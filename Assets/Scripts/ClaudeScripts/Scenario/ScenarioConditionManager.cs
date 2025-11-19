@@ -550,16 +550,19 @@ public class CustomCondition : IScenarioCondition
 }
 
 /// <summary>
-/// 손 동작 트래킹 조건 (HandPosePlayerEventBridge 연동)
-/// ✅ ScenarioActionHandler가 CSV의 handTrackingFileName을 감지하여 자동 생성 및 등록
-/// ✅ HandPosePlayerEventBridge 사용 (원본 HandPosePlayer 수정 없이 이벤트 기능 추가)
+/// 손 동작 트래킹 조건
+/// ✅ HandPosePlayerEventBridge 또는 HandPoseTrainingControllerBridge 지원
+/// ✅ 두 가지 브리지 모두 동일한 이벤트 인터페이스 제공
 /// </summary>
 public class HandPoseCondition : IScenarioCondition
 {
-    private HandPosePlayerEventBridge eventBridge;
+    private object eventBridge;  // HandPosePlayerEventBridge 또는 HandPoseTrainingControllerBridge
     private bool isCompleted = false;
     private string fileName;
 
+    /// <summary>
+    /// 구 시스템용 생성자 (HandPosePlayerEventBridge)
+    /// </summary>
     public HandPoseCondition(HandPosePlayerEventBridge bridge, string trackingFileName, ScenarioConditionManager conditionManager)
     {
         eventBridge = bridge;
@@ -569,15 +572,39 @@ public class HandPoseCondition : IScenarioCondition
         {
             // OnSequenceCompleted 이벤트 구독
             bridge.OnSequenceCompleted += OnSequenceCompleted;
-            Debug.Log($"<color=cyan>[HandPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
+            Debug.Log($"<color=cyan>[HandPoseCondition] OnSequenceCompleted 이벤트 구독 성공 (구 시스템): {trackingFileName}</color>");
 
             // OnProgressThresholdReached 이벤트 구독
             bridge.OnProgressThresholdReached += OnProgressThresholdReached;
-            Debug.Log($"<color=cyan>[HandPoseCondition] OnProgressThresholdReached 이벤트 구독 성공: {trackingFileName}</color>");
+            Debug.Log($"<color=cyan>[HandPoseCondition] OnProgressThresholdReached 이벤트 구독 성공 (구 시스템): {trackingFileName}</color>");
         }
         else
         {
             Debug.LogError("[HandPoseCondition] HandPosePlayerEventBridge가 null입니다!");
+        }
+    }
+
+    /// <summary>
+    /// 신 시스템용 생성자 (HandPoseTrainingControllerBridge)
+    /// </summary>
+    public HandPoseCondition(HandPoseTrainingControllerBridge bridge, string trackingFileName, ScenarioConditionManager conditionManager)
+    {
+        eventBridge = bridge;
+        fileName = trackingFileName;
+
+        if (bridge != null)
+        {
+            // OnSequenceCompleted 이벤트 구독
+            bridge.OnSequenceCompleted += OnSequenceCompleted;
+            Debug.Log($"<color=cyan>[HandPoseCondition] OnSequenceCompleted 이벤트 구독 성공 (신 시스템): {trackingFileName}</color>");
+
+            // OnProgressThresholdReached 이벤트 구독
+            bridge.OnProgressThresholdReached += OnProgressThresholdReached;
+            Debug.Log($"<color=cyan>[HandPoseCondition] OnProgressThresholdReached 이벤트 구독 성공 (신 시스템): {trackingFileName}</color>");
+        }
+        else
+        {
+            Debug.LogError("[HandPoseCondition] HandPoseTrainingControllerBridge가 null입니다!");
         }
     }
 
