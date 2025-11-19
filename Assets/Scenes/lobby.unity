@@ -12632,24 +12632,6 @@ MonoBehaviour:
   _pointerPoseRoot: {fileID: 0}
   m_showState: 3
   RayHelper: {fileID: 0}
---- !u!114 &608136543
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5637625588961239782}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7ab5e9e2a2fd5f9409bf2e17311ae9ac, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  silsub: {fileID: 0}
-  yeonsub: {fileID: 0}
-  username: {fileID: 3293820020078461648}
-  runStatus:
-    deviceSN: 
-    status: 
 --- !u!1 &608486717
 GameObject:
   m_ObjectHideFlags: 0
@@ -38514,7 +38496,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-      - m_Target: {fileID: 608136543}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: LobbyManager, Assembly-CSharp
         m_MethodName: UIbgColorS
         m_Mode: 1
@@ -42638,7 +42620,7 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls:
-      - m_Target: {fileID: 608136543}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: LobbyManager, Assembly-CSharp
         m_MethodName: MoveToAuth
         m_Mode: 1
@@ -42804,7 +42786,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5637625588961239783}
-  - component: {fileID: 608136543}
   m_Layer: 0
   m_Name: UI (1)
   m_TagString: Untagged
@@ -46863,7 +46844,7 @@ MonoBehaviour:
           m_StringArgument: 
           m_BoolArgument: 0
         m_CallState: 2
-      - m_Target: {fileID: 608136543}
+      - m_Target: {fileID: 0}
         m_TargetAssemblyTypeName: LobbyManager, Assembly-CSharp
         m_MethodName: UIbgColorY
         m_Mode: 1
