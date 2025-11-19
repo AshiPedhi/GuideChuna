@@ -465,6 +465,15 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message} | DeviceSN: {deviceSN ?? "AUTO"} | UUID: {SystemInfo.deviceUniqueIdentifier}");
 
+            // "등록된 장치입니다" 오류 시 UUID 앞 10글자로 재시도
+            if (e.Message.Contains("등록된 장치입니다"))
+            {
+                string uuidSubstring = SystemInfo.deviceUniqueIdentifier.Substring(0, 10);
+                Debug.Log($"[LobbyUI] 등록된 장치 감지 - UUID 앞 10글자로 재시도: {uuidSubstring}");
+                await AuthenticateDeviceWithRetry(uuidSubstring, 0);
+                return;
+            }
+
             if (retryCount < maxRetries)
             {
                 await UniTask.Delay(1000);
