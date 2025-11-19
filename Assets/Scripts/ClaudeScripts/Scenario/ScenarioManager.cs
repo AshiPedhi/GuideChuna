@@ -19,21 +19,11 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("CSV 파일 이름 (Resources/Scenarios/ 폴더)")]
     [SerializeField] private string csvFileName = "ScenarioData";
 
-    [Header("=== HandPose 시스템 선택 ===")]
-    [Tooltip("새로운 모듈식 HandPose 시스템 사용 (권장)")]
-    [SerializeField] private bool useNewHandPoseSystem = true;
-
     [Header("=== HandPose 시스템 (자동 연동) ===")]
-    [Tooltip("HandPosePlayer (구 시스템, 자동 찾기)")]
-    [SerializeField] private HandPosePlayer handPosePlayer;
-
-    [Tooltip("HandPosePlayerEventBridge (구 시스템, 자동 찾기/생성)")]
-    [SerializeField] private HandPosePlayerEventBridge handPoseEventBridge;
-
-    [Tooltip("HandPoseTrainingController (신 시스템, 자동 찾기)")]
+    [Tooltip("HandPoseTrainingController (자동 찾기)")]
     [SerializeField] private HandPoseTrainingController trainingController;
 
-    [Tooltip("HandPoseTrainingControllerBridge (신 시스템, 자동 찾기/생성)")]
+    [Tooltip("HandPoseTrainingControllerBridge (자동 찾기/생성)")]
     [SerializeField] private HandPoseTrainingControllerBridge trainingControllerBridge;
 
     [Tooltip("ScenarioConditionManager (자동 찾기)")]
@@ -83,23 +73,16 @@ public class ScenarioManager : MonoBehaviour
             conditionManager = FindObjectOfType<ScenarioConditionManager>();
         }
 
-        // ✅ HandPose 시스템 초기화 (새 시스템 또는 구 시스템)
-        if (useNewHandPoseSystem)
-        {
-            InitializeNewHandPoseSystem();
-        }
-        else
-        {
-            InitializeOldHandPoseSystem();
-        }
+        // ✅ HandPose 시스템 초기화
+        InitializeHandPoseSystem();
     }
 
     /// <summary>
-    /// 새로운 모듈식 HandPose 시스템 초기화
+    /// HandPose 시스템 초기화
     /// </summary>
-    private void InitializeNewHandPoseSystem()
+    private void InitializeHandPoseSystem()
     {
-        Debug.Log("<color=cyan>[ScenarioManager] 새로운 HandPose 시스템 초기화 중...</color>");
+        Debug.Log("<color=cyan>[ScenarioManager] HandPose 시스템 초기화 중...</color>");
 
         // HandPoseTrainingController 찾기
         if (trainingController == null)
@@ -109,10 +92,7 @@ public class ScenarioManager : MonoBehaviour
 
         if (trainingController == null)
         {
-            Debug.LogWarning("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
-            Debug.LogWarning("[ScenarioManager] 구 시스템으로 폴백합니다.");
-            useNewHandPoseSystem = false;
-            InitializeOldHandPoseSystem();
+            Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
             return;
         }
 
@@ -125,38 +105,7 @@ public class ScenarioManager : MonoBehaviour
             trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
         }
 
-        Debug.Log("<color=green>[ScenarioManager] ✓ 새로운 HandPose 시스템 초기화 완료!</color>");
-    }
-
-    /// <summary>
-    /// 구 HandPose 시스템 초기화
-    /// </summary>
-    private void InitializeOldHandPoseSystem()
-    {
-        Debug.Log("<color=cyan>[ScenarioManager] 구 HandPose 시스템 초기화 중...</color>");
-
-        // HandPosePlayer 찾기
-        if (handPosePlayer == null)
-        {
-            handPosePlayer = FindObjectOfType<HandPosePlayer>();
-        }
-
-        if (handPosePlayer == null)
-        {
-            Debug.LogError("[ScenarioManager] HandPosePlayer를 찾을 수 없습니다!");
-            return;
-        }
-
-        // HandPosePlayerEventBridge 찾기 또는 생성
-        handPoseEventBridge = handPosePlayer.GetComponent<HandPosePlayerEventBridge>();
-
-        if (handPoseEventBridge == null)
-        {
-            Debug.Log("[ScenarioManager] HandPosePlayerEventBridge가 없어서 자동으로 추가합니다.");
-            handPoseEventBridge = handPosePlayer.gameObject.AddComponent<HandPosePlayerEventBridge>();
-        }
-
-        Debug.Log("<color=green>[ScenarioManager] ✓ 구 HandPose 시스템 초기화 완료!</color>");
+        Debug.Log("<color=green>[ScenarioManager] ✓ HandPose 시스템 초기화 완료!</color>");
     }
 
     private void OnEnable()
@@ -476,11 +425,16 @@ public class ScenarioManager : MonoBehaviour
     /// <summary>
     /// HandPose 트래킹 자동 처리 (CSV 기반)
     /// ✅ 핵심 기능: handTrackingFileName이 있으면 자동으로 HandPoseCondition 등록
-    /// ✅ 새 시스템 또는 구 시스템 선택 가능
     /// ✅ 완료 시 직접 알림 방식으로 경쟁 상태 완전 해결
     /// </summary>
     private void HandleHandPoseTracking(SubStepData subStep)
     {
+        if (trainingController == null || trainingControllerBridge == null)
+        {
+            Debug.LogError("[ScenarioManager] HandPoseTrainingController 또는 Bridge를 찾을 수 없습니다!");
+            return;
+        }
+
         if (conditionManager == null)
         {
             Debug.LogError("[ScenarioManager] ScenarioConditionManager를 찾을 수 없습니다!");
@@ -488,37 +442,11 @@ public class ScenarioManager : MonoBehaviour
         }
 
         Debug.Log($"<color=yellow>[ScenarioManager] HandPose 트래킹 시작: {subStep.handTrackingFileName}</color>");
-        Debug.Log($"<color=yellow>[ScenarioManager] 사용 중인 시스템: {(useNewHandPoseSystem ? "신규 모듈식" : "구 통합형")}</color>");
-
-        // 새 시스템 또는 구 시스템 선택
-        if (useNewHandPoseSystem)
-        {
-            HandleHandPoseTrackingWithNewSystem(subStep);
-        }
-        else
-        {
-            HandleHandPoseTrackingWithOldSystem(subStep);
-        }
-    }
-
-    /// <summary>
-    /// 새로운 모듈식 시스템으로 HandPose 트래킹
-    /// </summary>
-    private void HandleHandPoseTrackingWithNewSystem(SubStepData subStep)
-    {
-        if (trainingController == null || trainingControllerBridge == null)
-        {
-            Debug.LogError("[ScenarioManager] HandPoseTrainingController 또는 Bridge를 찾을 수 없습니다!");
-            Debug.LogWarning("[ScenarioManager] 구 시스템으로 폴백합니다.");
-            useNewHandPoseSystem = false;
-            HandleHandPoseTrackingWithOldSystem(subStep);
-            return;
-        }
 
         // 1. CSV 로드 및 훈련 시작
         trainingControllerBridge.LoadFromCSV(subStep.handTrackingFileName);
 
-        // 2. HandPoseCondition 생성 (새 시스템용)
+        // 2. HandPoseCondition 생성
         HandPoseCondition condition = new HandPoseCondition(trainingControllerBridge, subStep.handTrackingFileName, conditionManager);
 
         // 3. ScenarioConditionManager에 조건 등록
@@ -528,38 +456,7 @@ public class ScenarioManager : MonoBehaviour
 
         conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
 
-        Debug.Log($"<color=green>[ScenarioManager] ✓ HandPoseCondition 등록 완료! (신규 시스템)</color>");
-        Debug.Log($"<color=green>  - Phase: {phaseName}</color>");
-        Debug.Log($"<color=green>  - Step: {stepName}</color>");
-        Debug.Log($"<color=green>  - SubStep: {subStepNo}</color>");
-        Debug.Log($"<color=green>  - CSV: {subStep.handTrackingFileName}</color>");
-    }
-
-    /// <summary>
-    /// 구 통합형 시스템으로 HandPose 트래킹
-    /// </summary>
-    private void HandleHandPoseTrackingWithOldSystem(SubStepData subStep)
-    {
-        if (handPosePlayer == null || handPoseEventBridge == null)
-        {
-            Debug.LogError("[ScenarioManager] HandPosePlayer 또는 EventBridge를 찾을 수 없습니다!");
-            return;
-        }
-
-        // 1. CSV 로드
-        handPoseEventBridge.LoadFromCSV(subStep.handTrackingFileName);
-
-        // 2. HandPoseCondition 생성 (구 시스템용)
-        HandPoseCondition condition = new HandPoseCondition(handPoseEventBridge, subStep.handTrackingFileName, conditionManager);
-
-        // 3. ScenarioConditionManager에 조건 등록
-        string phaseName = currentPhase.phaseName;
-        string stepName = currentStep.stepName;
-        int subStepNo = subStep.subStepNo;
-
-        conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
-
-        Debug.Log($"<color=green>[ScenarioManager] ✓ HandPoseCondition 등록 완료! (구 시스템)</color>");
+        Debug.Log($"<color=green>[ScenarioManager] ✓ HandPoseCondition 등록 완료!</color>");
         Debug.Log($"<color=green>  - Phase: {phaseName}</color>");
         Debug.Log($"<color=green>  - Step: {stepName}</color>");
         Debug.Log($"<color=green>  - SubStep: {subStepNo}</color>");
