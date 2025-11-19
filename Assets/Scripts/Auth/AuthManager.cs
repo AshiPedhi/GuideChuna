@@ -363,7 +363,7 @@ public class AuthManager : MonoBehaviour
         catch (Exception e)
         {
 #if UNITY_EDITOR
-            Debug.LogWarning("UUID 인증 실패: " + e.Message);
+            Debug.LogWarning($"UUID 인증 실패: {e.Message} | DeviceSN: {deviceUUID.deviceSN} | UUID: {deviceUUID.deviceUUID}");
 #endif
             if (e.Message.Contains("등록된 장치입니다"))
             {

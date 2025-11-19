@@ -428,7 +428,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 인증 최종 실패: {e.Message}");
+            Debug.LogError($"[LobbyUI] 인증 최종 실패: {e.Message} | UUID: {SystemInfo.deviceUniqueIdentifier}");
             ShowAuthenticationError(e.Message);
         }
     }
@@ -463,7 +463,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message}");
+            Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message} | DeviceSN: {deviceSN ?? "AUTO"} | UUID: {SystemInfo.deviceUniqueIdentifier}");
 
             if (retryCount < maxRetries)
             {
