@@ -132,11 +132,11 @@ public class UIManager : MonoBehaviour
 
     public void ToLobby()
     {
-        SceneManager.LoadScene("lobby");
+        SceneLoader.LoadScene("lobby");
     }
     public void ToLobby2()
     {
-        SceneManager.LoadScene("AuthMain Copy");
+        SceneLoader.LoadScene("AuthMain Copy");
     }
 
     public void MiniMap()

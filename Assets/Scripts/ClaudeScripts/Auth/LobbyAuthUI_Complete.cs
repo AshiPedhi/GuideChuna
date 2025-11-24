@@ -545,8 +545,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
         Debug.Log($"[LobbyUI] ✅ 시나리오 {scenarioIndex + 1} 시작: 사용자={currentUsername}");
 
-        // TODO: 시나리오 씬 로드
-        SceneManager.LoadScene($"Scenario_{scenarioIndex + 1}");
+        // 시나리오 씬 로드 (로딩씬 사용)
+        SceneLoader.LoadScene($"Scenario_{scenarioIndex + 1}");
     }
 
     private void OnUserIconClicked()
