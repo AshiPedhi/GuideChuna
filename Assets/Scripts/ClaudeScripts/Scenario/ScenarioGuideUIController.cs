@@ -515,4 +515,16 @@ public class ScenarioGuideUIController : MonoBehaviour
             startToggle.isOn = false;
         }
     }
+
+    /// <summary>
+    /// 시작 토글 상태 초기화 (항상 off로 리셋)
+    /// </summary>
+    public void ResetStartToggle()
+    {
+        if (startToggle != null)
+        {
+            startToggle.isOn = false;
+            Debug.Log("[GuideUI] 시작 토글 초기화 (off)");
+        }
+    }
 }
