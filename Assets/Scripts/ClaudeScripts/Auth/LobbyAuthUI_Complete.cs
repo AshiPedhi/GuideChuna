@@ -641,19 +641,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void OnUserIconClicked()
     {
-        Debug.Log("[LobbyUI] 유저 아이콘 클릭");
+        Debug.Log($"[LobbyUI] ========== 유저 아이콘 클릭 ==========");
+        Debug.Log($"[LobbyUI] currentUsername: '{currentUsername}' (IsNullOrEmpty: {string.IsNullOrEmpty(currentUsername)})");
 
         // 로그인 상태 확인
         if (string.IsNullOrEmpty(currentUsername))
         {
             // 로그인 안 되어 있으면 조 선택 패널 표시
-            Debug.Log("[LobbyUI] 로그인 안 되어 있음 - 조 선택 패널 표시");
+            Debug.Log("[LobbyUI] ➡️ 로그인 안 되어 있음 - 조 선택 패널 표시");
             ShowGradeSelectionPanel();
         }
         else
         {
             // 로그인 되어 있으면 로그아웃 확인 팝업 표시
-            Debug.Log($"[LobbyUI] 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
+            Debug.Log($"[LobbyUI] ➡️ 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
             ShowLogoutConfirmationPopup();
         }
     }
@@ -697,29 +698,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     }
 
     /// <summary>
-    /// 애플리케이션 종료 (로그아웃 후)
+    /// 애플리케이션 종료 (로그아웃 없이 바로 종료)
     /// </summary>
     private async UniTaskVoid ExitApplication()
     {
-        // 로그인되어 있으면 먼저 로그아웃
-        if (!string.IsNullOrEmpty(currentUsername))
-        {
-            Debug.Log("[LobbyUI] 종료 전 로그아웃 진행...");
-
-            try
-            {
-                await PerformLogoutAsync();
-                Debug.Log("[LobbyUI] 로그아웃 완료, 애플리케이션 종료");
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[LobbyUI] 로그아웃 실패했지만 종료 진행: {e.Message}");
-            }
-        }
-        else
-        {
-            Debug.Log("[LobbyUI] 로그인 안 되어 있음, 바로 종료");
-        }
+        Debug.Log("[LobbyUI] 애플리케이션 종료 (로그아웃 없이 바로 종료)");
 
         // 애플리케이션 종료
 #if UNITY_EDITOR
@@ -1024,6 +1007,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             currentUserID = userId;
             currentUsername = username;
 
+            Debug.Log($"[LobbyUI] 로그인 정보 저장 완료 - currentUsername: '{currentUsername}', currentUserID: {currentUserID}");
+
             HideUserSelectionPanel();
             UpdateUserInfoPanel();
 
@@ -1253,14 +1238,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void ShowLogoutConfirmationPopup()
     {
+        Debug.Log($"[LobbyUI] ShowLogoutConfirmationPopup 호출 - logoutConfirmationPopup: {(logoutConfirmationPopup != null ? "연결됨" : "NULL")}");
+
         if (logoutConfirmationPopup != null)
         {
             logoutConfirmationPopup.SetActive(true);
-            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 표시");
+            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 팝업 표시 완료");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] logoutConfirmationPopup이 연결되지 않았습니다.");
+            Debug.LogError("[LobbyUI] ❌ logoutConfirmationPopup이 NULL입니다! Inspector에서 연결되어 있는지 확인하세요.");
         }
     }
 
