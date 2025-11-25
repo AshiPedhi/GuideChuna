@@ -40,13 +40,6 @@ public class EventManager : MonoBehaviour
             BackObj.SetActive(!realOn);
         }
 
-        if (FindAnyObjectByType<Scenario>() != null)
-        {
-            Scenario scm = FindAnyObjectByType<Scenario>();
-            foreach (GameObject human in scm.human) human.GetComponent<SkinnedMeshRenderer>().enabled = !realOn;
-            foreach (GameObject bantu in scm.humanBantu) bantu.GetComponent<SkinnedMeshRenderer>().enabled = realOn;
-        }
-
 
         if (realOn)
         {

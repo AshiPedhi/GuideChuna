@@ -20,11 +20,11 @@ public class ScenarioManager : MonoBehaviour
     [SerializeField] private string csvFileName = "ScenarioData";
 
     [Header("=== HandPose 시스템 (자동 연동) ===")]
-    [Tooltip("HandPosePlayer (자동 찾기)")]
-    [SerializeField] private HandPosePlayer handPosePlayer;
+    [Tooltip("HandPoseTrainingController (자동 찾기)")]
+    [SerializeField] private HandPoseTrainingController trainingController;
 
-    [Tooltip("HandPosePlayerEventBridge (자동 찾기/생성)")]
-    [SerializeField] private HandPosePlayerEventBridge handPoseEventBridge;
+    [Tooltip("HandPoseTrainingControllerBridge (자동 찾기/생성)")]
+    [SerializeField] private HandPoseTrainingControllerBridge trainingControllerBridge;
 
     [Tooltip("ScenarioConditionManager (자동 찾기)")]
     [SerializeField] private ScenarioConditionManager conditionManager;
@@ -73,23 +73,39 @@ public class ScenarioManager : MonoBehaviour
             conditionManager = FindObjectOfType<ScenarioConditionManager>();
         }
 
-        // ✅ HandPosePlayer 찾기
-        if (handPosePlayer == null)
+        // ✅ HandPose 시스템 초기화
+        InitializeHandPoseSystem();
+    }
+
+    /// <summary>
+    /// HandPose 시스템 초기화
+    /// </summary>
+    private void InitializeHandPoseSystem()
+    {
+        Debug.Log("<color=cyan>[ScenarioManager] HandPose 시스템 초기화 중...</color>");
+
+        // HandPoseTrainingController 찾기
+        if (trainingController == null)
         {
-            handPosePlayer = FindObjectOfType<HandPosePlayer>();
+            trainingController = FindObjectOfType<HandPoseTrainingController>();
         }
 
-        // ✅ HandPosePlayerEventBridge 찾기 또는 생성
-        if (handPosePlayer != null)
+        if (trainingController == null)
         {
-            handPoseEventBridge = handPosePlayer.GetComponent<HandPosePlayerEventBridge>();
-
-            if (handPoseEventBridge == null)
-            {
-                Debug.Log("[ScenarioManager] HandPosePlayerEventBridge가 없어서 자동으로 추가합니다.");
-                handPoseEventBridge = handPosePlayer.gameObject.AddComponent<HandPosePlayerEventBridge>();
-            }
+            Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
+            return;
         }
+
+        // HandPoseTrainingControllerBridge 찾기 또는 생성
+        trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
+
+        if (trainingControllerBridge == null)
+        {
+            Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
+            trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
+        }
+
+        Debug.Log("<color=green>[ScenarioManager] ✓ HandPose 시스템 초기화 완료!</color>");
     }
 
     private void OnEnable()
@@ -413,9 +429,9 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void HandleHandPoseTracking(SubStepData subStep)
     {
-        if (handPosePlayer == null || handPoseEventBridge == null)
+        if (trainingController == null || trainingControllerBridge == null)
         {
-            Debug.LogError("[ScenarioManager] HandPosePlayer 또는 EventBridge를 찾을 수 없습니다!");
+            Debug.LogError("[ScenarioManager] HandPoseTrainingController 또는 Bridge를 찾을 수 없습니다!");
             return;
         }
 
@@ -427,11 +443,11 @@ public class ScenarioManager : MonoBehaviour
 
         Debug.Log($"<color=yellow>[ScenarioManager] HandPose 트래킹 시작: {subStep.handTrackingFileName}</color>");
 
-        // 1. CSV 로드
-        handPoseEventBridge.LoadFromCSV(subStep.handTrackingFileName);
+        // 1. CSV 로드 및 훈련 시작
+        trainingControllerBridge.LoadFromCSV(subStep.handTrackingFileName);
 
-        // 2. HandPoseCondition 생성 (✅ conditionManager 전달)
-        HandPoseCondition condition = new HandPoseCondition(handPoseEventBridge, subStep.handTrackingFileName, conditionManager);
+        // 2. HandPoseCondition 생성
+        HandPoseCondition condition = new HandPoseCondition(trainingControllerBridge, subStep.handTrackingFileName, conditionManager);
 
         // 3. ScenarioConditionManager에 조건 등록
         string phaseName = currentPhase.phaseName;

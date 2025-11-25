@@ -45,6 +45,7 @@ public class ModeSelectionManagerV2 : MonoBehaviour
     // 선택 상태
     private ModeType selectedMode = ModeType.None;
     private DifficultyType selectedDifficulty = DifficultyType.Intermediate; // 기본값 중급자로 변경
+    private bool hasCompletedFirstSelection = false; // 최초 모드 선택 완료 여부
 
     public enum ModeType
     {
@@ -426,11 +427,14 @@ public class ModeSelectionManagerV2 : MonoBehaviour
         // ═══ UI 패널 전환 ═══
         Debug.Log("<color=cyan>[ModeSelection] UI 패널 전환 중...</color>");
 
+        // 최초 모드 선택 완료로 표시
+        hasCompletedFirstSelection = true;
+
         // 모드 선택 패널 비활성화
         if (modeSelectionPanel != null)
         {
             modeSelectionPanel.SetActive(false);
-            Debug.Log("<color=yellow>[ModeSelection] ✓ 모드 선택 패널 비활성화</color>");
+            Debug.Log("<color=yellow>[ModeSelection] ✓ 모드 선택 패널 비활성화 (영구적)</color>");
         }
         else
         {
@@ -493,6 +497,47 @@ public class ModeSelectionManagerV2 : MonoBehaviour
         UpdateToggleColors();
 
         Debug.Log("선택 초기화 완료 (중급자로 설정)");
+    }
+
+    // ═══════════════ 팝업 연동 메서드 ═══════════════
+
+    /// <summary>
+    /// 팝업이 열렸을 때 호출 - 메뉴들을 숨깁니다
+    /// </summary>
+    public void OnPopupOpened()
+    {
+        Debug.Log("[ModeSelection] 팝업 열림 감지 - 메뉴 숨김");
+
+        // 모드 선택 패널 숨기기 (첫 선택 전이면)
+        if (!hasCompletedFirstSelection && modeSelectionPanel != null && modeSelectionPanel.activeSelf)
+        {
+            modeSelectionPanel.SetActive(false);
+        }
+
+        // 가이드 패널 숨기기
+        if (guidePanel != null && guidePanel.activeSelf)
+        {
+            guidePanel.SetActive(false);
+        }
+    }
+
+    /// <summary>
+    /// 팝업이 닫혔을 때 호출 - 메뉴들을 다시 표시합니다
+    /// </summary>
+    public void OnPopupClosed()
+    {
+        Debug.Log("[ModeSelection] 팝업 닫힘 감지 - 메뉴 복원");
+
+        // 모드 선택 패널 복원 (첫 선택이 완료되지 않았으면)
+        if (!hasCompletedFirstSelection && modeSelectionPanel != null)
+        {
+            modeSelectionPanel.SetActive(true);
+        }
+        // 가이드 패널 복원 (첫 선택이 완료되었으면)
+        else if (hasCompletedFirstSelection && guidePanel != null)
+        {
+            guidePanel.SetActive(true);
+        }
     }
 
     void OnDestroy()

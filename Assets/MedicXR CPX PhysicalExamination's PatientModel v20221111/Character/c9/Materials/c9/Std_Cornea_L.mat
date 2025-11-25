@@ -9,11 +9,14 @@ Material:
   m_PrefabAsset: {fileID: 0}
   m_Name: Std_Cornea_L
   m_Shader: {fileID: 4800000, guid: 63d5771360ced2f4d9683cccd76fdecf, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - BOOLEAN_ISCORNEA_ON
   m_InvalidKeywords:
   - _DISABLE_SSR_TRANSPARENT
   - _ENABLE_FOG_ON_TRANSPARENT
+  - _ISLEFTEYE_ON
   - _SURFACE_TYPE_TRANSPARENT
   m_LightmapFlags: 0
   m_EnableInstancingVariants: 0
@@ -27,6 +30,7 @@ Material:
   - TransparentBackface
   - RayTracingPrepass
   - TransparentDepthPrepass
+  m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
@@ -105,3 +109,4 @@ Material:
     - _LimbusColor: {r: 0, g: 0, b: 0, a: 0}
     - _SubsurfaceFalloff: {r: 1, g: 1, b: 1, a: 0}
   m_BuildTextureStacks: []
+  m_AllowLocking: 1

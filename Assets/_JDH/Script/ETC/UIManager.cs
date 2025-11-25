@@ -132,11 +132,11 @@ public class UIManager : MonoBehaviour
 
     public void ToLobby()
     {
-        SceneManager.LoadScene("lobby");
+        SceneLoader.LoadScene("lobby");
     }
     public void ToLobby2()
     {
-        SceneManager.LoadScene("AuthMain Copy");
+        SceneLoader.LoadScene("AuthMain Copy");
     }
 
     public void MiniMap()
@@ -169,17 +169,31 @@ public class UIManager : MonoBehaviour
 
     public void Setting()
     {
+        // 다른 팝업들 먼저 닫기
+        mainUI.SetActive(false);
+        replayPopup.SetActive(false);
+        replayDeactive.SetActive(false);
+        replayActive.SetActive(true);
+        logoutPopup.SetActive(false);
+        logoutDeactive.SetActive(false);
+        logoutActive.SetActive(true);
+
         if (settingObj.activeSelf)
         {
+            // 설정 패널 닫기
             settingObj.SetActive(false);
             settingA.SetActive(false);
             settingD.SetActive(true);
+            // 메인 UI 다시 보여주기
+            mainUI.SetActive(true);
         }
         else
         {
+            // 설정 패널 열기
             settingObj.SetActive(true);
             settingA.SetActive(true);
             settingD.SetActive(false);
+            // 메인 UI는 숨김 상태 유지
         }
     }
 }

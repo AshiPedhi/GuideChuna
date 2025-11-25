@@ -38,10 +38,13 @@ public class SettingsPopupController : MonoBehaviour
     
     private CanvasGroup canvasGroup;
     private Resolution[] resolutions;
-    
+
     // 설정 값 저장
     private SettingsData currentSettings;
     private SettingsData tempSettings;
+
+    // ModeSelectionManagerV2 참조
+    private ModeSelectionManagerV2 modeSelectionManager;
     
     [System.Serializable]
     public class SettingsData
@@ -60,12 +63,15 @@ public class SettingsPopupController : MonoBehaviour
     
     void Awake()
     {
+        // ModeSelectionManagerV2 찾기
+        modeSelectionManager = FindObjectOfType<ModeSelectionManagerV2>();
+
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null)
         {
             canvasGroup = gameObject.AddComponent<CanvasGroup>();
         }
-        
+
         LoadSettings();
         GetAvailableResolutions();
     }
@@ -348,15 +354,27 @@ public class SettingsPopupController : MonoBehaviour
     }
     
     // ═══════════════ 팝업 제어 ═══════════════
-    
+
     public void ShowPopup()
     {
+        // 메뉴 숨기기 알림
+        if (modeSelectionManager != null)
+        {
+            modeSelectionManager.OnPopupOpened();
+        }
+
         gameObject.SetActive(true);
         StartCoroutine(AnimateOpen());
     }
     
     public void ClosePopup()
     {
+        // 메뉴 복원 알림
+        if (modeSelectionManager != null)
+        {
+            modeSelectionManager.OnPopupClosed();
+        }
+
         StartCoroutine(AnimateClose());
     }
     

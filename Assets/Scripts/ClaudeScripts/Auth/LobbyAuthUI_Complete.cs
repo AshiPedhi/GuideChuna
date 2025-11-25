@@ -47,7 +47,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     [Header("Popups")]
     [SerializeField] private GameObject loginRequiredPopup;
-    [SerializeField] private Button loginRequiredCloseButton;
+    [SerializeField] private Toggle loginRequiredCloseButton;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -351,12 +351,18 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
-        // 로그인 팝업 닫기 버튼
+        // 로그인 팝업 닫기 토글
         if (loginRequiredCloseButton != null)
         {
-            loginRequiredCloseButton.onClick.RemoveAllListeners();
-            loginRequiredCloseButton.onClick.AddListener(OnLoginRequiredPopupClose);
-            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 버튼 연결");
+            loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
+            loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLoginRequiredPopupClose();
+                    StartCoroutine(ResetToggle(loginRequiredCloseButton));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 토글 연결");
         }
         else
         {
@@ -428,7 +434,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 인증 최종 실패: {e.Message}");
+            Debug.LogError($"[LobbyUI] 인증 최종 실패: {e.Message} | UUID: {SystemInfo.deviceUniqueIdentifier}");
             ShowAuthenticationError(e.Message);
         }
     }
@@ -463,7 +469,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message}");
+            Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message} | DeviceSN: {deviceSN ?? "AUTO"} | UUID: {SystemInfo.deviceUniqueIdentifier}");
+
+            // "등록된 장치입니다" 오류 시 UUID 앞 10글자로 재시도
+            if (e.Message.Contains("등록된 장치입니다"))
+            {
+                string uuidSubstring = SystemInfo.deviceUniqueIdentifier.Substring(0, 10);
+                Debug.Log($"[LobbyUI] 등록된 장치 감지 - UUID 앞 10글자로 재시도: {uuidSubstring}");
+                await AuthenticateDeviceWithRetry(uuidSubstring, 0);
+                return;
+            }
 
             if (retryCount < maxRetries)
             {
@@ -536,8 +551,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
         Debug.Log($"[LobbyUI] ✅ 시나리오 {scenarioIndex + 1} 시작: 사용자={currentUsername}");
 
-        // TODO: 시나리오 씬 로드
-        SceneManager.LoadScene($"Scenario_{scenarioIndex + 1}");
+        // 시나리오 씬 로드 (로딩씬 사용)
+        SceneLoader.LoadScene($"Scenario_{scenarioIndex + 1}");
     }
 
     private void OnUserIconClicked()
@@ -1080,6 +1095,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.Log("[LobbyUI] 로그인 필요 팝업 닫기");
         }
     }
+
+    /// <summary>
+    /// 토글을 버튼처럼 사용하기 위한 리셋 코루틴
+    /// </summary>
+    private System.Collections.IEnumerator ResetToggle(Toggle toggle)
+    {
+        yield return null;
+        if (toggle != null)
+            toggle.isOn = false;
+    }
     #endregion
 
     #region Error Handling
@@ -1255,7 +1280,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         Debug.Log($"  - userBackButton: {(userBackButton != null ? "✅" : "❌")}");
         Debug.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
         Debug.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - loginRequiredCloseButton: {(loginRequiredCloseButton != null ? "✅" : "❌")}");
+        Debug.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
     }
     #endregion
 }

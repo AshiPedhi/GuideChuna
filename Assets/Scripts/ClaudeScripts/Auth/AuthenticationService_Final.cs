@@ -105,7 +105,7 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
         catch (Exception e)
         {
             AuthEvents.TriggerAuthenticationFailed(e.Message);
-            LogError($"디바이스 인증 실패: {e.Message}");
+            LogError($"디바이스 인증 실패: {e.Message} | DeviceSN: {deviceSN ?? "AUTO"} | UUID: {SystemInfo.deviceUniqueIdentifier}");
             throw;
         }
     }
