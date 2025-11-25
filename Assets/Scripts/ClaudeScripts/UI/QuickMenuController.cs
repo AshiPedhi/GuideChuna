@@ -37,9 +37,13 @@ public class QuickMenuController : MonoBehaviour
     // ModeSelectionManagerV2 참조
     private ModeSelectionManagerV2 modeSelectionManager;
 
+    // PracticeSettingsController 참조 (설정 닫힐 때 환자 위치 조정 off용)
+    private PracticeSettingsController practiceSettingsController;
+
     void Awake()
     {
         modeSelectionManager = FindObjectOfType<ModeSelectionManagerV2>();
+        practiceSettingsController = FindObjectOfType<PracticeSettingsController>();
     }
 
     void Start()
@@ -134,6 +138,13 @@ public class QuickMenuController : MonoBehaviour
             else
             {
                 Debug.Log("설정 메뉴 닫힘");
+
+                // 설정이 닫힐 때 환자 위치 조정 컨트롤러 자동 off
+                if (practiceSettingsController != null)
+                {
+                    practiceSettingsController.ForceDisablePatientPositionController();
+                    Debug.Log("설정 닫힘 - 환자 위치 조정 자동 비활성화");
+                }
             }
 
             UpdateToggleColors();
