@@ -202,8 +202,9 @@ public class PracticeSettingsController : MonoBehaviour
         if (skeletonDisplayToggle != null && skeletonModel != null)
             skeletonDisplayToggle.isOn = skeletonModel.activeSelf;
 
-        if (patientModelDisplayToggle != null && patientModel != null)
-            patientModelDisplayToggle.isOn = patientModel.activeSelf;
+        // 환자 모델은 기본적으로 표시 (알파값 기반이므로 초기값 true)
+        if (patientModelDisplayToggle != null)
+            patientModelDisplayToggle.isOn = true;
 
         if (realityModeToggle != null)
             realityModeToggle.isOn = isRealityModeOn;
@@ -312,17 +313,23 @@ public class PracticeSettingsController : MonoBehaviour
             skeletonModel.SetActive(isOn);
             Debug.Log($"[PracticeSettings] ✅ 근골격계 모델: {(isOn ? "표시" : "숨김")}");
 
-            // 골격 표시 시 환자 모델 반투명 처리
-            if (isOn)
+            // 환자 모델이 표시되어 있을 때만 투명도 조정
+            bool isPatientModelVisible = patientModelDisplayToggle != null && patientModelDisplayToggle.isOn;
+
+            if (isPatientModelVisible)
             {
-                SetModelTransparency(patientRenderers, skeletonModeAlpha, "환자 모델");
-            }
-            else
-            {
-                // 골격 숨김 시 환자 모델을 일반 상태로 복원 (현실 모드가 아니면)
-                if (!isRealityModeOn)
+                // 골격 표시 시 환자 모델 반투명 처리
+                if (isOn)
                 {
-                    SetModelTransparency(patientRenderers, normalAlpha, "환자 모델");
+                    SetModelTransparency(patientRenderers, skeletonModeAlpha, "환자 모델");
+                }
+                else
+                {
+                    // 골격 숨김 시 환자 모델을 일반 상태로 복원 (현실 모드가 아니면)
+                    if (!isRealityModeOn)
+                    {
+                        SetModelTransparency(patientRenderers, normalAlpha, "환자 모델");
+                    }
                 }
             }
         }
@@ -335,7 +342,7 @@ public class PracticeSettingsController : MonoBehaviour
 
     #region 4. 환자 모델 표시
     /// <summary>
-    /// 환자 모델 on/off
+    /// 환자 모델 on/off (알파값 기반)
     /// </summary>
     private void OnPatientModelDisplayToggle(bool isOn)
     {
@@ -343,8 +350,31 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (patientModel != null)
         {
-            patientModel.SetActive(isOn);
-            Debug.Log($"[PracticeSettings] ✅ 환자 모델: {(isOn ? "표시" : "숨김")}");
+            if (isOn)
+            {
+                // 환자 모델 표시: 현재 상태에 따른 적절한 알파값 적용
+                float targetAlpha = normalAlpha;
+
+                // 현실 모드가 켜져있으면 현실 모드 알파값 우선
+                if (isRealityModeOn)
+                {
+                    targetAlpha = realityModeAlpha;
+                }
+                // 골격이 켜져있으면 골격 모드 알파값
+                else if (skeletonModel != null && skeletonModel.activeSelf)
+                {
+                    targetAlpha = skeletonModeAlpha;
+                }
+
+                SetModelTransparency(patientRenderers, targetAlpha, "환자 모델");
+                Debug.Log($"[PracticeSettings] ✅ 환자 모델 표시 (Alpha: {targetAlpha})");
+            }
+            else
+            {
+                // 환자 모델 숨김: 알파값 0으로 완전 투명
+                SetModelTransparency(patientRenderers, 0f, "환자 모델");
+                Debug.Log($"[PracticeSettings] ✅ 환자 모델 숨김 (Alpha: 0)");
+            }
         }
         else
         {
@@ -399,10 +429,16 @@ public class PracticeSettingsController : MonoBehaviour
         }
 
         // 현실 모드 시 모델 투명도 조정
+        // 환자 모델이 표시되어 있을 때만 투명도 조정
+        bool isPatientModelVisible = patientModelDisplayToggle != null && patientModelDisplayToggle.isOn;
+
         if (isOn)
         {
             // 환자 모델을 반투명하게
-            SetModelTransparency(patientRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
+            if (isPatientModelVisible)
+            {
+                SetModelTransparency(patientRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
+            }
 
             // 골격 모델도 표시되어 있다면 반투명하게
             if (skeletonModel != null && skeletonModel.activeSelf)
@@ -413,13 +449,16 @@ public class PracticeSettingsController : MonoBehaviour
         else
         {
             // 현실 모드 해제 시
-            // 골격이 표시되어 있으면 골격 모드 알파값으로, 아니면 일반 알파값으로
-            bool skeletonIsOn = skeletonModel != null && skeletonModel.activeSelf;
-            float targetAlpha = skeletonIsOn ? skeletonModeAlpha : normalAlpha;
-            SetModelTransparency(patientRenderers, targetAlpha, "환자 모델 (현실 모드 해제)");
+            if (isPatientModelVisible)
+            {
+                // 골격이 표시되어 있으면 골격 모드 알파값으로, 아니면 일반 알파값으로
+                bool skeletonIsOn = skeletonModel != null && skeletonModel.activeSelf;
+                float targetAlpha = skeletonIsOn ? skeletonModeAlpha : normalAlpha;
+                SetModelTransparency(patientRenderers, targetAlpha, "환자 모델 (현실 모드 해제)");
+            }
 
             // 골격 모델은 일반 상태로 복원
-            if (skeletonIsOn)
+            if (skeletonModel != null && skeletonModel.activeSelf)
             {
                 SetModelTransparency(skeletonRenderers, normalAlpha, "골격 모델 (현실 모드 해제)");
             }
