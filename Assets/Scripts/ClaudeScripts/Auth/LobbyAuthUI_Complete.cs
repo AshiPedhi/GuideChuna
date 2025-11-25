@@ -48,6 +48,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("Popups")]
     [SerializeField] private GameObject loginRequiredPopup;
     [SerializeField] private Toggle loginRequiredCloseButton;
+
+    [Header("Exit Confirmation Popup")]
+    [SerializeField] private GameObject exitConfirmationPopup;
+    [SerializeField] private Toggle exitYesToggle;
+    [SerializeField] private Toggle exitNoToggle;
+
+    [Header("Logout Confirmation Popup")]
+    [SerializeField] private GameObject logoutConfirmationPopup;
+    [SerializeField] private Toggle logoutCancelToggle;
+    [SerializeField] private Toggle logoutConfirmToggle;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -165,6 +175,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         userSelectionPanel?.SetActive(false);
         userInfoContent?.SetActive(true); // 항상 활성화! (로그인 전에는 "Guest" 표시)
         loginRequiredPopup?.SetActive(false);
+        exitConfirmationPopup?.SetActive(false);
+        logoutConfirmationPopup?.SetActive(false);
 
         // 시나리오 카드 자동 검색
         if (autoFindScenarioCards)
@@ -351,22 +363,94 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
-        // 로그인 팝업 닫기 토글
+        // 로그인 팝업 - 유저 목록으로 연결 토글
         if (loginRequiredCloseButton != null)
         {
             loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
             loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
                 if (isOn)
                 {
-                    OnLoginRequiredPopupClose();
+                    OnLoginRequiredPopupGoToUserList();
                     StartCoroutine(ResetToggle(loginRequiredCloseButton));
                 }
             });
-            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 토글 연결");
+            Debug.Log("[LobbyUI] ✅ 로그인 팝업 - 유저 목록 연결 토글 연결");
         }
         else
         {
             Debug.LogWarning("[LobbyUI] ⚠️ loginRequiredCloseButton이 null입니다.");
+        }
+
+        // 종료 확인 팝업 - 예 토글
+        if (exitYesToggle != null)
+        {
+            exitYesToggle.onValueChanged.RemoveAllListeners();
+            exitYesToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnExitConfirmYes();
+                    StartCoroutine(ResetToggle(exitYesToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 종료 확인 - 예 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ exitYesToggle이 null입니다.");
+        }
+
+        // 종료 확인 팝업 - 아니오 토글
+        if (exitNoToggle != null)
+        {
+            exitNoToggle.onValueChanged.RemoveAllListeners();
+            exitNoToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnExitConfirmNo();
+                    StartCoroutine(ResetToggle(exitNoToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 종료 확인 - 아니오 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ exitNoToggle이 null입니다.");
+        }
+
+        // 로그아웃 확인 팝업 - 취소 토글
+        if (logoutCancelToggle != null)
+        {
+            logoutCancelToggle.onValueChanged.RemoveAllListeners();
+            logoutCancelToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLogoutCancel();
+                    StartCoroutine(ResetToggle(logoutCancelToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 취소 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ logoutCancelToggle이 null입니다.");
+        }
+
+        // 로그아웃 확인 팝업 - 로그아웃하기 토글
+        if (logoutConfirmToggle != null)
+        {
+            logoutConfirmToggle.onValueChanged.RemoveAllListeners();
+            logoutConfirmToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLogoutConfirm();
+                    StartCoroutine(ResetToggle(logoutConfirmToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 로그아웃하기 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ logoutConfirmToggle이 null입니다.");
         }
     }
 
@@ -558,7 +642,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnUserIconClicked()
     {
         Debug.Log("[LobbyUI] 유저 아이콘 클릭");
-        ShowGradeSelectionPanel();
+
+        // 로그인 상태 확인
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            // 로그인 안 되어 있으면 조 선택 패널 표시
+            Debug.Log("[LobbyUI] 로그인 안 되어 있음 - 조 선택 패널 표시");
+            ShowGradeSelectionPanel();
+        }
+        else
+        {
+            // 로그인 되어 있으면 로그아웃 확인 팝업 표시
+            Debug.Log($"[LobbyUI] 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
+            ShowLogoutConfirmationPopup();
+        }
     }
 
     private void OnGradeBackButtonClicked()
@@ -577,7 +674,26 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnExitButtonClicked()
     {
         Debug.Log("[LobbyUI] 나가기 버튼 클릭");
+        ShowExitConfirmationPopup();
+    }
+
+    /// <summary>
+    /// 종료 확인 팝업 - 예 선택
+    /// </summary>
+    private void OnExitConfirmYes()
+    {
+        Debug.Log("[LobbyUI] 종료 확인 - 예 선택");
+        HideExitConfirmationPopup();
         ExitApplication().Forget();
+    }
+
+    /// <summary>
+    /// 종료 확인 팝업 - 아니오 선택
+    /// </summary>
+    private void OnExitConfirmNo()
+    {
+        Debug.Log("[LobbyUI] 종료 확인 - 아니오 선택");
+        HideExitConfirmationPopup();
     }
 
     /// <summary>
@@ -1097,6 +1213,86 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     }
 
     /// <summary>
+    /// 로그인 팝업에서 유저 목록으로 이동
+    /// </summary>
+    private void OnLoginRequiredPopupGoToUserList()
+    {
+        Debug.Log("[LobbyUI] 로그인 팝업 - 유저 목록으로 이동");
+
+        // 팝업 닫기
+        if (loginRequiredPopup != null)
+        {
+            loginRequiredPopup.SetActive(false);
+        }
+
+        // 조 선택 패널 표시
+        ShowGradeSelectionPanel();
+    }
+
+    private void ShowExitConfirmationPopup()
+    {
+        if (exitConfirmationPopup != null)
+        {
+            exitConfirmationPopup.SetActive(true);
+            Debug.Log("[LobbyUI] 종료 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] exitConfirmationPopup이 연결되지 않았습니다.");
+        }
+    }
+
+    private void HideExitConfirmationPopup()
+    {
+        if (exitConfirmationPopup != null)
+        {
+            exitConfirmationPopup.SetActive(false);
+            Debug.Log("[LobbyUI] 종료 확인 팝업 닫기");
+        }
+    }
+
+    private void ShowLogoutConfirmationPopup()
+    {
+        if (logoutConfirmationPopup != null)
+        {
+            logoutConfirmationPopup.SetActive(true);
+            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] logoutConfirmationPopup이 연결되지 않았습니다.");
+        }
+    }
+
+    private void HideLogoutConfirmationPopup()
+    {
+        if (logoutConfirmationPopup != null)
+        {
+            logoutConfirmationPopup.SetActive(false);
+            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 닫기");
+        }
+    }
+
+    /// <summary>
+    /// 로그아웃 확인 팝업 - 취소 선택
+    /// </summary>
+    private void OnLogoutCancel()
+    {
+        Debug.Log("[LobbyUI] 로그아웃 취소");
+        HideLogoutConfirmationPopup();
+    }
+
+    /// <summary>
+    /// 로그아웃 확인 팝업 - 로그아웃하기 선택
+    /// </summary>
+    private void OnLogoutConfirm()
+    {
+        Debug.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
+        HideLogoutConfirmationPopup();
+        PerformLogout().Forget();
+    }
+
+    /// <summary>
     /// 토글을 버튼처럼 사용하기 위한 리셋 코루틴
     /// </summary>
     private System.Collections.IEnumerator ResetToggle(Toggle toggle)
@@ -1281,6 +1477,14 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         Debug.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
         Debug.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
         Debug.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
+
+        Debug.Log("종료 확인 팝업:");
+        Debug.Log($"  - exitYesToggle (토글): {(exitYesToggle != null ? "✅" : "❌")}");
+        Debug.Log($"  - exitNoToggle (토글): {(exitNoToggle != null ? "✅" : "❌")}");
+
+        Debug.Log("로그아웃 확인 팝업:");
+        Debug.Log($"  - logoutCancelToggle (토글): {(logoutCancelToggle != null ? "✅" : "❌")}");
+        Debug.Log($"  - logoutConfirmToggle (토글): {(logoutConfirmToggle != null ? "✅" : "❌")}");
     }
     #endregion
 }
