@@ -495,50 +495,115 @@ public class PracticeSettingsController : MonoBehaviour
                 // 투명도가 1 미만이면 Transparent 모드로 변경
                 if (targetAlpha < 1f)
                 {
-                    // Rendering Mode를 Transparent로 설정
-                    mat.SetFloat("_Mode", 3); // 3 = Transparent
-                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-                    mat.SetInt("_ZWrite", 0);
+                    // Rendering Mode를 Transparent로 설정 (Standard Shader)
+                    if (mat.HasProperty("_Mode"))
+                    {
+                        mat.SetFloat("_Mode", 3); // 3 = Transparent
+                    }
+
+                    // 블렌드 모드 설정
+                    if (mat.HasProperty("_SrcBlend"))
+                        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    if (mat.HasProperty("_DstBlend"))
+                        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    if (mat.HasProperty("_ZWrite"))
+                        mat.SetInt("_ZWrite", 0);
+
+                    // 키워드 설정
                     mat.DisableKeyword("_ALPHATEST_ON");
                     mat.EnableKeyword("_ALPHABLEND_ON");
                     mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+
+                    // 렌더 큐 설정
                     mat.renderQueue = 3000;
                 }
                 else
                 {
-                    // Rendering Mode를 Opaque로 복원
-                    mat.SetFloat("_Mode", 0); // 0 = Opaque
-                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
-                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
-                    mat.SetInt("_ZWrite", 1);
+                    // Rendering Mode를 Opaque로 복원 (Standard Shader)
+                    if (mat.HasProperty("_Mode"))
+                    {
+                        mat.SetFloat("_Mode", 0); // 0 = Opaque
+                    }
+
+                    // 블렌드 모드 복원
+                    if (mat.HasProperty("_SrcBlend"))
+                        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    if (mat.HasProperty("_DstBlend"))
+                        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                    if (mat.HasProperty("_ZWrite"))
+                        mat.SetInt("_ZWrite", 1);
+
+                    // 키워드 복원
                     mat.DisableKeyword("_ALPHATEST_ON");
                     mat.DisableKeyword("_ALPHABLEND_ON");
                     mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+
+                    // 렌더 큐 복원
                     mat.renderQueue = -1;
                 }
 
-                // 알파값 적용 - _Color 프로퍼티가 있을 때만
+                // 알파값 적용 - 다양한 셰이더의 컬러/알파 프로퍼티 지원
+                bool alphaApplied = false;
+
+                // 1. _Color (Standard Shader, Unity Built-in)
                 if (mat.HasProperty("_Color"))
                 {
                     Color mainColor = mat.GetColor("_Color");
                     mainColor.a = targetAlpha;
                     mat.SetColor("_Color", mainColor);
+                    alphaApplied = true;
                 }
 
-                // 기타 일반적인 컬러 프로퍼티들 확인
+                // 2. _BaseColor (URP/HDRP Lit Shader)
                 if (mat.HasProperty("_BaseColor"))
                 {
                     Color baseColor = mat.GetColor("_BaseColor");
                     baseColor.a = targetAlpha;
                     mat.SetColor("_BaseColor", baseColor);
+                    alphaApplied = true;
                 }
 
+                // 3. _MainColor (일부 커스텀 셰이더)
                 if (mat.HasProperty("_MainColor"))
                 {
                     Color mainColor = mat.GetColor("_MainColor");
                     mainColor.a = targetAlpha;
                     mat.SetColor("_MainColor", mainColor);
+                    alphaApplied = true;
+                }
+
+                // 4. _DiffuseColor (Reallusion 셰이더)
+                if (mat.HasProperty("_DiffuseColor"))
+                {
+                    Color diffuseColor = mat.GetColor("_DiffuseColor");
+                    diffuseColor.a = targetAlpha;
+                    mat.SetColor("_DiffuseColor", diffuseColor);
+                    alphaApplied = true;
+                }
+
+                // 5. _Opacity (Reallusion 셰이더 - float 타입)
+                if (mat.HasProperty("_Opacity"))
+                {
+                    mat.SetFloat("_Opacity", targetAlpha);
+                    alphaApplied = true;
+                }
+
+                // 6. _Alpha (일부 커스텀 셰이더 - float 타입)
+                if (mat.HasProperty("_Alpha"))
+                {
+                    mat.SetFloat("_Alpha", targetAlpha);
+                    alphaApplied = true;
+                }
+
+                // 7. _AlphaClip (알파 클리핑 임계값 - 0으로 설정하여 투명도 활성화)
+                if (mat.HasProperty("_AlphaClip") && targetAlpha < 1f)
+                {
+                    mat.SetFloat("_AlphaClip", 0f);
+                }
+
+                if (!alphaApplied)
+                {
+                    Debug.LogWarning($"[PracticeSettings] 머티리얼 '{mat.name}'에서 알파 프로퍼티를 찾을 수 없습니다. 셰이더: {mat.shader.name}");
                 }
             }
 
