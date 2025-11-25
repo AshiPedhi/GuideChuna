@@ -29,12 +29,25 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField] private GameObject skeletonModel;            // 근골격계 모델
     [SerializeField] private GameObject patientModel;             // 환자 모델
 
+    [Header("═══ 투명도 설정 ═══")]
+    [SerializeField][Range(0f, 1f)] private float skeletonModeAlpha = 0.3f;  // 골격 표시 시 환자 모델 알파값
+    [SerializeField][Range(0f, 1f)] private float realityModeAlpha = 0.5f;   // 현실 모드 시 모델 알파값
+    [SerializeField][Range(0f, 1f)] private float normalAlpha = 1f;          // 일반 상태 알파값
+
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
 
     // 패스쓰루 레이어 (런타임에 찾음)
     private OVRPassthroughLayer passthroughLayer;
     private bool isRealityModeOn = false;
+
+    // SkinnedMeshRenderer 캐싱
+    private SkinnedMeshRenderer[] patientRenderers;
+    private SkinnedMeshRenderer[] skeletonRenderers;
+
+    // 원본 머티리얼 저장 (투명도 복원용)
+    private Material[][] originalPatientMaterials;
+    private Material[][] originalSkeletonMaterials;
 
     // QuickMenuController 참조 (설정 토글 off 감지용)
     private QuickMenuController quickMenuController;
@@ -64,8 +77,47 @@ public class PracticeSettingsController : MonoBehaviour
 
     void Start()
     {
+        CacheRenderers();
         SetupToggleListeners();
         InitializeToggles();
+    }
+
+    /// <summary>
+    /// SkinnedMeshRenderer 캐싱 및 원본 머티리얼 저장
+    /// </summary>
+    void CacheRenderers()
+    {
+        // 환자 모델 렌더러 캐싱
+        if (patientModel != null)
+        {
+            patientRenderers = patientModel.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            if (patientRenderers.Length > 0)
+            {
+                // 원본 머티리얼 저장
+                originalPatientMaterials = new Material[patientRenderers.Length][];
+                for (int i = 0; i < patientRenderers.Length; i++)
+                {
+                    originalPatientMaterials[i] = patientRenderers[i].materials;
+                }
+                Debug.Log($"[PracticeSettings] ✅ 환자 모델 렌더러 {patientRenderers.Length}개 캐싱 완료");
+            }
+        }
+
+        // 골격 모델 렌더러 캐싱
+        if (skeletonModel != null)
+        {
+            skeletonRenderers = skeletonModel.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            if (skeletonRenderers.Length > 0)
+            {
+                // 원본 머티리얼 저장
+                originalSkeletonMaterials = new Material[skeletonRenderers.Length][];
+                for (int i = 0; i < skeletonRenderers.Length; i++)
+                {
+                    originalSkeletonMaterials[i] = skeletonRenderers[i].materials;
+                }
+                Debug.Log($"[PracticeSettings] ✅ 골격 모델 렌더러 {skeletonRenderers.Length}개 캐싱 완료");
+            }
+        }
     }
 
     void InitializePassthrough()
@@ -259,6 +311,20 @@ public class PracticeSettingsController : MonoBehaviour
         {
             skeletonModel.SetActive(isOn);
             Debug.Log($"[PracticeSettings] ✅ 근골격계 모델: {(isOn ? "표시" : "숨김")}");
+
+            // 골격 표시 시 환자 모델 반투명 처리
+            if (isOn)
+            {
+                SetModelTransparency(patientRenderers, skeletonModeAlpha, "환자 모델");
+            }
+            else
+            {
+                // 골격 숨김 시 환자 모델을 일반 상태로 복원 (현실 모드가 아니면)
+                if (!isRealityModeOn)
+                {
+                    SetModelTransparency(patientRenderers, normalAlpha, "환자 모델");
+                }
+            }
         }
         else
         {
@@ -331,6 +397,106 @@ public class PracticeSettingsController : MonoBehaviour
             }
             Debug.Log($"[PracticeSettings] 카메라 설정 업데이트");
         }
+
+        // 현실 모드 시 모델 투명도 조정
+        if (isOn)
+        {
+            // 환자 모델을 반투명하게
+            SetModelTransparency(patientRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
+
+            // 골격 모델도 표시되어 있다면 반투명하게
+            if (skeletonModel != null && skeletonModel.activeSelf)
+            {
+                SetModelTransparency(skeletonRenderers, realityModeAlpha, "골격 모델 (현실 모드)");
+            }
+        }
+        else
+        {
+            // 현실 모드 해제 시
+            // 골격이 표시되어 있으면 골격 모드 알파값으로, 아니면 일반 알파값으로
+            bool skeletonIsOn = skeletonModel != null && skeletonModel.activeSelf;
+            float targetAlpha = skeletonIsOn ? skeletonModeAlpha : normalAlpha;
+            SetModelTransparency(patientRenderers, targetAlpha, "환자 모델 (현실 모드 해제)");
+
+            // 골격 모델은 일반 상태로 복원
+            if (skeletonIsOn)
+            {
+                SetModelTransparency(skeletonRenderers, normalAlpha, "골격 모델 (현실 모드 해제)");
+            }
+        }
+    }
+    #endregion
+
+    #region 투명도 제어
+    /// <summary>
+    /// 모델의 투명도를 조정하는 메서드
+    /// </summary>
+    /// <param name="renderers">대상 SkinnedMeshRenderer 배열</param>
+    /// <param name="targetAlpha">목표 알파값 (0~1)</param>
+    /// <param name="modelName">로그용 모델 이름</param>
+    private void SetModelTransparency(SkinnedMeshRenderer[] renderers, float targetAlpha, string modelName)
+    {
+        if (renderers == null || renderers.Length == 0)
+        {
+            Debug.LogWarning($"[PracticeSettings] {modelName} 렌더러가 없어 투명도 조정을 건너뜁니다.");
+            return;
+        }
+
+        foreach (var renderer in renderers)
+        {
+            if (renderer == null) continue;
+
+            Material[] materials = renderer.materials;
+
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material mat = materials[i];
+                if (mat == null) continue;
+
+                // 투명도가 1 미만이면 Transparent 모드로 변경
+                if (targetAlpha < 1f)
+                {
+                    // Rendering Mode를 Transparent로 설정
+                    mat.SetFloat("_Mode", 3); // 3 = Transparent
+                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    mat.SetInt("_ZWrite", 0);
+                    mat.DisableKeyword("_ALPHATEST_ON");
+                    mat.EnableKeyword("_ALPHABLEND_ON");
+                    mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    mat.renderQueue = 3000;
+                }
+                else
+                {
+                    // Rendering Mode를 Opaque로 복원
+                    mat.SetFloat("_Mode", 0); // 0 = Opaque
+                    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+                    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+                    mat.SetInt("_ZWrite", 1);
+                    mat.DisableKeyword("_ALPHATEST_ON");
+                    mat.DisableKeyword("_ALPHABLEND_ON");
+                    mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    mat.renderQueue = -1;
+                }
+
+                // 알파값 적용
+                Color color = mat.color;
+                color.a = targetAlpha;
+                mat.color = color;
+
+                // _Color 프로퍼티가 있으면 거기에도 적용
+                if (mat.HasProperty("_Color"))
+                {
+                    Color mainColor = mat.GetColor("_Color");
+                    mainColor.a = targetAlpha;
+                    mat.SetColor("_Color", mainColor);
+                }
+            }
+
+            renderer.materials = materials;
+        }
+
+        Debug.Log($"[PracticeSettings] ✅ {modelName} 투명도 조정 완료: Alpha = {targetAlpha}");
     }
     #endregion
 
