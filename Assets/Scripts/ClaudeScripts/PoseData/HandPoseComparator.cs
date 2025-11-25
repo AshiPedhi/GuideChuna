@@ -57,6 +57,28 @@ public class HandPoseComparator
         public bool compareHandRotation = true;
         public float handRotationThreshold = 20f;    // 20도
 
+        [Header("연속 프레임 검증 (노이즈 필터링)")]
+        [Tooltip("통과로 인정하기 위해 필요한 연속 프레임 수 (1 = 즉시 통과, 3 = 3프레임 연속)")]
+        public int consecutiveFramesRequired = 3;
+
+        [Header("관절별 가중치 (중요도)")]
+        [Tooltip("손목 관절 가중치 (가장 중요)")]
+        public float wristWeight = 2.0f;
+        [Tooltip("손가락 끝 관절 가중치")]
+        public float fingerTipWeight = 1.5f;
+        [Tooltip("기타 관절 가중치")]
+        public float otherJointWeight = 1.0f;
+
+        [Header("적응형 임계값 (관절별 조정)")]
+        [Tooltip("손목은 위치 변화가 크므로 임계값 완화")]
+        public float wristPositionMultiplier = 1.5f;  // 7.5cm
+        [Tooltip("손가락 끝은 회전 변화가 크므로 임계값 완화")]
+        public float fingerTipRotationMultiplier = 1.5f; // 22.5도
+
+        [Header("디버그")]
+        [Tooltip("실패한 관절 상세 로그 출력")]
+        public bool showDetailedLogs = false;
+
         [Header("비교할 주요 조인트")]
         public List<HandJointId> keyJoints = new List<HandJointId>()
         {
@@ -84,6 +106,10 @@ public class HandPoseComparator
     private Vector3 rightReplayTargetPosition;
     private Vector3 leftPlayerCurrentPosition;
     private Vector3 rightPlayerCurrentPosition;
+
+    // 연속 프레임 검증용
+    private int leftConsecutiveSuccessCount = 0;
+    private int rightConsecutiveSuccessCount = 0;
 
     /// <summary>
     /// 설정 초기화
@@ -132,24 +158,30 @@ public class HandPoseComparator
     }
 
     /// <summary>
-    /// 왼손 포즈 비교
+    /// 왼손 포즈 비교 (연속 프레임 검증 추가)
     /// </summary>
     public SimilarityResult CompareLeftPose(HandVisual playerLeftHand, PoseFrame guideFrame, int currentFrameIndex = 0)
     {
         SimilarityResult result = new SimilarityResult();
 
         if (playerLeftHand == null || guideFrame == null)
+        {
+            leftConsecutiveSuccessCount = 0; // 실패 시 리셋
             return result;
+        }
 
         if (playerLeftHand.Hand == null || !playerLeftHand.Hand.IsTrackedDataValid)
+        {
+            leftConsecutiveSuccessCount = 0; // 트래킹 실패 시 리셋
             return result;
+        }
 
         // 조인트 유사도 비교
-        bool passed;
-        result.leftHandSimilarity = ComparePose(playerLeftHand, guideFrame.leftLocalPoses, out passed, "왼손", currentFrameIndex);
-        result.leftHandPassed = passed;
+        bool framePassed;
+        result.leftHandSimilarity = ComparePose(playerLeftHand, guideFrame.leftLocalPoses, out framePassed, "왼손", currentFrameIndex);
 
         // 손 전체 위치/회전 비교
+        bool positionPassed = true;
         if (settings.compareHandPosition)
         {
             CompareHandWorldPosition(
@@ -159,40 +191,68 @@ public class HandPoseComparator
                 leftOpenXRRoot,
                 out result.leftHandPositionError,
                 out result.leftHandRotationError,
-                out result.leftHandPositionPassed,
+                out positionPassed,
                 "왼손",
                 currentFrameIndex
             );
+            result.leftHandPositionPassed = positionPassed;
         }
         else
         {
             result.leftHandPositionPassed = true;
         }
 
+        // 이번 프레임이 통과했는지 확인
+        bool currentFrameSuccess = framePassed && positionPassed;
+
+        // 연속 프레임 검증
+        if (currentFrameSuccess)
+        {
+            leftConsecutiveSuccessCount++;
+        }
+        else
+        {
+            leftConsecutiveSuccessCount = 0; // 실패 시 카운터 리셋
+        }
+
+        // 연속 프레임 조건 만족 확인
+        result.leftHandPassed = leftConsecutiveSuccessCount >= settings.consecutiveFramesRequired;
         result.overallPassed = result.leftHandPassed && result.leftHandPositionPassed;
+
+        // 디버그 로그
+        if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
+        {
+            Debug.Log($"[HandPoseComparator] 왼손 연속 성공: {leftConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (유사도: {result.leftHandSimilarity:P0})");
+        }
 
         return result;
     }
 
     /// <summary>
-    /// 오른손 포즈 비교
+    /// 오른손 포즈 비교 (연속 프레임 검증 추가)
     /// </summary>
     public SimilarityResult CompareRightPose(HandVisual playerRightHand, PoseFrame guideFrame, int currentFrameIndex = 0)
     {
         SimilarityResult result = new SimilarityResult();
 
         if (playerRightHand == null || guideFrame == null)
+        {
+            rightConsecutiveSuccessCount = 0; // 실패 시 리셋
             return result;
+        }
 
         if (playerRightHand.Hand == null || !playerRightHand.Hand.IsTrackedDataValid)
+        {
+            rightConsecutiveSuccessCount = 0; // 트래킹 실패 시 리셋
             return result;
+        }
 
         // 조인트 유사도 비교
-        bool passed;
-        result.rightHandSimilarity = ComparePose(playerRightHand, guideFrame.rightLocalPoses, out passed, "오른손", currentFrameIndex);
-        result.rightHandPassed = passed;
+        bool framePassed;
+        result.rightHandSimilarity = ComparePose(playerRightHand, guideFrame.rightLocalPoses, out framePassed, "오른손", currentFrameIndex);
 
         // 손 전체 위치/회전 비교
+        bool positionPassed = true;
         if (settings.compareHandPosition)
         {
             CompareHandWorldPosition(
@@ -202,17 +262,39 @@ public class HandPoseComparator
                 rightOpenXRRoot,
                 out result.rightHandPositionError,
                 out result.rightHandRotationError,
-                out result.rightHandPositionPassed,
+                out positionPassed,
                 "오른손",
                 currentFrameIndex
             );
+            result.rightHandPositionPassed = positionPassed;
         }
         else
         {
             result.rightHandPositionPassed = true;
         }
 
+        // 이번 프레임이 통과했는지 확인
+        bool currentFrameSuccess = framePassed && positionPassed;
+
+        // 연속 프레임 검증
+        if (currentFrameSuccess)
+        {
+            rightConsecutiveSuccessCount++;
+        }
+        else
+        {
+            rightConsecutiveSuccessCount = 0; // 실패 시 카운터 리셋
+        }
+
+        // 연속 프레임 조건 만족 확인
+        result.rightHandPassed = rightConsecutiveSuccessCount >= settings.consecutiveFramesRequired;
         result.overallPassed = result.rightHandPassed && result.rightHandPositionPassed;
+
+        // 디버그 로그
+        if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
+        {
+            Debug.Log($"[HandPoseComparator] 오른손 연속 성공: {rightConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (유사도: {result.rightHandSimilarity:P0})");
+        }
 
         return result;
     }
@@ -248,7 +330,7 @@ public class HandPoseComparator
     }
 
     /// <summary>
-    /// 조인트 포즈 비교 (로컬 좌표)
+    /// 조인트 포즈 비교 (로컬 좌표, 가중치 및 적응형 임계값 적용)
     /// </summary>
     private float ComparePose(HandVisual playerHand, Dictionary<int, PoseData> guidePoses, out bool passed, string handName, int frameIndex)
     {
@@ -259,8 +341,8 @@ public class HandPoseComparator
             return 0f;
         }
 
-        int similarJointCount = 0;
-        int totalJointCount = 0;
+        float weightedSimilaritySum = 0f;
+        float totalWeight = 0f;
 
         foreach (HandJointId jointId in settings.keyJoints)
         {
@@ -269,30 +351,97 @@ public class HandPoseComparator
             if (!guidePoses.ContainsKey(jointIndex))
                 continue;
 
-            totalJointCount++;
-
             if (jointIndex >= playerHand.Joints.Count || playerHand.Joints[jointIndex] == null)
                 continue;
 
             Transform playerJoint = playerHand.Joints[jointIndex];
             PoseData guidePose = guidePoses[jointIndex];
 
+            // 관절별 가중치 계산
+            float jointWeight = GetJointWeight(jointId);
+            totalWeight += jointWeight;
+
+            // 관절별 적응형 임계값 계산
+            float posThreshold = GetAdaptivePositionThreshold(jointId);
+            float rotThreshold = GetAdaptiveRotationThreshold(jointId);
+
             float positionDistance = Vector3.Distance(playerJoint.localPosition, guidePose.position);
             float rotationAngle = Quaternion.Angle(playerJoint.localRotation, guidePose.rotation);
 
-            if (positionDistance <= settings.positionThreshold && rotationAngle <= settings.rotationThreshold)
+            // 이 관절이 통과했는지 확인
+            bool jointPassed = positionDistance <= posThreshold && rotationAngle <= rotThreshold;
+
+            if (jointPassed)
             {
-                similarJointCount++;
+                weightedSimilaritySum += jointWeight;
+            }
+
+            // 상세 디버그 로그
+            if (settings.showDetailedLogs && frameIndex % 30 == 0 && !jointPassed)
+            {
+                Debug.LogWarning($"[HandPoseComparator] {handName} {jointId} 실패: " +
+                    $"위치오차={positionDistance * 100:F1}cm (임계값={posThreshold * 100:F1}cm), " +
+                    $"각도오차={rotationAngle:F1}° (임계값={rotThreshold:F1}°)");
             }
         }
 
-        if (totalJointCount == 0)
+        if (totalWeight == 0f)
             return 0f;
 
-        float similarity = (float)similarJointCount / totalJointCount;
-        passed = similarity >= settings.similarityPercentage;
+        // 가중치 적용된 유사도 계산
+        float weightedSimilarity = weightedSimilaritySum / totalWeight;
+        passed = weightedSimilarity >= settings.similarityPercentage;
 
-        return similarity;
+        return weightedSimilarity;
+    }
+
+    /// <summary>
+    /// 관절별 가중치 반환
+    /// </summary>
+    private float GetJointWeight(HandJointId jointId)
+    {
+        // 손목은 가장 중요
+        if (jointId == HandJointId.HandWristRoot)
+            return settings.wristWeight;
+
+        // 손가락 끝은 중요
+        if (jointId == HandJointId.HandThumb3 ||
+            jointId == HandJointId.HandIndex3 ||
+            jointId == HandJointId.HandMiddle3 ||
+            jointId == HandJointId.HandRing3 ||
+            jointId == HandJointId.HandPinky3)
+            return settings.fingerTipWeight;
+
+        // 기타 관절
+        return settings.otherJointWeight;
+    }
+
+    /// <summary>
+    /// 적응형 위치 임계값 반환
+    /// </summary>
+    private float GetAdaptivePositionThreshold(HandJointId jointId)
+    {
+        // 손목은 위치 변화가 크므로 임계값 완화
+        if (jointId == HandJointId.HandWristRoot)
+            return settings.positionThreshold * settings.wristPositionMultiplier;
+
+        return settings.positionThreshold;
+    }
+
+    /// <summary>
+    /// 적응형 회전 임계값 반환
+    /// </summary>
+    private float GetAdaptiveRotationThreshold(HandJointId jointId)
+    {
+        // 손가락 끝은 회전 변화가 크므로 임계값 완화
+        if (jointId == HandJointId.HandThumb3 ||
+            jointId == HandJointId.HandIndex3 ||
+            jointId == HandJointId.HandMiddle3 ||
+            jointId == HandJointId.HandRing3 ||
+            jointId == HandJointId.HandPinky3)
+            return settings.rotationThreshold * settings.fingerTipRotationMultiplier;
+
+        return settings.rotationThreshold;
     }
 
     /// <summary>
@@ -382,5 +531,23 @@ public class HandPoseComparator
     public (Vector3 leftTarget, Vector3 leftPlayer, Vector3 rightTarget, Vector3 rightPlayer) GetDebugPositions()
     {
         return (leftReplayTargetPosition, leftPlayerCurrentPosition, rightReplayTargetPosition, rightPlayerCurrentPosition);
+    }
+
+    /// <summary>
+    /// 연속 프레임 카운터 리셋 (새로운 훈련 시작 시 호출)
+    /// </summary>
+    public void ResetConsecutiveCounters()
+    {
+        leftConsecutiveSuccessCount = 0;
+        rightConsecutiveSuccessCount = 0;
+        Debug.Log("[HandPoseComparator] 연속 프레임 카운터 리셋");
+    }
+
+    /// <summary>
+    /// 현재 연속 성공 카운트 가져오기 (디버그용)
+    /// </summary>
+    public (int leftCount, int rightCount) GetConsecutiveCounts()
+    {
+        return (leftConsecutiveSuccessCount, rightConsecutiveSuccessCount);
     }
 }

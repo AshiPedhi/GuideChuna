@@ -617,6 +617,12 @@ public class HandPoseTrainingController : MonoBehaviour
         userCompletedLeft = false;
         userCompletedRight = false;
         hasNotifiedUserCompletion = false;
+
+        // 연속 프레임 카운터 리셋
+        if (comparator != null)
+        {
+            comparator.ResetConsecutiveCounters();
+        }
     }
 
     /// <summary>
