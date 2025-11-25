@@ -518,17 +518,27 @@ public class PracticeSettingsController : MonoBehaviour
                     mat.renderQueue = -1;
                 }
 
-                // 알파값 적용
-                Color color = mat.color;
-                color.a = targetAlpha;
-                mat.color = color;
-
-                // _Color 프로퍼티가 있으면 거기에도 적용
+                // 알파값 적용 - _Color 프로퍼티가 있을 때만
                 if (mat.HasProperty("_Color"))
                 {
                     Color mainColor = mat.GetColor("_Color");
                     mainColor.a = targetAlpha;
                     mat.SetColor("_Color", mainColor);
+                }
+
+                // 기타 일반적인 컬러 프로퍼티들 확인
+                if (mat.HasProperty("_BaseColor"))
+                {
+                    Color baseColor = mat.GetColor("_BaseColor");
+                    baseColor.a = targetAlpha;
+                    mat.SetColor("_BaseColor", baseColor);
+                }
+
+                if (mat.HasProperty("_MainColor"))
+                {
+                    Color mainColor = mat.GetColor("_MainColor");
+                    mainColor.a = targetAlpha;
+                    mat.SetColor("_MainColor", mainColor);
                 }
             }
 
