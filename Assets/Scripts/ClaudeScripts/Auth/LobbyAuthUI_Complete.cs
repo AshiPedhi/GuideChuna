@@ -47,7 +47,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     [Header("Popups")]
     [SerializeField] private GameObject loginRequiredPopup;
-    [SerializeField] private Button loginRequiredCloseButton;
+    [SerializeField] private Toggle loginRequiredCloseButton;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -351,12 +351,18 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
-        // 로그인 팝업 닫기 버튼
+        // 로그인 팝업 닫기 토글
         if (loginRequiredCloseButton != null)
         {
-            loginRequiredCloseButton.onClick.RemoveAllListeners();
-            loginRequiredCloseButton.onClick.AddListener(OnLoginRequiredPopupClose);
-            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 버튼 연결");
+            loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
+            loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLoginRequiredPopupClose();
+                    StartCoroutine(ResetToggle(loginRequiredCloseButton));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 토글 연결");
         }
         else
         {
@@ -1089,6 +1095,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.Log("[LobbyUI] 로그인 필요 팝업 닫기");
         }
     }
+
+    /// <summary>
+    /// 토글을 버튼처럼 사용하기 위한 리셋 코루틴
+    /// </summary>
+    private System.Collections.IEnumerator ResetToggle(Toggle toggle)
+    {
+        yield return null;
+        if (toggle != null)
+            toggle.isOn = false;
+    }
     #endregion
 
     #region Error Handling
@@ -1264,7 +1280,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         Debug.Log($"  - userBackButton: {(userBackButton != null ? "✅" : "❌")}");
         Debug.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
         Debug.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - loginRequiredCloseButton: {(loginRequiredCloseButton != null ? "✅" : "❌")}");
+        Debug.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
     }
     #endregion
 }
