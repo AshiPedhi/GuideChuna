@@ -51,8 +51,14 @@ public class ExitPopupController : MonoBehaviour
     private bool isShowing = false;
     private Coroutine animationCoroutine;
 
+    // ModeSelectionManagerV2 참조
+    private ModeSelectionManagerV2 modeSelectionManager;
+
     private void Awake()
     {
+        // ModeSelectionManagerV2 찾기
+        modeSelectionManager = FindObjectOfType<ModeSelectionManagerV2>();
+
         // 토글 이벤트 연결
         if (cancelToggle != null)
         {
@@ -157,6 +163,12 @@ public class ExitPopupController : MonoBehaviour
 
         isShowing = true;
 
+        // 메뉴 숨기기 알림
+        if (modeSelectionManager != null)
+        {
+            modeSelectionManager.OnPopupOpened();
+        }
+
         if (popupPanel != null)
         {
             popupPanel.SetActive(true);
@@ -190,6 +202,12 @@ public class ExitPopupController : MonoBehaviour
         if (!isShowing) return;
 
         isShowing = false;
+
+        // 메뉴 복원 알림
+        if (modeSelectionManager != null)
+        {
+            modeSelectionManager.OnPopupClosed();
+        }
 
         // 애니메이션
         if (animationCoroutine != null)
