@@ -53,6 +53,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [SerializeField] private GameObject exitConfirmationPopup;
     [SerializeField] private Toggle exitYesToggle;
     [SerializeField] private Toggle exitNoToggle;
+
+    [Header("Logout Confirmation Popup")]
+    [SerializeField] private GameObject logoutConfirmationPopup;
+    [SerializeField] private Toggle logoutCancelToggle;
+    [SerializeField] private Toggle logoutConfirmToggle;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -171,6 +176,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         userInfoContent?.SetActive(true); // 항상 활성화! (로그인 전에는 "Guest" 표시)
         loginRequiredPopup?.SetActive(false);
         exitConfirmationPopup?.SetActive(false);
+        logoutConfirmationPopup?.SetActive(false);
 
         // 시나리오 카드 자동 검색
         if (autoFindScenarioCards)
@@ -357,18 +363,18 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
-        // 로그인 팝업 닫기 토글
+        // 로그인 팝업 - 유저 목록으로 연결 토글
         if (loginRequiredCloseButton != null)
         {
             loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
             loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
                 if (isOn)
                 {
-                    OnLoginRequiredPopupClose();
+                    OnLoginRequiredPopupGoToUserList();
                     StartCoroutine(ResetToggle(loginRequiredCloseButton));
                 }
             });
-            Debug.Log("[LobbyUI] ✅ 로그인 팝업 닫기 토글 연결");
+            Debug.Log("[LobbyUI] ✅ 로그인 팝업 - 유저 목록 연결 토글 연결");
         }
         else
         {
@@ -409,6 +415,42 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         else
         {
             Debug.LogWarning("[LobbyUI] ⚠️ exitNoToggle이 null입니다.");
+        }
+
+        // 로그아웃 확인 팝업 - 취소 토글
+        if (logoutCancelToggle != null)
+        {
+            logoutCancelToggle.onValueChanged.RemoveAllListeners();
+            logoutCancelToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLogoutCancel();
+                    StartCoroutine(ResetToggle(logoutCancelToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 취소 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ logoutCancelToggle이 null입니다.");
+        }
+
+        // 로그아웃 확인 팝업 - 로그아웃하기 토글
+        if (logoutConfirmToggle != null)
+        {
+            logoutConfirmToggle.onValueChanged.RemoveAllListeners();
+            logoutConfirmToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnLogoutConfirm();
+                    StartCoroutine(ResetToggle(logoutConfirmToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 로그아웃하기 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ logoutConfirmToggle이 null입니다.");
         }
     }
 
@@ -600,7 +642,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnUserIconClicked()
     {
         Debug.Log("[LobbyUI] 유저 아이콘 클릭");
-        ShowGradeSelectionPanel();
+
+        // 로그인 상태 확인
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            // 로그인 안 되어 있으면 조 선택 패널 표시
+            Debug.Log("[LobbyUI] 로그인 안 되어 있음 - 조 선택 패널 표시");
+            ShowGradeSelectionPanel();
+        }
+        else
+        {
+            // 로그인 되어 있으면 로그아웃 확인 팝업 표시
+            Debug.Log($"[LobbyUI] 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
+            ShowLogoutConfirmationPopup();
+        }
     }
 
     private void OnGradeBackButtonClicked()
@@ -1157,6 +1212,23 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 로그인 팝업에서 유저 목록으로 이동
+    /// </summary>
+    private void OnLoginRequiredPopupGoToUserList()
+    {
+        Debug.Log("[LobbyUI] 로그인 팝업 - 유저 목록으로 이동");
+
+        // 팝업 닫기
+        if (loginRequiredPopup != null)
+        {
+            loginRequiredPopup.SetActive(false);
+        }
+
+        // 조 선택 패널 표시
+        ShowGradeSelectionPanel();
+    }
+
     private void ShowExitConfirmationPopup()
     {
         if (exitConfirmationPopup != null)
@@ -1177,6 +1249,47 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             exitConfirmationPopup.SetActive(false);
             Debug.Log("[LobbyUI] 종료 확인 팝업 닫기");
         }
+    }
+
+    private void ShowLogoutConfirmationPopup()
+    {
+        if (logoutConfirmationPopup != null)
+        {
+            logoutConfirmationPopup.SetActive(true);
+            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] logoutConfirmationPopup이 연결되지 않았습니다.");
+        }
+    }
+
+    private void HideLogoutConfirmationPopup()
+    {
+        if (logoutConfirmationPopup != null)
+        {
+            logoutConfirmationPopup.SetActive(false);
+            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 닫기");
+        }
+    }
+
+    /// <summary>
+    /// 로그아웃 확인 팝업 - 취소 선택
+    /// </summary>
+    private void OnLogoutCancel()
+    {
+        Debug.Log("[LobbyUI] 로그아웃 취소");
+        HideLogoutConfirmationPopup();
+    }
+
+    /// <summary>
+    /// 로그아웃 확인 팝업 - 로그아웃하기 선택
+    /// </summary>
+    private void OnLogoutConfirm()
+    {
+        Debug.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
+        HideLogoutConfirmationPopup();
+        PerformLogout().Forget();
     }
 
     /// <summary>
@@ -1368,6 +1481,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         Debug.Log("종료 확인 팝업:");
         Debug.Log($"  - exitYesToggle (토글): {(exitYesToggle != null ? "✅" : "❌")}");
         Debug.Log($"  - exitNoToggle (토글): {(exitNoToggle != null ? "✅" : "❌")}");
+
+        Debug.Log("로그아웃 확인 팝업:");
+        Debug.Log($"  - logoutCancelToggle (토글): {(logoutCancelToggle != null ? "✅" : "❌")}");
+        Debug.Log($"  - logoutConfirmToggle (토글): {(logoutConfirmToggle != null ? "✅" : "❌")}");
     }
     #endregion
 }
