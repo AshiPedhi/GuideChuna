@@ -48,6 +48,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("Popups")]
     [SerializeField] private GameObject loginRequiredPopup;
     [SerializeField] private Toggle loginRequiredCloseButton;
+
+    [Header("Exit Confirmation Popup")]
+    [SerializeField] private GameObject exitConfirmationPopup;
+    [SerializeField] private Toggle exitYesToggle;
+    [SerializeField] private Toggle exitNoToggle;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -165,6 +170,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         userSelectionPanel?.SetActive(false);
         userInfoContent?.SetActive(true); // 항상 활성화! (로그인 전에는 "Guest" 표시)
         loginRequiredPopup?.SetActive(false);
+        exitConfirmationPopup?.SetActive(false);
 
         // 시나리오 카드 자동 검색
         if (autoFindScenarioCards)
@@ -367,6 +373,42 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         else
         {
             Debug.LogWarning("[LobbyUI] ⚠️ loginRequiredCloseButton이 null입니다.");
+        }
+
+        // 종료 확인 팝업 - 예 토글
+        if (exitYesToggle != null)
+        {
+            exitYesToggle.onValueChanged.RemoveAllListeners();
+            exitYesToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnExitConfirmYes();
+                    StartCoroutine(ResetToggle(exitYesToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 종료 확인 - 예 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ exitYesToggle이 null입니다.");
+        }
+
+        // 종료 확인 팝업 - 아니오 토글
+        if (exitNoToggle != null)
+        {
+            exitNoToggle.onValueChanged.RemoveAllListeners();
+            exitNoToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn)
+                {
+                    OnExitConfirmNo();
+                    StartCoroutine(ResetToggle(exitNoToggle));
+                }
+            });
+            Debug.Log("[LobbyUI] ✅ 종료 확인 - 아니오 토글 연결");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] ⚠️ exitNoToggle이 null입니다.");
         }
     }
 
@@ -577,7 +619,26 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnExitButtonClicked()
     {
         Debug.Log("[LobbyUI] 나가기 버튼 클릭");
+        ShowExitConfirmationPopup();
+    }
+
+    /// <summary>
+    /// 종료 확인 팝업 - 예 선택
+    /// </summary>
+    private void OnExitConfirmYes()
+    {
+        Debug.Log("[LobbyUI] 종료 확인 - 예 선택");
+        HideExitConfirmationPopup();
         ExitApplication().Forget();
+    }
+
+    /// <summary>
+    /// 종료 확인 팝업 - 아니오 선택
+    /// </summary>
+    private void OnExitConfirmNo()
+    {
+        Debug.Log("[LobbyUI] 종료 확인 - 아니오 선택");
+        HideExitConfirmationPopup();
     }
 
     /// <summary>
@@ -1096,6 +1157,28 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
     }
 
+    private void ShowExitConfirmationPopup()
+    {
+        if (exitConfirmationPopup != null)
+        {
+            exitConfirmationPopup.SetActive(true);
+            Debug.Log("[LobbyUI] 종료 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] exitConfirmationPopup이 연결되지 않았습니다.");
+        }
+    }
+
+    private void HideExitConfirmationPopup()
+    {
+        if (exitConfirmationPopup != null)
+        {
+            exitConfirmationPopup.SetActive(false);
+            Debug.Log("[LobbyUI] 종료 확인 팝업 닫기");
+        }
+    }
+
     /// <summary>
     /// 토글을 버튼처럼 사용하기 위한 리셋 코루틴
     /// </summary>
@@ -1281,6 +1364,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         Debug.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
         Debug.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
         Debug.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
+
+        Debug.Log("종료 확인 팝업:");
+        Debug.Log($"  - exitYesToggle (토글): {(exitYesToggle != null ? "✅" : "❌")}");
+        Debug.Log($"  - exitNoToggle (토글): {(exitNoToggle != null ? "✅" : "❌")}");
     }
     #endregion
 }
