@@ -366,6 +366,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그인 팝업 - 유저 목록으로 연결 토글
         if (loginRequiredCloseButton != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            loginRequiredCloseButton.group = null;
+
             loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
             loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -384,6 +387,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 종료 확인 팝업 - 예 토글
         if (exitYesToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            exitYesToggle.group = null;
+
             exitYesToggle.onValueChanged.RemoveAllListeners();
             exitYesToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -402,6 +408,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 종료 확인 팝업 - 아니오 토글
         if (exitNoToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            exitNoToggle.group = null;
+
             exitNoToggle.onValueChanged.RemoveAllListeners();
             exitNoToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -420,6 +429,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그아웃 확인 팝업 - 취소 토글
         if (logoutCancelToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            logoutCancelToggle.group = null;
+
             logoutCancelToggle.onValueChanged.RemoveAllListeners();
             logoutCancelToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -438,6 +450,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그아웃 확인 팝업 - 로그아웃하기 토글
         if (logoutConfirmToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            logoutConfirmToggle.group = null;
+
             logoutConfirmToggle.onValueChanged.RemoveAllListeners();
             logoutConfirmToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
