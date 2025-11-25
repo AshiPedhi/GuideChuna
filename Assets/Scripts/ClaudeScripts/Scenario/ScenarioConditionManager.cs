@@ -32,6 +32,9 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("완료 후 다음 단계까지 딜레이 (초)")]
     [SerializeField] private float completionDelay = 2f;
 
+    [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
+    [SerializeField] private float progressTimeout = 20f;
+
     [Header("=== 완료 알림 UI ===")]
     [SerializeField] private GameObject completionAlertPanel;
     [SerializeField] private TMPro.TextMeshProUGUI completionAlertText;
@@ -39,6 +42,9 @@ public class ScenarioConditionManager : MonoBehaviour
     [Header("=== 사운드 (선택사항) ===")]
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip completionSound;
+
+    [Header("=== UI 참조 ===")]
+    [SerializeField] private ScenarioGuideUIController guideUIController;
 
     // 현재 조건
     private IScenarioCondition currentCondition;
@@ -52,10 +58,24 @@ public class ScenarioConditionManager : MonoBehaviour
     // 조건 레지스트리 (SubStep별로 조건을 등록)
     private Dictionary<string, IScenarioCondition> conditionRegistry = new Dictionary<string, IScenarioCondition>();
 
+    // Quest 최적화: WaitForSeconds 캐싱
+    private WaitForSeconds cachedCheckInterval;
+    private WaitForSeconds cachedCompletionDelay;
+
     void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
         scenarioManager = FindObjectOfType<ScenarioManager>();
+
+        // GuideUIController가 설정되지 않았으면 자동으로 찾기
+        if (guideUIController == null)
+        {
+            guideUIController = FindObjectOfType<ScenarioGuideUIController>();
+        }
+
+        // Quest 최적화: WaitForSeconds 객체 캐싱
+        cachedCheckInterval = new WaitForSeconds(checkInterval);
+        cachedCompletionDelay = new WaitForSeconds(completionDelay);
 
         // 완료 알림 패널 초기화
         if (completionAlertPanel != null)
@@ -216,13 +236,20 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 수동 진행 처리
+    /// 수동 진행 처리 (토글 버튼 활성화 및 초기화)
     /// </summary>
     private void HandleManualProgress()
     {
         currentCondition = null;
         StopConditionCheck();
         eventSystem.RequestButtonStateUpdate(true);
+
+        // 토글 버튼 초기화 (항상 off 상태로)
+        if (guideUIController != null)
+        {
+            guideUIController.ResetStartToggle();
+        }
+
         Debug.Log("[ConditionManager] '다음' 버튼 활성화 (수동 진행)");
     }
 
@@ -254,10 +281,13 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 조건 체크 루틴
+    /// 조건 체크 루틴 (Quest 최적화: WaitForSeconds 캐싱, 20초 타임아웃 추가)
     /// </summary>
     private IEnumerator ConditionCheckRoutine()
     {
+        float elapsedTime = 0f; // 경과 시간 추적
+        bool timeoutTriggered = false; // 타임아웃 발생 여부
+
         while (isCheckingCondition && currentCondition != null)
         {
             // 조건 확인
@@ -274,14 +304,33 @@ public class ScenarioConditionManager : MonoBehaviour
                 yield break;
             }
 
-            // 다음 체크까지 대기
-            yield return new WaitForSeconds(checkInterval);
+            // 경과 시간 증가
+            elapsedTime += checkInterval;
+
+            // 20초 타임아웃 체크
+            if (!timeoutTriggered && elapsedTime >= progressTimeout)
+            {
+                timeoutTriggered = true;
+                Debug.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 진행 안됨 감지, 토글 버튼 활성화</color>");
+
+                // 토글 버튼 활성화
+                if (guideUIController != null)
+                {
+                    guideUIController.EnableStartToggle();
+                }
+
+                // 조건 체크는 계속 진행 (사용자가 동작을 완료할 수도 있음)
+            }
+
+            // 다음 체크까지 대기 (Quest 최적화: 캐시된 객체 사용)
+            yield return cachedCheckInterval;
         }
     }
 
     /// <summary>
     /// 조건 완료 시 처리 (완료 알림 + 딜레이)
     /// HandPose 조건 등 등록된 조건에서 사용
+    /// Quest 최적화: WaitForSeconds 캐싱
     /// </summary>
     private IEnumerator OnConditionCompleted()
     {
@@ -291,8 +340,8 @@ public class ScenarioConditionManager : MonoBehaviour
         // 완료 사운드 재생
         PlayCompletionSound();
 
-        // 딜레이
-        yield return new WaitForSeconds(completionDelay);
+        // 딜레이 (Quest 최적화: 캐시된 객체 사용)
+        yield return cachedCompletionDelay;
 
         // 완료 알림 숨김
         HideCompletionAlert();
