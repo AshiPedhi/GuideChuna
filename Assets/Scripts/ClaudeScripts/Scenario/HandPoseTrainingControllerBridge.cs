@@ -22,6 +22,10 @@ public class HandPoseTrainingControllerBridge : MonoBehaviour
     [Tooltip("자동으로 찾아서 연결됩니다")]
     [SerializeField] private HandPoseTrainingController trainingController;
 
+    [Header("=== ReferenceHandBridge 참조 ===")]
+    [Tooltip("참조 손 모델 표시 (옵션)")]
+    [SerializeField] private ReferenceHandBridge referenceHandBridge;
+
     [Header("=== 진행률 추적 설정 ===")]
     [Tooltip("목표 진행률 (0.0~1.0). 이 진행률에 도달하면 OnProgressThresholdReached 이벤트 발생")]
     [SerializeField] private float progressThreshold = 0.8f;
@@ -71,6 +75,17 @@ public class HandPoseTrainingControllerBridge : MonoBehaviour
             // 이벤트 구독
             trainingController.OnUserProgressCompleted += OnUserProgressCompletedHandler;
             trainingController.OnSequenceCompleted += OnSequenceCompletedHandler;
+        }
+
+        // ReferenceHandBridge 자동 찾기
+        if (referenceHandBridge == null)
+        {
+            referenceHandBridge = FindObjectOfType<ReferenceHandBridge>();
+        }
+
+        if (referenceHandBridge != null && showDebugLogs)
+        {
+            Debug.Log($"[TrainingControllerBridge] ReferenceHandBridge 연결 완료: {referenceHandBridge.name}");
         }
     }
 
@@ -188,6 +203,12 @@ public class HandPoseTrainingControllerBridge : MonoBehaviour
         // HandPoseTrainingController의 LoadAndStartTraining 메서드 호출
         trainingController.LoadAndStartTraining(csvFileName);
 
+        // ReferenceHandBridge도 동일한 CSV 로드 (있으면)
+        if (referenceHandBridge != null)
+        {
+            referenceHandBridge.OnTrainingStarted(csvFileName);
+        }
+
         // 추적 시작
         StartTracking();
     }
@@ -213,6 +234,12 @@ public class HandPoseTrainingControllerBridge : MonoBehaviour
     public void StopTracking()
     {
         isTracking = false;
+
+        // ReferenceHandBridge도 중지 (있으면)
+        if (referenceHandBridge != null)
+        {
+            referenceHandBridge.OnTrainingStopped();
+        }
 
         if (showDebugLogs)
             Debug.Log($"[TrainingControllerBridge] 추적 중지");
