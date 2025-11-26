@@ -9,11 +9,18 @@ using static HandPoseDataLoader;
 /// </summary>
 public class ReferenceHandDisplay : MonoBehaviour
 {
-    [Header("=== 참조 손 모델 ===")]
-    [Tooltip("왼손 참조 모델 (HandVisual 또는 HandTransformMapper)")]
+    [Header("=== 참조 손 모델 (HandTransformMapper) ===")]
+    [Tooltip("왼손 참조 모델 (HandTransformMapper 권장)")]
+    [SerializeField] private HandTransformMapper leftReferenceMapper;
+
+    [Tooltip("오른손 참조 모델 (HandTransformMapper 권장)")]
+    [SerializeField] private HandTransformMapper rightReferenceMapper;
+
+    [Header("=== 참조 손 모델 (HandVisual - 대체용) ===")]
+    [Tooltip("왼손 참조 모델 (HandVisual) - Mapper가 없을 때만 사용")]
     [SerializeField] private HandVisual leftReferenceHand;
 
-    [Tooltip("오른손 참조 모델 (HandVisual 또는 HandTransformMapper)")]
+    [Tooltip("오른손 참조 모델 (HandVisual) - Mapper가 없을 때만 사용")]
     [SerializeField] private HandVisual rightReferenceHand;
 
     [Header("=== 트레이닝 컨트롤러 ===")]
@@ -49,6 +56,10 @@ public class ReferenceHandDisplay : MonoBehaviour
     // 업데이트 타이머
     private float updateTimer = 0f;
 
+    // 모델 타입 플래그
+    private bool useLeftMapper = false;
+    private bool useRightMapper = false;
+
     // 렌더러 캐시
     private SkinnedMeshRenderer[] leftRenderers;
     private SkinnedMeshRenderer[] rightRenderers;
@@ -64,6 +75,10 @@ public class ReferenceHandDisplay : MonoBehaviour
                 Debug.LogWarning("[ReferenceHandDisplay] HandPoseTrainingController를 찾을 수 없습니다!");
             }
         }
+
+        // Mapper 사용 여부 확인
+        useLeftMapper = (leftReferenceMapper != null);
+        useRightMapper = (rightReferenceMapper != null);
 
         // 렌더러 캐시
         CacheRenderers();
@@ -94,14 +109,24 @@ public class ReferenceHandDisplay : MonoBehaviour
     /// </summary>
     private void SetupReferenceHands()
     {
-        if (leftReferenceHand != null)
+        // 왼손 설정
+        if (useLeftMapper && leftReferenceMapper != null)
         {
-            SetupHandVisual(leftReferenceHand, leftRenderers);
+            SetupHandMapper(leftReferenceMapper, ref leftRenderers);
+        }
+        else if (leftReferenceHand != null)
+        {
+            SetupHandVisual(leftReferenceHand, ref leftRenderers);
         }
 
-        if (rightReferenceHand != null)
+        // 오른손 설정
+        if (useRightMapper && rightReferenceMapper != null)
         {
-            SetupHandVisual(rightReferenceHand, rightRenderers);
+            SetupHandMapper(rightReferenceMapper, ref rightRenderers);
+        }
+        else if (rightReferenceHand != null)
+        {
+            SetupHandVisual(rightReferenceHand, ref rightRenderers);
         }
 
         // 표시 상태 설정
@@ -110,13 +135,58 @@ public class ReferenceHandDisplay : MonoBehaviour
         if (showDebugLogs)
         {
             Debug.Log($"[ReferenceHandDisplay] 참조 손 초기화 완료 (투명도: {referenceAlpha}, 색상: {referenceColor})");
+            Debug.Log($"  왼손: {(useLeftMapper ? "HandTransformMapper" : "HandVisual")}");
+            Debug.Log($"  오른손: {(useRightMapper ? "HandTransformMapper" : "HandVisual")}");
+        }
+    }
+
+    /// <summary>
+    /// HandTransformMapper 반투명 설정
+    /// </summary>
+    private void SetupHandMapper(HandTransformMapper mapper, ref SkinnedMeshRenderer[] renderers)
+    {
+        if (mapper == null)
+            return;
+
+        renderers = mapper.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+
+        foreach (var renderer in renderers)
+        {
+            // 새 머티리얼 생성 (원본 보존)
+            Material mat = new Material(renderer.material);
+
+            // Transparent 모드로 변경
+            mat.SetFloat("_Mode", 3); // Transparent
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.EnableKeyword("_ALPHABLEND_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            mat.renderQueue = 3000;
+
+            // 색상 및 투명도 설정
+            if (mat.HasProperty("_Color"))
+            {
+                Color finalColor = referenceColor;
+                finalColor.a = referenceAlpha;
+                mat.color = finalColor;
+            }
+            else if (mat.HasProperty("_BaseColor"))
+            {
+                Color finalColor = referenceColor;
+                finalColor.a = referenceAlpha;
+                mat.SetColor("_BaseColor", finalColor);
+            }
+
+            renderer.material = mat;
         }
     }
 
     /// <summary>
     /// HandVisual 반투명 설정
     /// </summary>
-    private void SetupHandVisual(HandVisual handVisual, SkinnedMeshRenderer[] renderers)
+    private void SetupHandVisual(HandVisual handVisual, ref SkinnedMeshRenderer[] renderers)
     {
         if (handVisual == null)
             return;
@@ -161,12 +231,20 @@ public class ReferenceHandDisplay : MonoBehaviour
     /// </summary>
     private void CacheRenderers()
     {
-        if (leftReferenceHand != null)
+        if (useLeftMapper && leftReferenceMapper != null)
+        {
+            leftRenderers = leftReferenceMapper.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        }
+        else if (leftReferenceHand != null)
         {
             leftRenderers = leftReferenceHand.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         }
 
-        if (rightReferenceHand != null)
+        if (useRightMapper && rightReferenceMapper != null)
+        {
+            rightRenderers = rightReferenceMapper.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        }
+        else if (rightReferenceHand != null)
         {
             rightRenderers = rightReferenceHand.GetComponentsInChildren<SkinnedMeshRenderer>(true);
         }
@@ -235,15 +313,23 @@ public class ReferenceHandDisplay : MonoBehaviour
         }
 
         // 왼손 적용
-        if (leftReferenceHand != null)
+        if (useLeftMapper && leftReferenceMapper != null)
         {
-            ApplyHandPose(leftReferenceHand, frame.leftRootPosition, frame.leftRootRotation, frame.leftLocalPoses, "왼손");
+            ApplyHandPoseToMapper(leftReferenceMapper, frame.leftRootPosition, frame.leftRootRotation, frame.leftLocalPoses, "왼손");
+        }
+        else if (leftReferenceHand != null)
+        {
+            ApplyHandPoseToVisual(leftReferenceHand, frame.leftRootPosition, frame.leftRootRotation, frame.leftLocalPoses, "왼손");
         }
 
         // 오른손 적용
-        if (rightReferenceHand != null)
+        if (useRightMapper && rightReferenceMapper != null)
         {
-            ApplyHandPose(rightReferenceHand, frame.rightRootPosition, frame.rightRootRotation, frame.rightLocalPoses, "오른손");
+            ApplyHandPoseToMapper(rightReferenceMapper, frame.rightRootPosition, frame.rightRootRotation, frame.rightLocalPoses, "오른손");
+        }
+        else if (rightReferenceHand != null)
+        {
+            ApplyHandPoseToVisual(rightReferenceHand, frame.rightRootPosition, frame.rightRootRotation, frame.rightLocalPoses, "오른손");
         }
 
         if (showDebugLogs)
@@ -253,9 +339,38 @@ public class ReferenceHandDisplay : MonoBehaviour
     }
 
     /// <summary>
-    /// 손 포즈 적용 (Root + 조인트)
+    /// HandTransformMapper에 손 포즈 적용 (Root + 조인트)
     /// </summary>
-    private void ApplyHandPose(HandVisual handVisual, Vector3 rootPosition, Quaternion rootRotation, System.Collections.Generic.Dictionary<int, PoseData> localPoses, string handName)
+    private void ApplyHandPoseToMapper(HandTransformMapper mapper, Vector3 rootPosition, Quaternion rootRotation, System.Collections.Generic.Dictionary<int, PoseData> localPoses, string handName)
+    {
+        if (mapper == null || mapper.Root == null)
+            return;
+
+        // Root Transform 계산
+        Vector3 targetRootPos = rootPosition + positionOffset;
+        Quaternion targetRootRot = rootRotation;
+
+        if (referencePoint != null)
+        {
+            targetRootPos = referencePoint.position + rootPosition + positionOffset;
+            targetRootRot = referencePoint.rotation * rootRotation;
+        }
+
+        // Root 적용
+        mapper.Root.position = targetRootPos;
+        mapper.Root.rotation = targetRootRot;
+
+        // 조인트 적용 (HandTransformMapper의 SetJointLocalPose 사용)
+        foreach (var kvp in localPoses)
+        {
+            mapper.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+        }
+    }
+
+    /// <summary>
+    /// HandVisual에 손 포즈 적용 (Root + 조인트)
+    /// </summary>
+    private void ApplyHandPoseToVisual(HandVisual handVisual, Vector3 rootPosition, Quaternion rootRotation, System.Collections.Generic.Dictionary<int, PoseData> localPoses, string handName)
     {
         if (handVisual == null || handVisual.Root == null)
             return;
@@ -293,13 +408,21 @@ public class ReferenceHandDisplay : MonoBehaviour
         showReferenceHands = visible;
 
         // 왼손
-        if (leftReferenceHand != null && leftReferenceHand.gameObject != null)
+        if (useLeftMapper && leftReferenceMapper != null)
+        {
+            leftReferenceMapper.SetVisible(visible);
+        }
+        else if (leftReferenceHand != null && leftReferenceHand.gameObject != null)
         {
             leftReferenceHand.gameObject.SetActive(visible);
         }
 
         // 오른손
-        if (rightReferenceHand != null && rightReferenceHand.gameObject != null)
+        if (useRightMapper && rightReferenceMapper != null)
+        {
+            rightReferenceMapper.SetVisible(visible);
+        }
+        else if (rightReferenceHand != null && rightReferenceHand.gameObject != null)
         {
             rightReferenceHand.gameObject.SetActive(visible);
         }
@@ -318,13 +441,21 @@ public class ReferenceHandDisplay : MonoBehaviour
         referenceAlpha = Mathf.Clamp01(alpha);
 
         // 왼손
-        if (leftRenderers != null)
+        if (useLeftMapper && leftReferenceMapper != null)
+        {
+            leftReferenceMapper.SetAlpha(referenceAlpha);
+        }
+        else if (leftRenderers != null)
         {
             SetRenderersAlpha(leftRenderers, referenceAlpha);
         }
 
         // 오른손
-        if (rightRenderers != null)
+        if (useRightMapper && rightReferenceMapper != null)
+        {
+            rightReferenceMapper.SetAlpha(referenceAlpha);
+        }
+        else if (rightRenderers != null)
         {
             SetRenderersAlpha(rightRenderers, referenceAlpha);
         }
