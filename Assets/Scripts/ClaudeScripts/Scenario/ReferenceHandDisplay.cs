@@ -165,22 +165,11 @@ public class ReferenceHandDisplay : MonoBehaviour
             mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = 3000;
 
-            // 색상 및 투명도 설정
-            if (mat.HasProperty("_Color"))
-            {
-                Color finalColor = referenceColor;
-                finalColor.a = referenceAlpha;
-                mat.color = finalColor;
-            }
-            else if (mat.HasProperty("_BaseColor"))
-            {
-                Color finalColor = referenceColor;
-                finalColor.a = referenceAlpha;
-                mat.SetColor("_BaseColor", finalColor);
-            }
-
             renderer.material = mat;
         }
+
+        // 색상 및 투명도 설정 (Mapper 메서드 사용)
+        mapper.SetColorAndAlpha(referenceColor, referenceAlpha);
     }
 
     /// <summary>

@@ -547,7 +547,7 @@ public class HandPoseTrainingController : MonoBehaviour
         if (useLeftMapper && leftHandMapper != null)
         {
             leftHandMapper.SetVisible(showReplayHands);
-            leftHandMapper.SetAlpha(replayHandAlpha);
+            leftHandMapper.SetColorAndAlpha(replayHandColor, replayHandAlpha);
         }
         else if (leftHandVisual != null)
         {
@@ -557,7 +557,7 @@ public class HandPoseTrainingController : MonoBehaviour
         if (useRightMapper && rightHandMapper != null)
         {
             rightHandMapper.SetVisible(showReplayHands);
-            rightHandMapper.SetAlpha(replayHandAlpha);
+            rightHandMapper.SetColorAndAlpha(replayHandColor, replayHandAlpha);
         }
         else if (rightHandVisual != null)
         {

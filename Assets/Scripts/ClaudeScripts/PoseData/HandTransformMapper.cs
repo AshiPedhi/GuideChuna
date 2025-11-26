@@ -285,6 +285,53 @@ public class HandTransformMapper : MonoBehaviour
     }
 
     /// <summary>
+    /// 재질 색상 설정
+    /// </summary>
+    public void SetColor(Color color)
+    {
+        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            if (renderer.material != null)
+            {
+                if (renderer.material.HasProperty("_Color"))
+                {
+                    renderer.material.color = color;
+                }
+                else if (renderer.material.HasProperty("_BaseColor"))
+                {
+                    renderer.material.SetColor("_BaseColor", color);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 재질 색상과 투명도 동시 설정
+    /// </summary>
+    public void SetColorAndAlpha(Color color, float alpha)
+    {
+        Color finalColor = color;
+        finalColor.a = alpha;
+
+        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            if (renderer.material != null)
+            {
+                if (renderer.material.HasProperty("_Color"))
+                {
+                    renderer.material.color = finalColor;
+                }
+                else if (renderer.material.HasProperty("_BaseColor"))
+                {
+                    renderer.material.SetColor("_BaseColor", finalColor);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// 디버그 정보 출력
     /// </summary>
     public void DebugPrintJoints()
