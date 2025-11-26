@@ -83,7 +83,8 @@ public class ReferenceHandBridge : MonoBehaviour
     }
 
     /// <summary>
-    /// 참조 손 업데이트 (현재 재생 프레임 기준)
+    /// 참조 손 업데이트 (현재 비교 프레임 기준)
+    /// 가이드 재생 프레임이 아닌 사용자 진행 프레임(userProgress)을 사용
     /// </summary>
     private void UpdateReferenceHands()
     {
@@ -96,42 +97,42 @@ public class ReferenceHandBridge : MonoBehaviour
             return;
         }
 
-        // TrainingController에서 현재 재생 상태 가져오기
-        var (leftPlaying, rightPlaying, leftFrame, rightFrame, totalFrames) = trainingController.GetPlaybackState();
+        // TrainingController에서 사용자 진행 프레임 가져오기 (재생 프레임 아님!)
+        var (leftProgress, rightProgress, leftCompleted, rightCompleted) = trainingController.GetUserProgress();
 
         // 중복 업데이트 방지
-        if (leftFrame == lastAppliedLeftFrame && rightFrame == lastAppliedRightFrame)
+        if (leftProgress == lastAppliedLeftFrame && rightProgress == lastAppliedRightFrame)
         {
             return;
         }
 
         // 유효성 검사
-        if (leftFrame >= loadedFrames.Count || rightFrame >= loadedFrames.Count)
+        if (leftProgress >= loadedFrames.Count || rightProgress >= loadedFrames.Count)
         {
             if (showDebugLogs)
             {
-                Debug.LogWarning($"[ReferenceHandBridge] 프레임 인덱스 범위 초과: L={leftFrame}, R={rightFrame}, Total={loadedFrames.Count}");
+                Debug.LogWarning($"[ReferenceHandBridge] 프레임 인덱스 범위 초과: L={leftProgress}, R={rightProgress}, Total={loadedFrames.Count}");
             }
             return;
         }
 
-        // 왼손/오른손 중 더 큰 프레임 인덱스 사용 (동기화)
-        int currentFrameIndex = Mathf.Max(leftFrame, rightFrame);
+        // 왼손/오른손 중 더 큰 진행 프레임 사용 (동기화)
+        int currentFrameIndex = Mathf.Max(leftProgress, rightProgress);
         currentFrameIndex = Mathf.Clamp(currentFrameIndex, 0, loadedFrames.Count - 1);
 
-        // 현재 프레임 가져오기
+        // 현재 비교 프레임 가져오기
         PoseFrame currentFrame = loadedFrames[currentFrameIndex];
 
         // ReferenceHandDisplay에 적용
         referenceDisplay.ApplyPoseFrame(currentFrame);
 
         // 마지막 적용 프레임 기록
-        lastAppliedLeftFrame = leftFrame;
-        lastAppliedRightFrame = rightFrame;
+        lastAppliedLeftFrame = leftProgress;
+        lastAppliedRightFrame = rightProgress;
 
         if (showDebugLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[ReferenceHandBridge] 프레임 {currentFrameIndex} 적용 완료");
+            Debug.Log($"[ReferenceHandBridge] 비교 프레임 {currentFrameIndex} 적용 완료 (userProgress 기반)");
         }
     }
 

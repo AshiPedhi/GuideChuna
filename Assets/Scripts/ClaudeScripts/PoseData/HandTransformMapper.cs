@@ -307,7 +307,7 @@ public class HandTransformMapper : MonoBehaviour
     }
 
     /// <summary>
-    /// 재질 색상과 투명도 동시 설정
+    /// 재질 색상과 투명도 동시 설정 (Transparent 모드로 자동 전환)
     /// </summary>
     public void SetColorAndAlpha(Color color, float alpha)
     {
@@ -319,13 +319,34 @@ public class HandTransformMapper : MonoBehaviour
         {
             if (renderer.material != null)
             {
-                if (renderer.material.HasProperty("_Color"))
+                Material mat = renderer.material;
+
+                // 투명도가 1 미만이면 Transparent 모드로 변경
+                if (alpha < 1f)
                 {
-                    renderer.material.color = finalColor;
+                    if (mat.HasProperty("_Mode"))
+                        mat.SetFloat("_Mode", 3); // Transparent
+                    if (mat.HasProperty("_SrcBlend"))
+                        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    if (mat.HasProperty("_DstBlend"))
+                        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    if (mat.HasProperty("_ZWrite"))
+                        mat.SetInt("_ZWrite", 0);
+
+                    mat.DisableKeyword("_ALPHATEST_ON");
+                    mat.EnableKeyword("_ALPHABLEND_ON");
+                    mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    mat.renderQueue = 3000;
                 }
-                else if (renderer.material.HasProperty("_BaseColor"))
+
+                // 색상 적용
+                if (mat.HasProperty("_Color"))
                 {
-                    renderer.material.SetColor("_BaseColor", finalColor);
+                    mat.color = finalColor;
+                }
+                else if (mat.HasProperty("_BaseColor"))
+                {
+                    mat.SetColor("_BaseColor", finalColor);
                 }
             }
         }

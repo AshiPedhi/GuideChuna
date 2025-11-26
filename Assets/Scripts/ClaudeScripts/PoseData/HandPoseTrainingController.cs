@@ -65,11 +65,15 @@ public class HandPoseTrainingController : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
-    [Header("=== 디버그 모드 (수동 프레임 진행) ===")]
-    [Tooltip("활성화 시 자동 재생 중지, 버튼으로만 프레임 진행")]
+    [Header("=== 디버그 모드 (수동 비교 진행) ===")]
+    [Tooltip("활성화 시 자동 비교 중지, 버튼으로만 비교 프레임 진행")]
     [SerializeField] private bool debugMode = false;
-    [Tooltip("다음 프레임으로 진행할 토글 버튼")]
+    [Tooltip("다음 비교 프레임으로 진행할 토글 버튼 (가이드 재생과 무관)")]
     [SerializeField] private UnityEngine.UI.Toggle debugNextFrameButton;
+
+    [Header("=== 피드백 UI ===")]
+    [Tooltip("손 포즈 유사도 피드백 UI (옵션)")]
+    [SerializeField] private HandFeedbackUI handFeedbackUI;
 
     // 모듈
     private HandPoseDataLoader dataLoader;
@@ -144,20 +148,16 @@ public class HandPoseTrainingController : MonoBehaviour
         if (loadedFrames.Count == 0)
             return;
 
-        // 디버그 모드가 아닐 때만 자동 재생
+        // 가이드 재생은 항상 실행 (디버그 모드와 무관)
+        UpdatePlayback();
+
+        // 디버그 모드가 아닐 때만 자동 비교
         if (!debugMode)
         {
-            // 재생 업데이트
-            UpdatePlayback();
-
             // 비교 업데이트
             UpdateComparison();
         }
-        else
-        {
-            // 디버그 모드: 버튼으로만 비교 실행
-            UpdateComparison();
-        }
+        // 디버그 모드: 비교 중지, 버튼으로만 진행
     }
 
     /// <summary>
@@ -309,6 +309,12 @@ public class HandPoseTrainingController : MonoBehaviour
             PoseFrame currentFrame = loadedFrames[currentLeftPlaybackIndex];
             var result = comparator.CompareLeftPose(playerLeftHand, currentFrame, currentLeftPlaybackIndex);
 
+            // 유사도를 피드백 UI에 전달
+            if (handFeedbackUI != null)
+            {
+                handFeedbackUI.UpdateLeftHandSimilarity(result.leftHandSimilarity);
+            }
+
             if (result.leftHandPassed && result.leftHandPositionPassed)
             {
                 if (currentLeftPlaybackIndex > userLeftProgress)
@@ -331,6 +337,12 @@ public class HandPoseTrainingController : MonoBehaviour
         {
             PoseFrame currentFrame = loadedFrames[currentRightPlaybackIndex];
             var result = comparator.CompareRightPose(playerRightHand, currentFrame, currentRightPlaybackIndex);
+
+            // 유사도를 피드백 UI에 전달
+            if (handFeedbackUI != null)
+            {
+                handFeedbackUI.UpdateRightHandSimilarity(result.rightHandSimilarity);
+            }
 
             if (result.rightHandPassed && result.rightHandPositionPassed)
             {
@@ -658,66 +670,59 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
-    /// 디버그 모드: 다음 프레임 버튼 클릭
+    /// 디버그 모드: 다음 비교 프레임 버튼 클릭
     /// </summary>
     private void OnDebugNextFrameButtonClick(bool isOn)
     {
         if (!debugMode || !isOn)
             return;
 
-        // 다음 프레임으로 수동 진행
-        AdvanceToNextFrame();
+        // 다음 비교 프레임으로 수동 진행 (가이드 재생과 무관)
+        AdvanceUserProgress();
 
         // 토글 자동 리셋 (버튼처럼 동작)
         StartCoroutine(ResetDebugButton());
 
         if (showDebugLogs)
-            Debug.Log($"[TrainingController] 디버그: 다음 프레임으로 진행 (L:{currentLeftPlaybackIndex}, R:{currentRightPlaybackIndex})");
+            Debug.Log($"[TrainingController] 디버그: 다음 비교 프레임으로 진행 (userProgress - L:{userLeftProgress}, R:{userRightProgress})");
     }
 
     /// <summary>
-    /// 다음 프레임으로 수동 진행
+    /// 사용자 진행 프레임을 수동으로 증가 (디버그용)
     /// </summary>
-    private void AdvanceToNextFrame()
+    private void AdvanceUserProgress()
     {
         if (loadedFrames.Count == 0)
             return;
 
-        // 왼손 프레임 진행
-        if (currentLeftPlaybackIndex < cachedMaxFrameIndex)
+        // 왼손 진행 프레임 증가
+        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex - 1)
         {
-            ApplyLeftHandFrame();
-            currentLeftPlaybackIndex++;
-
-            // 루프 처리
-            if (currentLeftPlaybackIndex >= cachedMaxFrameIndex)
-            {
-                if (enableLoopPlayback)
-                {
-                    currentLeftPlaybackIndex = 0;
-                }
-            }
+            userLeftProgress++;
+            if (showDebugLogs)
+                Debug.Log($"[TrainingController] 왼손 진행: {userLeftProgress}/{cachedMaxFrameIndex}");
         }
 
-        // 오른손 프레임 진행
-        if (currentRightPlaybackIndex < cachedMaxFrameIndex)
+        // 오른손 진행 프레임 증가
+        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex - 1)
         {
-            ApplyRightHandFrame();
-            currentRightPlaybackIndex++;
-
-            // 루프 처리
-            if (currentRightPlaybackIndex >= cachedMaxFrameIndex)
-            {
-                if (enableLoopPlayback)
-                {
-                    currentRightPlaybackIndex = 0;
-                }
-            }
+            userRightProgress++;
+            if (showDebugLogs)
+                Debug.Log($"[TrainingController] 오른손 진행: {userRightProgress}/{cachedMaxFrameIndex}");
         }
 
-        // 진행률 이벤트
-        float progress = GetOverallProgress();
-        OnPlaybackProgress?.Invoke(progress);
+        // 완료 체크
+        if (userLeftProgress >= cachedMaxFrameIndex - 1)
+        {
+            userCompletedLeft = true;
+        }
+
+        if (userRightProgress >= cachedMaxFrameIndex - 1)
+        {
+            userCompletedRight = true;
+        }
+
+        CheckUserCompletion();
     }
 
     /// <summary>
