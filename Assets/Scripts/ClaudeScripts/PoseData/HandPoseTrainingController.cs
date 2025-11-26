@@ -311,7 +311,7 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
-    /// 비교 업데이트 (Quest 최적화: Time.deltaTime 캐싱, maxFrameIndex 캐싱)
+    /// 비교 업데이트 (한 프레임씩만 진행, 점프 없음)
     /// </summary>
     private void UpdateComparison()
     {
@@ -322,11 +322,11 @@ public class HandPoseTrainingController : MonoBehaviour
 
         comparisonElapsedTime = 0f;
 
-        // 왼손 비교
-        if (!userCompletedLeft && currentLeftPlaybackIndex < cachedMaxFrameIndex)
+        // 왼손 비교 (userLeftProgress 프레임과만 비교)
+        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex)
         {
-            PoseFrame currentFrame = loadedFrames[currentLeftPlaybackIndex];
-            var result = comparator.CompareLeftPose(playerLeftHand, currentFrame, currentLeftPlaybackIndex);
+            PoseFrame targetFrame = loadedFrames[userLeftProgress];
+            var result = comparator.CompareLeftPose(playerLeftHand, targetFrame, userLeftProgress);
 
             // 유사도를 피드백 UI에 전달
             if (handFeedbackUI != null)
@@ -344,28 +344,29 @@ public class HandPoseTrainingController : MonoBehaviour
                 }
             }
 
+            // 통과하면 한 프레임만 증가 (점프 없음)
             if (result.leftHandPassed && result.leftHandPositionPassed)
             {
-                if (currentLeftPlaybackIndex > userLeftProgress)
-                {
-                    userLeftProgress = currentLeftPlaybackIndex;
-                }
+                userLeftProgress++;  // 한 프레임씩만 증가
 
-                if (userLeftProgress >= cachedMaxFrameIndex - 1)
+                if (showDebugLogs)
+                    Debug.Log($"<color=cyan>[왼손] 프레임 {userLeftProgress - 1} 통과 → 다음: {userLeftProgress}/{cachedMaxFrameIndex}</color>");
+
+                if (userLeftProgress >= cachedMaxFrameIndex)
                 {
                     userCompletedLeft = true;
                     if (showDebugLogs)
-                        Debug.Log($"<color=green>✓ 왼손 사용자 동작 완료! ({userLeftProgress + 1}/{cachedMaxFrameIndex} 프레임)</color>");
+                        Debug.Log($"<color=green>✓ 왼손 사용자 동작 완료! ({userLeftProgress}/{cachedMaxFrameIndex} 프레임)</color>");
                     CheckUserCompletion();
                 }
             }
         }
 
-        // 오른손 비교
-        if (!userCompletedRight && currentRightPlaybackIndex < cachedMaxFrameIndex)
+        // 오른손 비교 (userRightProgress 프레임과만 비교)
+        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex)
         {
-            PoseFrame currentFrame = loadedFrames[currentRightPlaybackIndex];
-            var result = comparator.CompareRightPose(playerRightHand, currentFrame, currentRightPlaybackIndex);
+            PoseFrame targetFrame = loadedFrames[userRightProgress];
+            var result = comparator.CompareRightPose(playerRightHand, targetFrame, userRightProgress);
 
             // 유사도를 피드백 UI에 전달
             if (handFeedbackUI != null)
@@ -383,18 +384,19 @@ public class HandPoseTrainingController : MonoBehaviour
                 }
             }
 
+            // 통과하면 한 프레임만 증가 (점프 없음)
             if (result.rightHandPassed && result.rightHandPositionPassed)
             {
-                if (currentRightPlaybackIndex > userRightProgress)
-                {
-                    userRightProgress = currentRightPlaybackIndex;
-                }
+                userRightProgress++;  // 한 프레임씩만 증가
 
-                if (userRightProgress >= cachedMaxFrameIndex - 1)
+                if (showDebugLogs)
+                    Debug.Log($"<color=cyan>[오른손] 프레임 {userRightProgress - 1} 통과 → 다음: {userRightProgress}/{cachedMaxFrameIndex}</color>");
+
+                if (userRightProgress >= cachedMaxFrameIndex)
                 {
                     userCompletedRight = true;
                     if (showDebugLogs)
-                        Debug.Log($"<color=green>✓ 오른손 사용자 동작 완료! ({userRightProgress + 1}/{cachedMaxFrameIndex} 프레임)</color>");
+                        Debug.Log($"<color=green>✓ 오른손 사용자 동작 완료! ({userRightProgress}/{cachedMaxFrameIndex} 프레임)</color>");
                     CheckUserCompletion();
                 }
             }
@@ -727,23 +729,23 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
-    /// 사용자 진행 프레임을 수동으로 증가 (디버그용)
+    /// 사용자 진행 프레임을 수동으로 증가 (디버그용, 한 프레임씩만)
     /// </summary>
     private void AdvanceUserProgress()
     {
         if (loadedFrames.Count == 0)
             return;
 
-        // 왼손 진행 프레임 증가
-        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex - 1)
+        // 왼손 진행 프레임 증가 (한 프레임씩만)
+        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex)
         {
             userLeftProgress++;
             if (showDebugLogs)
                 Debug.Log($"[TrainingController] 왼손 진행: {userLeftProgress}/{cachedMaxFrameIndex}");
         }
 
-        // 오른손 진행 프레임 증가
-        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex - 1)
+        // 오른손 진행 프레임 증가 (한 프레임씩만)
+        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex)
         {
             userRightProgress++;
             if (showDebugLogs)
@@ -751,12 +753,12 @@ public class HandPoseTrainingController : MonoBehaviour
         }
 
         // 완료 체크
-        if (userLeftProgress >= cachedMaxFrameIndex - 1)
+        if (userLeftProgress >= cachedMaxFrameIndex)
         {
             userCompletedLeft = true;
         }
 
-        if (userRightProgress >= cachedMaxFrameIndex - 1)
+        if (userRightProgress >= cachedMaxFrameIndex)
         {
             userCompletedRight = true;
         }

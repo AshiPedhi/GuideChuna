@@ -75,6 +75,14 @@ public class HandPoseComparator
         [Tooltip("손가락 끝은 회전 변화가 크므로 임계값 완화")]
         public float fingerTipRotationMultiplier = 1.5f; // 22.5도
 
+        [Header("유사도 통합 가중치")]
+        [Tooltip("조인트 포즈 가중치 (0~1)")]
+        public float jointSimilarityWeight = 0.6f;
+        [Tooltip("손목 위치 가중치 (0~1)")]
+        public float handPositionWeight = 0.2f;
+        [Tooltip("손목 회전 가중치 (0~1)")]
+        public float handRotationWeight = 0.2f;
+
         [Header("디버그")]
         [Tooltip("실패한 관절 상세 로그 출력")]
         public bool showDetailedLogs = false;
@@ -179,7 +187,7 @@ public class HandPoseComparator
     }
 
     /// <summary>
-    /// 왼손 포즈 비교 (연속 프레임 검증 추가)
+    /// 왼손 포즈 비교 (연속 프레임 검증 추가, 손목 위치/회전 유사도 통합)
     /// </summary>
     public SimilarityResult CompareLeftPose(HandVisual playerLeftHand, PoseFrame guideFrame, int currentFrameIndex = 0)
     {
@@ -199,10 +207,13 @@ public class HandPoseComparator
 
         // 조인트 유사도 비교
         bool framePassed;
-        result.leftHandSimilarity = ComparePose(playerLeftHand, guideFrame.leftLocalPoses, out framePassed, "왼손", currentFrameIndex);
+        float jointSimilarity = ComparePose(playerLeftHand, guideFrame.leftLocalPoses, out framePassed, "왼손", currentFrameIndex);
 
         // 손 전체 위치/회전 비교
         bool positionPassed = true;
+        float positionSimilarity = 1f;
+        float rotationSimilarity = 1f;
+
         if (settings.compareHandPosition)
         {
             CompareHandWorldPosition(
@@ -213,6 +224,8 @@ public class HandPoseComparator
                 out result.leftHandPositionError,
                 out result.leftHandRotationError,
                 out positionPassed,
+                out positionSimilarity,
+                out rotationSimilarity,
                 "왼손",
                 currentFrameIndex
             );
@@ -221,6 +234,20 @@ public class HandPoseComparator
         else
         {
             result.leftHandPositionPassed = true;
+        }
+
+        // 통합 유사도 계산 (조인트 + 위치 + 회전)
+        float totalWeight = settings.jointSimilarityWeight + settings.handPositionWeight + settings.handRotationWeight;
+        if (totalWeight > 0)
+        {
+            result.leftHandSimilarity =
+                (jointSimilarity * settings.jointSimilarityWeight +
+                 positionSimilarity * settings.handPositionWeight +
+                 rotationSimilarity * settings.handRotationWeight) / totalWeight;
+        }
+        else
+        {
+            result.leftHandSimilarity = jointSimilarity;
         }
 
         // 이번 프레임이 통과했는지 확인
@@ -243,14 +270,14 @@ public class HandPoseComparator
         // 디버그 로그
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 왼손 연속 성공: {leftConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (유사도: {result.leftHandSimilarity:P0})");
+            Debug.Log($"[HandPoseComparator] 왼손 연속 성공: {leftConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.leftHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
         }
 
         return result;
     }
 
     /// <summary>
-    /// 오른손 포즈 비교 (연속 프레임 검증 추가)
+    /// 오른손 포즈 비교 (연속 프레임 검증 추가, 손목 위치/회전 유사도 통합)
     /// </summary>
     public SimilarityResult CompareRightPose(HandVisual playerRightHand, PoseFrame guideFrame, int currentFrameIndex = 0)
     {
@@ -270,10 +297,13 @@ public class HandPoseComparator
 
         // 조인트 유사도 비교
         bool framePassed;
-        result.rightHandSimilarity = ComparePose(playerRightHand, guideFrame.rightLocalPoses, out framePassed, "오른손", currentFrameIndex);
+        float jointSimilarity = ComparePose(playerRightHand, guideFrame.rightLocalPoses, out framePassed, "오른손", currentFrameIndex);
 
         // 손 전체 위치/회전 비교
         bool positionPassed = true;
+        float positionSimilarity = 1f;
+        float rotationSimilarity = 1f;
+
         if (settings.compareHandPosition)
         {
             CompareHandWorldPosition(
@@ -284,6 +314,8 @@ public class HandPoseComparator
                 out result.rightHandPositionError,
                 out result.rightHandRotationError,
                 out positionPassed,
+                out positionSimilarity,
+                out rotationSimilarity,
                 "오른손",
                 currentFrameIndex
             );
@@ -292,6 +324,20 @@ public class HandPoseComparator
         else
         {
             result.rightHandPositionPassed = true;
+        }
+
+        // 통합 유사도 계산 (조인트 + 위치 + 회전)
+        float totalWeight = settings.jointSimilarityWeight + settings.handPositionWeight + settings.handRotationWeight;
+        if (totalWeight > 0)
+        {
+            result.rightHandSimilarity =
+                (jointSimilarity * settings.jointSimilarityWeight +
+                 positionSimilarity * settings.handPositionWeight +
+                 rotationSimilarity * settings.handRotationWeight) / totalWeight;
+        }
+        else
+        {
+            result.rightHandSimilarity = jointSimilarity;
         }
 
         // 이번 프레임이 통과했는지 확인
@@ -314,7 +360,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 오른손 연속 성공: {rightConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (유사도: {result.rightHandSimilarity:P0})");
+            Debug.Log($"[HandPoseComparator] 오른손 연속 성공: {rightConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.rightHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
         }
 
         return result;
@@ -466,7 +512,7 @@ public class HandPoseComparator
     }
 
     /// <summary>
-    /// 손 전체 위치/회전 비교 (월드 좌표)
+    /// 손 전체 위치/회전 비교 (월드 좌표) - 유사도 반환
     /// </summary>
     private void CompareHandWorldPosition(
         HandVisual playerHand,
@@ -476,12 +522,16 @@ public class HandPoseComparator
         out float positionError,
         out float rotationError,
         out bool passed,
+        out float positionSimilarity,
+        out float rotationSimilarity,
         string handName,
         int frameIndex)
     {
         positionError = 0f;
         rotationError = 0f;
         passed = false;
+        positionSimilarity = 0f;
+        rotationSimilarity = 0f;
 
         if (playerHand == null || playerHand.Hand == null || !playerHand.Hand.IsTrackedDataValid)
             return;
@@ -520,10 +570,22 @@ public class HandPoseComparator
         // 위치 오차 계산
         positionError = Vector3.Distance(playerPos, targetPos);
 
+        // 위치 유사도 계산 (0~1, 임계값 기준으로 역비례)
+        // positionError가 0이면 1.0, threshold이면 0.0
+        positionSimilarity = Mathf.Clamp01(1f - (positionError / settings.handPositionThreshold));
+
         // 회전 오차 계산
         if (settings.compareHandRotation)
         {
             rotationError = Quaternion.Angle(targetTransform.rotation, targetRootRotation);
+
+            // 회전 유사도 계산 (0~1, 임계값 기준으로 역비례)
+            // rotationError가 0이면 1.0, threshold이면 0.0
+            rotationSimilarity = Mathf.Clamp01(1f - (rotationError / settings.handRotationThreshold));
+        }
+        else
+        {
+            rotationSimilarity = 1f;  // 회전 비교 안 함 = 항상 통과
         }
 
         // 합격 여부
@@ -534,7 +596,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (frameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] {handName} 위치 오차: {positionError:F3}m, 회전 오차: {rotationError:F1}° (합격: {passed})");
+            Debug.Log($"[HandPoseComparator] {handName} 위치 오차: {positionError:F3}m (유사도:{positionSimilarity:P0}), 회전 오차: {rotationError:F1}° (유사도:{rotationSimilarity:P0}) 합격: {passed}");
         }
     }
 
