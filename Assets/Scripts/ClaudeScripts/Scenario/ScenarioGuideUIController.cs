@@ -456,11 +456,22 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// 수동으로 Step 이름 설정
+    /// 수동으로 Step 이름 설정 (stepNo 없이 이름만)
     /// </summary>
     public void SetStepName(string stepName)
     {
-        UpdateStepName(stepName);
+        if (stepNameText != null)
+        {
+            stepNameText.text = stepName;
+        }
+    }
+
+    /// <summary>
+    /// 수동으로 Step 이름 설정 (StepData 사용)
+    /// </summary>
+    public void SetStepName(StepData step)
+    {
+        UpdateStepName(step);
     }
 
     /// <summary>
