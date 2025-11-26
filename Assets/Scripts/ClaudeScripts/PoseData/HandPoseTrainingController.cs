@@ -51,10 +51,11 @@ public class HandPoseTrainingController : MonoBehaviour
     [SerializeField] private float rotationThreshold = 15f;         // 15도
     [SerializeField] private float similarityPercentage = 0.7f;     // 70%
     [SerializeField] private bool compareHandPosition = true;
-    [SerializeField] private float handPositionThreshold = 0.1f;    // 10cm
+    [SerializeField] private float handPositionThreshold = 0.05f;   // 5cm (엄격하게 조정)
     [SerializeField] private bool compareHandRotation = true;
     [SerializeField] private float handRotationThreshold = 20f;     // 20도
     [SerializeField] private float comparisonInterval = 0.5f;       // 비교 간격
+    [SerializeField] private int consecutiveFramesRequired = 5;     // 연속 프레임 요구 수 (통과 속도 조절)
 
     [Header("=== 진행 추적 설정 ===")]
     [SerializeField] [Range(0.0f, 1.0f)] private float progressThreshold = 0.8f;
@@ -74,6 +75,20 @@ public class HandPoseTrainingController : MonoBehaviour
     [Header("=== 피드백 UI ===")]
     [Tooltip("손 포즈 유사도 피드백 UI (옵션)")]
     [SerializeField] private HandFeedbackUI handFeedbackUI;
+
+    [Header("=== 핸드 모델 색상 피드백 ===")]
+    [Tooltip("유사도에 따라 가이드 핸드 색상 변경")]
+    [SerializeField] private bool enableHandColorFeedback = true;
+    [Tooltip("낮은 유사도 색상 (빨강)")]
+    [SerializeField] private Color lowSimilarityColor = new Color(1f, 0.2f, 0.2f, 0.5f);
+    [Tooltip("중간 유사도 색상 (노랑)")]
+    [SerializeField] private Color mediumSimilarityColor = new Color(1f, 1f, 0.2f, 0.5f);
+    [Tooltip("높은 유사도 색상 (초록)")]
+    [SerializeField] private Color highSimilarityColor = new Color(0.2f, 1f, 0.2f, 0.5f);
+    [Tooltip("낮음→중간 임계값")]
+    [SerializeField][Range(0f, 1f)] private float lowToMediumThreshold = 0.4f;
+    [Tooltip("중간→높음 임계값")]
+    [SerializeField][Range(0f, 1f)] private float mediumToHighThreshold = 0.7f;
 
     // 모듈
     private HandPoseDataLoader dataLoader;
@@ -122,6 +137,10 @@ public class HandPoseTrainingController : MonoBehaviour
         comparator.SetThresholds(positionThreshold, rotationThreshold, similarityPercentage);
         comparator.SetHandComparisonSettings(compareHandPosition, handPositionThreshold, compareHandRotation, handRotationThreshold);
         comparator.SetReferencePoint(referencePoint);
+
+        // 연속 프레임 요구 수 설정
+        var settings = comparator.GetSettings();
+        settings.consecutiveFramesRequired = consecutiveFramesRequired;
 
         // Mapper 사용 여부 확인
         useLeftMapper = (leftHandMapper != null);
@@ -315,6 +334,16 @@ public class HandPoseTrainingController : MonoBehaviour
                 handFeedbackUI.UpdateLeftHandSimilarity(result.leftHandSimilarity);
             }
 
+            // 유사도에 따라 가이드 핸드 색상 변경
+            if (enableHandColorFeedback)
+            {
+                Color targetColor = GetColorForSimilarity(result.leftHandSimilarity);
+                if (useLeftMapper && leftHandMapper != null)
+                {
+                    leftHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
+                }
+            }
+
             if (result.leftHandPassed && result.leftHandPositionPassed)
             {
                 if (currentLeftPlaybackIndex > userLeftProgress)
@@ -342,6 +371,16 @@ public class HandPoseTrainingController : MonoBehaviour
             if (handFeedbackUI != null)
             {
                 handFeedbackUI.UpdateRightHandSimilarity(result.rightHandSimilarity);
+            }
+
+            // 유사도에 따라 가이드 핸드 색상 변경
+            if (enableHandColorFeedback)
+            {
+                Color targetColor = GetColorForSimilarity(result.rightHandSimilarity);
+                if (useRightMapper && rightHandMapper != null)
+                {
+                    rightHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
+                }
             }
 
             if (result.rightHandPassed && result.rightHandPositionPassed)
@@ -776,5 +815,33 @@ public class HandPoseTrainingController : MonoBehaviour
     public (bool leftPlaying, bool rightPlaying, int leftFrame, int rightFrame, int totalFrames) GetPlaybackState()
     {
         return (isLeftPlaying, isRightPlaying, currentLeftPlaybackIndex, currentRightPlaybackIndex, loadedFrames.Count);
+    }
+
+    /// <summary>
+    /// 유사도에 따른 색상 계산 (HandFeedbackUI와 동일한 로직)
+    /// </summary>
+    /// <param name="similarity">유사도 (0~1)</param>
+    /// <returns>계산된 색상</returns>
+    private Color GetColorForSimilarity(float similarity)
+    {
+        similarity = Mathf.Clamp01(similarity);
+
+        if (similarity < lowToMediumThreshold)
+        {
+            // 빨강 → 노랑 보간 (0 ~ lowToMediumThreshold)
+            float t = similarity / lowToMediumThreshold;
+            return Color.Lerp(lowSimilarityColor, mediumSimilarityColor, t);
+        }
+        else if (similarity < mediumToHighThreshold)
+        {
+            // 노랑 → 초록 보간 (lowToMediumThreshold ~ mediumToHighThreshold)
+            float t = (similarity - lowToMediumThreshold) / (mediumToHighThreshold - lowToMediumThreshold);
+            return Color.Lerp(mediumSimilarityColor, highSimilarityColor, t);
+        }
+        else
+        {
+            // 초록 유지 (mediumToHighThreshold ~ 1)
+            return highSimilarityColor;
+        }
     }
 }
