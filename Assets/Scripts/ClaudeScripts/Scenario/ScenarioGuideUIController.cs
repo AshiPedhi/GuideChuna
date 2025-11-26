@@ -140,7 +140,7 @@ public class ScenarioGuideUIController : MonoBehaviour
             startToggleObject.SetActive(true);
             startToggle.isOn = false;
         }*/
-        UpdateStepName(step.stepName);
+        UpdateStepName(step);
         UpdateStartToggleVisibility(step);
 
         Debug.Log($"[GuideUI] Step 변경: {step.stepName}");
@@ -274,12 +274,22 @@ public class ScenarioGuideUIController : MonoBehaviour
 
     /// <summary>
     /// Step 이름 업데이트
+    /// - 가이드 스텝(stepNo == 0)은 stepName만 표시
+    /// - 다른 스텝은 "stepNo. stepName" 형식으로 표시
     /// </summary>
-    private void UpdateStepName(string stepName)
+    private void UpdateStepName(StepData step)
     {
         if (stepNameText != null)
         {
-            stepNameText.text = stepName;
+            // 가이드 스텝이 아닌 경우 stepNo 추가
+            if (step.IsGuideStep())
+            {
+                stepNameText.text = step.stepName;
+            }
+            else
+            {
+                stepNameText.text = $"{step.stepNo}. {step.stepName}";
+            }
         }
     }
 
