@@ -115,14 +115,27 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void Start()
     {
-        // 초기 Guest 텍스트 설정
-        if (userNameText != null)
-        {
-            userNameText.text = "Guest";
-        }
+        // 저장된 로그인 정보 복원
+        LoadSavedLoginInfo();
 
-        // 초기 안내 메시지 설정
-        SetGuideMessage(loginGuideMessage);
+        // 로그인 정보가 없으면 Guest 텍스트 설정
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            if (userNameText != null)
+            {
+                userNameText.text = "Guest";
+            }
+            // 초기 안내 메시지 설정
+            SetGuideMessage(loginGuideMessage);
+        }
+        else
+        {
+            // 로그인 정보가 있으면 UI 업데이트
+            UpdateUserInfoPanel();
+            SetScenarioCardsVisualState(true);
+            SetGuideMessage(scenarioGuideMessage);
+            Debug.Log($"[LobbyUI] 저장된 로그인 정보 복원 완료: {currentUsername}");
+        }
 
         LoadSavedDeviceSN();
         AuthenticateDevice().Forget();
@@ -132,22 +145,21 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         UnsubscribeFromEvents();
 
-        // 애플리케이션 종료 시 자동 로그아웃
-        if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
-        {
-            // OnDestroy에서는 async를 사용할 수 없으므로 동기 방식으로 처리
-            try
-            {
-                Debug.Log($"[LobbyUI] OnDestroy - 로그아웃 시도: {currentUsername}");
-
-                // UniTask를 동기적으로 실행
-                PerformLogoutAsync().Forget();
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[LobbyUI] OnDestroy 로그아웃 실패: {e.Message}");
-            }
-        }
+        // 씬 전환이 아닌 애플리케이션 종료 시에만 로그아웃 시도
+        // (씬 전환 시에는 로그인 상태 유지를 위해 로그아웃하지 않음)
+        // Application.isQuitting을 체크할 수 없으므로 주석 처리
+        // if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
+        // {
+        //     try
+        //     {
+        //         Debug.Log($"[LobbyUI] OnDestroy - 로그아웃 시도: {currentUsername}");
+        //         PerformLogoutAsync().Forget();
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Debug.LogWarning($"[LobbyUI] OnDestroy 로그아웃 실패 (무시): {e.Message}");
+        //     }
+        // }
     }
     #endregion
 
@@ -366,6 +378,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그인 팝업 - 유저 목록으로 연결 토글
         if (loginRequiredCloseButton != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            loginRequiredCloseButton.group = null;
+
             loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
             loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -384,6 +399,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 종료 확인 팝업 - 예 토글
         if (exitYesToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            exitYesToggle.group = null;
+
             exitYesToggle.onValueChanged.RemoveAllListeners();
             exitYesToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -402,6 +420,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 종료 확인 팝업 - 아니오 토글
         if (exitNoToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            exitNoToggle.group = null;
+
             exitNoToggle.onValueChanged.RemoveAllListeners();
             exitNoToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -420,6 +441,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그아웃 확인 팝업 - 취소 토글
         if (logoutCancelToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            logoutCancelToggle.group = null;
+
             logoutCancelToggle.onValueChanged.RemoveAllListeners();
             logoutCancelToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -438,6 +462,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그아웃 확인 팝업 - 로그아웃하기 토글
         if (logoutConfirmToggle != null)
         {
+            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
+            logoutConfirmToggle.group = null;
+
             logoutConfirmToggle.onValueChanged.RemoveAllListeners();
             logoutConfirmToggle.onValueChanged.AddListener((isOn) => {
                 if (isOn)
@@ -1007,6 +1034,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             currentUserID = userId;
             currentUsername = username;
 
+            // PlayerPrefs에 로그인 정보 저장 (씬 전환 후에도 유지)
+            SaveLoginInfo(username, userId);
+
             Debug.Log($"[LobbyUI] 로그인 정보 저장 완료 - currentUsername: '{currentUsername}', currentUserID: {currentUserID}");
 
             HideUserSelectionPanel();
@@ -1037,30 +1067,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private async UniTask PerformLogoutAsync()
     {
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            return;
+        }
+
+        Debug.Log($"[LobbyUI] 로그아웃 시작: {currentUsername}");
+
         try
         {
-            if (string.IsNullOrEmpty(currentUsername))
-            {
-                return;
-            }
-
-            Debug.Log($"[LobbyUI] 로그아웃 시작: {currentUsername}");
-
             await authService.LogoffAsync(
                 currentDeviceSN,
                 currentUsername,
                 "VR_CHUNA"
             );
 
-            ClearUserInfo();
-
-            Debug.Log($"[LobbyUI] 로그아웃 완료");
+            Debug.Log($"[LobbyUI] ✅ 로그아웃 API 호출 성공");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 로그아웃 실패: {e.Message}");
-            throw;
+            // 로그아웃 실패는 무시 (이미 로그아웃 상태이거나 네트워크 오류일 수 있음)
+            Debug.LogWarning($"[LobbyUI] ⚠️ 로그아웃 API 실패 (무시하고 진행): {e.Message}");
         }
+
+        // API 실패 여부와 관계없이 로컬 상태는 항상 초기화
+        ClearUserInfo();
+        Debug.Log($"[LobbyUI] ✅ 로그아웃 완료 (로컬 상태 초기화)");
     }
     #endregion
 
@@ -1118,6 +1150,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         currentUsername = string.Empty;
         currentUserID = 0;
+
+        // PlayerPrefs에서 로그인 정보 삭제
+        ClearSavedLoginInfo();
 
         // 텍스트만 "Guest"로 변경 (버튼은 계속 보임)
         if (userNameText != null)
@@ -1385,6 +1420,47 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         PlayerPrefs.Save();
         savedDeviceSN = string.Empty;
         Debug.Log("[LobbyUI] 저장된 DeviceSN 삭제");
+    }
+
+    /// <summary>
+    /// 로그인 정보 저장 (씬 전환 후에도 유지)
+    /// </summary>
+    private void SaveLoginInfo(string username, int userID)
+    {
+        PlayerPrefs.SetString("LOGIN_USERNAME", username);
+        PlayerPrefs.SetInt("LOGIN_USERID", userID);
+        PlayerPrefs.Save();
+        Debug.Log($"[LobbyUI] 로그인 정보 저장: {username} (ID: {userID})");
+    }
+
+    /// <summary>
+    /// 저장된 로그인 정보 불러오기
+    /// </summary>
+    private void LoadSavedLoginInfo()
+    {
+        if (PlayerPrefs.HasKey("LOGIN_USERNAME"))
+        {
+            currentUsername = PlayerPrefs.GetString("LOGIN_USERNAME");
+            currentUserID = PlayerPrefs.GetInt("LOGIN_USERID", 0);
+            Debug.Log($"[LobbyUI] 저장된 로그인 정보 로드: {currentUsername} (ID: {currentUserID})");
+        }
+        else
+        {
+            currentUsername = string.Empty;
+            currentUserID = 0;
+            Debug.Log("[LobbyUI] 저장된 로그인 정보 없음");
+        }
+    }
+
+    /// <summary>
+    /// 저장된 로그인 정보 삭제
+    /// </summary>
+    private void ClearSavedLoginInfo()
+    {
+        PlayerPrefs.DeleteKey("LOGIN_USERNAME");
+        PlayerPrefs.DeleteKey("LOGIN_USERID");
+        PlayerPrefs.Save();
+        Debug.Log("[LobbyUI] 저장된 로그인 정보 삭제");
     }
     #endregion
 

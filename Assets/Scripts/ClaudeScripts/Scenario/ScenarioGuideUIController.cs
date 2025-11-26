@@ -140,7 +140,7 @@ public class ScenarioGuideUIController : MonoBehaviour
             startToggleObject.SetActive(true);
             startToggle.isOn = false;
         }*/
-        UpdateStepName(step.stepName);
+        UpdateStepName(step);
         UpdateStartToggleVisibility(step);
 
         Debug.Log($"[GuideUI] Step 변경: {step.stepName}");
@@ -274,12 +274,22 @@ public class ScenarioGuideUIController : MonoBehaviour
 
     /// <summary>
     /// Step 이름 업데이트
+    /// - 가이드 스텝(stepNo == 0)은 stepName만 표시
+    /// - 다른 스텝은 "stepNo. stepName" 형식으로 표시
     /// </summary>
-    private void UpdateStepName(string stepName)
+    private void UpdateStepName(StepData step)
     {
         if (stepNameText != null)
         {
-            stepNameText.text = stepName;
+            // 가이드 스텝이 아닌 경우 stepNo 추가
+            if (step.IsGuideStep())
+            {
+                stepNameText.text = step.stepName;
+            }
+            else
+            {
+                stepNameText.text = $"{step.stepNo}. {step.stepName}";
+            }
         }
     }
 
@@ -416,7 +426,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         {
             // 첫 번째 가이드인지 확인
             bool isFirstPhase = scenarioManager.CurrentPhase == scenarioManager.CurrentScenario.phases[0];
-            startToggleText.text = isFirstPhase ? "시작하기" : "다음 단계 시작";
+            startToggleText.text = isFirstPhase ? "시작" : "다음";
         }
 
         // 토글 상태 초기화 (꺼진 상태로)
@@ -446,11 +456,22 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     /// <summary>
-    /// 수동으로 Step 이름 설정
+    /// 수동으로 Step 이름 설정 (stepNo 없이 이름만)
     /// </summary>
     public void SetStepName(string stepName)
     {
-        UpdateStepName(stepName);
+        if (stepNameText != null)
+        {
+            stepNameText.text = stepName;
+        }
+    }
+
+    /// <summary>
+    /// 수동으로 Step 이름 설정 (StepData 사용)
+    /// </summary>
+    public void SetStepName(StepData step)
+    {
+        UpdateStepName(step);
     }
 
     /// <summary>
