@@ -65,6 +65,12 @@ public class HandPoseTrainingController : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
+    [Header("=== 디버그 모드 (수동 프레임 진행) ===")]
+    [Tooltip("활성화 시 자동 재생 중지, 버튼으로만 프레임 진행")]
+    [SerializeField] private bool debugMode = false;
+    [Tooltip("다음 프레임으로 진행할 토글 버튼")]
+    [SerializeField] private UnityEngine.UI.Toggle debugNextFrameButton;
+
     // 모듈
     private HandPoseDataLoader dataLoader;
     private HandPoseComparator comparator;
@@ -128,6 +134,9 @@ public class HandPoseTrainingController : MonoBehaviour
 
         // 재생 손 설정
         SetupReplayHands();
+
+        // 디버그 모드 버튼 설정
+        SetupDebugButton();
     }
 
     void Update()
@@ -135,11 +144,20 @@ public class HandPoseTrainingController : MonoBehaviour
         if (loadedFrames.Count == 0)
             return;
 
-        // 재생 업데이트
-        UpdatePlayback();
+        // 디버그 모드가 아닐 때만 자동 재생
+        if (!debugMode)
+        {
+            // 재생 업데이트
+            UpdatePlayback();
 
-        // 비교 업데이트
-        UpdateComparison();
+            // 비교 업데이트
+            UpdateComparison();
+        }
+        else
+        {
+            // 디버그 모드: 버튼으로만 비교 실행
+            UpdateComparison();
+        }
     }
 
     /// <summary>
@@ -622,6 +640,95 @@ public class HandPoseTrainingController : MonoBehaviour
         if (comparator != null)
         {
             comparator.ResetConsecutiveCounters();
+        }
+    }
+
+    /// <summary>
+    /// 디버그 모드 버튼 설정
+    /// </summary>
+    private void SetupDebugButton()
+    {
+        if (debugNextFrameButton != null)
+        {
+            debugNextFrameButton.onValueChanged.AddListener(OnDebugNextFrameButtonClick);
+            debugNextFrameButton.isOn = false; // 초기값
+            if (showDebugLogs)
+                Debug.Log("[TrainingController] 디버그 다음 프레임 버튼 연결 완료");
+        }
+    }
+
+    /// <summary>
+    /// 디버그 모드: 다음 프레임 버튼 클릭
+    /// </summary>
+    private void OnDebugNextFrameButtonClick(bool isOn)
+    {
+        if (!debugMode || !isOn)
+            return;
+
+        // 다음 프레임으로 수동 진행
+        AdvanceToNextFrame();
+
+        // 토글 자동 리셋 (버튼처럼 동작)
+        StartCoroutine(ResetDebugButton());
+
+        if (showDebugLogs)
+            Debug.Log($"[TrainingController] 디버그: 다음 프레임으로 진행 (L:{currentLeftPlaybackIndex}, R:{currentRightPlaybackIndex})");
+    }
+
+    /// <summary>
+    /// 다음 프레임으로 수동 진행
+    /// </summary>
+    private void AdvanceToNextFrame()
+    {
+        if (loadedFrames.Count == 0)
+            return;
+
+        // 왼손 프레임 진행
+        if (currentLeftPlaybackIndex < cachedMaxFrameIndex)
+        {
+            ApplyLeftHandFrame();
+            currentLeftPlaybackIndex++;
+
+            // 루프 처리
+            if (currentLeftPlaybackIndex >= cachedMaxFrameIndex)
+            {
+                if (enableLoopPlayback)
+                {
+                    currentLeftPlaybackIndex = 0;
+                }
+            }
+        }
+
+        // 오른손 프레임 진행
+        if (currentRightPlaybackIndex < cachedMaxFrameIndex)
+        {
+            ApplyRightHandFrame();
+            currentRightPlaybackIndex++;
+
+            // 루프 처리
+            if (currentRightPlaybackIndex >= cachedMaxFrameIndex)
+            {
+                if (enableLoopPlayback)
+                {
+                    currentRightPlaybackIndex = 0;
+                }
+            }
+        }
+
+        // 진행률 이벤트
+        float progress = GetOverallProgress();
+        OnPlaybackProgress?.Invoke(progress);
+    }
+
+    /// <summary>
+    /// 디버그 버튼 리셋 코루틴
+    /// </summary>
+    private System.Collections.IEnumerator ResetDebugButton()
+    {
+        yield return null;
+        if (debugNextFrameButton != null)
+        {
+            debugNextFrameButton.isOn = false;
         }
     }
 
