@@ -29,6 +29,10 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioConditionManager (자동 찾기)")]
     [SerializeField] private ScenarioConditionManager conditionManager;
 
+    [Header("=== UI 자동 배치 ===")]
+    [Tooltip("ScenarioUIPositioner (자동 찾기)")]
+    [SerializeField] private ScenarioUIPositioner uiPositioner;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
@@ -71,6 +75,16 @@ public class ScenarioManager : MonoBehaviour
         if (conditionManager == null)
         {
             conditionManager = FindObjectOfType<ScenarioConditionManager>();
+        }
+
+        // ✅ UI Positioner 찾기
+        if (uiPositioner == null)
+        {
+            uiPositioner = FindObjectOfType<ScenarioUIPositioner>();
+            if (uiPositioner != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ ScenarioUIPositioner 자동 찾기 성공");
+            }
         }
 
         // ✅ HandPose 시스템 초기화
@@ -195,6 +209,18 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=yellow>  - Phase: {currentPhase.phaseName}</color>");
         Debug.Log($"<color=yellow>  - Step: {currentStep.stepName}</color>");
         Debug.Log($"<color=yellow>  - SubStep: {currentSubStep.subStepNo}</color>");
+
+        // UI 자동 배치
+        if (uiPositioner != null)
+        {
+            Debug.Log("<color=magenta>[ScenarioManager] UI 자동 배치 시작...</color>");
+            uiPositioner.PositionUIElements();
+            Debug.Log("<color=magenta>[ScenarioManager] ✓ UI 자동 배치 완료</color>");
+        }
+        else
+        {
+            Debug.LogWarning("<color=orange>[ScenarioManager] ScenarioUIPositioner가 없어 UI 자동 배치를 건너뜁니다.</color>");
+        }
 
         // 이벤트 발생
         Debug.Log("<color=cyan>[ScenarioManager] 이벤트 시스템 호출 중...</color>");

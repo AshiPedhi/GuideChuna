@@ -51,10 +51,11 @@ public class HandPoseTrainingController : MonoBehaviour
     [SerializeField] private float rotationThreshold = 15f;         // 15도
     [SerializeField] private float similarityPercentage = 0.7f;     // 70%
     [SerializeField] private bool compareHandPosition = true;
-    [SerializeField] private float handPositionThreshold = 0.1f;    // 10cm
+    [SerializeField] private float handPositionThreshold = 0.05f;   // 5cm (엄격하게 조정)
     [SerializeField] private bool compareHandRotation = true;
     [SerializeField] private float handRotationThreshold = 20f;     // 20도
     [SerializeField] private float comparisonInterval = 0.5f;       // 비교 간격
+    [SerializeField] private int consecutiveFramesRequired = 5;     // 연속 프레임 요구 수 (통과 속도 조절)
 
     [Header("=== 진행 추적 설정 ===")]
     [SerializeField] [Range(0.0f, 1.0f)] private float progressThreshold = 0.8f;
@@ -64,6 +65,30 @@ public class HandPoseTrainingController : MonoBehaviour
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
+
+    [Header("=== 디버그 모드 (수동 비교 진행) ===")]
+    [Tooltip("활성화 시 자동 비교 중지, 버튼으로만 비교 프레임 진행")]
+    [SerializeField] private bool debugMode = false;
+    [Tooltip("다음 비교 프레임으로 진행할 토글 버튼 (가이드 재생과 무관)")]
+    [SerializeField] private UnityEngine.UI.Toggle debugNextFrameButton;
+
+    [Header("=== 피드백 UI ===")]
+    [Tooltip("손 포즈 유사도 피드백 UI (옵션)")]
+    [SerializeField] private HandFeedbackUI handFeedbackUI;
+
+    [Header("=== 핸드 모델 색상 피드백 ===")]
+    [Tooltip("유사도에 따라 가이드 핸드 색상 변경")]
+    [SerializeField] private bool enableHandColorFeedback = true;
+    [Tooltip("낮은 유사도 색상 (빨강)")]
+    [SerializeField] private Color lowSimilarityColor = new Color(1f, 0.2f, 0.2f, 0.5f);
+    [Tooltip("중간 유사도 색상 (노랑)")]
+    [SerializeField] private Color mediumSimilarityColor = new Color(1f, 1f, 0.2f, 0.5f);
+    [Tooltip("높은 유사도 색상 (초록)")]
+    [SerializeField] private Color highSimilarityColor = new Color(0.2f, 1f, 0.2f, 0.5f);
+    [Tooltip("낮음→중간 임계값")]
+    [SerializeField][Range(0f, 1f)] private float lowToMediumThreshold = 0.4f;
+    [Tooltip("중간→높음 임계값")]
+    [SerializeField][Range(0f, 1f)] private float mediumToHighThreshold = 0.7f;
 
     // 모듈
     private HandPoseDataLoader dataLoader;
@@ -113,6 +138,10 @@ public class HandPoseTrainingController : MonoBehaviour
         comparator.SetHandComparisonSettings(compareHandPosition, handPositionThreshold, compareHandRotation, handRotationThreshold);
         comparator.SetReferencePoint(referencePoint);
 
+        // 연속 프레임 요구 수 설정
+        var settings = comparator.GetSettings();
+        settings.consecutiveFramesRequired = consecutiveFramesRequired;
+
         // Mapper 사용 여부 확인
         useLeftMapper = (leftHandMapper != null);
         useRightMapper = (rightHandMapper != null);
@@ -128,6 +157,9 @@ public class HandPoseTrainingController : MonoBehaviour
 
         // 재생 손 설정
         SetupReplayHands();
+
+        // 디버그 모드 버튼 설정
+        SetupDebugButton();
     }
 
     void Update()
@@ -135,11 +167,16 @@ public class HandPoseTrainingController : MonoBehaviour
         if (loadedFrames.Count == 0)
             return;
 
-        // 재생 업데이트
+        // 가이드 재생은 항상 실행 (디버그 모드와 무관)
         UpdatePlayback();
 
-        // 비교 업데이트
-        UpdateComparison();
+        // 디버그 모드가 아닐 때만 자동 비교
+        if (!debugMode)
+        {
+            // 비교 업데이트
+            UpdateComparison();
+        }
+        // 디버그 모드: 비교 중지, 버튼으로만 진행
     }
 
     /// <summary>
@@ -291,6 +328,22 @@ public class HandPoseTrainingController : MonoBehaviour
             PoseFrame currentFrame = loadedFrames[currentLeftPlaybackIndex];
             var result = comparator.CompareLeftPose(playerLeftHand, currentFrame, currentLeftPlaybackIndex);
 
+            // 유사도를 피드백 UI에 전달
+            if (handFeedbackUI != null)
+            {
+                handFeedbackUI.UpdateLeftHandSimilarity(result.leftHandSimilarity);
+            }
+
+            // 유사도에 따라 가이드 핸드 색상 변경
+            if (enableHandColorFeedback)
+            {
+                Color targetColor = GetColorForSimilarity(result.leftHandSimilarity);
+                if (useLeftMapper && leftHandMapper != null)
+                {
+                    leftHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
+                }
+            }
+
             if (result.leftHandPassed && result.leftHandPositionPassed)
             {
                 if (currentLeftPlaybackIndex > userLeftProgress)
@@ -313,6 +366,22 @@ public class HandPoseTrainingController : MonoBehaviour
         {
             PoseFrame currentFrame = loadedFrames[currentRightPlaybackIndex];
             var result = comparator.CompareRightPose(playerRightHand, currentFrame, currentRightPlaybackIndex);
+
+            // 유사도를 피드백 UI에 전달
+            if (handFeedbackUI != null)
+            {
+                handFeedbackUI.UpdateRightHandSimilarity(result.rightHandSimilarity);
+            }
+
+            // 유사도에 따라 가이드 핸드 색상 변경
+            if (enableHandColorFeedback)
+            {
+                Color targetColor = GetColorForSimilarity(result.rightHandSimilarity);
+                if (useRightMapper && rightHandMapper != null)
+                {
+                    rightHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
+                }
+            }
 
             if (result.rightHandPassed && result.rightHandPositionPassed)
             {
@@ -547,7 +616,7 @@ public class HandPoseTrainingController : MonoBehaviour
         if (useLeftMapper && leftHandMapper != null)
         {
             leftHandMapper.SetVisible(showReplayHands);
-            leftHandMapper.SetAlpha(replayHandAlpha);
+            leftHandMapper.SetColorAndAlpha(replayHandColor, replayHandAlpha);
         }
         else if (leftHandVisual != null)
         {
@@ -557,7 +626,7 @@ public class HandPoseTrainingController : MonoBehaviour
         if (useRightMapper && rightHandMapper != null)
         {
             rightHandMapper.SetVisible(showReplayHands);
-            rightHandMapper.SetAlpha(replayHandAlpha);
+            rightHandMapper.SetColorAndAlpha(replayHandColor, replayHandAlpha);
         }
         else if (rightHandVisual != null)
         {
@@ -626,6 +695,88 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
+    /// 디버그 모드 버튼 설정
+    /// </summary>
+    private void SetupDebugButton()
+    {
+        if (debugNextFrameButton != null)
+        {
+            debugNextFrameButton.onValueChanged.AddListener(OnDebugNextFrameButtonClick);
+            debugNextFrameButton.isOn = false; // 초기값
+            if (showDebugLogs)
+                Debug.Log("[TrainingController] 디버그 다음 프레임 버튼 연결 완료");
+        }
+    }
+
+    /// <summary>
+    /// 디버그 모드: 다음 비교 프레임 버튼 클릭
+    /// </summary>
+    private void OnDebugNextFrameButtonClick(bool isOn)
+    {
+        if (!debugMode || !isOn)
+            return;
+
+        // 다음 비교 프레임으로 수동 진행 (가이드 재생과 무관)
+        AdvanceUserProgress();
+
+        // 토글 자동 리셋 (버튼처럼 동작)
+        StartCoroutine(ResetDebugButton());
+
+        if (showDebugLogs)
+            Debug.Log($"[TrainingController] 디버그: 다음 비교 프레임으로 진행 (userProgress - L:{userLeftProgress}, R:{userRightProgress})");
+    }
+
+    /// <summary>
+    /// 사용자 진행 프레임을 수동으로 증가 (디버그용)
+    /// </summary>
+    private void AdvanceUserProgress()
+    {
+        if (loadedFrames.Count == 0)
+            return;
+
+        // 왼손 진행 프레임 증가
+        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex - 1)
+        {
+            userLeftProgress++;
+            if (showDebugLogs)
+                Debug.Log($"[TrainingController] 왼손 진행: {userLeftProgress}/{cachedMaxFrameIndex}");
+        }
+
+        // 오른손 진행 프레임 증가
+        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex - 1)
+        {
+            userRightProgress++;
+            if (showDebugLogs)
+                Debug.Log($"[TrainingController] 오른손 진행: {userRightProgress}/{cachedMaxFrameIndex}");
+        }
+
+        // 완료 체크
+        if (userLeftProgress >= cachedMaxFrameIndex - 1)
+        {
+            userCompletedLeft = true;
+        }
+
+        if (userRightProgress >= cachedMaxFrameIndex - 1)
+        {
+            userCompletedRight = true;
+        }
+
+        CheckUserCompletion();
+    }
+
+    /// <summary>
+    /// 디버그 버튼 리셋 코루틴
+    /// </summary>
+    private System.Collections.IEnumerator ResetDebugButton()
+    {
+        yield return null;
+        if (debugNextFrameButton != null)
+        {
+            debugNextFrameButton.isOn = false;
+        }
+    }
+
+    /// <summary>
     /// 재생 중지
     /// </summary>
     public void StopPlayback()
@@ -664,5 +815,33 @@ public class HandPoseTrainingController : MonoBehaviour
     public (bool leftPlaying, bool rightPlaying, int leftFrame, int rightFrame, int totalFrames) GetPlaybackState()
     {
         return (isLeftPlaying, isRightPlaying, currentLeftPlaybackIndex, currentRightPlaybackIndex, loadedFrames.Count);
+    }
+
+    /// <summary>
+    /// 유사도에 따른 색상 계산 (HandFeedbackUI와 동일한 로직)
+    /// </summary>
+    /// <param name="similarity">유사도 (0~1)</param>
+    /// <returns>계산된 색상</returns>
+    private Color GetColorForSimilarity(float similarity)
+    {
+        similarity = Mathf.Clamp01(similarity);
+
+        if (similarity < lowToMediumThreshold)
+        {
+            // 빨강 → 노랑 보간 (0 ~ lowToMediumThreshold)
+            float t = similarity / lowToMediumThreshold;
+            return Color.Lerp(lowSimilarityColor, mediumSimilarityColor, t);
+        }
+        else if (similarity < mediumToHighThreshold)
+        {
+            // 노랑 → 초록 보간 (lowToMediumThreshold ~ mediumToHighThreshold)
+            float t = (similarity - lowToMediumThreshold) / (mediumToHighThreshold - lowToMediumThreshold);
+            return Color.Lerp(mediumSimilarityColor, highSimilarityColor, t);
+        }
+        else
+        {
+            // 초록 유지 (mediumToHighThreshold ~ 1)
+            return highSimilarityColor;
+        }
     }
 }

@@ -285,6 +285,74 @@ public class HandTransformMapper : MonoBehaviour
     }
 
     /// <summary>
+    /// 재질 색상 설정
+    /// </summary>
+    public void SetColor(Color color)
+    {
+        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            if (renderer.material != null)
+            {
+                if (renderer.material.HasProperty("_Color"))
+                {
+                    renderer.material.color = color;
+                }
+                else if (renderer.material.HasProperty("_BaseColor"))
+                {
+                    renderer.material.SetColor("_BaseColor", color);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// 재질 색상과 투명도 동시 설정 (Transparent 모드로 자동 전환)
+    /// </summary>
+    public void SetColorAndAlpha(Color color, float alpha)
+    {
+        Color finalColor = color;
+        finalColor.a = alpha;
+
+        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+        foreach (var renderer in renderers)
+        {
+            if (renderer.material != null)
+            {
+                Material mat = renderer.material;
+
+                // 투명도가 1 미만이면 Transparent 모드로 변경
+                if (alpha < 1f)
+                {
+                    if (mat.HasProperty("_Mode"))
+                        mat.SetFloat("_Mode", 3); // Transparent
+                    if (mat.HasProperty("_SrcBlend"))
+                        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                    if (mat.HasProperty("_DstBlend"))
+                        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                    if (mat.HasProperty("_ZWrite"))
+                        mat.SetInt("_ZWrite", 0);
+
+                    mat.DisableKeyword("_ALPHATEST_ON");
+                    mat.EnableKeyword("_ALPHABLEND_ON");
+                    mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                    mat.renderQueue = 3000;
+                }
+
+                // 색상 적용
+                if (mat.HasProperty("_Color"))
+                {
+                    mat.color = finalColor;
+                }
+                else if (mat.HasProperty("_BaseColor"))
+                {
+                    mat.SetColor("_BaseColor", finalColor);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// 디버그 정보 출력
     /// </summary>
     public void DebugPrintJoints()

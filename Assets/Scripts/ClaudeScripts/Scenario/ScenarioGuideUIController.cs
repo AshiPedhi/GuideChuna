@@ -153,6 +153,9 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         UpdateDescription(subStep.textInstruction);
 
+        // 시작 토글 초기화 (다음 SubStep으로 넘어갔으므로)
+        ResetStartToggle();
+
         // Duration이 있는 경우 ProgressCircle 활성화
         HandleProgressCircleVisibility(subStep);
     }

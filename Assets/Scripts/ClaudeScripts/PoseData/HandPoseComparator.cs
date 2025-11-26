@@ -82,11 +82,32 @@ public class HandPoseComparator
         [Header("비교할 주요 조인트")]
         public List<HandJointId> keyJoints = new List<HandJointId>()
         {
+            // 손목
             HandJointId.HandWristRoot,
+
+            // 엄지
+            HandJointId.HandThumb1,
+            HandJointId.HandThumb2,
             HandJointId.HandThumb3,
+
+            // 검지
+            HandJointId.HandIndex1,
+            HandJointId.HandIndex2,
             HandJointId.HandIndex3,
+
+            // 중지
+            HandJointId.HandMiddle1,
+            HandJointId.HandMiddle2,
             HandJointId.HandMiddle3,
+
+            // 약지
+            HandJointId.HandRing1,
+            HandJointId.HandRing2,
             HandJointId.HandRing3,
+
+            // 새끼
+            HandJointId.HandPinky1,
+            HandJointId.HandPinky2,
             HandJointId.HandPinky3
         };
     }

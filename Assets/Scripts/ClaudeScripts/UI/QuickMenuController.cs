@@ -134,6 +134,12 @@ public class QuickMenuController : MonoBehaviour
             if (isSettingsOpen)
             {
                 Debug.Log("설정 메뉴 열림");
+
+                // 팝업 열림 알림 (모드선택/가이드 패널 숨김)
+                if (modeSelectionManager != null)
+                {
+                    modeSelectionManager.OnPopupOpened();
+                }
             }
             else
             {
@@ -144,6 +150,12 @@ public class QuickMenuController : MonoBehaviour
                 {
                     practiceSettingsController.ForceDisablePatientPositionController();
                     Debug.Log("설정 닫힘 - 환자 위치 조정 자동 비활성화");
+                }
+
+                // 팝업 닫힘 알림 (패널 복원)
+                if (modeSelectionManager != null)
+                {
+                    modeSelectionManager.OnPopupClosed();
                 }
             }
 
@@ -171,10 +183,22 @@ public class QuickMenuController : MonoBehaviour
             if (isExitPopupOpen)
             {
                 Debug.Log("종료 확인 팝업 열림");
+
+                // 팝업 열림 알림 (모드선택/가이드 패널 숨김)
+                if (modeSelectionManager != null)
+                {
+                    modeSelectionManager.OnPopupOpened();
+                }
             }
             else
             {
                 Debug.Log("종료 확인 팝업 닫힘");
+
+                // 팝업 닫힘 알림 (패널 복원)
+                if (modeSelectionManager != null)
+                {
+                    modeSelectionManager.OnPopupClosed();
+                }
             }
 
             UpdateToggleColors();
