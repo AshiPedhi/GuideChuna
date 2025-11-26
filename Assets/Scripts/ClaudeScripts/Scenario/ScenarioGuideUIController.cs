@@ -426,7 +426,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         {
             // 첫 번째 가이드인지 확인
             bool isFirstPhase = scenarioManager.CurrentPhase == scenarioManager.CurrentScenario.phases[0];
-            startToggleText.text = isFirstPhase ? "시작하기" : "다음 단계 시작";
+            startToggleText.text = isFirstPhase ? "시작" : "다음";
         }
 
         // 토글 상태 초기화 (꺼진 상태로)
