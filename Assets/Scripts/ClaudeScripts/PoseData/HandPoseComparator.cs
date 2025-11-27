@@ -265,15 +265,40 @@ public class HandPoseComparator
             result.leftHandSimilarity = jointSimilarity;
         }
 
-        // 위치 오차가 10cm 이상이면 유사도 강제 하향 (페널티)
-        if (result.leftHandPositionError > 0.1f)
+        // 위치/회전 오차가 크면 유사도 강제 하향 (빨강색 강제)
+        bool forceRed = false;
+
+        // 위치 오차가 임계값의 1.5배 이상이면 빨강색 강제
+        if (result.leftHandPositionError > settings.handPositionThreshold * 1.5f)
         {
-            float penalty = Mathf.Clamp01(result.leftHandPositionError / 0.2f); // 0.1m~0.2m 사이에서 페널티
-            result.leftHandSimilarity *= (1f - penalty * 0.8f); // 최대 80% 감소
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.1f); // 10% 이하로 강제
+            forceRed = true;
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 큼 ({result.leftHandPositionError:F3}m) - 유사도 페널티 적용: {result.leftHandSimilarity:P0}");
+                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 빨강색 강제 (유사도: {result.leftHandSimilarity:P0})");
+            }
+        }
+        // 회전 오차가 임계값의 1.5배 이상이면 빨강색 강제
+        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 1.5f)
+        {
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.1f); // 10% 이하로 강제
+            forceRed = true;
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 빨강색 강제 (유사도: {result.leftHandSimilarity:P0})");
+            }
+        }
+        // 위치 오차가 임계값 이상이면 유사도 페널티 (20% 이하)
+        else if (result.leftHandPositionError > settings.handPositionThreshold)
+        {
+            float penalty = Mathf.Clamp01((result.leftHandPositionError - settings.handPositionThreshold) / settings.handPositionThreshold);
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.2f * (1f - penalty)); // 최대 20%
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
 
@@ -382,15 +407,40 @@ public class HandPoseComparator
             result.rightHandSimilarity = jointSimilarity;
         }
 
-        // 위치 오차가 10cm 이상이면 유사도 강제 하향 (페널티)
-        if (result.rightHandPositionError > 0.1f)
+        // 위치/회전 오차가 크면 유사도 강제 하향 (빨강색 강제)
+        bool forceRed = false;
+
+        // 위치 오차가 임계값의 1.5배 이상이면 빨강색 강제
+        if (result.rightHandPositionError > settings.handPositionThreshold * 1.5f)
         {
-            float penalty = Mathf.Clamp01(result.rightHandPositionError / 0.2f); // 0.1m~0.2m 사이에서 페널티
-            result.rightHandSimilarity *= (1f - penalty * 0.8f); // 최대 80% 감소
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.1f); // 10% 이하로 강제
+            forceRed = true;
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 큼 ({result.rightHandPositionError:F3}m) - 유사도 페널티 적용: {result.rightHandSimilarity:P0}");
+                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 빨강색 강제 (유사도: {result.rightHandSimilarity:P0})");
+            }
+        }
+        // 회전 오차가 임계값의 1.5배 이상이면 빨강색 강제
+        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 1.5f)
+        {
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.1f); // 10% 이하로 강제
+            forceRed = true;
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 빨강색 강제 (유사도: {result.rightHandSimilarity:P0})");
+            }
+        }
+        // 위치 오차가 임계값 이상이면 유사도 페널티 (20% 이하)
+        else if (result.rightHandPositionError > settings.handPositionThreshold)
+        {
+            float penalty = Mathf.Clamp01((result.rightHandPositionError - settings.handPositionThreshold) / settings.handPositionThreshold);
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.2f * (1f - penalty)); // 최대 20%
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
 
