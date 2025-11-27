@@ -205,6 +205,32 @@ public class HandPoseComparator
             return result;
         }
 
+        // 추가 트래킹 검증: 신뢰도 체크
+        if (playerLeftHand.Hand.IsHighConfidence != null && !playerLeftHand.Hand.IsHighConfidence.Value)
+        {
+            leftConsecutiveSuccessCount = 0; // 낮은 신뢰도
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning("[HandPoseComparator] 왼손 트래킹 신뢰도 낮음");
+            }
+            return result;
+        }
+
+        // 손목 위치 검증 (원점 근처면 트래킹 실패로 간주)
+        if (playerLeftHand.Joints != null && playerLeftHand.Joints.Count > 0)
+        {
+            Transform wrist = playerLeftHand.Joints[(int)HandJointId.HandWristRoot];
+            if (wrist != null && wrist.position.magnitude < 0.01f)
+            {
+                leftConsecutiveSuccessCount = 0; // 손목이 원점 근처 (트래킹 실패)
+                if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+                {
+                    Debug.LogWarning("[HandPoseComparator] 왼손 손목 위치 이상 (원점 근처)");
+                }
+                return result;
+            }
+        }
+
         // 조인트 유사도 비교
         bool framePassed;
         float jointSimilarity = ComparePose(playerLeftHand, guideFrame.leftLocalPoses, out framePassed, "왼손", currentFrameIndex);
@@ -293,6 +319,32 @@ public class HandPoseComparator
         {
             rightConsecutiveSuccessCount = 0; // 트래킹 실패 시 리셋
             return result;
+        }
+
+        // 추가 트래킹 검증: 신뢰도 체크
+        if (playerRightHand.Hand.IsHighConfidence != null && !playerRightHand.Hand.IsHighConfidence.Value)
+        {
+            rightConsecutiveSuccessCount = 0; // 낮은 신뢰도
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning("[HandPoseComparator] 오른손 트래킹 신뢰도 낮음");
+            }
+            return result;
+        }
+
+        // 손목 위치 검증 (원점 근처면 트래킹 실패로 간주)
+        if (playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+        {
+            Transform wrist = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+            if (wrist != null && wrist.position.magnitude < 0.01f)
+            {
+                rightConsecutiveSuccessCount = 0; // 손목이 원점 근처 (트래킹 실패)
+                if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+                {
+                    Debug.LogWarning("[HandPoseComparator] 오른손 손목 위치 이상 (원점 근처)");
+                }
+                return result;
+            }
         }
 
         // 조인트 유사도 비교

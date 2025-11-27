@@ -311,7 +311,7 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
-    /// 비교 업데이트 (한 프레임씩만 진행, 점프 없음)
+    /// 비교 업데이트 (양손 모두 통과해야 진행)
     /// </summary>
     private void UpdateComparison()
     {
@@ -322,101 +322,114 @@ public class HandPoseTrainingController : MonoBehaviour
 
         comparisonElapsedTime = 0f;
 
-        // 왼손 비교 (userLeftProgress 프레임과만 비교)
-        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex)
+        // 양손이 같은 프레임에 있는지 확인 (동기화)
+        int currentProgress = Mathf.Min(userLeftProgress, userRightProgress);
+
+        // 왼손 비교 (현재 공통 프레임과 비교)
+        bool leftPassed = false;
+        float leftSimilarity = 0f;
+        int leftConsecutive = 0;
+
+        if (!userCompletedLeft && currentProgress < cachedMaxFrameIndex)
         {
-            PoseFrame targetFrame = loadedFrames[userLeftProgress];
-            var result = comparator.CompareLeftPose(playerLeftHand, targetFrame, userLeftProgress);
+            PoseFrame targetFrame = loadedFrames[currentProgress];
+            var result = comparator.CompareLeftPose(playerLeftHand, targetFrame, currentProgress);
 
-            // 연속 성공 카운트 가져오기
-            var (leftConsecutive, rightConsecutive) = comparator.GetConsecutiveCounts();
+            leftSimilarity = result.leftHandSimilarity;
+            leftPassed = result.leftHandPassed && result.leftHandPositionPassed;
 
-            // 유사도와 상세 정보를 피드백 UI에 전달
-            if (handFeedbackUI != null)
+            var (leftCon, _) = comparator.GetConsecutiveCounts();
+            leftConsecutive = leftCon;
+        }
+
+        // 오른손 비교 (현재 공통 프레임과 비교)
+        bool rightPassed = false;
+        float rightSimilarity = 0f;
+        int rightConsecutive = 0;
+
+        if (!userCompletedRight && currentProgress < cachedMaxFrameIndex)
+        {
+            PoseFrame targetFrame = loadedFrames[currentProgress];
+            var result = comparator.CompareRightPose(playerRightHand, targetFrame, currentProgress);
+
+            rightSimilarity = result.rightHandSimilarity;
+            rightPassed = result.rightHandPassed && result.rightHandPositionPassed;
+
+            var (_, rightCon) = comparator.GetConsecutiveCounts();
+            rightConsecutive = rightCon;
+        }
+
+        // UI 업데이트 (양손 모두 항상 업데이트)
+        if (handFeedbackUI != null)
+        {
+            handFeedbackUI.UpdateLeftHandInfo(
+                leftSimilarity,
+                currentProgress,
+                cachedMaxFrameIndex,
+                leftConsecutive,
+                consecutiveFramesRequired
+            );
+
+            handFeedbackUI.UpdateRightHandInfo(
+                rightSimilarity,
+                currentProgress,
+                cachedMaxFrameIndex,
+                rightConsecutive,
+                consecutiveFramesRequired
+            );
+        }
+
+        // 유사도에 따라 가이드 핸드 색상 변경 (양손 모두)
+        if (enableHandColorFeedback)
+        {
+            if (useLeftMapper && leftHandMapper != null)
             {
-                handFeedbackUI.UpdateLeftHandInfo(
-                    result.leftHandSimilarity,
-                    userLeftProgress,
-                    cachedMaxFrameIndex,
-                    leftConsecutive,
-                    consecutiveFramesRequired
-                );
+                Color leftColor = GetColorForSimilarity(leftSimilarity);
+                leftHandMapper.SetColorAndAlpha(leftColor, replayHandAlpha);
             }
 
-            // 유사도에 따라 가이드 핸드 색상 변경
-            if (enableHandColorFeedback)
+            if (useRightMapper && rightHandMapper != null)
             {
-                Color targetColor = GetColorForSimilarity(result.leftHandSimilarity);
-                if (useLeftMapper && leftHandMapper != null)
-                {
-                    leftHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
-                }
-            }
-
-            // 통과하면 한 프레임만 증가 (점프 없음)
-            if (result.leftHandPassed && result.leftHandPositionPassed)
-            {
-                userLeftProgress++;  // 한 프레임씩만 증가
-
-                if (showDebugLogs)
-                    Debug.Log($"<color=cyan>[왼손] 프레임 {userLeftProgress - 1} 통과 → 다음: {userLeftProgress}/{cachedMaxFrameIndex}</color>");
-
-                if (userLeftProgress >= cachedMaxFrameIndex)
-                {
-                    userCompletedLeft = true;
-                    if (showDebugLogs)
-                        Debug.Log($"<color=green>✓ 왼손 사용자 동작 완료! ({userLeftProgress}/{cachedMaxFrameIndex} 프레임)</color>");
-                    CheckUserCompletion();
-                }
+                Color rightColor = GetColorForSimilarity(rightSimilarity);
+                rightHandMapper.SetColorAndAlpha(rightColor, replayHandAlpha);
             }
         }
 
-        // 오른손 비교 (userRightProgress 프레임과만 비교)
-        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex)
+        // ✅ 양손 모두 통과했을 때만 진행
+        if (leftPassed && rightPassed)
         {
-            PoseFrame targetFrame = loadedFrames[userRightProgress];
-            var result = comparator.CompareRightPose(playerRightHand, targetFrame, userRightProgress);
+            userLeftProgress++;
+            userRightProgress++;
 
-            // 연속 성공 카운트 가져오기
-            var (leftConsecutive, rightConsecutive) = comparator.GetConsecutiveCounts();
+            if (showDebugLogs)
+                Debug.Log($"<color=cyan>[양손 통과] 프레임 {currentProgress} 완료 → 다음: {userLeftProgress}/{cachedMaxFrameIndex}</color>");
 
-            // 유사도와 상세 정보를 피드백 UI에 전달
-            if (handFeedbackUI != null)
+            // 완료 체크
+            if (userLeftProgress >= cachedMaxFrameIndex)
             {
-                handFeedbackUI.UpdateRightHandInfo(
-                    result.rightHandSimilarity,
-                    userRightProgress,
-                    cachedMaxFrameIndex,
-                    rightConsecutive,
-                    consecutiveFramesRequired
-                );
+                userCompletedLeft = true;
             }
 
-            // 유사도에 따라 가이드 핸드 색상 변경
-            if (enableHandColorFeedback)
+            if (userRightProgress >= cachedMaxFrameIndex)
             {
-                Color targetColor = GetColorForSimilarity(result.rightHandSimilarity);
-                if (useRightMapper && rightHandMapper != null)
-                {
-                    rightHandMapper.SetColorAndAlpha(targetColor, replayHandAlpha);
-                }
+                userCompletedRight = true;
             }
 
-            // 통과하면 한 프레임만 증가 (점프 없음)
-            if (result.rightHandPassed && result.rightHandPositionPassed)
+            if (userCompletedLeft && userCompletedRight)
             {
-                userRightProgress++;  // 한 프레임씩만 증가
-
                 if (showDebugLogs)
-                    Debug.Log($"<color=cyan>[오른손] 프레임 {userRightProgress - 1} 통과 → 다음: {userRightProgress}/{cachedMaxFrameIndex}</color>");
-
-                if (userRightProgress >= cachedMaxFrameIndex)
-                {
-                    userCompletedRight = true;
-                    if (showDebugLogs)
-                        Debug.Log($"<color=green>✓ 오른손 사용자 동작 완료! ({userRightProgress}/{cachedMaxFrameIndex} 프레임)</color>");
-                    CheckUserCompletion();
-                }
+                    Debug.Log($"<color=green>✓✓ 양손 모두 완료!</color>");
+                CheckUserCompletion();
+            }
+        }
+        else
+        {
+            // 통과 실패 로그
+            if (showDebugLogs && currentProgress % 2 == 0)
+            {
+                string leftStatus = leftPassed ? "✓" : "✗";
+                string rightStatus = rightPassed ? "✓" : "✗";
+                Debug.Log($"<color=yellow>[진행 대기] 프레임 {currentProgress} - 왼손:{leftStatus}({leftSimilarity:P0}), 오른손:{rightStatus}({rightSimilarity:P0})</color>");
             }
         }
     }
@@ -747,27 +760,29 @@ public class HandPoseTrainingController : MonoBehaviour
     }
 
     /// <summary>
-    /// 사용자 진행 프레임을 수동으로 증가 (디버그용, 한 프레임씩만)
+    /// 사용자 진행 프레임을 수동으로 증가 (디버그용, 양손 함께 진행)
     /// </summary>
     private void AdvanceUserProgress()
     {
         if (loadedFrames.Count == 0)
             return;
 
-        // 왼손 진행 프레임 증가 (한 프레임씩만)
-        if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex)
+        // 양손 진행 프레임 함께 증가 (동기화)
+        if ((!userCompletedLeft || !userCompletedRight) &&
+            (userLeftProgress < cachedMaxFrameIndex || userRightProgress < cachedMaxFrameIndex))
         {
-            userLeftProgress++;
-            if (showDebugLogs)
-                Debug.Log($"[TrainingController] 왼손 진행: {userLeftProgress}/{cachedMaxFrameIndex}");
-        }
+            if (!userCompletedLeft && userLeftProgress < cachedMaxFrameIndex)
+            {
+                userLeftProgress++;
+            }
 
-        // 오른손 진행 프레임 증가 (한 프레임씩만)
-        if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex)
-        {
-            userRightProgress++;
+            if (!userCompletedRight && userRightProgress < cachedMaxFrameIndex)
+            {
+                userRightProgress++;
+            }
+
             if (showDebugLogs)
-                Debug.Log($"[TrainingController] 오른손 진행: {userRightProgress}/{cachedMaxFrameIndex}");
+                Debug.Log($"[TrainingController] 디버그 진행: {Mathf.Min(userLeftProgress, userRightProgress)}/{cachedMaxFrameIndex}");
         }
 
         // 완료 체크
