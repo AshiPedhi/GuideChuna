@@ -101,8 +101,10 @@ public class HandFeedbackUI : MonoBehaviour
         // 연속 성공 텍스트 (별 표시)
         if (leftHoldText != null)
         {
-            string stars = GenerateStarString(consecutiveCount, requiredCount);
-            leftHoldText.text = $"Hold: {stars} {consecutiveCount}/{requiredCount}";
+            // 필요 수를 넘지 않도록 제한
+            int displayCount = Mathf.Min(consecutiveCount, requiredCount);
+            string stars = GenerateStarString(displayCount, requiredCount);
+            leftHoldText.text = $"Hold: {stars} {displayCount}/{requiredCount}";
         }
     }
 
@@ -148,8 +150,10 @@ public class HandFeedbackUI : MonoBehaviour
         // 연속 성공 텍스트 (별 표시)
         if (rightHoldText != null)
         {
-            string stars = GenerateStarString(consecutiveCount, requiredCount);
-            rightHoldText.text = $"Hold: {stars} {consecutiveCount}/{requiredCount}";
+            // 필요 수를 넘지 않도록 제한
+            int displayCount = Mathf.Min(consecutiveCount, requiredCount);
+            string stars = GenerateStarString(displayCount, requiredCount);
+            rightHoldText.text = $"Hold: {stars} {displayCount}/{requiredCount}";
         }
     }
 
