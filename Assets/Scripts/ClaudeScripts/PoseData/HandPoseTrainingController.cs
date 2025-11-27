@@ -328,10 +328,19 @@ public class HandPoseTrainingController : MonoBehaviour
             PoseFrame targetFrame = loadedFrames[userLeftProgress];
             var result = comparator.CompareLeftPose(playerLeftHand, targetFrame, userLeftProgress);
 
-            // 유사도를 피드백 UI에 전달
+            // 연속 성공 카운트 가져오기
+            var (leftConsecutive, rightConsecutive) = comparator.GetConsecutiveCounts();
+
+            // 유사도와 상세 정보를 피드백 UI에 전달
             if (handFeedbackUI != null)
             {
-                handFeedbackUI.UpdateLeftHandSimilarity(result.leftHandSimilarity);
+                handFeedbackUI.UpdateLeftHandInfo(
+                    result.leftHandSimilarity,
+                    userLeftProgress,
+                    cachedMaxFrameIndex,
+                    leftConsecutive,
+                    consecutiveFramesRequired
+                );
             }
 
             // 유사도에 따라 가이드 핸드 색상 변경
@@ -368,10 +377,19 @@ public class HandPoseTrainingController : MonoBehaviour
             PoseFrame targetFrame = loadedFrames[userRightProgress];
             var result = comparator.CompareRightPose(playerRightHand, targetFrame, userRightProgress);
 
-            // 유사도를 피드백 UI에 전달
+            // 연속 성공 카운트 가져오기
+            var (leftConsecutive, rightConsecutive) = comparator.GetConsecutiveCounts();
+
+            // 유사도와 상세 정보를 피드백 UI에 전달
             if (handFeedbackUI != null)
             {
-                handFeedbackUI.UpdateRightHandSimilarity(result.rightHandSimilarity);
+                handFeedbackUI.UpdateRightHandInfo(
+                    result.rightHandSimilarity,
+                    userRightProgress,
+                    cachedMaxFrameIndex,
+                    rightConsecutive,
+                    consecutiveFramesRequired
+                );
             }
 
             // 유사도에 따라 가이드 핸드 색상 변경

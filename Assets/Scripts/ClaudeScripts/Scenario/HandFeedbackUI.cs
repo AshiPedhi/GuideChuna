@@ -1,9 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 
 /// <summary>
 /// 손 포즈 유사도 피드백 UI
 /// 유사도에 따라 손 이미지 색상 변경 (빨강 → 노랑 → 초록)
+/// + 진행률, 유사도, 연속 성공 정보 표시
 /// </summary>
 public class HandFeedbackUI : MonoBehaviour
 {
@@ -13,6 +15,25 @@ public class HandFeedbackUI : MonoBehaviour
 
     [Tooltip("오른손 이미지")]
     [SerializeField] private Image rightHandImage;
+
+    [Header("=== 정보 텍스트 ===")]
+    [Tooltip("왼손 진행률 텍스트 (Progress: 5/20)")]
+    [SerializeField] private TextMeshProUGUI leftProgressText;
+
+    [Tooltip("왼손 유사도 텍스트 (Match: 85%)")]
+    [SerializeField] private TextMeshProUGUI leftSimilarityText;
+
+    [Tooltip("왼손 연속 성공 텍스트 (Hold: 3/5)")]
+    [SerializeField] private TextMeshProUGUI leftHoldText;
+
+    [Tooltip("오른손 진행률 텍스트")]
+    [SerializeField] private TextMeshProUGUI rightProgressText;
+
+    [Tooltip("오른손 유사도 텍스트")]
+    [SerializeField] private TextMeshProUGUI rightSimilarityText;
+
+    [Tooltip("오른손 연속 성공 텍스트")]
+    [SerializeField] private TextMeshProUGUI rightHoldText;
 
     [Header("=== 색상 설정 ===")]
     [Tooltip("낮은 유사도 색상 (빨강)")]
@@ -53,6 +74,39 @@ public class HandFeedbackUI : MonoBehaviour
     }
 
     /// <summary>
+    /// 왼손 전체 정보 업데이트 (진행률, 유사도, 연속 성공)
+    /// </summary>
+    /// <param name="similarity">유사도 (0~1)</param>
+    /// <param name="currentProgress">현재 진행 프레임</param>
+    /// <param name="totalFrames">전체 프레임 수</param>
+    /// <param name="consecutiveCount">연속 성공 카운트</param>
+    /// <param name="requiredCount">필요한 연속 프레임 수</param>
+    public void UpdateLeftHandInfo(float similarity, int currentProgress, int totalFrames, int consecutiveCount, int requiredCount)
+    {
+        // 이미지 색상 업데이트
+        UpdateLeftHandSimilarity(similarity);
+
+        // 진행률 텍스트
+        if (leftProgressText != null)
+        {
+            leftProgressText.text = $"Progress: {currentProgress}/{totalFrames}";
+        }
+
+        // 유사도 텍스트
+        if (leftSimilarityText != null)
+        {
+            leftSimilarityText.text = $"Match: {similarity * 100:F0}%";
+        }
+
+        // 연속 성공 텍스트 (별 표시)
+        if (leftHoldText != null)
+        {
+            string stars = GenerateStarString(consecutiveCount, requiredCount);
+            leftHoldText.text = $"Hold: {stars} {consecutiveCount}/{requiredCount}";
+        }
+    }
+
+    /// <summary>
     /// 오른손 유사도 업데이트
     /// </summary>
     /// <param name="similarity">유사도 (0~1)</param>
@@ -64,6 +118,39 @@ public class HandFeedbackUI : MonoBehaviour
         rightHandImage.color = targetColor;
 
         Debug.Log($"[HandFeedback] 오른손 유사도: {similarity:F2} → 색상: {targetColor}");
+    }
+
+    /// <summary>
+    /// 오른손 전체 정보 업데이트 (진행률, 유사도, 연속 성공)
+    /// </summary>
+    /// <param name="similarity">유사도 (0~1)</param>
+    /// <param name="currentProgress">현재 진행 프레임</param>
+    /// <param name="totalFrames">전체 프레임 수</param>
+    /// <param name="consecutiveCount">연속 성공 카운트</param>
+    /// <param name="requiredCount">필요한 연속 프레임 수</param>
+    public void UpdateRightHandInfo(float similarity, int currentProgress, int totalFrames, int consecutiveCount, int requiredCount)
+    {
+        // 이미지 색상 업데이트
+        UpdateRightHandSimilarity(similarity);
+
+        // 진행률 텍스트
+        if (rightProgressText != null)
+        {
+            rightProgressText.text = $"Progress: {currentProgress}/{totalFrames}";
+        }
+
+        // 유사도 텍스트
+        if (rightSimilarityText != null)
+        {
+            rightSimilarityText.text = $"Match: {similarity * 100:F0}%";
+        }
+
+        // 연속 성공 텍스트 (별 표시)
+        if (rightHoldText != null)
+        {
+            string stars = GenerateStarString(consecutiveCount, requiredCount);
+            rightHoldText.text = $"Hold: {stars} {consecutiveCount}/{requiredCount}";
+        }
     }
 
     /// <summary>
@@ -177,6 +264,31 @@ public class HandFeedbackUI : MonoBehaviour
         {
             ResetBothHandsColor();
         }
+    }
+
+    /// <summary>
+    /// 연속 성공 카운트를 별 문자열로 변환 (⭐⭐⭐○○)
+    /// </summary>
+    /// <param name="current">현재 카운트</param>
+    /// <param name="required">필요한 카운트</param>
+    /// <returns>별 문자열</returns>
+    private string GenerateStarString(int current, int required)
+    {
+        System.Text.StringBuilder sb = new System.Text.StringBuilder();
+
+        // 현재까지 채운 별
+        for (int i = 0; i < current && i < required; i++)
+        {
+            sb.Append("⭐");
+        }
+
+        // 아직 채워지지 않은 별
+        for (int i = current; i < required; i++)
+        {
+            sb.Append("○");
+        }
+
+        return sb.ToString();
     }
 
 #if UNITY_EDITOR
