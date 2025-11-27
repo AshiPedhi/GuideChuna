@@ -418,11 +418,11 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void UpdateStartToggleVisibility(StepData step)
     {
-        //if (startToggleObject == null) return;
+        if (startToggleObject == null) return;
 
         // 가이드 스텝(stepNo == 0)에서만 시작 토글 표시
         bool shouldShow = step.IsGuideStep();
-        //startToggleObject.SetActive(shouldShow);
+        startToggleObject.SetActive(shouldShow);
 
         // 토글 텍스트 업데이트
         if (shouldShow && startToggleText != null)
