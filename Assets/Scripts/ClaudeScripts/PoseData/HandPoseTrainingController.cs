@@ -51,7 +51,7 @@ public class HandPoseTrainingController : MonoBehaviour
     [SerializeField] private float rotationThreshold = 15f;         // 15도
     [SerializeField] private float similarityPercentage = 0.7f;     // 70%
     [SerializeField] private bool compareHandPosition = true;
-    [SerializeField] private float handPositionThreshold = 0.05f;   // 5cm (엄격하게 조정)
+    [SerializeField] private float handPositionThreshold = 0.03f;   // 3cm (더 엄격하게 조정)
     [SerializeField] private bool compareHandRotation = true;
     [SerializeField] private float handRotationThreshold = 20f;     // 20도
     [SerializeField] private float comparisonInterval = 0.5f;       // 비교 간격

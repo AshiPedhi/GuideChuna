@@ -77,9 +77,9 @@ public class HandPoseComparator
 
         [Header("유사도 통합 가중치")]
         [Tooltip("조인트 포즈 가중치 (0~1)")]
-        public float jointSimilarityWeight = 0.6f;
+        public float jointSimilarityWeight = 0.4f;
         [Tooltip("손목 위치 가중치 (0~1)")]
-        public float handPositionWeight = 0.2f;
+        public float handPositionWeight = 0.4f;
         [Tooltip("손목 회전 가중치 (0~1)")]
         public float handRotationWeight = 0.2f;
 
@@ -265,6 +265,18 @@ public class HandPoseComparator
             result.leftHandSimilarity = jointSimilarity;
         }
 
+        // 위치 오차가 10cm 이상이면 유사도 강제 하향 (페널티)
+        if (result.leftHandPositionError > 0.1f)
+        {
+            float penalty = Mathf.Clamp01(result.leftHandPositionError / 0.2f); // 0.1m~0.2m 사이에서 페널티
+            result.leftHandSimilarity *= (1f - penalty * 0.8f); // 최대 80% 감소
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 큼 ({result.leftHandPositionError:F3}m) - 유사도 페널티 적용: {result.leftHandSimilarity:P0}");
+            }
+        }
+
         // 이번 프레임이 통과했는지 확인
         bool currentFrameSuccess = framePassed && positionPassed;
 
@@ -368,6 +380,18 @@ public class HandPoseComparator
         else
         {
             result.rightHandSimilarity = jointSimilarity;
+        }
+
+        // 위치 오차가 10cm 이상이면 유사도 강제 하향 (페널티)
+        if (result.rightHandPositionError > 0.1f)
+        {
+            float penalty = Mathf.Clamp01(result.rightHandPositionError / 0.2f); // 0.1m~0.2m 사이에서 페널티
+            result.rightHandSimilarity *= (1f - penalty * 0.8f); // 최대 80% 감소
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 큼 ({result.rightHandPositionError:F3}m) - 유사도 페널티 적용: {result.rightHandSimilarity:P0}");
+            }
         }
 
         // 이번 프레임이 통과했는지 확인
