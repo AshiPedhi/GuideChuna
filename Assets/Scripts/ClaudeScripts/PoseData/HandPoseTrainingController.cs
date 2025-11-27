@@ -35,8 +35,10 @@ public class HandPoseTrainingController : MonoBehaviour
     [SerializeField] private HandVisual playerRightHand;
 
     [Header("=== OpenXR Root (자동 탐색) ===")]
-    [SerializeField] private Transform leftOpenXRRoot;
-    [SerializeField] private Transform rightOpenXRRoot;
+    [SerializeField] private Transform leftOpenXRRoot;       // 재생 손 모델의 OpenXRRoot
+    [SerializeField] private Transform rightOpenXRRoot;      // 재생 손 모델의 OpenXRRoot
+    [SerializeField] private Transform playerLeftOpenXRRoot;  // 플레이어 손의 OpenXRRoot
+    [SerializeField] private Transform playerRightOpenXRRoot; // 플레이어 손의 OpenXRRoot
 
     [Header("=== 재생 설정 ===")]
     [SerializeField] private float playbackInterval = 0.1f;
@@ -152,8 +154,8 @@ public class HandPoseTrainingController : MonoBehaviour
         // OpenXRRoot 자동 탐색
         FindOpenXRRoots();
 
-        // Comparator에 OpenXRRoot 설정
-        comparator.SetOpenXRRoots(leftOpenXRRoot, rightOpenXRRoot);
+        // Comparator에 플레이어 손의 OpenXRRoot 설정 (실제 손 위치 비교용)
+        comparator.SetOpenXRRoots(playerLeftOpenXRRoot, playerRightOpenXRRoot);
 
         // 재생 손 설정
         SetupReplayHands();
@@ -588,7 +590,7 @@ public class HandPoseTrainingController : MonoBehaviour
     /// </summary>
     private void FindOpenXRRoots()
     {
-        // 왼손 OpenXRRoot 찾기
+        // 재생 손 모델의 왼손 OpenXRRoot 찾기
         if (leftOpenXRRoot == null)
         {
             Transform searchFrom = null;
@@ -606,7 +608,7 @@ public class HandPoseTrainingController : MonoBehaviour
                     {
                         leftOpenXRRoot = parent;
                         if (showDebugLogs)
-                            Debug.Log($"[TrainingController] 왼손 OpenXRRoot 찾음: {leftOpenXRRoot.name}");
+                            Debug.Log($"[TrainingController] 재생 왼손 OpenXRRoot 찾음: {leftOpenXRRoot.name}");
                         break;
                     }
                     parent = parent.parent;
@@ -614,7 +616,7 @@ public class HandPoseTrainingController : MonoBehaviour
             }
         }
 
-        // 오른손 OpenXRRoot 찾기
+        // 재생 손 모델의 오른손 OpenXRRoot 찾기
         if (rightOpenXRRoot == null)
         {
             Transform searchFrom = null;
@@ -632,11 +634,47 @@ public class HandPoseTrainingController : MonoBehaviour
                     {
                         rightOpenXRRoot = parent;
                         if (showDebugLogs)
-                            Debug.Log($"[TrainingController] 오른손 OpenXRRoot 찾음: {rightOpenXRRoot.name}");
+                            Debug.Log($"[TrainingController] 재생 오른손 OpenXRRoot 찾음: {rightOpenXRRoot.name}");
                         break;
                     }
                     parent = parent.parent;
                 }
+            }
+        }
+
+        // 플레이어 손의 왼손 OpenXRRoot 찾기
+        if (playerLeftOpenXRRoot == null && playerLeftHand != null)
+        {
+            Transform searchFrom = playerLeftHand.transform;
+            Transform parent = searchFrom.parent;
+            while (parent != null)
+            {
+                if (parent.name.Contains("OpenXR") || parent.name.Contains("LeftHand"))
+                {
+                    playerLeftOpenXRRoot = parent;
+                    if (showDebugLogs)
+                        Debug.Log($"[TrainingController] 플레이어 왼손 OpenXRRoot 찾음: {playerLeftOpenXRRoot.name}");
+                    break;
+                }
+                parent = parent.parent;
+            }
+        }
+
+        // 플레이어 손의 오른손 OpenXRRoot 찾기
+        if (playerRightOpenXRRoot == null && playerRightHand != null)
+        {
+            Transform searchFrom = playerRightHand.transform;
+            Transform parent = searchFrom.parent;
+            while (parent != null)
+            {
+                if (parent.name.Contains("OpenXR") || parent.name.Contains("RightHand"))
+                {
+                    playerRightOpenXRRoot = parent;
+                    if (showDebugLogs)
+                        Debug.Log($"[TrainingController] 플레이어 오른손 OpenXRRoot 찾음: {playerRightOpenXRRoot.name}");
+                    break;
+                }
+                parent = parent.parent;
             }
         }
     }
