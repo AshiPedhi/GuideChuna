@@ -92,6 +92,14 @@ public class HandPoseTrainingController : MonoBehaviour
     [Tooltip("중간→높음 임계값")]
     [SerializeField][Range(0f, 1f)] private float mediumToHighThreshold = 0.7f;
 
+    [Header("=== 추나 시술 평가 ===")]
+    [Tooltip("추나 시술 평가 시스템 (옵션)")]
+    [SerializeField] private TunaEvaluator tunaEvaluator;
+    [Tooltip("평가 활성화 여부")]
+    [SerializeField] private bool enableTunaEvaluation = false;
+    [Tooltip("결과 UI (옵션)")]
+    [SerializeField] private TunaResultUI tunaResultUI;
+
     // 모듈
     private HandPoseDataLoader dataLoader;
     private HandPoseComparator comparator;
@@ -207,6 +215,14 @@ public class HandPoseTrainingController : MonoBehaviour
 
         // 재생 시작
         StartPlayback();
+
+        // 추나 평가 시작
+        if (enableTunaEvaluation && tunaEvaluator != null)
+        {
+            tunaEvaluator.StartEvaluation();
+            if (showDebugLogs)
+                Debug.Log("[TrainingController] 추나 시술 평가 시작");
+        }
 
         if (showDebugLogs)
             Debug.Log($"<color=green>[TrainingController] ✓ 훈련 시작 - {loadedFrames.Count} 프레임, {result.totalDuration:F2}초</color>");
@@ -327,38 +343,54 @@ public class HandPoseTrainingController : MonoBehaviour
         // 양손이 같은 프레임에 있는지 확인 (동기화)
         int currentProgress = Mathf.Min(userLeftProgress, userRightProgress);
 
-        // 왼손 비교 (현재 공통 프레임과 비교)
+        // 양손 비교 (현재 공통 프레임과 비교)
         bool leftPassed = false;
-        float leftSimilarity = 0f;
-        int leftConsecutive = 0;
-
-        if (!userCompletedLeft && currentProgress < cachedMaxFrameIndex)
-        {
-            PoseFrame targetFrame = loadedFrames[currentProgress];
-            var result = comparator.CompareLeftPose(playerLeftHand, targetFrame, currentProgress);
-
-            leftSimilarity = result.leftHandSimilarity;
-            leftPassed = result.leftHandPassed && result.leftHandPositionPassed;
-
-            var (leftCon, _) = comparator.GetConsecutiveCounts();
-            leftConsecutive = leftCon;
-        }
-
-        // 오른손 비교 (현재 공통 프레임과 비교)
         bool rightPassed = false;
+        float leftSimilarity = 0f;
         float rightSimilarity = 0f;
+        int leftConsecutive = 0;
         int rightConsecutive = 0;
+        HandPoseComparator.SimilarityResult comparisonResult = new HandPoseComparator.SimilarityResult();
 
-        if (!userCompletedRight && currentProgress < cachedMaxFrameIndex)
+        if (currentProgress < cachedMaxFrameIndex)
         {
             PoseFrame targetFrame = loadedFrames[currentProgress];
-            var result = comparator.CompareRightPose(playerRightHand, targetFrame, currentProgress);
 
-            rightSimilarity = result.rightHandSimilarity;
-            rightPassed = result.rightHandPassed && result.rightHandPositionPassed;
+            // 왼손 비교
+            if (!userCompletedLeft)
+            {
+                var leftResult = comparator.CompareLeftPose(playerLeftHand, targetFrame, currentProgress);
+                leftSimilarity = leftResult.leftHandSimilarity;
+                leftPassed = leftResult.leftHandPassed && leftResult.leftHandPositionPassed;
+                comparisonResult.leftHandSimilarity = leftResult.leftHandSimilarity;
+                comparisonResult.leftHandPositionError = leftResult.leftHandPositionError;
+                comparisonResult.leftHandRotationError = leftResult.leftHandRotationError;
+                comparisonResult.leftHandPassed = leftResult.leftHandPassed;
+                comparisonResult.leftHandPositionPassed = leftResult.leftHandPositionPassed;
+            }
 
-            var (_, rightCon) = comparator.GetConsecutiveCounts();
+            // 오른손 비교
+            if (!userCompletedRight)
+            {
+                var rightResult = comparator.CompareRightPose(playerRightHand, targetFrame, currentProgress);
+                rightSimilarity = rightResult.rightHandSimilarity;
+                rightPassed = rightResult.rightHandPassed && rightResult.rightHandPositionPassed;
+                comparisonResult.rightHandSimilarity = rightResult.rightHandSimilarity;
+                comparisonResult.rightHandPositionError = rightResult.rightHandPositionError;
+                comparisonResult.rightHandRotationError = rightResult.rightHandRotationError;
+                comparisonResult.rightHandPassed = rightResult.rightHandPassed;
+                comparisonResult.rightHandPositionPassed = rightResult.rightHandPositionPassed;
+            }
+
+            var (leftCon, rightCon) = comparator.GetConsecutiveCounts();
+            leftConsecutive = leftCon;
             rightConsecutive = rightCon;
+
+            // 추나 평가 시스템에 전달
+            if (enableTunaEvaluation && tunaEvaluator != null)
+            {
+                tunaEvaluator.EvaluateFrame(currentProgress, targetFrame, comparisonResult);
+            }
         }
 
         // UI 업데이트 (양손 모두 항상 업데이트)
@@ -454,6 +486,22 @@ public class HandPoseTrainingController : MonoBehaviour
                 Debug.Log($"<color=green>  왼손: {userLeftProgress + 1}프레임 도달</color>");
                 Debug.Log($"<color=green>  오른손: {userRightProgress + 1}프레임 도달</color>");
                 Debug.Log("<color=green>======================</color>");
+            }
+
+            // 추나 평가 종료 및 결과 출력
+            if (enableTunaEvaluation && tunaEvaluator != null)
+            {
+                var evaluationResult = tunaEvaluator.StopEvaluation();
+
+                // 결과 리포트 출력
+                Debug.Log("<color=cyan>========== 추나 시술 평가 결과 ==========</color>");
+                Debug.Log($"<color=cyan>{evaluationResult.GenerateReport()}</color>");
+
+                // 결과 UI 표시
+                if (tunaResultUI != null)
+                {
+                    tunaResultUI.ShowResult(evaluationResult);
+                }
             }
 
             OnUserProgressCompleted?.Invoke();
