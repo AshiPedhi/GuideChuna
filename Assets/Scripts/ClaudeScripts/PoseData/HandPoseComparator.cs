@@ -205,17 +205,6 @@ public class HandPoseComparator
             return result;
         }
 
-        // 추가 트래킹 검증: 신뢰도 체크
-        if (playerLeftHand.Hand.IsHighConfidence != null && !playerLeftHand.Hand.IsHighConfidence.Value)
-        {
-            leftConsecutiveSuccessCount = 0; // 낮은 신뢰도
-            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
-            {
-                Debug.LogWarning("[HandPoseComparator] 왼손 트래킹 신뢰도 낮음");
-            }
-            return result;
-        }
-
         // 손목 위치 검증 (원점 근처면 트래킹 실패로 간주)
         if (playerLeftHand.Joints != null && playerLeftHand.Joints.Count > 0)
         {
@@ -318,17 +307,6 @@ public class HandPoseComparator
         if (playerRightHand.Hand == null || !playerRightHand.Hand.IsTrackedDataValid)
         {
             rightConsecutiveSuccessCount = 0; // 트래킹 실패 시 리셋
-            return result;
-        }
-
-        // 추가 트래킹 검증: 신뢰도 체크
-        if (playerRightHand.Hand.IsHighConfidence != null && !playerRightHand.Hand.IsHighConfidence.Value)
-        {
-            rightConsecutiveSuccessCount = 0; // 낮은 신뢰도
-            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
-            {
-                Debug.LogWarning("[HandPoseComparator] 오른손 트래킹 신뢰도 낮음");
-            }
             return result;
         }
 
