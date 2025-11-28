@@ -58,6 +58,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [SerializeField] private GameObject logoutConfirmationPopup;
     [SerializeField] private Toggle logoutCancelToggle;
     [SerializeField] private Toggle logoutConfirmToggle;
+
+    [Header("Survey Panel")]
+    [Tooltip("설문 패널 (로그아웃/종료 시 표시)")]
+    [SerializeField] private SurveyPanel surveyPanel;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -111,6 +115,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         InitializeAuthService();
         SetupInitialUI();
         SubscribeToEvents();
+
+        // SurveyPanel 자동 찾기
+        if (surveyPanel == null)
+        {
+            surveyPanel = FindObjectOfType<SurveyPanel>();
+            if (surveyPanel != null)
+            {
+                Debug.Log("[LobbyUI] ✅ SurveyPanel 자동 찾기 성공");
+            }
+        }
     }
 
     private void Start()
@@ -712,7 +726,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         Debug.Log("[LobbyUI] 종료 확인 - 예 선택");
         HideExitConfirmationPopup();
-        ExitApplication().Forget();
+
+        // 설문 패널 표시 후 종료
+        if (surveyPanel != null)
+        {
+            surveyPanel.ShowSurveyPanel(() => {
+                ExitApplication().Forget();
+            });
+        }
+        else
+        {
+            // SurveyPanel 없으면 바로 종료
+            Debug.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 종료합니다.");
+            ExitApplication().Forget();
+        }
     }
 
     /// <summary>
@@ -1311,7 +1338,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         Debug.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
         HideLogoutConfirmationPopup();
-        PerformLogout().Forget();
+
+        // 설문 패널 표시 후 로그아웃
+        if (surveyPanel != null)
+        {
+            surveyPanel.ShowSurveyPanel(() => {
+                PerformLogout().Forget();
+            });
+        }
+        else
+        {
+            // SurveyPanel 없으면 바로 로그아웃
+            Debug.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 로그아웃합니다.");
+            PerformLogout().Forget();
+        }
     }
 
     /// <summary>
