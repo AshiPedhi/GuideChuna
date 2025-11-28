@@ -27,6 +27,9 @@ public class ScenarioUIPositioner : MonoBehaviour
     [Tooltip("UI가 항상 헤드셋을 바라보도록 설정")]
     [SerializeField] private bool lookAtHeadset = true;
 
+    // UI 위치 초기화가 한 번만 실행되도록 하는 플래그
+    private bool hasPositionedOnce = false;
+
     void Awake()
     {
         // 헤드셋 Transform 자동 찾기
@@ -62,9 +65,17 @@ public class ScenarioUIPositioner : MonoBehaviour
 
     /// <summary>
     /// UI 요소들을 헤드셋 위치 기준으로 배치
+    /// (시나리오당 한 번만 실행됨)
     /// </summary>
     public void PositionUIElements()
     {
+        // 이미 배치가 완료된 경우 건너뜀
+        if (hasPositionedOnce)
+        {
+            Debug.Log("[ScenarioUIPositioner] 이미 UI 배치가 완료되었습니다. 건너뜁니다.");
+            return;
+        }
+
         if (headsetTransform == null)
         {
             Debug.LogError("[ScenarioUIPositioner] headsetTransform이 null입니다! UI 배치를 건너뜁니다.");
@@ -118,16 +129,31 @@ public class ScenarioUIPositioner : MonoBehaviour
             Debug.Log($"[ScenarioUIPositioner] ✅ UI 배치 완료: {uiTarget.name} -> {targetPosition}");
         }
 
-        Debug.Log($"[ScenarioUIPositioner] 총 {uiTargets.Length}개 UI 배치 완료");
+        // 플래그 설정: 한 번만 실행되도록
+        hasPositionedOnce = true;
+
+        Debug.Log($"[ScenarioUIPositioner] 총 {uiTargets.Length}개 UI 배치 완료 (이후 재실행 방지)");
     }
 
     /// <summary>
     /// 수동으로 UI 재배치 (설정 변경 후 호출 가능)
+    /// 플래그를 리셋하여 강제로 재배치합니다.
     /// </summary>
     [ContextMenu("Reposition UI")]
     public void RepositionUI()
     {
+        hasPositionedOnce = false;
         PositionUIElements();
+    }
+
+    /// <summary>
+    /// UI 위치 초기화 플래그를 리셋합니다.
+    /// (새 시나리오 시작 시 호출)
+    /// </summary>
+    public void ResetPositionFlag()
+    {
+        hasPositionedOnce = false;
+        Debug.Log("[ScenarioUIPositioner] UI 위치 초기화 플래그 리셋");
     }
 
     /// <summary>
