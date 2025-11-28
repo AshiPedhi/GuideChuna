@@ -3,6 +3,18 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
+/// 손 동작 평가 모드
+/// </summary>
+public enum EvaluationMode
+{
+    [Tooltip("기존 프레임 기반 평가 - 프레임 순서대로 따라가기")]
+    FrameBased,
+
+    [Tooltip("체크포인트 기반 평가 - 경로상의 체크포인트 통과")]
+    CheckpointBased
+}
+
+/// <summary>
 /// Inspector에서 직접 편집 가능한 시나리오 매니저
 /// 모드 선택 정보 저장 기능 추가
 /// </summary>
@@ -19,12 +31,23 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("CSV 파일 이름 (Resources/Scenarios/ 폴더)")]
     [SerializeField] private string csvFileName = "ScenarioData";
 
-    [Header("=== HandPose 시스템 (자동 연동) ===")]
+    [Header("=== 손 동작 평가 모드 ===")]
+    [Tooltip("평가 모드 선택: FrameBased(기존 방식) / CheckpointBased(체크포인트 기반)")]
+    [SerializeField] private EvaluationMode evaluationMode = EvaluationMode.CheckpointBased;
+
+    [Header("=== HandPose 시스템 (기존 프레임 기반) ===")]
     [Tooltip("HandPoseTrainingController (자동 찾기)")]
     [SerializeField] private HandPoseTrainingController trainingController;
 
     [Tooltip("HandPoseTrainingControllerBridge (자동 찾기/생성)")]
     [SerializeField] private HandPoseTrainingControllerBridge trainingControllerBridge;
+
+    [Header("=== 체크포인트 기반 평가 시스템 (새로운 방식) ===")]
+    [Tooltip("ChunaPathEvaluator (자동 찾기)")]
+    [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
+
+    [Tooltip("ChunaPathEvaluatorBridge (자동 찾기/생성)")]
+    [SerializeField] private ChunaPathEvaluatorBridge chunaPathEvaluatorBridge;
 
     [Tooltip("ScenarioConditionManager (자동 찾기)")]
     [SerializeField] private ScenarioConditionManager conditionManager;
@@ -106,34 +129,69 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// HandPose 시스템 초기화
+    /// HandPose 시스템 초기화 (프레임 기반 + 체크포인트 기반)
     /// </summary>
     private void InitializeHandPoseSystem()
     {
-        Debug.Log("<color=cyan>[ScenarioManager] HandPose 시스템 초기화 중...</color>");
+        Debug.Log("<color=cyan>[ScenarioManager] 손 동작 평가 시스템 초기화 중...</color>");
+        Debug.Log($"<color=cyan>[ScenarioManager] 현재 평가 모드: {evaluationMode}</color>");
 
-        // HandPoseTrainingController 찾기
-        if (trainingController == null)
+        // ========== 프레임 기반 시스템 초기화 ==========
+        if (evaluationMode == EvaluationMode.FrameBased)
         {
-            trainingController = FindObjectOfType<HandPoseTrainingController>();
+            // HandPoseTrainingController 찾기
+            if (trainingController == null)
+            {
+                trainingController = FindObjectOfType<HandPoseTrainingController>();
+            }
+
+            if (trainingController == null)
+            {
+                Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
+                return;
+            }
+
+            // HandPoseTrainingControllerBridge 찾기 또는 생성
+            trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
+
+            if (trainingControllerBridge == null)
+            {
+                Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
+                trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
+            }
+
+            Debug.Log("<color=green>[ScenarioManager] ✓ 프레임 기반 평가 시스템 초기화 완료!</color>");
         }
 
-        if (trainingController == null)
+        // ========== 체크포인트 기반 시스템 초기화 ==========
+        if (evaluationMode == EvaluationMode.CheckpointBased)
         {
-            Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
-            return;
+            // ChunaPathEvaluator 찾기
+            if (chunaPathEvaluator == null)
+            {
+                chunaPathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            }
+
+            if (chunaPathEvaluator == null)
+            {
+                Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator를 찾을 수 없습니다. 체크포인트 기반 평가가 비활성화됩니다.");
+                Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
+                evaluationMode = EvaluationMode.FrameBased;
+                InitializeHandPoseSystem(); // 재귀 호출로 프레임 기반 초기화
+                return;
+            }
+
+            // ChunaPathEvaluatorBridge 찾기 또는 생성
+            chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
+
+            if (chunaPathEvaluatorBridge == null)
+            {
+                Debug.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
+                chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
+            }
+
+            Debug.Log("<color=green>[ScenarioManager] ✓ 체크포인트 기반 평가 시스템 초기화 완료!</color>");
         }
-
-        // HandPoseTrainingControllerBridge 찾기 또는 생성
-        trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
-
-        if (trainingControllerBridge == null)
-        {
-            Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
-            trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
-        }
-
-        Debug.Log("<color=green>[ScenarioManager] ✓ HandPose 시스템 초기화 완료!</color>");
     }
 
     private void OnEnable()
@@ -483,10 +541,74 @@ public class ScenarioManager : MonoBehaviour
 
     /// <summary>
     /// HandPose 트래킹 자동 처리 (CSV 기반)
-    /// ✅ 핵심 기능: handTrackingFileName이 있으면 자동으로 HandPoseCondition 등록
-    /// ✅ 완료 시 직접 알림 방식으로 경쟁 상태 완전 해결
+    /// 평가 모드에 따라 프레임 기반 또는 체크포인트 기반으로 동작
     /// </summary>
     private void HandleHandPoseTracking(SubStepData subStep)
+    {
+        if (conditionManager == null)
+        {
+            Debug.LogError("[ScenarioManager] ScenarioConditionManager를 찾을 수 없습니다!");
+            return;
+        }
+
+        string phaseName = currentPhase.phaseName;
+        string stepName = currentStep.stepName;
+        int subStepNo = subStep.subStepNo;
+
+        // ========== 체크포인트 기반 평가 ==========
+        if (evaluationMode == EvaluationMode.CheckpointBased)
+        {
+            HandleCheckpointBasedTracking(subStep, phaseName, stepName, subStepNo);
+        }
+        // ========== 프레임 기반 평가 (기존 방식) ==========
+        else
+        {
+            HandleFrameBasedTracking(subStep, phaseName, stepName, subStepNo);
+        }
+    }
+
+    /// <summary>
+    /// 체크포인트 기반 손 동작 평가 처리
+    /// 각 SubStep마다 CSV를 로드하고 체크포인트를 생성
+    /// </summary>
+    private void HandleCheckpointBasedTracking(SubStepData subStep, string phaseName, string stepName, int subStepNo)
+    {
+        if (chunaPathEvaluator == null || chunaPathEvaluatorBridge == null)
+        {
+            Debug.LogError("[ScenarioManager] ChunaPathEvaluator 또는 Bridge를 찾을 수 없습니다!");
+            Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
+            HandleFrameBasedTracking(subStep, phaseName, stepName, subStepNo);
+            return;
+        }
+
+        Debug.Log($"<color=cyan>[ScenarioManager] ========== 체크포인트 기반 평가 시작 ==========</color>");
+        Debug.Log($"<color=cyan>[ScenarioManager] CSV 파일: {subStep.handTrackingFileName}</color>");
+
+        // 1. CSV 로드 및 체크포인트 생성 + 평가 시작
+        chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
+
+        // 2. CheckpointPoseCondition 생성
+        CheckpointPoseCondition condition = new CheckpointPoseCondition(
+            chunaPathEvaluatorBridge,
+            subStep.handTrackingFileName,
+            conditionManager
+        );
+
+        // 3. ScenarioConditionManager에 조건 등록
+        conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
+
+        Debug.Log($"<color=green>[ScenarioManager] ✓ CheckpointPoseCondition 등록 완료!</color>");
+        Debug.Log($"<color=green>  - Phase: {phaseName}</color>");
+        Debug.Log($"<color=green>  - Step: {stepName}</color>");
+        Debug.Log($"<color=green>  - SubStep: {subStepNo}</color>");
+        Debug.Log($"<color=green>  - CSV: {subStep.handTrackingFileName}</color>");
+        Debug.Log($"<color=green>  - 체크포인트 수: {chunaPathEvaluator.TotalCheckpoints}</color>");
+    }
+
+    /// <summary>
+    /// 프레임 기반 손 동작 평가 처리 (기존 방식)
+    /// </summary>
+    private void HandleFrameBasedTracking(SubStepData subStep, string phaseName, string stepName, int subStepNo)
     {
         if (trainingController == null || trainingControllerBridge == null)
         {
@@ -494,25 +616,19 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        if (conditionManager == null)
-        {
-            Debug.LogError("[ScenarioManager] ScenarioConditionManager를 찾을 수 없습니다!");
-            return;
-        }
-
-        Debug.Log($"<color=yellow>[ScenarioManager] HandPose 트래킹 시작: {subStep.handTrackingFileName}</color>");
+        Debug.Log($"<color=yellow>[ScenarioManager] 프레임 기반 HandPose 트래킹 시작: {subStep.handTrackingFileName}</color>");
 
         // 1. CSV 로드 및 훈련 시작
         trainingControllerBridge.LoadFromCSV(subStep.handTrackingFileName);
 
         // 2. HandPoseCondition 생성
-        HandPoseCondition condition = new HandPoseCondition(trainingControllerBridge, subStep.handTrackingFileName, conditionManager);
+        HandPoseCondition condition = new HandPoseCondition(
+            trainingControllerBridge,
+            subStep.handTrackingFileName,
+            conditionManager
+        );
 
         // 3. ScenarioConditionManager에 조건 등록
-        string phaseName = currentPhase.phaseName;
-        string stepName = currentStep.stepName;
-        int subStepNo = subStep.subStepNo;
-
         conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
 
         Debug.Log($"<color=green>[ScenarioManager] ✓ HandPoseCondition 등록 완료!</color>");
