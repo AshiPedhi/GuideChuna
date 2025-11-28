@@ -413,19 +413,19 @@ public class HandPoseTrainingController : MonoBehaviour
             );
         }
 
-        // 유사도에 따라 가이드 핸드 색상 변경 (양손 모두)
+        // 유사도에 따라 플레이어 핸드 색상 변경 (양손 모두)
         if (enableHandColorFeedback)
         {
-            if (useLeftMapper && leftHandMapper != null)
+            if (playerLeftHand != null)
             {
                 Color leftColor = GetColorForSimilarity(leftSimilarity);
-                leftHandMapper.SetColorAndAlpha(leftColor, replayHandAlpha);
+                SetPlayerHandColor(playerLeftHand, leftColor);
             }
 
-            if (useRightMapper && rightHandMapper != null)
+            if (playerRightHand != null)
             {
                 Color rightColor = GetColorForSimilarity(rightSimilarity);
-                rightHandMapper.SetColorAndAlpha(rightColor, replayHandAlpha);
+                SetPlayerHandColor(playerRightHand, rightColor);
             }
         }
 
@@ -963,6 +963,63 @@ public class HandPoseTrainingController : MonoBehaviour
         {
             // 초록 유지 (mediumToHighThreshold ~ 1)
             return highSimilarityColor;
+        }
+    }
+
+    /// <summary>
+    /// 플레이어 손에 색상 적용 (OculusHand 쉐이더 지원)
+    /// </summary>
+    /// <param name="handVisual">플레이어 HandVisual</param>
+    /// <param name="color">적용할 색상</param>
+    private void SetPlayerHandColor(HandVisual handVisual, Color color)
+    {
+        if (handVisual == null)
+            return;
+
+        SkinnedMeshRenderer[] renderers = handVisual.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+
+        foreach (var renderer in renderers)
+        {
+            if (renderer == null)
+                continue;
+
+            Material[] materials = renderer.materials;
+
+            for (int i = 0; i < materials.Length; i++)
+            {
+                Material mat = materials[i];
+                if (mat == null)
+                    continue;
+
+                // 색상 적용 (다양한 쉐이더 지원)
+                if (mat.HasProperty("_Color"))
+                {
+                    mat.color = color;
+                }
+                else if (mat.HasProperty("_BaseColor"))
+                {
+                    mat.SetColor("_BaseColor", color);
+                }
+
+                // OculusHand 쉐이더 지원
+                if (mat.HasProperty("_ColorTop"))
+                {
+                    mat.SetColor("_ColorTop", color);
+                }
+                if (mat.HasProperty("_ColorBottom"))
+                {
+                    mat.SetColor("_ColorBottom", color);
+                }
+                if (mat.HasProperty("_GlowColor"))
+                {
+                    // Glow는 약간 밝게
+                    Color glowColor = color * 1.5f;
+                    glowColor.a = color.a;
+                    mat.SetColor("_GlowColor", glowColor);
+                }
+            }
+
+            renderer.materials = materials;
         }
     }
 }
