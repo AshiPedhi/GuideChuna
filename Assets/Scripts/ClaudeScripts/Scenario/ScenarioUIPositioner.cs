@@ -117,7 +117,8 @@ public class ScenarioUIPositioner : MonoBehaviour
             // UI가 헤드셋을 바라보도록 설정
             if (lookAtHeadset)
             {
-                Vector3 lookDirection = headsetPosition - targetPosition;
+                // Canvas의 앞면이 헤드셋을 향하도록 반대 방향 사용
+                Vector3 lookDirection = targetPosition - headsetPosition;
                 lookDirection.y = 0; // 수평 방향만 고려
 
                 if (lookDirection.sqrMagnitude > 0.001f)
