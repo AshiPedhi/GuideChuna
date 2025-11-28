@@ -1,95 +1,131 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 추나 훈련 피드백 UI
-/// 실시간 점수, 상태, 위반 정보를 표시
+/// 추나 훈련 피드백 UI (체크포인트 기반)
+///
+/// 표시 내용:
+/// - 손 이미지 색상 (유사도/경로 이탈 기반)
+/// - 체크포인트 진행률
+/// - 현재 유사도
+/// - 감점 정보
+///
+/// 각 단계별 결과를 저장하여 최종 결과표에서 확인 가능
 /// </summary>
 public class ChunaFeedbackUI : MonoBehaviour
 {
-    [Header("=== 매니저 참조 ===")]
-    [SerializeField] private ChunaTrainingManager trainingManager;
-    [SerializeField] private ChunaLimitChecker limitChecker;
+    [Header("=== 평가 시스템 참조 ===")]
+    [SerializeField] private ChunaPathEvaluator pathEvaluator;
+    [SerializeField] private ChunaPathEvaluatorBridge evaluatorBridge;
     [SerializeField] private DeductionRecord deductionRecord;
+
+    [Header("=== 손 이미지 (유사도 색상) ===")]
+    [SerializeField] private Image leftHandImage;
+    [SerializeField] private Image rightHandImage;
+
+    [Header("=== 진행률 UI ===")]
+    [Tooltip("체크포인트 진행률 텍스트 (예: 3/10)")]
+    [SerializeField] private Text progressText;
+    [SerializeField] private Slider progressSlider;
+    [SerializeField] private Text currentCheckpointText;
+
+    [Header("=== 유사도 UI ===")]
+    [SerializeField] private Text leftSimilarityText;
+    [SerializeField] private Text rightSimilarityText;
+    [SerializeField] private Text averageSimilarityText;
 
     [Header("=== 점수 UI ===")]
     [SerializeField] private Text scoreText;
     [SerializeField] private Text gradeText;
-    [SerializeField] private Slider scoreSlider;
-    [SerializeField] private Image scoreSliderFill;
+    [SerializeField] private Text deductionText;
 
-    [Header("=== 상태 UI ===")]
-    [SerializeField] private Text leftHandStatusText;
-    [SerializeField] private Text rightHandStatusText;
-    [SerializeField] private Image leftHandStatusIcon;
-    [SerializeField] private Image rightHandStatusIcon;
-    [SerializeField] private RectTransform leftHandLimitIndicator;
-    [SerializeField] private RectTransform rightHandLimitIndicator;
+    [Header("=== 경로 이탈 경고 ===")]
+    [SerializeField] private GameObject pathDeviationWarning;
+    [SerializeField] private Text pathDeviationText;
+    [SerializeField] private Image pathDeviationIndicator;
 
-    [Header("=== 위반 정보 UI ===")]
-    [SerializeField] private Text violationCountText;
-    [SerializeField] private Text lastViolationText;
-    [SerializeField] private GameObject violationAlert;
-    [SerializeField] private Text violationAlertText;
-    [SerializeField] private float alertDisplayDuration = 2f;
+    [Header("=== 색상 설정 (유사도 기반) ===")]
+    [SerializeField] private Color lowSimilarityColor = new Color(1f, 0.2f, 0.2f, 1f);   // 빨강
+    [SerializeField] private Color mediumSimilarityColor = new Color(1f, 1f, 0.2f, 1f);  // 노랑
+    [SerializeField] private Color highSimilarityColor = new Color(0.2f, 1f, 0.2f, 1f);  // 초록
+    [SerializeField] private Color defaultHandColor = new Color(0.5f, 0.5f, 0.5f, 1f);
 
-    [Header("=== 되돌리기 가이드 UI ===")]
-    [SerializeField] private GameObject revertGuidePanel;
-    [SerializeField] private Text revertGuideText;
-    [SerializeField] private Image revertProgressBar;
-    [SerializeField] private RectTransform revertArrowIndicator;
+    [Header("=== 유사도 임계값 ===")]
+    [SerializeField][Range(0f, 1f)] private float lowThreshold = 0.4f;
+    [SerializeField][Range(0f, 1f)] private float highThreshold = 0.7f;
 
-    [Header("=== 결과 패널 ===")]
-    [SerializeField] private GameObject resultPanel;
-    [SerializeField] private Text resultScoreText;
-    [SerializeField] private Text resultGradeText;
-    [SerializeField] private Text resultDetailText;
-    [SerializeField] private Text resultViolationSummaryText;
+    [Header("=== 경로 이탈 설정 ===")]
+    [Tooltip("경로 이탈 경고 거리 (미터)")]
+    [SerializeField] private float pathDeviationWarningDistance = 0.15f;
+    [SerializeField] private Color onPathColor = new Color(0.2f, 0.8f, 0.2f);
+    [SerializeField] private Color offPathColor = new Color(1f, 0.3f, 0.3f);
 
-    [Header("=== 색상 설정 ===")]
-    [SerializeField] private Color safeColor = new Color(0.2f, 0.8f, 0.2f);
-    [SerializeField] private Color warningColor = new Color(1f, 0.8f, 0f);
-    [SerializeField] private Color dangerColor = new Color(1f, 0.5f, 0f);
-    [SerializeField] private Color exceededColor = new Color(1f, 0.2f, 0.2f);
-    [SerializeField] private Gradient scoreGradient;
-
-    [Header("=== 애니메이션 설정 ===")]
+    [Header("=== 업데이트 설정 ===")]
     [SerializeField] private float updateInterval = 0.1f;
-    [SerializeField] private float scoreLerpSpeed = 5f;
-    [SerializeField] private float indicatorLerpSpeed = 8f;
 
-    // 상태
-    private float displayedScore;
+    // 현재 상태
+    private float leftSimilarity = 0f;
+    private float rightSimilarity = 0f;
     private float lastUpdateTime;
-    private float alertEndTime;
-    private bool isShowingAlert;
+    private bool isActive = false;
+
+    // 단계별 결과 저장
+    private List<StepResult> stepResults = new List<StepResult>();
+    private StepResult currentStepResult;
+
+    /// <summary>
+    /// 단계별 결과 데이터
+    /// </summary>
+    [System.Serializable]
+    public class StepResult
+    {
+        public string stepName;
+        public string csvFileName;
+        public DateTime startTime;
+        public DateTime endTime;
+        public float duration;
+        public int totalCheckpoints;
+        public int passedCheckpoints;
+        public float averageSimilarity;
+        public float finalScore;
+        public string grade;
+        public int violationCount;
+        public float totalDeduction;
+        public List<CheckpointResult> checkpointResults = new List<CheckpointResult>();
+
+        [System.Serializable]
+        public class CheckpointResult
+        {
+            public int index;
+            public string name;
+            public float similarity;
+            public bool passed;
+            public float timeToPass;
+        }
+    }
+
+    void Awake()
+    {
+        FindReferences();
+    }
 
     void Start()
     {
-        // 자동 참조 찾기
-        FindReferences();
-
-        // 이벤트 연결
         ConnectEvents();
-
-        // 초기화
         Initialize();
     }
 
     void Update()
     {
+        if (!isActive) return;
+
         if (Time.time - lastUpdateTime >= updateInterval)
         {
             lastUpdateTime = Time.time;
             UpdateDisplay();
         }
-
-        // 점수 스무스 업데이트
-        UpdateScoreSmooth();
-
-        // 경고 알림 타이머
-        UpdateAlert();
     }
 
     void OnDestroy()
@@ -102,11 +138,11 @@ public class ChunaFeedbackUI : MonoBehaviour
     /// </summary>
     private void FindReferences()
     {
-        if (trainingManager == null)
-            trainingManager = FindObjectOfType<ChunaTrainingManager>();
+        if (pathEvaluator == null)
+            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
 
-        if (limitChecker == null)
-            limitChecker = FindObjectOfType<ChunaLimitChecker>();
+        if (evaluatorBridge == null)
+            evaluatorBridge = FindObjectOfType<ChunaPathEvaluatorBridge>();
 
         if (deductionRecord == null)
             deductionRecord = FindObjectOfType<DeductionRecord>();
@@ -117,18 +153,17 @@ public class ChunaFeedbackUI : MonoBehaviour
     /// </summary>
     private void ConnectEvents()
     {
-        if (trainingManager != null)
+        if (pathEvaluator != null)
         {
-            trainingManager.OnTrainingStarted += OnTrainingStarted;
-            trainingManager.OnTrainingEnded += OnTrainingEnded;
-            trainingManager.OnViolation += OnViolation;
-            trainingManager.OnStatusChanged += OnStatusChanged;
+            pathEvaluator.OnEvaluationStarted += OnEvaluationStarted;
+            pathEvaluator.OnEvaluationCompleted += OnEvaluationCompleted;
+            pathEvaluator.OnCheckpointPassed += OnCheckpointPassed;
+            pathEvaluator.OnProgressChanged += OnProgressChanged;
         }
 
         if (deductionRecord != null)
         {
             deductionRecord.OnScoreChanged += OnScoreChanged;
-            deductionRecord.OnDeductionAdded += OnDeductionAdded;
         }
     }
 
@@ -137,18 +172,17 @@ public class ChunaFeedbackUI : MonoBehaviour
     /// </summary>
     private void DisconnectEvents()
     {
-        if (trainingManager != null)
+        if (pathEvaluator != null)
         {
-            trainingManager.OnTrainingStarted -= OnTrainingStarted;
-            trainingManager.OnTrainingEnded -= OnTrainingEnded;
-            trainingManager.OnViolation -= OnViolation;
-            trainingManager.OnStatusChanged -= OnStatusChanged;
+            pathEvaluator.OnEvaluationStarted -= OnEvaluationStarted;
+            pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompleted;
+            pathEvaluator.OnCheckpointPassed -= OnCheckpointPassed;
+            pathEvaluator.OnProgressChanged -= OnProgressChanged;
         }
 
         if (deductionRecord != null)
         {
             deductionRecord.OnScoreChanged -= OnScoreChanged;
-            deductionRecord.OnDeductionAdded -= OnDeductionAdded;
         }
     }
 
@@ -157,20 +191,13 @@ public class ChunaFeedbackUI : MonoBehaviour
     /// </summary>
     private void Initialize()
     {
-        displayedScore = 100f;
+        ResetHandColors();
 
-        // UI 초기 상태
-        if (violationAlert != null)
-            violationAlert.SetActive(false);
-
-        if (revertGuidePanel != null)
-            revertGuidePanel.SetActive(false);
-
-        if (resultPanel != null)
-            resultPanel.SetActive(false);
+        if (pathDeviationWarning != null)
+            pathDeviationWarning.SetActive(false);
 
         UpdateScoreDisplay(100f);
-        UpdateStatusDisplay(LimitStatus.Safe, LimitStatus.Safe);
+        UpdateProgressDisplay(0, 0);
     }
 
     /// <summary>
@@ -178,380 +205,194 @@ public class ChunaFeedbackUI : MonoBehaviour
     /// </summary>
     private void UpdateDisplay()
     {
-        if (limitChecker != null)
-        {
-            var leftResult = limitChecker.GetLeftHandResult();
-            var rightResult = limitChecker.GetRightHandResult();
+        if (pathEvaluator == null || !pathEvaluator.IsEvaluating) return;
 
-            UpdateStatusDisplay(leftResult.overallStatus, rightResult.overallStatus);
-            UpdateLimitIndicators(leftResult.maxLimitRatio, rightResult.maxLimitRatio);
-        }
-
-        if (trainingManager != null)
-        {
-            UpdateViolationCount(trainingManager.GetSessionViolationCount());
-        }
+        // 유사도 텍스트 업데이트
+        UpdateSimilarityTexts();
     }
 
+    // ========== 손 이미지 색상 업데이트 ==========
+
     /// <summary>
-    /// 점수 스무스 업데이트
+    /// 왼손 유사도 업데이트
     /// </summary>
-    private void UpdateScoreSmooth()
+    public void UpdateLeftHandSimilarity(float similarity)
     {
-        float targetScore = deductionRecord?.GetCurrentScore() ?? 100f;
-        displayedScore = Mathf.Lerp(displayedScore, targetScore, Time.deltaTime * scoreLerpSpeed);
-        UpdateScoreDisplay(displayedScore);
-    }
+        leftSimilarity = similarity;
 
-    /// <summary>
-    /// 경고 알림 업데이트
-    /// </summary>
-    private void UpdateAlert()
-    {
-        if (isShowingAlert && Time.time >= alertEndTime)
+        if (leftHandImage != null)
         {
-            HideViolationAlert();
+            leftHandImage.color = GetColorForSimilarity(similarity);
+        }
+
+        if (leftSimilarityText != null)
+        {
+            leftSimilarityText.text = $"{similarity * 100:F0}%";
         }
     }
 
     /// <summary>
-    /// 점수 표시 업데이트
+    /// 오른손 유사도 업데이트
     /// </summary>
+    public void UpdateRightHandSimilarity(float similarity)
+    {
+        rightSimilarity = similarity;
+
+        if (rightHandImage != null)
+        {
+            rightHandImage.color = GetColorForSimilarity(similarity);
+        }
+
+        if (rightSimilarityText != null)
+        {
+            rightSimilarityText.text = $"{similarity * 100:F0}%";
+        }
+    }
+
+    /// <summary>
+    /// 양손 유사도 동시 업데이트
+    /// </summary>
+    public void UpdateBothHandsSimilarity(float left, float right)
+    {
+        UpdateLeftHandSimilarity(left);
+        UpdateRightHandSimilarity(right);
+
+        float average = (left + right) / 2f;
+        if (averageSimilarityText != null)
+        {
+            averageSimilarityText.text = $"평균: {average * 100:F0}%";
+        }
+    }
+
+    /// <summary>
+    /// 유사도에 따른 색상 반환
+    /// </summary>
+    private Color GetColorForSimilarity(float similarity)
+    {
+        similarity = Mathf.Clamp01(similarity);
+
+        if (similarity < lowThreshold)
+        {
+            float t = similarity / lowThreshold;
+            return Color.Lerp(lowSimilarityColor, mediumSimilarityColor, t);
+        }
+        else if (similarity < highThreshold)
+        {
+            float t = (similarity - lowThreshold) / (highThreshold - lowThreshold);
+            return Color.Lerp(mediumSimilarityColor, highSimilarityColor, t);
+        }
+        else
+        {
+            return highSimilarityColor;
+        }
+    }
+
+    /// <summary>
+    /// 손 색상 초기화
+    /// </summary>
+    public void ResetHandColors()
+    {
+        if (leftHandImage != null)
+            leftHandImage.color = defaultHandColor;
+
+        if (rightHandImage != null)
+            rightHandImage.color = defaultHandColor;
+    }
+
+    // ========== 경로 이탈 표시 ==========
+
+    /// <summary>
+    /// 경로 이탈 상태 업데이트
+    /// </summary>
+    public void UpdatePathDeviation(bool isOnPath, float deviation)
+    {
+        if (pathDeviationWarning != null)
+        {
+            pathDeviationWarning.SetActive(!isOnPath);
+        }
+
+        if (pathDeviationText != null)
+        {
+            pathDeviationText.text = isOnPath ? "경로 유지" : $"경로 이탈: {deviation * 100:F0}cm";
+        }
+
+        if (pathDeviationIndicator != null)
+        {
+            pathDeviationIndicator.color = isOnPath ? onPathColor : offPathColor;
+        }
+    }
+
+    // ========== 진행률 표시 ==========
+
+    /// <summary>
+    /// 진행률 표시 업데이트
+    /// </summary>
+    private void UpdateProgressDisplay(int current, int total)
+    {
+        if (progressText != null)
+        {
+            progressText.text = total > 0 ? $"{current}/{total}" : "0/0";
+        }
+
+        if (progressSlider != null)
+        {
+            progressSlider.value = total > 0 ? (float)current / total : 0f;
+        }
+    }
+
+    /// <summary>
+    /// 현재 체크포인트 표시
+    /// </summary>
+    private void UpdateCurrentCheckpoint(string checkpointName)
+    {
+        if (currentCheckpointText != null)
+        {
+            currentCheckpointText.text = checkpointName;
+        }
+    }
+
+    // ========== 유사도 텍스트 ==========
+
+    private void UpdateSimilarityTexts()
+    {
+        if (leftSimilarityText != null)
+        {
+            leftSimilarityText.text = $"L: {leftSimilarity * 100:F0}%";
+        }
+
+        if (rightSimilarityText != null)
+        {
+            rightSimilarityText.text = $"R: {rightSimilarity * 100:F0}%";
+        }
+
+        float avg = (leftSimilarity + rightSimilarity) / 2f;
+        if (averageSimilarityText != null)
+        {
+            averageSimilarityText.text = $"평균: {avg * 100:F0}%";
+        }
+    }
+
+    // ========== 점수 표시 ==========
+
     private void UpdateScoreDisplay(float score)
     {
         if (scoreText != null)
         {
-            scoreText.text = $"{Mathf.RoundToInt(score)}";
+            scoreText.text = $"{Mathf.RoundToInt(score)}점";
         }
 
         if (gradeText != null)
         {
             gradeText.text = GetGradeFromScore(score);
-            gradeText.color = GetGradeColor(score);
-        }
-
-        if (scoreSlider != null)
-        {
-            scoreSlider.value = score / 100f;
-        }
-
-        if (scoreSliderFill != null && scoreGradient != null)
-        {
-            scoreSliderFill.color = scoreGradient.Evaluate(score / 100f);
         }
     }
 
-    /// <summary>
-    /// 상태 표시 업데이트
-    /// </summary>
-    private void UpdateStatusDisplay(LimitStatus leftStatus, LimitStatus rightStatus)
+    private void UpdateDeductionDisplay(float totalDeduction)
     {
-        // 왼손 상태
-        if (leftHandStatusText != null)
+        if (deductionText != null)
         {
-            leftHandStatusText.text = GetStatusString(leftStatus);
-            leftHandStatusText.color = GetStatusColor(leftStatus);
+            deductionText.text = totalDeduction > 0 ? $"-{totalDeduction:F1}" : "";
         }
-
-        if (leftHandStatusIcon != null)
-        {
-            leftHandStatusIcon.color = GetStatusColor(leftStatus);
-        }
-
-        // 오른손 상태
-        if (rightHandStatusText != null)
-        {
-            rightHandStatusText.text = GetStatusString(rightStatus);
-            rightHandStatusText.color = GetStatusColor(rightStatus);
-        }
-
-        if (rightHandStatusIcon != null)
-        {
-            rightHandStatusIcon.color = GetStatusColor(rightStatus);
-        }
-    }
-
-    /// <summary>
-    /// 한계 인디케이터 업데이트
-    /// </summary>
-    private void UpdateLimitIndicators(float leftRatio, float rightRatio)
-    {
-        // 왼손 인디케이터 (0~100% 범위의 바)
-        if (leftHandLimitIndicator != null)
-        {
-            float targetScale = Mathf.Clamp01(leftRatio);
-            Vector3 scale = leftHandLimitIndicator.localScale;
-            scale.x = Mathf.Lerp(scale.x, targetScale, Time.deltaTime * indicatorLerpSpeed);
-            leftHandLimitIndicator.localScale = scale;
-
-            // 색상도 업데이트
-            Image img = leftHandLimitIndicator.GetComponent<Image>();
-            if (img != null)
-            {
-                img.color = GetColorForRatio(leftRatio);
-            }
-        }
-
-        // 오른손 인디케이터
-        if (rightHandLimitIndicator != null)
-        {
-            float targetScale = Mathf.Clamp01(rightRatio);
-            Vector3 scale = rightHandLimitIndicator.localScale;
-            scale.x = Mathf.Lerp(scale.x, targetScale, Time.deltaTime * indicatorLerpSpeed);
-            rightHandLimitIndicator.localScale = scale;
-
-            Image img = rightHandLimitIndicator.GetComponent<Image>();
-            if (img != null)
-            {
-                img.color = GetColorForRatio(rightRatio);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 위반 횟수 업데이트
-    /// </summary>
-    private void UpdateViolationCount(int count)
-    {
-        if (violationCountText != null)
-        {
-            violationCountText.text = $"위반: {count}회";
-        }
-    }
-
-    /// <summary>
-    /// 위반 알림 표시
-    /// </summary>
-    public void ShowViolationAlert(string message, ViolationSeverity severity)
-    {
-        if (violationAlert != null)
-        {
-            violationAlert.SetActive(true);
-        }
-
-        if (violationAlertText != null)
-        {
-            violationAlertText.text = message;
-            violationAlertText.color = GetSeverityColor(severity);
-        }
-
-        isShowingAlert = true;
-        alertEndTime = Time.time + alertDisplayDuration;
-    }
-
-    /// <summary>
-    /// 위반 알림 숨기기
-    /// </summary>
-    private void HideViolationAlert()
-    {
-        if (violationAlert != null)
-        {
-            violationAlert.SetActive(false);
-        }
-        isShowingAlert = false;
-    }
-
-    /// <summary>
-    /// 되돌리기 가이드 표시
-    /// </summary>
-    public void ShowRevertGuide(bool isLeftHand, Vector3 direction)
-    {
-        if (revertGuidePanel != null)
-        {
-            revertGuidePanel.SetActive(true);
-        }
-
-        if (revertGuideText != null)
-        {
-            string handName = isLeftHand ? "왼손" : "오른손";
-            revertGuideText.text = $"{handName}을 안전 위치로 되돌려주세요";
-        }
-
-        // 화살표 방향 설정
-        if (revertArrowIndicator != null)
-        {
-            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-            revertArrowIndicator.rotation = Quaternion.Euler(0, 0, angle);
-        }
-    }
-
-    /// <summary>
-    /// 되돌리기 가이드 숨기기
-    /// </summary>
-    public void HideRevertGuide()
-    {
-        if (revertGuidePanel != null)
-        {
-            revertGuidePanel.SetActive(false);
-        }
-    }
-
-    /// <summary>
-    /// 되돌리기 진행률 업데이트
-    /// </summary>
-    public void UpdateRevertProgress(float progress)
-    {
-        if (revertProgressBar != null)
-        {
-            revertProgressBar.fillAmount = progress;
-        }
-    }
-
-    /// <summary>
-    /// 결과 패널 표시
-    /// </summary>
-    public void ShowResultPanel(DeductionRecord.SessionRecord result)
-    {
-        if (resultPanel != null)
-        {
-            resultPanel.SetActive(true);
-        }
-
-        if (resultScoreText != null)
-        {
-            resultScoreText.text = $"{result.finalScore:F0}점";
-        }
-
-        if (resultGradeText != null)
-        {
-            resultGradeText.text = result.grade;
-            resultGradeText.color = GetGradeColor(result.finalScore);
-        }
-
-        if (resultDetailText != null)
-        {
-            resultDetailText.text = $"소요 시간: {result.duration:F1}초\n" +
-                                    $"총 감점: -{result.totalDeductionAmount:F1}점\n" +
-                                    $"보너스: +{result.bonusEarned:F1}점";
-        }
-
-        if (resultViolationSummaryText != null)
-        {
-            string summary = $"총 위반: {result.totalDeductions}회\n";
-            foreach (var kvp in result.violationCounts)
-            {
-                summary += $"  {GetViolationTypeName(kvp.Key)}: {kvp.Value}회\n";
-            }
-            resultViolationSummaryText.text = summary;
-        }
-    }
-
-    /// <summary>
-    /// 결과 패널 숨기기
-    /// </summary>
-    public void HideResultPanel()
-    {
-        if (resultPanel != null)
-        {
-            resultPanel.SetActive(false);
-        }
-    }
-
-    // ========== 이벤트 핸들러 ==========
-
-    private void OnTrainingStarted()
-    {
-        Initialize();
-        HideResultPanel();
-    }
-
-    private void OnTrainingEnded(DeductionRecord.SessionRecord result)
-    {
-        if (result != null)
-        {
-            ShowResultPanel(result);
-        }
-    }
-
-    private void OnViolation(ChunaLimitChecker.ViolationEvent violation)
-    {
-        string handName = violation.isLeftHand ? "왼손" : "오른손";
-        string violationName = GetViolationTypeName(violation.violationType);
-        ShowViolationAlert($"{handName}: {violationName}!", violation.severity);
-
-        if (lastViolationText != null)
-        {
-            lastViolationText.text = $"최근: {violationName} ({violation.limitRatio:P0})";
-        }
-    }
-
-    private void OnStatusChanged(LimitStatus leftStatus, LimitStatus rightStatus)
-    {
-        UpdateStatusDisplay(leftStatus, rightStatus);
-
-        // 초과 상태면 되돌리기 가이드 표시
-        if (leftStatus == LimitStatus.Exceeded)
-        {
-            ShowRevertGuide(true, Vector3.left);
-        }
-        else if (rightStatus == LimitStatus.Exceeded)
-        {
-            ShowRevertGuide(false, Vector3.right);
-        }
-        else if (leftStatus == LimitStatus.Safe && rightStatus == LimitStatus.Safe)
-        {
-            HideRevertGuide();
-        }
-    }
-
-    private void OnScoreChanged(float newScore)
-    {
-        // 스무스 업데이트를 위해 타겟 점수만 저장
-        // 실제 표시는 UpdateScoreSmooth에서 처리
-    }
-
-    private void OnDeductionAdded(DeductionRecord.DeductionEntry entry)
-    {
-        if (lastViolationText != null)
-        {
-            lastViolationText.text = $"-{entry.finalDeduction:F1}점: {entry.description}";
-        }
-    }
-
-    // ========== 유틸리티 ==========
-
-    private string GetStatusString(LimitStatus status)
-    {
-        return status switch
-        {
-            LimitStatus.Safe => "안전",
-            LimitStatus.Warning => "주의",
-            LimitStatus.Danger => "위험",
-            LimitStatus.Exceeded => "초과!",
-            _ => "?"
-        };
-    }
-
-    private Color GetStatusColor(LimitStatus status)
-    {
-        return status switch
-        {
-            LimitStatus.Safe => safeColor,
-            LimitStatus.Warning => warningColor,
-            LimitStatus.Danger => dangerColor,
-            LimitStatus.Exceeded => exceededColor,
-            _ => Color.gray
-        };
-    }
-
-    private Color GetColorForRatio(float ratio)
-    {
-        if (ratio >= 1f) return exceededColor;
-        if (ratio >= 0.95f) return dangerColor;
-        if (ratio >= 0.8f) return warningColor;
-        return safeColor;
-    }
-
-    private Color GetSeverityColor(ViolationSeverity severity)
-    {
-        return severity switch
-        {
-            ViolationSeverity.Minor => warningColor,
-            ViolationSeverity.Moderate => dangerColor,
-            ViolationSeverity.Severe => exceededColor,
-            ViolationSeverity.Dangerous => exceededColor,
-            _ => Color.white
-        };
     }
 
     private string GetGradeFromScore(float score)
@@ -567,27 +408,174 @@ public class ChunaFeedbackUI : MonoBehaviour
         return "F";
     }
 
-    private Color GetGradeColor(float score)
+    // ========== 이벤트 핸들러 ==========
+
+    private void OnEvaluationStarted()
     {
-        if (score >= 90f) return new Color(1f, 0.84f, 0f); // Gold
-        if (score >= 80f) return new Color(0.75f, 0.75f, 0.75f); // Silver
-        if (score >= 70f) return new Color(0.8f, 0.5f, 0.2f); // Bronze
-        if (score >= 60f) return Color.white;
-        return Color.red;
+        isActive = true;
+
+        // 새 단계 결과 시작
+        currentStepResult = new StepResult
+        {
+            startTime = DateTime.Now,
+            checkpointResults = new List<StepResult.CheckpointResult>()
+        };
+
+        if (pathEvaluator != null)
+        {
+            var session = pathEvaluator.GetCurrentSession();
+            if (session != null)
+            {
+                currentStepResult.csvFileName = session.procedureName;
+                currentStepResult.totalCheckpoints = session.totalCheckpoints;
+            }
+        }
+
+        Initialize();
+        Debug.Log("[ChunaFeedbackUI] 평가 시작 - 결과 기록 시작");
     }
 
-    private string GetViolationTypeName(ViolationType type)
+    private void OnEvaluationCompleted(ChunaPathEvaluator.EvaluationSession session)
     {
-        return type switch
+        isActive = false;
+
+        if (currentStepResult != null && session != null)
         {
-            ViolationType.OverFlexion => "과굴곡",
-            ViolationType.OverExtension => "과신전",
-            ViolationType.OverRotation => "과회전",
-            ViolationType.OverLateralFlexion => "과측굴",
-            ViolationType.OverTranslation => "과이동",
-            ViolationType.OverSpeed => "과속",
-            ViolationType.OverForce => "과압력",
-            _ => "위반"
-        };
+            // 결과 저장
+            currentStepResult.endTime = DateTime.Now;
+            currentStepResult.duration = session.duration;
+            currentStepResult.passedCheckpoints = session.passedCheckpoints;
+            currentStepResult.averageSimilarity = session.averageSimilarity;
+            currentStepResult.finalScore = session.finalScore;
+            currentStepResult.grade = session.grade;
+            currentStepResult.violationCount = session.limitViolations;
+
+            // 체크포인트별 결과 복사
+            foreach (var record in session.checkpointRecords)
+            {
+                currentStepResult.checkpointResults.Add(new StepResult.CheckpointResult
+                {
+                    index = record.index,
+                    name = record.name,
+                    similarity = record.similarity,
+                    passed = record.passed,
+                    timeToPass = record.timestamp
+                });
+            }
+
+            // 리스트에 추가
+            stepResults.Add(currentStepResult);
+
+            Debug.Log($"[ChunaFeedbackUI] 단계 결과 저장 완료 (총 {stepResults.Count}개 단계)");
+            Debug.Log($"  - 점수: {currentStepResult.finalScore:F0} ({currentStepResult.grade})");
+            Debug.Log($"  - 체크포인트: {currentStepResult.passedCheckpoints}/{currentStepResult.totalCheckpoints}");
+        }
+
+        // 점수 표시 업데이트
+        UpdateScoreDisplay(session?.finalScore ?? 100f);
+    }
+
+    private void OnCheckpointPassed(PathCheckpoint checkpoint, float similarity)
+    {
+        UpdateCurrentCheckpoint($"✓ {checkpoint.CheckpointName}");
+
+        // 손 색상 업데이트
+        UpdateBothHandsSimilarity(similarity, similarity);
+    }
+
+    private void OnProgressChanged(int current, int total)
+    {
+        UpdateProgressDisplay(current, total);
+    }
+
+    private void OnScoreChanged(float newScore)
+    {
+        UpdateScoreDisplay(newScore);
+
+        if (deductionRecord != null)
+        {
+            float deduction = 100f - newScore;
+            UpdateDeductionDisplay(deduction);
+        }
+    }
+
+    // ========== 결과 조회 API ==========
+
+    /// <summary>
+    /// 모든 단계 결과 가져오기
+    /// </summary>
+    public List<StepResult> GetAllStepResults()
+    {
+        return new List<StepResult>(stepResults);
+    }
+
+    /// <summary>
+    /// 총합 결과 계산
+    /// </summary>
+    public TotalResult CalculateTotalResult()
+    {
+        var total = new TotalResult();
+
+        if (stepResults.Count == 0)
+        {
+            total.grade = "N/A";
+            return total;
+        }
+
+        foreach (var step in stepResults)
+        {
+            total.totalSteps++;
+            total.totalCheckpoints += step.totalCheckpoints;
+            total.passedCheckpoints += step.passedCheckpoints;
+            total.totalDuration += step.duration;
+            total.totalScore += step.finalScore;
+            total.totalViolations += step.violationCount;
+            total.totalSimilarity += step.averageSimilarity;
+        }
+
+        total.averageScore = total.totalScore / total.totalSteps;
+        total.averageSimilarity = total.totalSimilarity / total.totalSteps;
+        total.grade = GetGradeFromScore(total.averageScore);
+
+        return total;
+    }
+
+    /// <summary>
+    /// 결과 초기화
+    /// </summary>
+    public void ClearResults()
+    {
+        stepResults.Clear();
+        currentStepResult = null;
+        Debug.Log("[ChunaFeedbackUI] 모든 단계 결과 초기화");
+    }
+
+    /// <summary>
+    /// 단계 이름 설정 (현재 진행 중인 단계)
+    /// </summary>
+    public void SetCurrentStepName(string stepName)
+    {
+        if (currentStepResult != null)
+        {
+            currentStepResult.stepName = stepName;
+        }
+    }
+
+    /// <summary>
+    /// 총합 결과 데이터
+    /// </summary>
+    [System.Serializable]
+    public class TotalResult
+    {
+        public int totalSteps;
+        public int totalCheckpoints;
+        public int passedCheckpoints;
+        public float totalDuration;
+        public float totalScore;
+        public float averageScore;
+        public float totalSimilarity;
+        public float averageSimilarity;
+        public int totalViolations;
+        public string grade;
     }
 }
