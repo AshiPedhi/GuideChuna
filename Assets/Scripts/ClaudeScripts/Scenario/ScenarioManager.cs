@@ -33,6 +33,13 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
+    [Header("=== 퀴즈 및 설문 ===")]
+    [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
+    [SerializeField] private QuizPanel quizPanel;
+
+    [Tooltip("설문 패널 (로그아웃/종료 시 표시)")]
+    [SerializeField] private SurveyPanel surveyPanel;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
@@ -84,6 +91,26 @@ public class ScenarioManager : MonoBehaviour
             if (uiPositioner != null)
             {
                 Debug.Log("[ScenarioManager] ✅ ScenarioUIPositioner 자동 찾기 성공");
+            }
+        }
+
+        // ✅ QuizPanel 찾기
+        if (quizPanel == null)
+        {
+            quizPanel = FindObjectOfType<QuizPanel>();
+            if (quizPanel != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
+            }
+        }
+
+        // ✅ SurveyPanel 찾기
+        if (surveyPanel == null)
+        {
+            surveyPanel = FindObjectOfType<SurveyPanel>();
+            if (surveyPanel != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ SurveyPanel 자동 찾기 성공");
             }
         }
 
@@ -363,6 +390,43 @@ public class ScenarioManager : MonoBehaviour
     {
         eventSystem.ScenarioCompleted(currentScenario);
         Log($"시나리오 완료: {currentScenario.scenarioName}");
+
+        // 퀴즈 패널 표시
+        ShowQuizPanel();
+    }
+
+    /// <summary>
+    /// 퀴즈 패널 표시 (학습 완료 후)
+    /// </summary>
+    private void ShowQuizPanel()
+    {
+        if (quizPanel != null)
+        {
+            Debug.Log("[ScenarioManager] 퀴즈 패널 표시");
+            quizPanel.ShowQuizPanel();
+        }
+        else
+        {
+            Debug.LogWarning("[ScenarioManager] QuizPanel이 없어 퀴즈를 건너뜁니다.");
+        }
+    }
+
+    /// <summary>
+    /// 설문 패널 표시 (로그아웃/종료 시 호출)
+    /// </summary>
+    /// <param name="onCompleteAction">설문 완료 후 실행할 액션 (로그아웃, 종료 등)</param>
+    public void ShowSurveyPanel(System.Action onCompleteAction)
+    {
+        if (surveyPanel != null)
+        {
+            Debug.Log("[ScenarioManager] 설문 패널 표시");
+            surveyPanel.ShowSurveyPanel(onCompleteAction);
+        }
+        else
+        {
+            Debug.LogWarning("[ScenarioManager] SurveyPanel이 없어 설문을 건너뜁니다.");
+            onCompleteAction?.Invoke();
+        }
     }
 
     /// <summary>
