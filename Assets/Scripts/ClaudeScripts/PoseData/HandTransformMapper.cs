@@ -339,7 +339,7 @@ public class HandTransformMapper : MonoBehaviour
                     mat.renderQueue = 3000;
                 }
 
-                // 색상 적용
+                // 색상 적용 (다양한 쉐이더 지원)
                 if (mat.HasProperty("_Color"))
                 {
                     mat.color = finalColor;
@@ -347,6 +347,23 @@ public class HandTransformMapper : MonoBehaviour
                 else if (mat.HasProperty("_BaseColor"))
                 {
                     mat.SetColor("_BaseColor", finalColor);
+                }
+
+                // OculusHand 쉐이더 지원
+                if (mat.HasProperty("_ColorTop"))
+                {
+                    mat.SetColor("_ColorTop", finalColor);
+                }
+                if (mat.HasProperty("_ColorBottom"))
+                {
+                    mat.SetColor("_ColorBottom", finalColor);
+                }
+                if (mat.HasProperty("_GlowColor"))
+                {
+                    // Glow는 약간 밝게
+                    Color glowColor = finalColor * 1.5f;
+                    glowColor.a = finalColor.a;
+                    mat.SetColor("_GlowColor", glowColor);
                 }
             }
         }

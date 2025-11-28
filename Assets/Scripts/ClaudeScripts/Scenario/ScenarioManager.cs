@@ -33,6 +33,10 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
+    [Header("=== 퀴즈 패널 ===")]
+    [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
+    [SerializeField] private QuizPanel quizPanel;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
@@ -84,6 +88,16 @@ public class ScenarioManager : MonoBehaviour
             if (uiPositioner != null)
             {
                 Debug.Log("[ScenarioManager] ✅ ScenarioUIPositioner 자동 찾기 성공");
+            }
+        }
+
+        // ✅ QuizPanel 찾기
+        if (quizPanel == null)
+        {
+            quizPanel = FindObjectOfType<QuizPanel>();
+            if (quizPanel != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
             }
         }
 
@@ -363,6 +377,25 @@ public class ScenarioManager : MonoBehaviour
     {
         eventSystem.ScenarioCompleted(currentScenario);
         Log($"시나리오 완료: {currentScenario.scenarioName}");
+
+        // 퀴즈 패널 표시
+        ShowQuizPanel();
+    }
+
+    /// <summary>
+    /// 퀴즈 패널 표시 (학습 완료 후)
+    /// </summary>
+    private void ShowQuizPanel()
+    {
+        if (quizPanel != null)
+        {
+            Debug.Log("[ScenarioManager] 퀴즈 패널 표시");
+            quizPanel.ShowQuizPanel();
+        }
+        else
+        {
+            Debug.LogWarning("[ScenarioManager] QuizPanel이 없어 퀴즈를 건너뜁니다.");
+        }
     }
 
     /// <summary>
