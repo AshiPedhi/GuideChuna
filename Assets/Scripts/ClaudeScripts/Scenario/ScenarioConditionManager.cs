@@ -659,3 +659,65 @@ public class HandPoseCondition : IScenarioCondition
         isCompleted = false;
     }
 }
+
+/// <summary>
+/// 체크포인트 기반 손 동작 조건
+/// ChunaPathEvaluatorBridge와 연동하여 체크포인트 통과 감지
+/// </summary>
+public class CheckpointPoseCondition : IScenarioCondition
+{
+    private ChunaPathEvaluatorBridge evaluatorBridge;
+    private bool isCompleted = false;
+    private string fileName;
+
+    /// <summary>
+    /// CheckpointPoseCondition 생성자
+    /// </summary>
+    public CheckpointPoseCondition(ChunaPathEvaluatorBridge bridge, string trackingFileName, ScenarioConditionManager conditionManager)
+    {
+        evaluatorBridge = bridge;
+        fileName = trackingFileName;
+
+        if (bridge != null)
+        {
+            // OnSequenceCompleted 이벤트 구독
+            bridge.OnSequenceCompleted += OnSequenceCompleted;
+            Debug.Log($"<color=cyan>[CheckpointPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
+
+            // OnProgressThresholdReached 이벤트 구독
+            bridge.OnProgressThresholdReached += OnProgressThresholdReached;
+            Debug.Log($"<color=cyan>[CheckpointPoseCondition] OnProgressThresholdReached 이벤트 구독 성공: {trackingFileName}</color>");
+        }
+        else
+        {
+            Debug.LogError("[CheckpointPoseCondition] ChunaPathEvaluatorBridge가 null입니다!");
+        }
+    }
+
+    private void OnSequenceCompleted()
+    {
+        isCompleted = true;
+        Debug.Log($"<color=green>[CheckpointPoseCondition] 모든 체크포인트 통과: {fileName}</color>");
+    }
+
+    private void OnProgressThresholdReached()
+    {
+        isCompleted = true;
+        Debug.Log($"<color=green>[CheckpointPoseCondition] 진행률 목표 달성으로 완료: {fileName}</color>");
+    }
+
+    public bool IsConditionMet()
+    {
+        return isCompleted;
+    }
+
+    public string GetConditionDescription()
+    {
+        return $"체크포인트 기반 추나 평가: {fileName}";
+    }
+
+    public void Reset()
+    {
+        isCompleted = false;
+    }
+}
