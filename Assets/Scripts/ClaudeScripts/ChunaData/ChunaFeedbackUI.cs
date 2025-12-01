@@ -448,7 +448,7 @@ public class ChunaFeedbackUI : MonoBehaviour
             currentStepResult.averageSimilarity = session.averageSimilarity;
             currentStepResult.finalScore = session.finalScore;
             currentStepResult.grade = session.grade;
-            currentStepResult.violationCount = session.limitViolations;
+            currentStepResult.violationCount = session.limitViolationCount;
 
             // 체크포인트별 결과 복사
             foreach (var record in session.checkpointRecords)
@@ -458,8 +458,8 @@ public class ChunaFeedbackUI : MonoBehaviour
                     index = record.index,
                     name = record.name,
                     similarity = record.similarity,
-                    passed = record.passed,
-                    timeToPass = record.timestamp
+                    passed = true,  // 터치된 체크포인트는 통과로 간주
+                    timeToPass = record.touchTime
                 });
             }
 
