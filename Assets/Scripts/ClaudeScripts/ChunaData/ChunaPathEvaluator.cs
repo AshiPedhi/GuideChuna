@@ -658,15 +658,38 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void UpdateGuideHands()
     {
-        if (!showGuideHands) return;
+        if (!showGuideHands)
+        {
+            if (showDebugLogs) Debug.Log("[ChunaPathEvaluator] showGuideHands가 false입니다");
+            return;
+        }
 
-        if (currentCheckpointIndex >= checkpoints.Count) return;
+        if (loadedFrames == null || loadedFrames.Count == 0)
+        {
+            if (showDebugLogs) Debug.LogWarning("[ChunaPathEvaluator] loadedFrames가 비어있습니다");
+            return;
+        }
+
+        if (currentCheckpointIndex >= checkpoints.Count)
+        {
+            if (showDebugLogs) Debug.LogWarning("[ChunaPathEvaluator] currentCheckpointIndex가 범위를 벗어났습니다");
+            return;
+        }
 
         int frameIndex = currentCheckpointIndex * checkpointFrameInterval;
         if (frameIndex >= loadedFrames.Count)
             frameIndex = loadedFrames.Count - 1;
 
         PoseFrame frame = loadedFrames[frameIndex];
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"[ChunaPathEvaluator] 가이드 손 업데이트 - 프레임 {frameIndex}");
+            Debug.Log($"  - 왼손 위치: {frame.leftRootPosition}");
+            Debug.Log($"  - 오른손 위치: {frame.rightRootPosition}");
+            Debug.Log($"  - leftGuideHand 할당됨: {leftGuideHand != null}");
+            Debug.Log($"  - rightGuideHand 할당됨: {rightGuideHand != null}");
+        }
 
         // 왼손 가이드
         if (leftGuideHand != null)
@@ -679,11 +702,19 @@ public class ChunaPathEvaluator : MonoBehaviour
                 leftGuideHand.Root.position = frame.leftRootPosition;
                 leftGuideHand.Root.rotation = frame.leftRootRotation;
             }
+            else if (showDebugLogs)
+            {
+                Debug.LogWarning("[ChunaPathEvaluator] leftGuideHand.Root가 null입니다!");
+            }
 
             foreach (var kvp in frame.leftLocalPoses)
             {
                 leftGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
             }
+        }
+        else if (showDebugLogs)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] leftGuideHand가 할당되지 않았습니다. Inspector에서 설정해주세요.");
         }
 
         // 오른손 가이드
@@ -697,11 +728,19 @@ public class ChunaPathEvaluator : MonoBehaviour
                 rightGuideHand.Root.position = frame.rightRootPosition;
                 rightGuideHand.Root.rotation = frame.rightRootRotation;
             }
+            else if (showDebugLogs)
+            {
+                Debug.LogWarning("[ChunaPathEvaluator] rightGuideHand.Root가 null입니다!");
+            }
 
             foreach (var kvp in frame.rightLocalPoses)
             {
                 rightGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
             }
+        }
+        else if (showDebugLogs)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] rightGuideHand가 할당되지 않았습니다. Inspector에서 설정해주세요.");
         }
     }
 
