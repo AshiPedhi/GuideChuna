@@ -16,17 +16,17 @@ public class PathCheckpoint : MonoBehaviour
 
     [Header("=== 통과 조건 ===")]
     [Tooltip("체크포인트 내에서 유지해야 하는 시간 (0 = 즉시 통과)")]
-    [SerializeField] private float requiredHoldTime = 0.5f;
+    [SerializeField] private float requiredHoldTime = 0.2f;
 
     [Tooltip("손모양 유사도 체크 활성화")]
-    [SerializeField] private bool checkHandPose = true;
+    [SerializeField] private bool checkHandPose = false;
 
     [Tooltip("통과에 필요한 최소 유사도 (0~1)")]
-    [SerializeField] [Range(0f, 1f)] private float requiredSimilarity = 0.6f;
+    [SerializeField] [Range(0f, 1f)] private float requiredSimilarity = 0.3f;
 
     [Header("=== 트리거 설정 ===")]
     [Tooltip("트리거 반경 (미터)")]
-    [SerializeField] private float triggerRadius = 0.08f;
+    [SerializeField] private float triggerRadius = 0.15f;
 
     [Tooltip("왼손 감지")]
     [SerializeField] private bool detectLeftHand = true;
@@ -381,6 +381,24 @@ public class PathCheckpoint : MonoBehaviour
     {
         detectLeftHand = left;
         detectRightHand = right;
+    }
+
+    /// <summary>
+    /// 통과 조건 설정
+    /// </summary>
+    public void SetPassConditions(float holdTime, float similarity, bool checkPose)
+    {
+        requiredHoldTime = holdTime;
+        requiredSimilarity = similarity;
+        checkHandPose = checkPose;
+    }
+
+    /// <summary>
+    /// 유사도 체크 활성화/비활성화
+    /// </summary>
+    public void SetCheckHandPose(bool enable)
+    {
+        checkHandPose = enable;
     }
 
     /// <summary>

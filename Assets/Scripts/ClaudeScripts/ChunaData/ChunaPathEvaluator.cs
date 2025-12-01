@@ -36,6 +36,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Header("=== 모듈 참조 ===")]
     [SerializeField] private DeductionRecord deductionRecord;
     [SerializeField] private HandPoseComparator poseComparator;
+    [SerializeField] private ChunaLimitChecker limitChecker;
+    [SerializeField] private ChunaLimitData limitData;
 
     [Header("=== 가이드 손 표시 ===")]
     [SerializeField] private HandTransformMapper leftGuideHand;
@@ -58,13 +60,19 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Header("=== 자동 생성 설정 ===")]
     [Tooltip("체크포인트 간격 (프레임)")]
-    [SerializeField] private int checkpointFrameInterval = 10;
+    [SerializeField] private int checkpointFrameInterval = 15;
 
     [Tooltip("체크포인트 트리거 반경 (미터)")]
-    [SerializeField] private float checkpointRadius = 0.1f;
+    [SerializeField] private float checkpointRadius = 0.15f;
 
     [Tooltip("체크포인트 홀드 시간 (초)")]
-    [SerializeField] private float checkpointHoldTime = 0.3f;
+    [SerializeField] private float checkpointHoldTime = 0.2f;
+
+    [Tooltip("손 모양 유사도 체크 활성화")]
+    [SerializeField] private bool checkHandPoseSimilarity = false;
+
+    [Tooltip("통과에 필요한 최소 유사도")]
+    [SerializeField][Range(0f, 1f)] private float requiredSimilarity = 0.3f;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -190,6 +198,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         if (deductionRecord == null)
             deductionRecord = FindObjectOfType<DeductionRecord>();
+
+        if (limitChecker == null)
+            limitChecker = FindObjectOfType<ChunaLimitChecker>();
+
+        // 리밋 체커에 데이터 연결
+        if (limitChecker != null && limitData != null)
+        {
+            limitChecker.SetLimitData(limitData);
+        }
 
         // 손 찾기
         if (playerLeftHand == null || playerRightHand == null)
@@ -326,6 +343,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         checkpoint.SetTriggerRadius(checkpointRadius);
         checkpoint.SetDetectHand(isLeftHand, !isLeftHand); // 한쪽 손만 감지
+        checkpoint.SetPassConditions(checkpointHoldTime, requiredSimilarity, checkHandPoseSimilarity);
 
         // 이벤트 연결
         checkpoint.OnCheckpointPassed += (cp, isLeft, similarity) => HandleCheckpointPassed(cp, isLeft, similarity);
@@ -402,6 +420,17 @@ public class ChunaPathEvaluator : MonoBehaviour
             deductionRecord.StartSession(currentProcedureName);
         }
 
+        // 리밋 체커 시작
+        if (limitChecker != null)
+        {
+            if (limitData != null)
+            {
+                limitChecker.SetLimitData(limitData);
+            }
+            limitChecker.Initialize();
+            limitChecker.SetEnabled(true);
+        }
+
         // 가이드 핸드 재생 시작
         StartGuideHandPlayback();
 
@@ -453,6 +482,12 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // 가이드 핸드 중지
         StopGuideHandPlayback();
+
+        // 리밋 체커 중지
+        if (limitChecker != null)
+        {
+            limitChecker.SetEnabled(false);
+        }
 
         if (showDebugLogs)
         {
@@ -747,6 +782,45 @@ public class ChunaPathEvaluator : MonoBehaviour
         checkpointRadius = Mathf.Max(0.01f, radius);
         foreach (var cp in leftCheckpoints) cp?.SetTriggerRadius(radius);
         foreach (var cp in rightCheckpoints) cp?.SetTriggerRadius(radius);
+    }
+
+    /// <summary>
+    /// 통과 조건 설정 (홀드 시간, 유사도, 유사도 체크 여부)
+    /// </summary>
+    public void SetPassConditions(float holdTime, float similarity, bool checkPose)
+    {
+        checkpointHoldTime = Mathf.Max(0f, holdTime);
+        requiredSimilarity = Mathf.Clamp01(similarity);
+        checkHandPoseSimilarity = checkPose;
+
+        foreach (var cp in leftCheckpoints)
+            cp?.SetPassConditions(holdTime, similarity, checkPose);
+        foreach (var cp in rightCheckpoints)
+            cp?.SetPassConditions(holdTime, similarity, checkPose);
+    }
+
+    /// <summary>
+    /// 유사도 체크 활성화/비활성화
+    /// </summary>
+    public void SetCheckHandPose(bool enable)
+    {
+        checkHandPoseSimilarity = enable;
+        foreach (var cp in leftCheckpoints)
+            cp?.SetCheckHandPose(enable);
+        foreach (var cp in rightCheckpoints)
+            cp?.SetCheckHandPose(enable);
+    }
+
+    /// <summary>
+    /// 리밋 데이터 설정
+    /// </summary>
+    public void SetLimitData(ChunaLimitData data)
+    {
+        limitData = data;
+        if (limitChecker != null && data != null)
+        {
+            limitChecker.SetLimitData(data);
+        }
     }
 
     public float GetProgress()
