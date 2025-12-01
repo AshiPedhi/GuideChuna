@@ -215,17 +215,32 @@ public class PathCheckpoint : MonoBehaviour
     /// </summary>
     private bool IsLeftHand(Collider other)
     {
-        // 태그 또는 이름으로 판별
-        if (other.CompareTag("LeftHand")) return true;
-        if (other.name.ToLower().Contains("left")) return true;
+        // 1. 이름으로 판별 (가장 안전한 방법)
+        string lowerName = other.name.ToLower();
+        if (lowerName.Contains("left") && (lowerName.Contains("hand") || lowerName.Contains("wrist") || lowerName.Contains("palm")))
+            return true;
 
-        // 부모 오브젝트 확인
+        // 2. 태그로 판별 (태그가 정의되어 있는 경우에만)
+        try
+        {
+            if (other.CompareTag("LeftHand")) return true;
+        }
+        catch (UnityException) { /* 태그가 정의되지 않음 - 무시 */ }
+
+        // 3. 부모 오브젝트 이름 확인
         Transform parent = other.transform.parent;
         while (parent != null)
         {
-            if (parent.name.ToLower().Contains("left")) return true;
+            string parentLower = parent.name.ToLower();
+            if (parentLower.Contains("left") && (parentLower.Contains("hand") || parentLower.Contains("skeleton") || parentLower.Contains("visual")))
+                return true;
             parent = parent.parent;
         }
+
+        // 4. OVR/Oculus 컴포넌트로 확인
+        var ovrHand = other.GetComponentInParent<Oculus.Interaction.Input.Hand>();
+        if (ovrHand != null && ovrHand.Handedness == Oculus.Interaction.Input.Handedness.Left)
+            return true;
 
         return false;
     }
@@ -235,15 +250,32 @@ public class PathCheckpoint : MonoBehaviour
     /// </summary>
     private bool IsRightHand(Collider other)
     {
-        if (other.CompareTag("RightHand")) return true;
-        if (other.name.ToLower().Contains("right")) return true;
+        // 1. 이름으로 판별 (가장 안전한 방법)
+        string lowerName = other.name.ToLower();
+        if (lowerName.Contains("right") && (lowerName.Contains("hand") || lowerName.Contains("wrist") || lowerName.Contains("palm")))
+            return true;
 
+        // 2. 태그로 판별 (태그가 정의되어 있는 경우에만)
+        try
+        {
+            if (other.CompareTag("RightHand")) return true;
+        }
+        catch (UnityException) { /* 태그가 정의되지 않음 - 무시 */ }
+
+        // 3. 부모 오브젝트 이름 확인
         Transform parent = other.transform.parent;
         while (parent != null)
         {
-            if (parent.name.ToLower().Contains("right")) return true;
+            string parentLower = parent.name.ToLower();
+            if (parentLower.Contains("right") && (parentLower.Contains("hand") || parentLower.Contains("skeleton") || parentLower.Contains("visual")))
+                return true;
             parent = parent.parent;
         }
+
+        // 4. OVR/Oculus 컴포넌트로 확인
+        var ovrHand = other.GetComponentInParent<Oculus.Interaction.Input.Hand>();
+        if (ovrHand != null && ovrHand.Handedness == Oculus.Interaction.Input.Handedness.Right)
+            return true;
 
         return false;
     }
