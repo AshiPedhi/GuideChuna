@@ -7,13 +7,12 @@ using Oculus.Interaction.Input;
 using static HandPoseDataLoader;
 
 /// <summary>
-/// 체크포인트 기반 추나 시술 평가 시스템 (개선 버전)
+/// 체크포인트 기반 추나 시술 평가 시스템 (v2)
 ///
-/// 개선 사항:
-/// - 환자 위치 기준 상대 좌표 사용
-/// - 좌/우 손 별도 체크포인트 생성
-/// - 가이드 핸드 루프 재생 (경로 시각화)
-/// - 체크포인트는 평가용으로만 사용
+/// 핵심 개념:
+/// - 체크포인트는 점수 판단용 지표 (관문이 아님)
+/// - 진행은 시간/수동으로 제어
+/// - 유사도, 리밋 초과, 각도 근접도를 기록하여 점수화
 /// </summary>
 public class ChunaPathEvaluator : MonoBehaviour
 {
@@ -52,11 +51,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private bool loopGuideHands = true;
 
     [Header("=== 평가 설정 ===")]
-    [Tooltip("순차 통과 필수 (1→2→3 순서로)")]
-    [SerializeField] private bool requireSequentialPass = true;
+    [Tooltip("메트릭 기록 간격 (초)")]
+    [SerializeField] private float metricsRecordInterval = 0.1f;
 
-    [Tooltip("유사도 체크 간격 (초)")]
-    [SerializeField] private float similarityCheckInterval = 0.2f;
+    [Header("=== 홀드 감지 (다음 단계 진행 조건) ===")]
+    [Tooltip("홀드 감지 활성화")]
+    [SerializeField] private bool enableHoldDetection = true;
+
+    [Tooltip("다음 단계로 넘어가기 위해 유지해야 하는 시간 (초)")]
+    [SerializeField] private float requiredHoldTime = 2f;
+
+    [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
+    [SerializeField] private float holdVelocityThreshold = 0.02f;
+
+    [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
+    [SerializeField] private bool requireLimitSafeForHold = true;
 
     [Header("=== 자동 생성 설정 ===")]
     [Tooltip("체크포인트 간격 (프레임)")]
@@ -65,24 +74,19 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("체크포인트 트리거 반경 (미터)")]
     [SerializeField] private float checkpointRadius = 0.15f;
 
-    [Tooltip("체크포인트 홀드 시간 (초)")]
-    [SerializeField] private float checkpointHoldTime = 0.2f;
-
-    [Tooltip("손 모양 유사도 체크 활성화")]
-    [SerializeField] private bool checkHandPoseSimilarity = false;
-
-    [Tooltip("통과에 필요한 최소 유사도")]
-    [SerializeField][Range(0f, 1f)] private float requiredSimilarity = 0.3f;
-
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
     // 상태
     private bool isEvaluating = false;
-    private int currentLeftCheckpointIndex = 0;
-    private int currentRightCheckpointIndex = 0;
     private float evaluationStartTime;
-    private float lastSimilarityCheckTime;
+    private float lastMetricsRecordTime;
+
+    // 홀드 감지 상태
+    private float currentHoldTime = 0f;
+    private bool isHolding = false;
+    private Vector3 lastLeftHandPosition;
+    private Vector3 lastRightHandPosition;
 
     // 데이터
     private List<PoseFrame> loadedFrames = new List<PoseFrame>();
@@ -98,9 +102,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 이벤트
     public event Action OnEvaluationStarted;
     public event Action<EvaluationSession> OnEvaluationCompleted;
-    public event Action<PathCheckpoint> OnCheckpointActivated;
-    public event Action<PathCheckpoint, float> OnCheckpointPassed;
-    public event Action<int, int> OnProgressChanged;  // current, total
+    public event Action<PathCheckpoint, float> OnCheckpointTouched;  // 체크포인트 터치 시
+    public event Action<LimitStatus, bool> OnLimitStatusChanged;      // 리밋 상태 변경 시
+    public event Action<float, float> OnSimilarityUpdated;           // 유사도 업데이트 (left, right)
+    public event Action<float, float> OnHoldProgressChanged;         // 홀드 진행률 (current, required)
+    public event Action OnHoldCompleted;                             // 홀드 완료 (다음 단계로)
 
     /// <summary>
     /// 평가 세션 데이터
@@ -112,24 +118,54 @@ public class ChunaPathEvaluator : MonoBehaviour
         public DateTime startTime;
         public DateTime endTime;
         public float duration;
+
+        // 체크포인트 관련
         public int totalCheckpoints;
-        public int passedCheckpoints;
+        public int touchedCheckpoints;      // 터치한 체크포인트 수
         public List<CheckpointRecord> checkpointRecords = new List<CheckpointRecord>();
+
+        // 메트릭 기록
+        public List<MetricsSnapshot> metricsHistory = new List<MetricsSnapshot>();
+
+        // 리밋 관련
+        public int limitViolationCount;     // 리밋 초과 횟수
+        public float totalTimeInWarning;    // 경고 상태 총 시간
+        public float totalTimeInDanger;     // 위험 상태 총 시간
+        public float totalTimeExceeded;     // 초과 상태 총 시간
+
+        // 유사도 관련
         public float averageSimilarity;
-        public int limitViolations;
+        public float minSimilarity;
+        public float maxSimilarity;
+
+        // 최종 점수
         public float finalScore;
         public string grade;
+        public string feedback;
 
         [System.Serializable]
         public class CheckpointRecord
         {
             public int index;
             public string name;
-            public float similarity;
-            public float holdTime;
-            public float timestamp;
-            public bool passed;
+            public float touchTime;         // 터치한 시간
+            public float similarity;        // 터치 시 유사도
+            public LimitStatus limitStatus; // 터치 시 리밋 상태
             public bool isLeftHand;
+        }
+
+        [System.Serializable]
+        public class MetricsSnapshot
+        {
+            public float timestamp;
+            public float leftSimilarity;
+            public float rightSimilarity;
+            public LimitStatus leftLimitStatus;
+            public LimitStatus rightLimitStatus;
+            public float leftLimitRatio;
+            public float rightLimitRatio;
+            public Vector3 leftHandPosition;
+            public Vector3 rightHandPosition;
         }
     }
 
@@ -159,18 +195,94 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         float currentTime = Time.time;
 
-        // 유사도 체크
-        if (currentTime - lastSimilarityCheckTime >= similarityCheckInterval)
+        // 메트릭 기록
+        if (currentTime - lastMetricsRecordTime >= metricsRecordInterval)
         {
-            lastSimilarityCheckTime = currentTime;
-            UpdateCurrentCheckpointSimilarity();
+            lastMetricsRecordTime = currentTime;
+            RecordMetricsSnapshot();
+        }
+
+        // 홀드 감지 (다음 단계 진행 조건)
+        if (enableHoldDetection)
+        {
+            UpdateHoldDetection();
+        }
+    }
+
+    /// <summary>
+    /// 홀드 감지 업데이트 - 손이 일정 시간 정지하면 다음 단계로
+    /// </summary>
+    private void UpdateHoldDetection()
+    {
+        Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
+        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
+
+        // 손 이동 속도 계산
+        float leftVelocity = (leftPos - lastLeftHandPosition).magnitude / Time.deltaTime;
+        float rightVelocity = (rightPos - lastRightHandPosition).magnitude / Time.deltaTime;
+
+        lastLeftHandPosition = leftPos;
+        lastRightHandPosition = rightPos;
+
+        // 양손 모두 정지 판정
+        bool bothHandsStopped = leftVelocity < holdVelocityThreshold && rightVelocity < holdVelocityThreshold;
+
+        // 리밋 범위 내 확인 (옵션)
+        bool inSafeRange = true;
+        if (requireLimitSafeForHold && limitChecker != null)
+        {
+            var leftResult = limitChecker.GetLeftHandResult();
+            var rightResult = limitChecker.GetRightHandResult();
+            // Danger나 Exceeded 상태가 아니면 OK
+            inSafeRange = leftResult.overallStatus != LimitStatus.Exceeded &&
+                          leftResult.overallStatus != LimitStatus.Danger &&
+                          rightResult.overallStatus != LimitStatus.Exceeded &&
+                          rightResult.overallStatus != LimitStatus.Danger;
+        }
+
+        // 홀드 조건 충족 여부
+        bool canHold = bothHandsStopped && inSafeRange;
+
+        if (canHold)
+        {
+            if (!isHolding)
+            {
+                isHolding = true;
+                if (showDebugLogs)
+                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 홀드 시작...</color>");
+            }
+
+            currentHoldTime += Time.deltaTime;
+            OnHoldProgressChanged?.Invoke(currentHoldTime, requiredHoldTime);
+
+            // 홀드 완료
+            if (currentHoldTime >= requiredHoldTime)
+            {
+                if (showDebugLogs)
+                    Debug.Log("<color=green>[ChunaPathEvaluator] 홀드 완료! 다음 단계로 진행</color>");
+
+                OnHoldCompleted?.Invoke();
+                CompleteEvaluation();
+            }
+        }
+        else
+        {
+            // 홀드 중단 - 타이머 리셋
+            if (isHolding)
+            {
+                if (showDebugLogs && currentHoldTime > 0.5f)
+                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단 ({currentHoldTime:F1}s)</color>");
+
+                isHolding = false;
+                currentHoldTime = 0f;
+                OnHoldProgressChanged?.Invoke(0f, requiredHoldTime);
+            }
         }
     }
 
     void OnDestroy()
     {
         StopGuideHandPlayback();
-        DisconnectAllCheckpointEvents();
     }
 
     /// <summary>
@@ -178,7 +290,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void FindReferences()
     {
-        // 환자 기준점 찾기
         if (referenceTransform == null)
         {
             var patient = GameObject.FindGameObjectWithTag("Patient");
@@ -202,13 +313,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (limitChecker == null)
             limitChecker = FindObjectOfType<ChunaLimitChecker>();
 
-        // 리밋 체커에 데이터 연결
         if (limitChecker != null && limitData != null)
         {
             limitChecker.SetLimitData(limitData);
         }
 
-        // 손 찾기
         if (playerLeftHand == null || playerRightHand == null)
         {
             var hands = FindObjectsOfType<HandVisual>();
@@ -227,9 +336,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // ========== CSV 데이터 기반 체크포인트 생성 ==========
 
-    /// <summary>
-    /// CSV 파일 로드 및 체크포인트 생성
-    /// </summary>
     public void LoadAndGenerateCheckpoints(string csvFileName)
     {
         if (showDebugLogs)
@@ -237,7 +343,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         currentProcedureName = csvFileName;
 
-        // 데이터 로드
         HandPoseDataLoader loader = new HandPoseDataLoader();
         var result = loader.LoadFromResources($"HandPoseData/{csvFileName}");
 
@@ -252,10 +357,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs)
             Debug.Log($"[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 로드됨");
 
-        // 기존 체크포인트 정리
         ClearCheckpoints();
-
-        // 체크포인트 생성 (좌/우 분리)
         GenerateCheckpointsFromFrames();
 
         if (showDebugLogs)
@@ -266,18 +368,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 프레임 데이터에서 체크포인트 생성 (좌/우 분리)
-    /// </summary>
     private void GenerateCheckpointsFromFrames()
     {
         if (loadedFrames == null || loadedFrames.Count == 0) return;
 
-        // 위치 오프셋 계산
         Vector3 positionOffset = Vector3.zero;
         if (referenceTransform != null)
         {
-            // 현재 환자 위치 - 기록 당시 환자 위치 = 오프셋
             positionOffset = referenceTransform.position - recordedPatientOffset;
 
             if (showDebugLogs)
@@ -290,33 +387,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             PoseFrame frame = loadedFrames[i];
 
-            // 왼손 체크포인트 생성
             Vector3 leftPos = frame.leftRootPosition + positionOffset;
-            CreateCheckpoint(
-                isLeftHand: true,
-                index: checkpointCount,
-                position: leftPos,
-                frame: frame,
-                checkpointList: leftCheckpoints
-            );
+            CreateCheckpoint(true, checkpointCount, leftPos, frame, leftCheckpoints);
 
-            // 오른손 체크포인트 생성
             Vector3 rightPos = frame.rightRootPosition + positionOffset;
-            CreateCheckpoint(
-                isLeftHand: false,
-                index: checkpointCount,
-                position: rightPos,
-                frame: frame,
-                checkpointList: rightCheckpoints
-            );
+            CreateCheckpoint(false, checkpointCount, rightPos, frame, rightCheckpoints);
 
             checkpointCount++;
         }
     }
 
-    /// <summary>
-    /// 개별 체크포인트 생성
-    /// </summary>
     private void CreateCheckpoint(bool isLeftHand, int index, Vector3 position, PoseFrame frame, List<PathCheckpoint> checkpointList)
     {
         string handName = isLeftHand ? "L" : "R";
@@ -328,7 +408,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         PathCheckpoint checkpoint = cpObj.AddComponent<PathCheckpoint>();
 
-        // 해당 손만 감지하도록 설정
         checkpoint.Initialize(
             index: index,
             name: cpName,
@@ -337,23 +416,20 @@ public class ChunaPathEvaluator : MonoBehaviour
             leftHandRot: isLeftHand ? frame.leftRootRotation : Quaternion.identity,
             rightHandPos: isLeftHand ? Vector3.zero : frame.rightRootPosition,
             rightHandRot: isLeftHand ? Quaternion.identity : frame.rightRootRotation,
-            holdTime: checkpointHoldTime,
-            similarity: 0.5f
+            holdTime: 0f,      // 즉시 터치로 기록
+            similarity: 0f    // 유사도 조건 없음
         );
 
         checkpoint.SetTriggerRadius(checkpointRadius);
-        checkpoint.SetDetectHand(isLeftHand, !isLeftHand); // 한쪽 손만 감지
-        checkpoint.SetPassConditions(checkpointHoldTime, requiredSimilarity, checkHandPoseSimilarity);
+        checkpoint.SetDetectHand(isLeftHand, !isLeftHand);
+        checkpoint.SetPassConditions(0f, 0f, false);  // 즉시 터치, 유사도 무관
 
-        // 이벤트 연결
-        checkpoint.OnCheckpointPassed += (cp, isLeft, similarity) => HandleCheckpointPassed(cp, isLeft, similarity);
+        // 터치 이벤트 연결 (관문이 아닌 기록용)
+        checkpoint.OnCheckpointPassed += (cp, isLeft, similarity) => HandleCheckpointTouched(cp, isLeft, similarity);
 
         checkpointList.Add(checkpoint);
     }
 
-    /// <summary>
-    /// 체크포인트 정리
-    /// </summary>
     private void ClearCheckpoints()
     {
         foreach (var cp in leftCheckpoints)
@@ -369,18 +445,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         rightCheckpoints.Clear();
     }
 
-    /// <summary>
-    /// 모든 체크포인트 이벤트 해제
-    /// </summary>
-    private void DisconnectAllCheckpointEvents()
-    {
-        // PathCheckpoint는 Destroy 시 자동으로 정리됨
-    }
-
     // ========== 평가 제어 ==========
 
     /// <summary>
-    /// 평가 시작
+    /// 평가 시작 (체크포인트는 지표용, 진행은 수동)
     /// </summary>
     public void StartEvaluation()
     {
@@ -388,15 +456,20 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (totalCheckpoints == 0)
         {
-            Debug.LogError("[ChunaPathEvaluator] 체크포인트가 없습니다!");
-            return;
+            Debug.LogWarning("[ChunaPathEvaluator] 체크포인트가 없습니다. 가이드만 재생합니다.");
         }
 
         isEvaluating = true;
-        currentLeftCheckpointIndex = 0;
-        currentRightCheckpointIndex = 0;
         evaluationStartTime = Time.time;
-        lastSimilarityCheckTime = Time.time;
+        lastMetricsRecordTime = Time.time;
+
+        // 홀드 상태 초기화
+        currentHoldTime = 0f;
+        isHolding = false;
+        if (playerLeftHand != null)
+            lastLeftHandPosition = playerLeftHand.transform.position;
+        if (playerRightHand != null)
+            lastRightHandPosition = playerRightHand.transform.position;
 
         // 세션 초기화
         currentSession = new EvaluationSession
@@ -404,15 +477,15 @@ public class ChunaPathEvaluator : MonoBehaviour
             procedureName = currentProcedureName,
             startTime = DateTime.Now,
             totalCheckpoints = totalCheckpoints,
-            passedCheckpoints = 0,
-            checkpointRecords = new List<EvaluationSession.CheckpointRecord>()
+            touchedCheckpoints = 0,
+            checkpointRecords = new List<EvaluationSession.CheckpointRecord>(),
+            metricsHistory = new List<EvaluationSession.MetricsSnapshot>(),
+            minSimilarity = 1f,
+            maxSimilarity = 0f
         };
 
-        // 모든 체크포인트 리셋
-        ResetAllCheckpoints();
-
-        // 첫 번째 체크포인트 활성화
-        ActivateNextCheckpoints();
+        // 모든 체크포인트 활성화 (관문이 아닌 지표이므로 전부 활성화)
+        ActivateAllCheckpoints();
 
         // 감점 기록 시작
         if (deductionRecord != null)
@@ -429,22 +502,35 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
             limitChecker.Initialize();
             limitChecker.SetEnabled(true);
+
+            // 리밋 이벤트 연결
+            limitChecker.OnViolationDetected += HandleLimitViolation;
         }
 
         // 가이드 핸드 재생 시작
         StartGuideHandPlayback();
 
         if (showDebugLogs)
-            Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작!</color>");
+            Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작! (체크포인트는 점수 지표용)</color>");
 
         OnEvaluationStarted?.Invoke();
-        OnProgressChanged?.Invoke(0, totalCheckpoints);
     }
 
     /// <summary>
-    /// 평가 종료
+    /// 모든 체크포인트 활성화
     /// </summary>
-    public EvaluationSession StopEvaluation()
+    private void ActivateAllCheckpoints()
+    {
+        foreach (var cp in leftCheckpoints)
+            cp?.Activate();
+        foreach (var cp in rightCheckpoints)
+            cp?.Activate();
+    }
+
+    /// <summary>
+    /// 평가 완료 (외부에서 호출 - 다음 단계로 넘어갈 때)
+    /// </summary>
+    public EvaluationSession CompleteEvaluation()
     {
         if (!isEvaluating) return currentSession;
 
@@ -455,45 +541,36 @@ public class ChunaPathEvaluator : MonoBehaviour
         currentSession.duration = Time.time - evaluationStartTime;
 
         // 평균 유사도 계산
-        if (currentSession.checkpointRecords.Count > 0)
+        CalculateAverageSimilarity();
+
+        // 리밋 관련 통계 계산
+        CalculateLimitStatistics();
+
+        // 최종 점수 계산
+        CalculateFinalScore();
+
+        // 리밋 체커 이벤트 해제 및 중지
+        if (limitChecker != null)
         {
-            float totalSim = 0f;
-            foreach (var record in currentSession.checkpointRecords)
-            {
-                totalSim += record.similarity;
-            }
-            currentSession.averageSimilarity = totalSim / currentSession.checkpointRecords.Count;
+            limitChecker.OnViolationDetected -= HandleLimitViolation;
+            limitChecker.SetEnabled(false);
         }
 
         // 감점 기록 종료
         if (deductionRecord != null)
         {
-            var deductionResult = deductionRecord.EndSession();
-            currentSession.finalScore = deductionResult.finalScore;
-            currentSession.grade = deductionResult.grade;
-            currentSession.limitViolations = deductionResult.totalDeductions;
-        }
-        else
-        {
-            // 감점 없으면 유사도 기반 점수
-            currentSession.finalScore = currentSession.averageSimilarity * 100f;
-            currentSession.grade = GetGradeFromScore(currentSession.finalScore);
+            deductionRecord.EndSession();
         }
 
         // 가이드 핸드 중지
         StopGuideHandPlayback();
 
-        // 리밋 체커 중지
-        if (limitChecker != null)
-        {
-            limitChecker.SetEnabled(false);
-        }
-
         if (showDebugLogs)
         {
             Debug.Log("<color=green>========== 평가 완료 ==========</color>");
-            Debug.Log($"통과: {currentSession.passedCheckpoints}/{currentSession.totalCheckpoints}");
+            Debug.Log($"터치한 체크포인트: {currentSession.touchedCheckpoints}/{currentSession.totalCheckpoints}");
             Debug.Log($"평균 유사도: {currentSession.averageSimilarity:P0}");
+            Debug.Log($"리밋 초과 횟수: {currentSession.limitViolationCount}");
             Debug.Log($"최종 점수: {currentSession.finalScore:F0}점 ({currentSession.grade})");
         }
 
@@ -508,11 +585,17 @@ public class ChunaPathEvaluator : MonoBehaviour
     public void ResetEvaluation()
     {
         isEvaluating = false;
-        currentLeftCheckpointIndex = 0;
-        currentRightCheckpointIndex = 0;
 
-        ResetAllCheckpoints();
+        foreach (var cp in leftCheckpoints) cp?.ResetCheckpoint();
+        foreach (var cp in rightCheckpoints) cp?.ResetCheckpoint();
+
         StopGuideHandPlayback();
+
+        if (limitChecker != null)
+        {
+            limitChecker.OnViolationDetected -= HandleLimitViolation;
+            limitChecker.SetEnabled(false);
+        }
 
         if (deductionRecord != null)
         {
@@ -523,134 +606,221 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log("[ChunaPathEvaluator] 평가 리셋");
     }
 
-    /// <summary>
-    /// 모든 체크포인트 리셋
-    /// </summary>
-    private void ResetAllCheckpoints()
-    {
-        foreach (var cp in leftCheckpoints) cp?.ResetCheckpoint();
-        foreach (var cp in rightCheckpoints) cp?.ResetCheckpoint();
-    }
+    // ========== 체크포인트 터치 처리 (기록용) ==========
 
-    /// <summary>
-    /// 다음 체크포인트 활성화
-    /// </summary>
-    private void ActivateNextCheckpoints()
-    {
-        // 왼손 체크포인트
-        if (currentLeftCheckpointIndex < leftCheckpoints.Count)
-        {
-            leftCheckpoints[currentLeftCheckpointIndex].Activate();
-        }
-
-        // 오른손 체크포인트
-        if (currentRightCheckpointIndex < rightCheckpoints.Count)
-        {
-            rightCheckpoints[currentRightCheckpointIndex].Activate();
-        }
-    }
-
-    // ========== 체크포인트 처리 ==========
-
-    /// <summary>
-    /// 체크포인트 통과 처리
-    /// </summary>
-    private void HandleCheckpointPassed(PathCheckpoint checkpoint, bool isLeftHand, float similarity)
+    private void HandleCheckpointTouched(PathCheckpoint checkpoint, bool isLeftHand, float similarity)
     {
         if (!isEvaluating) return;
+
+        // 현재 유사도 계산
+        float currentSimilarity = CalculateCurrentSimilarity(isLeftHand, checkpoint.CheckpointIndex);
+
+        // 현재 리밋 상태
+        LimitStatus currentLimitStatus = LimitStatus.Safe;
+        if (limitChecker != null)
+        {
+            var result = isLeftHand ? limitChecker.GetLeftHandResult() : limitChecker.GetRightHandResult();
+            currentLimitStatus = result.overallStatus;
+        }
 
         // 기록 추가
         currentSession.checkpointRecords.Add(new EvaluationSession.CheckpointRecord
         {
             index = checkpoint.CheckpointIndex,
             name = checkpoint.CheckpointName,
-            similarity = similarity,
-            holdTime = checkpoint.RequiredHoldTime,
-            timestamp = Time.time - evaluationStartTime,
-            passed = true,
+            touchTime = Time.time - evaluationStartTime,
+            similarity = currentSimilarity,
+            limitStatus = currentLimitStatus,
             isLeftHand = isLeftHand
         });
 
-        currentSession.passedCheckpoints++;
+        currentSession.touchedCheckpoints++;
 
         if (showDebugLogs)
         {
             string hand = isLeftHand ? "왼손" : "오른손";
-            Debug.Log($"<color=green>[ChunaPathEvaluator] {hand} 체크포인트 {checkpoint.CheckpointIndex} 통과! (유사도: {similarity:P0})</color>");
+            string limitStr = currentLimitStatus.ToString();
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] {hand} 체크포인트 {checkpoint.CheckpointIndex} 터치 (유사도: {currentSimilarity:P0}, 리밋: {limitStr})</color>");
         }
 
-        OnCheckpointPassed?.Invoke(checkpoint, similarity);
-        OnProgressChanged?.Invoke(currentSession.passedCheckpoints, currentSession.totalCheckpoints);
-
-        // 다음 체크포인트 활성화
-        if (isLeftHand)
-        {
-            currentLeftCheckpointIndex++;
-            if (currentLeftCheckpointIndex < leftCheckpoints.Count)
-            {
-                leftCheckpoints[currentLeftCheckpointIndex].Activate();
-            }
-        }
-        else
-        {
-            currentRightCheckpointIndex++;
-            if (currentRightCheckpointIndex < rightCheckpoints.Count)
-            {
-                rightCheckpoints[currentRightCheckpointIndex].Activate();
-            }
-        }
-
-        // 모든 체크포인트 통과 확인
-        if (currentLeftCheckpointIndex >= leftCheckpoints.Count &&
-            currentRightCheckpointIndex >= rightCheckpoints.Count)
-        {
-            StopEvaluation();
-        }
+        OnCheckpointTouched?.Invoke(checkpoint, currentSimilarity);
     }
 
-    // ========== 유사도 체크 ==========
+    // ========== 리밋 위반 처리 ==========
 
-    /// <summary>
-    /// 현재 체크포인트 유사도 업데이트
-    /// </summary>
-    private void UpdateCurrentCheckpointSimilarity()
+    private void HandleLimitViolation(ChunaLimitChecker.ViolationEvent evt)
     {
-        // 왼손 체크포인트 유사도
-        if (currentLeftCheckpointIndex < leftCheckpoints.Count)
+        if (!isEvaluating) return;
+
+        currentSession.limitViolationCount++;
+
+        if (showDebugLogs)
         {
-            var leftCP = leftCheckpoints[currentLeftCheckpointIndex];
-            if (leftCP.IsActive && leftCP.IsHandInside(true) && playerLeftHand != null)
-            {
-                int frameIndex = leftCP.CheckpointIndex * checkpointFrameInterval;
-                if (frameIndex < loadedFrames.Count)
-                {
-                    var leftResult = poseComparator.CompareLeftPose(playerLeftHand, loadedFrames[frameIndex], frameIndex);
-                    leftCP.UpdateSimilarity(true, leftResult.leftHandSimilarity);
-                }
-            }
+            string hand = evt.isLeftHand ? "왼손" : "오른손";
+            Debug.Log($"<color=red>[ChunaPathEvaluator] 리밋 위반! {hand} - {evt.violationType} (비율: {evt.limitRatio:P0})</color>");
         }
 
-        // 오른손 체크포인트 유사도
-        if (currentRightCheckpointIndex < rightCheckpoints.Count)
+        // 감점 기록
+        if (deductionRecord != null && limitData != null)
         {
-            var rightCP = rightCheckpoints[currentRightCheckpointIndex];
-            if (rightCP.IsActive && rightCP.IsHandInside(false) && playerRightHand != null)
-            {
-                int frameIndex = rightCP.CheckpointIndex * checkpointFrameInterval;
-                if (frameIndex < loadedFrames.Count)
-                {
-                    var rightResult = poseComparator.CompareRightPose(playerRightHand, loadedFrames[frameIndex], frameIndex);
-                    rightCP.UpdateSimilarity(false, rightResult.rightHandSimilarity);
-                }
-            }
+            float deduction = limitData.GetDeductionForSeverity(evt.severity);
+            string reason = $"{evt.violationType}: {evt.violationValue}";
+            deductionRecord.AddManualDeduction(deduction, reason, evt.violationType);
         }
+
+        OnLimitStatusChanged?.Invoke(evt.severity == ViolationSeverity.Dangerous ? LimitStatus.Exceeded : LimitStatus.Warning, evt.isLeftHand);
+    }
+
+    // ========== 메트릭 기록 ==========
+
+    private void RecordMetricsSnapshot()
+    {
+        var snapshot = new EvaluationSession.MetricsSnapshot
+        {
+            timestamp = Time.time - evaluationStartTime
+        };
+
+        // 유사도 계산
+        snapshot.leftSimilarity = CalculateCurrentSimilarity(true, -1);
+        snapshot.rightSimilarity = CalculateCurrentSimilarity(false, -1);
+
+        // 리밋 상태
+        if (limitChecker != null)
+        {
+            var leftResult = limitChecker.GetLeftHandResult();
+            var rightResult = limitChecker.GetRightHandResult();
+
+            snapshot.leftLimitStatus = leftResult.overallStatus;
+            snapshot.rightLimitStatus = rightResult.overallStatus;
+            snapshot.leftLimitRatio = leftResult.maxLimitRatio;
+            snapshot.rightLimitRatio = rightResult.maxLimitRatio;
+
+            // 리밋 상태별 시간 누적
+            if (leftResult.overallStatus == LimitStatus.Warning || rightResult.overallStatus == LimitStatus.Warning)
+                currentSession.totalTimeInWarning += metricsRecordInterval;
+            if (leftResult.overallStatus == LimitStatus.Danger || rightResult.overallStatus == LimitStatus.Danger)
+                currentSession.totalTimeInDanger += metricsRecordInterval;
+            if (leftResult.overallStatus == LimitStatus.Exceeded || rightResult.overallStatus == LimitStatus.Exceeded)
+                currentSession.totalTimeExceeded += metricsRecordInterval;
+        }
+
+        // 손 위치
+        if (playerLeftHand != null)
+            snapshot.leftHandPosition = playerLeftHand.transform.position;
+        if (playerRightHand != null)
+            snapshot.rightHandPosition = playerRightHand.transform.position;
+
+        currentSession.metricsHistory.Add(snapshot);
+
+        // 유사도 이벤트 발생
+        OnSimilarityUpdated?.Invoke(snapshot.leftSimilarity, snapshot.rightSimilarity);
+    }
+
+    private float CalculateCurrentSimilarity(bool isLeftHand, int checkpointIndex)
+    {
+        if (loadedFrames == null || loadedFrames.Count == 0) return 0f;
+
+        // 가장 가까운 프레임 찾기
+        int frameIndex = checkpointIndex >= 0 ? checkpointIndex * checkpointFrameInterval : currentGuideFrameIndex;
+        frameIndex = Mathf.Clamp(frameIndex, 0, loadedFrames.Count - 1);
+
+        PoseFrame frame = loadedFrames[frameIndex];
+
+        if (isLeftHand && playerLeftHand != null)
+        {
+            var result = poseComparator.CompareLeftPose(playerLeftHand, frame, frameIndex);
+            return result.leftHandSimilarity;
+        }
+        else if (!isLeftHand && playerRightHand != null)
+        {
+            var result = poseComparator.CompareRightPose(playerRightHand, frame, frameIndex);
+            return result.rightHandSimilarity;
+        }
+
+        return 0f;
+    }
+
+    // ========== 점수 계산 ==========
+
+    private void CalculateAverageSimilarity()
+    {
+        if (currentSession.metricsHistory.Count == 0) return;
+
+        float totalLeft = 0f, totalRight = 0f;
+        foreach (var snapshot in currentSession.metricsHistory)
+        {
+            totalLeft += snapshot.leftSimilarity;
+            totalRight += snapshot.rightSimilarity;
+
+            float avg = (snapshot.leftSimilarity + snapshot.rightSimilarity) / 2f;
+            if (avg < currentSession.minSimilarity) currentSession.minSimilarity = avg;
+            if (avg > currentSession.maxSimilarity) currentSession.maxSimilarity = avg;
+        }
+
+        currentSession.averageSimilarity = (totalLeft + totalRight) / (currentSession.metricsHistory.Count * 2);
+    }
+
+    private void CalculateLimitStatistics()
+    {
+        // 이미 Update에서 누적됨
+    }
+
+    private void CalculateFinalScore()
+    {
+        float score = 100f;
+
+        // 유사도 기반 점수 (40%)
+        float similarityScore = currentSession.averageSimilarity * 40f;
+
+        // 체크포인트 통과율 (30%)
+        float checkpointRate = currentSession.totalCheckpoints > 0
+            ? (float)currentSession.touchedCheckpoints / currentSession.totalCheckpoints
+            : 1f;
+        float checkpointScore = checkpointRate * 30f;
+
+        // 리밋 준수 점수 (30%)
+        float limitScore = 30f;
+        limitScore -= currentSession.limitViolationCount * 2f;  // 위반당 -2점
+        limitScore -= currentSession.totalTimeInWarning * 0.5f;  // 경고 초당 -0.5점
+        limitScore -= currentSession.totalTimeInDanger * 1f;     // 위험 초당 -1점
+        limitScore -= currentSession.totalTimeExceeded * 3f;     // 초과 초당 -3점
+        limitScore = Mathf.Max(0f, limitScore);
+
+        score = similarityScore + checkpointScore + limitScore;
+        score = Mathf.Clamp(score, 0f, 100f);
+
+        currentSession.finalScore = score;
+        currentSession.grade = GetGradeFromScore(score);
+        currentSession.feedback = GenerateFeedback();
+    }
+
+    private string GenerateFeedback()
+    {
+        List<string> feedbacks = new List<string>();
+
+        if (currentSession.averageSimilarity < 0.5f)
+            feedbacks.Add("손 모양을 가이드와 더 비슷하게 유지하세요");
+
+        if (currentSession.limitViolationCount > 3)
+            feedbacks.Add("적정 범위를 벗어난 횟수가 많습니다. 부드럽게 움직이세요");
+
+        if (currentSession.totalTimeExceeded > 2f)
+            feedbacks.Add("위험 범위에서 너무 오래 머물렀습니다");
+
+        float checkpointRate = currentSession.totalCheckpoints > 0
+            ? (float)currentSession.touchedCheckpoints / currentSession.totalCheckpoints
+            : 1f;
+        if (checkpointRate < 0.7f)
+            feedbacks.Add("경로를 더 정확하게 따라가세요");
+
+        if (feedbacks.Count == 0)
+            feedbacks.Add("잘 수행하셨습니다!");
+
+        return string.Join("\n", feedbacks);
     }
 
     // ========== 가이드 손 루프 재생 ==========
 
-    /// <summary>
-    /// 가이드 핸드 재생 시작
-    /// </summary>
     private void StartGuideHandPlayback()
     {
         if (!showGuideHands) return;
@@ -663,9 +833,6 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log("[ChunaPathEvaluator] 가이드 핸드 재생 시작");
     }
 
-    /// <summary>
-    /// 가이드 핸드 재생 중지
-    /// </summary>
     private void StopGuideHandPlayback()
     {
         if (guideHandCoroutine != null)
@@ -677,19 +844,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         HideGuideHands();
     }
 
-    /// <summary>
-    /// 가이드 핸드 루프 재생 코루틴
-    /// </summary>
     private IEnumerator GuideHandPlaybackRoutine()
     {
-        // 위치 오프셋 계산
         Vector3 positionOffset = Vector3.zero;
         if (referenceTransform != null)
         {
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        float frameTime = 1f / 30f; // 30fps 기준
+        float frameTime = 1f / 30f;
         currentGuideFrameIndex = 0;
 
         while (true)
@@ -698,7 +861,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             PoseFrame frame = loadedFrames[currentGuideFrameIndex];
 
-            // 왼손 가이드 업데이트
             if (leftGuideHand != null)
             {
                 leftGuideHand.SetVisible(true);
@@ -716,7 +878,6 @@ public class ChunaPathEvaluator : MonoBehaviour
                 }
             }
 
-            // 오른손 가이드 업데이트
             if (rightGuideHand != null)
             {
                 rightGuideHand.SetVisible(true);
@@ -734,17 +895,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 }
             }
 
-            // 다음 프레임으로
             currentGuideFrameIndex++;
             if (currentGuideFrameIndex >= loadedFrames.Count)
             {
                 if (loopGuideHands)
                 {
-                    currentGuideFrameIndex = 0; // 루프
+                    currentGuideFrameIndex = 0;
                 }
                 else
                 {
-                    break; // 종료
+                    break;
                 }
             }
 
@@ -752,9 +912,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 가이드 손 숨기기
-    /// </summary>
     private void HideGuideHands()
     {
         if (leftGuideHand != null)
@@ -768,9 +925,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     public bool IsEvaluating => isEvaluating;
     public EvaluationSession GetCurrentSession() => currentSession;
-    public int CurrentLeftCheckpointIndex => currentLeftCheckpointIndex;
-    public int CurrentRightCheckpointIndex => currentRightCheckpointIndex;
     public int TotalCheckpoints => leftCheckpoints.Count + rightCheckpoints.Count;
+    public int TouchedCheckpoints => currentSession?.touchedCheckpoints ?? 0;
 
     public void SetCheckpointInterval(int frameInterval)
     {
@@ -785,35 +941,36 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 통과 조건 설정 (홀드 시간, 유사도, 유사도 체크 여부)
+    /// 홀드 감지 설정
     /// </summary>
-    public void SetPassConditions(float holdTime, float similarity, bool checkPose)
+    public void SetHoldSettings(float holdTime, float velocityThreshold, bool requireSafeRange)
     {
-        checkpointHoldTime = Mathf.Max(0f, holdTime);
-        requiredSimilarity = Mathf.Clamp01(similarity);
-        checkHandPoseSimilarity = checkPose;
-
-        foreach (var cp in leftCheckpoints)
-            cp?.SetPassConditions(holdTime, similarity, checkPose);
-        foreach (var cp in rightCheckpoints)
-            cp?.SetPassConditions(holdTime, similarity, checkPose);
+        requiredHoldTime = Mathf.Max(0.1f, holdTime);
+        holdVelocityThreshold = Mathf.Max(0.001f, velocityThreshold);
+        requireLimitSafeForHold = requireSafeRange;
     }
 
     /// <summary>
-    /// 유사도 체크 활성화/비활성화
+    /// 홀드 감지 활성화/비활성화
     /// </summary>
-    public void SetCheckHandPose(bool enable)
+    public void SetHoldDetectionEnabled(bool enabled)
     {
-        checkHandPoseSimilarity = enable;
-        foreach (var cp in leftCheckpoints)
-            cp?.SetCheckHandPose(enable);
-        foreach (var cp in rightCheckpoints)
-            cp?.SetCheckHandPose(enable);
+        enableHoldDetection = enabled;
     }
 
     /// <summary>
-    /// 리밋 데이터 설정
+    /// 현재 홀드 진행률 (0~1)
     /// </summary>
+    public float GetHoldProgress()
+    {
+        return requiredHoldTime > 0 ? Mathf.Clamp01(currentHoldTime / requiredHoldTime) : 0f;
+    }
+
+    /// <summary>
+    /// 현재 홀드 중인지
+    /// </summary>
+    public bool IsHolding => isHolding;
+
     public void SetLimitData(ChunaLimitData data)
     {
         limitData = data;
@@ -823,27 +980,32 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
     }
 
-    public float GetProgress()
-    {
-        int total = leftCheckpoints.Count + rightCheckpoints.Count;
-        if (total == 0) return 0f;
-        return (float)(currentSession?.passedCheckpoints ?? 0) / total;
-    }
-
-    /// <summary>
-    /// 기준 위치 설정 (환자 위치)
-    /// </summary>
     public void SetReferenceTransform(Transform reference)
     {
         referenceTransform = reference;
     }
 
-    /// <summary>
-    /// 기록 당시 환자 오프셋 설정
-    /// </summary>
     public void SetRecordedPatientOffset(Vector3 offset)
     {
         recordedPatientOffset = offset;
+    }
+
+    /// <summary>
+    /// 현재 리밋 상태 가져오기
+    /// </summary>
+    public LimitStatus GetCurrentLimitStatus(bool isLeftHand)
+    {
+        if (limitChecker == null) return LimitStatus.Safe;
+        var result = isLeftHand ? limitChecker.GetLeftHandResult() : limitChecker.GetRightHandResult();
+        return result.overallStatus;
+    }
+
+    /// <summary>
+    /// 현재 유사도 가져오기
+    /// </summary>
+    public float GetCurrentSimilarity(bool isLeftHand)
+    {
+        return CalculateCurrentSimilarity(isLeftHand, -1);
     }
 
     private string GetGradeFromScore(float score)
