@@ -375,6 +375,15 @@ public class PathCheckpoint : MonoBehaviour
     }
 
     /// <summary>
+    /// 감지할 손 설정
+    /// </summary>
+    public void SetDetectHand(bool left, bool right)
+    {
+        detectLeftHand = left;
+        detectRightHand = right;
+    }
+
+    /// <summary>
     /// 시각화 업데이트
     /// </summary>
     private void UpdateVisual()
