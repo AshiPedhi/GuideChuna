@@ -4,10 +4,12 @@ using System.Linq;
 
 public class NeckVRControllerOptimized : MonoBehaviour
 {
-    [Header("본 매핑")]
+    [Header("본 매핑 (CC_Base 구조)")]
+    [Tooltip("CC_Base_NeckTwist01")]
     public Transform neckBase;
+    [Tooltip("CC_Base_NeckTwist02")]
     public Transform neckMid;
-    public Transform neckTop;
+    [Tooltip("CC_Base_Head")]
     public Transform head;
 
     [Header("VR 손 트래킹")]
@@ -31,13 +33,21 @@ public class NeckVRControllerOptimized : MonoBehaviour
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        rb.useGravity = false;
-        rb.isKinematic = true;
+        if (rb != null)
+        {
+            rb.useGravity = false;
+            rb.isKinematic = true;
+        }
 
-        if (neckBase == null) neckBase = FindBone("Neck", "NeckTwist01");
-        if (neckMid == null) neckMid = FindBone("NeckTwist02");
-        if (neckTop == null) neckTop = FindBone("NeckTwist03");
-        if (head == null) head = FindBone("Head");
+        // CC_Base 구조에 맞게 본 자동 탐색
+        if (neckBase == null) neckBase = FindBoneRecursive(transform.root, "CC_Base_NeckTwist01", "NeckTwist01");
+        if (neckMid == null) neckMid = FindBoneRecursive(transform.root, "CC_Base_NeckTwist02", "NeckTwist02");
+        if (head == null) head = FindBoneRecursive(transform.root, "CC_Base_Head", "Head");
+
+        if (neckBase != null && neckMid != null && head != null)
+            Debug.Log($"[NeckVRController] 본 매핑 완료: {neckBase.name} → {neckMid.name} → {head.name}");
+        else
+            Debug.LogWarning("[NeckVRController] 일부 본을 찾지 못했습니다. Inspector에서 수동 연결하세요.");
     }
 
     void LateUpdate()
@@ -58,10 +68,13 @@ public class NeckVRControllerOptimized : MonoBehaviour
         Quaternion targetRot = CalculateTargetRotation();
         Quaternion limitedRot = ApplyRotationLimit(neckBase.rotation, targetRot);
 
-        neckBase.rotation = Quaternion.Slerp(neckBase.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed);
-        neckMid.rotation = Quaternion.Slerp(neckMid.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 1.2f);
-        neckTop.rotation = Quaternion.Slerp(neckTop.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 1.5f);
-        head.rotation = Quaternion.Slerp(head.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 2f);
+        // 3단계 본 구조: NeckTwist01 → NeckTwist02 → Head
+        if (neckBase != null)
+            neckBase.rotation = Quaternion.Slerp(neckBase.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed);
+        if (neckMid != null)
+            neckMid.rotation = Quaternion.Slerp(neckMid.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 1.3f);
+        if (head != null)
+            head.rotation = Quaternion.Slerp(head.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 1.8f);
 
         transform.rotation = limitedRot;
     }
@@ -117,12 +130,27 @@ public class NeckVRControllerOptimized : MonoBehaviour
         );
     }
 
-    Transform FindBone(params string[] names)
+    /// <summary>
+    /// 계층 구조 전체에서 본 탐색
+    /// </summary>
+    Transform FindBoneRecursive(Transform root, params string[] names)
     {
-        foreach (string n in names)
+        foreach (string name in names)
         {
-            Transform t = transform.Find(n);
-            if (t != null) return t;
+            Transform found = FindChildRecursive(root, name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
+    Transform FindChildRecursive(Transform parent, string name)
+    {
+        if (parent.name == name) return parent;
+
+        foreach (Transform child in parent)
+        {
+            Transform found = FindChildRecursive(child, name);
+            if (found != null) return found;
         }
         return null;
     }
