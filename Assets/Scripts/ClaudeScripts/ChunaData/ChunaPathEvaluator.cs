@@ -103,6 +103,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action OnEvaluationStarted;
     public event Action<EvaluationSession> OnEvaluationCompleted;
     public event Action<PathCheckpoint, float> OnCheckpointTouched;  // 체크포인트 터치 시
+    public event Action<PathCheckpoint, float> OnCheckpointPassed;   // OnCheckpointTouched와 동일 (Bridge 호환용)
+    public event Action<int, int> OnProgressChanged;                 // 진행률 변경 (current, total)
     public event Action<LimitStatus, bool> OnLimitStatusChanged;      // 리밋 상태 변경 시
     public event Action<float, float> OnSimilarityUpdated;           // 유사도 업데이트 (left, right)
     public event Action<float, float> OnHoldProgressChanged;         // 홀드 진행률 (current, required)
@@ -122,6 +124,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 체크포인트 관련
         public int totalCheckpoints;
         public int touchedCheckpoints;      // 터치한 체크포인트 수
+        public int passedCheckpoints { get => touchedCheckpoints; set => touchedCheckpoints = value; }  // Bridge 호환용 별칭
         public List<CheckpointRecord> checkpointRecords = new List<CheckpointRecord>();
 
         // 메트릭 기록
@@ -580,6 +583,27 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// 평가 중지 (결과 저장 없이 중단)
+    /// </summary>
+    public void StopEvaluation()
+    {
+        if (!isEvaluating) return;
+
+        isEvaluating = false;
+
+        StopGuideHandPlayback();
+
+        if (limitChecker != null)
+        {
+            limitChecker.OnViolationDetected -= HandleLimitViolation;
+            limitChecker.SetEnabled(false);
+        }
+
+        if (showDebugLogs)
+            Debug.Log("[ChunaPathEvaluator] 평가 중지");
+    }
+
+    /// <summary>
     /// 평가 리셋
     /// </summary>
     public void ResetEvaluation()
@@ -643,7 +667,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log($"<color=cyan>[ChunaPathEvaluator] {hand} 체크포인트 {checkpoint.CheckpointIndex} 터치 (유사도: {currentSimilarity:P0}, 리밋: {limitStr})</color>");
         }
 
+        // 이벤트 발생
         OnCheckpointTouched?.Invoke(checkpoint, currentSimilarity);
+        OnCheckpointPassed?.Invoke(checkpoint, currentSimilarity);  // Bridge 호환용
+        OnProgressChanged?.Invoke(currentSession.touchedCheckpoints, currentSession.totalCheckpoints);
     }
 
     // ========== 리밋 위반 처리 ==========
@@ -927,6 +954,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     public EvaluationSession GetCurrentSession() => currentSession;
     public int TotalCheckpoints => leftCheckpoints.Count + rightCheckpoints.Count;
     public int TouchedCheckpoints => currentSession?.touchedCheckpoints ?? 0;
+
+    /// <summary>
+    /// 현재 진행률 가져오기 (0~1)
+    /// </summary>
+    public float GetProgress()
+    {
+        int total = TotalCheckpoints;
+        if (total == 0) return 0f;
+        return (float)TouchedCheckpoints / total;
+    }
 
     public void SetCheckpointInterval(int frameInterval)
     {
