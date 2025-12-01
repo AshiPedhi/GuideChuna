@@ -54,6 +54,19 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("메트릭 기록 간격 (초)")]
     [SerializeField] private float metricsRecordInterval = 0.1f;
 
+    [Header("=== 홀드 감지 (다음 단계 진행 조건) ===")]
+    [Tooltip("홀드 감지 활성화")]
+    [SerializeField] private bool enableHoldDetection = true;
+
+    [Tooltip("다음 단계로 넘어가기 위해 유지해야 하는 시간 (초)")]
+    [SerializeField] private float requiredHoldTime = 2f;
+
+    [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
+    [SerializeField] private float holdVelocityThreshold = 0.02f;
+
+    [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
+    [SerializeField] private bool requireLimitSafeForHold = true;
+
     [Header("=== 자동 생성 설정 ===")]
     [Tooltip("체크포인트 간격 (프레임)")]
     [SerializeField] private int checkpointFrameInterval = 15;
@@ -68,6 +81,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isEvaluating = false;
     private float evaluationStartTime;
     private float lastMetricsRecordTime;
+
+    // 홀드 감지 상태
+    private float currentHoldTime = 0f;
+    private bool isHolding = false;
+    private Vector3 lastLeftHandPosition;
+    private Vector3 lastRightHandPosition;
 
     // 데이터
     private List<PoseFrame> loadedFrames = new List<PoseFrame>();
@@ -86,6 +105,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action<PathCheckpoint, float> OnCheckpointTouched;  // 체크포인트 터치 시
     public event Action<LimitStatus, bool> OnLimitStatusChanged;      // 리밋 상태 변경 시
     public event Action<float, float> OnSimilarityUpdated;           // 유사도 업데이트 (left, right)
+    public event Action<float, float> OnHoldProgressChanged;         // 홀드 진행률 (current, required)
+    public event Action OnHoldCompleted;                             // 홀드 완료 (다음 단계로)
 
     /// <summary>
     /// 평가 세션 데이터
@@ -179,6 +200,83 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             lastMetricsRecordTime = currentTime;
             RecordMetricsSnapshot();
+        }
+
+        // 홀드 감지 (다음 단계 진행 조건)
+        if (enableHoldDetection)
+        {
+            UpdateHoldDetection();
+        }
+    }
+
+    /// <summary>
+    /// 홀드 감지 업데이트 - 손이 일정 시간 정지하면 다음 단계로
+    /// </summary>
+    private void UpdateHoldDetection()
+    {
+        Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
+        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
+
+        // 손 이동 속도 계산
+        float leftVelocity = (leftPos - lastLeftHandPosition).magnitude / Time.deltaTime;
+        float rightVelocity = (rightPos - lastRightHandPosition).magnitude / Time.deltaTime;
+
+        lastLeftHandPosition = leftPos;
+        lastRightHandPosition = rightPos;
+
+        // 양손 모두 정지 판정
+        bool bothHandsStopped = leftVelocity < holdVelocityThreshold && rightVelocity < holdVelocityThreshold;
+
+        // 리밋 범위 내 확인 (옵션)
+        bool inSafeRange = true;
+        if (requireLimitSafeForHold && limitChecker != null)
+        {
+            var leftResult = limitChecker.GetLeftHandResult();
+            var rightResult = limitChecker.GetRightHandResult();
+            // Danger나 Exceeded 상태가 아니면 OK
+            inSafeRange = leftResult.overallStatus != LimitStatus.Exceeded &&
+                          leftResult.overallStatus != LimitStatus.Danger &&
+                          rightResult.overallStatus != LimitStatus.Exceeded &&
+                          rightResult.overallStatus != LimitStatus.Danger;
+        }
+
+        // 홀드 조건 충족 여부
+        bool canHold = bothHandsStopped && inSafeRange;
+
+        if (canHold)
+        {
+            if (!isHolding)
+            {
+                isHolding = true;
+                if (showDebugLogs)
+                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 홀드 시작...</color>");
+            }
+
+            currentHoldTime += Time.deltaTime;
+            OnHoldProgressChanged?.Invoke(currentHoldTime, requiredHoldTime);
+
+            // 홀드 완료
+            if (currentHoldTime >= requiredHoldTime)
+            {
+                if (showDebugLogs)
+                    Debug.Log("<color=green>[ChunaPathEvaluator] 홀드 완료! 다음 단계로 진행</color>");
+
+                OnHoldCompleted?.Invoke();
+                CompleteEvaluation();
+            }
+        }
+        else
+        {
+            // 홀드 중단 - 타이머 리셋
+            if (isHolding)
+            {
+                if (showDebugLogs && currentHoldTime > 0.5f)
+                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단 ({currentHoldTime:F1}s)</color>");
+
+                isHolding = false;
+                currentHoldTime = 0f;
+                OnHoldProgressChanged?.Invoke(0f, requiredHoldTime);
+            }
         }
     }
 
@@ -364,6 +462,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         isEvaluating = true;
         evaluationStartTime = Time.time;
         lastMetricsRecordTime = Time.time;
+
+        // 홀드 상태 초기화
+        currentHoldTime = 0f;
+        isHolding = false;
+        if (playerLeftHand != null)
+            lastLeftHandPosition = playerLeftHand.transform.position;
+        if (playerRightHand != null)
+            lastRightHandPosition = playerRightHand.transform.position;
 
         // 세션 초기화
         currentSession = new EvaluationSession
@@ -833,6 +939,37 @@ public class ChunaPathEvaluator : MonoBehaviour
         foreach (var cp in leftCheckpoints) cp?.SetTriggerRadius(radius);
         foreach (var cp in rightCheckpoints) cp?.SetTriggerRadius(radius);
     }
+
+    /// <summary>
+    /// 홀드 감지 설정
+    /// </summary>
+    public void SetHoldSettings(float holdTime, float velocityThreshold, bool requireSafeRange)
+    {
+        requiredHoldTime = Mathf.Max(0.1f, holdTime);
+        holdVelocityThreshold = Mathf.Max(0.001f, velocityThreshold);
+        requireLimitSafeForHold = requireSafeRange;
+    }
+
+    /// <summary>
+    /// 홀드 감지 활성화/비활성화
+    /// </summary>
+    public void SetHoldDetectionEnabled(bool enabled)
+    {
+        enableHoldDetection = enabled;
+    }
+
+    /// <summary>
+    /// 현재 홀드 진행률 (0~1)
+    /// </summary>
+    public float GetHoldProgress()
+    {
+        return requiredHoldTime > 0 ? Mathf.Clamp01(currentHoldTime / requiredHoldTime) : 0f;
+    }
+
+    /// <summary>
+    /// 현재 홀드 중인지
+    /// </summary>
+    public bool IsHolding => isHolding;
 
     public void SetLimitData(ChunaLimitData data)
     {
