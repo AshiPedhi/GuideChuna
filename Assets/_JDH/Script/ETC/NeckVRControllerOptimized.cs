@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using Oculus.Interaction;
 
 public class NeckVRControllerOptimized : MonoBehaviour
 {
@@ -23,7 +24,11 @@ public class NeckVRControllerOptimized : MonoBehaviour
     public Transform head;
 
     [Header("VR 손 트래킹")]
+    [Tooltip("비워두면 자동으로 HandVisual 탐색")]
     public List<Transform> hands = new List<Transform>();
+
+    [Tooltip("손 감지 반경 (이 거리 안에 손이 있어야 반응)")]
+    public float handDetectionRadius = 0.3f;
 
     [Header("회전 제한 (ROM 기준)")]
     public float maxFlexion = 50f;
@@ -35,7 +40,8 @@ public class NeckVRControllerOptimized : MonoBehaviour
     public float rotationLerpSpeed = 8f;
 
     [Header("목-머리 거리 제한")]
-    public float maxDistanceFromNeck = 0.05f;
+    [Tooltip("머리가 목에서 벗어날 수 있는 최대 거리")]
+    public float maxDistanceFromNeck = 0.1f;
 
     private Transform activeHand = null;
     private Rigidbody rb;
@@ -59,6 +65,12 @@ public class NeckVRControllerOptimized : MonoBehaviour
         if (neckMid == null) neckMid = FindBoneRecursive(transform.root, "CC_Base_NeckTwist02", "NeckTwist02");
         if (head == null) head = FindBoneRecursive(transform.root, "CC_Base_Head", "Head");
 
+        // 손 자동 탐색 (비어있으면)
+        if (hands == null || hands.Count == 0)
+        {
+            FindHandsAutomatically();
+        }
+
         // 초기 회전 저장
         SaveInitialRotations();
 
@@ -66,6 +78,44 @@ public class NeckVRControllerOptimized : MonoBehaviour
             Debug.Log($"[NeckVRController] 본 매핑 완료: {neckBase.name} → {neckMid.name} → {head.name}");
         else
             Debug.LogWarning("[NeckVRController] 일부 본을 찾지 못했습니다. Inspector에서 수동 연결하세요.");
+
+        if (hands.Count > 0)
+            Debug.Log($"[NeckVRController] 손 {hands.Count}개 연결됨");
+        else
+            Debug.LogWarning("[NeckVRController] 손을 찾지 못했습니다. Inspector에서 수동 연결하세요.");
+    }
+
+    /// <summary>
+    /// HandVisual 컴포넌트로 손 자동 탐색
+    /// </summary>
+    private void FindHandsAutomatically()
+    {
+        hands = new List<Transform>();
+
+        // HandVisual 탐색
+        var handVisuals = FindObjectsOfType<HandVisual>();
+        foreach (var hv in handVisuals)
+        {
+            if (hv != null && hv.transform != null)
+            {
+                hands.Add(hv.transform);
+                Debug.Log($"[NeckVRController] HandVisual 발견: {hv.name}");
+            }
+        }
+
+        // 못 찾으면 OVRHand 탐색
+        if (hands.Count == 0)
+        {
+            var ovrHands = FindObjectsOfType<OVRHand>();
+            foreach (var oh in ovrHands)
+            {
+                if (oh != null && oh.transform != null)
+                {
+                    hands.Add(oh.transform);
+                    Debug.Log($"[NeckVRController] OVRHand 발견: {oh.name}");
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -137,12 +187,15 @@ public class NeckVRControllerOptimized : MonoBehaviour
         float minDistance = float.MaxValue;
         activeHand = null;
 
+        // head 위치 기준으로 손 감지 (head가 없으면 neckBase 사용)
+        Vector3 referencePos = head != null ? head.position : (neckBase != null ? neckBase.position : transform.position);
+
         foreach (var hand in hands)
         {
             if (hand == null) continue;
 
-            float dist = Vector3.Distance(hand.position, transform.position);
-            if (dist < maxDistanceFromNeck && dist < minDistance)
+            float dist = Vector3.Distance(hand.position, referencePos);
+            if (dist < handDetectionRadius && dist < minDistance)
             {
                 minDistance = dist;
                 activeHand = hand;
@@ -281,6 +334,12 @@ public class NeckVRControllerOptimized : MonoBehaviour
     {
         if (neckBase == null) return;
 
+        // 손 감지 반경 (파란색)
+        Gizmos.color = Color.cyan;
+        Vector3 headPos = head != null ? head.position : neckBase.position;
+        Gizmos.DrawWireSphere(headPos, handDetectionRadius);
+
+        // 목-머리 거리 제한 (회색)
         Gizmos.color = Color.gray;
         Gizmos.DrawWireSphere(neckBase.position, maxDistanceFromNeck);
 

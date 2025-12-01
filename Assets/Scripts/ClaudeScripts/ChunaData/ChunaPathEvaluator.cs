@@ -74,6 +74,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("목표 위치 인정 반경 (미터)")]
     [SerializeField] private float holdTargetRadius = 0.15f;
 
+    [Tooltip("시작 위치 근처에서만 평가 시작")]
+    [SerializeField] private bool requireNearStartToBegin = true;
+
+    [Tooltip("시작 위치 인정 반경 (미터)")]
+    [SerializeField] private float startPositionRadius = 0.2f;
+
+    [Header("=== 가이드 레이어 설정 ===")]
+    [Tooltip("가이드 체크포인트 레이어 이름")]
+    [SerializeField] private string guideLayerName = "Guide";
+
     [Header("=== 자동 생성 설정 ===")]
     [Tooltip("체크포인트 간격 (프레임)")]
     [SerializeField] private int checkpointFrameInterval = 15;
@@ -94,6 +104,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isHolding = false;
     private Vector3 lastLeftHandPosition;
     private Vector3 lastRightHandPosition;
+
+    // 시작 위치 도달 상태
+    private bool hasReachedStartPosition = false;
 
     // 데이터
     private List<PoseFrame> loadedFrames = new List<PoseFrame>();
@@ -202,6 +215,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     void Update()
     {
         if (!isEvaluating) return;
+
+        // 시작 위치 도달 확인 (아직 도달하지 않았으면 체크)
+        if (requireNearStartToBegin && !hasReachedStartPosition)
+        {
+            CheckStartPositionReached();
+            return;  // 시작 위치에 도달해야 메트릭 기록 시작
+        }
 
         float currentTime = Time.time;
 
@@ -346,6 +366,69 @@ public class ChunaPathEvaluator : MonoBehaviour
         return lastCp != null ? lastCp.transform.position : (Vector3?)null;
     }
 
+    /// <summary>
+    /// 첫 번째 체크포인트 위치 가져오기
+    /// </summary>
+    private Vector3? GetFirstCheckpointPosition(bool isLeftHand)
+    {
+        var checkpoints = isLeftHand ? leftCheckpoints : rightCheckpoints;
+        if (checkpoints == null || checkpoints.Count == 0)
+            return null;
+
+        var firstCp = checkpoints[0];
+        return firstCp != null ? firstCp.transform.position : (Vector3?)null;
+    }
+
+    /// <summary>
+    /// 시작 위치 도달 확인
+    /// </summary>
+    private void CheckStartPositionReached()
+    {
+        Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
+        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
+
+        Vector3? leftStart = GetFirstCheckpointPosition(true);
+        Vector3? rightStart = GetFirstCheckpointPosition(false);
+
+        bool leftNear = true;
+        bool rightNear = true;
+
+        if (leftStart.HasValue && playerLeftHand != null)
+        {
+            float dist = Vector3.Distance(leftPos, leftStart.Value);
+            leftNear = dist <= startPositionRadius;
+        }
+
+        if (rightStart.HasValue && playerRightHand != null)
+        {
+            float dist = Vector3.Distance(rightPos, rightStart.Value);
+            rightNear = dist <= startPositionRadius;
+        }
+
+        // 체크포인트가 있는 쪽만 확인
+        bool nearStart = true;
+        if (leftStart.HasValue && rightStart.HasValue)
+            nearStart = leftNear && rightNear;
+        else if (leftStart.HasValue)
+            nearStart = leftNear;
+        else if (rightStart.HasValue)
+            nearStart = rightNear;
+
+        if (nearStart)
+        {
+            hasReachedStartPosition = true;
+
+            // 목 컨트롤러 활성화 (시작 위치 도달 시)
+            if (neckController != null && !neckController.IsEnabled)
+            {
+                neckController.Enable();
+            }
+
+            if (showDebugLogs)
+                Debug.Log("<color=green>[ChunaPathEvaluator] 시작 위치 도달! 평가를 시작합니다.</color>");
+        }
+    }
+
     void OnDestroy()
     {
         StopGuideHandPlayback();
@@ -476,6 +559,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         cpObj.transform.SetParent(checkpointParent);
         cpObj.transform.position = position;
 
+        // Guide 레이어 설정
+        int guideLayer = LayerMask.NameToLayer(guideLayerName);
+        if (guideLayer != -1)
+        {
+            cpObj.layer = guideLayer;
+        }
+        else
+        {
+            Debug.LogWarning($"[ChunaPathEvaluator] '{guideLayerName}' 레이어를 찾을 수 없습니다. Unity에서 레이어를 생성하세요.");
+        }
+
         PathCheckpoint checkpoint = cpObj.AddComponent<PathCheckpoint>();
 
         checkpoint.Initialize(
@@ -536,6 +630,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 홀드 상태 초기화
         currentHoldTime = 0f;
         isHolding = false;
+        hasReachedStartPosition = !requireNearStartToBegin;  // 시작 위치 체크 필요 시 false
         if (playerLeftHand != null)
             lastLeftHandPosition = playerLeftHand.transform.position;
         if (playerRightHand != null)
@@ -580,14 +675,19 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 가이드 핸드 재생 시작
         StartGuideHandPlayback();
 
-        // 목 컨트롤러 활성화 (평가 중에만 환자 목이 반응)
-        if (neckController != null)
+        // 목 컨트롤러 활성화 (시작 위치 체크 불필요 시 즉시 활성화)
+        if (neckController != null && !requireNearStartToBegin)
         {
             neckController.Enable();
         }
 
         if (showDebugLogs)
-            Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작! (체크포인트는 점수 지표용)</color>");
+        {
+            if (requireNearStartToBegin)
+                Debug.Log("<color=yellow>[ChunaPathEvaluator] 평가 대기 중... 시작 위치로 이동하세요!</color>");
+            else
+                Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작! (체크포인트는 점수 지표용)</color>");
+        }
 
         OnEvaluationStarted?.Invoke();
     }
