@@ -68,6 +68,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
     [SerializeField] private bool requireLimitSafeForHold = true;
 
+    [Tooltip("목표 위치(경로 끝) 근처에서만 홀드 인정")]
+    [SerializeField] private bool requireNearTargetForHold = true;
+
+    [Tooltip("목표 위치 인정 반경 (미터)")]
+    [SerializeField] private float holdTargetRadius = 0.15f;
+
     [Header("=== 자동 생성 설정 ===")]
     [Tooltip("체크포인트 간격 (프레임)")]
     [SerializeField] private int checkpointFrameInterval = 15;
@@ -214,7 +220,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 홀드 감지 업데이트 - 손이 일정 시간 정지하면 다음 단계로
+    /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로
     /// </summary>
     private void UpdateHoldDetection()
     {
@@ -231,6 +237,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 양손 모두 정지 판정
         bool bothHandsStopped = leftVelocity < holdVelocityThreshold && rightVelocity < holdVelocityThreshold;
 
+        // 목표 위치 근처인지 확인 (경로 끝 = 마지막 체크포인트)
+        bool nearTarget = true;
+        if (requireNearTargetForHold)
+        {
+            nearTarget = IsNearTargetPosition(leftPos, rightPos);
+        }
+
         // 리밋 범위 내 확인 (옵션)
         bool inSafeRange = true;
         if (requireLimitSafeForHold && limitChecker != null)
@@ -244,8 +257,8 @@ public class ChunaPathEvaluator : MonoBehaviour
                           rightResult.overallStatus != LimitStatus.Danger;
         }
 
-        // 홀드 조건 충족 여부
-        bool canHold = bothHandsStopped && inSafeRange;
+        // 홀드 조건 충족 여부: 정지 + 목표 근처 + 안전 범위
+        bool canHold = bothHandsStopped && nearTarget && inSafeRange;
 
         if (canHold)
         {
@@ -253,7 +266,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 isHolding = true;
                 if (showDebugLogs)
-                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 홀드 시작...</color>");
+                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 목표 위치에서 홀드 시작...</color>");
             }
 
             currentHoldTime += Time.deltaTime;
@@ -274,14 +287,63 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 홀드 중단 - 타이머 리셋
             if (isHolding)
             {
-                if (showDebugLogs && currentHoldTime > 0.5f)
-                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단 ({currentHoldTime:F1}s)</color>");
+                string reason = !bothHandsStopped ? "손 움직임" : (!nearTarget ? "목표 위치 이탈" : "안전 범위 이탈");
+                if (showDebugLogs && currentHoldTime > 0.3f)
+                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F1}s)</color>");
 
                 isHolding = false;
                 currentHoldTime = 0f;
                 OnHoldProgressChanged?.Invoke(0f, requiredHoldTime);
             }
         }
+    }
+
+    /// <summary>
+    /// 손이 목표 위치(경로 끝) 근처에 있는지 확인
+    /// </summary>
+    private bool IsNearTargetPosition(Vector3 leftHandPos, Vector3 rightHandPos)
+    {
+        // 마지막 체크포인트 위치가 목표
+        Vector3? leftTarget = GetLastCheckpointPosition(true);
+        Vector3? rightTarget = GetLastCheckpointPosition(false);
+
+        bool leftNear = true;
+        bool rightNear = true;
+
+        if (leftTarget.HasValue)
+        {
+            float leftDist = Vector3.Distance(leftHandPos, leftTarget.Value);
+            leftNear = leftDist <= holdTargetRadius;
+        }
+
+        if (rightTarget.HasValue)
+        {
+            float rightDist = Vector3.Distance(rightHandPos, rightTarget.Value);
+            rightNear = rightDist <= holdTargetRadius;
+        }
+
+        // 체크포인트가 있는 쪽만 확인 (양쪽 모두 있으면 양쪽 모두 근처여야 함)
+        if (leftTarget.HasValue && rightTarget.HasValue)
+            return leftNear && rightNear;
+        else if (leftTarget.HasValue)
+            return leftNear;
+        else if (rightTarget.HasValue)
+            return rightNear;
+        else
+            return true;  // 체크포인트 없으면 위치 상관없이 허용
+    }
+
+    /// <summary>
+    /// 마지막 체크포인트 위치 가져오기
+    /// </summary>
+    private Vector3? GetLastCheckpointPosition(bool isLeftHand)
+    {
+        var checkpoints = isLeftHand ? leftCheckpoints : rightCheckpoints;
+        if (checkpoints == null || checkpoints.Count == 0)
+            return null;
+
+        var lastCp = checkpoints[checkpoints.Count - 1];
+        return lastCp != null ? lastCp.transform.position : (Vector3?)null;
     }
 
     void OnDestroy()
