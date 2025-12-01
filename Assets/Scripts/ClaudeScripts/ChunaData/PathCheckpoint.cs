@@ -220,14 +220,7 @@ public class PathCheckpoint : MonoBehaviour
         if (lowerName.Contains("left") && (lowerName.Contains("hand") || lowerName.Contains("wrist") || lowerName.Contains("palm")))
             return true;
 
-        // 2. 태그로 판별 (태그가 정의되어 있는 경우에만)
-        try
-        {
-            if (other.CompareTag("LeftHand")) return true;
-        }
-        catch (UnityException) { /* 태그가 정의되지 않음 - 무시 */ }
-
-        // 3. 부모 오브젝트 이름 확인
+        // 2. 부모 오브젝트 이름 확인
         Transform parent = other.transform.parent;
         while (parent != null)
         {
@@ -237,7 +230,7 @@ public class PathCheckpoint : MonoBehaviour
             parent = parent.parent;
         }
 
-        // 4. OVR/Oculus 컴포넌트로 확인
+        // 3. OVR/Oculus 컴포넌트로 확인
         var ovrHand = other.GetComponentInParent<Oculus.Interaction.Input.Hand>();
         if (ovrHand != null && ovrHand.Handedness == Oculus.Interaction.Input.Handedness.Left)
             return true;
@@ -255,14 +248,7 @@ public class PathCheckpoint : MonoBehaviour
         if (lowerName.Contains("right") && (lowerName.Contains("hand") || lowerName.Contains("wrist") || lowerName.Contains("palm")))
             return true;
 
-        // 2. 태그로 판별 (태그가 정의되어 있는 경우에만)
-        try
-        {
-            if (other.CompareTag("RightHand")) return true;
-        }
-        catch (UnityException) { /* 태그가 정의되지 않음 - 무시 */ }
-
-        // 3. 부모 오브젝트 이름 확인
+        // 2. 부모 오브젝트 이름 확인
         Transform parent = other.transform.parent;
         while (parent != null)
         {
@@ -272,7 +258,7 @@ public class PathCheckpoint : MonoBehaviour
             parent = parent.parent;
         }
 
-        // 4. OVR/Oculus 컴포넌트로 확인
+        // 3. OVR/Oculus 컴포넌트로 확인
         var ovrHand = other.GetComponentInParent<Oculus.Interaction.Input.Hand>();
         if (ovrHand != null && ovrHand.Handedness == Oculus.Interaction.Input.Handedness.Right)
             return true;
