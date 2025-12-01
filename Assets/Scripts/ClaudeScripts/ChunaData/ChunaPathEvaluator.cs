@@ -37,6 +37,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private HandPoseComparator poseComparator;
     [SerializeField] private ChunaLimitChecker limitChecker;
     [SerializeField] private ChunaLimitData limitData;
+    [SerializeField] private NeckVRControllerOptimized neckController;
 
     [Header("=== 가이드 손 표시 ===")]
     [SerializeField] private HandTransformMapper leftGuideHand;
@@ -335,6 +336,10 @@ public class ChunaPathEvaluator : MonoBehaviour
                 }
             }
         }
+
+        // 목 컨트롤러 자동 탐색
+        if (neckController == null)
+            neckController = FindObjectOfType<NeckVRControllerOptimized>();
     }
 
     // ========== CSV 데이터 기반 체크포인트 생성 ==========
@@ -513,6 +518,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 가이드 핸드 재생 시작
         StartGuideHandPlayback();
 
+        // 목 컨트롤러 활성화 (평가 중에만 환자 목이 반응)
+        if (neckController != null)
+        {
+            neckController.Enable();
+        }
+
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작! (체크포인트는 점수 지표용)</color>");
 
@@ -568,6 +579,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 가이드 핸드 중지
         StopGuideHandPlayback();
 
+        // 목 컨트롤러 비활성화 (초기 위치로 복귀)
+        if (neckController != null)
+        {
+            neckController.Disable();
+        }
+
         if (showDebugLogs)
         {
             Debug.Log("<color=green>========== 평가 완료 ==========</color>");
@@ -599,6 +616,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             limitChecker.SetEnabled(false);
         }
 
+        // 목 컨트롤러 비활성화
+        if (neckController != null)
+        {
+            neckController.Disable();
+        }
+
         if (showDebugLogs)
             Debug.Log("[ChunaPathEvaluator] 평가 중지");
     }
@@ -619,6 +642,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             limitChecker.OnViolationDetected -= HandleLimitViolation;
             limitChecker.SetEnabled(false);
+        }
+
+        // 목 컨트롤러 비활성화
+        if (neckController != null)
+        {
+            neckController.Disable();
         }
 
         if (deductionRecord != null)
