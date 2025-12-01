@@ -4,6 +4,16 @@ using System.Linq;
 
 public class NeckVRControllerOptimized : MonoBehaviour
 {
+    [Header("=== 활성화 설정 ===")]
+    [Tooltip("평가 시작 전까지 비활성화 상태로 유지")]
+    [SerializeField] private bool isEnabled = false;
+
+    [Tooltip("비활성화 시 초기 위치로 복귀")]
+    [SerializeField] private bool returnToInitialOnDisable = true;
+
+    [Tooltip("복귀 속도")]
+    [SerializeField] private float returnLerpSpeed = 5f;
+
     [Header("본 매핑 (CC_Base 구조)")]
     [Tooltip("CC_Base_NeckTwist01")]
     public Transform neckBase;
@@ -30,6 +40,11 @@ public class NeckVRControllerOptimized : MonoBehaviour
     private Transform activeHand = null;
     private Rigidbody rb;
 
+    // 초기 회전 저장 (복귀용)
+    private Quaternion initialNeckBaseRotation;
+    private Quaternion initialNeckMidRotation;
+    private Quaternion initialHeadRotation;
+
     void Start()
     {
         rb = GetComponent<Rigidbody>();
@@ -44,14 +59,37 @@ public class NeckVRControllerOptimized : MonoBehaviour
         if (neckMid == null) neckMid = FindBoneRecursive(transform.root, "CC_Base_NeckTwist02", "NeckTwist02");
         if (head == null) head = FindBoneRecursive(transform.root, "CC_Base_Head", "Head");
 
+        // 초기 회전 저장
+        SaveInitialRotations();
+
         if (neckBase != null && neckMid != null && head != null)
             Debug.Log($"[NeckVRController] 본 매핑 완료: {neckBase.name} → {neckMid.name} → {head.name}");
         else
             Debug.LogWarning("[NeckVRController] 일부 본을 찾지 못했습니다. Inspector에서 수동 연결하세요.");
     }
 
+    /// <summary>
+    /// 초기 회전값 저장
+    /// </summary>
+    private void SaveInitialRotations()
+    {
+        if (neckBase != null) initialNeckBaseRotation = neckBase.rotation;
+        if (neckMid != null) initialNeckMidRotation = neckMid.rotation;
+        if (head != null) initialHeadRotation = head.rotation;
+    }
+
     void LateUpdate()
     {
+        // 비활성화 상태면 초기 위치로 복귀
+        if (!isEnabled)
+        {
+            if (returnToInitialOnDisable)
+            {
+                ReturnToInitialRotation();
+            }
+            return;
+        }
+
         SelectActiveHand();
 
         if (activeHand == null) return;
@@ -66,7 +104,7 @@ public class NeckVRControllerOptimized : MonoBehaviour
 
         // ✅ 회전 계산
         Quaternion targetRot = CalculateTargetRotation();
-        Quaternion limitedRot = ApplyRotationLimit(neckBase.rotation, targetRot);
+        Quaternion limitedRot = ApplyRotationLimit(initialNeckBaseRotation, targetRot);
 
         // 3단계 본 구조: NeckTwist01 → NeckTwist02 → Head
         if (neckBase != null)
@@ -77,6 +115,21 @@ public class NeckVRControllerOptimized : MonoBehaviour
             head.rotation = Quaternion.Slerp(head.rotation, limitedRot, Time.deltaTime * rotationLerpSpeed * 1.8f);
 
         transform.rotation = limitedRot;
+    }
+
+    /// <summary>
+    /// 초기 회전으로 복귀
+    /// </summary>
+    private void ReturnToInitialRotation()
+    {
+        float t = Time.deltaTime * returnLerpSpeed;
+
+        if (neckBase != null)
+            neckBase.rotation = Quaternion.Slerp(neckBase.rotation, initialNeckBaseRotation, t);
+        if (neckMid != null)
+            neckMid.rotation = Quaternion.Slerp(neckMid.rotation, initialNeckMidRotation, t);
+        if (head != null)
+            head.rotation = Quaternion.Slerp(head.rotation, initialHeadRotation, t);
     }
 
     void SelectActiveHand()
@@ -153,6 +206,74 @@ public class NeckVRControllerOptimized : MonoBehaviour
             if (found != null) return found;
         }
         return null;
+    }
+
+    // ========== Public API ==========
+
+    /// <summary>
+    /// 활성화 상태 확인
+    /// </summary>
+    public bool IsEnabled => isEnabled;
+
+    /// <summary>
+    /// 목 컨트롤러 활성화 (평가 시작 시 호출)
+    /// </summary>
+    public void Enable()
+    {
+        isEnabled = true;
+        Debug.Log("<color=green>[NeckVRController] 활성화됨 - 손 움직임에 따라 목이 반응합니다</color>");
+    }
+
+    /// <summary>
+    /// 목 컨트롤러 비활성화 (평가 종료 시 호출)
+    /// </summary>
+    public void Disable()
+    {
+        isEnabled = false;
+        Debug.Log("<color=yellow>[NeckVRController] 비활성화됨 - 목이 초기 위치로 복귀합니다</color>");
+    }
+
+    /// <summary>
+    /// 활성화 상태 설정
+    /// </summary>
+    public void SetEnabled(bool enabled)
+    {
+        isEnabled = enabled;
+        if (enabled)
+            Debug.Log("<color=green>[NeckVRController] 활성화됨</color>");
+        else
+            Debug.Log("<color=yellow>[NeckVRController] 비활성화됨</color>");
+    }
+
+    /// <summary>
+    /// 초기 회전 리셋 (현재 위치를 새 초기 위치로 저장)
+    /// </summary>
+    public void ResetInitialRotation()
+    {
+        SaveInitialRotations();
+        Debug.Log("[NeckVRController] 현재 위치를 초기 위치로 저장했습니다");
+    }
+
+    /// <summary>
+    /// 즉시 초기 위치로 복귀
+    /// </summary>
+    public void ResetToInitial()
+    {
+        if (neckBase != null) neckBase.rotation = initialNeckBaseRotation;
+        if (neckMid != null) neckMid.rotation = initialNeckMidRotation;
+        if (head != null) head.rotation = initialHeadRotation;
+        Debug.Log("[NeckVRController] 초기 위치로 즉시 복귀");
+    }
+
+    /// <summary>
+    /// ROM 제한값 설정
+    /// </summary>
+    public void SetRotationLimits(float flexion, float extension, float rotation, float tilt)
+    {
+        maxFlexion = flexion;
+        maxExtension = extension;
+        maxRotation = rotation;
+        maxTilt = tilt;
     }
 
     // ✅ Gizmos 시각화
