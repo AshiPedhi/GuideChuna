@@ -30,6 +30,9 @@ public class ChunaLimitChecker : MonoBehaviour
     [Tooltip("체크 활성화")]
     [SerializeField] private bool enableChecking = true;
 
+    [Tooltip("왼손(보조수) 제한 체크 활성화 - 비활성화하면 왼손은 항상 Safe")]
+    [SerializeField] private bool enableLeftHandCheck = false;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
     [SerializeField] private bool drawDebugGizmos = true;
@@ -245,9 +248,17 @@ public class ChunaLimitChecker : MonoBehaviour
         LimitCheckResult previousLeftResult = currentLeftResult;
         LimitCheckResult previousRightResult = currentRightResult;
 
-        // 왼손 체크
-        currentLeftResult = CheckHandLimits(playerLeftHand, leftHandRoot,
-            leftHandStartPosition, leftHandStartRotation, leftJointStartRotations, true);
+        // 왼손 체크 (비활성화 시 항상 Safe)
+        if (enableLeftHandCheck)
+        {
+            currentLeftResult = CheckHandLimits(playerLeftHand, leftHandRoot,
+                leftHandStartPosition, leftHandStartRotation, leftJointStartRotations, true);
+        }
+        else
+        {
+            // 왼손 체크 비활성화 - 항상 Safe 상태
+            currentLeftResult = new LimitCheckResult { overallStatus = LimitStatus.Safe };
+        }
 
         // 오른손 체크
         currentRightResult = CheckHandLimits(playerRightHand, rightHandRoot,
@@ -260,14 +271,17 @@ public class ChunaLimitChecker : MonoBehaviour
             OnLimitStatusChanged?.Invoke(currentLeftResult, currentRightResult);
         }
 
-        // 위반 감지 및 이벤트 발생
-        ProcessViolations(currentLeftResult, true);
+        // 위반 감지 및 이벤트 발생 (왼손은 체크 활성화 시에만)
+        if (enableLeftHandCheck)
+        {
+            ProcessViolations(currentLeftResult, true);
+        }
         ProcessViolations(currentRightResult, false);
 
         // 되돌리기 필요 여부 체크
         if (limitData.EnableAutoRevert)
         {
-            if (currentLeftResult.overallStatus == LimitStatus.Exceeded)
+            if (enableLeftHandCheck && currentLeftResult.overallStatus == LimitStatus.Exceeded)
             {
                 OnRevertRequired?.Invoke(true);
             }
