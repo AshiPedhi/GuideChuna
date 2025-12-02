@@ -60,6 +60,13 @@ public class ScenarioGuideUIController : MonoBehaviour
     [Tooltip("완료 아이콘")]
     [SerializeField] private GameObject completeIcon;
 
+    [Header("=== 홀드 연동 (ChunaPathEvaluator) ===")]
+    [Tooltip("홀드 상태와 연동할 ChunaPathEvaluator (없으면 시간 기반으로 진행)")]
+    [SerializeField] private ChunaPathEvaluator pathEvaluator;
+
+    [Tooltip("홀드 중일 때만 시간 진행 (pathEvaluator 필요)")]
+    [SerializeField] private bool requireHoldForProgress = true;
+
     private ScenarioEventSystem eventSystem;
     private ScenarioManager scenarioManager;
     private string currentPhaseName = "";
@@ -68,6 +75,9 @@ public class ScenarioGuideUIController : MonoBehaviour
     private bool isProgressActive = false;
     private float currentDuration = 0f;
     private float elapsedTime = 0f;
+
+    // 홀드 상태 (ChunaPathEvaluator 연동)
+    private bool isCurrentlyHolding = false;
 
     void Awake()
     {
@@ -87,6 +97,13 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnPhaseChanged += OnPhaseChanged;
         eventSystem.OnStepChanged += OnStepChanged;
         eventSystem.OnSubStepStarted += OnSubStepStarted;
+
+        // ChunaPathEvaluator 홀드 이벤트 구독
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnHoldProgressChanged += OnHoldProgressChanged;
+            pathEvaluator.OnHoldCompleted += OnHoldCompleted;
+        }
     }
 
     void OnDisable()
@@ -95,6 +112,30 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnPhaseChanged -= OnPhaseChanged;
         eventSystem.OnStepChanged -= OnStepChanged;
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
+
+        // ChunaPathEvaluator 홀드 이벤트 구독 해제
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnHoldProgressChanged -= OnHoldProgressChanged;
+            pathEvaluator.OnHoldCompleted -= OnHoldCompleted;
+        }
+    }
+
+    /// <summary>
+    /// 홀드 진행 상태 변경 시 호출
+    /// </summary>
+    private void OnHoldProgressChanged(float currentTime, float requiredTime)
+    {
+        // 홀드 중인지 판단 (currentTime > 0이면 홀드 중)
+        isCurrentlyHolding = currentTime > 0f;
+    }
+
+    /// <summary>
+    /// 홀드 완료 시 호출
+    /// </summary>
+    private void OnHoldCompleted()
+    {
+        isCurrentlyHolding = false;
     }
 
     void Update()
@@ -102,7 +143,17 @@ public class ScenarioGuideUIController : MonoBehaviour
         // 진행 원형 표시가 활성화된 경우 시간 업데이트
         if (isProgressActive && currentDuration > 0)
         {
-            elapsedTime += Time.deltaTime;
+            // 홀드 연동이 필요한 경우: 홀드 중일 때만 시간 진행
+            bool canProgress = true;
+            if (requireHoldForProgress && pathEvaluator != null)
+            {
+                canProgress = isCurrentlyHolding;
+            }
+
+            if (canProgress)
+            {
+                elapsedTime += Time.deltaTime;
+            }
 
             // 남은 시간 계산
             float remainingTime = Mathf.Max(0f, currentDuration - elapsedTime);
