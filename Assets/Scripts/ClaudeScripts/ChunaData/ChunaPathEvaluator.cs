@@ -214,11 +214,18 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     void Update()
     {
-        if (!isEvaluating) return;
+        if (!isEvaluating)
+        {
+            if (showDebugLogs && Time.frameCount % 300 == 0)  // 5초에 한번
+                Debug.Log("<color=red>[ChunaPathEvaluator] 평가가 시작되지 않음 (isEvaluating=false)</color>");
+            return;
+        }
 
         // 시작 위치 도달 확인 (아직 도달하지 않았으면 체크)
         if (requireNearStartToBegin && !hasReachedStartPosition)
         {
+            if (showDebugLogs && Time.frameCount % 60 == 0)  // 1초에 한번
+                Debug.Log("<color=yellow>[ChunaPathEvaluator] 시작 위치 도달 대기 중...</color>");
             CheckStartPositionReached();
             return;  // 시작 위치에 도달해야 메트릭 기록 시작
         }
@@ -276,6 +283,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             // Danger나 Exceeded 상태가 아니면 OK (오른손만 체크)
             inSafeRange = rightResult.overallStatus != LimitStatus.Exceeded &&
                           rightResult.overallStatus != LimitStatus.Danger;
+        }
+
+        // 디버그: 각 조건 상태 출력
+        if (showDebugLogs && Time.frameCount % 60 == 0)  // 1초에 한번
+        {
+            Debug.Log($"[HoldDetection] 왼손시작위치:{leftHandAtStart}, 오른손정지:{rightHandStopped}(vel:{rightVelocity:F3}), 오른손목표:{rightHandAtTarget}, 안전범위:{inSafeRange}");
         }
 
         // 홀드 조건: 왼손 시작위치 유지 + 오른손 정지 + 오른손 목표 근처 + 안전 범위
