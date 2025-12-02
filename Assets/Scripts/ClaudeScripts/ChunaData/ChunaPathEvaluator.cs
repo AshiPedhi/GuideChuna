@@ -241,6 +241,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로
+    /// 왼손: 시작 위치 유지 체크, 오른손: 끝 지점 정지 체크
     /// </summary>
     private void UpdateHoldDetection()
     {
@@ -254,14 +255,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         lastLeftHandPosition = leftPos;
         lastRightHandPosition = rightPos;
 
-        // 양손 모두 정지 판정
-        bool bothHandsStopped = leftVelocity < holdVelocityThreshold && rightVelocity < holdVelocityThreshold;
+        // 오른손(주동수) 정지 판정
+        bool rightHandStopped = rightVelocity < holdVelocityThreshold;
 
-        // 목표 위치 근처인지 확인 (경로 끝 = 마지막 체크포인트)
-        bool nearTarget = true;
+        // 왼손(보조수): 시작 위치(첫 번째 체크포인트)에서 유지하고 있는지 체크
+        bool leftHandAtStart = IsLeftHandAtStartPosition(leftPos);
+
+        // 오른손(주동수): 끝 지점(마지막 체크포인트) 근처인지 확인
+        bool rightHandAtTarget = true;
         if (requireNearTargetForHold)
         {
-            nearTarget = IsNearTargetPosition(leftPos, rightPos);
+            rightHandAtTarget = IsRightHandAtTargetPosition(rightPos);
         }
 
         // 리밋 범위 내 확인 (옵션) - 오른손(주동수)만 체크
@@ -274,8 +278,8 @@ public class ChunaPathEvaluator : MonoBehaviour
                           rightResult.overallStatus != LimitStatus.Danger;
         }
 
-        // 홀드 조건 충족 여부: 정지 + 목표 근처 + 안전 범위
-        bool canHold = bothHandsStopped && nearTarget && inSafeRange;
+        // 홀드 조건: 왼손 시작위치 유지 + 오른손 정지 + 오른손 목표 근처 + 안전 범위
+        bool canHold = leftHandAtStart && rightHandStopped && rightHandAtTarget && inSafeRange;
 
         if (canHold)
         {
@@ -283,7 +287,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 isHolding = true;
                 if (showDebugLogs)
-                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 목표 위치에서 홀드 시작...</color>");
+                    Debug.Log("<color=yellow>[ChunaPathEvaluator] 홀드 시작 (왼손: 시작위치 유지, 오른손: 목표위치 정지)</color>");
             }
 
             currentHoldTime += Time.deltaTime;
@@ -302,9 +306,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         else
         {
             // 홀드 중단 - 타이머 리셋
-            if (isHolding)
+            if (isHolding || currentHoldTime > 0f)
             {
-                string reason = !bothHandsStopped ? "손 움직임" : (!nearTarget ? "목표 위치 이탈" : "안전 범위 이탈");
+                string reason = !leftHandAtStart ? "왼손 시작위치 이탈" :
+                               (!rightHandStopped ? "오른손 움직임" :
+                               (!rightHandAtTarget ? "오른손 목표위치 이탈" : "안전 범위 이탈"));
                 if (showDebugLogs && currentHoldTime > 0.3f)
                     Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F1}s)</color>");
 
@@ -316,20 +322,44 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 손이 목표 위치(경로 끝) 근처에 있는지 확인 - 오른손(주동수)만 체크
+    /// 왼손이 시작 위치(첫 번째 체크포인트)에서 유지하고 있는지 확인
     /// </summary>
-    private bool IsNearTargetPosition(Vector3 leftHandPos, Vector3 rightHandPos)
+    private bool IsLeftHandAtStartPosition(Vector3 leftHandPos)
     {
-        // 마지막 체크포인트 위치가 목표 - 오른손만 체크
+        Vector3? leftStart = GetFirstCheckpointPosition(true);
+
+        if (leftStart.HasValue)
+        {
+            float dist = Vector3.Distance(leftHandPos, leftStart.Value);
+            return dist <= startPositionRadius;
+        }
+
+        return true;  // 왼손 체크포인트 없으면 조건 무시
+    }
+
+    /// <summary>
+    /// 오른손이 목표 위치(마지막 체크포인트)에 있는지 확인
+    /// </summary>
+    private bool IsRightHandAtTargetPosition(Vector3 rightHandPos)
+    {
         Vector3? rightTarget = GetLastCheckpointPosition(false);
 
         if (rightTarget.HasValue)
         {
-            float rightDist = Vector3.Distance(rightHandPos, rightTarget.Value);
-            return rightDist <= holdTargetRadius;
+            float dist = Vector3.Distance(rightHandPos, rightTarget.Value);
+            return dist <= holdTargetRadius;
         }
 
-        return true;  // 오른손 체크포인트 없으면 위치 상관없이 허용
+        return true;  // 오른손 체크포인트 없으면 조건 무시
+    }
+
+    /// <summary>
+    /// [Deprecated] 손이 목표 위치(경로 끝) 근처에 있는지 확인 - 오른손(주동수)만 체크
+    /// IsRightHandAtTargetPosition으로 대체됨
+    /// </summary>
+    private bool IsNearTargetPosition(Vector3 leftHandPos, Vector3 rightHandPos)
+    {
+        return IsRightHandAtTargetPosition(rightHandPos);
     }
 
     /// <summary>
@@ -359,21 +389,41 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 시작 위치 도달 확인 - 왼손만 체크
+    /// 시작 위치 도달 확인 - 양손 모두 시작 위치에 도달해야 평가 시작
     /// </summary>
     private void CheckStartPositionReached()
     {
         Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
+        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
 
-        // 왼손 시작 위치만 체크
         Vector3? leftStart = GetFirstCheckpointPosition(true);
+        Vector3? rightStart = GetFirstCheckpointPosition(false);
 
-        bool nearStart = true;
+        bool leftNear = true;
+        bool rightNear = true;
+
+        // 왼손 시작 위치 체크
         if (leftStart.HasValue && playerLeftHand != null)
         {
             float dist = Vector3.Distance(leftPos, leftStart.Value);
-            nearStart = dist <= startPositionRadius;
+            leftNear = dist <= startPositionRadius;
         }
+
+        // 오른손 시작 위치 체크
+        if (rightStart.HasValue && playerRightHand != null)
+        {
+            float dist = Vector3.Distance(rightPos, rightStart.Value);
+            rightNear = dist <= startPositionRadius;
+        }
+
+        // 체크포인트가 있는 손만 확인 (양쪽 모두 있으면 양쪽 모두 도달해야 함)
+        bool nearStart = true;
+        if (leftStart.HasValue && rightStart.HasValue)
+            nearStart = leftNear && rightNear;
+        else if (leftStart.HasValue)
+            nearStart = leftNear;
+        else if (rightStart.HasValue)
+            nearStart = rightNear;
 
         if (nearStart)
         {
@@ -386,7 +436,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[ChunaPathEvaluator] 시작 위치 도달! 평가를 시작합니다.</color>");
+                Debug.Log("<color=green>[ChunaPathEvaluator] 양손 시작 위치 도달! 평가를 시작합니다.</color>");
         }
     }
 
