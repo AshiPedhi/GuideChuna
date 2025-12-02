@@ -1,6 +1,24 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+
+/// <summary>
+/// 시간 표시 형식
+/// </summary>
+public enum TimeDisplayFormat
+{
+    /// <summary>현재 / 필요 (예: "1.5 / 3.0")</summary>
+    CurrentSlashRequired,
+    /// <summary>남은 시간 (예: "1.5s")</summary>
+    RemainingTime,
+    /// <summary>현재 시간만 (예: "1.5s")</summary>
+    CurrentTimeOnly,
+    /// <summary>퍼센트 (예: "50%")</summary>
+    Percentage,
+    /// <summary>카운트다운 정수 (예: "2")</summary>
+    CountdownInteger
+}
 
 /// <summary>
 /// 홀드 진행 상황을 Image의 fillAmount로 시각화하는 컴포넌트
@@ -9,6 +27,7 @@ using UnityEngine.UI;
 /// 1. 이 컴포넌트를 아무 GameObject에 추가
 /// 2. Path Evaluator에 ChunaPathEvaluator 참조 할당
 /// 3. Fill Image에 Image (Type: Filled) 할당
+/// 4. (선택) Time Text에 TextMeshProUGUI 할당하여 시간 표시
 /// </summary>
 public class HoldProgressIndicator : MonoBehaviour
 {
@@ -18,6 +37,22 @@ public class HoldProgressIndicator : MonoBehaviour
 
     [Tooltip("fillAmount를 업데이트할 Image (Image Type을 Filled로 설정해야 함)")]
     [SerializeField] private Image fillImage;
+
+    [Header("=== 시간 표시 (TextMeshPro) ===")]
+    [Tooltip("시간을 표시할 TextMeshProUGUI")]
+    [SerializeField] private TextMeshProUGUI timeText;
+
+    [Tooltip("시간 표시 형식")]
+    [SerializeField] private TimeDisplayFormat timeDisplayFormat = TimeDisplayFormat.CurrentSlashRequired;
+
+    [Tooltip("완료 시 표시할 텍스트 (비어있으면 시간 계속 표시)")]
+    [SerializeField] private string completedText = "완료!";
+
+    [Tooltip("홀드하지 않을 때 표시할 텍스트 (비어있으면 0으로 표시)")]
+    [SerializeField] private string idleText = "";
+
+    [Tooltip("소수점 자릿수")]
+    [SerializeField] private int decimalPlaces = 1;
 
     [Header("=== 옵션 ===")]
     [Tooltip("홀드 시작 시 오브젝트 활성화")]
@@ -52,6 +87,10 @@ public class HoldProgressIndicator : MonoBehaviour
     private float completedTimer = 0f;
     private GameObject fillImageObject;
 
+    // 시간 표시용
+    private float lastCurrentTime = 0f;
+    private float lastRequiredTime = 0f;
+
     private void Awake()
     {
         if (fillImage != null)
@@ -70,6 +109,7 @@ public class HoldProgressIndicator : MonoBehaviour
 
         // 초기화
         SetFillAmount(0f);
+        UpdateTimeText(0f, 0f);
 
         if (showOnlyWhenHolding && fillImageObject != null)
         {
@@ -120,9 +160,13 @@ public class HoldProgressIndicator : MonoBehaviour
 
     private void OnHoldProgressChanged(float currentTime, float requiredTime)
     {
+        lastCurrentTime = currentTime;
+        lastRequiredTime = requiredTime;
+
         if (requiredTime <= 0f)
         {
             targetFillAmount = 0f;
+            UpdateTimeText(0f, 0f);
             return;
         }
 
@@ -144,6 +188,7 @@ public class HoldProgressIndicator : MonoBehaviour
         }
 
         SetFillAmount(progress);
+        UpdateTimeText(currentTime, requiredTime);
     }
 
     private void OnHoldCompleted()
@@ -156,6 +201,12 @@ public class HoldProgressIndicator : MonoBehaviour
         isHoldCompleted = true;
         completedTimer = 0f;
         SetFillAmount(1f);
+
+        // 완료 텍스트 표시
+        if (timeText != null && !string.IsNullOrEmpty(completedText))
+        {
+            timeText.text = completedText;
+        }
     }
 
     private void SetFillAmount(float amount)
@@ -171,6 +222,68 @@ public class HoldProgressIndicator : MonoBehaviour
             {
                 fillImage.color = Color.Lerp(startColor, endColor, amount);
             }
+        }
+    }
+
+    private void UpdateTimeText(float currentTime, float requiredTime)
+    {
+        if (timeText == null) return;
+
+        // 홀드하지 않을 때 idle 텍스트 표시
+        if (currentTime <= 0f && !isHoldCompleted)
+        {
+            if (!string.IsNullOrEmpty(idleText))
+            {
+                timeText.text = idleText;
+            }
+            else
+            {
+                timeText.text = FormatTime(0f, requiredTime);
+            }
+            return;
+        }
+
+        // 완료 상태면 completedText 유지
+        if (isHoldCompleted && !string.IsNullOrEmpty(completedText))
+        {
+            return;
+        }
+
+        timeText.text = FormatTime(currentTime, requiredTime);
+    }
+
+    private string FormatTime(float currentTime, float requiredTime)
+    {
+        string format = decimalPlaces switch
+        {
+            0 => "F0",
+            1 => "F1",
+            2 => "F2",
+            _ => "F1"
+        };
+
+        switch (timeDisplayFormat)
+        {
+            case TimeDisplayFormat.CurrentSlashRequired:
+                return $"{currentTime.ToString(format)} / {requiredTime.ToString(format)}";
+
+            case TimeDisplayFormat.RemainingTime:
+                float remaining = Mathf.Max(0f, requiredTime - currentTime);
+                return $"{remaining.ToString(format)}s";
+
+            case TimeDisplayFormat.CurrentTimeOnly:
+                return $"{currentTime.ToString(format)}s";
+
+            case TimeDisplayFormat.Percentage:
+                float percent = requiredTime > 0f ? (currentTime / requiredTime) * 100f : 0f;
+                return $"{percent.ToString("F0")}%";
+
+            case TimeDisplayFormat.CountdownInteger:
+                int countdownValue = Mathf.CeilToInt(requiredTime - currentTime);
+                return countdownValue.ToString();
+
+            default:
+                return $"{currentTime.ToString(format)} / {requiredTime.ToString(format)}";
         }
     }
 
@@ -224,10 +337,29 @@ public class HoldProgressIndicator : MonoBehaviour
         isHoldCompleted = false;
         completedTimer = 0f;
         SetFillAmount(0f);
+        UpdateTimeText(0f, lastRequiredTime);
 
         if (showOnlyWhenHolding && fillImageObject != null)
         {
             fillImageObject.SetActive(false);
         }
+    }
+
+    /// <summary>
+    /// 런타임에서 timeText 설정
+    /// </summary>
+    public void SetTimeText(TextMeshProUGUI text)
+    {
+        timeText = text;
+        UpdateTimeText(lastCurrentTime, lastRequiredTime);
+    }
+
+    /// <summary>
+    /// 시간 표시 형식 변경
+    /// </summary>
+    public void SetTimeDisplayFormat(TimeDisplayFormat format)
+    {
+        timeDisplayFormat = format;
+        UpdateTimeText(lastCurrentTime, lastRequiredTime);
     }
 }
