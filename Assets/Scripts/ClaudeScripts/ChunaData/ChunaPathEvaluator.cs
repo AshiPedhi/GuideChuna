@@ -264,16 +264,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             nearTarget = IsNearTargetPosition(leftPos, rightPos);
         }
 
-        // 리밋 범위 내 확인 (옵션)
+        // 리밋 범위 내 확인 (옵션) - 오른손(주동수)만 체크
         bool inSafeRange = true;
         if (requireLimitSafeForHold && limitChecker != null)
         {
-            var leftResult = limitChecker.GetLeftHandResult();
             var rightResult = limitChecker.GetRightHandResult();
-            // Danger나 Exceeded 상태가 아니면 OK
-            inSafeRange = leftResult.overallStatus != LimitStatus.Exceeded &&
-                          leftResult.overallStatus != LimitStatus.Danger &&
-                          rightResult.overallStatus != LimitStatus.Exceeded &&
+            // Danger나 Exceeded 상태가 아니면 OK (오른손만 체크)
+            inSafeRange = rightResult.overallStatus != LimitStatus.Exceeded &&
                           rightResult.overallStatus != LimitStatus.Danger;
         }
 
@@ -319,38 +316,20 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 손이 목표 위치(경로 끝) 근처에 있는지 확인
+    /// 손이 목표 위치(경로 끝) 근처에 있는지 확인 - 오른손(주동수)만 체크
     /// </summary>
     private bool IsNearTargetPosition(Vector3 leftHandPos, Vector3 rightHandPos)
     {
-        // 마지막 체크포인트 위치가 목표
-        Vector3? leftTarget = GetLastCheckpointPosition(true);
+        // 마지막 체크포인트 위치가 목표 - 오른손만 체크
         Vector3? rightTarget = GetLastCheckpointPosition(false);
-
-        bool leftNear = true;
-        bool rightNear = true;
-
-        if (leftTarget.HasValue)
-        {
-            float leftDist = Vector3.Distance(leftHandPos, leftTarget.Value);
-            leftNear = leftDist <= holdTargetRadius;
-        }
 
         if (rightTarget.HasValue)
         {
             float rightDist = Vector3.Distance(rightHandPos, rightTarget.Value);
-            rightNear = rightDist <= holdTargetRadius;
+            return rightDist <= holdTargetRadius;
         }
 
-        // 체크포인트가 있는 쪽만 확인 (양쪽 모두 있으면 양쪽 모두 근처여야 함)
-        if (leftTarget.HasValue && rightTarget.HasValue)
-            return leftNear && rightNear;
-        else if (leftTarget.HasValue)
-            return leftNear;
-        else if (rightTarget.HasValue)
-            return rightNear;
-        else
-            return true;  // 체크포인트 없으면 위치 상관없이 허용
+        return true;  // 오른손 체크포인트 없으면 위치 상관없이 허용
     }
 
     /// <summary>
@@ -380,39 +359,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 시작 위치 도달 확인
+    /// 시작 위치 도달 확인 - 왼손만 체크
     /// </summary>
     private void CheckStartPositionReached()
     {
         Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
-        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
 
+        // 왼손 시작 위치만 체크
         Vector3? leftStart = GetFirstCheckpointPosition(true);
-        Vector3? rightStart = GetFirstCheckpointPosition(false);
 
-        bool leftNear = true;
-        bool rightNear = true;
-
+        bool nearStart = true;
         if (leftStart.HasValue && playerLeftHand != null)
         {
             float dist = Vector3.Distance(leftPos, leftStart.Value);
-            leftNear = dist <= startPositionRadius;
+            nearStart = dist <= startPositionRadius;
         }
-
-        if (rightStart.HasValue && playerRightHand != null)
-        {
-            float dist = Vector3.Distance(rightPos, rightStart.Value);
-            rightNear = dist <= startPositionRadius;
-        }
-
-        // 체크포인트가 있는 쪽만 확인
-        bool nearStart = true;
-        if (leftStart.HasValue && rightStart.HasValue)
-            nearStart = leftNear && rightNear;
-        else if (leftStart.HasValue)
-            nearStart = leftNear;
-        else if (rightStart.HasValue)
-            nearStart = rightNear;
 
         if (nearStart)
         {
