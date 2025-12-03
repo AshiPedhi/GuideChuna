@@ -94,10 +94,47 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
+    [Header("=== 새로운 평가 흐름 설정 ===")]
+    [Tooltip("시작 홀드 시간 (초)")]
+    [SerializeField] private float startHoldDuration = 2f;
+
+    [Tooltip("중간 홀드 시간 (초)")]
+    [SerializeField] private float midHoldDuration = 3f;
+
+    [Tooltip("중간 홀드 시작 구간 (0~1, 전체 프레임 기준)")]
+    [SerializeField] private float midHoldStartRatio = 0.3f;
+
+    [Tooltip("중간 홀드 종료 구간 (0~1, 전체 프레임 기준)")]
+    [SerializeField] private float midHoldEndRatio = 0.5f;
+
+    [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
+    [SerializeField] private float limitBarrierRatio = 0.5f;
+
+    [Tooltip("왼손 이탈 허용 거리 (미터)")]
+    [SerializeField] private float leftHandDriftThreshold = 0.15f;
+
+    /// <summary>
+    /// 평가 단계
+    /// </summary>
+    public enum EvaluationPhase
+    {
+        Idle,              // 대기
+        WaitingForStart,   // 시작 위치 대기
+        StartHold,         // 시작 홀드 (2초)
+        Moving,            // 자유 이동
+        MidHold,           // 중간 홀드 (3초)
+        Completed          // 완료
+    }
+
     // 상태
     private bool isEvaluating = false;
     private float evaluationStartTime;
     private float lastMetricsRecordTime;
+
+    // 새로운 평가 흐름 상태
+    private EvaluationPhase currentPhase = EvaluationPhase.Idle;
+    private float phaseHoldTime = 0f;
+    private Vector3 leftHandStartHoldPosition;  // 시작 홀드 시 왼손 위치 저장
 
     // 홀드 감지 상태
     private float currentHoldTime = 0f;
@@ -130,6 +167,14 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action<float, float> OnHoldProgressChanged;         // 홀드 진행률 (current, required)
     public event Action OnHoldCompleted;                             // 홀드 완료 (다음 단계로)
 
+    // 새로운 평가 흐름 이벤트
+    public event Action<EvaluationPhase> OnPhaseChanged;             // 단계 변경
+    public event Action OnStartHoldComplete;                         // 시작 홀드 완료 (움직이세요)
+    public event Action OnMidHoldBegin;                              // 중간 홀드 시작 (멈추세요)
+    public event Action OnMidHoldComplete;                           // 중간 홀드 완료
+    public event Action<float> OnLimitWarning;                       // 제한장벽 경고 (현재 비율)
+    public event Action<float> OnLeftHandDrifted;                    // 왼손 이탈 (이탈 거리)
+
     /// <summary>
     /// 평가 세션 데이터
     /// </summary>
@@ -155,6 +200,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         public float totalTimeInWarning;    // 경고 상태 총 시간
         public float totalTimeInDanger;     // 위험 상태 총 시간
         public float totalTimeExceeded;     // 초과 상태 총 시간
+
+        // 새로운 평가 흐름 관련
+        public int leftHandDriftCount;      // 왼손 이탈 횟수
+        public int limitWarningCount;       // 제한장벽 경고 횟수
 
         // 유사도 관련
         public float averageSimilarity;
@@ -214,37 +263,255 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     void Update()
     {
-        if (!isEvaluating)
-        {
-            if (showDebugLogs && Time.frameCount % 300 == 0)  // 5초에 한번
-                Debug.Log("<color=red>[ChunaPathEvaluator] 평가가 시작되지 않음 (isEvaluating=false)</color>");
-            return;
-        }
+        if (!isEvaluating) return;
 
-        // 시작 위치 도달 확인 (아직 도달하지 않았으면 체크)
-        if (requireNearStartToBegin && !hasReachedStartPosition)
-        {
-            if (showDebugLogs && Time.frameCount % 60 == 0)  // 1초에 한번
-                Debug.Log("<color=yellow>[ChunaPathEvaluator] 시작 위치 도달 대기 중...</color>");
-            CheckStartPositionReached();
-            return;  // 시작 위치에 도달해야 메트릭 기록 시작
-        }
+        // 새로운 평가 흐름 업데이트
+        UpdatePhaseBasedEvaluation();
 
-        float currentTime = Time.time;
-
-        // 메트릭 기록
-        if (currentTime - lastMetricsRecordTime >= metricsRecordInterval)
+        // 메트릭 기록 (Moving/MidHold 단계에서만)
+        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
         {
-            lastMetricsRecordTime = currentTime;
-            RecordMetricsSnapshot();
-        }
-
-        // 홀드 감지 (다음 단계 진행 조건)
-        if (enableHoldDetection)
-        {
-            UpdateHoldDetection();
+            float currentTime = Time.time;
+            if (currentTime - lastMetricsRecordTime >= metricsRecordInterval)
+            {
+                lastMetricsRecordTime = currentTime;
+                RecordMetricsSnapshot();
+            }
         }
     }
+
+    /// <summary>
+    /// 새로운 평가 흐름 업데이트
+    /// </summary>
+    private void UpdatePhaseBasedEvaluation()
+    {
+        Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
+        Vector3 rightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
+
+        // 손 속도 계산
+        float leftVelocity = Time.deltaTime > 0 ? (leftPos - lastLeftHandPosition).magnitude / Time.deltaTime : 0f;
+        float rightVelocity = Time.deltaTime > 0 ? (rightPos - lastRightHandPosition).magnitude / Time.deltaTime : 0f;
+        lastLeftHandPosition = leftPos;
+        lastRightHandPosition = rightPos;
+
+        switch (currentPhase)
+        {
+            case EvaluationPhase.WaitingForStart:
+                UpdateWaitingForStart(leftPos, rightPos);
+                break;
+
+            case EvaluationPhase.StartHold:
+                UpdateStartHold(leftPos, rightPos, leftVelocity, rightVelocity);
+                break;
+
+            case EvaluationPhase.Moving:
+                UpdateMoving(leftPos, rightPos);
+                break;
+
+            case EvaluationPhase.MidHold:
+                UpdateMidHold(leftPos, rightPos, rightVelocity);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 단계 변경
+    /// </summary>
+    private void ChangePhase(EvaluationPhase newPhase)
+    {
+        if (currentPhase == newPhase) return;
+
+        var oldPhase = currentPhase;
+        currentPhase = newPhase;
+        phaseHoldTime = 0f;
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 단계 변경: {oldPhase} → {newPhase}</color>");
+
+        OnPhaseChanged?.Invoke(newPhase);
+    }
+
+    /// <summary>
+    /// 1단계: 시작 위치 대기
+    /// </summary>
+    private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos)
+    {
+        Vector3? leftStart = GetFirstCheckpointPosition(true);
+        Vector3? rightStart = GetFirstCheckpointPosition(false);
+
+        bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
+        bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
+
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+            Debug.Log($"[WaitingForStart] 왼손:{leftNear}, 오른손:{rightNear}");
+
+        if (leftNear && rightNear)
+        {
+            // 왼손 위치 저장 (이후 이탈 체크용)
+            leftHandStartHoldPosition = leftPos;
+            ChangePhase(EvaluationPhase.StartHold);
+
+            // 목 컨트롤러 활성화
+            if (neckController != null && !neckController.IsEnabled)
+                neckController.Enable();
+        }
+    }
+
+    /// <summary>
+    /// 2단계: 시작 홀드 (2초)
+    /// </summary>
+    private void UpdateStartHold(Vector3 leftPos, Vector3 rightPos, float leftVel, float rightVel)
+    {
+        // 양손 정지 체크
+        bool bothStopped = leftVel < holdVelocityThreshold && rightVel < holdVelocityThreshold;
+
+        // 시작 위치 유지 체크
+        Vector3? leftStart = GetFirstCheckpointPosition(true);
+        Vector3? rightStart = GetFirstCheckpointPosition(false);
+        bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
+        bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
+
+        if (bothStopped && leftNear && rightNear)
+        {
+            phaseHoldTime += Time.deltaTime;
+            OnHoldProgressChanged?.Invoke(phaseHoldTime, startHoldDuration);
+
+            if (showDebugLogs && Time.frameCount % 30 == 0)
+                Debug.Log($"[StartHold] 홀드 진행: {phaseHoldTime:F1}s / {startHoldDuration:F1}s");
+
+            if (phaseHoldTime >= startHoldDuration)
+            {
+                // 시작 홀드 완료 → 이동 단계로
+                OnStartHoldComplete?.Invoke();  // "움직이세요" 안내
+                StartGuideHandPlayback();       // 가이드 핸드 재생 시작
+                ChangePhase(EvaluationPhase.Moving);
+            }
+        }
+        else
+        {
+            // 홀드 중단
+            if (phaseHoldTime > 0.1f && showDebugLogs)
+                Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped}, 왼손위치:{leftNear}, 오른손위치:{rightNear})</color>");
+
+            phaseHoldTime = 0f;
+            OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+        }
+    }
+
+    /// <summary>
+    /// 3단계: 자유 이동
+    /// </summary>
+    private void UpdateMoving(Vector3 leftPos, Vector3 rightPos)
+    {
+        // 왼손 이탈 체크 (시작 위치에서 너무 벗어나면 경고)
+        float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
+        if (leftDrift > leftHandDriftThreshold)
+        {
+            OnLeftHandDrifted?.Invoke(leftDrift);
+
+            // 감점 기록
+            if (currentSession != null)
+                currentSession.leftHandDriftCount++;
+
+            if (showDebugLogs)
+                Debug.Log($"<color=orange>[Moving] 왼손 이탈! 거리: {leftDrift:F3}m</color>");
+        }
+
+        // 현재 진행률 계산 (가이드 핸드 기준)
+        float progress = GetCurrentProgress();
+
+        // 제한장벽 체크 (중반 이후 경고)
+        if (progress >= limitBarrierRatio)
+        {
+            // 리밋 체커로 제한 확인
+            if (limitChecker != null)
+            {
+                var rightResult = limitChecker.GetRightHandResult();
+                if (rightResult.overallStatus == LimitStatus.Exceeded ||
+                    rightResult.overallStatus == LimitStatus.Danger)
+                {
+                    OnLimitWarning?.Invoke(progress);
+
+                    if (showDebugLogs)
+                        Debug.Log($"<color=red>[Moving] 제한장벽 경고! 진행률: {progress:P0}</color>");
+                }
+            }
+        }
+
+        // 중간 홀드 구간 도달 체크
+        if (progress >= midHoldStartRatio && progress <= midHoldEndRatio)
+        {
+            // 중간 홀드 구간 진입 → 중간 홀드 단계로
+            OnMidHoldBegin?.Invoke();  // "멈추세요" 안내
+            ChangePhase(EvaluationPhase.MidHold);
+        }
+
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+            Debug.Log($"[Moving] 진행률: {progress:P0}, 왼손이탈: {leftDrift:F3}m");
+    }
+
+    /// <summary>
+    /// 4단계: 중간 홀드 (3초)
+    /// </summary>
+    private void UpdateMidHold(Vector3 leftPos, Vector3 rightPos, float rightVel)
+    {
+        // 오른손 정지 체크
+        bool rightStopped = rightVel < holdVelocityThreshold;
+
+        // 왼손 이탈 체크
+        float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
+        bool leftOk = leftDrift <= leftHandDriftThreshold;
+
+        // 오른손 목표 구간 내 체크 (0.3~0.5)
+        float progress = GetCurrentProgress();
+        bool rightInRange = progress >= midHoldStartRatio && progress <= midHoldEndRatio;
+
+        if (rightStopped && leftOk && rightInRange)
+        {
+            phaseHoldTime += Time.deltaTime;
+            OnHoldProgressChanged?.Invoke(phaseHoldTime, midHoldDuration);
+
+            if (showDebugLogs && Time.frameCount % 30 == 0)
+                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F1}s / {midHoldDuration:F1}s");
+
+            if (phaseHoldTime >= midHoldDuration)
+            {
+                // 중간 홀드 완료
+                OnMidHoldComplete?.Invoke();
+                OnHoldCompleted?.Invoke();
+                ChangePhase(EvaluationPhase.Completed);
+                CompleteEvaluation();
+            }
+        }
+        else
+        {
+            // 홀드 중단 - 초기화
+            if (phaseHoldTime > 0.1f)
+            {
+                string reason = !rightStopped ? "오른손 움직임" :
+                               (!leftOk ? "왼손 이탈" : "구간 이탈");
+                if (showDebugLogs)
+                    Debug.Log($"<color=orange>[MidHold] 홀드 중단: {reason}</color>");
+            }
+
+            phaseHoldTime = 0f;
+            OnHoldProgressChanged?.Invoke(0f, midHoldDuration);
+        }
+    }
+
+    /// <summary>
+    /// 현재 진행률 (0~1)
+    /// </summary>
+    public float GetCurrentProgress()
+    {
+        if (loadedFrames == null || loadedFrames.Count == 0) return 0f;
+        return Mathf.Clamp01((float)currentGuideFrameIndex / loadedFrames.Count);
+    }
+
+    /// <summary>
+    /// 현재 평가 단계
+    /// </summary>
+    public EvaluationPhase CurrentPhase => currentPhase;
 
     /// <summary>
     /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로
@@ -659,6 +926,14 @@ public class ChunaPathEvaluator : MonoBehaviour
             lastLeftHandPosition = playerLeftHand.transform.position;
         if (playerRightHand != null)
             lastRightHandPosition = playerRightHand.transform.position;
+
+        // 새로운 평가 흐름 초기화
+        currentPhase = EvaluationPhase.WaitingForStart;
+        phaseHoldTime = 0f;
+        leftHandStartHoldPosition = Vector3.zero;
+
+        if (showDebugLogs)
+            Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
         // 세션 초기화
         currentSession = new EvaluationSession
