@@ -153,6 +153,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Coroutine guideHandCoroutine;
     private int currentGuideFrameIndex = 0;
 
+    // 사용자 손 위치 기반 프레임
+    private int userHandFrameIndex = 0;
+    private float userHandFrameRatio = 0f;  // 0~1
+
     // 결과
     private EvaluationSession currentSession;
 
@@ -174,6 +178,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action OnMidHoldComplete;                           // 중간 홀드 완료
     public event Action<float> OnLimitWarning;                       // 제한장벽 경고 (현재 비율)
     public event Action<float> OnLeftHandDrifted;                    // 왼손 이탈 (이탈 거리)
+    public event Action<int, int, float> OnUserFrameChanged;         // 사용자 손 프레임 변경 (현재, 총, 비율)
 
     /// <summary>
     /// 평가 세션 데이터
@@ -264,6 +269,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     void Update()
     {
         if (!isEvaluating) return;
+
+        // 사용자 손 위치 기반 프레임 업데이트
+        UpdateUserHandFrame();
 
         // 새로운 평가 흐름 업데이트
         UpdatePhaseBasedEvaluation();
@@ -548,18 +556,87 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 진행률 (0~1)
+    /// 현재 진행률 (0~1) - 사용자 손 위치 기반
     /// </summary>
     public float GetCurrentProgress()
     {
-        if (loadedFrames == null || loadedFrames.Count == 0) return 0f;
-        return Mathf.Clamp01((float)currentGuideFrameIndex / loadedFrames.Count);
+        return userHandFrameRatio;
+    }
+
+    /// <summary>
+    /// 현재 사용자 손이 위치한 프레임 인덱스
+    /// </summary>
+    public int GetUserHandFrameIndex()
+    {
+        return userHandFrameIndex;
+    }
+
+    /// <summary>
+    /// 총 프레임 수
+    /// </summary>
+    public int GetTotalFrameCount()
+    {
+        return loadedFrames != null ? loadedFrames.Count : 0;
     }
 
     /// <summary>
     /// 현재 평가 단계
     /// </summary>
     public EvaluationPhase CurrentPhase => currentPhase;
+
+    /// <summary>
+    /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
+    /// </summary>
+    private void UpdateUserHandFrame()
+    {
+        if (loadedFrames == null || loadedFrames.Count == 0) return;
+        if (playerRightHand == null) return;
+
+        Vector3 rightHandPos = playerRightHand.transform.position;
+
+        // 위치 오프셋 계산
+        Vector3 positionOffset = Vector3.zero;
+        if (referenceTransform != null)
+        {
+            positionOffset = referenceTransform.position - recordedPatientOffset;
+        }
+
+        // 가장 가까운 프레임 찾기
+        float minDistance = float.MaxValue;
+        int closestFrame = 0;
+
+        for (int i = 0; i < loadedFrames.Count; i++)
+        {
+            Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
+            float dist = Vector3.Distance(rightHandPos, framePos);
+
+            if (dist < minDistance)
+            {
+                minDistance = dist;
+                closestFrame = i;
+            }
+        }
+
+        // 변경 감지
+        int prevFrame = userHandFrameIndex;
+        userHandFrameIndex = closestFrame;
+        userHandFrameRatio = Mathf.Clamp01((float)closestFrame / loadedFrames.Count);
+
+        // 프레임 변경 시 이벤트 발생
+        if (prevFrame != userHandFrameIndex)
+        {
+            OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
+
+            // 50% 초과 경고
+            if (userHandFrameRatio > limitBarrierRatio && currentPhase == EvaluationPhase.Moving)
+            {
+                OnLimitWarning?.Invoke(userHandFrameRatio);
+
+                if (showDebugLogs)
+                    Debug.Log($"<color=red>[경고] 프레임 {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}) - 제한 구간 초과!</color>");
+            }
+        }
+    }
 
     /// <summary>
     /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로
