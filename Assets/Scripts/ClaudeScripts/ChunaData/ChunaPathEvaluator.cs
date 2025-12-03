@@ -852,12 +852,38 @@ public class ChunaPathEvaluator : MonoBehaviour
         ClearCheckpoints();
         GenerateCheckpointsFromFrames();
 
+        // 리밋 체커에 첫 프레임의 회전을 기준점으로 설정
+        SetLimitCheckerReferenceFromFirstFrame();
+
         if (showDebugLogs)
         {
             Debug.Log($"<color=green>[ChunaPathEvaluator] 체크포인트 생성 완료</color>");
             Debug.Log($"  - 왼손: {leftCheckpoints.Count}개");
             Debug.Log($"  - 오른손: {rightCheckpoints.Count}개");
         }
+    }
+
+    /// <summary>
+    /// 리밋 체커에 첫 프레임의 회전을 기준점으로 설정
+    /// </summary>
+    private void SetLimitCheckerReferenceFromFirstFrame()
+    {
+        if (limitChecker == null || loadedFrames == null || loadedFrames.Count == 0)
+            return;
+
+        var firstFrame = loadedFrames[0];
+
+        // 첫 프레임의 회전을 기준점으로 설정
+        limitChecker.SetReferenceFromPoseFrame(
+            firstFrame.leftRootRotation,
+            firstFrame.rightRootRotation
+        );
+
+        // PathEvaluator 참조 설정
+        limitChecker.SetPathEvaluator(this);
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 기준점 설정 - 첫 프레임 회전 사용</color>");
     }
 
     private void GenerateCheckpointsFromFrames()

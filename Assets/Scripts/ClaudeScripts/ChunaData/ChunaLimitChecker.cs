@@ -33,6 +33,16 @@ public class ChunaLimitChecker : MonoBehaviour
     [Tooltip("왼손(보조수) 제한 체크 활성화 - 비활성화하면 왼손은 항상 Safe")]
     [SerializeField] private bool enableLeftHandCheck = false;
 
+    [Header("=== 진행률 기반 체크 ===")]
+    [Tooltip("ChunaPathEvaluator 참조 - 진행률 확인용")]
+    [SerializeField] private ChunaPathEvaluator pathEvaluator;
+
+    [Tooltip("제한 체크 시작 진행률 (0~1) - 이 진행률 이상에서만 체크")]
+    [SerializeField] private float limitCheckStartProgress = 0.5f;
+
+    [Tooltip("진행률 기반 체크 활성화 - 비활성화하면 항상 체크")]
+    [SerializeField] private bool useProgressBasedCheck = true;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
     [SerializeField] private bool drawDebugGizmos = true;
@@ -245,6 +255,23 @@ public class ChunaLimitChecker : MonoBehaviour
     /// </summary>
     private void PerformLimitCheck()
     {
+        // 진행률 기반 체크: 진행률이 임계값 미만이면 항상 Safe
+        if (useProgressBasedCheck)
+        {
+            float currentProgress = GetCurrentProgress();
+            if (currentProgress < limitCheckStartProgress)
+            {
+                // 진행률 미달 - 체크 스킵 (항상 Safe)
+                currentLeftResult = new LimitCheckResult { overallStatus = LimitStatus.Safe };
+                currentRightResult = new LimitCheckResult { overallStatus = LimitStatus.Safe };
+
+                if (showDebugLogs && Time.frameCount % 60 == 0)
+                    Debug.Log($"[ChunaLimitChecker] 진행률 {currentProgress:P0} < {limitCheckStartProgress:P0} - 체크 스킵");
+
+                return;
+            }
+        }
+
         LimitCheckResult previousLeftResult = currentLeftResult;
         LimitCheckResult previousRightResult = currentRightResult;
 
@@ -605,6 +632,26 @@ public class ChunaLimitChecker : MonoBehaviour
         return angle;
     }
 
+    /// <summary>
+    /// 현재 진행률 가져오기 (ChunaPathEvaluator에서)
+    /// </summary>
+    private float GetCurrentProgress()
+    {
+        if (pathEvaluator == null)
+        {
+            // PathEvaluator 자동 탐색
+            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+        }
+
+        if (pathEvaluator != null)
+        {
+            return pathEvaluator.GetCurrentProgress();
+        }
+
+        // PathEvaluator 없으면 항상 체크 (1.0 반환)
+        return 1.0f;
+    }
+
     // ========== Public API ==========
 
     /// <summary>
@@ -615,6 +662,35 @@ public class ChunaLimitChecker : MonoBehaviour
         limitData = data;
         if (showDebugLogs)
             Debug.Log($"[ChunaLimitChecker] 한계 데이터 설정: {data?.ProcedureName ?? "null"}");
+    }
+
+    /// <summary>
+    /// 회전 기준점을 핸드 데이터의 첫 프레임으로 설정
+    /// </summary>
+    public void SetReferenceFromPoseFrame(Quaternion leftRootRotation, Quaternion rightRootRotation)
+    {
+        leftHandStartRotation = leftRootRotation;
+        rightHandStartRotation = rightRootRotation;
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[ChunaLimitChecker] 회전 기준점 설정 (핸드 데이터 기준) - L:{leftRootRotation.eulerAngles}, R:{rightRootRotation.eulerAngles}</color>");
+    }
+
+    /// <summary>
+    /// PathEvaluator 참조 설정
+    /// </summary>
+    public void SetPathEvaluator(ChunaPathEvaluator evaluator)
+    {
+        pathEvaluator = evaluator;
+    }
+
+    /// <summary>
+    /// 진행률 기반 체크 설정
+    /// </summary>
+    public void SetProgressBasedCheck(bool enabled, float startProgress = 0.5f)
+    {
+        useProgressBasedCheck = enabled;
+        limitCheckStartProgress = startProgress;
     }
 
     /// <summary>
@@ -679,18 +755,20 @@ public class ChunaLimitChecker : MonoBehaviour
         if (!drawDebugGizmos || !isInitialized)
             return;
 
-        // 왼손 상태 표시
-        if (leftHandRoot != null)
+        // 왼손 상태 표시 (손바닥 위치)
+        Vector3 leftPalmPos = GetPalmPosition(playerLeftHand, leftHandRoot);
+        if (leftPalmPos != Vector3.zero)
         {
             Gizmos.color = GetColorForStatus(currentLeftResult.overallStatus);
-            Gizmos.DrawWireSphere(leftHandRoot.position, 0.05f);
+            Gizmos.DrawWireSphere(leftPalmPos, 0.05f);
         }
 
-        // 오른손 상태 표시
-        if (rightHandRoot != null)
+        // 오른손 상태 표시 (손바닥 위치)
+        Vector3 rightPalmPos = GetPalmPosition(playerRightHand, rightHandRoot);
+        if (rightPalmPos != Vector3.zero)
         {
             Gizmos.color = GetColorForStatus(currentRightResult.overallStatus);
-            Gizmos.DrawWireSphere(rightHandRoot.position, 0.05f);
+            Gizmos.DrawWireSphere(rightPalmPos, 0.05f);
         }
 
         // 기준점 표시
@@ -699,6 +777,47 @@ public class ChunaLimitChecker : MonoBehaviour
             Gizmos.color = Color.white;
             Gizmos.DrawWireCube(referencePoint.position, Vector3.one * 0.1f);
         }
+    }
+
+    /// <summary>
+    /// 손바닥 위치 가져오기 (Middle1 관절 기준)
+    /// </summary>
+    private Vector3 GetPalmPosition(HandVisual hand, Transform handRoot)
+    {
+        if (hand == null || hand.Joints == null)
+            return handRoot != null ? handRoot.position : Vector3.zero;
+
+        // Middle1 관절 인덱스 (일반적으로 9번 = HandMiddle1)
+        // Oculus Hand Tracking: 0=Wrist, 2=Thumb0, 6=Index1, 9=Middle1, 12=Ring1, 15=Pinky1
+        int middleProximalIndex = 9;  // HandMiddle1
+
+        if (hand.Joints.Count > middleProximalIndex && hand.Joints[middleProximalIndex] != null)
+        {
+            return hand.Joints[middleProximalIndex].position;
+        }
+
+        // 대안: 손가락 근위 관절들의 평균
+        List<Vector3> proximalPositions = new List<Vector3>();
+        int[] proximalIndices = { 6, 9, 12, 15 };  // Index1, Middle1, Ring1, Pinky1
+
+        foreach (int idx in proximalIndices)
+        {
+            if (hand.Joints.Count > idx && hand.Joints[idx] != null)
+            {
+                proximalPositions.Add(hand.Joints[idx].position);
+            }
+        }
+
+        if (proximalPositions.Count > 0)
+        {
+            Vector3 avg = Vector3.zero;
+            foreach (var pos in proximalPositions)
+                avg += pos;
+            return avg / proximalPositions.Count;
+        }
+
+        // Fallback: handRoot 위치
+        return handRoot != null ? handRoot.position : Vector3.zero;
     }
 
     private Color GetColorForStatus(LimitStatus status)
