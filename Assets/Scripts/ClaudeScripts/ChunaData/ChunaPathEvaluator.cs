@@ -326,9 +326,32 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 단계 변경: {oldPhase} → {newPhase}</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] ========== 단계 변경: {oldPhase} → {newPhase} ==========</color>");
 
         OnPhaseChanged?.Invoke(newPhase);
+
+        // 단계별 안내
+        if (showDebugLogs)
+        {
+            switch (newPhase)
+            {
+                case EvaluationPhase.WaitingForStart:
+                    Debug.Log("<color=yellow>시작 위치로 이동하세요!</color>");
+                    break;
+                case EvaluationPhase.StartHold:
+                    Debug.Log("<color=yellow>시작 위치에서 2초간 유지하세요! (홀드 타이머 시작)</color>");
+                    break;
+                case EvaluationPhase.Moving:
+                    Debug.Log("<color=green>가이드를 따라 움직이세요!</color>");
+                    break;
+                case EvaluationPhase.MidHold:
+                    Debug.Log("<color=yellow>중간 지점에서 3초간 멈추세요! (홀드 타이머 시작)</color>");
+                    break;
+                case EvaluationPhase.Completed:
+                    Debug.Log("<color=green>평가 완료!</color>");
+                    break;
+            }
+        }
     }
 
     /// <summary>
@@ -339,11 +362,22 @@ public class ChunaPathEvaluator : MonoBehaviour
         Vector3? leftStart = GetFirstCheckpointPosition(true);
         Vector3? rightStart = GetFirstCheckpointPosition(false);
 
+        // 체크포인트가 없으면 경고
+        if (!leftStart.HasValue && !rightStart.HasValue)
+        {
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+                Debug.Log("<color=orange>[WaitingForStart] 체크포인트가 없음! 바로 StartHold로 진행</color>");
+        }
+
         bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
         bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            Debug.Log($"[WaitingForStart] 왼손:{leftNear}, 오른손:{rightNear}");
+        {
+            float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
+            float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
+            Debug.Log($"[WaitingForStart] 왼손:{leftNear}({leftDist:F3}m), 오른손:{rightNear}({rightDist:F3}m), 반경:{startPositionRadius:F3}m");
+        }
 
         if (leftNear && rightNear)
         {
@@ -371,17 +405,31 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
         bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
 
+        // 디버그: 모든 조건 출력 (5프레임마다)
+        if (showDebugLogs && Time.frameCount % 5 == 0)
+        {
+            float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
+            float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
+            Debug.Log($"[StartHold] 정지:{bothStopped}(L:{leftVel:F3}/R:{rightVel:F3}), " +
+                      $"위치OK(L:{leftNear}[{leftDist:F2}m]/R:{rightNear}[{rightDist:F2}m]), " +
+                      $"홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+        }
+
         if (bothStopped && leftNear && rightNear)
         {
             phaseHoldTime += Time.deltaTime;
-            OnHoldProgressChanged?.Invoke(phaseHoldTime, startHoldDuration);
 
-            if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[StartHold] 홀드 진행: {phaseHoldTime:F1}s / {startHoldDuration:F1}s");
+            // 홀드 진행률 이벤트 발생 (매 프레임)
+            if (showDebugLogs && phaseHoldTime < 0.1f)
+                Debug.Log($"<color=green>[StartHold] 홀드 시작! OnHoldProgressChanged 이벤트 발생</color>");
+
+            OnHoldProgressChanged?.Invoke(phaseHoldTime, startHoldDuration);
 
             if (phaseHoldTime >= startHoldDuration)
             {
                 // 시작 홀드 완료 → 이동 단계로
+                Debug.Log("<color=green>[StartHold] 홀드 완료! 이동 단계로 진행</color>");
+                OnHoldCompleted?.Invoke();      // 홀드 완료 이벤트
                 OnStartHoldComplete?.Invoke();  // "움직이세요" 안내
                 StartGuideHandPlayback();       // 가이드 핸드 재생 시작
                 ChangePhase(EvaluationPhase.Moving);
@@ -971,8 +1019,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             limitChecker.OnViolationDetected += HandleLimitViolation;
         }
 
-        // 가이드 핸드 재생 시작
-        StartGuideHandPlayback();
+        // 가이드 핸드는 StartHold 완료 후에 재생됨 (UpdateStartHold에서 호출)
+        // 여기서는 재생하지 않음!
 
         // 목 컨트롤러 활성화 (시작 위치 체크 불필요 시 즉시 활성화)
         if (neckController != null && !requireNearStartToBegin)
