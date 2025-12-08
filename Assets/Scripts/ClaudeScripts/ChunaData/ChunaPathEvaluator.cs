@@ -58,7 +58,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float guidePlaybackSpeed = 1f;
 
     [Tooltip("가이드 핸드 루프 재생")]
-    [SerializeField] private bool loopGuideHands = false;
+    [SerializeField] private bool loopGuideHands = true;
+
+    [Tooltip("루프 재생 시 대기 시간 (초)")]
+    [SerializeField] private float loopDelaySeconds = 1f;
 
     [Tooltip("시작 위치 대기 중 첫 프레임 표시")]
     [SerializeField] private bool showFirstFrameWhileWaiting = true;
@@ -1708,6 +1711,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 if (loopGuideHands)
                 {
+                    // 1회 재생 완료 후 대기 시간
+                    if (loopDelaySeconds > 0f)
+                    {
+                        if (showDebugLogs)
+                            Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 1회 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
+                        yield return new WaitForSeconds(loopDelaySeconds);
+                    }
                     currentGuideFrameIndex = 0;
                 }
                 else
