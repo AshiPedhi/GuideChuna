@@ -354,6 +354,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         currentPhase = newPhase;
         phaseHoldTime = 0f;
 
+        // Moving 단계 시작 시 프레임 인덱스 초기화
+        if (newPhase == EvaluationPhase.Moving)
+        {
+            userHandFrameIndex = 0;
+            userHandFrameRatio = 0f;
+
+            if (showDebugLogs)
+                Debug.Log("<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작)</color>");
+        }
+
         if (showDebugLogs)
             Debug.Log($"<color=cyan>[ChunaPathEvaluator] ========== 단계 변경: {oldPhase} → {newPhase} ==========</color>");
 
@@ -615,11 +625,21 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
+    /// Moving 단계에서만 업데이트하며, 앞으로만 진행 가능 (중간으로 점프 불가)
     /// </summary>
     private void UpdateUserHandFrame()
     {
         if (loadedFrames == null || loadedFrames.Count == 0) return;
         if (playerRightHand == null) return;
+
+        // Moving 또는 MidHold 단계에서만 프레임 업데이트
+        if (currentPhase != EvaluationPhase.Moving && currentPhase != EvaluationPhase.MidHold)
+        {
+            // 다른 단계에서는 프레임 0으로 유지
+            userHandFrameIndex = 0;
+            userHandFrameRatio = 0f;
+            return;
+        }
 
         Vector3 rightHandPos = playerRightHand.transform.position;
 
@@ -630,11 +650,17 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        // 가장 가까운 프레임 찾기
-        float minDistance = float.MaxValue;
-        int closestFrame = 0;
+        // 현재 프레임 근처에서만 검색 (앞으로만 진행, 최대 30프레임 앞까지)
+        int searchStart = userHandFrameIndex;
+        int searchEnd = Mathf.Min(loadedFrames.Count, userHandFrameIndex + 30);
 
-        for (int i = 0; i < loadedFrames.Count; i++)
+        float minDistance = float.MaxValue;
+        int closestFrame = userHandFrameIndex;  // 기본값은 현재 프레임 유지
+
+        // 프레임 인정 거리 임계값 (이 거리 이내에 있어야 해당 프레임으로 인정)
+        float frameAcceptanceRadius = checkpointRadius * 1.5f;  // 체크포인트 반경의 1.5배
+
+        for (int i = searchStart; i < searchEnd; i++)
         {
             Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
             float dist = Vector3.Distance(rightHandPos, framePos);
@@ -646,10 +672,18 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 변경 감지
+        // 변경 감지 (앞으로만 진행 가능, 거리 임계값 이내에 있을 때만)
         int prevFrame = userHandFrameIndex;
-        userHandFrameIndex = closestFrame;
-        userHandFrameRatio = Mathf.Clamp01((float)closestFrame / loadedFrames.Count);
+        if (closestFrame > userHandFrameIndex && minDistance <= frameAcceptanceRadius)
+        {
+            userHandFrameIndex = closestFrame;
+
+            if (showDebugLogs && Time.frameCount % 30 == 0)
+                Debug.Log($"[Frame] 프레임 진행: {prevFrame} → {userHandFrameIndex} (거리: {minDistance:F3}m)");
+        }
+        // 거리가 멀거나 뒤로 가려고 하면 현재 프레임 유지
+
+        userHandFrameRatio = Mathf.Clamp01((float)userHandFrameIndex / Mathf.Max(1, loadedFrames.Count - 1));
 
         // 프레임 변경 시 이벤트 발생
         if (prevFrame != userHandFrameIndex)
