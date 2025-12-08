@@ -168,94 +168,6 @@ public class DeductionRecord : MonoBehaviour
     }
 
     /// <summary>
-    /// 위반으로 인한 감점 추가
-    /// </summary>
-    public void AddDeduction(ChunaLimitChecker.ViolationEvent violation)
-    {
-        if (currentSession == null || currentSession.isCompleted)
-        {
-            if (showDebugLogs)
-                Debug.LogWarning("[DeductionRecord] 세션이 시작되지 않았거나 이미 종료됨");
-            return;
-        }
-
-        // 기본 감점 계산
-        float baseDeduction = GetBaseDeduction(violation.severity);
-
-        // 배율 계산
-        float multiplier = 1f;
-
-        // 연속 위반 배율
-        if (Time.time - lastViolationTime < 2f) // 2초 이내 연속 위반
-        {
-            consecutiveViolationCount++;
-            multiplier *= Mathf.Pow(consecutiveViolationMultiplier, consecutiveViolationCount - 1);
-        }
-        else
-        {
-            consecutiveViolationCount = 1;
-        }
-
-        // 같은 유형 반복 위반 배율
-        if (violation.violationType == lastViolationType && lastViolationType != ViolationType.None)
-        {
-            multiplier *= repeatViolationMultiplier;
-        }
-
-        // 최종 감점 계산
-        float finalDeduction = baseDeduction * multiplier;
-
-        // 감점 항목 생성
-        DeductionEntry entry = new DeductionEntry
-        {
-            entryId = currentSession.deductions.Count + 1,
-            timestamp = violation.timestamp,
-            elapsedTime = Time.time - sessionStartTime,
-            violationType = violation.violationType,
-            severity = violation.severity,
-            baseDeduction = baseDeduction,
-            multiplier = multiplier,
-            finalDeduction = finalDeduction,
-            isLeftHand = violation.isLeftHand,
-            jointId = violation.jointId,
-            jointName = violation.jointName,
-            limitRatio = violation.limitRatio,
-            violationValue = violation.violationValue,
-            limitValue = violation.limitValue,
-            description = GenerateDescription(violation)
-        };
-
-        // 기록 추가
-        currentSession.deductions.Add(entry);
-        currentSession.totalDeductions++;
-        currentSession.totalDeductionAmount += finalDeduction;
-
-        // 위반 유형별 카운트
-        if (!currentSession.violationCounts.ContainsKey(violation.violationType))
-        {
-            currentSession.violationCounts[violation.violationType] = 0;
-        }
-        currentSession.violationCounts[violation.violationType]++;
-
-        // 상태 업데이트
-        lastViolationTime = Time.time;
-        lastViolationType = violation.violationType;
-
-        // 이벤트 발생
-        OnDeductionAdded?.Invoke(entry);
-        OnScoreChanged?.Invoke(GetCurrentScore());
-
-        if (showDebugLogs)
-        {
-            string handName = violation.isLeftHand ? "왼손" : "오른손";
-            Debug.Log($"<color=red>[DeductionRecord] 감점: -{finalDeduction:F1}점</color>");
-            Debug.Log($"  유형: {violation.violationType}, 심각도: {violation.severity}");
-            Debug.Log($"  손: {handName}, 관절: {violation.jointName}");
-            Debug.Log($"  배율: x{multiplier:F2} (연속:{consecutiveViolationCount})");
-        }
-    }
-
-    /// <summary>
     /// 수동 감점 추가
     /// </summary>
     public void AddManualDeduction(float amount, string reason, ViolationType type = ViolationType.None)
@@ -375,38 +287,6 @@ public class DeductionRecord : MonoBehaviour
         if (score >= 65f) return "C";
         if (score >= 60f) return "D";
         return "F";
-    }
-
-    /// <summary>
-    /// 설명 문자열 생성
-    /// </summary>
-    private string GenerateDescription(ChunaLimitChecker.ViolationEvent violation)
-    {
-        string handName = violation.isLeftHand ? "왼손" : "오른손";
-        string jointName = string.IsNullOrEmpty(violation.jointName) ? "손목" : violation.jointName;
-
-        string violationDesc = violation.violationType switch
-        {
-            ViolationType.OverFlexion => "과도한 굴곡",
-            ViolationType.OverExtension => "과도한 신전",
-            ViolationType.OverRotation => "과도한 회전",
-            ViolationType.OverLateralFlexion => "과도한 측굴",
-            ViolationType.OverTranslation => "과도한 이동",
-            ViolationType.OverSpeed => "과도한 속도",
-            ViolationType.OverForce => "과도한 힘",
-            _ => "위반"
-        };
-
-        string severityDesc = violation.severity switch
-        {
-            ViolationSeverity.Minor => "경미한",
-            ViolationSeverity.Moderate => "중간 수준의",
-            ViolationSeverity.Severe => "심각한",
-            ViolationSeverity.Dangerous => "위험한",
-            _ => ""
-        };
-
-        return $"{handName} {jointName}에서 {severityDesc} {violationDesc} 감지 (한계의 {violation.limitRatio:P0})";
     }
 
     /// <summary>
