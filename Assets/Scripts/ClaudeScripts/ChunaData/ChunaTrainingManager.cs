@@ -1,13 +1,11 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Oculus.Interaction;
 
 /// <summary>
-/// 추나 훈련 통합 관리자
-/// 한계 기반 검사, 감점 기록, 되돌리기 기능을 통합 관리
-/// 기존 HandPoseTrainingController와 함께 사용 가능
+/// 추나 훈련 통합 관리자 (간소화 버전)
+/// ChunaLimitChecker의 프레임 비율 기반 평가와 연동
 /// </summary>
 public class ChunaTrainingManager : MonoBehaviour
 {
@@ -23,14 +21,11 @@ public class ChunaTrainingManager : MonoBehaviour
 
     [Header("=== 모듈 참조 ===")]
     [SerializeField] private ChunaLimitChecker limitChecker;
-    [SerializeField] private DeductionRecord deductionRecord;
-    [SerializeField] private SafePositionManager safePositionManager;
     [SerializeField] private HandPoseTrainingController pathTrainingController;
 
     [Header("=== UI 참조 ===")]
     [SerializeField] private Text scoreText;
     [SerializeField] private Text statusText;
-    [SerializeField] private Text violationText;
     [SerializeField] private Image leftHandStatusImage;
     [SerializeField] private Image rightHandStatusImage;
     [SerializeField] private GameObject warningPanel;
@@ -59,12 +54,12 @@ public class ChunaTrainingManager : MonoBehaviour
     private float lastUIUpdateTime;
 
     // 통계
-    private int sessionViolationCount;
     private float sessionStartTime;
+    private float currentScore = 100f;
 
     // 이벤트
     public event Action OnTrainingStarted;
-    public event Action<DeductionRecord.SessionRecord> OnTrainingEnded;
+    public event Action<float> OnTrainingEnded;  // 최종 점수
     public event Action<LimitStatus, LimitStatus> OnStatusChanged;  // left, right
 
     /// <summary>
@@ -84,13 +79,11 @@ public class ChunaTrainingManager : MonoBehaviour
 
     void Awake()
     {
-        // 모듈 자동 찾기
         FindModules();
     }
 
     void Start()
     {
-        // 이벤트 연결
         ConnectEvents();
 
         if (autoInitialize)
@@ -104,7 +97,6 @@ public class ChunaTrainingManager : MonoBehaviour
         if (!isTrainingActive)
             return;
 
-        // UI 업데이트
         if (Time.time - lastUIUpdateTime >= uiUpdateInterval)
         {
             lastUIUpdateTime = Time.time;
@@ -125,35 +117,14 @@ public class ChunaTrainingManager : MonoBehaviour
         if (limitChecker == null)
             limitChecker = GetComponent<ChunaLimitChecker>() ?? FindObjectOfType<ChunaLimitChecker>();
 
-        if (deductionRecord == null)
-            deductionRecord = GetComponent<DeductionRecord>() ?? FindObjectOfType<DeductionRecord>();
-
-        if (safePositionManager == null)
-            safePositionManager = GetComponent<SafePositionManager>() ?? FindObjectOfType<SafePositionManager>();
-
         if (pathTrainingController == null)
             pathTrainingController = FindObjectOfType<HandPoseTrainingController>();
 
-        // 모듈이 없으면 생성
         if (limitChecker == null)
         {
             limitChecker = gameObject.AddComponent<ChunaLimitChecker>();
             if (showDebugLogs)
                 Debug.Log("[ChunaTrainingManager] ChunaLimitChecker 자동 생성됨");
-        }
-
-        if (deductionRecord == null)
-        {
-            deductionRecord = gameObject.AddComponent<DeductionRecord>();
-            if (showDebugLogs)
-                Debug.Log("[ChunaTrainingManager] DeductionRecord 자동 생성됨");
-        }
-
-        if (safePositionManager == null)
-        {
-            safePositionManager = gameObject.AddComponent<SafePositionManager>();
-            if (showDebugLogs)
-                Debug.Log("[ChunaTrainingManager] SafePositionManager 자동 생성됨");
         }
     }
 
@@ -166,18 +137,6 @@ public class ChunaTrainingManager : MonoBehaviour
         {
             limitChecker.OnLimitStatusChanged += HandleLimitStatusChanged;
         }
-
-        if (deductionRecord != null)
-        {
-            deductionRecord.OnScoreChanged += HandleScoreChanged;
-            deductionRecord.OnDeductionAdded += HandleDeductionAdded;
-        }
-
-        if (safePositionManager != null)
-        {
-            safePositionManager.OnRevertStarted += HandleRevertStarted;
-            safePositionManager.OnRevertCompleted += HandleRevertCompleted;
-        }
     }
 
     /// <summary>
@@ -189,18 +148,6 @@ public class ChunaTrainingManager : MonoBehaviour
         {
             limitChecker.OnLimitStatusChanged -= HandleLimitStatusChanged;
         }
-
-        if (deductionRecord != null)
-        {
-            deductionRecord.OnScoreChanged -= HandleScoreChanged;
-            deductionRecord.OnDeductionAdded -= HandleDeductionAdded;
-        }
-
-        if (safePositionManager != null)
-        {
-            safePositionManager.OnRevertStarted -= HandleRevertStarted;
-            safePositionManager.OnRevertCompleted -= HandleRevertCompleted;
-        }
     }
 
     /// <summary>
@@ -211,7 +158,6 @@ public class ChunaTrainingManager : MonoBehaviour
         if (showDebugLogs)
             Debug.Log("<color=cyan>[ChunaTrainingManager] 초기화 중...</color>");
 
-        // 기본 한계 데이터 설정
         if (currentLimitData == null)
         {
             SetProcedureType(ChunaType.IsometricExercise);
@@ -228,7 +174,6 @@ public class ChunaTrainingManager : MonoBehaviour
     {
         currentProcedureType = procedureType;
 
-        // 해당 시술의 한계 데이터 가져오기
         currentLimitData = procedureType switch
         {
             ChunaType.HealthySideRotation => healthySideRotationLimit,
@@ -237,13 +182,6 @@ public class ChunaTrainingManager : MonoBehaviour
             ChunaType.LateralFlexion => lateralFlexionLimit,
             _ => isometricExerciseLimit
         };
-
-        // 모듈에 한계 데이터 설정 (프레임 비율 기반 시스템에서는 LimitChecker에 설정 불필요)
-        if (deductionRecord != null)
-            deductionRecord.SetLimitData(currentLimitData);
-
-        if (safePositionManager != null)
-            safePositionManager.SetLimitData(currentLimitData);
 
         if (showDebugLogs)
         {
@@ -267,30 +205,15 @@ public class ChunaTrainingManager : MonoBehaviour
         SetProcedureType(procedureType);
 
         isTrainingActive = true;
-        sessionViolationCount = 0;
         sessionStartTime = Time.time;
+        currentScore = 100f;
 
-        // 감점 기록 세션 시작
-        if (deductionRecord != null)
-        {
-            string procedureName = currentLimitData != null ? currentLimitData.ProcedureName : procedureType.ToString();
-            deductionRecord.StartSession(procedureName, procedureType);
-        }
-
-        // 한계 체커 초기화 및 시작
         if (limitChecker != null)
         {
             limitChecker.Initialize();
             limitChecker.SetEnabled(true);
         }
 
-        // 안전 위치 관리자 리셋
-        if (safePositionManager != null)
-        {
-            safePositionManager.Reset();
-        }
-
-        // UI 초기화
         ShowWarningPanel(false);
         UpdateUI();
 
@@ -311,7 +234,6 @@ public class ChunaTrainingManager : MonoBehaviour
         }
         else
         {
-            // CSV 파일 이름으로 매칭
             ChunaType matched = procedureTypeName switch
             {
                 "건측회전" => ChunaType.HealthySideRotation,
@@ -327,42 +249,34 @@ public class ChunaTrainingManager : MonoBehaviour
     /// <summary>
     /// 훈련 종료
     /// </summary>
-    public DeductionRecord.SessionRecord EndTraining()
+    public float EndTraining()
     {
         if (!isTrainingActive)
         {
             if (showDebugLogs)
                 Debug.LogWarning("[ChunaTrainingManager] 훈련이 진행 중이 아닙니다.");
-            return null;
+            return 0f;
         }
 
         isTrainingActive = false;
 
-        // 한계 체커 정지
         if (limitChecker != null)
         {
             limitChecker.SetEnabled(false);
         }
 
-        // 세션 종료 및 결과 가져오기
-        DeductionRecord.SessionRecord result = null;
-        if (deductionRecord != null)
-        {
-            result = deductionRecord.EndSession();
-        }
+        float duration = Time.time - sessionStartTime;
 
-        // 결과 출력
-        if (showDebugLogs && result != null)
+        if (showDebugLogs)
         {
             Debug.Log("<color=green>========== 훈련 결과 ==========</color>");
-            Debug.Log($"최종 점수: {result.finalScore:F1}점 ({result.grade})");
-            Debug.Log($"총 위반: {result.totalDeductions}회");
-            Debug.Log($"소요 시간: {result.duration:F1}초");
+            Debug.Log($"최종 점수: {currentScore:F1}점");
+            Debug.Log($"소요 시간: {duration:F1}초");
         }
 
-        OnTrainingEnded?.Invoke(result);
+        OnTrainingEnded?.Invoke(currentScore);
 
-        return result;
+        return currentScore;
     }
 
     /// <summary>
@@ -403,16 +317,10 @@ public class ChunaTrainingManager : MonoBehaviour
             EndTraining();
         }
 
-        if (deductionRecord != null)
-            deductionRecord.ResetSession();
-
-        if (safePositionManager != null)
-            safePositionManager.Reset();
-
         if (limitChecker != null)
             limitChecker.Reset();
 
-        sessionViolationCount = 0;
+        currentScore = 100f;
         UpdateUI();
 
         if (showDebugLogs)
@@ -423,45 +331,14 @@ public class ChunaTrainingManager : MonoBehaviour
 
     private void HandleLimitStatusChanged(ChunaLimitChecker.LimitCheckResult leftResult, ChunaLimitChecker.LimitCheckResult rightResult)
     {
-        // 안전 위치 관리자에 상태 업데이트
-        if (safePositionManager != null)
-        {
-            safePositionManager.UpdateLimitStatus(true, leftResult.overallStatus);
-            safePositionManager.UpdateLimitStatus(false, rightResult.overallStatus);
-        }
-
         OnStatusChanged?.Invoke(leftResult.overallStatus, rightResult.overallStatus);
-    }
-
-    private void HandleScoreChanged(float newScore)
-    {
-        UpdateScoreUI(newScore);
-    }
-
-    private void HandleDeductionAdded(DeductionRecord.DeductionEntry entry)
-    {
-        UpdateViolationUI(entry);
-    }
-
-    private void HandleRevertStarted(bool isLeftHand, SafePositionManager.SafePositionRecord targetPosition)
-    {
-        string handName = isLeftHand ? "왼손" : "오른손";
-        ShowWarning($"{handName}을 안전 위치로 되돌려주세요!");
-    }
-
-    private void HandleRevertCompleted(bool isLeftHand)
-    {
-        ShowWarningPanel(false);
     }
 
     // ========== UI 업데이트 ==========
 
     private void UpdateUI()
     {
-        if (deductionRecord != null)
-        {
-            UpdateScoreUI(deductionRecord.GetCurrentScore());
-        }
+        UpdateScoreUI(currentScore);
 
         if (limitChecker != null)
         {
@@ -494,14 +371,6 @@ public class ChunaTrainingManager : MonoBehaviour
         if (rightHandStatusImage != null)
         {
             rightHandStatusImage.color = GetStatusColor(rightResult.overallStatus);
-        }
-    }
-
-    private void UpdateViolationUI(DeductionRecord.DeductionEntry entry)
-    {
-        if (violationText != null)
-        {
-            violationText.text = $"위반: {sessionViolationCount}회\n최근: -{entry.finalDeduction:F1}점";
         }
     }
 
@@ -550,33 +419,6 @@ public class ChunaTrainingManager : MonoBehaviour
         };
     }
 
-    private string GetViolationDescription(ViolationType type)
-    {
-        return type switch
-        {
-            ViolationType.OverFlexion => "과굴곡",
-            ViolationType.OverExtension => "과신전",
-            ViolationType.OverRotation => "과회전",
-            ViolationType.OverLateralFlexion => "과측굴",
-            ViolationType.OverTranslation => "과이동",
-            ViolationType.OverSpeed => "과속",
-            ViolationType.OverForce => "과압력",
-            _ => "위반"
-        };
-    }
-
-    private string GetSeverityDescription(ViolationSeverity severity)
-    {
-        return severity switch
-        {
-            ViolationSeverity.Minor => "경미한",
-            ViolationSeverity.Moderate => "중간 수준의",
-            ViolationSeverity.Severe => "심각한",
-            ViolationSeverity.Dangerous => "위험한",
-            _ => ""
-        };
-    }
-
     // ========== Public API ==========
 
     /// <summary>
@@ -584,7 +426,7 @@ public class ChunaTrainingManager : MonoBehaviour
     /// </summary>
     public float GetCurrentScore()
     {
-        return deductionRecord?.GetCurrentScore() ?? 100f;
+        return currentScore;
     }
 
     /// <summary>
@@ -633,14 +475,6 @@ public class ChunaTrainingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 세션 위반 횟수 가져오기
-    /// </summary>
-    public int GetSessionViolationCount()
-    {
-        return sessionViolationCount;
-    }
-
-    /// <summary>
     /// 세션 경과 시간 가져오기
     /// </summary>
     public float GetSessionElapsedTime()
@@ -649,26 +483,11 @@ public class ChunaTrainingManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 결과 리포트 생성
-    /// </summary>
-    public string GenerateReport()
-    {
-        return deductionRecord?.GenerateSummaryReport() ?? "데이터 없음";
-    }
-
-    /// <summary>
     /// 한계 데이터 수동 설정
     /// </summary>
     public void SetLimitData(ChunaLimitData data)
     {
         currentLimitData = data;
-
-        // 프레임 비율 기반 시스템에서는 LimitChecker에 설정 불필요
-        if (deductionRecord != null)
-            deductionRecord.SetLimitData(data);
-
-        if (safePositionManager != null)
-            safePositionManager.SetLimitData(data);
 
         if (showDebugLogs)
             Debug.Log($"[ChunaTrainingManager] 한계 데이터 수동 설정: {data?.ProcedureName ?? "null"}");

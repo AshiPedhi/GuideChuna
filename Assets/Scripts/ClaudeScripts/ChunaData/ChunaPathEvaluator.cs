@@ -33,7 +33,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private HandVisual playerRightHand;
 
     [Header("=== 모듈 참조 ===")]
-    [SerializeField] private DeductionRecord deductionRecord;
     [SerializeField] private HandPoseComparator poseComparator;
     [SerializeField] private ChunaLimitChecker limitChecker;
     [SerializeField] private NeckVRControllerOptimized neckController;
@@ -1022,9 +1021,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void FindModules()
     {
-        if (deductionRecord == null)
-            deductionRecord = FindObjectOfType<DeductionRecord>();
-
         if (limitChecker == null)
             limitChecker = FindObjectOfType<ChunaLimitChecker>();
 
@@ -1245,12 +1241,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 모든 체크포인트 활성화 (관문이 아닌 지표이므로 전부 활성화)
         ActivateAllCheckpoints();
 
-        // 감점 기록 시작
-        if (deductionRecord != null)
-        {
-            deductionRecord.StartSession(currentProcedureName);
-        }
-
         // 리밋 체커 시작
         if (limitChecker != null)
         {
@@ -1316,12 +1306,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (limitChecker != null)
         {
             limitChecker.SetEnabled(false);
-        }
-
-        // 감점 기록 종료
-        if (deductionRecord != null)
-        {
-            deductionRecord.EndSession();
         }
 
         // 가이드 핸드 중지
@@ -1394,11 +1378,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (neckController != null)
         {
             neckController.Disable();
-        }
-
-        if (deductionRecord != null)
-        {
-            deductionRecord.ResetSession();
         }
 
         if (showDebugLogs)

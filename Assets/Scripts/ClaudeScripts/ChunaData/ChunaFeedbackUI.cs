@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// - 손 이미지 색상 (유사도/경로 이탈 기반)
 /// - 체크포인트 진행률
 /// - 현재 유사도
-/// - 감점 정보
+/// - 점수 정보
 ///
 /// 각 단계별 결과를 저장하여 최종 결과표에서 확인 가능
 /// </summary>
@@ -19,7 +19,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     [Header("=== 평가 시스템 참조 ===")]
     [SerializeField] private ChunaPathEvaluator pathEvaluator;
     [SerializeField] private ChunaPathEvaluatorBridge evaluatorBridge;
-    [SerializeField] private DeductionRecord deductionRecord;
 
     [Header("=== 손 이미지 (유사도 색상) ===")]
     [SerializeField] private Image leftHandImage;
@@ -39,7 +38,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     [Header("=== 점수 UI ===")]
     [SerializeField] private Text scoreText;
     [SerializeField] private Text gradeText;
-    [SerializeField] private Text deductionText;
 
     [Header("=== 경로 이탈 경고 ===")]
     [SerializeField] private GameObject pathDeviationWarning;
@@ -143,9 +141,6 @@ public class ChunaFeedbackUI : MonoBehaviour
 
         if (evaluatorBridge == null)
             evaluatorBridge = FindObjectOfType<ChunaPathEvaluatorBridge>();
-
-        if (deductionRecord == null)
-            deductionRecord = FindObjectOfType<DeductionRecord>();
     }
 
     /// <summary>
@@ -160,11 +155,6 @@ public class ChunaFeedbackUI : MonoBehaviour
             pathEvaluator.OnCheckpointPassed += OnCheckpointPassed;
             pathEvaluator.OnProgressChanged += OnProgressChanged;
         }
-
-        if (deductionRecord != null)
-        {
-            deductionRecord.OnScoreChanged += OnScoreChanged;
-        }
     }
 
     /// <summary>
@@ -178,11 +168,6 @@ public class ChunaFeedbackUI : MonoBehaviour
             pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompleted;
             pathEvaluator.OnCheckpointPassed -= OnCheckpointPassed;
             pathEvaluator.OnProgressChanged -= OnProgressChanged;
-        }
-
-        if (deductionRecord != null)
-        {
-            deductionRecord.OnScoreChanged -= OnScoreChanged;
         }
     }
 
@@ -207,7 +192,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     {
         if (pathEvaluator == null || !pathEvaluator.IsEvaluating) return;
 
-        // 유사도 텍스트 업데이트
         UpdateSimilarityTexts();
     }
 
@@ -387,14 +371,6 @@ public class ChunaFeedbackUI : MonoBehaviour
         }
     }
 
-    private void UpdateDeductionDisplay(float totalDeduction)
-    {
-        if (deductionText != null)
-        {
-            deductionText.text = totalDeduction > 0 ? $"-{totalDeduction:F1}" : "";
-        }
-    }
-
     private string GetGradeFromScore(float score)
     {
         if (score >= 95f) return "S";
@@ -414,7 +390,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     {
         isActive = true;
 
-        // 새 단계 결과 시작
         currentStepResult = new StepResult
         {
             startTime = DateTime.Now,
@@ -441,7 +416,6 @@ public class ChunaFeedbackUI : MonoBehaviour
 
         if (currentStepResult != null && session != null)
         {
-            // 결과 저장
             currentStepResult.endTime = DateTime.Now;
             currentStepResult.duration = session.duration;
             currentStepResult.passedCheckpoints = session.passedCheckpoints;
@@ -450,7 +424,6 @@ public class ChunaFeedbackUI : MonoBehaviour
             currentStepResult.grade = session.grade;
             currentStepResult.violationCount = session.limitViolationCount;
 
-            // 체크포인트별 결과 복사
             foreach (var record in session.checkpointRecords)
             {
                 currentStepResult.checkpointResults.Add(new StepResult.CheckpointResult
@@ -458,12 +431,11 @@ public class ChunaFeedbackUI : MonoBehaviour
                     index = record.index,
                     name = record.name,
                     similarity = record.similarity,
-                    passed = true,  // 터치된 체크포인트는 통과로 간주
+                    passed = true,
                     timeToPass = record.touchTime
                 });
             }
 
-            // 리스트에 추가
             stepResults.Add(currentStepResult);
 
             Debug.Log($"[ChunaFeedbackUI] 단계 결과 저장 완료 (총 {stepResults.Count}개 단계)");
@@ -471,32 +443,18 @@ public class ChunaFeedbackUI : MonoBehaviour
             Debug.Log($"  - 체크포인트: {currentStepResult.passedCheckpoints}/{currentStepResult.totalCheckpoints}");
         }
 
-        // 점수 표시 업데이트
         UpdateScoreDisplay(session?.finalScore ?? 100f);
     }
 
     private void OnCheckpointPassed(PathCheckpoint checkpoint, float similarity)
     {
         UpdateCurrentCheckpoint($"✓ {checkpoint.CheckpointName}");
-
-        // 손 색상 업데이트
         UpdateBothHandsSimilarity(similarity, similarity);
     }
 
     private void OnProgressChanged(int current, int total)
     {
         UpdateProgressDisplay(current, total);
-    }
-
-    private void OnScoreChanged(float newScore)
-    {
-        UpdateScoreDisplay(newScore);
-
-        if (deductionRecord != null)
-        {
-            float deduction = 100f - newScore;
-            UpdateDeductionDisplay(deduction);
-        }
     }
 
     // ========== 결과 조회 API ==========
