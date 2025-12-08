@@ -595,6 +595,14 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// 현재 가이드 프레임 인덱스 가져오기
+    /// </summary>
+    public int GetCurrentGuideFrameIndex()
+    {
+        return currentGuideFrameIndex;
+    }
+
+    /// <summary>
     /// 현재 평가 단계
     /// </summary>
     public EvaluationPhase CurrentPhase => currentPhase;
