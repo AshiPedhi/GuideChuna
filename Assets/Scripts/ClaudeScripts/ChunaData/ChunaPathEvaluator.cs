@@ -1038,26 +1038,18 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 리밋 체커에 첫 프레임의 회전을 기준점으로 설정
+    /// 리밋 체커에 PathEvaluator 참조 설정
     /// </summary>
     private void SetLimitCheckerReferenceFromFirstFrame()
     {
-        if (limitChecker == null || loadedFrames == null || loadedFrames.Count == 0)
+        if (limitChecker == null)
             return;
 
-        var firstFrame = loadedFrames[0];
-
-        // 첫 프레임의 회전을 기준점으로 설정
-        limitChecker.SetReferenceFromPoseFrame(
-            firstFrame.leftRootRotation,
-            firstFrame.rightRootRotation
-        );
-
-        // PathEvaluator 참조 설정
+        // PathEvaluator 참조 설정 (프레임 비율 기반 체크용)
         limitChecker.SetPathEvaluator(this);
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 기준점 설정 - 첫 프레임 회전 사용</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커에 PathEvaluator 참조 설정 완료</color>");
     }
 
     private void GenerateCheckpointsFromFrames()
@@ -1435,8 +1427,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             snapshot.leftLimitStatus = leftResult.overallStatus;
             snapshot.rightLimitStatus = rightResult.overallStatus;
-            snapshot.leftLimitRatio = leftResult.maxLimitRatio;
-            snapshot.rightLimitRatio = rightResult.maxLimitRatio;
+            snapshot.leftLimitRatio = leftResult.frameRatio;
+            snapshot.rightLimitRatio = rightResult.frameRatio;
 
             // 리밋 상태별 시간 누적
             if (leftResult.overallStatus == LimitStatus.Warning || rightResult.overallStatus == LimitStatus.Warning)
