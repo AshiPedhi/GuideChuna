@@ -58,7 +58,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float guidePlaybackSpeed = 1f;
 
     [Tooltip("가이드 핸드 루프 재생")]
-    [SerializeField] private bool loopGuideHands = true;
+    [SerializeField] private bool loopGuideHands = false;
+
+    [Tooltip("시작 위치 대기 중 첫 프레임 표시")]
+    [SerializeField] private bool showFirstFrameWhileWaiting = true;
 
     [Header("=== 평가 설정 ===")]
     [Tooltip("메트릭 기록 간격 (초)")]
@@ -1183,6 +1186,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
+        // 시작 위치 대기 중 첫 프레임 표시
+        if (showFirstFrameWhileWaiting)
+        {
+            ShowGuideHandFirstFrame();
+        }
+
         // 세션 초기화
         currentSession = new EvaluationSession
         {
@@ -1574,6 +1583,62 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("[ChunaPathEvaluator] 가이드 핸드 재생 시작");
+    }
+
+    /// <summary>
+    /// 첫 프레임만 정적으로 표시 (시작 위치 안내용)
+    /// </summary>
+    private void ShowGuideHandFirstFrame()
+    {
+        if (!showGuideHands) return;
+        if (loadedFrames == null || loadedFrames.Count == 0) return;
+
+        Vector3 positionOffset = Vector3.zero;
+        if (referenceTransform != null)
+        {
+            positionOffset = referenceTransform.position - recordedPatientOffset;
+        }
+
+        PoseFrame firstFrame = loadedFrames[0];
+
+        // 왼손 첫 프레임 표시
+        if (leftGuideHand != null)
+        {
+            leftGuideHand.SetVisible(true);
+            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+
+            if (leftGuideHand.Root != null)
+            {
+                leftGuideHand.Root.position = firstFrame.leftRootPosition + positionOffset;
+                leftGuideHand.Root.rotation = firstFrame.leftRootRotation;
+            }
+
+            foreach (var kvp in firstFrame.leftLocalPoses)
+            {
+                leftGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+            }
+        }
+
+        // 오른손 첫 프레임 표시
+        if (rightGuideHand != null)
+        {
+            rightGuideHand.SetVisible(true);
+            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+
+            if (rightGuideHand.Root != null)
+            {
+                rightGuideHand.Root.position = firstFrame.rightRootPosition + positionOffset;
+                rightGuideHand.Root.rotation = firstFrame.rightRootRotation;
+            }
+
+            foreach (var kvp in firstFrame.rightLocalPoses)
+            {
+                rightGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+            }
+        }
+
+        if (showDebugLogs)
+            Debug.Log("<color=cyan>[ChunaPathEvaluator] 가이드 핸드 첫 프레임 표시 (시작 위치 안내)</color>");
     }
 
     private void StopGuideHandPlayback()
