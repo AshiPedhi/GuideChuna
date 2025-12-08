@@ -208,18 +208,18 @@ public class ChunaLimitChecker : MonoBehaviour
     }
 
     /// <summary>
-    /// 손바닥 위치 가져오기
+    /// 손목 위치 가져오기
     /// </summary>
-    private Vector3 GetPalmPosition(HandVisual hand)
+    private Vector3 GetWristPosition(HandVisual hand)
     {
         if (hand == null || hand.Joints == null)
             return Vector3.zero;
 
-        // Middle1 관절 (9번)
-        int middleProximalIndex = 9;
-        if (hand.Joints.Count > middleProximalIndex && hand.Joints[middleProximalIndex] != null)
+        // Wrist 관절 (0번)
+        int wristIndex = 0;
+        if (hand.Joints.Count > wristIndex && hand.Joints[wristIndex] != null)
         {
-            return hand.Joints[middleProximalIndex].position;
+            return hand.Joints[wristIndex].position;
         }
 
         return hand.transform.position;
@@ -230,12 +230,12 @@ public class ChunaLimitChecker : MonoBehaviour
         if (!drawDebugGizmos || !isInitialized)
             return;
 
-        // 오른손 상태 표시 (손바닥 위치)
-        Vector3 rightPalmPos = GetPalmPosition(playerRightHand);
-        if (rightPalmPos != Vector3.zero)
+        // 오른손 상태 표시 (손목 위치)
+        Vector3 rightWristPos = GetWristPosition(playerRightHand);
+        if (rightWristPos != Vector3.zero)
         {
             Gizmos.color = GetColorForStatus(currentRightResult.overallStatus);
-            Gizmos.DrawWireSphere(rightPalmPos, 0.05f);
+            Gizmos.DrawWireSphere(rightWristPos, 0.05f);
         }
     }
 
