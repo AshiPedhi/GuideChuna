@@ -36,8 +36,17 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private DeductionRecord deductionRecord;
     [SerializeField] private HandPoseComparator poseComparator;
     [SerializeField] private ChunaLimitChecker limitChecker;
-    [SerializeField] private ChunaLimitData limitData;
     [SerializeField] private NeckVRControllerOptimized neckController;
+
+    [Header("=== 환자 애니메이션 ===")]
+    [Tooltip("환자 모델의 Animator")]
+    [SerializeField] private Animator patientAnimator;
+
+    [Tooltip("프레임 레이트에 맞춰 애니메이션 동기화")]
+    [SerializeField] private bool syncAnimationWithFrame = true;
+
+    [Tooltip("애니메이션 재생 모드")]
+    [SerializeField] private AnimationPlayMode animationPlayMode = AnimationPlayMode.SyncWithUser;
 
     [Header("=== 가이드 손 표시 ===")]
     [SerializeField] private HandTransformMapper leftGuideHand;
@@ -156,6 +165,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 사용자 손 위치 기반 프레임
     private int userHandFrameIndex = 0;
     private float userHandFrameRatio = 0f;  // 0~1
+
+    // 환자 애니메이션
+    private AnimationClip currentAnimationClip;
+    private string currentAnimationStateName;
+    private float animationFrameRate = 30f;  // 핸드 데이터 프레임 레이트
+    private float animationDuration = 0f;
 
     // 결과
     private EvaluationSession currentSession;
@@ -635,7 +650,94 @@ public class ChunaPathEvaluator : MonoBehaviour
                 if (showDebugLogs)
                     Debug.Log($"<color=red>[경고] 프레임 {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}) - 제한 구간 초과!</color>");
             }
+
+            // 애니메이션 동기화
+            if (syncAnimationWithFrame && animationPlayMode == AnimationPlayMode.SyncWithUser)
+            {
+                SyncAnimationToFrame(userHandFrameRatio);
+            }
         }
+    }
+
+    /// <summary>
+    /// 애니메이션을 프레임 비율에 맞춰 동기화
+    /// </summary>
+    private void SyncAnimationToFrame(float ratio)
+    {
+        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName))
+            return;
+
+        // 애니메이션의 정규화된 시간 (0~1)으로 설정
+        float normalizedTime = Mathf.Clamp01(ratio);
+
+        // Animator의 현재 상태를 해당 시간으로 설정
+        patientAnimator.Play(currentAnimationStateName, 0, normalizedTime);
+        patientAnimator.speed = 0f;  // 수동 제어를 위해 정지
+
+        if (showDebugLogs && Time.frameCount % 30 == 0)
+            Debug.Log($"[Animation] 동기화: {currentAnimationStateName} @ {normalizedTime:P0}");
+    }
+
+    /// <summary>
+    /// 환자 애니메이션 설정 (시나리오 데이터에서)
+    /// </summary>
+    public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser)
+    {
+        currentAnimationStateName = animationStateName;
+        animationPlayMode = playMode;
+
+        if (patientAnimator == null)
+        {
+            // Patient 태그로 Animator 찾기
+            var patient = GameObject.FindGameObjectWithTag("Patient");
+            if (patient != null)
+            {
+                patientAnimator = patient.GetComponent<Animator>();
+            }
+        }
+
+        if (patientAnimator != null && !string.IsNullOrEmpty(animationStateName))
+        {
+            if (playMode == AnimationPlayMode.AutoPlay)
+            {
+                // 자동 재생 모드
+                patientAnimator.Play(animationStateName);
+                patientAnimator.speed = 1f;
+            }
+            else if (playMode == AnimationPlayMode.SyncWithUser)
+            {
+                // 사용자 동기화 모드 - 시작 위치로 설정
+                patientAnimator.Play(animationStateName, 0, 0f);
+                patientAnimator.speed = 0f;
+            }
+
+            if (showDebugLogs)
+                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환자 애니메이션 설정: {animationStateName} ({playMode})</color>");
+        }
+    }
+
+    /// <summary>
+    /// SubStepData에서 애니메이션 설정
+    /// </summary>
+    public void SetPatientAnimationFromSubStep(SubStepData subStep)
+    {
+        if (subStep == null || !subStep.HasPatientAnimation())
+            return;
+
+        AnimationPlayMode mode = subStep.GetAnimationPlayMode();
+        SetPatientAnimation(subStep.patientAnimationClip, mode);
+    }
+
+    /// <summary>
+    /// 애니메이션 정지 및 초기화
+    /// </summary>
+    public void StopPatientAnimation()
+    {
+        if (patientAnimator != null)
+        {
+            patientAnimator.speed = 0f;
+        }
+        currentAnimationStateName = null;
     }
 
     /// <summary>
@@ -878,11 +980,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (limitChecker == null)
             limitChecker = FindObjectOfType<ChunaLimitChecker>();
 
-        if (limitChecker != null && limitData != null)
-        {
-            limitChecker.SetLimitData(limitData);
-        }
-
         if (playerLeftHand == null || playerRightHand == null)
         {
             var hands = FindObjectsOfType<HandVisual>();
@@ -1111,15 +1208,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 리밋 체커 시작
         if (limitChecker != null)
         {
-            if (limitData != null)
-            {
-                limitChecker.SetLimitData(limitData);
-            }
+            limitChecker.SetPathEvaluator(this);
             limitChecker.Initialize();
             limitChecker.SetEnabled(true);
-
-            // 리밋 이벤트 연결
-            limitChecker.OnViolationDetected += HandleLimitViolation;
         }
 
         // 가이드 핸드는 StartHold 완료 후에 재생됨 (UpdateStartHold에서 호출)
@@ -1175,10 +1266,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 최종 점수 계산
         CalculateFinalScore();
 
-        // 리밋 체커 이벤트 해제 및 중지
+        // 리밋 체커 중지
         if (limitChecker != null)
         {
-            limitChecker.OnViolationDetected -= HandleLimitViolation;
             limitChecker.SetEnabled(false);
         }
 
@@ -1224,7 +1314,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (limitChecker != null)
         {
-            limitChecker.OnViolationDetected -= HandleLimitViolation;
             limitChecker.SetEnabled(false);
         }
 
@@ -1252,7 +1341,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (limitChecker != null)
         {
-            limitChecker.OnViolationDetected -= HandleLimitViolation;
             limitChecker.SetEnabled(false);
         }
 
@@ -1314,29 +1402,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         OnProgressChanged?.Invoke(currentSession.touchedCheckpoints, currentSession.totalCheckpoints);
     }
 
-    // ========== 리밋 위반 처리 ==========
+    // ========== 리밋 상태 체크 (프레임 비율 기반) ==========
 
-    private void HandleLimitViolation(ChunaLimitChecker.ViolationEvent evt)
+    /// <summary>
+    /// 현재 리밋 상태 가져오기 (프레임 비율 기반)
+    /// </summary>
+    public LimitStatus GetCurrentLimitStatus()
     {
-        if (!isEvaluating) return;
-
-        currentSession.limitViolationCount++;
-
-        if (showDebugLogs)
-        {
-            string hand = evt.isLeftHand ? "왼손" : "오른손";
-            Debug.Log($"<color=red>[ChunaPathEvaluator] 리밋 위반! {hand} - {evt.violationType} (비율: {evt.limitRatio:P0})</color>");
-        }
-
-        // 감점 기록
-        if (deductionRecord != null && limitData != null)
-        {
-            float deduction = limitData.GetDeductionForSeverity(evt.severity);
-            string reason = $"{evt.violationType}: {evt.violationValue}";
-            deductionRecord.AddManualDeduction(deduction, reason, evt.violationType);
-        }
-
-        OnLimitStatusChanged?.Invoke(evt.severity == ViolationSeverity.Dangerous ? LimitStatus.Exceeded : LimitStatus.Warning, evt.isLeftHand);
+        if (limitChecker == null) return LimitStatus.Safe;
+        var result = limitChecker.GetRightHandResult();
+        return result.overallStatus;
     }
 
     // ========== 메트릭 기록 ==========
@@ -1648,15 +1723,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 현재 홀드 중인지
     /// </summary>
     public bool IsHolding => isHolding;
-
-    public void SetLimitData(ChunaLimitData data)
-    {
-        limitData = data;
-        if (limitChecker != null && data != null)
-        {
-            limitChecker.SetLimitData(data);
-        }
-    }
 
     public void SetReferenceTransform(Transform reference)
     {
