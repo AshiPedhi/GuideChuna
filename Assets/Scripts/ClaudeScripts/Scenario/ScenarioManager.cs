@@ -584,15 +584,15 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=cyan>[ScenarioManager] ========== 체크포인트 기반 평가 시작 ==========</color>");
         Debug.Log($"<color=cyan>[ScenarioManager] CSV 파일: {subStep.handTrackingFileName}</color>");
 
-        // 1. CSV 로드 및 체크포인트 생성 + 평가 시작
-        chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
-
-        // 2. 환자 애니메이션 설정 (시나리오 데이터에서)
+        // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
         if (subStep.HasPatientAnimation())
         {
             chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
             Debug.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정: {subStep.patientAnimationClip}</color>");
         }
+
+        // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
+        chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
 
         // 3. CheckpointPoseCondition 생성
         CheckpointPoseCondition condition = new CheckpointPoseCondition(

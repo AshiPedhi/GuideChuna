@@ -110,7 +110,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Header("=== 새로운 평가 흐름 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
-    [SerializeField] private float startHoldDuration = 2f;
+    [SerializeField] private float startHoldDuration = 3f;
 
     [Tooltip("중간 홀드 시간 (초)")]
     [SerializeField] private float midHoldDuration = 3f;
@@ -158,6 +158,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // 시작 위치 도달 상태
     private bool hasReachedStartPosition = false;
+
+    // 50% 초과 경고 상태
+    private bool isOverLimitBarrier = false;
 
     // 데이터
     private List<PoseFrame> loadedFrames = new List<PoseFrame>();
@@ -394,6 +397,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 1단계: 시작 위치 대기
+    /// 손 인식 시 StartHold 단계로 전환
     /// </summary>
     private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos)
     {
@@ -421,16 +425,19 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             // 왼손 위치 저장 (이후 이탈 체크용)
             leftHandStartHoldPosition = leftPos;
-            ChangePhase(EvaluationPhase.StartHold);
 
             // 목 컨트롤러 활성화
             if (neckController != null && !neckController.IsEnabled)
                 neckController.Enable();
+
+            // ★ 손 인식 → StartHold 단계로 전환 (첫 프레임 홀드)
+            Debug.Log("<color=green>[WaitingForStart] 손 인식! StartHold 단계로 전환 (3초 홀드 시작)</color>");
+            ChangePhase(EvaluationPhase.StartHold);
         }
     }
 
     /// <summary>
-    /// 2단계: 시작 홀드 (2초)
+    /// 2단계: 시작 홀드 (첫 프레임에서 3초 홀드)
     /// </summary>
     private void UpdateStartHold(Vector3 leftPos, Vector3 rightPos, float leftVel, float rightVel)
     {
@@ -443,8 +450,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
         bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
 
-        // 디버그: 모든 조건 출력 (5프레임마다)
-        if (showDebugLogs && Time.frameCount % 5 == 0)
+        // 디버그: 모든 조건 출력 (10프레임마다)
+        if (showDebugLogs && Time.frameCount % 10 == 0)
         {
             float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
             float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
@@ -458,15 +465,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             phaseHoldTime += Time.deltaTime;
 
             // 홀드 진행률 이벤트 발생 (매 프레임)
-            if (showDebugLogs && phaseHoldTime < 0.1f)
-                Debug.Log($"<color=green>[StartHold] 홀드 시작! OnHoldProgressChanged 이벤트 발생</color>");
-
             OnHoldProgressChanged?.Invoke(phaseHoldTime, startHoldDuration);
 
             if (phaseHoldTime >= startHoldDuration)
             {
-                // 시작 홀드 완료 → 이동 단계로
-                Debug.Log("<color=green>[StartHold] 홀드 완료! 이동 단계로 진행</color>");
+                // ★ 시작 홀드 완료 → 가이드 핸드 재생 시작 → Moving 단계로
+                Debug.Log("<color=green>[StartHold] 홀드 완료! 가이드 핸드 재생 시작 → Moving 단계</color>");
                 OnHoldCompleted?.Invoke();      // 홀드 완료 이벤트
                 OnStartHoldComplete?.Invoke();  // "움직이세요" 안내
                 StartGuideHandPlayback();       // 가이드 핸드 재생 시작
@@ -475,7 +479,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
         else
         {
-            // 홀드 중단
+            // 홀드 중단 (손이 움직이거나 위치 이탈)
             if (phaseHoldTime > 0.1f && showDebugLogs)
                 Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped}, 왼손위치:{leftNear}, 오른손위치:{rightNear})</color>");
 
@@ -486,6 +490,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 3단계: 자유 이동
+    /// 50% 초과 시 지속 경고, 30~50% 구간에서 홀드 대기
     /// </summary>
     private void UpdateMoving(Vector3 leftPos, Vector3 rightPos)
     {
@@ -503,28 +508,39 @@ public class ChunaPathEvaluator : MonoBehaviour
                 Debug.Log($"<color=orange>[Moving] 왼손 이탈! 거리: {leftDrift:F3}m</color>");
         }
 
-        // 현재 진행률 계산 (가이드 핸드 기준)
+        // 현재 진행률 계산 (사용자 손 위치 기준)
         float progress = GetCurrentProgress();
 
-        // 제한장벽 체크 (중반 이후 경고)
-        if (progress >= limitBarrierRatio)
+        // ★ 50% 초과 경고 체크 (지속적으로 경고, 돌아가기 전까지)
+        if (progress > midHoldEndRatio)
         {
-            // 리밋 체커로 제한 확인
-            if (limitChecker != null)
+            // 50% 초과 상태 진입 시 경고 횟수 1회 증가
+            if (!isOverLimitBarrier)
             {
-                var rightResult = limitChecker.GetRightHandResult();
-                if (rightResult.overallStatus == LimitStatus.Exceeded ||
-                    rightResult.overallStatus == LimitStatus.Danger)
-                {
-                    OnLimitWarning?.Invoke(progress);
+                isOverLimitBarrier = true;
+                if (currentSession != null)
+                    currentSession.limitWarningCount++;
 
-                    if (showDebugLogs)
-                        Debug.Log($"<color=red>[Moving] 제한장벽 경고! 진행률: {progress:P0}</color>");
-                }
+                Debug.Log($"<color=red>[Moving] ★★★ 50% 초과! 돌아가세요! (경고 #{currentSession?.limitWarningCount}) ★★★</color>");
+            }
+
+            // 지속적으로 경고 이벤트 발생 (UI 알람용)
+            OnLimitWarning?.Invoke(progress);
+
+            if (showDebugLogs && Time.frameCount % 30 == 0)
+                Debug.Log($"<color=red>[Moving] 경고 지속 중! 진행률: {progress:P0} (50% 이하로 돌아가세요)</color>");
+        }
+        else
+        {
+            // 50% 이하로 돌아오면 경고 상태 해제
+            if (isOverLimitBarrier)
+            {
+                isOverLimitBarrier = false;
+                Debug.Log($"<color=green>[Moving] 50% 이하로 복귀! 경고 해제</color>");
             }
         }
 
-        // 중간 홀드 구간 도달 체크
+        // 중간 홀드 구간 체크 (30~50%)
         if (progress >= midHoldStartRatio && progress <= midHoldEndRatio)
         {
             // 중간 홀드 구간 진입 → 중간 홀드 단계로
@@ -533,7 +549,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            Debug.Log($"[Moving] 진행률: {progress:P0}, 왼손이탈: {leftDrift:F3}m");
+            Debug.Log($"[Moving] 진행률: {progress:P0}, 왼손이탈: {leftDrift:F3}m, 50%초과:{isOverLimitBarrier}");
     }
 
     /// <summary>
@@ -624,7 +640,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
-    /// Moving 단계에서만 업데이트하며, 앞으로만 진행 가능 (중간으로 점프 불가)
+    /// ★ 실시간 동기화: 앞뒤 자유 이동, 매 프레임 애니메이션 동기화
     /// </summary>
     private void UpdateUserHandFrame()
     {
@@ -649,17 +665,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        // 현재 프레임 근처에서만 검색 (앞으로만 진행, 최대 30프레임 앞까지)
-        int searchStart = userHandFrameIndex;
-        int searchEnd = Mathf.Min(loadedFrames.Count, userHandFrameIndex + 30);
-
+        // ★ 전체 프레임에서 가장 가까운 프레임 검색 (앞뒤 자유 이동)
         float minDistance = float.MaxValue;
-        int closestFrame = userHandFrameIndex;  // 기본값은 현재 프레임 유지
+        int closestFrame = userHandFrameIndex;
 
-        // 프레임 인정 거리 임계값 (이 거리 이내에 있어야 해당 프레임으로 인정)
-        float frameAcceptanceRadius = checkpointRadius * 1.5f;  // 체크포인트 반경의 1.5배
-
-        for (int i = searchStart; i < searchEnd; i++)
+        for (int i = 0; i < loadedFrames.Count; i++)
         {
             Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
             float dist = Vector3.Distance(rightHandPos, framePos);
@@ -671,16 +681,16 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 변경 감지 (앞으로만 진행 가능, 거리 임계값 이내에 있을 때만)
+        // 프레임 인정 거리 임계값
+        float frameAcceptanceRadius = checkpointRadius * 2f;
+
         int prevFrame = userHandFrameIndex;
-        if (closestFrame > userHandFrameIndex && minDistance <= frameAcceptanceRadius)
+
+        // 거리 임계값 이내에 있을 때만 프레임 업데이트
+        if (minDistance <= frameAcceptanceRadius)
         {
             userHandFrameIndex = closestFrame;
-
-            if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Frame] 프레임 진행: {prevFrame} → {userHandFrameIndex} (거리: {minDistance:F3}m)");
         }
-        // 거리가 멀거나 뒤로 가려고 하면 현재 프레임 유지
 
         userHandFrameRatio = Mathf.Clamp01((float)userHandFrameIndex / Mathf.Max(1, loadedFrames.Count - 1));
 
@@ -689,20 +699,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
 
-            // 50% 초과 경고
-            if (userHandFrameRatio > limitBarrierRatio && currentPhase == EvaluationPhase.Moving)
-            {
-                OnLimitWarning?.Invoke(userHandFrameRatio);
+            if (showDebugLogs && Time.frameCount % 15 == 0)
+                Debug.Log($"[Frame] 프레임: {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m");
+        }
 
-                if (showDebugLogs)
-                    Debug.Log($"<color=red>[경고] 프레임 {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}) - 제한 구간 초과!</color>");
-            }
-
-            // 애니메이션 동기화
-            if (syncAnimationWithFrame && animationPlayMode == AnimationPlayMode.SyncWithUser)
-            {
-                SyncAnimationToFrame(userHandFrameRatio);
-            }
+        // ★ 매 프레임마다 환자 애니메이션 실시간 동기화
+        if (syncAnimationWithFrame && animationPlayMode == AnimationPlayMode.SyncWithUser)
+        {
+            SyncAnimationToFrame(userHandFrameRatio);
         }
     }
 
@@ -1215,14 +1219,25 @@ public class ChunaPathEvaluator : MonoBehaviour
         currentPhase = EvaluationPhase.WaitingForStart;
         phaseHoldTime = 0f;
         leftHandStartHoldPosition = Vector3.zero;
+        isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
-        // 시작 위치 대기 중 첫 프레임 표시
+        // 시작 위치 대기 중 첫 프레임 표시 (가이드 핸드 + 환자 애니메이션)
         if (showFirstFrameWhileWaiting)
         {
             ShowGuideHandFirstFrame();
+
+            // 환자 애니메이션도 첫 프레임(0%)으로 설정
+            if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
+            {
+                patientAnimator.Play(currentAnimationStateName, 0, 0f);
+                patientAnimator.speed = 0f;
+
+                if (showDebugLogs)
+                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 첫 프레임 설정: {currentAnimationStateName}</color>");
+            }
         }
 
         // 세션 초기화
@@ -1606,8 +1621,25 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void ShowGuideHandFirstFrame()
     {
-        if (!showGuideHands) return;
-        if (loadedFrames == null || loadedFrames.Count == 0) return;
+        if (!showGuideHands)
+        {
+            if (showDebugLogs)
+                Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 비활성화됨 (showGuideHands=false)");
+            return;
+        }
+
+        if (loadedFrames == null || loadedFrames.Count == 0)
+        {
+            if (showDebugLogs)
+                Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 실패 - 프레임 데이터 없음");
+            return;
+        }
+
+        if (leftGuideHand == null && rightGuideHand == null)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 실패 - leftGuideHand/rightGuideHand가 연결되지 않음!");
+            return;
+        }
 
         Vector3 positionOffset = Vector3.zero;
         if (referenceTransform != null)

@@ -68,6 +68,9 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompletedHandler;
             pathEvaluator.OnProgressChanged += OnProgressChangedHandler;
             pathEvaluator.OnCheckpointPassed += OnCheckpointPassedHandler;
+
+            // MidHold 완료 이벤트 구독 (체크포인트 통과율 대신 MidHold 완료 시 진행)
+            pathEvaluator.OnMidHoldComplete += OnMidHoldCompleteHandler;
         }
     }
 
@@ -79,6 +82,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
             pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompletedHandler;
             pathEvaluator.OnProgressChanged -= OnProgressChangedHandler;
             pathEvaluator.OnCheckpointPassed -= OnCheckpointPassedHandler;
+            pathEvaluator.OnMidHoldComplete -= OnMidHoldCompleteHandler;
         }
     }
 
@@ -106,7 +110,9 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
     }
 
     /// <summary>
-    /// 진행률 변경 이벤트 핸들러
+    /// 진행률 변경 이벤트 핸들러 (체크포인트 통과 기준 - 로깅용)
+    /// 주의: 체크포인트 통과율 기반 OnProgressThresholdReached는 비활성화됨
+    /// MidHold 완료 시에만 OnProgressThresholdReached 발생
     /// </summary>
     private void OnProgressChangedHandler(int current, int total)
     {
@@ -116,21 +122,34 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
 
         if (showDebugLogs && progress > lastProgress)
         {
-            Debug.Log($"[ChunaPathEvaluatorBridge] 진행률: {progress * 100:F1}% ({current}/{total}) (목표: {progressThreshold * 100:F0}%)");
+            Debug.Log($"[ChunaPathEvaluatorBridge] 체크포인트 통과율: {progress * 100:F1}% ({current}/{total})");
         }
 
         lastProgress = progress;
 
-        // 진행률 목표 달성 체크
-        if (enableProgressThresholdEvent && !hasProgressThresholdBeenReached)
-        {
-            if (progress >= progressThreshold)
-            {
-                hasProgressThresholdBeenReached = true;
-                Debug.Log($"<color=green>[ChunaPathEvaluatorBridge] 진행률 목표 달성! ({progress * 100:F1}%)</color>");
-                OnProgressThresholdReached?.Invoke();
-            }
-        }
+        // 주의: 체크포인트 통과율 기반 OnProgressThresholdReached는 비활성화
+        // MidHold 완료 시에만 OnProgressThresholdReached 발생 (OnMidHoldCompleteHandler 참조)
+    }
+
+    /// <summary>
+    /// MidHold 완료 이벤트 핸들러
+    /// 30~50% 구간에서 홀드 완료 시 OnProgressThresholdReached 발생
+    /// </summary>
+    private void OnMidHoldCompleteHandler()
+    {
+        if (!isTracking) return;
+        if (!enableProgressThresholdEvent) return;
+        if (hasProgressThresholdBeenReached) return;  // 중복 방지
+
+        hasProgressThresholdBeenReached = true;
+
+        float frameProgress = pathEvaluator != null ? pathEvaluator.GetCurrentProgress() : 0f;
+
+        Debug.Log($"<color=green>[ChunaPathEvaluatorBridge] ===== MidHold 완료! =====</color>");
+        Debug.Log($"  - 프레임 진행률: {frameProgress * 100:F1}%");
+        Debug.Log($"  - OnProgressThresholdReached 이벤트 발생");
+
+        OnProgressThresholdReached?.Invoke();
     }
 
     /// <summary>
