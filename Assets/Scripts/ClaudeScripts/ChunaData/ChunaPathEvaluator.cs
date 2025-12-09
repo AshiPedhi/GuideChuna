@@ -1256,8 +1256,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             maxSimilarity = 0f
         };
 
-        // 모든 체크포인트 활성화 (관문이 아닌 지표이므로 전부 활성화)
-        ActivateAllCheckpoints();
+        // ★ 체크포인트는 가이드 핸드 1회 재생 완료 후 활성화됨
+        // ActivateAllCheckpoints()는 GuideHandPlaybackRoutine에서 호출됨
 
         // 리밋 체커 시작
         if (limitChecker != null)
@@ -1713,6 +1713,10 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         float frameTime = 1f / 30f;
         currentGuideFrameIndex = 0;
+        bool isFirstPlaythrough = true;  // 첫 번째 재생 여부 추적
+
+        if (showDebugLogs)
+            Debug.Log("<color=cyan>[ChunaPathEvaluator] ★ 가이드 핸드 첫 번째 재생 시작 (체크포인트 미활성)</color>");
 
         while (true)
         {
@@ -1757,13 +1761,28 @@ public class ChunaPathEvaluator : MonoBehaviour
             currentGuideFrameIndex++;
             if (currentGuideFrameIndex >= loadedFrames.Count)
             {
+                // ★ 첫 번째 재생 완료 시 체크포인트 활성화
+                if (isFirstPlaythrough)
+                {
+                    isFirstPlaythrough = false;
+
+                    Debug.Log("<color=green>[ChunaPathEvaluator] ★★★ 가이드 핸드 첫 번째 재생 완료! 체크포인트 활성화! ★★★</color>");
+                    ActivateAllCheckpoints();
+
+                    if (!loopGuideHands)
+                    {
+                        // 루프 비활성화 시 여기서 종료
+                        break;
+                    }
+                }
+
                 if (loopGuideHands)
                 {
-                    // 1회 재생 완료 후 대기 시간
+                    // 1회 재생 완료 후 대기 시간 (1초)
                     if (loopDelaySeconds > 0f)
                     {
                         if (showDebugLogs)
-                            Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 1회 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
+                            Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
                         yield return new WaitForSeconds(loopDelaySeconds);
                     }
                     currentGuideFrameIndex = 0;
