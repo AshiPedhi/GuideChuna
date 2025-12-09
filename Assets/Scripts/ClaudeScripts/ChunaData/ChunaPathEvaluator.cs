@@ -543,7 +543,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             // 홀드 중단 (손이 움직이거나 위치 이탈)
             if (phaseHoldTime > 0.1f && showDebugLogs)
-                Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped}, 왼손위치:{leftNear}, 오른손위치:{rightNear})</color>");
+                Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped})</color>");
 
             phaseHoldTime = 0f;
             OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
