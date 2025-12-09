@@ -640,7 +640,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
-    /// ★ 실시간 동기화: 앞뒤 자유 이동, 매 프레임 애니메이션 동기화
+    /// ★ 점진적 증가: 현재 프레임 근처에서만 검색 (급격한 점프 방지)
     /// </summary>
     private void UpdateUserHandFrame()
     {
@@ -665,11 +665,14 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        // ★ 전체 프레임에서 가장 가까운 프레임 검색 (앞뒤 자유 이동)
+        // ★ 현재 프레임 근처에서만 검색 (점진적 증가, 최대 30프레임 앞까지)
+        int searchStart = Mathf.Max(0, userHandFrameIndex - 5);  // 약간 뒤로도 허용
+        int searchEnd = Mathf.Min(loadedFrames.Count, userHandFrameIndex + 30);
+
         float minDistance = float.MaxValue;
         int closestFrame = userHandFrameIndex;
 
-        for (int i = 0; i < loadedFrames.Count; i++)
+        for (int i = searchStart; i < searchEnd; i++)
         {
             Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
             float dist = Vector3.Distance(rightHandPos, framePos);
