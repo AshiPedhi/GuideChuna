@@ -1219,10 +1219,20 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
-        // 시작 위치 대기 중 첫 프레임 표시
+        // 시작 위치 대기 중 첫 프레임 표시 (가이드 핸드 + 환자 애니메이션)
         if (showFirstFrameWhileWaiting)
         {
             ShowGuideHandFirstFrame();
+
+            // 환자 애니메이션도 첫 프레임(0%)으로 설정
+            if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
+            {
+                patientAnimator.Play(currentAnimationStateName, 0, 0f);
+                patientAnimator.speed = 0f;
+
+                if (showDebugLogs)
+                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 첫 프레임 설정: {currentAnimationStateName}</color>");
+            }
         }
 
         // 세션 초기화
@@ -1606,8 +1616,25 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void ShowGuideHandFirstFrame()
     {
-        if (!showGuideHands) return;
-        if (loadedFrames == null || loadedFrames.Count == 0) return;
+        if (!showGuideHands)
+        {
+            if (showDebugLogs)
+                Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 비활성화됨 (showGuideHands=false)");
+            return;
+        }
+
+        if (loadedFrames == null || loadedFrames.Count == 0)
+        {
+            if (showDebugLogs)
+                Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 실패 - 프레임 데이터 없음");
+            return;
+        }
+
+        if (leftGuideHand == null && rightGuideHand == null)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 가이드 핸드 표시 실패 - leftGuideHand/rightGuideHand가 연결되지 않음!");
+            return;
+        }
 
         Vector3 positionOffset = Vector3.zero;
         if (referenceTransform != null)
