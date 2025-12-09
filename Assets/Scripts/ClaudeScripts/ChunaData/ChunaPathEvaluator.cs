@@ -110,7 +110,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Header("=== 새로운 평가 흐름 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
-    [SerializeField] private float startHoldDuration = 2f;
+    [SerializeField] private float startHoldDuration = 3f;
 
     [Tooltip("중간 홀드 시간 (초)")]
     [SerializeField] private float midHoldDuration = 3f;
@@ -397,7 +397,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 1단계: 시작 위치 대기
-    /// 손 인식 시 바로 Moving 단계로 전환 (StartHold 없음)
+    /// 손 인식 시 StartHold 단계로 전환
     /// </summary>
     private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos)
     {
@@ -408,7 +408,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (!leftStart.HasValue && !rightStart.HasValue)
         {
             if (showDebugLogs && Time.frameCount % 60 == 0)
-                Debug.Log("<color=orange>[WaitingForStart] 체크포인트가 없음! 바로 Moving으로 진행</color>");
+                Debug.Log("<color=orange>[WaitingForStart] 체크포인트가 없음! 바로 StartHold로 진행</color>");
         }
 
         bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
@@ -430,24 +430,62 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (neckController != null && !neckController.IsEnabled)
                 neckController.Enable();
 
-            // ★ 손 인식 즉시 가이드 핸드 재생 시작 + Moving 단계로 전환
-            Debug.Log("<color=green>[WaitingForStart] 손 인식! 가이드 핸드 재생 시작 → Moving 단계</color>");
-            OnStartHoldComplete?.Invoke();  // "움직이세요" 안내
-            StartGuideHandPlayback();       // 가이드 핸드 재생 시작
-            ChangePhase(EvaluationPhase.Moving);
+            // ★ 손 인식 → StartHold 단계로 전환 (첫 프레임 홀드)
+            Debug.Log("<color=green>[WaitingForStart] 손 인식! StartHold 단계로 전환 (3초 홀드 시작)</color>");
+            ChangePhase(EvaluationPhase.StartHold);
         }
     }
 
     /// <summary>
-    /// [사용 안함] 2단계: 시작 홀드 - StartHold 단계는 건너뜀
+    /// 2단계: 시작 홀드 (첫 프레임에서 3초 홀드)
     /// </summary>
     private void UpdateStartHold(Vector3 leftPos, Vector3 rightPos, float leftVel, float rightVel)
     {
-        // StartHold는 더 이상 사용하지 않음 - 손 인식 즉시 Moving으로 전환
-        // 만약 이 함수가 호출되면 바로 Moving으로 전환
-        Debug.LogWarning("[StartHold] StartHold 단계는 사용하지 않음 - Moving으로 전환");
-        StartGuideHandPlayback();
-        ChangePhase(EvaluationPhase.Moving);
+        // 양손 정지 체크
+        bool bothStopped = leftVel < holdVelocityThreshold && rightVel < holdVelocityThreshold;
+
+        // 시작 위치 유지 체크
+        Vector3? leftStart = GetFirstCheckpointPosition(true);
+        Vector3? rightStart = GetFirstCheckpointPosition(false);
+        bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
+        bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
+
+        // 디버그: 모든 조건 출력 (10프레임마다)
+        if (showDebugLogs && Time.frameCount % 10 == 0)
+        {
+            float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
+            float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
+            Debug.Log($"[StartHold] 정지:{bothStopped}(L:{leftVel:F3}/R:{rightVel:F3}), " +
+                      $"위치OK(L:{leftNear}[{leftDist:F2}m]/R:{rightNear}[{rightDist:F2}m]), " +
+                      $"홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+        }
+
+        if (bothStopped && leftNear && rightNear)
+        {
+            phaseHoldTime += Time.deltaTime;
+
+            // 홀드 진행률 이벤트 발생 (매 프레임)
+            OnHoldProgressChanged?.Invoke(phaseHoldTime, startHoldDuration);
+
+            if (phaseHoldTime >= startHoldDuration)
+            {
+                // ★ 시작 홀드 완료 → 가이드 핸드 재생 시작 → Moving 단계로
+                Debug.Log("<color=green>[StartHold] 홀드 완료! 가이드 핸드 재생 시작 → Moving 단계</color>");
+                OnHoldCompleted?.Invoke();      // 홀드 완료 이벤트
+                OnStartHoldComplete?.Invoke();  // "움직이세요" 안내
+                StartGuideHandPlayback();       // 가이드 핸드 재생 시작
+                ChangePhase(EvaluationPhase.Moving);
+            }
+        }
+        else
+        {
+            // 홀드 중단 (손이 움직이거나 위치 이탈)
+            if (phaseHoldTime > 0.1f && showDebugLogs)
+                Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped}, 왼손위치:{leftNear}, 오른손위치:{rightNear})</color>");
+
+            phaseHoldTime = 0f;
+            OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+        }
     }
 
     /// <summary>
