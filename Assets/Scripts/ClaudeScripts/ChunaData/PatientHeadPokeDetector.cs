@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using UnityEngine;
 using Oculus.Interaction;
 using Oculus.Interaction.Input;
@@ -153,7 +154,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
     private void TryGetPokeHandedness()
     {
         // PokeInteractable에서 현재 Interactor 가져오기
-        if (pokeInteractable.SelectingInteractorViews.Count > 0)
+        if (pokeInteractable.SelectingInteractorViews.Any())
         {
             foreach (var interactorView in pokeInteractable.SelectingInteractorViews)
             {
