@@ -90,7 +90,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float requiredHoldTime = 2f;
 
     [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
-    [SerializeField] private float holdVelocityThreshold = 0.02f;
+    [SerializeField] private float holdVelocityThreshold = 0.05f;
 
     [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
     [SerializeField] private bool requireLimitSafeForHold = true;
@@ -396,7 +396,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs)
+        {
             Debug.Log($"<color=cyan>[ChunaPathEvaluator] ========== 단계 변경: {oldPhase} → {newPhase} ==========</color>");
+            Debug.Log($"<color=magenta>[Animation Info] 상태이름: {currentAnimationStateName ?? "NULL"}, Animator: {(patientAnimator != null ? patientAnimator.name : "NULL")}, 프레임수: {loadedFrames?.Count ?? 0}</color>");
+        }
 
         OnPhaseChanged?.Invoke(newPhase);
 
@@ -463,8 +466,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             leftHandStartHoldPosition = leftPos;
 
-            if (neckController != null && !neckController.IsEnabled)
+            // 충돌 모드에서는 NeckVRController 비활성화 (애니메이션으로 목 제어)
+            if (useCollisionMode && neckController != null)
+            {
+                neckController.Disable();
+                Debug.Log("<color=yellow>[Collision Mode] NeckVRController 비활성화 - 애니메이션으로 목 제어</color>");
+            }
+            else if (neckController != null && !neckController.IsEnabled)
+            {
                 neckController.Enable();
+            }
 
             Debug.Log("<color=green>[WaitingForStart] 손 인식! StartHold 단계로 전환</color>");
             ChangePhase(EvaluationPhase.StartHold);
@@ -485,7 +496,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 10 == 0)
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s");
         }
         else
         {
@@ -499,7 +510,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
                 float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s");
             }
 
             positionOk = leftNear && rightNear;
@@ -722,8 +733,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 프레임 인정 거리 임계값
-        float frameAcceptanceRadius = checkpointRadius * 2f;
+        // 프레임 인정 거리 임계값 (넓게 설정)
+        float frameAcceptanceRadius = checkpointRadius * 5f;
 
         int prevFrame = userHandFrameIndex;
 
@@ -740,8 +751,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
 
-            if (showDebugLogs && Time.frameCount % 15 == 0)
-                Debug.Log($"[Frame] 프레임: {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m");
+            if (showDebugLogs)
+                Debug.Log($"<color=yellow>[Frame Changed] {prevFrame} → {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m</color>");
+        }
+
+        // 손 위치 상세 디버그 (주기적)
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            Vector3 closestFramePos = loadedFrames[closestFrame].rightRootPosition + positionOffset;
+            Debug.Log($"[Hand Position] 손:{rightHandPos}, 가까운프레임위치:{closestFramePos}, 거리:{minDistance:F3}m, 임계값:{frameAcceptanceRadius:F3}m");
         }
 
         // ★ 매 프레임마다 환자 애니메이션 실시간 동기화
@@ -818,7 +836,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Animation Lerp] {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
+                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0}, 프레임:{userHandFrameIndex}/{loadedFrames?.Count ?? 0}");
+        }
+        else if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            // 애니메이션이 업데이트되지 않는 이유 출력
+            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, Animator:{patientAnimator != null}, 상태:{currentAnimationStateName ?? "NULL"}</color>");
         }
     }
 
@@ -1385,10 +1408,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 가이드 핸드는 StartHold 완료 후에 재생됨 (UpdateStartHold에서 호출)
         // 여기서는 재생하지 않음!
 
-        // 목 컨트롤러 활성화 (시작 위치 체크 불필요 시 즉시 활성화)
-        if (neckController != null && !requireNearStartToBegin)
+        // 목 컨트롤러 활성화 (충돌 모드가 아닐 때만)
+        // 충돌 모드에서는 애니메이션으로 목을 제어하므로 NeckVRController 비활성화
+        if (neckController != null && !requireNearStartToBegin && !useCollisionMode)
         {
             neckController.Enable();
+        }
+        else if (neckController != null && useCollisionMode)
+        {
+            neckController.Disable();
+            if (showDebugLogs)
+                Debug.Log("<color=yellow>[Collision Mode] NeckVRController 비활성화 - 애니메이션으로 목 제어</color>");
         }
 
         if (showDebugLogs)
