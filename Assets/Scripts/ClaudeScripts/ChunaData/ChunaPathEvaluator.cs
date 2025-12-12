@@ -626,7 +626,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             OnHoldProgressChanged?.Invoke(phaseHoldTime, midHoldDuration);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F1}s / {midHoldDuration:F1}s");
+                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F1}s");
 
             if (phaseHoldTime >= midHoldDuration)
             {
