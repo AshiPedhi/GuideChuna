@@ -43,7 +43,7 @@ public class HoldProgressIndicator : MonoBehaviour
     [SerializeField] private TextMeshProUGUI timeText;
 
     [Tooltip("시간 표시 형식")]
-    [SerializeField] private TimeDisplayFormat timeDisplayFormat = TimeDisplayFormat.CurrentSlashRequired;
+    [SerializeField] private TimeDisplayFormat timeDisplayFormat = TimeDisplayFormat.CurrentTimeOnly;
 
     [Tooltip("완료 시 표시할 텍스트 (비어있으면 시간 계속 표시)")]
     [SerializeField] private string completedText = "완료!";
@@ -97,6 +97,9 @@ public class HoldProgressIndicator : MonoBehaviour
         {
             fillImageObject = fillImage.gameObject;
         }
+
+        // 강제로 현재 시간만 표시하도록 설정 (기존 씬 데이터 무시)
+        timeDisplayFormat = TimeDisplayFormat.CurrentTimeOnly;
     }
 
     private void OnEnable()
@@ -174,7 +177,7 @@ public class HoldProgressIndicator : MonoBehaviour
 
         if (showDebugLogs)
         {
-            Debug.Log($"[HoldProgressIndicator] Progress: {progress:P0} ({currentTime:F2}s / {requiredTime:F2}s)");
+            Debug.Log($"[HoldProgressIndicator] Progress: {progress:P0} ({currentTime:F1}s)");
         }
 
         // 홀드 시작 시 오브젝트 활성화

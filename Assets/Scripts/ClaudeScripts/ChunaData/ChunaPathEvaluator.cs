@@ -896,11 +896,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void SetPatientAnimationFromSubStep(SubStepData subStep)
     {
-        if (subStep == null || !subStep.HasPatientAnimation())
-            return;
-
-        AnimationPlayMode mode = subStep.GetAnimationPlayMode();
-        SetPatientAnimation(subStep.patientAnimationClip, mode);
+        // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정
+        if (subStep != null && subStep.HasPatientAnimation())
+        {
+            string animStateName = subStep.patientAnimationClip;
+            AnimationPlayMode mode = subStep.GetAnimationPlayMode();
+            SetPatientAnimation(animStateName, mode);
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환자 애니메이션 로드: {animStateName}</color>");
+        }
+        else
+        {
+            // 비어있으면 애니메이션 없이 진행
+            currentAnimationStateName = null;
+            if (showDebugLogs)
+                Debug.Log("<color=yellow>[ChunaPathEvaluator] 애니메이션 클립 없음 - 애니메이션 없이 진행</color>");
+        }
     }
 
     /// <summary>
