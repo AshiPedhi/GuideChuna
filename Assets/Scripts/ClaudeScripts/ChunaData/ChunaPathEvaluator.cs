@@ -396,7 +396,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs)
+        {
             Debug.Log($"<color=cyan>[ChunaPathEvaluator] ========== 단계 변경: {oldPhase} → {newPhase} ==========</color>");
+            Debug.Log($"<color=magenta>[Animation Info] 상태이름: {currentAnimationStateName ?? "NULL"}, Animator: {(patientAnimator != null ? patientAnimator.name : "NULL")}, 프레임수: {loadedFrames?.Count ?? 0}</color>");
+        }
 
         OnPhaseChanged?.Invoke(newPhase);
 
@@ -485,7 +488,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 10 == 0)
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s");
         }
         else
         {
@@ -499,7 +502,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
                 float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
+                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s");
             }
 
             positionOk = leftNear && rightNear;
@@ -740,8 +743,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
 
-            if (showDebugLogs && Time.frameCount % 15 == 0)
-                Debug.Log($"[Frame] 프레임: {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m");
+            if (showDebugLogs)
+                Debug.Log($"<color=yellow>[Frame Changed] {prevFrame} → {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m</color>");
+        }
+
+        // 손 위치 상세 디버그 (주기적)
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            Vector3 closestFramePos = loadedFrames[closestFrame].rightRootPosition + positionOffset;
+            Debug.Log($"[Hand Position] 손:{rightHandPos}, 가까운프레임위치:{closestFramePos}, 거리:{minDistance:F3}m, 임계값:{frameAcceptanceRadius:F3}m");
         }
 
         // ★ 매 프레임마다 환자 애니메이션 실시간 동기화
@@ -818,7 +828,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Animation Lerp] {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
+                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0}, 프레임:{userHandFrameIndex}/{loadedFrames?.Count ?? 0}");
+        }
+        else if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            // 애니메이션이 업데이트되지 않는 이유 출력
+            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, Animator:{patientAnimator != null}, 상태:{currentAnimationStateName ?? "NULL"}</color>");
         }
     }
 
