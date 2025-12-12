@@ -90,7 +90,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float requiredHoldTime = 2f;
 
     [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
-    [SerializeField] private float holdVelocityThreshold = 0.02f;
+    [SerializeField] private float holdVelocityThreshold = 0.05f;
 
     [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
     [SerializeField] private bool requireLimitSafeForHold = true;
@@ -722,8 +722,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 프레임 인정 거리 임계값
-        float frameAcceptanceRadius = checkpointRadius * 2f;
+        // 프레임 인정 거리 임계값 (넓게 설정)
+        float frameAcceptanceRadius = checkpointRadius * 5f;
 
         int prevFrame = userHandFrameIndex;
 
