@@ -792,6 +792,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             Vector3 closestFramePos = loadedFrames[closestFrame].rightRootPosition + positionOffset;
             string rotInfo = useRotationMatching ? $", 회전차:{minRotationDiff:F1}°, 가중치:{rotationWeight:F1}" : "";
             Debug.Log($"[Hand Match] 거리:{minPositionDist:F3}m{rotInfo}, 점수:{minScore:F3}, 임계값:{scoreThreshold:F3}");
+            Debug.Log($"<color=cyan>[Frame Debug] 현재프레임:{userHandFrameIndex}, 가장가까운:{closestFrame}, 단계:{currentPhase}</color>");
+            Debug.Log($"<color=cyan>[Position] 손:{rightHandPos}, 프레임0:{loadedFrames[0].rightRootPosition + positionOffset}, 오프셋:{positionOffset}</color>");
         }
 
         // ★ 매 프레임마다 환자 애니메이션 실시간 동기화
