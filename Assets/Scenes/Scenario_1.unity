@@ -41700,7 +41700,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 24ea970f14ff62145a1f31feddc10872, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HoldProgressIndicator
-  pathEvaluator: {fileID: 1035274492}
+  pathEvaluator: {fileID: 0}
   fillImage: {fileID: 1080619882}
   timeText: {fileID: 1080619880}
   timeDisplayFormat: 1
@@ -71284,7 +71284,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ChunaLimitChecker
   playerLeftHand: {fileID: 1004980545}
   playerRightHand: {fileID: 1004980544}
-  pathEvaluator: {fileID: 1035274492}
+  pathEvaluator: {fileID: 0}
   warningRatio: 0.3
   dangerRatio: 0.5
   enableChecking: 1
@@ -71317,7 +71317,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 24ea970f14ff62145a1f31feddc10872, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::HoldProgressIndicator
-  pathEvaluator: {fileID: 1035274492}
+  pathEvaluator: {fileID: 1035274494}
   fillImage: {fileID: 1080619882}
   timeText: {fileID: 1080619880}
   timeDisplayFormat: 0
@@ -93909,6 +93909,12 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 4148778239110795873, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
       insertIndex: 1
       addedObject: {fileID: 1004980543}
+    - targetCorrespondingSourceObject: {fileID: 8222102283246498640, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2087145412}
+    - targetCorrespondingSourceObject: {fileID: 536020543301973468, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2087145413}
   m_SourcePrefab: {fileID: 100100000, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
 --- !u!4 &1004980541 stripped
 Transform:
@@ -97036,7 +97042,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1035274493}
-  - component: {fileID: 1035274492}
+  - component: {fileID: 1035274494}
   - component: {fileID: 1035274491}
   m_Layer: 0
   m_Name: ChunaPathEvaluator
@@ -97057,12 +97063,27 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f1513606760f4b4bbaeaa60f0767766, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunaPathEvaluatorBridge
-  pathEvaluator: {fileID: 1035274492}
+  pathEvaluator: {fileID: 1035274494}
   progressThreshold: 0.8
   enableSequenceCompletedEvent: 1
   enableProgressThresholdEvent: 1
   showDebugLogs: 1
---- !u!114 &1035274492
+--- !u!4 &1035274493
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1035274490}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.23905, y: 1.1432, z: -0.07317}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1035274494
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -97071,11 +97092,15 @@ MonoBehaviour:
   m_GameObject: {fileID: 1035274490}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dd5a5675da8da6a4290a2acfa7f84ab7, type: 3}
+  m_Script: {fileID: 11500000, guid: 8dbecac92cf0deb4c9049c647414c568, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunaPathEvaluator
   referenceTransform: {fileID: 2949187109976276139}
   recordedPatientOffset: {x: 0, y: 0, z: 0}
+  patientHeadCollider: {fileID: 2044603182}
+  leftHandCollider: {fileID: 2087145412}
+  rightHandCollider: {fileID: 2087145413}
+  useCollisionMode: 1
   leftCheckpoints: []
   rightCheckpoints: []
   checkpointParent: {fileID: 0}
@@ -97096,38 +97121,23 @@ MonoBehaviour:
   showFirstFrameWhileWaiting: 1
   metricsRecordInterval: 0.1
   enableHoldDetection: 1
-  requiredHoldTime: 3
+  requiredHoldTime: 2
   holdVelocityThreshold: 0.02
   requireLimitSafeForHold: 1
   requireNearTargetForHold: 1
-  holdTargetRadius: 0.02
+  holdTargetRadius: 0.15
   requireNearStartToBegin: 1
-  startPositionRadius: 0.25
+  startPositionRadius: 0.2
   guideLayerName: Guide
   checkpointFrameInterval: 15
-  checkpointRadius: 0.02
+  checkpointRadius: 0.15
   showDebugLogs: 1
-  startHoldDuration: 2
+  startHoldDuration: 3
   midHoldDuration: 3
   midHoldStartRatio: 0.3
   midHoldEndRatio: 0.5
   limitBarrierRatio: 0.5
   leftHandDriftThreshold: 0.15
---- !u!4 &1035274493
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1035274490}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.23905, y: 1.1432, z: -0.07317}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1036904081
 GameObject:
   m_ObjectHideFlags: 0
@@ -129442,7 +129452,7 @@ MonoBehaviour:
   evaluationMode: 1
   trainingController: {fileID: 0}
   trainingControllerBridge: {fileID: 0}
-  chunaPathEvaluator: {fileID: 1035274492}
+  chunaPathEvaluator: {fileID: 1035274494}
   chunaPathEvaluatorBridge: {fileID: 1035274491}
   conditionManager: {fileID: 1338513806}
   uiPositioner: {fileID: 1406233889}
@@ -217315,6 +217325,58 @@ Transform:
   m_Children: []
   m_Father: {fileID: 451571046}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2087145410 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 8222102283246498640, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+  m_PrefabInstance: {fileID: 1004980540}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &2087145411 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 536020543301973468, guid: 0a7d2469f24041c4284c66706f84c45e, type: 3}
+  m_PrefabInstance: {fileID: 1004980540}
+  m_PrefabAsset: {fileID: 0}
+--- !u!135 &2087145412
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2087145410}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.03
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!135 &2087145413
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2087145411}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 0.03
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &2088953015
 GameObject:
   m_ObjectHideFlags: 0
@@ -241450,7 +241512,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7cae97a1eea1474f9aa5c4db9098b85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AngleDisplayController
-  pathEvaluator: {fileID: 1035274492}
+  pathEvaluator: {fileID: 0}
   axisTransform: {fileID: 3683581782714295907}
   startAngle: 0
   endAngle: 90

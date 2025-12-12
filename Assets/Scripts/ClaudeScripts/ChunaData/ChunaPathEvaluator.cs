@@ -24,11 +24,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private Vector3 recordedPatientOffset = Vector3.zero;
 
     [Header("=== 직접 할당 충돌체 (환자 머리) ===")]
-<<<<<<< HEAD
-    [Tooltip("환자 머리에 부착된 충돌체 - 손이 이 충돌체에 닿으면 트래킹 시작")]
-=======
     [Tooltip("환자 머리에 부착된 충돌체 - 손이 닿으면 트래킹 시작")]
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
     [SerializeField] private Collider patientHeadCollider;
 
     [Tooltip("손 충돌체 (왼손)")]
@@ -182,15 +178,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 충돌 감지 상태
     private bool isLeftHandTouchingPatient = false;
     private bool isRightHandTouchingPatient = false;
-<<<<<<< HEAD
-    private float targetAnimationRatio = 0f;      // 목표 애니메이션 비율
-    private float currentAnimationRatio = 0f;     // 현재 애니메이션 비율 (선형보간용)
-    private float animationLerpSpeed = 5f;        // 애니메이션 보간 속도
-=======
     private float targetAnimationRatio = 0f;
     private float currentAnimationRatio = 0f;
     private float animationLerpSpeed = 5f;
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
 
     // 데이터
     private List<PoseFrame> loadedFrames = new List<PoseFrame>();
@@ -436,8 +426,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 1단계: 시작 위치 대기
-    /// 충돌 모드: 손이 환자에게 닿으면 StartHold로 전환
-    /// 레거시 모드: 체크포인트 위치 기반
+    /// 손 인식 시 StartHold 단계로 전환
     /// </summary>
     private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos)
     {
@@ -446,43 +435,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 충돌 모드: 손이 환자에게 닿았는지 확인
         if (useCollisionMode)
         {
-<<<<<<< HEAD
-            bool handTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-
-            if (showDebugLogs && Time.frameCount % 60 == 0)
-                Debug.Log($"[WaitingForStart-Collision] 왼손접촉:{isLeftHandTouchingPatient}, 오른손접촉:{isRightHandTouchingPatient}");
-
-            shouldProceed = handTouching;
-        }
-        else
-        {
-            // 레거시: 체크포인트 위치 기반
-            Vector3? leftStart = GetFirstCheckpointPosition(true);
-            Vector3? rightStart = GetFirstCheckpointPosition(false);
-
-            if (!leftStart.HasValue && !rightStart.HasValue)
-            {
-                if (showDebugLogs && Time.frameCount % 60 == 0)
-                    Debug.Log("<color=orange>[WaitingForStart] 체크포인트가 없음! 바로 StartHold로 진행</color>");
-            }
-
-            bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
-            bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
-
-            if (showDebugLogs && Time.frameCount % 60 == 0)
-            {
-                float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
-                float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[WaitingForStart] 왼손:{leftNear}({leftDist:F3}m), 오른손:{rightNear}({rightDist:F3}m), 반경:{startPositionRadius:F3}m");
-            }
-
-            shouldProceed = leftNear && rightNear;
-        }
-
-        if (shouldProceed)
-        {
-            // 왼손 위치 저장 (이후 이탈 체크용)
-=======
             shouldProceed = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 60 == 0)
@@ -509,7 +461,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (shouldProceed)
         {
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
             leftHandStartHoldPosition = leftPos;
 
             if (neckController != null && !neckController.IsEnabled)
@@ -528,31 +479,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool bothStopped = leftVel < holdVelocityThreshold && rightVel < holdVelocityThreshold;
         bool positionOk = false;
 
-<<<<<<< HEAD
-        bool positionOk = false;
-
-=======
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
         // ★ 충돌 모드: 손이 환자에게 닿아있는지 확인
         if (useCollisionMode)
         {
             positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 10 == 0)
-<<<<<<< HEAD
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}(L:{leftVel:F3}/R:{rightVel:F3}), " +
-                          $"접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
-        }
-        else
-        {
-            // 레거시: 시작 위치 유지 체크
-=======
                 Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
         }
         else
         {
             // 레거시: 체크포인트 위치 기반
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
             Vector3? leftStart = GetFirstCheckpointPosition(true);
             Vector3? rightStart = GetFirstCheckpointPosition(false);
             bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
@@ -562,13 +499,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
                 float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-<<<<<<< HEAD
-                Debug.Log($"[StartHold] 정지:{bothStopped}(L:{leftVel:F3}/R:{rightVel:F3}), " +
-                          $"위치OK(L:{leftNear}[{leftDist:F2}m]/R:{rightNear}[{rightDist:F2}m]), " +
-                          $"홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
-=======
                 Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s/{startHoldDuration:F1}s");
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
             }
 
             positionOk = leftNear && rightNear;
@@ -591,11 +522,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         else
         {
             if (phaseHoldTime > 0.1f && showDebugLogs)
-<<<<<<< HEAD
-                Debug.Log($"<color=orange>[StartHold] 홀드 중단 (정지:{bothStopped})</color>");
-=======
                 Debug.Log($"<color=orange>[StartHold] 홀드 중단</color>");
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
 
             phaseHoldTime = 0f;
             OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
@@ -754,7 +681,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
-    /// ★ 점진적 증가: 현재 프레임 근처에서만 검색 (급격한 점프 방지)
+    /// ★ 실시간 동기화: 앞뒤 자유 이동, 매 프레임 애니메이션 동기화
     /// </summary>
     private void UpdateUserHandFrame()
     {
@@ -779,14 +706,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        // ★ 현재 프레임 근처에서만 검색 (점진적 증가, 최대 30프레임 앞까지)
-        int searchStart = Mathf.Max(0, userHandFrameIndex - 5);  // 약간 뒤로도 허용
-        int searchEnd = Mathf.Min(loadedFrames.Count, userHandFrameIndex + 30);
-
+        // ★ 전체 프레임에서 가장 가까운 프레임 검색 (앞뒤 자유 이동)
         float minDistance = float.MaxValue;
         int closestFrame = userHandFrameIndex;
 
-        for (int i = searchStart; i < searchEnd; i++)
+        for (int i = 0; i < loadedFrames.Count; i++)
         {
             Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
             float dist = Vector3.Distance(rightHandPos, framePos);
@@ -828,7 +752,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 애니메이션을 프레임 비율에 맞춰 동기화 (즉시 적용)
+    /// 애니메이션을 프레임 비율에 맞춰 동기화
     /// </summary>
     private void SyncAnimationToFrame(float ratio)
     {
@@ -852,40 +776,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-<<<<<<< HEAD
-    /// 충돌 감지 업데이트 - 손이 환자 머리 충돌체에 닿았는지 확인
-=======
     /// 충돌 감지 업데이트
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
     /// </summary>
     private void UpdateCollisionDetection()
     {
         if (patientHeadCollider == null) return;
 
-<<<<<<< HEAD
-        // 왼손 충돌 체크
-        if (leftHandCollider != null)
-        {
-            bool wasTouch = isLeftHandTouchingPatient;
-            isLeftHandTouchingPatient = CheckColliderOverlap(leftHandCollider, patientHeadCollider);
-
-            if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
-                Debug.Log("<color=green>[Collision] 왼손이 환자에게 닿음!</color>");
-            else if (!isLeftHandTouchingPatient && wasTouch && showDebugLogs)
-                Debug.Log("<color=orange>[Collision] 왼손이 환자에서 떨어짐</color>");
-        }
-
-        // 오른손 충돌 체크
-        if (rightHandCollider != null)
-        {
-            bool wasTouch = isRightHandTouchingPatient;
-            isRightHandTouchingPatient = CheckColliderOverlap(rightHandCollider, patientHeadCollider);
-
-            if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
-                Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
-            else if (!isRightHandTouchingPatient && wasTouch && showDebugLogs)
-                Debug.Log("<color=orange>[Collision] 오른손이 환자에서 떨어짐</color>");
-=======
         if (leftHandCollider != null)
         {
             bool wasTouch = isLeftHandTouchingPatient;
@@ -902,75 +798,32 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
         }
     }
 
     /// <summary>
-<<<<<<< HEAD
-    /// 두 충돌체가 겹치는지 확인 (Physics.ComputePenetration 또는 거리 기반)
-    /// </summary>
-    private bool CheckColliderOverlap(Collider handCollider, Collider targetCollider)
-    {
-        if (handCollider == null || targetCollider == null) return false;
-
-        // Bounds 기반 간단한 충돌 체크
-        return handCollider.bounds.Intersects(targetCollider.bounds);
-    }
-
-    /// <summary>
-    /// 애니메이션 선형보간 업데이트 - 부드러운 애니메이션 전환
-=======
     /// 애니메이션 선형보간 업데이트
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
-<<<<<<< HEAD
-        // 손이 환자에게 닿아있을 때만 애니메이션 업데이트
-=======
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
         bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
         if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
         {
-<<<<<<< HEAD
-            // 목표 비율로 선형보간
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
-
-            // Animator에 적용
-=======
-            currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-<<<<<<< HEAD
-                Debug.Log($"[Animation Lerp] 현재: {currentAnimationRatio:P0} → 목표: {targetAnimationRatio:P0}");
-=======
                 Debug.Log($"[Animation Lerp] {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
         }
     }
 
     /// <summary>
-<<<<<<< HEAD
-    /// 손이 환자에게 닿아있는지 확인
-    /// </summary>
-    public bool IsHandTouchingPatient(bool isLeftHand)
-    {
-        return isLeftHand ? isLeftHandTouchingPatient : isRightHandTouchingPatient;
-    }
-
-    /// <summary>
-    /// 어느 손이든 환자에게 닿아있는지 확인
-=======
     /// 손이 환자에게 닿았는지 확인
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
     /// </summary>
     public bool IsAnyHandTouchingPatient()
     {
@@ -1323,11 +1176,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (useCollisionMode)
         {
             if (showDebugLogs)
-<<<<<<< HEAD
-                Debug.Log("<color=yellow>[ChunaPathEvaluator] 충돌 모드 - 체크포인트 생성 건너뜀 (직접 할당된 충돌체 사용)</color>");
-=======
                 Debug.Log("<color=yellow>[ChunaPathEvaluator] 충돌 모드 - 체크포인트 생성 건너뜀</color>");
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
         }
         else
         {
@@ -1344,10 +1193,6 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 Debug.Log($"<color=green>[ChunaPathEvaluator] 데이터 로드 완료 (충돌 모드)</color>");
                 Debug.Log($"  - 프레임 수: {loadedFrames.Count}개");
-<<<<<<< HEAD
-                Debug.Log($"  - 환자 머리 충돌체: {(patientHeadCollider != null ? patientHeadCollider.name : "미할당")}");
-=======
->>>>>>> 727887b00dc63711f2395969bc4eb30d78b27fd6
             }
             else
             {
@@ -1526,8 +1371,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             maxSimilarity = 0f
         };
 
-        // ★ 체크포인트는 가이드 핸드 1회 재생 완료 후 활성화됨
-        // ActivateAllCheckpoints()는 GuideHandPlaybackRoutine에서 호출됨
+        // 모든 체크포인트 활성화 (관문이 아닌 지표이므로 전부 활성화)
+        ActivateAllCheckpoints();
 
         // 리밋 체커 시작
         if (limitChecker != null)
@@ -1983,10 +1828,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         float frameTime = 1f / 30f;
         currentGuideFrameIndex = 0;
-        bool isFirstPlaythrough = true;  // 첫 번째 재생 여부 추적
-
-        if (showDebugLogs)
-            Debug.Log("<color=cyan>[ChunaPathEvaluator] ★ 가이드 핸드 첫 번째 재생 시작 (체크포인트 미활성)</color>");
 
         while (true)
         {
@@ -2031,28 +1872,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             currentGuideFrameIndex++;
             if (currentGuideFrameIndex >= loadedFrames.Count)
             {
-                // ★ 첫 번째 재생 완료 시 체크포인트 활성화
-                if (isFirstPlaythrough)
-                {
-                    isFirstPlaythrough = false;
-
-                    Debug.Log("<color=green>[ChunaPathEvaluator] ★★★ 가이드 핸드 첫 번째 재생 완료! 체크포인트 활성화! ★★★</color>");
-                    ActivateAllCheckpoints();
-
-                    if (!loopGuideHands)
-                    {
-                        // 루프 비활성화 시 여기서 종료
-                        break;
-                    }
-                }
-
                 if (loopGuideHands)
                 {
-                    // 1회 재생 완료 후 대기 시간 (1초)
+                    // 1회 재생 완료 후 대기 시간
                     if (loopDelaySeconds > 0f)
                     {
                         if (showDebugLogs)
-                            Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
+                            Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 1회 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
                         yield return new WaitForSeconds(loopDelaySeconds);
                     }
                     currentGuideFrameIndex = 0;
@@ -2175,67 +2001,5 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (score >= 65f) return "C";
         if (score >= 60f) return "D";
         return "F";
-    }
-
-    // ========== 충돌 모드 API ==========
-
-    /// <summary>
-    /// 충돌 모드 활성화/비활성화
-    /// </summary>
-    public void SetCollisionMode(bool enabled)
-    {
-        useCollisionMode = enabled;
-        if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 충돌 모드: {(enabled ? "활성화" : "비활성화")}</color>");
-    }
-
-    /// <summary>
-    /// 충돌 모드 여부
-    /// </summary>
-    public bool IsCollisionMode => useCollisionMode;
-
-    /// <summary>
-    /// 환자 머리 충돌체 설정
-    /// </summary>
-    public void SetPatientHeadCollider(Collider collider)
-    {
-        patientHeadCollider = collider;
-        if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환자 머리 충돌체 설정: {(collider != null ? collider.name : "null")}</color>");
-    }
-
-    /// <summary>
-    /// 손 충돌체 설정
-    /// </summary>
-    public void SetHandColliders(Collider leftHand, Collider rightHand)
-    {
-        leftHandCollider = leftHand;
-        rightHandCollider = rightHand;
-        if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 손 충돌체 설정 - 왼손: {(leftHand != null ? leftHand.name : "null")}, 오른손: {(rightHand != null ? rightHand.name : "null")}</color>");
-    }
-
-    /// <summary>
-    /// 애니메이션 선형보간 속도 설정
-    /// </summary>
-    public void SetAnimationLerpSpeed(float speed)
-    {
-        animationLerpSpeed = Mathf.Max(0.1f, speed);
-    }
-
-    /// <summary>
-    /// 현재 애니메이션 비율 (선형보간 적용된 값)
-    /// </summary>
-    public float GetCurrentAnimationRatio()
-    {
-        return currentAnimationRatio;
-    }
-
-    /// <summary>
-    /// 목표 애니메이션 비율 (프레임 기반 계산된 값)
-    /// </summary>
-    public float GetTargetAnimationRatio()
-    {
-        return targetAnimationRatio;
     }
 }
