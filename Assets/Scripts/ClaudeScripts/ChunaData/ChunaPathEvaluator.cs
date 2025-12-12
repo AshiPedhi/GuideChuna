@@ -54,6 +54,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("환자 모델의 Animator")]
     [SerializeField] private Animator patientAnimator;
 
+    [Tooltip("기본 애니메이션 상태 이름 (시나리오 데이터에 없을 때 사용)")]
+    [SerializeField] private string defaultAnimationStateName = "NeckRotation";
+
     [Tooltip("프레임 레이트에 맞춰 애니메이션 동기화")]
     [SerializeField] private bool syncAnimationWithFrame = true;
 
@@ -896,20 +899,27 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void SetPatientAnimationFromSubStep(SubStepData subStep)
     {
-        if (subStep == null)
+        string animStateName = null;
+        AnimationPlayMode mode = AnimationPlayMode.SyncWithUser;
+
+        if (subStep != null && subStep.HasPatientAnimation())
         {
-            Debug.LogWarning("[ChunaPathEvaluator] SubStepData가 null입니다.");
+            animStateName = subStep.patientAnimationClip;
+            mode = subStep.GetAnimationPlayMode();
+        }
+        else if (!string.IsNullOrEmpty(defaultAnimationStateName))
+        {
+            // 기본 애니메이션 상태 이름 사용
+            animStateName = defaultAnimationStateName;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 시나리오 데이터에 애니메이션 없음 → 기본값 사용: {defaultAnimationStateName}</color>");
+        }
+        else
+        {
+            Debug.LogWarning("<color=red>[ChunaPathEvaluator] ★★★ 애니메이션 설정 없음! Inspector에서 'defaultAnimationStateName' 또는 SubStepData의 'patientAnimationClip'을 설정하세요. ★★★</color>");
             return;
         }
 
-        if (!subStep.HasPatientAnimation())
-        {
-            Debug.LogWarning("<color=red>[ChunaPathEvaluator] ★★★ 환자 애니메이션 클립 이름이 설정되지 않았습니다! Inspector에서 SubStepData의 'patientAnimationClip' 필드를 설정하세요. ★★★</color>");
-            return;
-        }
-
-        AnimationPlayMode mode = subStep.GetAnimationPlayMode();
-        SetPatientAnimation(subStep.patientAnimationClip, mode);
+        SetPatientAnimation(animStateName, mode);
     }
 
     /// <summary>
