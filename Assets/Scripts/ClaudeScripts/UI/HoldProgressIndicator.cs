@@ -97,6 +97,9 @@ public class HoldProgressIndicator : MonoBehaviour
         {
             fillImageObject = fillImage.gameObject;
         }
+
+        // 강제로 현재 시간만 표시하도록 설정 (기존 씬 데이터 무시)
+        timeDisplayFormat = TimeDisplayFormat.CurrentTimeOnly;
     }
 
     private void OnEnable()

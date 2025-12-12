@@ -7,7 +7,7 @@ using System.Text;
 /// CSV 파일에서 시나리오 데이터를 로드하는 클래스
 /// 
 /// [CSV 구조]
-/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams
+/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip
 /// 
 /// [수정 내역]
 /// - RFC 4180 표준 CSV 파싱 (큰따옴표 안의 줄바꿈 처리) ✅
@@ -217,6 +217,13 @@ public class ScenarioCSVLoader : MonoBehaviour
                     conditionParams = values[11].Trim();
                 }
 
+                // patientAnimationClip (13번째 컬럼, 선택사항)
+                string patientAnimationClip = "";
+                if (values.Count >= 13 && !string.IsNullOrEmpty(values[12]))
+                {
+                    patientAnimationClip = values[12].Trim();
+                }
+
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
@@ -289,7 +296,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                     voiceInstruction = voiceInstruction,
                     handTrackingFileName = handTrackingFileName,
                     conditionType = conditionType,
-                    conditionParams = conditionParams
+                    conditionParams = conditionParams,
+                    patientAnimationClip = patientAnimationClip
                 };
 
                 currentStep.subSteps.Add(subStep);
@@ -297,7 +305,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                 if (showParsingDebugLog)
                 {
                     string handInfo = !string.IsNullOrEmpty(handTrackingFileName) ? $"핸드={handTrackingFileName}" : "핸드없음";
-                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초");
+                    string animInfo = !string.IsNullOrEmpty(patientAnimationClip) ? $"애니메이션={patientAnimationClip}" : "";
+                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo}");
                 }
             }
             catch (System.Exception e)
