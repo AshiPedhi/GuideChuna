@@ -1380,6 +1380,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void StartEvaluation()
     {
+        // ★ 이전 가이드 핸드 재생 중지 (스킵 시 중복 재생 방지)
+        StopGuideHandPlayback();
+
         int totalCheckpoints = leftCheckpoints.Count + rightCheckpoints.Count;
 
         if (totalCheckpoints == 0)
@@ -1405,6 +1408,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
+
+        // 프레임/애니메이션 상태 초기화
+        userHandFrameIndex = 0;
+        userHandFrameRatio = 0f;
+        currentAnimationRatio = 0f;
+        targetAnimationRatio = 0f;
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
