@@ -585,9 +585,8 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=cyan>[ScenarioManager] CSV 파일: {subStep.handTrackingFileName}</color>");
 
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
-        // 항상 호출 - 시나리오에 애니메이션 없어도 기본값 사용
         chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
-        Debug.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정 요청 (클립: {subStep.patientAnimationClip ?? "기본값 사용"})</color>");
+        Debug.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정 요청 (클립: {subStep.patientAnimationClip ?? "없음"})</color>");
 
         // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
         chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
