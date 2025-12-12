@@ -466,8 +466,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             leftHandStartHoldPosition = leftPos;
 
-            if (neckController != null && !neckController.IsEnabled)
+            // 충돌 모드에서는 NeckVRController 비활성화 (애니메이션으로 목 제어)
+            if (useCollisionMode && neckController != null)
+            {
+                neckController.Disable();
+                Debug.Log("<color=yellow>[Collision Mode] NeckVRController 비활성화 - 애니메이션으로 목 제어</color>");
+            }
+            else if (neckController != null && !neckController.IsEnabled)
+            {
                 neckController.Enable();
+            }
 
             Debug.Log("<color=green>[WaitingForStart] 손 인식! StartHold 단계로 전환</color>");
             ChangePhase(EvaluationPhase.StartHold);
@@ -1400,10 +1408,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 가이드 핸드는 StartHold 완료 후에 재생됨 (UpdateStartHold에서 호출)
         // 여기서는 재생하지 않음!
 
-        // 목 컨트롤러 활성화 (시작 위치 체크 불필요 시 즉시 활성화)
-        if (neckController != null && !requireNearStartToBegin)
+        // 목 컨트롤러 활성화 (충돌 모드가 아닐 때만)
+        // 충돌 모드에서는 애니메이션으로 목을 제어하므로 NeckVRController 비활성화
+        if (neckController != null && !requireNearStartToBegin && !useCollisionMode)
         {
             neckController.Enable();
+        }
+        else if (neckController != null && useCollisionMode)
+        {
+            neckController.Disable();
+            if (showDebugLogs)
+                Debug.Log("<color=yellow>[Collision Mode] NeckVRController 비활성화 - 애니메이션으로 목 제어</color>");
         }
 
         if (showDebugLogs)
