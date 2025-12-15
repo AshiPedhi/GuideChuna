@@ -1228,24 +1228,36 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void UpdateAutoPlay()
     {
-        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName))
-        {
-            // 애니메이션이 없으면 바로 완료 처리
-            if (showDebugLogs)
-                Debug.Log("<color=orange>[AutoPlay] 애니메이션 없음 - 즉시 완료</color>");
-            CompleteAutoPlay();
-            return;
-        }
-
-        // 현재 애니메이션 상태 정보 가져오기
-        AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
-
         // 경과 시간으로 진행률 계산
         float elapsed = Time.time - autoPlayStartTime;
         autoPlayProgress = Mathf.Clamp01(elapsed / autoPlayDuration);
 
         // 진행률 이벤트 발생
         OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
+        // ★ 애니메이션이 없어도 duration 시간만큼 대기
+        bool hasAnimation = patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName);
+
+        if (!hasAnimation)
+        {
+            // 애니메이션 없이 시간 기반으로만 진행
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"<color=orange>[AutoPlay] 애니메이션 없음 - 시간 기반 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
+            }
+
+            // 시간 완료 체크
+            if (elapsed >= autoPlayDuration)
+            {
+                if (showDebugLogs)
+                    Debug.Log($"<color=green>[AutoPlay] 완료! (시간 경과: {elapsed:F1}s)</color>");
+                CompleteAutoPlay();
+            }
+            return;
+        }
+
+        // 현재 애니메이션 상태 정보 가져오기
+        AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
 
         // ★ 올바른 애니메이션 상태인지 확인
         int expectedStateHash = Animator.StringToHash(currentAnimationStateName);
@@ -2133,6 +2145,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
 
+        // ★ 홀드 UI 리셋 이벤트 발생 (이전 SubStep의 타이머 표시 제거)
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+
         // 프레임/애니메이션 상태 초기화
         userHandFrameIndex = 0;
         userHandFrameRatio = 0f;
@@ -2280,6 +2295,13 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         isEvaluating = false;
 
+        // ★ AutoPlay 모드 리셋
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
+
+        // ★ 홀드 UI 리셋 이벤트 발생
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+
         StopGuideHandPlayback();
 
         if (limitChecker != null)
@@ -2307,6 +2329,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ AutoPlay 모드 리셋
         isAutoPlayMode = false;
         autoPlayProgress = 0f;
+
+        // ★ 홀드 UI 리셋 이벤트 발생
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
 
         foreach (var cp in leftCheckpoints) cp?.ResetCheckpoint();
         foreach (var cp in rightCheckpoints) cp?.ResetCheckpoint();
