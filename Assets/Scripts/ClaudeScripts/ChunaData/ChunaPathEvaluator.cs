@@ -215,6 +215,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
+    private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
 
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
@@ -545,6 +546,18 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             if (phaseHoldTime >= startHoldDuration)
             {
+                OnHoldCompleted?.Invoke();
+                OnStartHoldComplete?.Invoke();
+
+                // ★ StartHold 전용 모드 (등척성운동): StartHold만 완료하면 바로 종료
+                if (startHoldOnly)
+                {
+                    Debug.Log("<color=green>[StartHold] 홀드 완료! (StartHold 전용 모드 - 바로 완료)</color>");
+                    ChangePhase(EvaluationPhase.Completed);
+                    CompleteEvaluation();
+                    return;
+                }
+
                 Debug.Log("<color=green>[StartHold] 홀드 완료! Moving 단계로</color>");
 
                 // ★ 사용자 기준 위치/회전 저장 (상대 이동 감지용)
@@ -555,8 +568,6 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Debug.Log($"<color=cyan>[StartHold] 기준 위치 저장: {userHoldReferencePosition}</color>");
                 }
 
-                OnHoldCompleted?.Invoke();
-                OnStartHoldComplete?.Invoke();
                 StartGuideHandPlayback();
                 ChangePhase(EvaluationPhase.Moving);
             }
@@ -982,6 +993,19 @@ public class ChunaPathEvaluator : MonoBehaviour
         else
         {
             specifiedMovementType = null; // 자동 감지 사용
+        }
+
+        // StartHold만 체크 모드 (등척성운동 등)
+        // conditionParams에 "startHoldOnly" 포함 시 활성화
+        if (subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("startholdonly"))
+        {
+            startHoldOnly = true;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화</color>");
+        }
+        else
+        {
+            startHoldOnly = false;
         }
 
         // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정
