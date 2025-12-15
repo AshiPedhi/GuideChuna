@@ -186,10 +186,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("스트레칭/재평가 시 확장된 제한 장벽 (0~1)")]
     [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
 
+    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 시작 구간")]
+    [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
+
     [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
     [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
 
-    [Tooltip("스트레칭/재평가 시 시작 위치 (0~1, 30%부터 시작)")]
+    [Tooltip("스트레칭 시 시작 위치 (0~1, 30%부터 시작)")]
     [SerializeField] private float extendedStartRatio = 0.3f;
 
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
@@ -286,6 +289,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
     private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
+    private float currentMidHoldStart => isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio;  // 홀드 시작 (확장: 50%, 일반: 30%)
     private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
     private float currentStartRatio => isStretchingMode ? extendedStartRatio : 0f;  // 스트레칭만 30%부터 시작
 
@@ -734,8 +738,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 중간 홀드 구간 체크 (30~제한비율)
-        if (progress >= midHoldStartRatio && progress <= limitRatio)
+        // 중간 홀드 구간 체크 (확장:50~65%, 일반:30~50%)
+        if (progress >= currentMidHoldStart && progress <= limitRatio)
         {
             // 중간 홀드 구간 진입 → 중간 홀드 단계로
             OnMidHoldBegin?.Invoke();  // "멈추세요" 안내
@@ -758,9 +762,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
         bool leftOk = leftDrift <= leftHandDriftThreshold;
 
-        // 오른손 목표 구간 내 체크 (0.3~0.5)
+        // 오른손 목표 구간 내 체크 (확장:50~65%, 일반:30~50%)
         float progress = GetCurrentProgress();
-        bool rightInRange = progress >= midHoldStartRatio && progress <= midHoldEndRatio;
+        bool rightInRange = progress >= currentMidHoldStart && progress <= currentMidHoldEnd;
 
         if (rightStopped && leftOk && rightInRange)
         {
