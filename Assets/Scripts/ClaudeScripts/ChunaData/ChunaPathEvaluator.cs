@@ -45,6 +45,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private HandVisual playerLeftHand;
     [SerializeField] private HandVisual playerRightHand;
 
+    [Tooltip("회전 감지에 사용할 손목 본 (자동 검색됨)")]
+    private Transform leftWristBone;
+    private Transform rightWristBone;
+
     [Header("=== 모듈 참조 ===")]
     [SerializeField] private HandPoseComparator poseComparator;
     [SerializeField] private ChunaLimitChecker limitChecker;
@@ -563,10 +567,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // ★ 사용자 기준 위치/회전 저장 (상대 이동 감지용)
                 if (useRelativeMovement && playerRightHand != null)
                 {
+                    // 손목 본을 아직 못찾았으면 다시 검색
+                    if (rightWristBone == null)
+                        FindWristBones();
+
                     userHoldReferencePosition = playerRightHand.transform.position;
-                    userHoldReferenceRotation = playerRightHand.transform.rotation;
+                    // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전)
+                    userHoldReferenceRotation = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
                     Vector3 euler = userHoldReferenceRotation.eulerAngles;
-                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition}, 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0})</color>");
+                    string wristInfo = rightWristBone != null ? rightWristBone.name : "루트";
+                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition}, 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
                 }
                 else
                 {
@@ -755,7 +765,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         Vector3 rightHandPos = playerRightHand.transform.position;
-        Quaternion rightHandRot = playerRightHand.transform.rotation;
+        // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전 감지)
+        Quaternion rightHandRot = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
 
         float prevRatio = userHandFrameRatio;
         float newRatio = 0f;
@@ -1290,6 +1301,45 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Debug.Log($"[ChunaPathEvaluator] 환자 Transform 자동 연결: {patient.name}");
             }
         }
+
+        // 손목 본 자동 검색
+        FindWristBones();
+    }
+
+    /// <summary>
+    /// 손목 본 검색 (XRHand_Wrist 또는 XRHand_Palm)
+    /// </summary>
+    private void FindWristBones()
+    {
+        if (playerLeftHand != null && leftWristBone == null)
+        {
+            leftWristBone = FindBoneInHierarchy(playerLeftHand.transform, "Wrist", "Palm");
+            if (leftWristBone != null && showDebugLogs)
+                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 왼손 손목 본 연결: {leftWristBone.name}</color>");
+        }
+
+        if (playerRightHand != null && rightWristBone == null)
+        {
+            rightWristBone = FindBoneInHierarchy(playerRightHand.transform, "Wrist", "Palm");
+            if (rightWristBone != null && showDebugLogs)
+                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 오른손 손목 본 연결: {rightWristBone.name}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 계층 구조에서 특정 이름을 포함하는 본 검색
+    /// </summary>
+    private Transform FindBoneInHierarchy(Transform root, params string[] namePatterns)
+    {
+        foreach (Transform child in root.GetComponentsInChildren<Transform>())
+        {
+            foreach (string pattern in namePatterns)
+            {
+                if (child.name.Contains(pattern))
+                    return child;
+            }
+        }
+        return null;
     }
 
     /// <summary>
