@@ -1302,10 +1302,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser)
     {
-        currentAnimationStateName = animationStateName;
+        // ★ 애니메이션 이름 공백 제거 (CSV 파싱 시 공백 문제 방지)
+        string trimmedName = animationStateName?.Trim();
+
+        currentAnimationStateName = trimmedName;
         animationPlayMode = playMode;
 
-        Debug.Log($"<color=magenta>[Animation] ★ 애니메이션 설정 시도: '{animationStateName}' (모드:{playMode})</color>");
+        Debug.Log($"<color=magenta>[Animation] ★ 애니메이션 설정 시도: '{trimmedName}' (모드:{playMode})</color>");
 
         if (patientAnimator == null)
         {
@@ -1318,39 +1321,60 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
             else
             {
-                Debug.Log("<color=red>[Animation] Patient 태그 오브젝트를 찾을 수 없음!</color>");
+                Debug.LogError("<color=red>[Animation] Patient 태그 오브젝트를 찾을 수 없음!</color>");
             }
         }
 
         if (patientAnimator == null)
         {
-            Debug.Log("<color=red>[Animation] patientAnimator가 NULL - 애니메이션 재생 불가!</color>");
+            Debug.LogError("<color=red>[Animation] patientAnimator가 NULL - 애니메이션 재생 불가!</color>");
             return;
         }
 
-        if (string.IsNullOrEmpty(animationStateName))
+        if (string.IsNullOrEmpty(trimmedName))
         {
-            Debug.Log("<color=orange>[Animation] 애니메이션 이름이 비어있음</color>");
+            Debug.LogWarning("<color=orange>[Animation] 애니메이션 이름이 비어있음</color>");
             return;
         }
 
         // Animator에 해당 상태가 있는지 확인
-        bool hasState = patientAnimator.HasState(0, Animator.StringToHash(animationStateName));
-        Debug.Log($"<color=cyan>[Animation] Animator '{patientAnimator.name}'에 상태 '{animationStateName}' 존재: {hasState}</color>");
+        int stateHash = Animator.StringToHash(trimmedName);
+        bool hasState = patientAnimator.HasState(0, stateHash);
+        Debug.Log($"<color=cyan>[Animation] Animator '{patientAnimator.name}'에 상태 '{trimmedName}' (해시:{stateHash}) 존재: {hasState}</color>");
+
+        if (!hasState)
+        {
+            Debug.LogError($"<color=red>[Animation] ★★★ 경고: Animator에 '{trimmedName}' 상태가 없습니다! 애니메이션 재생 불가!</color>");
+            // 사용 가능한 상태 목록 출력 시도
+            var controller = patientAnimator.runtimeAnimatorController;
+            if (controller != null)
+            {
+                Debug.Log($"<color=yellow>[Animation] Animator Controller: {controller.name}</color>");
+                Debug.Log($"<color=yellow>[Animation] 클립 수: {controller.animationClips?.Length ?? 0}</color>");
+                if (controller.animationClips != null)
+                {
+                    foreach (var clip in controller.animationClips)
+                    {
+                        Debug.Log($"<color=yellow>  - 클립: '{clip.name}'</color>");
+                    }
+                }
+            }
+            return;
+        }
 
         if (playMode == AnimationPlayMode.AutoPlay)
         {
             // 자동 재생 모드
-            patientAnimator.Play(animationStateName);
+            patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 1f;
-            Debug.Log($"<color=green>[Animation] 자동 재생 시작: {animationStateName}</color>");
+            Debug.Log($"<color=green>[Animation] ★ 자동 재생 시작: '{trimmedName}' (speed=1)</color>");
         }
         else if (playMode == AnimationPlayMode.SyncWithUser)
         {
             // 사용자 동기화 모드 - 시작 위치로 설정
-            patientAnimator.Play(animationStateName, 0, 0f);
+            patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 0f;
-            Debug.Log($"<color=green>[Animation] 동기화 모드 시작: {animationStateName} (첫 프레임)</color>");
+            Debug.Log($"<color=green>[Animation] 동기화 모드 시작: '{trimmedName}' (첫 프레임, speed=0)</color>");
         }
     }
 
@@ -1511,7 +1535,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// Step 이름에 따라 확장 제한 모드 자동 설정
-    /// "스트레칭" 또는 "재평가"가 포함되면 확장 모드 활성화
+    /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
     /// </summary>
     public void SetExtendedLimitModeFromStepName(string stepName)
     {
@@ -1521,7 +1545,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        bool shouldExtend = stepName.Contains("스트레칭") || stepName.Contains("재평가");
+        // ★ 재평가 단계에서만 확장 (스트레칭은 기본 50% 유지)
+        bool shouldExtend = stepName.Contains("재평가");
 
         if (shouldExtend)
         {

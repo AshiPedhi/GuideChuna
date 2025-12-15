@@ -532,15 +532,29 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void OnSubStepStartedForHandPose(SubStepData subStep)
     {
+        // ★ 디버그: SubStep 정보 출력
+        Debug.Log($"<color=cyan>[ScenarioManager] OnSubStepStartedForHandPose 호출됨</color>");
+        Debug.Log($"<color=cyan>  - SubStep #{subStep?.subStepNo}</color>");
+        Debug.Log($"<color=cyan>  - handTrackingFileName: '{subStep?.handTrackingFileName ?? "(null)"}'</color>");
+        Debug.Log($"<color=cyan>  - patientAnimationClip: '{subStep?.patientAnimationClip ?? "(null)"}'</color>");
+        Debug.Log($"<color=cyan>  - HasPatientAnimation: {subStep?.HasPatientAnimation()}</color>");
+        Debug.Log($"<color=cyan>  - GetAnimationPlayMode: {subStep?.GetAnimationPlayMode()}</color>");
+
         // ✅ CSV의 handTrackingFileName 자동 처리
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
         {
+            Debug.Log($"<color=green>[ScenarioManager] → HandPoseTracking 모드 선택</color>");
             HandleHandPoseTracking(subStep);
         }
         // ★ 핸드데이터 없고 환자 애니메이션만 있는 경우 → AutoPlay 모드
         else if (subStep.HasPatientAnimation())
         {
+            Debug.Log($"<color=magenta>[ScenarioManager] → AutoPlay 모드 선택</color>");
             HandleAutoPlayAnimation(subStep);
+        }
+        else
+        {
+            Debug.Log($"<color=yellow>[ScenarioManager] → 핸드/애니메이션 처리 없음</color>");
         }
     }
 
