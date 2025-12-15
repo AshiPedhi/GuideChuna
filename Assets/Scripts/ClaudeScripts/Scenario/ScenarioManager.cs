@@ -537,6 +537,59 @@ public class ScenarioManager : MonoBehaviour
         {
             HandleHandPoseTracking(subStep);
         }
+        // ★ 핸드데이터 없고 환자 애니메이션만 있는 경우 → AutoPlay 모드
+        else if (subStep.HasPatientAnimation())
+        {
+            HandleAutoPlayAnimation(subStep);
+        }
+    }
+
+    /// <summary>
+    /// ★ 환자 애니메이션 AutoPlay 처리 (핸드데이터 없이 애니메이션만 자동 재생)
+    /// </summary>
+    private void HandleAutoPlayAnimation(SubStepData subStep)
+    {
+        if (chunaPathEvaluator == null)
+        {
+            Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator가 없어서 AutoPlay를 사용할 수 없습니다!");
+            return;
+        }
+
+        Debug.Log($"<color=magenta>[ScenarioManager] ========== AutoPlay 모드 시작 ==========</color>");
+        Debug.Log($"<color=magenta>[ScenarioManager] 애니메이션: {subStep.patientAnimationClip}</color>");
+        Debug.Log($"<color=magenta>[ScenarioManager] 시간: {subStep.duration}초</color>");
+
+        // AutoPlay 시작
+        chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
+
+        // AutoPlay 완료 시 SubStep 완료 처리
+        chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        chunaPathEvaluator.OnAutoPlayCompleted += OnAutoPlayCompletedHandler;
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 핸들러
+    /// </summary>
+    private void OnAutoPlayCompletedHandler()
+    {
+        Debug.Log("<color=green>[ScenarioManager] AutoPlay 완료 - 다음 SubStep으로 진행</color>");
+
+        // 이벤트 구독 해제
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        }
+
+        // 다음 SubStep으로 진행 (조건 매니저 통해)
+        if (conditionManager != null && currentSubStep != null)
+        {
+            string phaseName = currentPhase.phaseName;
+            string stepName = currentStep.stepName;
+            int subStepNo = currentSubStep.subStepNo;
+
+            // 조건 완료로 처리
+            conditionManager.TryCompleteCurrentCondition(phaseName, stepName, subStepNo);
+        }
     }
 
     /// <summary>

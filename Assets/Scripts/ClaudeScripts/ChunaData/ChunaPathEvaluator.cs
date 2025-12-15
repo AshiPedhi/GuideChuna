@@ -240,6 +240,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float animationFrameRate = 30f;  // 핸드 데이터 프레임 레이트
     private float animationDuration = 0f;
 
+    // ★ AutoPlay 모드 관련
+    private float autoPlayProgress = 0f;        // 자동 재생 진행률 (0~1)
+    private float autoPlayDuration = 3f;        // 자동 재생 시간 (초) - 기본값 3초
+    private float autoPlayStartTime = 0f;       // 자동 재생 시작 시간
+    private bool isAutoPlayMode = false;        // 자동 재생 모드 활성화 여부
+
     // 결과
     private EvaluationSession currentSession;
 
@@ -352,6 +358,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     void Update()
     {
         if (!isEvaluating) return;
+
+        // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생
+        if (isAutoPlayMode)
+        {
+            UpdateAutoPlay();
+            return;
+        }
 
         // 충돌 모드: 손-환자 충돌 체크
         if (useCollisionMode)
@@ -1101,6 +1114,72 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ AutoPlay 모드 업데이트 - 핸드데이터 없이 애니메이션만 자동 재생
+    /// </summary>
+    private void UpdateAutoPlay()
+    {
+        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName))
+        {
+            // 애니메이션이 없으면 바로 완료 처리
+            if (showDebugLogs)
+                Debug.Log("<color=orange>[AutoPlay] 애니메이션 없음 - 즉시 완료</color>");
+            CompleteAutoPlay();
+            return;
+        }
+
+        // 현재 애니메이션 상태 정보 가져오기
+        AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
+
+        // 경과 시간으로 진행률 계산
+        float elapsed = Time.time - autoPlayStartTime;
+        autoPlayProgress = Mathf.Clamp01(elapsed / autoPlayDuration);
+
+        // 진행률 이벤트 발생
+        OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
+        // 디버그 로그
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
+        }
+
+        // 애니메이션 완료 체크 (normalizedTime >= 1 또는 지정 시간 경과)
+        bool animationComplete = stateInfo.normalizedTime >= 0.99f;
+        bool timeComplete = elapsed >= autoPlayDuration;
+
+        if (animationComplete || timeComplete)
+        {
+            if (showDebugLogs)
+            {
+                string reason = animationComplete ? "애니메이션 끝" : "시간 초과";
+                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason})</color>");
+            }
+            CompleteAutoPlay();
+        }
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 처리
+    /// </summary>
+    private void CompleteAutoPlay()
+    {
+        isAutoPlayMode = false;
+        autoPlayProgress = 1f;
+
+        // 평가 완료 처리
+        ChangePhase(EvaluationPhase.Completed);
+        CompleteEvaluation();
+
+        // 완료 이벤트
+        OnAutoPlayCompleted?.Invoke();
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 이벤트
+    /// </summary>
+    public event Action OnAutoPlayCompleted;
+
+    /// <summary>
     /// 손이 환자에게 닿았는지 확인
     /// </summary>
     public bool IsAnyHandTouchingPatient()
@@ -1227,6 +1306,67 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
         currentAnimationStateName = null;
     }
+
+    /// <summary>
+    /// ★ AutoPlay 모드 시작 - 핸드데이터 없이 애니메이션만 자동 재생
+    /// </summary>
+    /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 길이 사용</param>
+    public void StartAutoPlay(float duration = 0f)
+    {
+        isAutoPlayMode = true;
+        autoPlayStartTime = Time.time;
+        autoPlayProgress = 0f;
+
+        // duration이 0이면 애니메이션 클립 길이 사용, 없으면 기본값 3초
+        if (duration > 0f)
+        {
+            autoPlayDuration = duration;
+        }
+        else if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
+        {
+            // 애니메이션 클립 길이 가져오기
+            AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
+            autoPlayDuration = stateInfo.length > 0f ? stateInfo.length : 3f;
+        }
+        else
+        {
+            autoPlayDuration = 3f; // 기본값
+        }
+
+        // 평가 시작 처리
+        isEvaluating = true;
+        evaluationStartTime = Time.time;
+        ChangePhase(EvaluationPhase.Moving); // AutoPlay는 바로 Moving 단계로
+
+        Debug.Log($"<color=green>[AutoPlay] ★ 자동 재생 시작! 시간:{autoPlayDuration:F1}초, 애니메이션:{currentAnimationStateName ?? "없음"}</color>");
+    }
+
+    /// <summary>
+    /// ★ SubStep에서 AutoPlay 모드 시작 (핸드데이터 없고 애니메이션만 있는 경우)
+    /// </summary>
+    public void StartAutoPlayFromSubStep(SubStepData subStep)
+    {
+        if (subStep == null) return;
+
+        // 애니메이션 설정
+        SetPatientAnimationFromSubStep(subStep);
+
+        // duration 파싱 시도
+        float duration = subStep.duration > 0 ? subStep.duration : 0f;
+
+        // AutoPlay 시작
+        StartAutoPlay(duration);
+    }
+
+    /// <summary>
+    /// 현재 AutoPlay 모드인지 확인
+    /// </summary>
+    public bool IsAutoPlayMode => isAutoPlayMode;
+
+    /// <summary>
+    /// AutoPlay 진행률 (0~1)
+    /// </summary>
+    public float AutoPlayProgress => autoPlayProgress;
 
     /// <summary>
     /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로
