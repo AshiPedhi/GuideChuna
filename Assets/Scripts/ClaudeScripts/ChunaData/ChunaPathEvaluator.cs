@@ -1289,6 +1289,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             string durationInfo = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}s" : "애니메이션 길이";
             Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {durationInfo})</color>");
             Debug.Log($"<color=cyan>[AutoPlay] 상태: '{currentAnimationStateName}', 올바른상태: {isCorrectState}, normalizedTime: {stateInfo.normalizedTime:F2}</color>");
+
+            // ★ 추가 디버그: 왜 normalizedTime이 0인지 확인
+            Debug.Log($"<color=yellow>[AutoPlay Debug] animator.speed={patientAnimator.speed}, animator.enabled={patientAnimator.enabled}, stateInfo.speed={stateInfo.speed}, stateInfo.length={stateInfo.length}</color>");
         }
 
         // ★ 최소 경과 시간 체크 (0.5초 미만이면 완료 판정 안함 - 상태 전환 대기)
