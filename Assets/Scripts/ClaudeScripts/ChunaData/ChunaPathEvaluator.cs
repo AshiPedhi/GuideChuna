@@ -1247,14 +1247,27 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 진행률 이벤트 발생
         OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
 
+        // ★ 올바른 애니메이션 상태인지 확인
+        int expectedStateHash = Animator.StringToHash(currentAnimationStateName);
+        bool isCorrectState = stateInfo.shortNameHash == expectedStateHash || stateInfo.fullPathHash == expectedStateHash;
+
         // 디버그 로그
         if (showDebugLogs && Time.frameCount % 60 == 0)
         {
             Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
+            Debug.Log($"<color=cyan>[AutoPlay] 상태 확인 - 예상: '{currentAnimationStateName}', 올바른 상태: {isCorrectState}, normalizedTime: {stateInfo.normalizedTime:F2}</color>");
         }
 
-        // 애니메이션 완료 체크 (normalizedTime >= 1 또는 지정 시간 경과)
-        bool animationComplete = stateInfo.normalizedTime >= 0.99f;
+        // ★ 최소 경과 시간 체크 (0.5초 미만이면 완료 판정 안함 - 상태 전환 대기)
+        const float minElapsedBeforeComplete = 0.5f;
+        if (elapsed < minElapsedBeforeComplete)
+        {
+            return;
+        }
+
+        // 애니메이션 완료 체크 (올바른 상태에서 normalizedTime >= 1 또는 지정 시간 경과)
+        // ★ 올바른 상태가 아니면 시간 기준으로만 완료 체크
+        bool animationComplete = isCorrectState && stateInfo.normalizedTime >= 0.99f;
         bool timeComplete = elapsed >= autoPlayDuration;
 
         if (animationComplete || timeComplete)
@@ -1262,7 +1275,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (showDebugLogs)
             {
                 string reason = animationComplete ? "애니메이션 끝" : "시간 초과";
-                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason})</color>");
+                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason}, 경과: {elapsed:F1}s)</color>");
             }
             CompleteAutoPlay();
         }
@@ -1305,7 +1318,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 애니메이션 이름 공백 제거 (CSV 파싱 시 공백 문제 방지)
         string trimmedName = animationStateName?.Trim();
 
-        currentAnimationStateName = trimmedName;
         animationPlayMode = playMode;
 
         Debug.Log($"<color=magenta>[Animation] ★ 애니메이션 설정 시도: '{trimmedName}' (모드:{playMode})</color>");
@@ -1328,12 +1340,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (patientAnimator == null)
         {
             Debug.LogError("<color=red>[Animation] patientAnimator가 NULL - 애니메이션 재생 불가!</color>");
+            currentAnimationStateName = null;  // ★ 실패 시 null로 설정
             return;
         }
 
         if (string.IsNullOrEmpty(trimmedName))
         {
             Debug.LogWarning("<color=orange>[Animation] 애니메이션 이름이 비어있음</color>");
+            currentAnimationStateName = null;  // ★ 실패 시 null로 설정
             return;
         }
 
@@ -1345,6 +1359,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (!hasState)
         {
             Debug.LogError($"<color=red>[Animation] ★★★ 경고: Animator에 '{trimmedName}' 상태가 없습니다! 애니메이션 재생 불가!</color>");
+            currentAnimationStateName = null;  // ★ 상태 없으면 null로 설정 (UpdateAutoPlay에서 즉시 완료 방지)
             // 사용 가능한 상태 목록 출력 시도
             var controller = patientAnimator.runtimeAnimatorController;
             if (controller != null)
@@ -1361,6 +1376,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
             return;
         }
+
+        // ★ 상태 확인 후에만 이름 설정 (실패 시 null 유지)
+        currentAnimationStateName = trimmedName;
 
         if (playMode == AnimationPlayMode.AutoPlay)
         {
@@ -2085,6 +2103,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 이전 가이드 핸드 재생 중지 (스킵 시 중복 재생 방지)
         StopGuideHandPlayback();
 
+        // ★ AutoPlay 모드 리셋 (이전 SubStep에서 남아있을 수 있음)
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
+
         int totalCheckpoints = leftCheckpoints.Count + rightCheckpoints.Count;
 
         if (totalCheckpoints == 0)
@@ -2281,6 +2303,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     public void ResetEvaluation()
     {
         isEvaluating = false;
+
+        // ★ AutoPlay 모드 리셋
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
 
         foreach (var cp in leftCheckpoints) cp?.ResetCheckpoint();
         foreach (var cp in rightCheckpoints) cp?.ResetCheckpoint();
