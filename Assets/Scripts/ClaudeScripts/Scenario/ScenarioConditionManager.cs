@@ -669,6 +669,9 @@ public class CheckpointPoseCondition : IScenarioCondition
     private ChunaPathEvaluatorBridge evaluatorBridge;
     private bool isCompleted = false;
     private string fileName;
+    private float creationTime;  // ★ 생성 시간 기록
+    private bool isActive = true;  // ★ 활성화 상태
+    private const float MIN_ACTIVE_TIME = 1.0f;  // ★ 최소 활성화 시간 (1초)
 
     /// <summary>
     /// CheckpointPoseCondition 생성자
@@ -677,9 +680,14 @@ public class CheckpointPoseCondition : IScenarioCondition
     {
         evaluatorBridge = bridge;
         fileName = trackingFileName;
+        creationTime = Time.time;  // ★ 생성 시간 기록
 
         if (bridge != null)
         {
+            // ★ 이전 이벤트 구독 해제 (혹시 남아있을 수 있음)
+            bridge.OnSequenceCompleted -= OnSequenceCompleted;
+            bridge.OnProgressThresholdReached -= OnProgressThresholdReached;
+
             // OnSequenceCompleted 이벤트 구독
             bridge.OnSequenceCompleted += OnSequenceCompleted;
             Debug.Log($"<color=cyan>[CheckpointPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
@@ -696,14 +704,54 @@ public class CheckpointPoseCondition : IScenarioCondition
 
     private void OnSequenceCompleted()
     {
+        // ★ 비활성화 상태면 무시
+        if (!isActive) return;
+
+        // ★ 최소 활성화 시간 체크 (너무 빨리 완료되는 것 방지)
+        float elapsed = Time.time - creationTime;
+        if (elapsed < MIN_ACTIVE_TIME)
+        {
+            Debug.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
+            return;
+        }
+
         isCompleted = true;
-        Debug.Log($"<color=green>[CheckpointPoseCondition] 모든 체크포인트 통과: {fileName}</color>");
+        Debug.Log($"<color=green>[CheckpointPoseCondition] 모든 체크포인트 통과 (경과: {elapsed:F1}s): {fileName}</color>");
+
+        // ★ 이벤트 구독 해제
+        Unsubscribe();
     }
 
     private void OnProgressThresholdReached()
     {
+        // ★ 비활성화 상태면 무시
+        if (!isActive) return;
+
+        // ★ 최소 활성화 시간 체크 (너무 빨리 완료되는 것 방지)
+        float elapsed = Time.time - creationTime;
+        if (elapsed < MIN_ACTIVE_TIME)
+        {
+            Debug.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
+            return;
+        }
+
         isCompleted = true;
-        Debug.Log($"<color=green>[CheckpointPoseCondition] 진행률 목표 달성으로 완료: {fileName}</color>");
+        Debug.Log($"<color=green>[CheckpointPoseCondition] 진행률 목표 달성으로 완료 (경과: {elapsed:F1}s): {fileName}</color>");
+
+        // ★ 이벤트 구독 해제
+        Unsubscribe();
+    }
+
+    /// <summary>
+    /// ★ 이벤트 구독 해제
+    /// </summary>
+    private void Unsubscribe()
+    {
+        if (evaluatorBridge != null)
+        {
+            evaluatorBridge.OnSequenceCompleted -= OnSequenceCompleted;
+            evaluatorBridge.OnProgressThresholdReached -= OnProgressThresholdReached;
+        }
     }
 
     public bool IsConditionMet()
@@ -719,5 +767,16 @@ public class CheckpointPoseCondition : IScenarioCondition
     public void Reset()
     {
         isCompleted = false;
+        creationTime = Time.time;  // ★ 리셋 시 시간도 갱신
+    }
+
+    /// <summary>
+    /// ★ 조건 비활성화 및 이벤트 구독 해제
+    /// </summary>
+    public void Deactivate()
+    {
+        isActive = false;
+        Unsubscribe();
+        Debug.Log($"<color=orange>[CheckpointPoseCondition] 비활성화됨: {fileName}</color>");
     }
 }

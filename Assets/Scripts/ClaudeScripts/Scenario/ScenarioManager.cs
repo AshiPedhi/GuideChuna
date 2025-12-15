@@ -532,11 +532,74 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void OnSubStepStartedForHandPose(SubStepData subStep)
     {
+        // ★ 디버그: SubStep 정보 출력
+        Debug.Log($"<color=cyan>[ScenarioManager] OnSubStepStartedForHandPose 호출됨</color>");
+        Debug.Log($"<color=cyan>  - SubStep #{subStep?.subStepNo}</color>");
+        Debug.Log($"<color=cyan>  - handTrackingFileName: '{subStep?.handTrackingFileName ?? "(null)"}'</color>");
+        Debug.Log($"<color=cyan>  - patientAnimationClip: '{subStep?.patientAnimationClip ?? "(null)"}'</color>");
+        Debug.Log($"<color=cyan>  - HasPatientAnimation: {subStep?.HasPatientAnimation()}</color>");
+        Debug.Log($"<color=cyan>  - GetAnimationPlayMode: {subStep?.GetAnimationPlayMode()}</color>");
+
         // ✅ CSV의 handTrackingFileName 자동 처리
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
         {
+            Debug.Log($"<color=green>[ScenarioManager] → HandPoseTracking 모드 선택</color>");
             HandleHandPoseTracking(subStep);
         }
+        // ★ 핸드데이터 없고 환자 애니메이션만 있는 경우 → AutoPlay 모드
+        else if (subStep.HasPatientAnimation())
+        {
+            Debug.Log($"<color=magenta>[ScenarioManager] → AutoPlay 모드 선택</color>");
+            HandleAutoPlayAnimation(subStep);
+        }
+        else
+        {
+            Debug.Log($"<color=yellow>[ScenarioManager] → 핸드/애니메이션 처리 없음</color>");
+        }
+    }
+
+    /// <summary>
+    /// ★ 환자 애니메이션 AutoPlay 처리 (핸드데이터 없이 애니메이션만 자동 재생)
+    /// </summary>
+    private void HandleAutoPlayAnimation(SubStepData subStep)
+    {
+        if (chunaPathEvaluator == null)
+        {
+            Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator가 없어서 AutoPlay를 사용할 수 없습니다!");
+            return;
+        }
+
+        string stepName = currentStep?.stepName ?? "";
+        Debug.Log($"<color=magenta>[ScenarioManager] ========== AutoPlay 모드 시작 ==========</color>");
+        Debug.Log($"<color=magenta>[ScenarioManager] 애니메이션: {subStep.patientAnimationClip}</color>");
+        Debug.Log($"<color=magenta>[ScenarioManager] 시간: {subStep.duration}초</color>");
+
+        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
+        chunaPathEvaluator.SetExtendedLimitModeFromStepName(stepName);
+
+        // AutoPlay 시작
+        chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
+
+        // AutoPlay 완료 시 SubStep 완료 처리
+        chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        chunaPathEvaluator.OnAutoPlayCompleted += OnAutoPlayCompletedHandler;
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 핸들러
+    /// </summary>
+    private void OnAutoPlayCompletedHandler()
+    {
+        Debug.Log("<color=green>[ScenarioManager] AutoPlay 완료 - 다음 SubStep으로 진행</color>");
+
+        // 이벤트 구독 해제
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        }
+
+        // 다음 SubStep으로 직접 진행
+        NextSubStep();
     }
 
     /// <summary>
@@ -587,6 +650,9 @@ public class ScenarioManager : MonoBehaviour
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
         chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
         Debug.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정 요청 (클립: {subStep.patientAnimationClip ?? "없음"})</color>");
+
+        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
+        chunaPathEvaluator.SetExtendedLimitModeFromStepName(stepName);
 
         // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
         chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);

@@ -41707,6 +41707,7 @@ MonoBehaviour:
   completedText: "\uC644\uB8CC"
   idleText: 
   decimalPlaces: 1
+  forceIntegerDisplay: 1
   showOnlyWhenHolding: 1
   completedDisplayDuration: 0.5
   smoothFill: 1
@@ -71323,7 +71324,8 @@ MonoBehaviour:
   timeDisplayFormat: 0
   completedText: "\uC644\uB8CC!"
   idleText: 
-  decimalPlaces: 1
+  decimalPlaces: 0
+  forceIntegerDisplay: 1
   showOnlyWhenHolding: 1
   completedDisplayDuration: 0.5
   smoothFill: 1
@@ -97100,7 +97102,15 @@ MonoBehaviour:
   patientHeadCollider: {fileID: 2044603182}
   leftHandCollider: {fileID: 2087145412}
   rightHandCollider: {fileID: 2087145413}
+  handColliderScale: 0.6
+  defaultHandCollisionRadius: 0.08
+  handCollisionForwardOffset: 0.07
   useCollisionMode: 1
+  handCollisionShape: 1
+  palmWidth: 0.08
+  palmThickness: 0.03
+  palmHeight: 0.08
+  fingerLength: 0.1
   leftCheckpoints: []
   rightCheckpoints: []
   checkpointParent: {fileID: 0}
@@ -97133,12 +97143,16 @@ MonoBehaviour:
   checkpointRadius: 0.15
   useRotationMatching: 1
   rotationWeight: 0.5
+  useRelativeMovement: 1
+  invertRotationDirection: 0
   showDebugLogs: 1
   startHoldDuration: 3
   midHoldDuration: 3
   midHoldStartRatio: 0.3
   midHoldEndRatio: 0.5
   limitBarrierRatio: 0.5
+  extendedLimitBarrierRatio: 0.65
+  extendedMidHoldEndRatio: 0.65
   leftHandDriftThreshold: 0.15
 --- !u!1 &1036904081
 GameObject:
@@ -100446,15 +100460,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 40
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -100462,15 +100476,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -19
+      objectReference: {fileID: 0}
+    - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
+      propertyPath: m_text
+      value: 3s
       objectReference: {fileID: 0}
     - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_fontSize
-      value: 48
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_fontColor.b
@@ -100482,7 +100500,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_fontSizeBase
-      value: 48
+      value: 30
       objectReference: {fileID: 0}
     - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_fontColor32.rgba
@@ -113792,7 +113810,7 @@ MonoBehaviour:
   progressThreshold: 0.6
   referencePoint: {fileID: 2949187109976276139}
   showDebugLogs: 1
-  debugMode: 0
+  debugMode: 1
   debugNextFrameButton: {fileID: 1339842938}
   handFeedbackUI: {fileID: 2058984117}
   enableHandColorFeedback: 1
@@ -129424,6 +129442,7 @@ MonoBehaviour:
           conditionType: None
           conditionParams: 
           patientAnimationClip: 
+          movementType: 
     - phaseName: "\uD3C9\uAC00"
       steps:
       - stepNo: 1
@@ -129438,6 +129457,7 @@ MonoBehaviour:
           conditionType: None
           conditionParams: 
           patientAnimationClip: 
+          movementType: 
         - subStepNo: 0
           duration: 0
           textInstruction: "\uC6B0\uCE21 \uD3C9\uAC00"
@@ -129449,6 +129469,7 @@ MonoBehaviour:
           conditionType: None
           conditionParams: 
           patientAnimationClip: 
+          movementType: 
   useCSVData: 1
   csvFileName: "\uC0C1\uBD80\uC2B9\uBAA8\uADFC"
   evaluationMode: 1
@@ -217357,7 +217378,7 @@ SphereCollider:
   m_Enabled: 1
   serializedVersion: 3
   m_Radius: 0.03
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: 0, z: 0.02}
 --- !u!135 &2087145413
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -217378,7 +217399,7 @@ SphereCollider:
   m_Enabled: 1
   serializedVersion: 3
   m_Radius: 0.03
-  m_Center: {x: 0, y: 0, z: 0}
+  m_Center: {x: 0, y: 0, z: 0.02}
 --- !u!1 &2088953015
 GameObject:
   m_ObjectHideFlags: 0
@@ -253679,7 +253700,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2309123286596928822}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e5ce6956ff9d2914c95120848da200ec, type: 3}
   m_Name: 

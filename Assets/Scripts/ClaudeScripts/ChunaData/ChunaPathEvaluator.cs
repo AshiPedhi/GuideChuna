@@ -33,8 +33,34 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("손 충돌체 (오른손)")]
     [SerializeField] private Collider rightHandCollider;
 
+    [Tooltip("손 충돌체 크기 배율 (1.0 = 원본, 0.7 = 70%)")]
+    [Range(0.1f, 2f)]
+    [SerializeField] private float handColliderScale = 0.7f;
+
+    [Tooltip("손 충돌체가 없을 때 사용할 기본 충돌 반지름 (m)")]
+    [SerializeField] private float defaultHandCollisionRadius = 0.08f;
+
+    [Tooltip("손 충돌 감지 위치 오프셋 - 손가락 방향으로 이동 (m)")]
+    [SerializeField] private float handCollisionForwardOffset = 0.02f;
+
     [Tooltip("충돌 감지 모드 사용 (체크포인트 대신)")]
     [SerializeField] private bool useCollisionMode = true;
+
+    [Header("=== 손 충돌 형태 설정 ===")]
+    [Tooltip("충돌 감지 형태: Sphere(구), Box(박스-손바닥+손가락), PalmOnly(손바닥만)")]
+    [SerializeField] private HandCollisionShape handCollisionShape = HandCollisionShape.Box;
+
+    [Tooltip("손바닥 너비 (m) - Box/PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmWidth = 0.08f;
+
+    [Tooltip("손바닥 두께 (m) - Box/PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmThickness = 0.03f;
+
+    [Tooltip("손바닥 높이/길이 (m) - PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmHeight = 0.08f;
+
+    [Tooltip("손가락 길이 (m) - Box 모드에서 손바닥+손가락 총 길이")]
+    [SerializeField] private float fingerLength = 0.10f;
 
     [Header("=== 체크포인트 설정 (레거시) ===")]
     [SerializeField] private List<PathCheckpoint> leftCheckpoints = new List<PathCheckpoint>();
@@ -44,6 +70,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Header("=== 손 참조 ===")]
     [SerializeField] private HandVisual playerLeftHand;
     [SerializeField] private HandVisual playerRightHand;
+
+    [Tooltip("회전 감지에 사용할 손목 본 (자동 검색됨)")]
+    private Transform leftWristBone;
+    private Transform rightWristBone;
 
     [Header("=== 모듈 참조 ===")]
     [SerializeField] private HandPoseComparator poseComparator;
@@ -130,6 +160,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("상대 이동 모드 사용 (시작 홀드 위치 기준으로 진행률 계산)")]
     [SerializeField] private bool useRelativeMovement = true;
 
+    [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
+    [SerializeField] private bool invertRotationDirection = true;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -149,8 +182,28 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
     [SerializeField] private float limitBarrierRatio = 0.5f;
 
+    [Header("=== 스트레칭/재평가 확장 제한 ===")]
+    [Tooltip("스트레칭/재평가 시 확장된 제한 장벽 (0~1)")]
+    [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
+
+    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
+    [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
+
+    [Tooltip("스트레칭/재평가 시 시작 위치 (0~1, 30%부터 시작)")]
+    [SerializeField] private float extendedStartRatio = 0.3f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
+
+    /// <summary>
+    /// 손 충돌 감지 형태
+    /// </summary>
+    public enum HandCollisionShape
+    {
+        Sphere,     // 구형 (기존 방식)
+        Box,        // 박스형 (손바닥 + 손가락 길이)
+        PalmOnly    // 손바닥만 (작은 박스)
+    }
 
     /// <summary>
     /// 평가 단계
@@ -214,12 +267,27 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 userHoldReferencePosition;  // 사용자 시작 홀드 위치 (기준점)
     private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
+    private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
+    private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
 
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
     private string currentAnimationStateName;
     private float animationFrameRate = 30f;  // 핸드 데이터 프레임 레이트
     private float animationDuration = 0f;
+
+    // ★ AutoPlay 모드 관련
+    private float autoPlayProgress = 0f;        // 자동 재생 진행률 (0~1)
+    private float autoPlayDuration = 3f;        // 자동 재생 시간 (초) - 기본값 3초
+    private float autoPlayStartTime = 0f;       // 자동 재생 시작 시간
+    private bool isAutoPlayMode = false;        // 자동 재생 모드 활성화 여부
+
+    // ★ 스트레칭/재평가 확장 모드
+    private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
+    private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
+    private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
+    private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
+    private float currentStartRatio => isStretchingMode ? extendedStartRatio : 0f;  // 스트레칭만 30%부터 시작
 
     // 결과
     private EvaluationSession currentSession;
@@ -334,6 +402,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         if (!isEvaluating) return;
 
+        // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생
+        if (isAutoPlayMode)
+        {
+            UpdateAutoPlay();
+            return;
+        }
+
         // 충돌 모드: 손-환자 충돌 체크
         if (useCollisionMode)
         {
@@ -407,13 +482,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
 
         // Moving 단계 시작 시 프레임 인덱스 초기화
+        // ★ 스트레칭/재평가 모드에서는 30%부터 시작
         if (newPhase == EvaluationPhase.Moving)
         {
-            userHandFrameIndex = 0;
-            userHandFrameRatio = 0f;
+            int startFrameIdx = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+            userHandFrameIndex = Mathf.Clamp(startFrameIdx, 0, loadedFrames.Count - 1);
+            userHandFrameRatio = currentStartRatio;
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작)</color>");
+                Debug.Log($"<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작, 시작비율: {currentStartRatio:P0})</color>");
         }
 
         if (showDebugLogs)
@@ -517,7 +594,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 10 == 0)
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s");
+                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F0}s");
         }
         else
         {
@@ -531,7 +608,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
                 float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s");
+                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F0}s");
             }
 
             positionOk = leftNear && rightNear;
@@ -544,18 +621,49 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             if (phaseHoldTime >= startHoldDuration)
             {
+                OnHoldCompleted?.Invoke();
+                OnStartHoldComplete?.Invoke();
+
+                // ★ StartHold 전용 모드 (등척성운동): StartHold만 완료하면 바로 종료
+                if (startHoldOnly)
+                {
+                    Debug.Log("<color=green>[StartHold] 홀드 완료! (StartHold 전용 모드 - 바로 완료)</color>");
+                    ChangePhase(EvaluationPhase.Completed);
+                    CompleteEvaluation();
+                    return;
+                }
+
                 Debug.Log("<color=green>[StartHold] 홀드 완료! Moving 단계로</color>");
 
                 // ★ 사용자 기준 위치/회전 저장 (상대 이동 감지용)
                 if (useRelativeMovement && playerRightHand != null)
                 {
-                    userHoldReferencePosition = playerRightHand.transform.position;
-                    userHoldReferenceRotation = playerRightHand.transform.rotation;
-                    Debug.Log($"<color=cyan>[StartHold] 기준 위치 저장: {userHoldReferencePosition}</color>");
+                    // 손목 본을 아직 못찾았으면 다시 검색
+                    if (rightWristBone == null)
+                        FindWristBones();
+
+                    // ★ 위치: 콜라이더가 있으면 콜라이더 중심, 없으면 transform 위치 사용
+                    if (rightHandCollider != null)
+                    {
+                        userHoldReferencePosition = rightHandCollider.bounds.center;
+                    }
+                    else
+                    {
+                        userHoldReferencePosition = playerRightHand.transform.position;
+                    }
+
+                    // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전)
+                    userHoldReferenceRotation = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
+                    Vector3 euler = userHoldReferenceRotation.eulerAngles;
+                    string wristInfo = rightWristBone != null ? rightWristBone.name : "루트";
+                    string posSource = rightHandCollider != null ? "콜라이더" : "transform";
+                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition} [{posSource}], 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
+                }
+                else
+                {
+                    Debug.Log($"<color=red>[StartHold] 기준 저장 실패! useRelativeMovement:{useRelativeMovement}, playerRightHand:{playerRightHand != null}</color>");
                 }
 
-                OnHoldCompleted?.Invoke();
-                OnStartHoldComplete?.Invoke();
                 StartGuideHandPlayback();
                 ChangePhase(EvaluationPhase.Moving);
             }
@@ -593,37 +701,41 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 현재 진행률 계산 (사용자 손 위치 기준)
         float progress = GetCurrentProgress();
 
-        // ★ 50% 초과 경고 체크 (지속적으로 경고, 돌아가기 전까지)
-        if (progress > midHoldEndRatio)
+        // ★ 현재 제한 비율 (스트레칭/재평가 시 확장됨)
+        float limitRatio = currentMidHoldEnd;
+        string limitLabel = isExtendedLimitMode ? $"{limitRatio:P0}(확장)" : $"{limitRatio:P0}";
+
+        // ★ 제한 초과 경고 체크 (지속적으로 경고, 돌아가기 전까지)
+        if (progress > limitRatio)
         {
-            // 50% 초과 상태 진입 시 경고 횟수 1회 증가
+            // 제한 초과 상태 진입 시 경고 횟수 1회 증가
             if (!isOverLimitBarrier)
             {
                 isOverLimitBarrier = true;
                 if (currentSession != null)
                     currentSession.limitWarningCount++;
 
-                Debug.Log($"<color=red>[Moving] ★★★ 50% 초과! 돌아가세요! (경고 #{currentSession?.limitWarningCount}) ★★★</color>");
+                Debug.Log($"<color=red>[Moving] ★★★ {limitLabel} 초과! 돌아가세요! (경고 #{currentSession?.limitWarningCount}) ★★★</color>");
             }
 
             // 지속적으로 경고 이벤트 발생 (UI 알람용)
             OnLimitWarning?.Invoke(progress);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"<color=red>[Moving] 경고 지속 중! 진행률: {progress:P0} (50% 이하로 돌아가세요)</color>");
+                Debug.Log($"<color=red>[Moving] 경고 지속 중! 진행률: {progress:P0} ({limitLabel} 이하로 돌아가세요)</color>");
         }
         else
         {
-            // 50% 이하로 돌아오면 경고 상태 해제
+            // 제한 이하로 돌아오면 경고 상태 해제
             if (isOverLimitBarrier)
             {
                 isOverLimitBarrier = false;
-                Debug.Log($"<color=green>[Moving] 50% 이하로 복귀! 경고 해제</color>");
+                Debug.Log($"<color=green>[Moving] {limitLabel} 이하로 복귀! 경고 해제</color>");
             }
         }
 
-        // 중간 홀드 구간 체크 (30~50%)
-        if (progress >= midHoldStartRatio && progress <= midHoldEndRatio)
+        // 중간 홀드 구간 체크 (30~제한비율)
+        if (progress >= midHoldStartRatio && progress <= limitRatio)
         {
             // 중간 홀드 구간 진입 → 중간 홀드 단계로
             OnMidHoldBegin?.Invoke();  // "멈추세요" 안내
@@ -631,7 +743,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            Debug.Log($"[Moving] 진행률: {progress:P0}, 왼손이탈: {leftDrift:F3}m, 50%초과:{isOverLimitBarrier}");
+            Debug.Log($"[Moving] 진행률: {progress:P0}, 제한:{limitLabel}, 왼손이탈: {leftDrift:F3}m, 초과:{isOverLimitBarrier}");
     }
 
     /// <summary>
@@ -656,7 +768,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             OnHoldProgressChanged?.Invoke(phaseHoldTime, midHoldDuration);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F1}s");
+                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F0}s");
 
             if (phaseHoldTime >= midHoldDuration)
             {
@@ -737,8 +849,19 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        Vector3 rightHandPos = playerRightHand.transform.position;
-        Quaternion rightHandRot = playerRightHand.transform.rotation;
+        // ★ 손 위치: 콜라이더가 있으면 콜라이더 중심, 없으면 transform 위치 사용
+        Vector3 rightHandPos;
+        if (rightHandCollider != null)
+        {
+            rightHandPos = rightHandCollider.bounds.center;
+        }
+        else
+        {
+            rightHandPos = playerRightHand.transform.position;
+        }
+
+        // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전 감지)
+        Quaternion rightHandRot = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
 
         float prevRatio = userHandFrameRatio;
         float newRatio = 0f;
@@ -748,19 +871,30 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             if (isPositionBasedMovement)
             {
-                // 위치 기반: 기준 위치에서 이동 축 방향으로 얼마나 이동했는지 계산
+                // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
                 Vector3 displacement = rightHandPos - userHoldReferencePosition;
+
+                // 방법 1: 축 방향 프로젝션 (방향 무관하게 절대값 사용)
                 float projectedDistance = Vector3.Dot(displacement, movementAxis);
+                float absProjectedDistance = Mathf.Abs(projectedDistance);
+
+                // 방법 2: 전체 이동 거리 (축 방향 무시)
+                float totalDisplacement = displacement.magnitude;
+
+                // 더 큰 값 사용 (둘 중 하나라도 이동했으면 인정)
+                float effectiveDistance = Mathf.Max(absProjectedDistance, totalDisplacement * 0.8f);
+
+                // ★ 핸드데이터 이동 거리가 너무 작으면 기본값 사용 (5cm)
+                float targetDistance = Mathf.Max(handDataTotalDistance, 0.05f);
 
                 // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
-                if (handDataTotalDistance > 0.001f)
-                {
-                    newRatio = Mathf.Clamp01(projectedDistance / handDataTotalDistance);
-                }
+                newRatio = Mathf.Clamp01(effectiveDistance / targetDistance);
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
-                    Debug.Log($"<color=yellow>[Relative Move] 이동:{projectedDistance:F3}m / {handDataTotalDistance:F3}m = {newRatio:P0}</color>");
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} (데이터거리:{handDataTotalDistance:F3}m)</color>");
+                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}</color>");
                 }
             }
             else
@@ -772,11 +906,21 @@ public class ChunaPathEvaluator : MonoBehaviour
                 if (handDataTotalRotation > 1f)
                 {
                     newRatio = Mathf.Clamp01(rotationAngle / handDataTotalRotation);
+
+                    // ★ 회전 방향 반전 옵션
+                    if (invertRotationDirection)
+                    {
+                        newRatio = 1f - newRatio;
+                    }
                 }
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
-                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0}</color>");
+                    Vector3 refEuler = userHoldReferenceRotation.eulerAngles;
+                    Vector3 curEuler = rightHandRot.eulerAngles;
+                    string invertInfo = invertRotationDirection ? "(반전)" : "";
+                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0} {invertInfo}</color>");
+                    Debug.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0})</color>");
                 }
             }
         }
@@ -870,41 +1014,205 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 충돌 감지 업데이트
+    /// 충돌 감지 업데이트 (거리 기반, 스케일 적용)
+    /// 콜라이더가 없으면 손 Transform 위치 사용
+    /// ★ HandCollisionShape에 따라 구형/박스형/손바닥만 감지
     /// </summary>
     private void UpdateCollisionDetection()
     {
-        if (patientHeadCollider == null) return;
+        if (patientHeadCollider == null)
+        {
+            if (showDebugLogs && Time.frameCount % 120 == 0)
+                Debug.Log("<color=red>[Collision] patientHeadCollider가 NULL!</color>");
+            return;
+        }
 
-        if (leftHandCollider != null)
+        // 환자 콜라이더 정보
+        Bounds patientBounds = patientHeadCollider.bounds;
+        Vector3 patientCenter = patientBounds.center;
+
+        // 왼손 충돌 감지
+        if (playerLeftHand != null)
         {
             bool wasTouch = isLeftHandTouchingPatient;
-            isLeftHandTouchingPatient = leftHandCollider.bounds.Intersects(patientHeadCollider.bounds);
+            isLeftHandTouchingPatient = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
 
             if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 왼손이 환자에게 닿음!</color>");
         }
 
-        if (rightHandCollider != null)
+        // 오른손 충돌 감지
+        if (playerRightHand != null)
         {
             bool wasTouch = isRightHandTouchingPatient;
-            isRightHandTouchingPatient = rightHandCollider.bounds.Intersects(patientHeadCollider.bounds);
+            isRightHandTouchingPatient = CheckHandCollision(playerRightHand.transform, rightHandCollider, patientBounds, false);
 
             if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
+
+        // 디버그: 양손 충돌 상태 표시
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            string shapeInfo = handCollisionShape.ToString();
+
+            if (playerLeftHand != null)
+            {
+                string lStatus = isLeftHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+                Debug.Log($"<color=cyan>[왼손] {lStatus} [{shapeInfo}]</color>");
+            }
+
+            if (playerRightHand != null)
+            {
+                string rStatus = isRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+                Debug.Log($"<color=cyan>[오른손] {rStatus} [{shapeInfo}]</color>");
+            }
+        }
+    }
+
+    /// <summary>
+    /// ★ 손 충돌 감지 (형태에 따라 다른 방식 사용)
+    /// </summary>
+    private bool CheckHandCollision(Transform handTransform, Collider handCollider, Bounds patientBounds, bool isLeftHand)
+    {
+        Vector3 handCenter;
+        Vector3 handForward = handTransform.forward;
+        Vector3 handRight = handTransform.right;
+        Vector3 handUp = handTransform.up;
+
+        // 손 중심 위치 결정
+        if (handCollider != null)
+        {
+            handCenter = handCollider.bounds.center;
+        }
+        else
+        {
+            handCenter = handTransform.position;
+        }
+
+        // 손가락 방향으로 오프셋 적용
+        handCenter += handForward * handCollisionForwardOffset;
+
+        switch (handCollisionShape)
+        {
+            case HandCollisionShape.Sphere:
+                return CheckSphereCollision(handCenter, handCollider, patientBounds);
+
+            case HandCollisionShape.Box:
+                // 박스: 손바닥 + 손가락 전체 영역
+                Vector3 boxSize = new Vector3(
+                    palmWidth * handColliderScale,
+                    palmThickness * handColliderScale,
+                    (palmHeight + fingerLength) * handColliderScale
+                );
+                // 박스 중심을 손가락 방향으로 약간 이동 (손바닥+손가락 중심)
+                Vector3 boxCenter = handCenter + handForward * (fingerLength * 0.3f * handColliderScale);
+                return CheckBoxCollision(boxCenter, boxSize, handTransform.rotation, patientBounds);
+
+            case HandCollisionShape.PalmOnly:
+                // 손바닥만: 작은 박스
+                Vector3 palmSize = new Vector3(
+                    palmWidth * handColliderScale,
+                    palmThickness * handColliderScale,
+                    palmHeight * handColliderScale
+                );
+                return CheckBoxCollision(handCenter, palmSize, handTransform.rotation, patientBounds);
+
+            default:
+                return CheckSphereCollision(handCenter, handCollider, patientBounds);
+        }
+    }
+
+    /// <summary>
+    /// 구형 충돌 감지 (기존 방식)
+    /// </summary>
+    private bool CheckSphereCollision(Vector3 handCenter, Collider handCollider, Bounds patientBounds)
+    {
+        float handRadius;
+        if (handCollider != null)
+        {
+            handRadius = Mathf.Max(handCollider.bounds.extents.x,
+                handCollider.bounds.extents.y, handCollider.bounds.extents.z) * handColliderScale;
+        }
+        else
+        {
+            handRadius = defaultHandCollisionRadius * handColliderScale;
+        }
+
+        float patientRadius = Mathf.Max(patientBounds.extents.x, patientBounds.extents.y, patientBounds.extents.z);
+        float distance = Vector3.Distance(handCenter, patientBounds.center);
+
+        return distance <= (handRadius + patientRadius);
+    }
+
+    /// <summary>
+    /// ★ 박스 충돌 감지 (OBB vs AABB 간소화 버전)
+    /// 손 박스가 환자 바운드와 교차하는지 확인
+    /// </summary>
+    private bool CheckBoxCollision(Vector3 boxCenter, Vector3 boxSize, Quaternion boxRotation, Bounds patientBounds)
+    {
+        // 박스의 8개 꼭짓점 계산
+        Vector3 halfSize = boxSize * 0.5f;
+        Vector3[] corners = new Vector3[8];
+        int idx = 0;
+        for (int x = -1; x <= 1; x += 2)
+        {
+            for (int y = -1; y <= 1; y += 2)
+            {
+                for (int z = -1; z <= 1; z += 2)
+                {
+                    Vector3 localCorner = new Vector3(halfSize.x * x, halfSize.y * y, halfSize.z * z);
+                    corners[idx++] = boxCenter + boxRotation * localCorner;
+                }
+            }
+        }
+
+        // 꼭짓점 중 하나라도 환자 바운드 안에 있으면 충돌
+        foreach (var corner in corners)
+        {
+            if (patientBounds.Contains(corner))
+                return true;
+        }
+
+        // 환자 바운드 중심이 손 박스 안에 있는지 확인 (역방향 체크)
+        Vector3 patientCenterLocal = Quaternion.Inverse(boxRotation) * (patientBounds.center - boxCenter);
+        if (Mathf.Abs(patientCenterLocal.x) <= halfSize.x &&
+            Mathf.Abs(patientCenterLocal.y) <= halfSize.y &&
+            Mathf.Abs(patientCenterLocal.z) <= halfSize.z)
+        {
+            return true;
+        }
+
+        // 박스 중심이 환자 바운드와 가까운지 확인 (확장된 바운드)
+        Bounds expandedBounds = patientBounds;
+        expandedBounds.Expand(boxSize.magnitude * 0.5f);
+        if (expandedBounds.Contains(boxCenter))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
     /// 애니메이션 선형보간 업데이트
+    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
-        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
         bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
+        // 애니메이션 상태 체크 로그
+        if (showDebugLogs && Time.frameCount % 120 == 0)
+        {
+            Debug.Log($"<color=yellow>[Animation Check] Animator:{(patientAnimator != null ? patientAnimator.name : "NULL")}, 상태이름:'{currentAnimationStateName}', 단계:{currentPhase}, 접촉:{isHandTouching}</color>");
+        }
+
+        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
+
+        // ★ 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
         if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
         {
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
@@ -912,14 +1220,131 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0}, 프레임:{userHandFrameIndex}/{loadedFrames?.Count ?? 0}");
+            {
+                Debug.Log($"<color=green>[Animation Lerp] '{currentAnimationStateName}' @ {currentAnimationRatio:P0} → {targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})</color>");
+            }
         }
         else if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            // 애니메이션이 업데이트되지 않는 이유 출력
-            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, Animator:{patientAnimator != null}, 상태:{currentAnimationStateName ?? "NULL"}</color>");
+            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, 애니메이션:'{currentAnimationStateName}'</color>");
         }
     }
+
+    /// <summary>
+    /// ★ AutoPlay 모드 업데이트 - 핸드데이터 없이 애니메이션만 자동 재생
+    /// </summary>
+    private void UpdateAutoPlay()
+    {
+        // 경과 시간 계산
+        float elapsed = Time.time - autoPlayStartTime;
+
+        // ★ 애니메이션이 없어도 duration 시간만큼 대기
+        bool hasAnimation = patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName);
+
+        if (!hasAnimation)
+        {
+            // 애니메이션 없이 시간 기반으로만 진행
+            autoPlayProgress = autoPlayDuration > 0 ? Mathf.Clamp01(elapsed / autoPlayDuration) : 0f;
+            OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+            {
+                Debug.Log($"<color=orange>[AutoPlay] 애니메이션 없음 - 시간 기반 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
+            }
+
+            // 시간 완료 체크
+            if (elapsed >= autoPlayDuration && autoPlayDuration > 0)
+            {
+                if (showDebugLogs)
+                    Debug.Log($"<color=green>[AutoPlay] 완료! (시간 경과: {elapsed:F1}s)</color>");
+                CompleteAutoPlay();
+            }
+            return;
+        }
+
+        // 현재 애니메이션 상태 정보 가져오기
+        AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
+
+        // ★ 애니메이터 속도 확인 및 복원 (다른 곳에서 0으로 설정될 수 있음)
+        if (patientAnimator.speed != 1f)
+        {
+            Debug.LogWarning($"<color=orange>[AutoPlay] 애니메이터 속도가 {patientAnimator.speed}입니다. 1로 복원합니다.</color>");
+            patientAnimator.speed = 1f;
+        }
+
+        // ★ 올바른 애니메이션 상태인지 확인
+        int expectedStateHash = Animator.StringToHash(currentAnimationStateName);
+        bool isCorrectState = stateInfo.shortNameHash == expectedStateHash || stateInfo.fullPathHash == expectedStateHash;
+
+        // ★ 진행률 계산: duration이 0이면 애니메이션 normalizedTime 기준, 아니면 시간 기준
+        if (autoPlayDuration > 0)
+        {
+            autoPlayProgress = Mathf.Clamp01(elapsed / autoPlayDuration);
+        }
+        else if (isCorrectState)
+        {
+            // duration=0이고 올바른 애니메이션 상태면 normalizedTime 기준
+            autoPlayProgress = Mathf.Clamp01(stateInfo.normalizedTime);
+        }
+
+        // 진행률 이벤트 발생
+        OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
+        // 디버그 로그
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            string durationInfo = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}s" : "애니메이션 길이";
+            Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {durationInfo})</color>");
+            Debug.Log($"<color=cyan>[AutoPlay] 상태: '{currentAnimationStateName}', 올바른상태: {isCorrectState}, normalizedTime: {stateInfo.normalizedTime:F2}</color>");
+
+            // ★ 추가 디버그: 왜 normalizedTime이 0인지 확인
+            Debug.Log($"<color=yellow>[AutoPlay Debug] animator.speed={patientAnimator.speed}, animator.enabled={patientAnimator.enabled}, stateInfo.speed={stateInfo.speed}, stateInfo.length={stateInfo.length}</color>");
+        }
+
+        // ★ 최소 경과 시간 체크 (0.5초 미만이면 완료 판정 안함 - 상태 전환 대기)
+        const float minElapsedBeforeComplete = 0.5f;
+        if (elapsed < minElapsedBeforeComplete)
+        {
+            return;
+        }
+
+        // 애니메이션 완료 체크
+        bool animationComplete = isCorrectState && stateInfo.normalizedTime >= 0.99f;
+
+        // ★ duration=0이면 애니메이션 완료만으로 진행, duration>0이면 시간 또는 애니메이션 완료
+        bool timeComplete = autoPlayDuration > 0 && elapsed >= autoPlayDuration;
+
+        if (animationComplete || timeComplete)
+        {
+            if (showDebugLogs)
+            {
+                string reason = animationComplete ? "애니메이션 완료" : "시간 초과";
+                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason}, 경과: {elapsed:F1}s, normalizedTime: {stateInfo.normalizedTime:F2})</color>");
+            }
+            CompleteAutoPlay();
+        }
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 처리
+    /// </summary>
+    private void CompleteAutoPlay()
+    {
+        isAutoPlayMode = false;
+        autoPlayProgress = 1f;
+
+        // 평가 완료 처리
+        ChangePhase(EvaluationPhase.Completed);
+        CompleteEvaluation();
+
+        // 완료 이벤트
+        OnAutoPlayCompleted?.Invoke();
+    }
+
+    /// <summary>
+    /// AutoPlay 완료 이벤트
+    /// </summary>
+    public event Action OnAutoPlayCompleted;
 
     /// <summary>
     /// 손이 환자에게 닿았는지 확인
@@ -934,8 +1359,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser)
     {
-        currentAnimationStateName = animationStateName;
+        // ★ 애니메이션 이름 공백 제거 (CSV 파싱 시 공백 문제 방지)
+        string trimmedName = animationStateName?.Trim();
+
         animationPlayMode = playMode;
+
+        Debug.Log($"<color=magenta>[Animation] ★ 애니메이션 설정 시도: '{trimmedName}' (모드:{playMode})</color>");
 
         if (patientAnimator == null)
         {
@@ -944,34 +1373,107 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (patient != null)
             {
                 patientAnimator = patient.GetComponent<Animator>();
+                Debug.Log($"<color=cyan>[Animation] Patient 태그로 Animator 찾음: {patient.name}</color>");
+            }
+            else
+            {
+                Debug.LogError("<color=red>[Animation] Patient 태그 오브젝트를 찾을 수 없음!</color>");
             }
         }
 
-        if (patientAnimator != null && !string.IsNullOrEmpty(animationStateName))
+        if (patientAnimator == null)
         {
-            if (playMode == AnimationPlayMode.AutoPlay)
-            {
-                // 자동 재생 모드
-                patientAnimator.Play(animationStateName);
-                patientAnimator.speed = 1f;
-            }
-            else if (playMode == AnimationPlayMode.SyncWithUser)
-            {
-                // 사용자 동기화 모드 - 시작 위치로 설정
-                patientAnimator.Play(animationStateName, 0, 0f);
-                patientAnimator.speed = 0f;
-            }
+            Debug.LogError("<color=red>[Animation] patientAnimator가 NULL - 애니메이션 재생 불가!</color>");
+            currentAnimationStateName = null;  // ★ 실패 시 null로 설정
+            return;
+        }
 
-            if (showDebugLogs)
-                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환자 애니메이션 설정: {animationStateName} ({playMode})</color>");
+        if (string.IsNullOrEmpty(trimmedName))
+        {
+            Debug.LogWarning("<color=orange>[Animation] 애니메이션 이름이 비어있음</color>");
+            currentAnimationStateName = null;  // ★ 실패 시 null로 설정
+            return;
+        }
+
+        // Animator에 해당 상태가 있는지 확인
+        int stateHash = Animator.StringToHash(trimmedName);
+        bool hasState = patientAnimator.HasState(0, stateHash);
+        Debug.Log($"<color=cyan>[Animation] Animator '{patientAnimator.name}'에 상태 '{trimmedName}' (해시:{stateHash}) 존재: {hasState}</color>");
+
+        if (!hasState)
+        {
+            Debug.LogError($"<color=red>[Animation] ★★★ 경고: Animator에 '{trimmedName}' 상태가 없습니다! 애니메이션 재생 불가!</color>");
+            currentAnimationStateName = null;  // ★ 상태 없으면 null로 설정 (UpdateAutoPlay에서 즉시 완료 방지)
+            // 사용 가능한 상태 목록 출력 시도
+            var controller = patientAnimator.runtimeAnimatorController;
+            if (controller != null)
+            {
+                Debug.Log($"<color=yellow>[Animation] Animator Controller: {controller.name}</color>");
+                Debug.Log($"<color=yellow>[Animation] 클립 수: {controller.animationClips?.Length ?? 0}</color>");
+                if (controller.animationClips != null)
+                {
+                    foreach (var clip in controller.animationClips)
+                    {
+                        Debug.Log($"<color=yellow>  - 클립: '{clip.name}'</color>");
+                    }
+                }
+            }
+            return;
+        }
+
+        // ★ 상태 확인 후에만 이름 설정 (실패 시 null 유지)
+        currentAnimationStateName = trimmedName;
+
+        if (playMode == AnimationPlayMode.AutoPlay)
+        {
+            // 자동 재생 모드
+            patientAnimator.Play(trimmedName, 0, 0f);
+            patientAnimator.speed = 1f;
+            Debug.Log($"<color=green>[Animation] ★ 자동 재생 시작: '{trimmedName}' (speed=1)</color>");
+        }
+        else if (playMode == AnimationPlayMode.SyncWithUser)
+        {
+            // 사용자 동기화 모드 - 시작 위치로 설정
+            patientAnimator.Play(trimmedName, 0, 0f);
+            patientAnimator.speed = 0f;
+            Debug.Log($"<color=green>[Animation] 동기화 모드 시작: '{trimmedName}' (첫 프레임, speed=0)</color>");
         }
     }
 
     /// <summary>
-    /// SubStepData에서 애니메이션 설정
+    /// SubStepData에서 애니메이션 및 이동 타입 설정
     /// </summary>
     public void SetPatientAnimationFromSubStep(SubStepData subStep)
     {
+        // 이동 타입 설정 (position/rotation)
+        if (subStep != null && !string.IsNullOrEmpty(subStep.movementType))
+        {
+            specifiedMovementType = subStep.movementType.Trim().ToLower();
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 이동 타입 지정: '{specifiedMovementType}'</color>");
+        }
+        else
+        {
+            specifiedMovementType = null; // 자동 감지 사용
+        }
+
+        // StartHold만 체크 모드 (등척성운동 등)
+        // 1. 핸드데이터 파일명에 "등척성" 포함 시 자동 활성화
+        // 2. conditionParams에 "startHoldOnly" 포함 시 활성화
+        bool isIsometricExercise = subStep != null && !string.IsNullOrEmpty(subStep.handTrackingFileName) &&
+            subStep.handTrackingFileName.Contains("등척성");
+        bool hasStartHoldOnlyParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("startholdonly");
+
+        if (isIsometricExercise || hasStartHoldOnlyParam)
+        {
+            startHoldOnly = true;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동)</color>");
+        }
+        else
+        {
+            startHoldOnly = false;
+        }
+
         // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정
         if (subStep != null && subStep.HasPatientAnimation())
         {
@@ -999,6 +1501,132 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientAnimator.speed = 0f;
         }
         currentAnimationStateName = null;
+    }
+
+    /// <summary>
+    /// ★ AutoPlay 모드 시작 - 핸드데이터 없이 애니메이션만 자동 재생
+    /// </summary>
+    /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 완료 시 자동 진행</param>
+    public void StartAutoPlay(float duration = 0f)
+    {
+        isAutoPlayMode = true;
+        autoPlayStartTime = Time.time;
+        autoPlayProgress = 0f;
+
+        // ★ duration이 0이면 애니메이션 normalizedTime 기반 완료 (UpdateAutoPlay에서 처리)
+        // stateInfo.length는 루핑 애니메이션에서 Infinity를 반환할 수 있으므로 사용하지 않음
+        if (duration > 0f)
+        {
+            autoPlayDuration = duration;
+        }
+        else
+        {
+            // duration=0: 애니메이션 완료(normalizedTime >= 0.99) 시 자동 진행
+            autoPlayDuration = 0f;
+        }
+
+        // 평가 시작 처리
+        isEvaluating = true;
+        evaluationStartTime = Time.time;
+        ChangePhase(EvaluationPhase.Moving); // AutoPlay는 바로 Moving 단계로
+
+        string durationStr = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}초" : "애니메이션 완료 시";
+        Debug.Log($"<color=green>[AutoPlay] ★ 자동 재생 시작! 시간:{durationStr}, 애니메이션:{currentAnimationStateName ?? "없음"}</color>");
+    }
+
+    /// <summary>
+    /// ★ SubStep에서 AutoPlay 모드 시작 (핸드데이터 없고 애니메이션만 있는 경우)
+    /// </summary>
+    public void StartAutoPlayFromSubStep(SubStepData subStep)
+    {
+        if (subStep == null) return;
+
+        // 애니메이션 설정
+        SetPatientAnimationFromSubStep(subStep);
+
+        // duration 파싱 시도
+        float duration = subStep.duration > 0 ? subStep.duration : 0f;
+
+        // AutoPlay 시작
+        StartAutoPlay(duration);
+    }
+
+    /// <summary>
+    /// 현재 AutoPlay 모드인지 확인
+    /// </summary>
+    public bool IsAutoPlayMode => isAutoPlayMode;
+
+    /// <summary>
+    /// AutoPlay 진행률 (0~1)
+    /// </summary>
+    public float AutoPlayProgress => autoPlayProgress;
+
+    // ========== 스트레칭/재평가 확장 제한 모드 ==========
+
+    /// <summary>
+    /// ★ 확장 제한 모드 활성화 (스트레칭/재평가용)
+    /// 제한 장벽이 50% → 65%로 확장됨
+    /// </summary>
+    public void EnableExtendedLimitMode()
+    {
+        isExtendedLimitMode = true;
+        Debug.Log($"<color=magenta>[ChunaPathEvaluator] ★ 확장 제한 모드 활성화 - 제한:{currentMidHoldEnd:P0}</color>");
+    }
+
+    /// <summary>
+    /// 확장 제한 모드 비활성화 (기본 50%로 복귀)
+    /// </summary>
+    public void DisableExtendedLimitMode()
+    {
+        isExtendedLimitMode = false;
+        Debug.Log($"<color=cyan>[ChunaPathEvaluator] 확장 제한 모드 비활성화 - 제한:{currentMidHoldEnd:P0}</color>");
+    }
+
+    /// <summary>
+    /// 현재 확장 제한 모드인지 확인
+    /// </summary>
+    public bool IsExtendedLimitMode => isExtendedLimitMode;
+
+    /// <summary>
+    /// 현재 제한 비율 반환 (확장 모드 여부에 따라)
+    /// </summary>
+    public float CurrentLimitRatio => currentMidHoldEnd;
+
+    /// <summary>
+    /// Step 이름에 따라 확장 제한 모드 자동 설정
+    /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
+    /// </summary>
+    public void SetExtendedLimitModeFromStepName(string stepName)
+    {
+        if (string.IsNullOrEmpty(stepName))
+        {
+            DisableExtendedLimitMode();
+            isStretchingMode = false;
+            return;
+        }
+
+        // ★ 스트레칭/재평가: 둘 다 제한 범위 확장 (50% → 65%)
+        // ★ 시작 위치 30%: 스트레칭만 적용
+        bool isReEvaluation = stepName.Contains("재평가");
+        bool isStretching = stepName.Contains("스트레칭");
+
+        if (isStretching)
+        {
+            EnableExtendedLimitMode();   // 제한 확장 (65%)
+            isStretchingMode = true;     // 30%부터 시작
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 - 제한:65%, 시작:30%</color>");
+        }
+        else if (isReEvaluation)
+        {
+            EnableExtendedLimitMode();   // 제한 확장 (65%)
+            isStretchingMode = false;    // 0%부터 시작
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 재평가 모드 - 제한:65%, 시작:0%</color>");
+        }
+        else
+        {
+            DisableExtendedLimitMode();
+            isStretchingMode = false;
+        }
     }
 
     /// <summary>
@@ -1080,7 +1708,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                                (!rightHandStopped ? "오른손 움직임" :
                                (!rightHandAtTarget ? "오른손 목표위치 이탈" : "안전 범위 이탈"));
                 if (showDebugLogs && currentHoldTime > 0.3f)
-                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F1}s)</color>");
+                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F0}s)</color>");
 
                 isHolding = false;
                 currentHoldTime = 0f;
@@ -1228,6 +1856,45 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Debug.Log($"[ChunaPathEvaluator] 환자 Transform 자동 연결: {patient.name}");
             }
         }
+
+        // 손목 본 자동 검색
+        FindWristBones();
+    }
+
+    /// <summary>
+    /// 손목 본 검색 (XRHand_Wrist 또는 XRHand_Palm)
+    /// </summary>
+    private void FindWristBones()
+    {
+        if (playerLeftHand != null && leftWristBone == null)
+        {
+            leftWristBone = FindBoneInHierarchy(playerLeftHand.transform, "Wrist", "Palm");
+            if (leftWristBone != null && showDebugLogs)
+                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 왼손 손목 본 연결: {leftWristBone.name}</color>");
+        }
+
+        if (playerRightHand != null && rightWristBone == null)
+        {
+            rightWristBone = FindBoneInHierarchy(playerRightHand.transform, "Wrist", "Palm");
+            if (rightWristBone != null && showDebugLogs)
+                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 오른손 손목 본 연결: {rightWristBone.name}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 계층 구조에서 특정 이름을 포함하는 본 검색
+    /// </summary>
+    private Transform FindBoneInHierarchy(Transform root, params string[] namePatterns)
+    {
+        foreach (Transform child in root.GetComponentsInChildren<Transform>())
+        {
+            foreach (string pattern in namePatterns)
+            {
+                if (child.name.Contains(pattern))
+                    return child;
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -1351,17 +2018,29 @@ public class ChunaPathEvaluator : MonoBehaviour
         handDataTotalRotation = Quaternion.Angle(startRot, endRot);
 
         // 위치 기반 vs 회전 기반 결정
-        // 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
-        isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
-
-        if (showDebugLogs)
+        // ★ CSV에서 지정한 타입이 있으면 그것을 사용, 없으면 자동 감지
+        if (!string.IsNullOrEmpty(specifiedMovementType))
         {
+            // StartsWith로 비교 (혹시 모를 공백/특수문자 대비)
+            isPositionBasedMovement = specifiedMovementType.StartsWith("position");
             string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-            Debug.Log($"<color=magenta>[HandData Analysis] {moveType}</color>");
-            Debug.Log($"  - 이동 거리: {handDataTotalDistance:F3}m ({handDataMovementVector})");
-            Debug.Log($"  - 회전 각도: {handDataTotalRotation:F1}°");
-            Debug.Log($"  - 이동 축: {movementAxis}");
+            Debug.Log($"<color=magenta>[HandData Analysis] ★ {moveType} (CSV 지정: '{specifiedMovementType}')</color>");
         }
+        else
+        {
+            // 자동 감지: 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
+            isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
+            if (showDebugLogs)
+            {
+                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+                Debug.Log($"<color=magenta>[HandData Analysis] {moveType} (자동 감지)</color>");
+            }
+        }
+
+        // 항상 출력 (디버깅용)
+        Debug.Log($"<color=cyan>[HandData] 시작위치: {startPos}, 끝위치: {endPos}</color>");
+        Debug.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
+        Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
     }
 
     /// <summary>
@@ -1477,6 +2156,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 이전 가이드 핸드 재생 중지 (스킵 시 중복 재생 방지)
         StopGuideHandPlayback();
 
+        // ★ AutoPlay 모드 리셋 (이전 SubStep에서 남아있을 수 있음)
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
+
         int totalCheckpoints = leftCheckpoints.Count + rightCheckpoints.Count;
 
         if (totalCheckpoints == 0)
@@ -1503,28 +2186,37 @@ public class ChunaPathEvaluator : MonoBehaviour
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
 
+        // ★ 충돌 감지 플래그 리셋 (이전 SubStep에서 남아있을 수 있음)
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
+
+        // ★ 홀드 UI 리셋 이벤트 발생 (이전 SubStep의 타이머 표시 제거)
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+
         // 프레임/애니메이션 상태 초기화
+        // ★ 스트레칭/재평가 모드에서는 30%부터 시작
         userHandFrameIndex = 0;
-        userHandFrameRatio = 0f;
-        currentAnimationRatio = 0f;
-        targetAnimationRatio = 0f;
+        userHandFrameRatio = currentStartRatio;
+        currentAnimationRatio = currentStartRatio;
+        targetAnimationRatio = currentStartRatio;
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
-        // 시작 위치 대기 중 첫 프레임 표시 (가이드 핸드 + 환자 애니메이션)
+        // 시작 위치 대기 중 시작 프레임 표시 (가이드 핸드 + 환자 애니메이션)
+        // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
         if (showFirstFrameWhileWaiting)
         {
             ShowGuideHandFirstFrame();
 
-            // 환자 애니메이션도 첫 프레임(0%)으로 설정
+            // 환자 애니메이션도 시작 프레임으로 설정 (스트레칭은 30%, 일반은 0%)
             if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
             {
-                patientAnimator.Play(currentAnimationStateName, 0, 0f);
+                patientAnimator.Play(currentAnimationStateName, 0, currentStartRatio);
                 patientAnimator.speed = 0f;
 
                 if (showDebugLogs)
-                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 첫 프레임 설정: {currentAnimationStateName}</color>");
+                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 시작 프레임 설정: {currentAnimationStateName} @ {currentStartRatio:P0}</color>");
             }
         }
 
@@ -1650,6 +2342,17 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         isEvaluating = false;
 
+        // ★ AutoPlay 모드 리셋
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
+
+        // ★ 충돌 감지 플래그 리셋
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
+
+        // ★ 홀드 UI 리셋 이벤트 발생
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
+
         StopGuideHandPlayback();
 
         if (limitChecker != null)
@@ -1673,6 +2376,17 @@ public class ChunaPathEvaluator : MonoBehaviour
     public void ResetEvaluation()
     {
         isEvaluating = false;
+
+        // ★ AutoPlay 모드 리셋
+        isAutoPlayMode = false;
+        autoPlayProgress = 0f;
+
+        // ★ 충돌 감지 플래그 리셋
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
+
+        // ★ 홀드 UI 리셋 이벤트 발생
+        OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
 
         foreach (var cp in leftCheckpoints) cp?.ResetCheckpoint();
         foreach (var cp in rightCheckpoints) cp?.ResetCheckpoint();
@@ -1912,7 +2626,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 첫 프레임만 정적으로 표시 (시작 위치 안내용)
+    /// 시작 프레임 표시 (시작 위치 안내용)
+    /// ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
     /// </summary>
     private void ShowGuideHandFirstFrame()
     {
@@ -1942,7 +2657,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        PoseFrame firstFrame = loadedFrames[0];
+        // ★ 스트레칭/재평가 모드면 30% 프레임, 아니면 첫 프레임
+        int startFrameIndex = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+        startFrameIndex = Mathf.Clamp(startFrameIndex, 0, loadedFrames.Count - 1);
+        PoseFrame firstFrame = loadedFrames[startFrameIndex];
 
         // 왼손 첫 프레임 표시
         if (leftGuideHand != null)
@@ -1981,7 +2699,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log("<color=cyan>[ChunaPathEvaluator] 가이드 핸드 첫 프레임 표시 (시작 위치 안내)</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 가이드 핸드 시작 프레임 표시 (프레임: {startFrameIndex}/{loadedFrames.Count - 1}, 비율: {currentStartRatio:P0})</color>");
     }
 
     private void StopGuideHandPlayback()

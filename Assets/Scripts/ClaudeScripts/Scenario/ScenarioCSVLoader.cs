@@ -224,6 +224,13 @@ public class ScenarioCSVLoader : MonoBehaviour
                     patientAnimationClip = values[12].Trim();
                 }
 
+                // movementType (14번째 컬럼, 선택사항) - position/rotation
+                string movementType = "";
+                if (values.Count >= 14 && !string.IsNullOrEmpty(values[13]))
+                {
+                    movementType = values[13].Trim().ToLower();
+                }
+
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
@@ -297,7 +304,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                     handTrackingFileName = handTrackingFileName,
                     conditionType = conditionType,
                     conditionParams = conditionParams,
-                    patientAnimationClip = patientAnimationClip
+                    patientAnimationClip = patientAnimationClip,
+                    movementType = movementType
                 };
 
                 currentStep.subSteps.Add(subStep);
@@ -306,7 +314,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                 {
                     string handInfo = !string.IsNullOrEmpty(handTrackingFileName) ? $"핸드={handTrackingFileName}" : "핸드없음";
                     string animInfo = !string.IsNullOrEmpty(patientAnimationClip) ? $"애니메이션={patientAnimationClip}" : "";
-                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo}");
+                    string moveInfo = !string.IsNullOrEmpty(movementType) ? $"이동={movementType}" : "";
+                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo} {moveInfo}");
                 }
             }
             catch (System.Exception e)
