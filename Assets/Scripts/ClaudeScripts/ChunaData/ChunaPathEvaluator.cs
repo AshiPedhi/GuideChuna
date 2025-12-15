@@ -145,7 +145,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private bool useRelativeMovement = true;
 
     [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
-    [SerializeField] private bool invertRotationDirection = false;
+    [SerializeField] private bool invertRotationDirection = true;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;

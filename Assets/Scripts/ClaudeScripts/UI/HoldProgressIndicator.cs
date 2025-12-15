@@ -52,7 +52,7 @@ public class HoldProgressIndicator : MonoBehaviour
     [SerializeField] private string idleText = "";
 
     [Tooltip("소수점 자릿수")]
-    [SerializeField] private int decimalPlaces = 1;
+    [SerializeField] private int decimalPlaces = 0;
 
     [Header("=== 옵션 ===")]
     [Tooltip("홀드 시작 시 오브젝트 활성화")]

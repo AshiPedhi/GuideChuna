@@ -208,19 +208,24 @@ public class HandPoseDataLoader
                     currentFrame.rightLocalPoses[jointId] = poseData;
 
                     // Root Transform 읽기 (WorldData)
+                    // ★ joint 0 또는 joint 1에서 WorldPos 읽기 (joint 0이 비어있을 수 있음)
                     if (values.Length >= 18 && !string.IsNullOrEmpty(values[11]) && !string.IsNullOrEmpty(values[14]))
                     {
-                        currentFrame.rightRootPosition = new Vector3(
-                            float.Parse(values[11], invariantCulture),
-                            float.Parse(values[12], invariantCulture),
-                            float.Parse(values[13], invariantCulture)
-                        );
-                        currentFrame.rightRootRotation = new Quaternion(
-                            float.Parse(values[14], invariantCulture),
-                            float.Parse(values[15], invariantCulture),
-                            float.Parse(values[16], invariantCulture),
-                            float.Parse(values[17], invariantCulture)
-                        );
+                        // rightRootPosition이 아직 설정되지 않았거나 joint 0인 경우만 설정
+                        if (jointId == 0 || (jointId == 1 && currentFrame.rightRootPosition == Vector3.zero))
+                        {
+                            currentFrame.rightRootPosition = new Vector3(
+                                float.Parse(values[11], invariantCulture),
+                                float.Parse(values[12], invariantCulture),
+                                float.Parse(values[13], invariantCulture)
+                            );
+                            currentFrame.rightRootRotation = new Quaternion(
+                                float.Parse(values[14], invariantCulture),
+                                float.Parse(values[15], invariantCulture),
+                                float.Parse(values[16], invariantCulture),
+                                float.Parse(values[17], invariantCulture)
+                            );
+                        }
                     }
                 }
             }
