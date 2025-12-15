@@ -783,19 +783,29 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             if (isPositionBasedMovement)
             {
-                // 위치 기반: 기준 위치에서 이동 축 방향으로 얼마나 이동했는지 계산
+                // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
                 Vector3 displacement = rightHandPos - userHoldReferencePosition;
+
+                // 방법 1: 축 방향 프로젝션 (방향 무관하게 절대값 사용)
                 float projectedDistance = Vector3.Dot(displacement, movementAxis);
+                float absProjectedDistance = Mathf.Abs(projectedDistance);
+
+                // 방법 2: 전체 이동 거리 (축 방향 무시)
+                float totalDisplacement = displacement.magnitude;
+
+                // 더 큰 값 사용 (둘 중 하나라도 이동했으면 인정)
+                float effectiveDistance = Mathf.Max(absProjectedDistance, totalDisplacement * 0.8f);
 
                 // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
                 if (handDataTotalDistance > 0.001f)
                 {
-                    newRatio = Mathf.Clamp01(projectedDistance / handDataTotalDistance);
+                    newRatio = Mathf.Clamp01(effectiveDistance / handDataTotalDistance);
                 }
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
-                    Debug.Log($"<color=yellow>[Relative Move] 이동:{projectedDistance:F3}m / {handDataTotalDistance:F3}m = {newRatio:P0}</color>");
+                    Debug.Log($"<color=yellow>[Relative Move] 축이동:{projectedDistance:F3}m, 총이동:{totalDisplacement:F3}m / 목표:{handDataTotalDistance:F3}m = {newRatio:P0}</color>");
+                    Debug.Log($"<color=cyan>  기준위치:{userHoldReferencePosition}, 현재위치:{rightHandPos}, 축:{movementAxis}</color>");
                 }
             }
             else
@@ -1008,28 +1018,30 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 애니메이션 선형보간 업데이트
-    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
+    /// Moving/MidHold 단계에서 애니메이션 동기화
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
-        bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-
-        // 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
-        if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
+        // Moving/MidHold 단계에서 애니메이션 업데이트
+        // ★ StartHold를 통과했으면 이미 손이 닿은 것이므로, 충돌 체크 없이 진행
+        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
         {
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})");
+            {
+                bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0}, 접촉:{isHandTouching})");
+            }
         }
         else if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}</color>");
+            Debug.Log($"<color=orange>[Animation Skip] 단계:{currentPhase} (Moving/MidHold 아님)</color>");
         }
     }
 
@@ -1087,8 +1099,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 이동 타입 설정 (position/rotation)
         if (subStep != null && !string.IsNullOrEmpty(subStep.movementType))
         {
-            specifiedMovementType = subStep.movementType.ToLower();
-            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 이동 타입 지정: {specifiedMovementType}</color>");
+            specifiedMovementType = subStep.movementType.Trim().ToLower();
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 이동 타입 지정: '{specifiedMovementType}'</color>");
         }
         else
         {
