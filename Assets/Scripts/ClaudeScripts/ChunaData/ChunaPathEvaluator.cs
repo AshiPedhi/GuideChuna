@@ -1489,27 +1489,23 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// ★ AutoPlay 모드 시작 - 핸드데이터 없이 애니메이션만 자동 재생
     /// </summary>
-    /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 길이 사용</param>
+    /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 완료 시 자동 진행</param>
     public void StartAutoPlay(float duration = 0f)
     {
         isAutoPlayMode = true;
         autoPlayStartTime = Time.time;
         autoPlayProgress = 0f;
 
-        // duration이 0이면 애니메이션 클립 길이 사용, 없으면 기본값 3초
+        // ★ duration이 0이면 애니메이션 normalizedTime 기반 완료 (UpdateAutoPlay에서 처리)
+        // stateInfo.length는 루핑 애니메이션에서 Infinity를 반환할 수 있으므로 사용하지 않음
         if (duration > 0f)
         {
             autoPlayDuration = duration;
         }
-        else if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
-        {
-            // 애니메이션 클립 길이 가져오기
-            AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
-            autoPlayDuration = stateInfo.length > 0f ? stateInfo.length : 3f;
-        }
         else
         {
-            autoPlayDuration = 3f; // 기본값
+            // duration=0: 애니메이션 완료(normalizedTime >= 0.99) 시 자동 진행
+            autoPlayDuration = 0f;
         }
 
         // 평가 시작 처리
@@ -1517,7 +1513,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         evaluationStartTime = Time.time;
         ChangePhase(EvaluationPhase.Moving); // AutoPlay는 바로 Moving 단계로
 
-        Debug.Log($"<color=green>[AutoPlay] ★ 자동 재생 시작! 시간:{autoPlayDuration:F1}초, 애니메이션:{currentAnimationStateName ?? "없음"}</color>");
+        string durationStr = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}초" : "애니메이션 완료 시";
+        Debug.Log($"<color=green>[AutoPlay] ★ 자동 재생 시작! 시간:{durationStr}, 애니메이션:{currentAnimationStateName ?? "없음"}</color>");
     }
 
     /// <summary>
