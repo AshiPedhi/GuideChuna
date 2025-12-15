@@ -788,7 +788,10 @@ public class ChunaPathEvaluator : MonoBehaviour
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
+                    Vector3 refEuler = userHoldReferenceRotation.eulerAngles;
+                    Vector3 curEuler = rightHandRot.eulerAngles;
                     Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0}</color>");
+                    Debug.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0})</color>");
                 }
             }
         }
@@ -909,27 +912,22 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 애니메이션 선형보간 업데이트
+    /// ★ Moving/MidHold 단계에서는 충돌 없이도 진행률 기반으로 애니메이션 업데이트
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
-        bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-
-        if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
+        // Moving/MidHold 단계에서는 진행률 기반으로 애니메이션 업데이트 (충돌 불필요)
+        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
         {
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
             patientAnimator.speed = 0f;
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0}, 프레임:{userHandFrameIndex}/{loadedFrames?.Count ?? 0}");
-        }
-        else if (showDebugLogs && Time.frameCount % 60 == 0)
-        {
-            // 애니메이션이 업데이트되지 않는 이유 출력
-            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, Animator:{patientAnimator != null}, 상태:{currentAnimationStateName ?? "NULL"}</color>");
+                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})");
         }
     }
 
