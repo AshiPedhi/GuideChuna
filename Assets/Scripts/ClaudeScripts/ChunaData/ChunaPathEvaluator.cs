@@ -1258,6 +1258,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 현재 애니메이션 상태 정보 가져오기
         AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
 
+        // ★ 애니메이터 속도 확인 및 복원 (다른 곳에서 0으로 설정될 수 있음)
+        if (patientAnimator.speed != 1f)
+        {
+            Debug.LogWarning($"<color=orange>[AutoPlay] 애니메이터 속도가 {patientAnimator.speed}입니다. 1로 복원합니다.</color>");
+            patientAnimator.speed = 1f;
+        }
+
         // ★ 올바른 애니메이션 상태인지 확인
         int expectedStateHash = Animator.StringToHash(currentAnimationStateName);
         bool isCorrectState = stateInfo.shortNameHash == expectedStateHash || stateInfo.fullPathHash == expectedStateHash;
