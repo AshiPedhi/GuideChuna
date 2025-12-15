@@ -1605,22 +1605,22 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        // ★ 재평가 단계: 확장 제한 모드 (65%)
+        // ★ 스트레칭/재평가: 둘 다 제한 범위 확장 (50% → 65%)
+        // ★ 시작 위치 30%: 스트레칭만 적용
         bool isReEvaluation = stepName.Contains("재평가");
-        // ★ 스트레칭 단계: 30%부터 시작
         bool isStretching = stepName.Contains("스트레칭");
 
-        if (isReEvaluation)
+        if (isStretching)
         {
-            EnableExtendedLimitMode();
-            isStretchingMode = false;  // 재평가는 0%부터
-            Debug.Log("<color=yellow>[ChunaPathEvaluator] 재평가 모드 - 제한:65%, 시작:0%</color>");
-        }
-        else if (isStretching)
-        {
-            DisableExtendedLimitMode();  // 스트레칭은 기본 50% 제한
+            EnableExtendedLimitMode();   // 제한 확장 (65%)
             isStretchingMode = true;     // 30%부터 시작
-            Debug.Log("<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 - 제한:50%, 시작:30%</color>");
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 - 제한:65%, 시작:30%</color>");
+        }
+        else if (isReEvaluation)
+        {
+            EnableExtendedLimitMode();   // 제한 확장 (65%)
+            isStretchingMode = false;    // 0%부터 시작
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 재평가 모드 - 제한:65%, 시작:0%</color>");
         }
         else
         {
