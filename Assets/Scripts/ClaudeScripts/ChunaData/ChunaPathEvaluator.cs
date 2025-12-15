@@ -166,6 +166,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
     [SerializeField] private float limitBarrierRatio = 0.5f;
 
+    [Header("=== 스트레칭/재평가 확장 제한 ===")]
+    [Tooltip("스트레칭/재평가 시 확장된 제한 장벽 (0~1)")]
+    [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
+
+    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
+    [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
 
@@ -245,6 +252,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float autoPlayDuration = 3f;        // 자동 재생 시간 (초) - 기본값 3초
     private float autoPlayStartTime = 0f;       // 자동 재생 시작 시간
     private bool isAutoPlayMode = false;        // 자동 재생 모드 활성화 여부
+
+    // ★ 스트레칭/재평가 확장 모드
+    private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부
+    private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
+    private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
 
     // 결과
     private EvaluationSession currentSession;
@@ -656,37 +668,41 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 현재 진행률 계산 (사용자 손 위치 기준)
         float progress = GetCurrentProgress();
 
-        // ★ 50% 초과 경고 체크 (지속적으로 경고, 돌아가기 전까지)
-        if (progress > midHoldEndRatio)
+        // ★ 현재 제한 비율 (스트레칭/재평가 시 확장됨)
+        float limitRatio = currentMidHoldEnd;
+        string limitLabel = isExtendedLimitMode ? $"{limitRatio:P0}(확장)" : $"{limitRatio:P0}";
+
+        // ★ 제한 초과 경고 체크 (지속적으로 경고, 돌아가기 전까지)
+        if (progress > limitRatio)
         {
-            // 50% 초과 상태 진입 시 경고 횟수 1회 증가
+            // 제한 초과 상태 진입 시 경고 횟수 1회 증가
             if (!isOverLimitBarrier)
             {
                 isOverLimitBarrier = true;
                 if (currentSession != null)
                     currentSession.limitWarningCount++;
 
-                Debug.Log($"<color=red>[Moving] ★★★ 50% 초과! 돌아가세요! (경고 #{currentSession?.limitWarningCount}) ★★★</color>");
+                Debug.Log($"<color=red>[Moving] ★★★ {limitLabel} 초과! 돌아가세요! (경고 #{currentSession?.limitWarningCount}) ★★★</color>");
             }
 
             // 지속적으로 경고 이벤트 발생 (UI 알람용)
             OnLimitWarning?.Invoke(progress);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"<color=red>[Moving] 경고 지속 중! 진행률: {progress:P0} (50% 이하로 돌아가세요)</color>");
+                Debug.Log($"<color=red>[Moving] 경고 지속 중! 진행률: {progress:P0} ({limitLabel} 이하로 돌아가세요)</color>");
         }
         else
         {
-            // 50% 이하로 돌아오면 경고 상태 해제
+            // 제한 이하로 돌아오면 경고 상태 해제
             if (isOverLimitBarrier)
             {
                 isOverLimitBarrier = false;
-                Debug.Log($"<color=green>[Moving] 50% 이하로 복귀! 경고 해제</color>");
+                Debug.Log($"<color=green>[Moving] {limitLabel} 이하로 복귀! 경고 해제</color>");
             }
         }
 
-        // 중간 홀드 구간 체크 (30~50%)
-        if (progress >= midHoldStartRatio && progress <= midHoldEndRatio)
+        // 중간 홀드 구간 체크 (30~제한비율)
+        if (progress >= midHoldStartRatio && progress <= limitRatio)
         {
             // 중간 홀드 구간 진입 → 중간 홀드 단계로
             OnMidHoldBegin?.Invoke();  // "멈추세요" 안내
@@ -694,7 +710,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            Debug.Log($"[Moving] 진행률: {progress:P0}, 왼손이탈: {leftDrift:F3}m, 50%초과:{isOverLimitBarrier}");
+            Debug.Log($"[Moving] 진행률: {progress:P0}, 제한:{limitLabel}, 왼손이탈: {leftDrift:F3}m, 초과:{isOverLimitBarrier}");
     }
 
     /// <summary>
@@ -1367,6 +1383,61 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// AutoPlay 진행률 (0~1)
     /// </summary>
     public float AutoPlayProgress => autoPlayProgress;
+
+    // ========== 스트레칭/재평가 확장 제한 모드 ==========
+
+    /// <summary>
+    /// ★ 확장 제한 모드 활성화 (스트레칭/재평가용)
+    /// 제한 장벽이 50% → 65%로 확장됨
+    /// </summary>
+    public void EnableExtendedLimitMode()
+    {
+        isExtendedLimitMode = true;
+        Debug.Log($"<color=magenta>[ChunaPathEvaluator] ★ 확장 제한 모드 활성화 - 제한:{currentMidHoldEnd:P0}</color>");
+    }
+
+    /// <summary>
+    /// 확장 제한 모드 비활성화 (기본 50%로 복귀)
+    /// </summary>
+    public void DisableExtendedLimitMode()
+    {
+        isExtendedLimitMode = false;
+        Debug.Log($"<color=cyan>[ChunaPathEvaluator] 확장 제한 모드 비활성화 - 제한:{currentMidHoldEnd:P0}</color>");
+    }
+
+    /// <summary>
+    /// 현재 확장 제한 모드인지 확인
+    /// </summary>
+    public bool IsExtendedLimitMode => isExtendedLimitMode;
+
+    /// <summary>
+    /// 현재 제한 비율 반환 (확장 모드 여부에 따라)
+    /// </summary>
+    public float CurrentLimitRatio => currentMidHoldEnd;
+
+    /// <summary>
+    /// Step 이름에 따라 확장 제한 모드 자동 설정
+    /// "스트레칭" 또는 "재평가"가 포함되면 확장 모드 활성화
+    /// </summary>
+    public void SetExtendedLimitModeFromStepName(string stepName)
+    {
+        if (string.IsNullOrEmpty(stepName))
+        {
+            DisableExtendedLimitMode();
+            return;
+        }
+
+        bool shouldExtend = stepName.Contains("스트레칭") || stepName.Contains("재평가");
+
+        if (shouldExtend)
+        {
+            EnableExtendedLimitMode();
+        }
+        else
+        {
+            DisableExtendedLimitMode();
+        }
+    }
 
     /// <summary>
     /// 홀드 감지 업데이트 - 목표 위치에서 손이 일정 시간 정지하면 다음 단계로

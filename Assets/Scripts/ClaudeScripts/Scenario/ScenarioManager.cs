@@ -555,9 +555,13 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
+        string stepName = currentStep?.stepName ?? "";
         Debug.Log($"<color=magenta>[ScenarioManager] ========== AutoPlay 모드 시작 ==========</color>");
         Debug.Log($"<color=magenta>[ScenarioManager] 애니메이션: {subStep.patientAnimationClip}</color>");
         Debug.Log($"<color=magenta>[ScenarioManager] 시간: {subStep.duration}초</color>");
+
+        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
+        chunaPathEvaluator.SetExtendedLimitModeFromStepName(stepName);
 
         // AutoPlay 시작
         chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
@@ -640,6 +644,9 @@ public class ScenarioManager : MonoBehaviour
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
         chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
         Debug.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정 요청 (클립: {subStep.patientAnimationClip ?? "없음"})</color>");
+
+        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
+        chunaPathEvaluator.SetExtendedLimitModeFromStepName(stepName);
 
         // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
         chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
