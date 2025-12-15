@@ -189,6 +189,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
     [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
 
+    [Tooltip("스트레칭/재평가 시 시작 위치 (0~1, 30%부터 시작)")]
+    [SerializeField] private float extendedStartRatio = 0.3f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
 
@@ -283,6 +286,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
+    private float currentStartRatio => isExtendedLimitMode ? extendedStartRatio : 0f;  // 스트레칭은 30%부터 시작
 
     // 결과
     private EvaluationSession currentSession;
@@ -477,13 +481,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
 
         // Moving 단계 시작 시 프레임 인덱스 초기화
+        // ★ 스트레칭/재평가 모드에서는 30%부터 시작
         if (newPhase == EvaluationPhase.Moving)
         {
-            userHandFrameIndex = 0;
-            userHandFrameRatio = 0f;
+            int startFrameIdx = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+            userHandFrameIndex = Mathf.Clamp(startFrameIdx, 0, loadedFrames.Count - 1);
+            userHandFrameRatio = currentStartRatio;
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작)</color>");
+                Debug.Log($"<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작, 시작비율: {currentStartRatio:P0})</color>");
         }
 
         if (showDebugLogs)
@@ -2175,27 +2181,29 @@ public class ChunaPathEvaluator : MonoBehaviour
         OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
 
         // 프레임/애니메이션 상태 초기화
+        // ★ 스트레칭/재평가 모드에서는 30%부터 시작
         userHandFrameIndex = 0;
-        userHandFrameRatio = 0f;
-        currentAnimationRatio = 0f;
-        targetAnimationRatio = 0f;
+        userHandFrameRatio = currentStartRatio;
+        currentAnimationRatio = currentStartRatio;
+        targetAnimationRatio = currentStartRatio;
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
 
-        // 시작 위치 대기 중 첫 프레임 표시 (가이드 핸드 + 환자 애니메이션)
+        // 시작 위치 대기 중 시작 프레임 표시 (가이드 핸드 + 환자 애니메이션)
+        // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
         if (showFirstFrameWhileWaiting)
         {
             ShowGuideHandFirstFrame();
 
-            // 환자 애니메이션도 첫 프레임(0%)으로 설정
+            // 환자 애니메이션도 시작 프레임으로 설정 (스트레칭은 30%, 일반은 0%)
             if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))
             {
-                patientAnimator.Play(currentAnimationStateName, 0, 0f);
+                patientAnimator.Play(currentAnimationStateName, 0, currentStartRatio);
                 patientAnimator.speed = 0f;
 
                 if (showDebugLogs)
-                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 첫 프레임 설정: {currentAnimationStateName}</color>");
+                    Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 시작 프레임 설정: {currentAnimationStateName} @ {currentStartRatio:P0}</color>");
             }
         }
 
@@ -2605,7 +2613,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 첫 프레임만 정적으로 표시 (시작 위치 안내용)
+    /// 시작 프레임 표시 (시작 위치 안내용)
+    /// ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
     /// </summary>
     private void ShowGuideHandFirstFrame()
     {
@@ -2635,7 +2644,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOffset = referenceTransform.position - recordedPatientOffset;
         }
 
-        PoseFrame firstFrame = loadedFrames[0];
+        // ★ 스트레칭/재평가 모드면 30% 프레임, 아니면 첫 프레임
+        int startFrameIndex = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+        startFrameIndex = Mathf.Clamp(startFrameIndex, 0, loadedFrames.Count - 1);
+        PoseFrame firstFrame = loadedFrames[startFrameIndex];
 
         // 왼손 첫 프레임 표시
         if (leftGuideHand != null)
@@ -2674,7 +2686,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log("<color=cyan>[ChunaPathEvaluator] 가이드 핸드 첫 프레임 표시 (시작 위치 안내)</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 가이드 핸드 시작 프레임 표시 (프레임: {startFrameIndex}/{loadedFrames.Count - 1}, 비율: {currentStartRatio:P0})</color>");
     }
 
     private void StopGuideHandPlayback()
