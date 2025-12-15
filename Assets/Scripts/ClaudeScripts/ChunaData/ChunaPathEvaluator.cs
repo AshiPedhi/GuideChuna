@@ -996,12 +996,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         // StartHold만 체크 모드 (등척성운동 등)
-        // conditionParams에 "startHoldOnly" 포함 시 활성화
-        if (subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
-            subStep.conditionParams.ToLower().Contains("startholdonly"))
+        // 1. 핸드데이터 파일명에 "등척성" 포함 시 자동 활성화
+        // 2. conditionParams에 "startHoldOnly" 포함 시 활성화
+        bool isIsometricExercise = subStep != null && !string.IsNullOrEmpty(subStep.handTrackingFileName) &&
+            subStep.handTrackingFileName.Contains("등척성");
+        bool hasStartHoldOnlyParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("startholdonly");
+
+        if (isIsometricExercise || hasStartHoldOnlyParam)
         {
             startHoldOnly = true;
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화</color>");
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동)</color>");
         }
         else
         {
