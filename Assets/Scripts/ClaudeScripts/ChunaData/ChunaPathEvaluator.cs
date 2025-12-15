@@ -214,6 +214,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 userHoldReferencePosition;  // 사용자 시작 홀드 위치 (기준점)
     private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
+    private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
 
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
@@ -968,10 +969,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// SubStepData에서 애니메이션 설정
+    /// SubStepData에서 애니메이션 및 이동 타입 설정
     /// </summary>
     public void SetPatientAnimationFromSubStep(SubStepData subStep)
     {
+        // 이동 타입 설정 (position/rotation)
+        if (subStep != null && !string.IsNullOrEmpty(subStep.movementType))
+        {
+            specifiedMovementType = subStep.movementType.ToLower();
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 이동 타입 지정: {specifiedMovementType}</color>");
+        }
+        else
+        {
+            specifiedMovementType = null; // 자동 감지 사용
+        }
+
         // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정
         if (subStep != null && subStep.HasPatientAnimation())
         {
@@ -1351,13 +1363,29 @@ public class ChunaPathEvaluator : MonoBehaviour
         handDataTotalRotation = Quaternion.Angle(startRot, endRot);
 
         // 위치 기반 vs 회전 기반 결정
-        // 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
-        isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
+        // ★ CSV에서 지정한 타입이 있으면 그것을 사용, 없으면 자동 감지
+        if (!string.IsNullOrEmpty(specifiedMovementType))
+        {
+            isPositionBasedMovement = specifiedMovementType == "position";
+            if (showDebugLogs)
+            {
+                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+                Debug.Log($"<color=magenta>[HandData Analysis] {moveType} (CSV 지정)</color>");
+            }
+        }
+        else
+        {
+            // 자동 감지: 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
+            isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
+            if (showDebugLogs)
+            {
+                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+                Debug.Log($"<color=magenta>[HandData Analysis] {moveType} (자동 감지)</color>");
+            }
+        }
 
         if (showDebugLogs)
         {
-            string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-            Debug.Log($"<color=magenta>[HandData Analysis] {moveType}</color>");
             Debug.Log($"  - 이동 거리: {handDataTotalDistance:F3}m ({handDataMovementVector})");
             Debug.Log($"  - 회전 각도: {handDataTotalRotation:F1}°");
             Debug.Log($"  - 이동 축: {movementAxis}");

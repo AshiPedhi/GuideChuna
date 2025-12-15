@@ -39,6 +39,10 @@ public class SubStepData
     [Tooltip("환자 모델 애니메이션 클립 이름 (Animator State 이름)")]
     public string patientAnimationClip;
 
+    [Header("이동 감지 타입")]
+    [Tooltip("이동 감지 방식: position(위치 기반), rotation(회전 기반), 비어있으면 자동 감지")]
+    public string movementType;
+
     /// <summary>
     /// 핸드 트래킹이 있는지 확인
     /// </summary>
