@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClipName
-=======
-﻿scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip
->>>>>>> e28c2083ae6d125d301bcca28e3ca64b50c7bec1
+scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip
 1,상부승모근,시작,가이드,0,1,0,"필요시 [설정] 버튼을 눌러 환자의 위치를 설정합니다
 [시작] 버튼을 눌러 실습을 시작합니다",상부승모근 시나리오를 시작합니다,,,,
 1,상부승모근,진단,진단,1,1,2,우측 상부승모근의 상태를 평가하세요,상부승모근을 촉진하세요,,,,

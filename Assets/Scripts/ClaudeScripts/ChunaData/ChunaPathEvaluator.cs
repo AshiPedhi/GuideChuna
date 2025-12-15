@@ -118,6 +118,18 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("체크포인트 트리거 반경 (미터)")]
     [SerializeField] private float checkpointRadius = 0.15f;
 
+    [Header("=== 회전 감지 설정 ===")]
+    [Tooltip("회전 감지 활성화 (제자리 회전 동작용)")]
+    [SerializeField] private bool useRotationMatching = true;
+
+    [Tooltip("회전 가중치 (0=위치만, 1=회전 강조)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float rotationWeight = 0.3f;
+
+    [Header("=== 상대 이동 감지 설정 ===")]
+    [Tooltip("상대 이동 모드 사용 (시작 홀드 위치 기준으로 진행률 계산)")]
+    [SerializeField] private bool useRelativeMovement = true;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -193,6 +205,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 사용자 손 위치 기반 프레임
     private int userHandFrameIndex = 0;
     private float userHandFrameRatio = 0f;  // 0~1
+
+    // ★ 상대 이동 감지 데이터 (시작-끝 프레임 간 이동량 기준)
+    private Vector3 handDataMovementVector;     // 핸드데이터 시작→끝 이동 벡터
+    private float handDataTotalDistance;        // 핸드데이터 총 이동 거리
+    private float handDataTotalRotation;        // 핸드데이터 총 회전 각도 (도)
+    private bool isPositionBasedMovement;       // true=위치 기반, false=회전 기반
+    private Vector3 userHoldReferencePosition;  // 사용자 시작 홀드 위치 (기준점)
+    private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
+    private Vector3 movementAxis;               // 주요 이동 축 (정규화)
 
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
@@ -524,6 +545,15 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (phaseHoldTime >= startHoldDuration)
             {
                 Debug.Log("<color=green>[StartHold] 홀드 완료! Moving 단계로</color>");
+
+                // ★ 사용자 기준 위치/회전 저장 (상대 이동 감지용)
+                if (useRelativeMovement && playerRightHand != null)
+                {
+                    userHoldReferencePosition = playerRightHand.transform.position;
+                    userHoldReferenceRotation = playerRightHand.transform.rotation;
+                    Debug.Log($"<color=cyan>[StartHold] 기준 위치 저장: {userHoldReferencePosition}</color>");
+                }
+
                 OnHoldCompleted?.Invoke();
                 OnStartHoldComplete?.Invoke();
                 StartGuideHandPlayback();
@@ -691,8 +721,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     public EvaluationPhase CurrentPhase => currentPhase;
 
     /// <summary>
-    /// 사용자 손 위치 기반으로 가장 가까운 프레임 계산 (오른손 기준)
-    /// ★ 실시간 동기화: 앞뒤 자유 이동, 매 프레임 애니메이션 동기화
+    /// 사용자 손 움직임 기반으로 진행률 계산
+    /// ★ 상대 이동 모드: 시작 홀드 위치 기준으로 이동량/회전량에 따라 진행률 계산
     /// </summary>
     private void UpdateUserHandFrame()
     {
@@ -702,64 +732,73 @@ public class ChunaPathEvaluator : MonoBehaviour
         // Moving 또는 MidHold 단계에서만 프레임 업데이트
         if (currentPhase != EvaluationPhase.Moving && currentPhase != EvaluationPhase.MidHold)
         {
-            // 다른 단계에서는 프레임 0으로 유지
             userHandFrameIndex = 0;
             userHandFrameRatio = 0f;
             return;
         }
 
         Vector3 rightHandPos = playerRightHand.transform.position;
+        Quaternion rightHandRot = playerRightHand.transform.rotation;
 
-        // 위치 오프셋 계산
-        Vector3 positionOffset = Vector3.zero;
-        if (referenceTransform != null)
+        float prevRatio = userHandFrameRatio;
+        float newRatio = 0f;
+
+        // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
+        if (useRelativeMovement)
         {
-            positionOffset = referenceTransform.position - recordedPatientOffset;
-        }
-
-        // ★ 전체 프레임에서 가장 가까운 프레임 검색 (앞뒤 자유 이동)
-        float minDistance = float.MaxValue;
-        int closestFrame = userHandFrameIndex;
-
-        for (int i = 0; i < loadedFrames.Count; i++)
-        {
-            Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
-            float dist = Vector3.Distance(rightHandPos, framePos);
-
-            if (dist < minDistance)
+            if (isPositionBasedMovement)
             {
-                minDistance = dist;
-                closestFrame = i;
+                // 위치 기반: 기준 위치에서 이동 축 방향으로 얼마나 이동했는지 계산
+                Vector3 displacement = rightHandPos - userHoldReferencePosition;
+                float projectedDistance = Vector3.Dot(displacement, movementAxis);
+
+                // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
+                if (handDataTotalDistance > 0.001f)
+                {
+                    newRatio = Mathf.Clamp01(projectedDistance / handDataTotalDistance);
+                }
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    Debug.Log($"<color=yellow>[Relative Move] 이동:{projectedDistance:F3}m / {handDataTotalDistance:F3}m = {newRatio:P0}</color>");
+                }
+            }
+            else
+            {
+                // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
+                float rotationAngle = Quaternion.Angle(userHoldReferenceRotation, rightHandRot);
+
+                // 핸드데이터 총 회전 각도로 나눠서 0~1 비율 계산
+                if (handDataTotalRotation > 1f)
+                {
+                    newRatio = Mathf.Clamp01(rotationAngle / handDataTotalRotation);
+                }
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0}</color>");
+                }
             }
         }
-
-        // 프레임 인정 거리 임계값 (넓게 설정)
-        float frameAcceptanceRadius = checkpointRadius * 5f;
-
-        int prevFrame = userHandFrameIndex;
-
-        // 거리 임계값 이내에 있을 때만 프레임 업데이트
-        if (minDistance <= frameAcceptanceRadius)
+        else
         {
-            userHandFrameIndex = closestFrame;
+            // 기존 프레임 매칭 방식 (fallback)
+            newRatio = CalculateFrameMatchingRatio(rightHandPos, rightHandRot);
         }
 
-        userHandFrameRatio = Mathf.Clamp01((float)userHandFrameIndex / Mathf.Max(1, loadedFrames.Count - 1));
+        // 비율 업데이트
+        userHandFrameRatio = newRatio;
+        userHandFrameIndex = Mathf.RoundToInt(newRatio * (loadedFrames.Count - 1));
 
-        // 프레임 변경 시 이벤트 발생
-        if (prevFrame != userHandFrameIndex)
+        // 변화 시 이벤트 발생
+        if (Mathf.Abs(prevRatio - userHandFrameRatio) > 0.01f)
         {
             OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
 
-            if (showDebugLogs)
-                Debug.Log($"<color=yellow>[Frame Changed] {prevFrame} → {userHandFrameIndex}/{loadedFrames.Count} ({userHandFrameRatio:P0}), 거리: {minDistance:F3}m</color>");
-        }
-
-        // 손 위치 상세 디버그 (주기적)
-        if (showDebugLogs && Time.frameCount % 60 == 0)
-        {
-            Vector3 closestFramePos = loadedFrames[closestFrame].rightRootPosition + positionOffset;
-            Debug.Log($"[Hand Position] 손:{rightHandPos}, 가까운프레임위치:{closestFramePos}, 거리:{minDistance:F3}m, 임계값:{frameAcceptanceRadius:F3}m");
+            if (showDebugLogs && Time.frameCount % 15 == 0)
+            {
+                Debug.Log($"<color=green>[Progress] {userHandFrameRatio:P0} (프레임:{userHandFrameIndex}/{loadedFrames.Count})</color>");
+            }
         }
 
         // ★ 매 프레임마다 환자 애니메이션 실시간 동기화
@@ -767,6 +806,43 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             SyncAnimationToFrame(userHandFrameRatio);
         }
+    }
+
+    /// <summary>
+    /// 기존 프레임 매칭 방식 (fallback)
+    /// </summary>
+    private float CalculateFrameMatchingRatio(Vector3 rightHandPos, Quaternion rightHandRot)
+    {
+        Vector3 positionOffset = Vector3.zero;
+        if (referenceTransform != null)
+        {
+            positionOffset = referenceTransform.position - recordedPatientOffset;
+        }
+
+        float minScore = float.MaxValue;
+        int closestFrame = 0;
+
+        for (int i = 0; i < loadedFrames.Count; i++)
+        {
+            Vector3 framePos = loadedFrames[i].rightRootPosition + positionOffset;
+            float positionDist = Vector3.Distance(rightHandPos, framePos);
+            float score = positionDist;
+
+            if (useRotationMatching && rotationWeight > 0f)
+            {
+                Quaternion frameRot = loadedFrames[i].rightRootRotation;
+                float rotationDiff = Quaternion.Angle(rightHandRot, frameRot) / 180f;
+                score = positionDist * (1f - rotationWeight) + rotationDiff * rotationWeight;
+            }
+
+            if (score < minScore)
+            {
+                minScore = score;
+                closestFrame = i;
+            }
+        }
+
+        return Mathf.Clamp01((float)closestFrame / Mathf.Max(1, loadedFrames.Count - 1));
     }
 
     /// <summary>
@@ -1205,6 +1281,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs)
             Debug.Log($"[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 로드됨");
 
+        // ★ 핸드데이터 이동량 계산 (시작-끝 프레임 간)
+        CalculateHandDataMovement();
+
         // ★ 충돌 모드에서는 체크포인트 생성 건너뛰기
         if (useCollisionMode)
         {
@@ -1233,6 +1312,55 @@ public class ChunaPathEvaluator : MonoBehaviour
                 Debug.Log($"  - 왼손: {leftCheckpoints.Count}개");
                 Debug.Log($"  - 오른손: {rightCheckpoints.Count}개");
             }
+        }
+    }
+
+    /// <summary>
+    /// 핸드데이터 시작-끝 프레임 간 이동량/회전량 계산
+    /// </summary>
+    private void CalculateHandDataMovement()
+    {
+        if (loadedFrames == null || loadedFrames.Count < 2)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 프레임이 2개 미만이라 이동량 계산 불가");
+            return;
+        }
+
+        PoseFrame firstFrame = loadedFrames[0];
+        PoseFrame lastFrame = loadedFrames[loadedFrames.Count - 1];
+
+        // 오른손 기준 이동 벡터 계산
+        Vector3 startPos = firstFrame.rightRootPosition;
+        Vector3 endPos = lastFrame.rightRootPosition;
+        handDataMovementVector = endPos - startPos;
+        handDataTotalDistance = handDataMovementVector.magnitude;
+
+        // 이동 축 계산 (정규화)
+        if (handDataTotalDistance > 0.001f)
+        {
+            movementAxis = handDataMovementVector.normalized;
+        }
+        else
+        {
+            movementAxis = Vector3.forward;
+        }
+
+        // 오른손 기준 회전량 계산
+        Quaternion startRot = firstFrame.rightRootRotation;
+        Quaternion endRot = lastFrame.rightRootRotation;
+        handDataTotalRotation = Quaternion.Angle(startRot, endRot);
+
+        // 위치 기반 vs 회전 기반 결정
+        // 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
+        isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
+
+        if (showDebugLogs)
+        {
+            string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+            Debug.Log($"<color=magenta>[HandData Analysis] {moveType}</color>");
+            Debug.Log($"  - 이동 거리: {handDataTotalDistance:F3}m ({handDataMovementVector})");
+            Debug.Log($"  - 회전 각도: {handDataTotalRotation:F1}°");
+            Debug.Log($"  - 이동 축: {movementAxis}");
         }
     }
 
@@ -1346,6 +1474,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void StartEvaluation()
     {
+        // ★ 이전 가이드 핸드 재생 중지 (스킵 시 중복 재생 방지)
+        StopGuideHandPlayback();
+
         int totalCheckpoints = leftCheckpoints.Count + rightCheckpoints.Count;
 
         if (totalCheckpoints == 0)
@@ -1371,6 +1502,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
+
+        // 프레임/애니메이션 상태 초기화
+        userHandFrameIndex = 0;
+        userHandFrameRatio = 0f;
+        currentAnimationRatio = 0f;
+        targetAnimationRatio = 0f;
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
