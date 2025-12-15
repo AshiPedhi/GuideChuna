@@ -584,12 +584,22 @@ public class ChunaPathEvaluator : MonoBehaviour
                     if (rightWristBone == null)
                         FindWristBones();
 
-                    userHoldReferencePosition = playerRightHand.transform.position;
+                    // ★ 위치: 콜라이더가 있으면 콜라이더 중심, 없으면 transform 위치 사용
+                    if (rightHandCollider != null)
+                    {
+                        userHoldReferencePosition = rightHandCollider.bounds.center;
+                    }
+                    else
+                    {
+                        userHoldReferencePosition = playerRightHand.transform.position;
+                    }
+
                     // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전)
                     userHoldReferenceRotation = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
                     Vector3 euler = userHoldReferenceRotation.eulerAngles;
                     string wristInfo = rightWristBone != null ? rightWristBone.name : "루트";
-                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition}, 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
+                    string posSource = rightHandCollider != null ? "콜라이더" : "transform";
+                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition} [{posSource}], 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
                 }
                 else
                 {
@@ -777,7 +787,17 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        Vector3 rightHandPos = playerRightHand.transform.position;
+        // ★ 손 위치: 콜라이더가 있으면 콜라이더 중심, 없으면 transform 위치 사용
+        Vector3 rightHandPos;
+        if (rightHandCollider != null)
+        {
+            rightHandPos = rightHandCollider.bounds.center;
+        }
+        else
+        {
+            rightHandPos = playerRightHand.transform.position;
+        }
+
         // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전 감지)
         Quaternion rightHandRot = rightWristBone != null ? rightWristBone.rotation : playerRightHand.transform.rotation;
 
@@ -810,8 +830,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
                     Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} (데이터거리:{handDataTotalDistance:F3}m)</color>");
-                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos}</color>");
+                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}</color>");
                 }
             }
             else
