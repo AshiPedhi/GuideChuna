@@ -1615,12 +1615,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        if (showDebugLogs)
-        {
-            Debug.Log($"  - 이동 거리: {handDataTotalDistance:F3}m ({handDataMovementVector})");
-            Debug.Log($"  - 회전 각도: {handDataTotalRotation:F1}°");
-            Debug.Log($"  - 이동 축: {movementAxis}");
-        }
+        // 항상 출력 (디버깅용)
+        Debug.Log($"<color=cyan>[HandData] 시작위치: {startPos}, 끝위치: {endPos}</color>");
+        Debug.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
+        Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
     }
 
     /// <summary>

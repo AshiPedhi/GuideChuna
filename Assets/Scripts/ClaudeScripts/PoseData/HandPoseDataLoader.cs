@@ -208,23 +208,34 @@ public class HandPoseDataLoader
                     currentFrame.rightLocalPoses[jointId] = poseData;
 
                     // Root Transform 읽기 (WorldData)
-                    // ★ joint 0 또는 joint 1에서 WorldPos 읽기 (joint 0이 비어있을 수 있음)
-                    if (values.Length >= 18 && !string.IsNullOrEmpty(values[11]) && !string.IsNullOrEmpty(values[14]))
+                    // ★ joint 0~25 중에서 유효한 WorldPos가 있으면 사용 (joint 0이 비어있을 수 있음)
+                    if (values.Length >= 18)
                     {
-                        // rightRootPosition이 아직 설정되지 않았거나 joint 0인 경우만 설정
-                        if (jointId == 0 || (jointId == 1 && currentFrame.rightRootPosition == Vector3.zero))
+                        string worldPosX = values[11].Trim();
+                        string worldRotX = values[14].Trim();
+
+                        // 유효한 데이터가 있고, 아직 설정되지 않았으면 설정
+                        bool hasValidWorldData = !string.IsNullOrEmpty(worldPosX) && !string.IsNullOrEmpty(worldRotX);
+                        bool needsPosition = currentFrame.rightRootPosition == Vector3.zero;
+
+                        if (hasValidWorldData && needsPosition)
                         {
                             currentFrame.rightRootPosition = new Vector3(
-                                float.Parse(values[11], invariantCulture),
-                                float.Parse(values[12], invariantCulture),
-                                float.Parse(values[13], invariantCulture)
+                                float.Parse(worldPosX, invariantCulture),
+                                float.Parse(values[12].Trim(), invariantCulture),
+                                float.Parse(values[13].Trim(), invariantCulture)
                             );
                             currentFrame.rightRootRotation = new Quaternion(
-                                float.Parse(values[14], invariantCulture),
-                                float.Parse(values[15], invariantCulture),
-                                float.Parse(values[16], invariantCulture),
-                                float.Parse(values[17], invariantCulture)
+                                float.Parse(worldRotX, invariantCulture),
+                                float.Parse(values[15].Trim(), invariantCulture),
+                                float.Parse(values[16].Trim(), invariantCulture),
+                                float.Parse(values[17].Trim(), invariantCulture)
                             );
+
+                            if (jointId > 0)
+                            {
+                                Debug.Log($"<color=yellow>[HandPoseDataLoader] Right WorldPos를 joint {jointId}에서 읽음: {currentFrame.rightRootPosition}</color>");
+                            }
                         }
                     }
                 }

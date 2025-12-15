@@ -51,8 +51,11 @@ public class HoldProgressIndicator : MonoBehaviour
     [Tooltip("홀드하지 않을 때 표시할 텍스트 (비어있으면 0으로 표시)")]
     [SerializeField] private string idleText = "";
 
-    [Tooltip("소수점 자릿수")]
+    [Tooltip("소수점 자릿수 (forceIntegerDisplay가 true면 무시됨)")]
     [SerializeField] private int decimalPlaces = 0;
+
+    [Tooltip("★ 강제로 정수만 표시 (Inspector 값 무시)")]
+    [SerializeField] private bool forceIntegerDisplay = true;
 
     [Header("=== 옵션 ===")]
     [Tooltip("홀드 시작 시 오브젝트 활성화")]
@@ -257,13 +260,22 @@ public class HoldProgressIndicator : MonoBehaviour
 
     private string FormatTime(float currentTime, float requiredTime)
     {
-        string format = decimalPlaces switch
+        // ★ forceIntegerDisplay가 true면 무조건 정수 표시
+        string format;
+        if (forceIntegerDisplay)
         {
-            0 => "F0",
-            1 => "F1",
-            2 => "F2",
-            _ => "F1"
-        };
+            format = "F0";
+        }
+        else
+        {
+            format = decimalPlaces switch
+            {
+                0 => "F0",
+                1 => "F1",
+                2 => "F2",
+                _ => "F1"
+            };
+        }
 
         switch (timeDisplayFormat)
         {
