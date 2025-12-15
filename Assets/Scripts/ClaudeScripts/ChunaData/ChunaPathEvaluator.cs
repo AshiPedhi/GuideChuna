@@ -889,7 +889,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void UpdateCollisionDetection()
     {
-        if (patientHeadCollider == null) return;
+        if (patientHeadCollider == null)
+        {
+            if (showDebugLogs && Time.frameCount % 120 == 0)
+                Debug.Log("<color=red>[Collision] patientHeadCollider가 NULL!</color>");
+            return;
+        }
 
         if (leftHandCollider != null)
         {
@@ -908,19 +913,28 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
+
+        // 디버그: 콜라이더 거리 표시
+        if (showDebugLogs && Time.frameCount % 60 == 0 && rightHandCollider != null)
+        {
+            float dist = Vector3.Distance(rightHandCollider.bounds.center, patientHeadCollider.bounds.center);
+            Debug.Log($"<color=cyan>[Collision Debug] 오른손-환자 거리:{dist:F2}m, 오른손크기:{rightHandCollider.bounds.size}, 환자크기:{patientHeadCollider.bounds.size}</color>");
+        }
     }
 
     /// <summary>
     /// 애니메이션 선형보간 업데이트
-    /// ★ Moving/MidHold 단계에서는 충돌 없이도 진행률 기반으로 애니메이션 업데이트
+    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
-        // Moving/MidHold 단계에서는 진행률 기반으로 애니메이션 업데이트 (충돌 불필요)
-        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
+        bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+
+        // 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
+        if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
         {
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
@@ -928,6 +942,10 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
                 Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})");
+        }
+        else if (showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}</color>");
         }
     }
 
