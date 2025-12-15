@@ -1228,12 +1228,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void UpdateAutoPlay()
     {
-        // 경과 시간으로 진행률 계산
+        // 경과 시간 계산
         float elapsed = Time.time - autoPlayStartTime;
-        autoPlayProgress = Mathf.Clamp01(elapsed / autoPlayDuration);
-
-        // 진행률 이벤트 발생
-        OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
 
         // ★ 애니메이션이 없어도 duration 시간만큼 대기
         bool hasAnimation = patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName);
@@ -1241,13 +1237,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (!hasAnimation)
         {
             // 애니메이션 없이 시간 기반으로만 진행
+            autoPlayProgress = autoPlayDuration > 0 ? Mathf.Clamp01(elapsed / autoPlayDuration) : 0f;
+            OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
             if (showDebugLogs && Time.frameCount % 60 == 0)
             {
                 Debug.Log($"<color=orange>[AutoPlay] 애니메이션 없음 - 시간 기반 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
             }
 
             // 시간 완료 체크
-            if (elapsed >= autoPlayDuration)
+            if (elapsed >= autoPlayDuration && autoPlayDuration > 0)
             {
                 if (showDebugLogs)
                     Debug.Log($"<color=green>[AutoPlay] 완료! (시간 경과: {elapsed:F1}s)</color>");
@@ -1263,11 +1262,26 @@ public class ChunaPathEvaluator : MonoBehaviour
         int expectedStateHash = Animator.StringToHash(currentAnimationStateName);
         bool isCorrectState = stateInfo.shortNameHash == expectedStateHash || stateInfo.fullPathHash == expectedStateHash;
 
+        // ★ 진행률 계산: duration이 0이면 애니메이션 normalizedTime 기준, 아니면 시간 기준
+        if (autoPlayDuration > 0)
+        {
+            autoPlayProgress = Mathf.Clamp01(elapsed / autoPlayDuration);
+        }
+        else if (isCorrectState)
+        {
+            // duration=0이고 올바른 애니메이션 상태면 normalizedTime 기준
+            autoPlayProgress = Mathf.Clamp01(stateInfo.normalizedTime);
+        }
+
+        // 진행률 이벤트 발생
+        OnUserFrameChanged?.Invoke(0, 1, autoPlayProgress);
+
         // 디버그 로그
         if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {autoPlayDuration:F1}s)</color>");
-            Debug.Log($"<color=cyan>[AutoPlay] 상태 확인 - 예상: '{currentAnimationStateName}', 올바른 상태: {isCorrectState}, normalizedTime: {stateInfo.normalizedTime:F2}</color>");
+            string durationInfo = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}s" : "애니메이션 길이";
+            Debug.Log($"<color=cyan>[AutoPlay] 진행: {autoPlayProgress:P0} ({elapsed:F1}s / {durationInfo})</color>");
+            Debug.Log($"<color=cyan>[AutoPlay] 상태: '{currentAnimationStateName}', 올바른상태: {isCorrectState}, normalizedTime: {stateInfo.normalizedTime:F2}</color>");
         }
 
         // ★ 최소 경과 시간 체크 (0.5초 미만이면 완료 판정 안함 - 상태 전환 대기)
@@ -1277,17 +1291,18 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        // 애니메이션 완료 체크 (올바른 상태에서 normalizedTime >= 1 또는 지정 시간 경과)
-        // ★ 올바른 상태가 아니면 시간 기준으로만 완료 체크
+        // 애니메이션 완료 체크
         bool animationComplete = isCorrectState && stateInfo.normalizedTime >= 0.99f;
-        bool timeComplete = elapsed >= autoPlayDuration;
+
+        // ★ duration=0이면 애니메이션 완료만으로 진행, duration>0이면 시간 또는 애니메이션 완료
+        bool timeComplete = autoPlayDuration > 0 && elapsed >= autoPlayDuration;
 
         if (animationComplete || timeComplete)
         {
             if (showDebugLogs)
             {
-                string reason = animationComplete ? "애니메이션 끝" : "시간 초과";
-                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason}, 경과: {elapsed:F1}s)</color>");
+                string reason = animationComplete ? "애니메이션 완료" : "시간 초과";
+                Debug.Log($"<color=green>[AutoPlay] 완료! ({reason}, 경과: {elapsed:F1}s, normalizedTime: {stateInfo.normalizedTime:F2})</color>");
             }
             CompleteAutoPlay();
         }
