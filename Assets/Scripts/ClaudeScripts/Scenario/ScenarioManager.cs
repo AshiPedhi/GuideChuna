@@ -584,16 +584,8 @@ public class ScenarioManager : MonoBehaviour
             chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
         }
 
-        // 다음 SubStep으로 진행 (조건 매니저 통해)
-        if (conditionManager != null && currentSubStep != null)
-        {
-            string phaseName = currentPhase.phaseName;
-            string stepName = currentStep.stepName;
-            int subStepNo = currentSubStep.subStepNo;
-
-            // 조건 완료로 처리
-            conditionManager.TryCompleteCurrentCondition(phaseName, stepName, subStepNo);
-        }
+        // 다음 SubStep으로 직접 진행
+        NextSubStep();
     }
 
     /// <summary>
