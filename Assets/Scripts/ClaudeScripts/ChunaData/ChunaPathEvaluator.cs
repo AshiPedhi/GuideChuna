@@ -283,10 +283,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isAutoPlayMode = false;        // 자동 재생 모드 활성화 여부
 
     // ★ 스트레칭/재평가 확장 모드
-    private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부
+    private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
+    private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
-    private float currentStartRatio => isExtendedLimitMode ? extendedStartRatio : 0f;  // 스트레칭은 30%부터 시작
+    private float currentStartRatio => isStretchingMode ? extendedStartRatio : 0f;  // 스트레칭만 30%부터 시작
 
     // 결과
     private EvaluationSession currentSession;
@@ -1600,19 +1601,31 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (string.IsNullOrEmpty(stepName))
         {
             DisableExtendedLimitMode();
+            isStretchingMode = false;
             return;
         }
 
-        // ★ 재평가 단계에서만 확장 (스트레칭은 기본 50% 유지)
-        bool shouldExtend = stepName.Contains("재평가");
+        // ★ 재평가 단계: 확장 제한 모드 (65%)
+        bool isReEvaluation = stepName.Contains("재평가");
+        // ★ 스트레칭 단계: 30%부터 시작
+        bool isStretching = stepName.Contains("스트레칭");
 
-        if (shouldExtend)
+        if (isReEvaluation)
         {
             EnableExtendedLimitMode();
+            isStretchingMode = false;  // 재평가는 0%부터
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 재평가 모드 - 제한:65%, 시작:0%</color>");
+        }
+        else if (isStretching)
+        {
+            DisableExtendedLimitMode();  // 스트레칭은 기본 50% 제한
+            isStretchingMode = true;     // 30%부터 시작
+            Debug.Log("<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 - 제한:50%, 시작:30%</color>");
         }
         else
         {
             DisableExtendedLimitMode();
+            isStretchingMode = false;
         }
     }
 
