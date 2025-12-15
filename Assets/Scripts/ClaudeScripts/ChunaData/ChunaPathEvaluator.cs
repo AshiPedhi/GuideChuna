@@ -991,28 +991,36 @@ public class ChunaPathEvaluator : MonoBehaviour
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
 
-        // 디버그: 충돌 거리 표시
-        if (showDebugLogs && Time.frameCount % 60 == 0 && playerRightHand != null)
+        // 디버그: 양손 충돌 거리 표시
+        if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            float handRadius;
-            Vector3 handCenter;
-
-            if (rightHandCollider != null)
+            // 왼손 충돌 상태
+            if (playerLeftHand != null)
             {
-                handRadius = Mathf.Max(rightHandCollider.bounds.extents.x,
-                    rightHandCollider.bounds.extents.y, rightHandCollider.bounds.extents.z) * handColliderScale;
-                handCenter = rightHandCollider.bounds.center;
-            }
-            else
-            {
-                handRadius = defaultHandCollisionRadius * handColliderScale;
-                handCenter = playerRightHand.transform.position;
+                float lHandRadius = leftHandCollider != null
+                    ? Mathf.Max(leftHandCollider.bounds.extents.x, leftHandCollider.bounds.extents.y, leftHandCollider.bounds.extents.z) * handColliderScale
+                    : defaultHandCollisionRadius * handColliderScale;
+                Vector3 lHandCenter = leftHandCollider != null ? leftHandCollider.bounds.center : playerLeftHand.transform.position;
+                float lDist = Vector3.Distance(lHandCenter, patientCenter);
+                float lCollisionDist = lHandRadius + patientRadius;
+                string lColliderInfo = leftHandCollider != null ? "콜라이더" : "Transform";
+                string lStatus = isLeftHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+                Debug.Log($"<color=cyan>[왼손] {lStatus} 거리:{lDist:F2}m / {lCollisionDist:F2}m [{lColliderInfo}]</color>");
             }
 
-            float dist = Vector3.Distance(handCenter, patientCenter);
-            float collisionDist = handRadius + patientRadius;
-            string colliderInfo = rightHandCollider != null ? "콜라이더" : "Transform";
-            Debug.Log($"<color=cyan>[Collision Debug] 거리:{dist:F2}m, 충돌거리:{collisionDist:F2}m (손R:{handRadius:F2}m [{colliderInfo}], 환자R:{patientRadius:F2}m)</color>");
+            // 오른손 충돌 상태
+            if (playerRightHand != null)
+            {
+                float rHandRadius = rightHandCollider != null
+                    ? Mathf.Max(rightHandCollider.bounds.extents.x, rightHandCollider.bounds.extents.y, rightHandCollider.bounds.extents.z) * handColliderScale
+                    : defaultHandCollisionRadius * handColliderScale;
+                Vector3 rHandCenter = rightHandCollider != null ? rightHandCollider.bounds.center : playerRightHand.transform.position;
+                float rDist = Vector3.Distance(rHandCenter, patientCenter);
+                float rCollisionDist = rHandRadius + patientRadius;
+                string rColliderInfo = rightHandCollider != null ? "콜라이더" : "Transform";
+                string rStatus = isRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+                Debug.Log($"<color=cyan>[오른손] {rStatus} 거리:{rDist:F2}m / {rCollisionDist:F2}m [{rColliderInfo}]</color>");
+            }
         }
     }
 
@@ -1023,6 +1031,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
+
+        // 애니메이션 상태 체크 로그
+        if (showDebugLogs && Time.frameCount % 120 == 0)
+        {
+            Debug.Log($"<color=yellow>[Animation Check] Animator:{(patientAnimator != null ? patientAnimator.name : "NULL")}, 상태이름:'{currentAnimationStateName}', 단계:{currentPhase}</color>");
+        }
+
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
         // Moving/MidHold 단계에서 애니메이션 업데이트
@@ -1036,12 +1051,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (showDebugLogs && Time.frameCount % 30 == 0)
             {
                 bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-                Debug.Log($"[Animation Lerp] 현재:{currentAnimationRatio:P0} → 목표:{targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0}, 접촉:{isHandTouching})");
+                Debug.Log($"<color=green>[Animation Lerp] '{currentAnimationStateName}' @ {currentAnimationRatio:P0} → {targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})</color>");
             }
         }
         else if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            Debug.Log($"<color=orange>[Animation Skip] 단계:{currentPhase} (Moving/MidHold 아님)</color>");
+            Debug.Log($"<color=orange>[Animation Skip] 단계:{currentPhase} (Moving/MidHold 아님), 애니메이션:'{currentAnimationStateName}'</color>");
         }
     }
 
@@ -1061,6 +1076,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         currentAnimationStateName = animationStateName;
         animationPlayMode = playMode;
 
+        Debug.Log($"<color=magenta>[Animation] ★ 애니메이션 설정 시도: '{animationStateName}' (모드:{playMode})</color>");
+
         if (patientAnimator == null)
         {
             // Patient 태그로 Animator 찾기
@@ -1068,26 +1085,43 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (patient != null)
             {
                 patientAnimator = patient.GetComponent<Animator>();
+                Debug.Log($"<color=cyan>[Animation] Patient 태그로 Animator 찾음: {patient.name}</color>");
+            }
+            else
+            {
+                Debug.Log("<color=red>[Animation] Patient 태그 오브젝트를 찾을 수 없음!</color>");
             }
         }
 
-        if (patientAnimator != null && !string.IsNullOrEmpty(animationStateName))
+        if (patientAnimator == null)
         {
-            if (playMode == AnimationPlayMode.AutoPlay)
-            {
-                // 자동 재생 모드
-                patientAnimator.Play(animationStateName);
-                patientAnimator.speed = 1f;
-            }
-            else if (playMode == AnimationPlayMode.SyncWithUser)
-            {
-                // 사용자 동기화 모드 - 시작 위치로 설정
-                patientAnimator.Play(animationStateName, 0, 0f);
-                patientAnimator.speed = 0f;
-            }
+            Debug.Log("<color=red>[Animation] patientAnimator가 NULL - 애니메이션 재생 불가!</color>");
+            return;
+        }
 
-            if (showDebugLogs)
-                Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환자 애니메이션 설정: {animationStateName} ({playMode})</color>");
+        if (string.IsNullOrEmpty(animationStateName))
+        {
+            Debug.Log("<color=orange>[Animation] 애니메이션 이름이 비어있음</color>");
+            return;
+        }
+
+        // Animator에 해당 상태가 있는지 확인
+        bool hasState = patientAnimator.HasState(0, Animator.StringToHash(animationStateName));
+        Debug.Log($"<color=cyan>[Animation] Animator '{patientAnimator.name}'에 상태 '{animationStateName}' 존재: {hasState}</color>");
+
+        if (playMode == AnimationPlayMode.AutoPlay)
+        {
+            // 자동 재생 모드
+            patientAnimator.Play(animationStateName);
+            patientAnimator.speed = 1f;
+            Debug.Log($"<color=green>[Animation] 자동 재생 시작: {animationStateName}</color>");
+        }
+        else if (playMode == AnimationPlayMode.SyncWithUser)
+        {
+            // 사용자 동기화 모드 - 시작 위치로 설정
+            patientAnimator.Play(animationStateName, 0, 0f);
+            patientAnimator.speed = 0f;
+            Debug.Log($"<color=green>[Animation] 동기화 모드 시작: {animationStateName} (첫 프레임)</color>");
         }
     }
 
