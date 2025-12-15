@@ -2160,6 +2160,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
 
+        // ★ 충돌 감지 플래그 리셋 (이전 SubStep에서 남아있을 수 있음)
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
+
         // ★ 홀드 UI 리셋 이벤트 발생 (이전 SubStep의 타이머 표시 제거)
         OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
 
@@ -2314,6 +2318,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         isAutoPlayMode = false;
         autoPlayProgress = 0f;
 
+        // ★ 충돌 감지 플래그 리셋
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
+
         // ★ 홀드 UI 리셋 이벤트 발생
         OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
 
@@ -2344,6 +2352,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ AutoPlay 모드 리셋
         isAutoPlayMode = false;
         autoPlayProgress = 0f;
+
+        // ★ 충돌 감지 플래그 리셋
+        isLeftHandTouchingPatient = false;
+        isRightHandTouchingPatient = false;
 
         // ★ 홀드 UI 리셋 이벤트 발생
         OnHoldProgressChanged?.Invoke(0f, startHoldDuration);
