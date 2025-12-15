@@ -40,6 +40,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("손 충돌체가 없을 때 사용할 기본 충돌 반지름 (m)")]
     [SerializeField] private float defaultHandCollisionRadius = 0.08f;
 
+    [Tooltip("손 충돌 감지 위치 오프셋 - 손가락 방향으로 이동 (m)")]
+    [SerializeField] private float handCollisionForwardOffset = 0.02f;
+
     [Tooltip("충돌 감지 모드 사용 (체크포인트 대신)")]
     [SerializeField] private bool useCollisionMode = true;
 
@@ -142,7 +145,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private bool useRelativeMovement = true;
 
     [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
-    [SerializeField] private bool invertRotationDirection = true;
+    [SerializeField] private bool invertRotationDirection = false;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -533,7 +536,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
             if (showDebugLogs && Time.frameCount % 10 == 0)
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s");
+                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F0}s");
         }
         else
         {
@@ -547,7 +550,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
                 float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F1}s");
+                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F0}s");
             }
 
             positionOk = leftNear && rightNear;
@@ -693,7 +696,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             OnHoldProgressChanged?.Invoke(phaseHoldTime, midHoldDuration);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F1}s");
+                Debug.Log($"[MidHold] 홀드 진행: {phaseHoldTime:F0}s");
 
             if (phaseHoldTime >= midHoldDuration)
             {
@@ -799,16 +802,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 더 큰 값 사용 (둘 중 하나라도 이동했으면 인정)
                 float effectiveDistance = Mathf.Max(absProjectedDistance, totalDisplacement * 0.8f);
 
+                // ★ 핸드데이터 이동 거리가 너무 작으면 기본값 사용 (5cm)
+                float targetDistance = Mathf.Max(handDataTotalDistance, 0.05f);
+
                 // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
-                if (handDataTotalDistance > 0.001f)
-                {
-                    newRatio = Mathf.Clamp01(effectiveDistance / handDataTotalDistance);
-                }
+                newRatio = Mathf.Clamp01(effectiveDistance / targetDistance);
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
-                    Debug.Log($"<color=yellow>[Relative Move] 축이동:{projectedDistance:F3}m, 총이동:{totalDisplacement:F3}m / 목표:{handDataTotalDistance:F3}m = {newRatio:P0}</color>");
-                    Debug.Log($"<color=cyan>  기준위치:{userHoldReferencePosition}, 현재위치:{rightHandPos}, 축:{movementAxis}</color>");
+                    Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} (데이터거리:{handDataTotalDistance:F3}m)</color>");
+                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos}</color>");
                 }
             }
             else
@@ -966,6 +969,9 @@ public class ChunaPathEvaluator : MonoBehaviour
                 handCenter = playerLeftHand.transform.position;
             }
 
+            // ★ 손가락 방향으로 오프셋 적용
+            handCenter += playerLeftHand.transform.forward * handCollisionForwardOffset;
+
             float distance = Vector3.Distance(handCenter, patientCenter);
             isLeftHandTouchingPatient = distance <= (handRadius + patientRadius);
 
@@ -993,6 +999,9 @@ public class ChunaPathEvaluator : MonoBehaviour
                 handRadius = defaultHandCollisionRadius * handColliderScale;
                 handCenter = playerRightHand.transform.position;
             }
+
+            // ★ 손가락 방향으로 오프셋 적용
+            handCenter += playerRightHand.transform.forward * handCollisionForwardOffset;
 
             float distance = Vector3.Distance(handCenter, patientCenter);
             isRightHandTouchingPatient = distance <= (handRadius + patientRadius);
@@ -1277,7 +1286,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                                (!rightHandStopped ? "오른손 움직임" :
                                (!rightHandAtTarget ? "오른손 목표위치 이탈" : "안전 범위 이탈"));
                 if (showDebugLogs && currentHoldTime > 0.3f)
-                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F1}s)</color>");
+                    Debug.Log($"<color=orange>[ChunaPathEvaluator] 홀드 중단: {reason} ({currentHoldTime:F0}s)</color>");
 
                 isHolding = false;
                 currentHoldTime = 0f;
@@ -1590,12 +1599,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ CSV에서 지정한 타입이 있으면 그것을 사용, 없으면 자동 감지
         if (!string.IsNullOrEmpty(specifiedMovementType))
         {
-            isPositionBasedMovement = specifiedMovementType == "position";
-            if (showDebugLogs)
-            {
-                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-                Debug.Log($"<color=magenta>[HandData Analysis] {moveType} (CSV 지정)</color>");
-            }
+            // StartsWith로 비교 (혹시 모를 공백/특수문자 대비)
+            isPositionBasedMovement = specifiedMovementType.StartsWith("position");
+            string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+            Debug.Log($"<color=magenta>[HandData Analysis] ★ {moveType} (CSV 지정: '{specifiedMovementType}')</color>");
         }
         else
         {
