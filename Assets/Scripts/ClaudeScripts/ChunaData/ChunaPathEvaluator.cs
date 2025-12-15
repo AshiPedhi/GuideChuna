@@ -141,6 +141,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("상대 이동 모드 사용 (시작 홀드 위치 기준으로 진행률 계산)")]
     [SerializeField] private bool useRelativeMovement = true;
 
+    [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
+    [SerializeField] private bool invertRotationDirection = true;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -817,13 +820,20 @@ public class ChunaPathEvaluator : MonoBehaviour
                 if (handDataTotalRotation > 1f)
                 {
                     newRatio = Mathf.Clamp01(rotationAngle / handDataTotalRotation);
+
+                    // ★ 회전 방향 반전 옵션
+                    if (invertRotationDirection)
+                    {
+                        newRatio = 1f - newRatio;
+                    }
                 }
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
                     Vector3 refEuler = userHoldReferenceRotation.eulerAngles;
                     Vector3 curEuler = rightHandRot.eulerAngles;
-                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0}</color>");
+                    string invertInfo = invertRotationDirection ? "(반전)" : "";
+                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0} {invertInfo}</color>");
                     Debug.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0})</color>");
                 }
             }
@@ -1026,23 +1036,24 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 애니메이션 선형보간 업데이트
-    /// Moving/MidHold 단계에서 애니메이션 동기화
+    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
     /// </summary>
     private void UpdateAnimationLerp()
     {
         if (!useCollisionMode) return;
 
+        bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+
         // 애니메이션 상태 체크 로그
         if (showDebugLogs && Time.frameCount % 120 == 0)
         {
-            Debug.Log($"<color=yellow>[Animation Check] Animator:{(patientAnimator != null ? patientAnimator.name : "NULL")}, 상태이름:'{currentAnimationStateName}', 단계:{currentPhase}</color>");
+            Debug.Log($"<color=yellow>[Animation Check] Animator:{(patientAnimator != null ? patientAnimator.name : "NULL")}, 상태이름:'{currentAnimationStateName}', 단계:{currentPhase}, 접촉:{isHandTouching}</color>");
         }
 
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
 
-        // Moving/MidHold 단계에서 애니메이션 업데이트
-        // ★ StartHold를 통과했으면 이미 손이 닿은 것이므로, 충돌 체크 없이 진행
-        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
+        // ★ 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
+        if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
         {
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
@@ -1050,13 +1061,12 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
             {
-                bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
                 Debug.Log($"<color=green>[Animation Lerp] '{currentAnimationStateName}' @ {currentAnimationRatio:P0} → {targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})</color>");
             }
         }
         else if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            Debug.Log($"<color=orange>[Animation Skip] 단계:{currentPhase} (Moving/MidHold 아님), 애니메이션:'{currentAnimationStateName}'</color>");
+            Debug.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, 애니메이션:'{currentAnimationStateName}'</color>");
         }
     }
 
