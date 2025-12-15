@@ -204,6 +204,17 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         UpdateDescription(subStep.textInstruction);
 
+        // ★ 시작 토글 숨기기 (20초 타임아웃으로 활성화된 경우 포함)
+        // 가이드 스텝이 아니면 무조건 숨김
+        if (startToggleObject != null && scenarioManager != null && scenarioManager.CurrentStep != null)
+        {
+            if (!scenarioManager.CurrentStep.IsGuideStep())
+            {
+                startToggleObject.SetActive(false);
+                Debug.Log("[GuideUI] SubStep 시작 - 시작 토글 숨김 (가이드 스텝 아님)");
+            }
+        }
+
         // 시작 토글 초기화 (다음 SubStep으로 넘어갔으므로)
         ResetStartToggle();
 

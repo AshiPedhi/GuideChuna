@@ -46,6 +46,22 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("충돌 감지 모드 사용 (체크포인트 대신)")]
     [SerializeField] private bool useCollisionMode = true;
 
+    [Header("=== 손 충돌 형태 설정 ===")]
+    [Tooltip("충돌 감지 형태: Sphere(구), Box(박스-손바닥+손가락), PalmOnly(손바닥만)")]
+    [SerializeField] private HandCollisionShape handCollisionShape = HandCollisionShape.Box;
+
+    [Tooltip("손바닥 너비 (m) - Box/PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmWidth = 0.08f;
+
+    [Tooltip("손바닥 두께 (m) - Box/PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmThickness = 0.03f;
+
+    [Tooltip("손바닥 높이/길이 (m) - PalmOnly 모드에서 사용")]
+    [SerializeField] private float palmHeight = 0.08f;
+
+    [Tooltip("손가락 길이 (m) - Box 모드에서 손바닥+손가락 총 길이")]
+    [SerializeField] private float fingerLength = 0.10f;
+
     [Header("=== 체크포인트 설정 (레거시) ===")]
     [SerializeField] private List<PathCheckpoint> leftCheckpoints = new List<PathCheckpoint>();
     [SerializeField] private List<PathCheckpoint> rightCheckpoints = new List<PathCheckpoint>();
@@ -175,6 +191,16 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
+
+    /// <summary>
+    /// 손 충돌 감지 형태
+    /// </summary>
+    public enum HandCollisionShape
+    {
+        Sphere,     // 구형 (기존 방식)
+        Box,        // 박스형 (손바닥 + 손가락 길이)
+        PalmOnly    // 손바닥만 (작은 박스)
+    }
 
     /// <summary>
     /// 평가 단계
@@ -983,6 +1009,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// 충돌 감지 업데이트 (거리 기반, 스케일 적용)
     /// 콜라이더가 없으면 손 Transform 위치 사용
+    /// ★ HandCollisionShape에 따라 구형/박스형/손바닥만 감지
     /// </summary>
     private void UpdateCollisionDetection()
     {
@@ -993,37 +1020,15 @@ public class ChunaPathEvaluator : MonoBehaviour
             return;
         }
 
-        // 환자 콜라이더 반지름 (가장 큰 축의 절반)
-        float patientRadius = Mathf.Max(patientHeadCollider.bounds.extents.x,
-            patientHeadCollider.bounds.extents.y, patientHeadCollider.bounds.extents.z);
-        Vector3 patientCenter = patientHeadCollider.bounds.center;
+        // 환자 콜라이더 정보
+        Bounds patientBounds = patientHeadCollider.bounds;
+        Vector3 patientCenter = patientBounds.center;
 
         // 왼손 충돌 감지
         if (playerLeftHand != null)
         {
             bool wasTouch = isLeftHandTouchingPatient;
-            float handRadius;
-            Vector3 handCenter;
-
-            if (leftHandCollider != null)
-            {
-                // 콜라이더가 있으면 콜라이더 사용
-                handRadius = Mathf.Max(leftHandCollider.bounds.extents.x,
-                    leftHandCollider.bounds.extents.y, leftHandCollider.bounds.extents.z) * handColliderScale;
-                handCenter = leftHandCollider.bounds.center;
-            }
-            else
-            {
-                // 콜라이더가 없으면 손 위치 + 기본 반지름 사용
-                handRadius = defaultHandCollisionRadius * handColliderScale;
-                handCenter = playerLeftHand.transform.position;
-            }
-
-            // ★ 손가락 방향으로 오프셋 적용
-            handCenter += playerLeftHand.transform.forward * handCollisionForwardOffset;
-
-            float distance = Vector3.Distance(handCenter, patientCenter);
-            isLeftHandTouchingPatient = distance <= (handRadius + patientRadius);
+            isLeftHandTouchingPatient = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
 
             if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 왼손이 환자에게 닿음!</color>");
@@ -1033,64 +1038,153 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (playerRightHand != null)
         {
             bool wasTouch = isRightHandTouchingPatient;
-            float handRadius;
-            Vector3 handCenter;
-
-            if (rightHandCollider != null)
-            {
-                // 콜라이더가 있으면 콜라이더 사용
-                handRadius = Mathf.Max(rightHandCollider.bounds.extents.x,
-                    rightHandCollider.bounds.extents.y, rightHandCollider.bounds.extents.z) * handColliderScale;
-                handCenter = rightHandCollider.bounds.center;
-            }
-            else
-            {
-                // 콜라이더가 없으면 손 위치 + 기본 반지름 사용
-                handRadius = defaultHandCollisionRadius * handColliderScale;
-                handCenter = playerRightHand.transform.position;
-            }
-
-            // ★ 손가락 방향으로 오프셋 적용
-            handCenter += playerRightHand.transform.forward * handCollisionForwardOffset;
-
-            float distance = Vector3.Distance(handCenter, patientCenter);
-            isRightHandTouchingPatient = distance <= (handRadius + patientRadius);
+            isRightHandTouchingPatient = CheckHandCollision(playerRightHand.transform, rightHandCollider, patientBounds, false);
 
             if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
 
-        // 디버그: 양손 충돌 거리 표시
+        // 디버그: 양손 충돌 상태 표시
         if (showDebugLogs && Time.frameCount % 60 == 0)
         {
-            // 왼손 충돌 상태
+            string shapeInfo = handCollisionShape.ToString();
+
             if (playerLeftHand != null)
             {
-                float lHandRadius = leftHandCollider != null
-                    ? Mathf.Max(leftHandCollider.bounds.extents.x, leftHandCollider.bounds.extents.y, leftHandCollider.bounds.extents.z) * handColliderScale
-                    : defaultHandCollisionRadius * handColliderScale;
-                Vector3 lHandCenter = leftHandCollider != null ? leftHandCollider.bounds.center : playerLeftHand.transform.position;
-                float lDist = Vector3.Distance(lHandCenter, patientCenter);
-                float lCollisionDist = lHandRadius + patientRadius;
-                string lColliderInfo = leftHandCollider != null ? "콜라이더" : "Transform";
                 string lStatus = isLeftHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
-                Debug.Log($"<color=cyan>[왼손] {lStatus} 거리:{lDist:F2}m / {lCollisionDist:F2}m [{lColliderInfo}]</color>");
+                Debug.Log($"<color=cyan>[왼손] {lStatus} [{shapeInfo}]</color>");
             }
 
-            // 오른손 충돌 상태
             if (playerRightHand != null)
             {
-                float rHandRadius = rightHandCollider != null
-                    ? Mathf.Max(rightHandCollider.bounds.extents.x, rightHandCollider.bounds.extents.y, rightHandCollider.bounds.extents.z) * handColliderScale
-                    : defaultHandCollisionRadius * handColliderScale;
-                Vector3 rHandCenter = rightHandCollider != null ? rightHandCollider.bounds.center : playerRightHand.transform.position;
-                float rDist = Vector3.Distance(rHandCenter, patientCenter);
-                float rCollisionDist = rHandRadius + patientRadius;
-                string rColliderInfo = rightHandCollider != null ? "콜라이더" : "Transform";
                 string rStatus = isRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
-                Debug.Log($"<color=cyan>[오른손] {rStatus} 거리:{rDist:F2}m / {rCollisionDist:F2}m [{rColliderInfo}]</color>");
+                Debug.Log($"<color=cyan>[오른손] {rStatus} [{shapeInfo}]</color>");
             }
         }
+    }
+
+    /// <summary>
+    /// ★ 손 충돌 감지 (형태에 따라 다른 방식 사용)
+    /// </summary>
+    private bool CheckHandCollision(Transform handTransform, Collider handCollider, Bounds patientBounds, bool isLeftHand)
+    {
+        Vector3 handCenter;
+        Vector3 handForward = handTransform.forward;
+        Vector3 handRight = handTransform.right;
+        Vector3 handUp = handTransform.up;
+
+        // 손 중심 위치 결정
+        if (handCollider != null)
+        {
+            handCenter = handCollider.bounds.center;
+        }
+        else
+        {
+            handCenter = handTransform.position;
+        }
+
+        // 손가락 방향으로 오프셋 적용
+        handCenter += handForward * handCollisionForwardOffset;
+
+        switch (handCollisionShape)
+        {
+            case HandCollisionShape.Sphere:
+                return CheckSphereCollision(handCenter, handCollider, patientBounds);
+
+            case HandCollisionShape.Box:
+                // 박스: 손바닥 + 손가락 전체 영역
+                Vector3 boxSize = new Vector3(
+                    palmWidth * handColliderScale,
+                    palmThickness * handColliderScale,
+                    (palmHeight + fingerLength) * handColliderScale
+                );
+                // 박스 중심을 손가락 방향으로 약간 이동 (손바닥+손가락 중심)
+                Vector3 boxCenter = handCenter + handForward * (fingerLength * 0.3f * handColliderScale);
+                return CheckBoxCollision(boxCenter, boxSize, handTransform.rotation, patientBounds);
+
+            case HandCollisionShape.PalmOnly:
+                // 손바닥만: 작은 박스
+                Vector3 palmSize = new Vector3(
+                    palmWidth * handColliderScale,
+                    palmThickness * handColliderScale,
+                    palmHeight * handColliderScale
+                );
+                return CheckBoxCollision(handCenter, palmSize, handTransform.rotation, patientBounds);
+
+            default:
+                return CheckSphereCollision(handCenter, handCollider, patientBounds);
+        }
+    }
+
+    /// <summary>
+    /// 구형 충돌 감지 (기존 방식)
+    /// </summary>
+    private bool CheckSphereCollision(Vector3 handCenter, Collider handCollider, Bounds patientBounds)
+    {
+        float handRadius;
+        if (handCollider != null)
+        {
+            handRadius = Mathf.Max(handCollider.bounds.extents.x,
+                handCollider.bounds.extents.y, handCollider.bounds.extents.z) * handColliderScale;
+        }
+        else
+        {
+            handRadius = defaultHandCollisionRadius * handColliderScale;
+        }
+
+        float patientRadius = Mathf.Max(patientBounds.extents.x, patientBounds.extents.y, patientBounds.extents.z);
+        float distance = Vector3.Distance(handCenter, patientBounds.center);
+
+        return distance <= (handRadius + patientRadius);
+    }
+
+    /// <summary>
+    /// ★ 박스 충돌 감지 (OBB vs AABB 간소화 버전)
+    /// 손 박스가 환자 바운드와 교차하는지 확인
+    /// </summary>
+    private bool CheckBoxCollision(Vector3 boxCenter, Vector3 boxSize, Quaternion boxRotation, Bounds patientBounds)
+    {
+        // 박스의 8개 꼭짓점 계산
+        Vector3 halfSize = boxSize * 0.5f;
+        Vector3[] corners = new Vector3[8];
+        int idx = 0;
+        for (int x = -1; x <= 1; x += 2)
+        {
+            for (int y = -1; y <= 1; y += 2)
+            {
+                for (int z = -1; z <= 1; z += 2)
+                {
+                    Vector3 localCorner = new Vector3(halfSize.x * x, halfSize.y * y, halfSize.z * z);
+                    corners[idx++] = boxCenter + boxRotation * localCorner;
+                }
+            }
+        }
+
+        // 꼭짓점 중 하나라도 환자 바운드 안에 있으면 충돌
+        foreach (var corner in corners)
+        {
+            if (patientBounds.Contains(corner))
+                return true;
+        }
+
+        // 환자 바운드 중심이 손 박스 안에 있는지 확인 (역방향 체크)
+        Vector3 patientCenterLocal = Quaternion.Inverse(boxRotation) * (patientBounds.center - boxCenter);
+        if (Mathf.Abs(patientCenterLocal.x) <= halfSize.x &&
+            Mathf.Abs(patientCenterLocal.y) <= halfSize.y &&
+            Mathf.Abs(patientCenterLocal.z) <= halfSize.z)
+        {
+            return true;
+        }
+
+        // 박스 중심이 환자 바운드와 가까운지 확인 (확장된 바운드)
+        Bounds expandedBounds = patientBounds;
+        expandedBounds.Expand(boxSize.magnitude * 0.5f);
+        if (expandedBounds.Contains(boxCenter))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
