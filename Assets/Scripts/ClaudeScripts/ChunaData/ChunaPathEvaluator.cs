@@ -565,7 +565,12 @@ public class ChunaPathEvaluator : MonoBehaviour
                 {
                     userHoldReferencePosition = playerRightHand.transform.position;
                     userHoldReferenceRotation = playerRightHand.transform.rotation;
-                    Debug.Log($"<color=cyan>[StartHold] 기준 위치 저장: {userHoldReferencePosition}</color>");
+                    Vector3 euler = userHoldReferenceRotation.eulerAngles;
+                    Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition}, 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0})</color>");
+                }
+                else
+                {
+                    Debug.Log($"<color=red>[StartHold] 기준 저장 실패! useRelativeMovement:{useRelativeMovement}, playerRightHand:{playerRightHand != null}</color>");
                 }
 
                 StartGuideHandPlayback();
