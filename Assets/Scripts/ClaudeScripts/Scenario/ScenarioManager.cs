@@ -70,6 +70,10 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
     [SerializeField] private QuizPanel quizPanel;
 
+    [Header("=== 결과 추적 ===")]
+    [Tooltip("훈련 결과 추적기 (자동 찾기)")]
+    [SerializeField] private TrainingResultTracker resultTracker;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
@@ -104,6 +108,10 @@ public class ScenarioManager : MonoBehaviour
     public string SelectedMode => selectedMode;
     public string SelectedDifficulty => selectedDifficulty;
 
+    // 결과 추적 프로퍼티
+    public TrainingResultTracker ResultTracker => resultTracker;
+    public TrainingResultData CurrentResultData => resultTracker?.GetResultData();
+
     private void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
@@ -131,6 +139,16 @@ public class ScenarioManager : MonoBehaviour
             if (quizPanel != null)
             {
                 Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
+            }
+        }
+
+        // ✅ TrainingResultTracker 찾기
+        if (resultTracker == null)
+        {
+            resultTracker = FindObjectOfType<TrainingResultTracker>();
+            if (resultTracker != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ TrainingResultTracker 자동 찾기 성공");
             }
         }
 
@@ -304,6 +322,15 @@ public class ScenarioManager : MonoBehaviour
             Debug.LogWarning("<color=orange>[ScenarioManager] ScenarioUIPositioner가 없어 UI 자동 배치를 건너뜁니다.</color>");
         }
 
+        // ✅ 결과 추적 시작
+        if (resultTracker != null)
+        {
+            resultTracker.StartTracking(selectedMode, selectedDifficulty);
+            resultTracker.StartPhase(currentPhase.phaseName);
+            resultTracker.StartStep(currentStep.stepName);
+            Debug.Log("<color=magenta>[ScenarioManager] ✓ 결과 추적 시작</color>");
+        }
+
         // 이벤트 발생
         Debug.Log("<color=cyan>[ScenarioManager] 이벤트 시스템 호출 중...</color>");
         eventSystem.ScenarioStarted(currentScenario);
@@ -393,6 +420,12 @@ public class ScenarioManager : MonoBehaviour
             currentStep = currentPhase.steps[currentStepIndex];
             currentSubStep = currentStep.subSteps[0];
 
+            // ✅ 결과 추적: Step 시작
+            if (resultTracker != null)
+            {
+                resultTracker.StartStep(currentStep.stepName);
+            }
+
             eventSystem.StepChanged(currentStep);
             eventSystem.SubStepStarted(currentSubStep);
             UpdateUI();
@@ -424,6 +457,13 @@ public class ScenarioManager : MonoBehaviour
             currentStep = currentPhase.steps[0];
             currentSubStep = currentStep.subSteps[0];
 
+            // ✅ 결과 추적: Phase 및 Step 시작
+            if (resultTracker != null)
+            {
+                resultTracker.StartPhase(currentPhase.phaseName);
+                resultTracker.StartStep(currentStep.stepName);
+            }
+
             eventSystem.PhaseChanged(currentPhase);
             eventSystem.StepChanged(currentStep);
             eventSystem.SubStepStarted(currentSubStep);
@@ -443,6 +483,21 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void CompleteScenario()
     {
+        // ✅ 결과 추적 종료 및 데이터 저장
+        TrainingResultData finalResult = null;
+        if (resultTracker != null)
+        {
+            finalResult = resultTracker.FinishTracking();
+            if (finalResult != null)
+            {
+                Debug.Log($"<color=magenta>[ScenarioManager] ✓ 훈련 결과 수집 완료</color>");
+                Debug.Log($"<color=magenta>  - 총 수행 시간: {TrainingResultData.FormatTime(finalResult.totalTime)}</color>");
+                Debug.Log($"<color=magenta>  - 전체 유사도: {finalResult.overallSimilarity:P0}</color>");
+                Debug.Log($"<color=magenta>  - 경고 횟수: {finalResult.totalWarningCount}회</color>");
+                Debug.Log($"<color=magenta>  - 스킵 횟수: {finalResult.totalSkipCount}회</color>");
+            }
+        }
+
         eventSystem.ScenarioCompleted(currentScenario);
         Log($"시나리오 완료: {currentScenario.scenarioName}");
 
@@ -549,6 +604,12 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=cyan>  - patientAnimationClip: '{subStep?.patientAnimationClip ?? "(null)"}'</color>");
         Debug.Log($"<color=cyan>  - HasPatientAnimation: {subStep?.HasPatientAnimation()}</color>");
         Debug.Log($"<color=cyan>  - GetAnimationPlayMode: {subStep?.GetAnimationPlayMode()}</color>");
+
+        // ✅ 결과 추적: SubStep 시작 기록
+        if (resultTracker != null && currentPhase != null && currentStep != null)
+        {
+            resultTracker.StartSubStep(currentPhase.phaseName, currentStep.stepName);
+        }
 
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
         UpdateAngleDisplayVisibility();
