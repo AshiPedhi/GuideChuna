@@ -1658,21 +1658,31 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log($"<color=cyan>[ChunaPathEvaluator] 건측 감지 (핸드데이터: {handDataName}) - 회전 방향: 기본</color>");
         }
 
-        // 모드 설정 (stepName 기준)
-        if (isStretching)
+        // ★ 모드 설정: 측굴일 때만 확장 모드, 회전은 항상 일반 모드 (0.3~0.5)
+        if (isRotation)
         {
-            EnableExtendedLimitMode();   // 제한 확장 (65%)
-            isStretchingMode = true;     // 30%부터 시작
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 (Step: {stepName}) - 제한:65%, 시작:30%</color>");
+            // 회전: 항상 일반 모드 유지
+            DisableExtendedLimitMode();
+            isStretchingMode = false;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 회전 모드 (핸드데이터: {handDataName}) - 일반 홀드 범위 (0.3~0.5)</color>");
         }
-        else if (isReEvaluation)
+        else if (isLateralFlexion && isStretching)
         {
-            EnableExtendedLimitMode();   // 제한 확장 (65%)
-            isStretchingMode = false;    // 0%부터 시작
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 재평가 모드 (Step: {stepName}) - 제한:65%, 시작:0%</color>");
+            // 측굴 + 스트레칭: 확장 모드 + 30% 오프셋
+            EnableExtendedLimitMode();
+            isStretchingMode = true;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 측굴 스트레칭 모드 - 제한:65%, 시작:30%</color>");
+        }
+        else if (isLateralFlexion && isReEvaluation)
+        {
+            // 측굴 + 재평가: 확장 모드
+            EnableExtendedLimitMode();
+            isStretchingMode = false;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 측굴 재평가 모드 - 제한:65%, 시작:0%</color>");
         }
         else
         {
+            // 기타: 일반 모드
             DisableExtendedLimitMode();
             isStretchingMode = false;
         }
