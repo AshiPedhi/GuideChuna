@@ -50,6 +50,28 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("색상 적용 대상 이미지")]
     [SerializeField] private Image statusImage;
 
+    [Header("=== 홀드 범위 표시 (fillAmount) ===")]
+    [Tooltip("홀드 시작점 표시 이미지 (fillAmount로 제어)")]
+    [SerializeField] private Image holdStartImage;
+
+    [Tooltip("홀드 끝점 표시 이미지 (fillAmount로 제어)")]
+    [SerializeField] private Image holdEndImage;
+
+    [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
+    [SerializeField] private bool syncHoldRangeWithEvaluator = true;
+
+    [Tooltip("일반 모드 홀드 시작 비율 (0~1)")]
+    [SerializeField] private float normalHoldStart = 0.3f;
+
+    [Tooltip("일반 모드 홀드 끝 비율 (0~1)")]
+    [SerializeField] private float normalHoldEnd = 0.5f;
+
+    [Tooltip("확장 모드 홀드 시작 비율 (스트레칭/재평가)")]
+    [SerializeField] private float extendedHoldStart = 0.5f;
+
+    [Tooltip("확장 모드 홀드 끝 비율 (스트레칭/재평가)")]
+    [SerializeField] private float extendedHoldEnd = 0.65f;
+
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]
     [SerializeField] private SyncSource syncSource = SyncSource.UserHandFrame;
@@ -65,6 +87,9 @@ public class AngleDisplayController : MonoBehaviour
     private float currentAngle;
     private float currentProgress;
     private bool isInitialized;
+    private bool isExtendedMode = false;  // 확장 모드 (스트레칭/재평가)
+    private float currentHoldStart;
+    private float currentHoldEnd;
 
     // 이벤트
     public event Action<float> OnAngleChanged;
@@ -102,6 +127,26 @@ public class AngleDisplayController : MonoBehaviour
         if (syncSource == SyncSource.PatientAnimation && isInitialized)
         {
             UpdateFromPatientAnimation();
+        }
+
+        // ChunaPathEvaluator와 홀드 범위 동기화
+        if (syncHoldRangeWithEvaluator && pathEvaluator != null)
+        {
+            SyncHoldRangeWithEvaluator();
+        }
+    }
+
+    /// <summary>
+    /// ChunaPathEvaluator의 확장 모드와 홀드 범위 동기화
+    /// </summary>
+    private void SyncHoldRangeWithEvaluator()
+    {
+        bool evaluatorExtendedMode = pathEvaluator.IsExtendedLimitMode;
+
+        // 모드가 변경되었을 때만 업데이트
+        if (isExtendedMode != evaluatorExtendedMode)
+        {
+            UpdateHoldRange(evaluatorExtendedMode);
         }
     }
 
@@ -163,8 +208,38 @@ public class AngleDisplayController : MonoBehaviour
             // 초기 각도 설정
             SetAngle(startAngle);
 
+            // 홀드 범위 초기화
+            UpdateHoldRange(false);
+
             if (showDebugLogs)
                 Debug.Log("<color=green>[AngleDisplayController] 초기화 완료</color>");
+        }
+    }
+
+    /// <summary>
+    /// 홀드 범위 업데이트 (fillAmount 적용)
+    /// </summary>
+    private void UpdateHoldRange(bool extended)
+    {
+        isExtendedMode = extended;
+        currentHoldStart = extended ? extendedHoldStart : normalHoldStart;
+        currentHoldEnd = extended ? extendedHoldEnd : normalHoldEnd;
+
+        // fillAmount 적용
+        if (holdStartImage != null)
+        {
+            holdStartImage.fillAmount = currentHoldStart;
+        }
+
+        if (holdEndImage != null)
+        {
+            holdEndImage.fillAmount = currentHoldEnd;
+        }
+
+        if (showDebugLogs)
+        {
+            string mode = extended ? "확장(스트레칭/재평가)" : "일반";
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0})</color>");
         }
     }
 
@@ -403,6 +478,63 @@ public class AngleDisplayController : MonoBehaviour
         }
     }
 
+    // ========== 홀드 범위 API ==========
+
+    /// <summary>
+    /// 확장 모드 설정 (스트레칭/재평가)
+    /// </summary>
+    public void SetExtendedMode(bool extended)
+    {
+        UpdateHoldRange(extended);
+    }
+
+    /// <summary>
+    /// 홀드 범위 직접 설정
+    /// </summary>
+    public void SetHoldRange(float holdStart, float holdEnd)
+    {
+        currentHoldStart = Mathf.Clamp01(holdStart);
+        currentHoldEnd = Mathf.Clamp01(holdEnd);
+
+        if (holdStartImage != null)
+            holdStartImage.fillAmount = currentHoldStart;
+
+        if (holdEndImage != null)
+            holdEndImage.fillAmount = currentHoldEnd;
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}</color>");
+    }
+
+    /// <summary>
+    /// 일반/확장 모드 홀드 범위 설정값 변경
+    /// </summary>
+    public void SetHoldRangePresets(float normalStart, float normalEnd, float extStart, float extEnd)
+    {
+        normalHoldStart = Mathf.Clamp01(normalStart);
+        normalHoldEnd = Mathf.Clamp01(normalEnd);
+        extendedHoldStart = Mathf.Clamp01(extStart);
+        extendedHoldEnd = Mathf.Clamp01(extEnd);
+
+        // 현재 모드에 맞게 다시 적용
+        UpdateHoldRange(isExtendedMode);
+    }
+
+    /// <summary>
+    /// 현재 홀드 시작 비율 가져오기
+    /// </summary>
+    public float GetCurrentHoldStart() => currentHoldStart;
+
+    /// <summary>
+    /// 현재 홀드 끝 비율 가져오기
+    /// </summary>
+    public float GetCurrentHoldEnd() => currentHoldEnd;
+
+    /// <summary>
+    /// 현재 확장 모드 여부
+    /// </summary>
+    public bool IsExtendedMode => isExtendedMode;
+
 #if UNITY_EDITOR
     /// <summary>
     /// 에디터에서 테스트용
@@ -415,5 +547,11 @@ public class AngleDisplayController : MonoBehaviour
 
     [ContextMenu("Test Angle 100%")]
     private void TestAngle100() => SetAngle(endAngle);
+
+    [ContextMenu("Test Hold Range - Normal Mode")]
+    private void TestHoldRangeNormal() => UpdateHoldRange(false);
+
+    [ContextMenu("Test Hold Range - Extended Mode")]
+    private void TestHoldRangeExtended() => UpdateHoldRange(true);
 #endif
 }
