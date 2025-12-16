@@ -535,48 +535,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos)
     {
-        bool shouldProceed = false;
+        // 충돌 모드: 손이 환자에게 닿았는지 확인
+        bool shouldProceed = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
-        // ★ 충돌 모드: 손이 환자에게 닿았는지 확인
-        if (useCollisionMode)
-        {
-            shouldProceed = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-
-            if (showDebugLogs && Time.frameCount % 60 == 0)
-                Debug.Log($"[WaitingForStart-Collision] 왼손:{isLeftHandTouchingPatient}, 오른손:{isRightHandTouchingPatient}");
-        }
-        else
-        {
-            // 레거시: 체크포인트 위치 기반
-            Vector3? leftStart = GetFirstCheckpointPosition(true);
-            Vector3? rightStart = GetFirstCheckpointPosition(false);
-
-            bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
-            bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
-
-            if (showDebugLogs && Time.frameCount % 60 == 0)
-            {
-                float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
-                float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[WaitingForStart] 왼손:{leftNear}({leftDist:F3}m), 오른손:{rightNear}({rightDist:F3}m)");
-            }
-
-            shouldProceed = leftNear && rightNear;
-        }
+        if (showDebugLogs && Time.frameCount % 60 == 0)
+            Debug.Log($"[WaitingForStart-Collision] 왼손:{isLeftHandTouchingPatient}, 오른손:{isRightHandTouchingPatient}");
 
         if (shouldProceed)
         {
             leftHandStartHoldPosition = leftPos;
 
             // 충돌 모드에서는 NeckVRController 비활성화 (애니메이션으로 목 제어)
-            if (useCollisionMode && neckController != null)
+            if (neckController != null)
             {
                 neckController.Disable();
                 Debug.Log("<color=yellow>[Collision Mode] NeckVRController 비활성화 - 애니메이션으로 목 제어</color>");
-            }
-            else if (neckController != null && !neckController.IsEnabled)
-            {
-                neckController.Enable();
             }
 
             Debug.Log("<color=green>[WaitingForStart] 손 인식! StartHold 단계로 전환</color>");
@@ -590,33 +563,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     private void UpdateStartHold(Vector3 leftPos, Vector3 rightPos, float leftVel, float rightVel)
     {
         bool bothStopped = leftVel < holdVelocityThreshold && rightVel < holdVelocityThreshold;
-        bool positionOk = false;
 
-        // ★ 충돌 모드: 손이 환자에게 닿아있는지 확인
-        if (useCollisionMode)
-        {
-            positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+        // 충돌 모드: 손이 환자에게 닿아있는지 확인
+        bool positionOk = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
-            if (showDebugLogs && Time.frameCount % 10 == 0)
-                Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F0}s");
-        }
-        else
-        {
-            // 레거시: 체크포인트 위치 기반
-            Vector3? leftStart = GetFirstCheckpointPosition(true);
-            Vector3? rightStart = GetFirstCheckpointPosition(false);
-            bool leftNear = !leftStart.HasValue || Vector3.Distance(leftPos, leftStart.Value) <= startPositionRadius;
-            bool rightNear = !rightStart.HasValue || Vector3.Distance(rightPos, rightStart.Value) <= startPositionRadius;
-
-            if (showDebugLogs && Time.frameCount % 10 == 0)
-            {
-                float leftDist = leftStart.HasValue ? Vector3.Distance(leftPos, leftStart.Value) : 0f;
-                float rightDist = rightStart.HasValue ? Vector3.Distance(rightPos, rightStart.Value) : 0f;
-                Debug.Log($"[StartHold] 정지:{bothStopped}, 위치OK(L:{leftNear}/R:{rightNear}), 홀드:{phaseHoldTime:F0}s");
-            }
-
-            positionOk = leftNear && rightNear;
-        }
+        if (showDebugLogs && Time.frameCount % 10 == 0)
+            Debug.Log($"[StartHold-Collision] 정지:{bothStopped}, 접촉:{positionOk}, 홀드:{phaseHoldTime:F1}s");
 
         if (bothStopped && positionOk)
         {
