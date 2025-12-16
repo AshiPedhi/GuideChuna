@@ -866,6 +866,15 @@ public class ScenarioManager : MonoBehaviour
     {
         string stepName = currentStep?.stepName ?? "";
 
+        if (showDebugLog)
+        {
+            Debug.Log($"<color=yellow>[ScenarioManager] UpdateAngleDisplayVisibility 호출</color>");
+            Debug.Log($"  - stepName: '{stepName}'");
+            Debug.Log($"  - angleDisplay_LateralFlexion: {(angleDisplay_LateralFlexion != null ? "✓" : "✗ NULL")}");
+            Debug.Log($"  - angleDisplay_LeftRotation: {(angleDisplay_LeftRotation != null ? "✓" : "✗ NULL")}");
+            Debug.Log($"  - angleDisplay_RightRotation: {(angleDisplay_RightRotation != null ? "✓" : "✗ NULL")}");
+        }
+
         // 모든 각도 표시 UI 숨김
         HideAllAngleDisplays();
 
@@ -876,6 +885,10 @@ public class ScenarioManager : MonoBehaviour
         {
             targetDisplay.Show();
             Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {stepName}</color>");
+        }
+        else if (showDebugLog)
+        {
+            Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 없음: stepName에 '측굴/환측/전부/건측/후부' 미포함</color>");
         }
     }
 
