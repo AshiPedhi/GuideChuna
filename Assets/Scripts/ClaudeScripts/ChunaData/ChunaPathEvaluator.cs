@@ -1520,37 +1520,78 @@ public class ChunaPathEvaluator : MonoBehaviour
     public float CurrentLimitRatio => currentMidHoldEnd;
 
     /// <summary>
-    /// Step 이름에 따라 확장 제한 모드 자동 설정
-    /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
-    /// "환측"/"건측"에 따라 회전 방향 자동 설정
+    /// Step 이름에 따라 확장 제한 모드 자동 설정 (기존 호환성 유지)
     /// </summary>
     public void SetExtendedLimitModeFromStepName(string stepName)
     {
-        if (string.IsNullOrEmpty(stepName))
+        SetExtendedLimitModeFromNames(stepName, null);
+    }
+
+    /// <summary>
+    /// Step 이름 및 핸드데이터 이름에 따라 확장 제한 모드 및 회전 방향 자동 설정
+    /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
+    /// "환측"/"건측"에 따라 회전 방향 자동 설정 (핸드데이터 이름 우선)
+    /// </summary>
+    public void SetExtendedLimitModeFromNames(string stepName, string handDataName)
+    {
+        if (string.IsNullOrEmpty(stepName) && string.IsNullOrEmpty(handDataName))
         {
             DisableExtendedLimitMode();
             isStretchingMode = false;
             return;
         }
 
+        string combinedName = $"{stepName ?? ""} {handDataName ?? ""}";
+
         // ★ 스트레칭/재평가: 둘 다 제한 범위 확장 (50% → 65%)
         // ★ 시작 위치 30%: 스트레칭만 적용
-        bool isReEvaluation = stepName.Contains("재평가");
-        bool isStretching = stepName.Contains("스트레칭");
+        bool isReEvaluation = combinedName.Contains("재평가");
+        bool isStretching = combinedName.Contains("스트레칭");
 
-        // ★ 환측/건측에 따라 회전 방향 설정
-        bool isAffectedSide = stepName.Contains("환측");
-        bool isHealthySide = stepName.Contains("건측");
+        // ★ 환측/건측에 따라 회전 방향 설정 (핸드데이터 이름 우선 체크)
+        bool isAffectedSide = false;
+        bool isHealthySide = false;
+        string detectionSource = "";
+
+        // 핸드데이터 이름에서 먼저 체크
+        if (!string.IsNullOrEmpty(handDataName))
+        {
+            if (handDataName.Contains("환측"))
+            {
+                isAffectedSide = true;
+                detectionSource = "핸드데이터";
+            }
+            else if (handDataName.Contains("건측"))
+            {
+                isHealthySide = true;
+                detectionSource = "핸드데이터";
+            }
+        }
+
+        // 핸드데이터에 없으면 stepName에서 체크
+        if (!isAffectedSide && !isHealthySide && !string.IsNullOrEmpty(stepName))
+        {
+            if (stepName.Contains("환측"))
+            {
+                isAffectedSide = true;
+                detectionSource = "Step이름";
+            }
+            else if (stepName.Contains("건측"))
+            {
+                isHealthySide = true;
+                detectionSource = "Step이름";
+            }
+        }
 
         if (isAffectedSide)
         {
             invertRotationDirection = false;  // 환측: 기본 방향
-            Debug.Log("<color=cyan>[ChunaPathEvaluator] 환측 감지 - 회전 방향: 기본</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환측 감지 - 회전 방향: 기본 (소스: {detectionSource})</color>");
         }
         else if (isHealthySide)
         {
             invertRotationDirection = true;   // 건측: 반대 방향
-            Debug.Log("<color=cyan>[ChunaPathEvaluator] 건측 감지 - 회전 방향: 반전</color>");
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 건측 감지 - 회전 방향: 반전 (소스: {detectionSource})</color>");
         }
 
         if (isStretching)
