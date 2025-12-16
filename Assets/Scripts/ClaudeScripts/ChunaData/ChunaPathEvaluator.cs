@@ -287,12 +287,13 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // ★ 스트레칭/재평가 확장 모드
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
-    private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
+    private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     private float currentMidHoldStart => isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio;  // 홀드 시작 (확장: 50%, 일반: 30%)
     private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
-    private float currentStartRatio => isStretchingMode ? extendedStartRatio : 0f;  // 스트레칭만 30%부터 시작
+    private float currentStartRatio => 0f;  // ★ 애니메이션은 항상 0프레임부터 시작
+    private float currentAngleDisplayOffset => isStretchingMode ? extendedStartRatio : 0f;  // ★ 각도 표시 오프셋 (스트레칭만 30%)
 
     // 결과
     private EvaluationSession currentSession;
@@ -1526,9 +1527,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsGuideMode => isGuideMode;
 
     /// <summary>
-    /// 현재 시작 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
+    /// 현재 시작 비율 반환 (애니메이션 시작 위치, 항상 0)
     /// </summary>
     public float CurrentStartRatio => currentStartRatio;
+
+    /// <summary>
+    /// 현재 각도 표시 오프셋 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
+    /// AngleDisplayController에서 사용
+    /// </summary>
+    public float CurrentAngleDisplayOffset => currentAngleDisplayOffset;
 
     /// <summary>
     /// 현재 제한 비율 반환 (확장 모드 여부에 따라)

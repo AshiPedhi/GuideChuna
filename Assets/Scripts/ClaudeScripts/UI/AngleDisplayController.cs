@@ -123,6 +123,7 @@ public class AngleDisplayController : MonoBehaviour
     private float currentProgress;
     private bool isInitialized;
     private bool isExtendedMode = false;  // 확장 모드 (스트레칭/재평가)
+    private bool isStretchingMode = false;  // 스트레칭 모드 추적 (홀드 범위 구분용)
     private float currentHoldStart;
     private float currentHoldEnd;
 
@@ -191,25 +192,28 @@ public class AngleDisplayController : MonoBehaviour
     private void SyncHoldRangeWithEvaluator()
     {
         bool evaluatorExtendedMode = pathEvaluator.IsExtendedLimitMode;
+        bool evaluatorStretchingMode = pathEvaluator.IsStretchingMode;
 
-        // 모드가 변경되었을 때만 업데이트
-        if (isExtendedMode != evaluatorExtendedMode)
+        // 확장 모드 또는 스트레칭 모드가 변경되었을 때 업데이트
+        if (isExtendedMode != evaluatorExtendedMode || isStretchingMode != evaluatorStretchingMode)
         {
+            isStretchingMode = evaluatorStretchingMode;
             UpdateHoldRange(evaluatorExtendedMode);
         }
     }
 
     /// <summary>
     /// ChunaPathEvaluator의 스트레칭 모드와 각도 표시 오프셋 동기화
-    /// 스트레칭 애니메이션이 시작 각도가 0이 아닐 때, 해당 각도를 오프셋으로 적용
-    /// 예: 스트레칭 시작 비율이 0.3이면 27° (0.3 * 90) 오프셋 적용
+    /// 스트레칭 애니메이션은 0프레임부터 시작하지만, 이미 30° 각도가 적용된 상태
+    /// 예: 스트레칭 오프셋 비율이 0.3이면 27° (0.3 * 90) 오프셋 적용
     /// </summary>
     private void SyncAngleOffsetWithEvaluator()
     {
-        float evaluatorStartRatio = pathEvaluator.CurrentStartRatio;
+        // ★ CurrentAngleDisplayOffset 사용 (스트레칭: 0.3, 나머지: 0)
+        float evaluatorOffsetRatio = pathEvaluator.CurrentAngleDisplayOffset;
 
-        // 시작 비율을 각도로 변환 (예: 0.3 * 90 = 27도)
-        float targetAngleOffset = evaluatorStartRatio * (endAngle - startAngle);
+        // 오프셋 비율을 각도로 변환 (예: 0.3 * 90 = 27도)
+        float targetAngleOffset = evaluatorOffsetRatio * (endAngle - startAngle);
 
         // 오프셋이 변경되었을 때만 업데이트 (0.5도 이상 차이)
         if (Mathf.Abs(angleDisplayOffset - targetAngleOffset) > 0.5f)
@@ -222,7 +226,7 @@ public class AngleDisplayController : MonoBehaviour
             if (showDebugLogs)
             {
                 string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
-                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 시작 비율: {evaluatorStartRatio:P0})</color>");
+                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 오프셋 비율: {evaluatorOffsetRatio:P0})</color>");
             }
         }
     }
@@ -303,9 +307,8 @@ public class AngleDisplayController : MonoBehaviour
 
         if (extended)
         {
-            // 확장 모드: 스트레칭과 재평가 구분
-            bool isStretching = pathEvaluator != null && pathEvaluator.IsStretchingMode;
-            if (isStretching)
+            // 확장 모드: 스트레칭과 재평가 구분 (로컬 isStretchingMode 사용)
+            if (isStretchingMode)
             {
                 // 스트레칭: 오프셋 30° 기준, 0.25~0.55 (45°~63° 위치)
                 currentHoldStart = stretchingHoldStart;
