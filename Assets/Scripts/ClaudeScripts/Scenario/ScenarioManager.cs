@@ -612,7 +612,7 @@ public class ScenarioManager : MonoBehaviour
         }
 
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
-        UpdateAngleDisplayVisibility();
+        UpdateAngleDisplayVisibility(subStep);
 
         // ✅ CSV의 handTrackingFileName 자동 처리
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
@@ -859,17 +859,21 @@ public class ScenarioManager : MonoBehaviour
     // ========== 각도 표시 UI 제어 ==========
 
     /// <summary>
-    /// 현재 Step 이름에 따라 각도 표시 UI 표시/숨김
+    /// SubStep의 핸드데이터/애니메이션 이름에 따라 각도 표시 UI 표시/숨김
     /// 동작별로 적절한 AngleDisplayController 선택
     /// </summary>
-    private void UpdateAngleDisplayVisibility()
+    private void UpdateAngleDisplayVisibility(SubStepData subStep)
     {
-        string stepName = currentStep?.stepName ?? "";
+        // 핸드 데이터 파일명 또는 애니메이션 클립 이름에서 동작 타입 확인
+        string handDataName = subStep?.handTrackingFileName ?? "";
+        string animClipName = subStep?.patientAnimationClip ?? "";
+        string combinedName = handDataName + "|" + animClipName;  // 둘 다 체크
 
         if (showDebugLog)
         {
             Debug.Log($"<color=yellow>[ScenarioManager] UpdateAngleDisplayVisibility 호출</color>");
-            Debug.Log($"  - stepName: '{stepName}'");
+            Debug.Log($"  - handTrackingFileName: '{handDataName}'");
+            Debug.Log($"  - patientAnimationClip: '{animClipName}'");
             Debug.Log($"  - angleDisplay_LateralFlexion: {(angleDisplay_LateralFlexion != null ? "✓" : "✗ NULL")}");
             Debug.Log($"  - angleDisplay_LeftRotation: {(angleDisplay_LeftRotation != null ? "✓" : "✗ NULL")}");
             Debug.Log($"  - angleDisplay_RightRotation: {(angleDisplay_RightRotation != null ? "✓" : "✗ NULL")}");
@@ -878,35 +882,37 @@ public class ScenarioManager : MonoBehaviour
         // 모든 각도 표시 UI 숨김
         HideAllAngleDisplays();
 
-        // Step 이름에 따라 적절한 UI 표시
-        AngleDisplayController targetDisplay = GetAngleDisplayForStep(stepName);
+        // 핸드데이터/애니메이션 이름에 따라 적절한 UI 표시
+        AngleDisplayController targetDisplay = GetAngleDisplayForMovement(combinedName);
 
         if (targetDisplay != null)
         {
             targetDisplay.Show();
-            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {stepName}</color>");
+            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {combinedName}</color>");
         }
         else if (showDebugLog)
         {
-            Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 없음: stepName에 '측굴/환측/전부/건측/후부' 미포함</color>");
+            Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 없음: 이름에 '측굴/환측/전부/건측/후부' 미포함</color>");
         }
     }
 
     /// <summary>
-    /// Step 이름에 따라 적절한 AngleDisplayController 반환
+    /// 핸드데이터/애니메이션 이름에 따라 적절한 AngleDisplayController 반환
     /// </summary>
-    private AngleDisplayController GetAngleDisplayForStep(string stepName)
+    private AngleDisplayController GetAngleDisplayForMovement(string movementName)
     {
         // 측굴 (우측굴)
-        if (stepName.Contains("측굴"))
+        if (movementName.Contains("측굴") || movementName.Contains("LateralFlexion"))
             return angleDisplay_LateralFlexion;
 
         // 좌회전 (환측/전부)
-        if (stepName.Contains("환측") || stepName.Contains("전부"))
+        if (movementName.Contains("환측") || movementName.Contains("전부") ||
+            movementName.Contains("LeftRotation") || movementName.Contains("Left_Rotation"))
             return angleDisplay_LeftRotation;
 
         // 우회전 (건측/후부)
-        if (stepName.Contains("건측") || stepName.Contains("후부"))
+        if (movementName.Contains("건측") || movementName.Contains("후부") ||
+            movementName.Contains("RightRotation") || movementName.Contains("Right_Rotation"))
             return angleDisplay_RightRotation;
 
         return null;
