@@ -90,11 +90,27 @@ public class TrainingResultTracker : MonoBehaviour
             warningAudioSource.playOnAwake = false;
             warningAudioSource.spatialBlend = 0f;  // 2D 사운드
         }
+
+        // 초기화 상태 로그
+        if (showDebugLogs)
+        {
+            Debug.Log($"<color=cyan>[TrainingResultTracker] Awake 초기화</color>");
+            Debug.Log($"  - pathEvaluator: {(pathEvaluator != null ? "✓" : "✗ NULL")}");
+            Debug.Log($"  - warningAudioSource: {(warningAudioSource != null ? "✓" : "✗ NULL")}");
+            Debug.Log($"  - approachBeepClip: {(approachBeepClip != null ? "✓" : "✗ 미할당")}");
+            Debug.Log($"  - holdCompleteClip: {(holdCompleteClip != null ? "✓" : "✗ 미할당")}");
+            Debug.Log($"  - enableWarningAudio: {enableWarningAudio}");
+        }
     }
 
     void Start()
     {
         SubscribeEvents();
+
+        if (showDebugLogs && pathEvaluator == null)
+        {
+            Debug.LogWarning("<color=orange>[TrainingResultTracker] pathEvaluator가 없어서 이벤트를 구독할 수 없습니다!</color>");
+        }
     }
 
     void OnDestroy()
@@ -146,10 +162,8 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleLimitWarning(float ratio)
     {
-        if (!isTracking) return;
-
-        // 경고 횟수 증가
-        if (resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
+        // 경고 횟수 증가 (추적 중일 때만)
+        if (isTracking && resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
         {
             resultData.RecordWarning(currentPhaseName, currentStepName);
 
@@ -159,7 +173,7 @@ public class TrainingResultTracker : MonoBehaviour
             OnWarningRecorded?.Invoke(currentPhaseName, currentStepName);
         }
 
-        // 한계 초과 경고음
+        // 한계 초과 경고음 (추적 여부와 관계없이)
         if (!isOverLimit)
         {
             isOverLimit = true;
@@ -211,14 +225,12 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleHoldComplete()
     {
-        if (!isTracking) return;
-
-        // 경고음 중지
+        // 경고음 중지 (추적 여부와 관계없이)
         StopApproachBeep();
         isOverLimit = false;
         isInApproachZone = false;
 
-        // 홀드 완료 효과음 재생
+        // 홀드 완료 효과음 재생 (추적 여부와 관계없이)
         PlayHoldCompleteSound();
 
         if (showDebugLogs)
