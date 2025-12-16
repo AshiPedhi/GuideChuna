@@ -163,6 +163,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
     [SerializeField] private bool invertRotationDirection = false;
 
+    [Tooltip("회전 감지 축 (Y=목회전, Z=측굴, X=굴곡/신전)")]
+    [SerializeField] private RotationDetectionAxis rotationDetectionAxis = RotationDetectionAxis.Y;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -197,6 +200,16 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
+
+    /// <summary>
+    /// 회전 감지 축 (목 움직임 종류에 따라 선택)
+    /// </summary>
+    public enum RotationDetectionAxis
+    {
+        Y,  // 목 회전 (좌우 돌리기) - Vector3.up
+        Z,  // 측굴 (좌우 기울이기) - Vector3.forward
+        X   // 굴곡/신전 (앞뒤로 숙이기) - Vector3.right
+    }
 
     /// <summary>
     /// 손 충돌 감지 형태
@@ -865,10 +878,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
-                // ★ 회전 방향 감지 (Y축 기준 - 목 회전)
+                // ★ 선택된 축에 따라 회전 감지 방향 결정
+                Vector3 detectionAxis = GetRotationDetectionAxis();
                 Vector3 refForward = userHoldReferenceRotation * Vector3.forward;
                 Vector3 curForward = rightHandRot * Vector3.forward;
-                float signedAngle = Vector3.SignedAngle(refForward, curForward, Vector3.up);
+                float signedAngle = Vector3.SignedAngle(refForward, curForward, detectionAxis);
 
                 // ★ 회전 방향 반전 옵션
                 if (invertRotationDirection)
@@ -1577,9 +1591,23 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log($"<color=magenta>[ChunaPathEvaluator] 가이드 모드 (Step: {stepName}) - 토글로만 진행</color>");
         }
 
-        // ★ handDataName에서만 환측/건측 회전 방향 판단
+        // ★ handDataName에서 환측/건측 회전 방향 및 동작 종류 판단
         bool isAffectedSide = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("환측");
         bool isHealthySide = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("건측");
+        bool isLateralFlexion = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("측굴");  // 측굴
+        bool isRotation = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("회전");       // 회전
+
+        // ★ 회전 감지 축 자동 설정 (핸드데이터 기준)
+        if (isLateralFlexion)
+        {
+            rotationDetectionAxis = RotationDetectionAxis.Z;  // 측굴: Z축 (forward)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 측굴 감지 (핸드데이터: {handDataName}) - 회전 축: Z(측굴)</color>");
+        }
+        else if (isRotation)
+        {
+            rotationDetectionAxis = RotationDetectionAxis.Y;  // 회전: Y축 (up)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 (핸드데이터: {handDataName}) - 회전 축: Y(목회전)</color>");
+        }
 
         // 회전 방향 설정 (핸드데이터 기준)
         if (isAffectedSide)
@@ -1627,6 +1655,43 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 현재 회전 방향 반전 여부
     /// </summary>
     public bool InvertRotationDirection => invertRotationDirection;
+
+    /// <summary>
+    /// 회전 감지 축 Vector3 반환
+    /// </summary>
+    private Vector3 GetRotationDetectionAxis()
+    {
+        switch (rotationDetectionAxis)
+        {
+            case RotationDetectionAxis.Y:
+                return Vector3.up;      // 목 회전 (좌우 돌리기)
+            case RotationDetectionAxis.Z:
+                return Vector3.forward; // 측굴 (좌우 기울이기)
+            case RotationDetectionAxis.X:
+                return Vector3.right;   // 굴곡/신전 (앞뒤로 숙이기)
+            default:
+                return Vector3.up;
+        }
+    }
+
+    /// <summary>
+    /// 회전 감지 축 설정
+    /// </summary>
+    public void SetRotationDetectionAxis(RotationDetectionAxis axis)
+    {
+        rotationDetectionAxis = axis;
+        if (showDebugLogs)
+        {
+            string axisName = axis == RotationDetectionAxis.Y ? "Y(목회전)" :
+                             axis == RotationDetectionAxis.Z ? "Z(측굴)" : "X(굴곡/신전)";
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 축 설정: {axisName}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 현재 회전 감지 축
+    /// </summary>
+    public RotationDetectionAxis CurrentRotationAxis => rotationDetectionAxis;
 
     void OnDestroy()
     {
