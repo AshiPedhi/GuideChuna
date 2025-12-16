@@ -288,6 +288,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     // ★ 스트레칭/재평가 확장 모드
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
     private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
+    private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     private float currentMidHoldStart => isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio;  // 홀드 시작 (확장: 50%, 일반: 30%)
     private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
@@ -731,6 +732,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 중간 홀드 완료
                 OnMidHoldComplete?.Invoke();
                 OnHoldCompleted?.Invoke();
+
+                // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+                if (isGuideMode)
+                {
+                    Debug.Log("<color=magenta>[MidHold] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                    // Completed로 전환하지만 CompleteEvaluation은 호출하지 않음
+                    ChangePhase(EvaluationPhase.Completed);
+                    return;
+                }
+
                 ChangePhase(EvaluationPhase.Completed);
                 CompleteEvaluation();
             }
@@ -1510,6 +1521,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsStretchingMode => isStretchingMode;
 
     /// <summary>
+    /// 현재 가이드 모드인지 확인 (토글로만 진행)
+    /// </summary>
+    public bool IsGuideMode => isGuideMode;
+
+    /// <summary>
     /// 현재 시작 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
     /// </summary>
     public float CurrentStartRatio => currentStartRatio;
@@ -1538,12 +1554,21 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             DisableExtendedLimitMode();
             isStretchingMode = false;
+            isGuideMode = false;
             return;
         }
 
-        // ★ stepName에서 스트레칭/재평가 모드 판단
+        // ★ stepName에서 스트레칭/재평가/가이드 모드 판단
         bool isReEvaluation = !string.IsNullOrEmpty(stepName) && stepName.Contains("재평가");
         bool isStretching = !string.IsNullOrEmpty(stepName) && stepName.Contains("스트레칭");
+        bool isGuide = !string.IsNullOrEmpty(stepName) && stepName.Contains("가이드");
+
+        // ★ 가이드 모드 설정 (토글로만 진행)
+        isGuideMode = isGuide;
+        if (isGuide)
+        {
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 가이드 모드 (Step: {stepName}) - 토글로만 진행</color>");
+        }
 
         // ★ handDataName에서만 환측/건측 회전 방향 판단
         bool isAffectedSide = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("환측");
