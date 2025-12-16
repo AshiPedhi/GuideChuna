@@ -1437,7 +1437,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (isIsometricExercise || hasStartHoldOnlyParam)
         {
             startHoldOnly = true;
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동)</color>");
+
+            // 등척성운동: duration 값을 홀드 시간으로 사용
+            if (subStep.duration > 0)
+            {
+                startHoldDuration = subStep.duration;
+                Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동) - 홀드 시간: {startHoldDuration}초</color>");
+            }
+            else
+            {
+                Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동) - 기본 홀드 시간: {startHoldDuration}초</color>");
+            }
         }
         else
         {
