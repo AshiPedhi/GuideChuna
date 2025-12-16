@@ -446,17 +446,19 @@ public class AngleDisplayController : MonoBehaviour
 
     /// <summary>
     /// 비율에서 각도 업데이트
+    /// ★ 오프셋 적용 시: 오프셋 ~ endAngle 범위로 표시 (90° 초과 안 함)
     /// </summary>
     private void UpdateAngleFromRatio(float ratio)
     {
         currentProgress = Mathf.Clamp01(ratio);
-        float targetAngle = Mathf.Lerp(startAngle, endAngle, currentProgress);
+
+        // ★ 오프셋이 있으면 시작점을 오프셋으로, 끝점은 endAngle로 유지
+        // 예: 오프셋 27° → 27° ~ 90° 범위로 표시
+        float effectiveStartAngle = startAngle + angleDisplayOffset;
+        float targetAngle = Mathf.Lerp(effectiveStartAngle, endAngle, currentProgress);
 
         if (invertAngle)
-            targetAngle = endAngle - (targetAngle - startAngle);
-
-        // ★ 각도 표시 오프셋 적용
-        targetAngle += angleDisplayOffset;
+            targetAngle = endAngle - (targetAngle - effectiveStartAngle);
 
         SetAngle(targetAngle);
     }
