@@ -84,11 +84,18 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("일반 모드 홀드 끝 비율 (0~1)")]
     [SerializeField] private float normalHoldEnd = 0.5f;
 
-    [Tooltip("확장 모드 홀드 시작 비율 (스트레칭/재평가)")]
+    [Tooltip("재평가 모드 홀드 시작 비율 (0°부터 시작, 45° 위치)")]
     [SerializeField] private float extendedHoldStart = 0.5f;
 
-    [Tooltip("확장 모드 홀드 끝 비율 (스트레칭/재평가)")]
-    [SerializeField] private float extendedHoldEnd = 0.65f;
+    [Tooltip("재평가 모드 홀드 끝 비율 (0°부터 시작, 63° 위치)")]
+    [SerializeField] private float extendedHoldEnd = 0.7f;
+
+    [Header("=== 스트레칭 모드 홀드 범위 ===")]
+    [Tooltip("스트레칭 모드 홀드 시작 비율 (오프셋 30° 기준, 45°와 동일)")]
+    [SerializeField] private float stretchingHoldStart = 0.25f;
+
+    [Tooltip("스트레칭 모드 홀드 끝 비율 (오프셋 30° 기준, 63°와 동일)")]
+    [SerializeField] private float stretchingHoldEnd = 0.55f;
 
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]
@@ -116,6 +123,7 @@ public class AngleDisplayController : MonoBehaviour
     private float currentProgress;
     private bool isInitialized;
     private bool isExtendedMode = false;  // 확장 모드 (스트레칭/재평가)
+    private bool isStretchingMode = false;  // 스트레칭 모드 추적 (홀드 범위 구분용)
     private float currentHoldStart;
     private float currentHoldEnd;
 
@@ -184,35 +192,41 @@ public class AngleDisplayController : MonoBehaviour
     private void SyncHoldRangeWithEvaluator()
     {
         bool evaluatorExtendedMode = pathEvaluator.IsExtendedLimitMode;
+        bool evaluatorStretchingMode = pathEvaluator.IsStretchingMode;
 
-        // 모드가 변경되었을 때만 업데이트
-        if (isExtendedMode != evaluatorExtendedMode)
+        // 확장 모드 또는 스트레칭 모드가 변경되었을 때 업데이트
+        if (isExtendedMode != evaluatorExtendedMode || isStretchingMode != evaluatorStretchingMode)
         {
+            isStretchingMode = evaluatorStretchingMode;
             UpdateHoldRange(evaluatorExtendedMode);
         }
     }
 
     /// <summary>
     /// ChunaPathEvaluator의 스트레칭 모드와 각도 표시 오프셋 동기화
-    /// 스트레칭 애니메이션이 시작 각도가 0이 아닐 때, 해당 각도를 오프셋으로 적용
-    /// 예: 스트레칭 시작 비율이 0.3이면 27° (0.3 * 90) 오프셋 적용
+    /// 스트레칭 애니메이션은 0프레임부터 시작하지만, 이미 30° 각도가 적용된 상태
+    /// 예: 스트레칭 오프셋 비율이 0.3이면 27° (0.3 * 90) 오프셋 적용
     /// </summary>
     private void SyncAngleOffsetWithEvaluator()
     {
-        float evaluatorStartRatio = pathEvaluator.CurrentStartRatio;
+        // ★ CurrentAngleDisplayOffset 사용 (스트레칭: 0.3, 나머지: 0)
+        float evaluatorOffsetRatio = pathEvaluator.CurrentAngleDisplayOffset;
 
-        // 시작 비율을 각도로 변환 (예: 0.3 * 90 = 27도)
-        float targetAngleOffset = evaluatorStartRatio * (endAngle - startAngle);
+        // 오프셋 비율을 각도로 변환 (예: 0.3 * 90 = 27도)
+        float targetAngleOffset = evaluatorOffsetRatio * (endAngle - startAngle);
 
         // 오프셋이 변경되었을 때만 업데이트 (0.5도 이상 차이)
         if (Mathf.Abs(angleDisplayOffset - targetAngleOffset) > 0.5f)
         {
             angleDisplayOffset = targetAngleOffset;
 
+            // ★ 오프셋 변경 시 홀드 범위 위치도 업데이트 (axis 위치와 동기화)
+            UpdateHoldRange(isExtendedMode);
+
             if (showDebugLogs)
             {
                 string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
-                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 시작 비율: {evaluatorStartRatio:P0})</color>");
+                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 오프셋 비율: {evaluatorOffsetRatio:P0})</color>");
             }
         }
     }
@@ -285,28 +299,61 @@ public class AngleDisplayController : MonoBehaviour
 
     /// <summary>
     /// 홀드 범위 업데이트 (fillAmount 적용)
+    /// ★ ChunaPathEvaluator의 값을 직접 사용 (스트레칭/재평가/일반 자동 구분)
     /// </summary>
     private void UpdateHoldRange(bool extended)
     {
         isExtendedMode = extended;
-        currentHoldStart = extended ? extendedHoldStart : normalHoldStart;
-        currentHoldEnd = extended ? extendedHoldEnd : normalHoldEnd;
 
-        // fillAmount 적용 (배율 곱하기: 90도=0.25)
+        // ★ ChunaPathEvaluator에서 현재 홀드 범위 직접 가져오기
+        if (pathEvaluator != null)
+        {
+            currentHoldStart = pathEvaluator.CurrentMidHoldStart;
+            currentHoldEnd = pathEvaluator.CurrentMidHoldEnd;
+        }
+        else
+        {
+            // pathEvaluator가 없으면 로컬 값 사용
+            if (extended)
+            {
+                if (isStretchingMode)
+                {
+                    currentHoldStart = stretchingHoldStart;
+                    currentHoldEnd = stretchingHoldEnd;
+                }
+                else
+                {
+                    currentHoldStart = extendedHoldStart;
+                    currentHoldEnd = extendedHoldEnd;
+                }
+            }
+            else
+            {
+                currentHoldStart = normalHoldStart;
+                currentHoldEnd = normalHoldEnd;
+            }
+        }
+
+        // ★ 오프셋 적용 시 axis가 해당 진행률에서 보여줄 실제 각도 계산
+        float effectiveStartAngle = startAngle + angleDisplayOffset;
+        float angleAtHoldStart = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldStart);
+        float angleAtHoldEnd = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldEnd);
+
+        // fillAmount = 각도 / 360 (axis 위치와 동기화)
         if (holdStartImage != null)
         {
-            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
+            holdStartImage.fillAmount = angleAtHoldStart / 360f;
         }
 
         if (holdEndImage != null)
         {
-            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
+            holdEndImage.fillAmount = angleAtHoldEnd / 360f;
         }
 
         if (showDebugLogs)
         {
-            string mode = extended ? "확장(스트레칭/재평가)" : "일반";
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, fillAmount: {currentHoldStart * fillAmountScale:F3}~{currentHoldEnd * fillAmountScale:F3})</color>");
+            string mode = extended ? (pathEvaluator != null && pathEvaluator.IsStretchingMode ? "스트레칭" : "재평가") : "일반";
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°)</color>");
         }
     }
 
@@ -442,17 +489,19 @@ public class AngleDisplayController : MonoBehaviour
 
     /// <summary>
     /// 비율에서 각도 업데이트
+    /// ★ 오프셋 적용 시: 오프셋 ~ endAngle 범위로 표시 (90° 초과 안 함)
     /// </summary>
     private void UpdateAngleFromRatio(float ratio)
     {
         currentProgress = Mathf.Clamp01(ratio);
-        float targetAngle = Mathf.Lerp(startAngle, endAngle, currentProgress);
+
+        // ★ 오프셋이 있으면 시작점을 오프셋으로, 끝점은 endAngle로 유지
+        // 예: 오프셋 27° → 27° ~ 90° 범위로 표시
+        float effectiveStartAngle = startAngle + angleDisplayOffset;
+        float targetAngle = Mathf.Lerp(effectiveStartAngle, endAngle, currentProgress);
 
         if (invertAngle)
-            targetAngle = endAngle - (targetAngle - startAngle);
-
-        // ★ 각도 표시 오프셋 적용
-        targetAngle += angleDisplayOffset;
+            targetAngle = endAngle - (targetAngle - effectiveStartAngle);
 
         SetAngle(targetAngle);
     }
@@ -647,22 +696,27 @@ public class AngleDisplayController : MonoBehaviour
     }
 
     /// <summary>
-    /// 홀드 범위 직접 설정
+    /// 홀드 범위 직접 설정 (axis 위치와 동기화)
     /// </summary>
     public void SetHoldRange(float holdStart, float holdEnd)
     {
         currentHoldStart = Mathf.Clamp01(holdStart);
         currentHoldEnd = Mathf.Clamp01(holdEnd);
 
-        // fillAmount 적용 (배율 곱하기)
+        // ★ axis가 해당 진행률에서 보여줄 실제 각도 계산
+        float effectiveStartAngle = startAngle + angleDisplayOffset;
+        float angleAtHoldStart = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldStart);
+        float angleAtHoldEnd = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldEnd);
+
+        // fillAmount = 각도 / 360 (axis 위치와 동기화)
         if (holdStartImage != null)
-            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
+            holdStartImage.fillAmount = angleAtHoldStart / 360f;
 
         if (holdEndImage != null)
-            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
+            holdEndImage.fillAmount = angleAtHoldEnd / 360f;
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}</color>");
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°</color>");
     }
 
     /// <summary>

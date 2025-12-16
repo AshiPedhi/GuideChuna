@@ -161,7 +161,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private bool useRelativeMovement = true;
 
     [Tooltip("회전 방향 반전 (손목 회전이 반대로 감지될 때 사용)")]
-    [SerializeField] private bool invertRotationDirection = true;
+    [SerializeField] private bool invertRotationDirection = false;
+
+    [Tooltip("회전 감지 축 (Y=목회전, Z=측굴, X=굴곡/신전)")]
+    [SerializeField] private RotationDetectionAxis rotationDetectionAxis = RotationDetectionAxis.Y;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -182,21 +185,38 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
     [SerializeField] private float limitBarrierRatio = 0.5f;
 
-    [Header("=== 스트레칭/재평가 확장 제한 ===")]
-    [Tooltip("스트레칭/재평가 시 확장된 제한 장벽 (0~1)")]
+    [Header("=== 재평가 확장 제한 ===")]
+    [Tooltip("재평가 시 확장된 제한 장벽 (0~1)")]
     [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
 
-    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 시작 구간")]
+    [Tooltip("재평가 시 확장된 중간 홀드 시작 구간 (0°기준)")]
     [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
 
-    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
-    [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
+    [Tooltip("재평가 시 확장된 중간 홀드 종료 구간 (0°기준)")]
+    [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
+    [Header("=== 스트레칭 전용 설정 ===")]
     [Tooltip("스트레칭 시 시작 위치 (0~1, 30%부터 시작)")]
     [SerializeField] private float extendedStartRatio = 0.3f;
 
+    [Tooltip("스트레칭 시 홀드 시작 구간 (30°오프셋 기준, 45°와 동일)")]
+    [SerializeField] private float stretchingMidHoldStartRatio = 0.25f;
+
+    [Tooltip("스트레칭 시 홀드 종료 구간 (30°오프셋 기준, 63°와 동일)")]
+    [SerializeField] private float stretchingMidHoldEndRatio = 0.55f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
+
+    /// <summary>
+    /// 회전 감지 축 (목 움직임 종류에 따라 선택)
+    /// </summary>
+    public enum RotationDetectionAxis
+    {
+        Y,  // 목 회전 (좌우 돌리기) - Vector3.up
+        Z,  // 측굴 (좌우 기울이기) - Vector3.forward
+        X   // 굴곡/신전 (앞뒤로 숙이기) - Vector3.right
+    }
 
     /// <summary>
     /// 손 충돌 감지 형태
@@ -287,11 +307,16 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // ★ 스트레칭/재평가 확장 모드
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
-    private bool isStretchingMode = false;      // 스트레칭 모드 (30%부터 시작)
+    private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
+    private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
-    private float currentMidHoldStart => isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio;  // 홀드 시작 (확장: 50%, 일반: 30%)
-    private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
-    private float currentStartRatio => isStretchingMode ? extendedStartRatio : 0f;  // 스트레칭만 30%부터 시작
+    // ★ 홀드 범위: 스트레칭과 재평가 구분
+    private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
+                                         (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
+    private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
+                                       (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
+    private float currentStartRatio => 0f;  // ★ 애니메이션은 항상 0프레임부터 시작
+    private float currentAngleDisplayOffset => isStretchingMode ? extendedStartRatio : 0f;  // ★ 각도 표시 오프셋 (스트레칭만 30%)
 
     // 결과
     private EvaluationSession currentSession;
@@ -585,6 +610,14 @@ public class ChunaPathEvaluator : MonoBehaviour
                 {
                     Debug.Log("<color=green>[StartHold] 홀드 완료! (StartHold 전용 모드 - 바로 완료)</color>");
                     ChangePhase(EvaluationPhase.Completed);
+
+                    // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+                    if (isGuideMode)
+                    {
+                        Debug.Log("<color=magenta>[StartHold] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                        return;
+                    }
+
                     CompleteEvaluation();
                     return;
                 }
@@ -731,6 +764,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 중간 홀드 완료
                 OnMidHoldComplete?.Invoke();
                 OnHoldCompleted?.Invoke();
+
+                // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+                if (isGuideMode)
+                {
+                    Debug.Log("<color=magenta>[MidHold] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                    // Completed로 전환하지만 CompleteEvaluation은 호출하지 않음
+                    ChangePhase(EvaluationPhase.Completed);
+                    return;
+                }
+
                 ChangePhase(EvaluationPhase.Completed);
                 CompleteEvaluation();
             }
@@ -853,10 +896,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
-                // ★ 회전 방향 감지 (Y축 기준 - 목 회전)
+                // ★ 선택된 축에 따라 회전 감지 방향 결정
+                Vector3 detectionAxis = GetRotationDetectionAxis();
                 Vector3 refForward = userHoldReferenceRotation * Vector3.forward;
                 Vector3 curForward = rightHandRot * Vector3.forward;
-                float signedAngle = Vector3.SignedAngle(refForward, curForward, Vector3.up);
+                float signedAngle = Vector3.SignedAngle(refForward, curForward, detectionAxis);
 
                 // ★ 회전 방향 반전 옵션
                 if (invertRotationDirection)
@@ -1252,6 +1296,15 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // 평가 완료 처리
         ChangePhase(EvaluationPhase.Completed);
+
+        // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+        if (isGuideMode)
+        {
+            Debug.Log("<color=magenta>[AutoPlay] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+            OnAutoPlayCompleted?.Invoke();
+            return;
+        }
+
         CompleteEvaluation();
 
         // 완료 이벤트
@@ -1384,7 +1437,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (isIsometricExercise || hasStartHoldOnlyParam)
         {
             startHoldOnly = true;
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동)</color>");
+
+            // 등척성운동: duration 값을 홀드 시간으로 사용
+            if (subStep.duration > 0)
+            {
+                startHoldDuration = subStep.duration;
+                Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동) - 홀드 시간: {startHoldDuration}초</color>");
+            }
+            else
+            {
+                Debug.Log($"<color=yellow>[ChunaPathEvaluator] StartHold 전용 모드 활성화 (등척성 운동) - 기본 홀드 시간: {startHoldDuration}초</color>");
+            }
         }
         else
         {
@@ -1510,9 +1573,30 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsStretchingMode => isStretchingMode;
 
     /// <summary>
-    /// 현재 시작 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
+    /// 현재 가이드 모드인지 확인 (토글로만 진행)
+    /// </summary>
+    public bool IsGuideMode => isGuideMode;
+
+    /// <summary>
+    /// 현재 시작 비율 반환 (애니메이션 시작 위치, 항상 0)
     /// </summary>
     public float CurrentStartRatio => currentStartRatio;
+
+    /// <summary>
+    /// 현재 각도 표시 오프셋 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
+    /// AngleDisplayController에서 사용
+    /// </summary>
+    public float CurrentAngleDisplayOffset => currentAngleDisplayOffset;
+
+    /// <summary>
+    /// 현재 홀드 시작 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// </summary>
+    public float CurrentMidHoldStart => currentMidHoldStart;
+
+    /// <summary>
+    /// 현재 홀드 종료 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// </summary>
+    public float CurrentMidHoldEnd => currentMidHoldEnd;
 
     /// <summary>
     /// 현재 제한 비율 반환 (확장 모드 여부에 따라)
@@ -1520,41 +1604,151 @@ public class ChunaPathEvaluator : MonoBehaviour
     public float CurrentLimitRatio => currentMidHoldEnd;
 
     /// <summary>
-    /// Step 이름에 따라 확장 제한 모드 자동 설정
-    /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
+    /// Step 이름에 따라 확장 제한 모드 자동 설정 (기존 호환성 유지)
     /// </summary>
     public void SetExtendedLimitModeFromStepName(string stepName)
     {
-        if (string.IsNullOrEmpty(stepName))
+        SetExtendedLimitModeFromNames(stepName, null);
+    }
+
+    /// <summary>
+    /// Step 이름 및 핸드데이터 이름에 따라 확장 제한 모드 및 회전 방향 자동 설정
+    /// stepName: 스트레칭/재평가 모드 판단 (가이드/진단/제한장벽확인/등척성운동/스트레칭/재평가)
+    /// handDataName: 환측/건측 회전 방향 판단
+    /// </summary>
+    public void SetExtendedLimitModeFromNames(string stepName, string handDataName)
+    {
+        if (string.IsNullOrEmpty(stepName) && string.IsNullOrEmpty(handDataName))
         {
             DisableExtendedLimitMode();
             isStretchingMode = false;
+            isGuideMode = false;
             return;
         }
 
-        // ★ 스트레칭/재평가: 둘 다 제한 범위 확장 (50% → 65%)
-        // ★ 시작 위치 30%: 스트레칭만 적용
-        bool isReEvaluation = stepName.Contains("재평가");
-        bool isStretching = stepName.Contains("스트레칭");
+        // ★ stepName에서 스트레칭/재평가/가이드 모드 판단
+        bool isReEvaluation = !string.IsNullOrEmpty(stepName) && stepName.Contains("재평가");
+        bool isStretching = !string.IsNullOrEmpty(stepName) && stepName.Contains("스트레칭");
+        bool isGuide = !string.IsNullOrEmpty(stepName) && stepName.Contains("가이드");
 
-        if (isStretching)
+        // ★ 가이드 모드 설정 (토글로만 진행)
+        isGuideMode = isGuide;
+        if (isGuide)
         {
-            EnableExtendedLimitMode();   // 제한 확장 (65%)
-            isStretchingMode = true;     // 30%부터 시작
-            Debug.Log("<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 - 제한:65%, 시작:30%</color>");
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 가이드 모드 (Step: {stepName}) - 토글로만 진행</color>");
         }
-        else if (isReEvaluation)
+
+        // ★ handDataName에서 환측/건측 회전 방향 및 동작 종류 판단
+        bool isAffectedSide = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("환측");
+        bool isHealthySide = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("건측");
+        bool isLateralFlexion = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("측굴");  // 측굴
+        bool isRotation = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("회전");       // 회전
+
+        // ★ 회전 감지 축 자동 설정 (핸드데이터 기준)
+        if (isLateralFlexion)
         {
-            EnableExtendedLimitMode();   // 제한 확장 (65%)
-            isStretchingMode = false;    // 0%부터 시작
-            Debug.Log("<color=yellow>[ChunaPathEvaluator] 재평가 모드 - 제한:65%, 시작:0%</color>");
+            rotationDetectionAxis = RotationDetectionAxis.Z;  // 측굴: Z축 (forward)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 측굴 감지 (핸드데이터: {handDataName}) - 회전 축: Z(측굴)</color>");
+        }
+        else if (isRotation)
+        {
+            rotationDetectionAxis = RotationDetectionAxis.Y;  // 회전: Y축 (up)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 (핸드데이터: {handDataName}) - 회전 축: Y(목회전)</color>");
+        }
+
+        // 회전 방향 설정 (핸드데이터 기준)
+        if (isAffectedSide)
+        {
+            invertRotationDirection = true;   // 환측: 반전 방향
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환측 감지 (핸드데이터: {handDataName}) - 회전 방향: 반전</color>");
+        }
+        else if (isHealthySide)
+        {
+            invertRotationDirection = false;  // 건측: 기본 방향
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 건측 감지 (핸드데이터: {handDataName}) - 회전 방향: 기본</color>");
+        }
+
+        // ★ 모드 설정: 측굴일 때만 확장 모드, 회전은 항상 일반 모드 (0.3~0.5)
+        if (isRotation)
+        {
+            // 회전: 항상 일반 모드 유지
+            DisableExtendedLimitMode();
+            isStretchingMode = false;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 회전 모드 (핸드데이터: {handDataName}) - 일반 홀드 범위 (0.3~0.5)</color>");
+        }
+        else if (isLateralFlexion && isStretching)
+        {
+            // 측굴 + 스트레칭: 확장 모드 + 30% 오프셋
+            EnableExtendedLimitMode();
+            isStretchingMode = true;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 측굴 스트레칭 모드 - 제한:65%, 시작:30%</color>");
+        }
+        else if (isLateralFlexion && isReEvaluation)
+        {
+            // 측굴 + 재평가: 확장 모드
+            EnableExtendedLimitMode();
+            isStretchingMode = false;
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] 측굴 재평가 모드 - 제한:65%, 시작:0%</color>");
         }
         else
         {
+            // 기타: 일반 모드
             DisableExtendedLimitMode();
             isStretchingMode = false;
         }
     }
+
+    /// <summary>
+    /// 회전 방향 반전 설정 (수동)
+    /// </summary>
+    public void SetInvertRotationDirection(bool invert)
+    {
+        invertRotationDirection = invert;
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 방향 반전: {invert}</color>");
+    }
+
+    /// <summary>
+    /// 현재 회전 방향 반전 여부
+    /// </summary>
+    public bool InvertRotationDirection => invertRotationDirection;
+
+    /// <summary>
+    /// 회전 감지 축 Vector3 반환
+    /// </summary>
+    private Vector3 GetRotationDetectionAxis()
+    {
+        switch (rotationDetectionAxis)
+        {
+            case RotationDetectionAxis.Y:
+                return Vector3.up;      // 목 회전 (좌우 돌리기)
+            case RotationDetectionAxis.Z:
+                return Vector3.forward; // 측굴 (좌우 기울이기)
+            case RotationDetectionAxis.X:
+                return Vector3.right;   // 굴곡/신전 (앞뒤로 숙이기)
+            default:
+                return Vector3.up;
+        }
+    }
+
+    /// <summary>
+    /// 회전 감지 축 설정
+    /// </summary>
+    public void SetRotationDetectionAxis(RotationDetectionAxis axis)
+    {
+        rotationDetectionAxis = axis;
+        if (showDebugLogs)
+        {
+            string axisName = axis == RotationDetectionAxis.Y ? "Y(목회전)" :
+                             axis == RotationDetectionAxis.Z ? "Z(측굴)" : "X(굴곡/신전)";
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 축 설정: {axisName}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 현재 회전 감지 축
+    /// </summary>
+    public RotationDetectionAxis CurrentRotationAxis => rotationDetectionAxis;
 
     void OnDestroy()
     {
