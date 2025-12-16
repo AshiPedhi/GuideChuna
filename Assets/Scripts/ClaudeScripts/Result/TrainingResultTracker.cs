@@ -121,8 +121,9 @@ public class TrainingResultTracker : MonoBehaviour
 
     void Update()
     {
-        // 경고음은 추적 여부와 관계없이 항상 체크
+        // 경고음은 충돌체 감지(isTracking) 상태일 때만 체크
         if (pathEvaluator == null) return;
+        if (!isTracking) return;
 
         // 현재 프레임 진행률 체크 (경고음용)
         CheckApproachWarning();
@@ -163,8 +164,11 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleLimitWarning(float ratio)
     {
-        // 경고 횟수 증가 (추적 중일 때만)
-        if (isTracking && resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
+        // 충돌체 감지(isTracking) 상태일 때만 경고 처리
+        if (!isTracking) return;
+
+        // 경고 횟수 증가
+        if (resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
         {
             resultData.RecordWarning(currentPhaseName, currentStepName);
 
@@ -174,7 +178,7 @@ public class TrainingResultTracker : MonoBehaviour
             OnWarningRecorded?.Invoke(currentPhaseName, currentStepName);
         }
 
-        // 한계 초과 경고음 (추적 여부와 관계없이)
+        // 한계 초과 경고음
         if (!isOverLimit)
         {
             isOverLimit = true;
@@ -187,7 +191,8 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleUserFrameChanged(int currentFrame, int totalFrames, float ratio)
     {
-        // 경고음용 접근 비율은 추적 여부와 관계없이 항상 업데이트
+        // 충돌체 감지(isTracking) 상태일 때만 경고음용 비율 업데이트
+        if (!isTracking) return;
         UpdateApproachRatio(ratio);
     }
 
