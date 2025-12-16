@@ -56,6 +56,10 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
+    [Header("=== 각도 표시 UI ===")]
+    [Tooltip("각도 표시 컨트롤러 (회전/측굴 단계에서 자동 표시)")]
+    [SerializeField] private AngleDisplayController angleDisplayController;
+
     [Header("=== 퀴즈 패널 ===")]
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
     [SerializeField] private QuizPanel quizPanel;
@@ -540,6 +544,9 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=cyan>  - HasPatientAnimation: {subStep?.HasPatientAnimation()}</color>");
         Debug.Log($"<color=cyan>  - GetAnimationPlayMode: {subStep?.GetAnimationPlayMode()}</color>");
 
+        // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
+        UpdateAngleDisplayVisibility();
+
         // ✅ CSV의 handTrackingFileName 자동 처리
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
         {
@@ -779,6 +786,31 @@ public class ScenarioManager : MonoBehaviour
             {
                 Debug.Log($"    - {step.stepName}: {step.subSteps.Count} SubSteps");
             }
+        }
+    }
+
+    // ========== 각도 표시 UI 제어 ==========
+
+    /// <summary>
+    /// 현재 Step 이름에 따라 각도 표시 UI 표시/숨김
+    /// 회전 또는 측굴 단계에서만 표시
+    /// </summary>
+    private void UpdateAngleDisplayVisibility()
+    {
+        if (angleDisplayController == null) return;
+
+        string stepName = currentStep?.stepName ?? "";
+        bool shouldShow = stepName.Contains("회전") || stepName.Contains("측굴");
+
+        if (shouldShow)
+        {
+            angleDisplayController.Show();
+            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시 (Step: {stepName})</color>");
+        }
+        else
+        {
+            angleDisplayController.Hide();
+            Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김 (Step: {stepName})</color>");
         }
     }
 }
