@@ -29,6 +29,18 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("각도 반전")]
     [SerializeField] private bool invertAngle = false;
 
+    [Header("=== 오프셋 설정 ===")]
+    [Tooltip("각도 표시 오프셋 (실제 시작 각도가 0이 아닐 때 사용)")]
+    [SerializeField] private float angleDisplayOffset = 0f;
+
+    [Tooltip("애니메이션 시작 오프셋 (0~1, 애니메이션의 어느 지점을 0%로 볼지)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float animationStartOffset = 0f;
+
+    [Tooltip("애니메이션 끝 오프셋 (0~1, 애니메이션의 어느 지점을 100%로 볼지)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float animationEndOffset = 1f;
+
     [Header("=== 표시 설정 ===")]
     [Tooltip("현재 각도 텍스트 (선택)")]
     [SerializeField] private TextMeshProUGUI angleText;
@@ -329,7 +341,35 @@ public class AngleDisplayController : MonoBehaviour
         AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
         float normalizedTime = Mathf.Clamp01(stateInfo.normalizedTime);
 
-        UpdateAngleFromRatio(normalizedTime);
+        // ★ 애니메이션 시작/끝 오프셋 적용
+        // animationStartOffset ~ animationEndOffset 구간을 0~1로 매핑
+        float mappedRatio = RemapAnimationTime(normalizedTime);
+
+        UpdateAngleFromRatio(mappedRatio);
+    }
+
+    /// <summary>
+    /// 애니메이션 시간을 오프셋 적용하여 리매핑
+    /// </summary>
+    private float RemapAnimationTime(float normalizedTime)
+    {
+        // 오프셋이 기본값이면 그대로 반환
+        if (animationStartOffset <= 0f && animationEndOffset >= 1f)
+            return normalizedTime;
+
+        // animationStartOffset 이전이면 0
+        if (normalizedTime <= animationStartOffset)
+            return 0f;
+
+        // animationEndOffset 이후면 1
+        if (normalizedTime >= animationEndOffset)
+            return 1f;
+
+        // 구간 내에서 0~1로 리매핑
+        float range = animationEndOffset - animationStartOffset;
+        if (range <= 0f) return 0f;
+
+        return (normalizedTime - animationStartOffset) / range;
     }
 
     /// <summary>
@@ -376,6 +416,9 @@ public class AngleDisplayController : MonoBehaviour
 
         if (invertAngle)
             targetAngle = endAngle - (targetAngle - startAngle);
+
+        // ★ 각도 표시 오프셋 적용
+        targetAngle += angleDisplayOffset;
 
         SetAngle(targetAngle);
     }
@@ -616,6 +659,47 @@ public class AngleDisplayController : MonoBehaviour
     /// 현재 확장 모드 여부
     /// </summary>
     public bool IsExtendedMode => isExtendedMode;
+
+    // ========== 오프셋 API ==========
+
+    /// <summary>
+    /// 각도 표시 오프셋 설정
+    /// 실제 시작 각도가 0이 아닐 때 사용 (예: 시작 위치가 15도면 15 입력)
+    /// </summary>
+    public void SetAngleDisplayOffset(float offset)
+    {
+        angleDisplayOffset = offset;
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋: {offset}°</color>");
+    }
+
+    /// <summary>
+    /// 애니메이션 구간 오프셋 설정
+    /// 애니메이션의 특정 구간만 사용할 때 (예: 20%~80% 구간만 사용)
+    /// </summary>
+    public void SetAnimationOffsets(float startOffset, float endOffset)
+    {
+        animationStartOffset = Mathf.Clamp01(startOffset);
+        animationEndOffset = Mathf.Clamp01(endOffset);
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[AngleDisplayController] 애니메이션 구간: {animationStartOffset:P0}~{animationEndOffset:P0}</color>");
+    }
+
+    /// <summary>
+    /// 현재 각도 표시 오프셋
+    /// </summary>
+    public float AngleDisplayOffset => angleDisplayOffset;
+
+    /// <summary>
+    /// 현재 애니메이션 시작 오프셋
+    /// </summary>
+    public float AnimationStartOffset => animationStartOffset;
+
+    /// <summary>
+    /// 현재 애니메이션 끝 오프셋
+    /// </summary>
+    public float AnimationEndOffset => animationEndOffset;
 
 #if UNITY_EDITOR
     /// <summary>
