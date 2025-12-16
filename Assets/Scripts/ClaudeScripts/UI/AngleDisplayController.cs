@@ -84,11 +84,11 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("일반 모드 홀드 끝 비율 (0~1)")]
     [SerializeField] private float normalHoldEnd = 0.5f;
 
-    [Tooltip("확장 모드 홀드 시작 비율 (스트레칭/재평가)")]
-    [SerializeField] private float extendedHoldStart = 0.5f;
+    [Tooltip("확장 모드 홀드 시작 비율 (스트레칭/재평가) - 오프셋 30° 기준 45°와 동일")]
+    [SerializeField] private float extendedHoldStart = 0.25f;
 
-    [Tooltip("확장 모드 홀드 끝 비율 (스트레칭/재평가)")]
-    [SerializeField] private float extendedHoldEnd = 0.65f;
+    [Tooltip("확장 모드 홀드 끝 비율 (스트레칭/재평가) - 오프셋 30° 기준 63°와 동일")]
+    [SerializeField] private float extendedHoldEnd = 0.55f;
 
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]
