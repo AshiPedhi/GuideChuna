@@ -54,6 +54,10 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("동기화 소스")]
     [SerializeField] private SyncSource syncSource = SyncSource.UserHandFrame;
 
+    [Header("=== 환자 애니메이션 (PatientAnimation 모드) ===")]
+    [Tooltip("환자 모델의 Animator (PatientAnimation 모드용, 자동 찾기)")]
+    [SerializeField] private Animator patientAnimator;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
 
@@ -81,12 +85,24 @@ public class AngleDisplayController : MonoBehaviour
         GuideHandFrame,
 
         [Tooltip("진행률 (Progress)")]
-        Progress
+        Progress,
+
+        [Tooltip("환자 애니메이션 진행률 (0~1)")]
+        PatientAnimation
     }
 
     void Start()
     {
         Initialize();
+    }
+
+    void Update()
+    {
+        // PatientAnimation 모드일 때만 Update에서 처리
+        if (syncSource == SyncSource.PatientAnimation && isInitialized)
+        {
+            UpdateFromPatientAnimation();
+        }
     }
 
     void OnEnable()
@@ -115,11 +131,32 @@ public class AngleDisplayController : MonoBehaviour
             axisTransform = transform.Find("Axis");
         }
 
-        isInitialized = pathEvaluator != null && axisTransform != null;
+        // PatientAnimation 모드일 때 Animator 찾기
+        if (syncSource == SyncSource.PatientAnimation && patientAnimator == null)
+        {
+            GameObject patient = GameObject.FindGameObjectWithTag("Patient");
+            if (patient != null)
+            {
+                patientAnimator = patient.GetComponent<Animator>();
+            }
+        }
+
+        // PatientAnimation 모드는 PathEvaluator 없어도 됨
+        if (syncSource == SyncSource.PatientAnimation)
+        {
+            isInitialized = axisTransform != null && patientAnimator != null;
+        }
+        else
+        {
+            isInitialized = pathEvaluator != null && axisTransform != null;
+        }
 
         if (!isInitialized)
         {
-            Debug.LogWarning("[AngleDisplayController] 초기화 실패 - PathEvaluator 또는 Axis를 찾을 수 없습니다.");
+            if (syncSource == SyncSource.PatientAnimation)
+                Debug.LogWarning("[AngleDisplayController] 초기화 실패 - Axis 또는 Patient Animator를 찾을 수 없습니다.");
+            else
+                Debug.LogWarning("[AngleDisplayController] 초기화 실패 - PathEvaluator 또는 Axis를 찾을 수 없습니다.");
         }
         else
         {
@@ -147,6 +184,19 @@ public class AngleDisplayController : MonoBehaviour
             pathEvaluator.OnUserFrameChanged -= HandleUserFrameChanged;
             pathEvaluator.OnProgressChanged -= HandleProgressChanged;
         }
+    }
+
+    /// <summary>
+    /// 환자 애니메이션 기반 업데이트 (PatientAnimation 모드)
+    /// </summary>
+    private void UpdateFromPatientAnimation()
+    {
+        if (patientAnimator == null) return;
+
+        AnimatorStateInfo stateInfo = patientAnimator.GetCurrentAnimatorStateInfo(0);
+        float normalizedTime = Mathf.Clamp01(stateInfo.normalizedTime);
+
+        UpdateAngleFromRatio(normalizedTime);
     }
 
     /// <summary>
@@ -339,6 +389,18 @@ public class AngleDisplayController : MonoBehaviour
     {
         SetAngle(startAngle);
         currentProgress = 0f;
+    }
+
+    /// <summary>
+    /// 환자 Animator 설정 (PatientAnimation 모드용)
+    /// </summary>
+    public void SetPatientAnimator(Animator animator)
+    {
+        patientAnimator = animator;
+        if (syncSource == SyncSource.PatientAnimation)
+        {
+            isInitialized = axisTransform != null && patientAnimator != null;
+        }
     }
 
 #if UNITY_EDITOR
