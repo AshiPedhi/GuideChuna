@@ -1505,6 +1505,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsExtendedLimitMode => isExtendedLimitMode;
 
     /// <summary>
+    /// 현재 스트레칭 모드인지 확인 (30%부터 시작)
+    /// </summary>
+    public bool IsStretchingMode => isStretchingMode;
+
+    /// <summary>
+    /// 현재 시작 비율 반환 (스트레칭 모드면 0.3, 아니면 0)
+    /// </summary>
+    public float CurrentStartRatio => currentStartRatio;
+
+    /// <summary>
     /// 현재 제한 비율 반환 (확장 모드 여부에 따라)
     /// </summary>
     public float CurrentLimitRatio => currentMidHoldEnd;

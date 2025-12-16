@@ -75,6 +75,9 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
     [SerializeField] private bool syncHoldRangeWithEvaluator = true;
 
+    [Tooltip("ChunaPathEvaluator와 애니메이션 시작 오프셋 동기화 (스트레칭 모드 자동 적용)")]
+    [SerializeField] private bool syncAnimationStartWithEvaluator = true;
+
     [Tooltip("일반 모드 홀드 시작 비율 (0~1)")]
     [SerializeField] private float normalHoldStart = 0.3f;
 
@@ -167,6 +170,12 @@ public class AngleDisplayController : MonoBehaviour
         {
             SyncHoldRangeWithEvaluator();
         }
+
+        // ChunaPathEvaluator와 애니메이션 시작 오프셋 동기화 (스트레칭 모드)
+        if (syncAnimationStartWithEvaluator && pathEvaluator != null)
+        {
+            SyncAnimationStartWithEvaluator();
+        }
     }
 
     /// <summary>
@@ -180,6 +189,27 @@ public class AngleDisplayController : MonoBehaviour
         if (isExtendedMode != evaluatorExtendedMode)
         {
             UpdateHoldRange(evaluatorExtendedMode);
+        }
+    }
+
+    /// <summary>
+    /// ChunaPathEvaluator의 스트레칭 모드와 애니메이션 시작 오프셋 동기화
+    /// 스트레칭 모드면 애니메이션 시작 오프셋을 0.3으로 설정
+    /// </summary>
+    private void SyncAnimationStartWithEvaluator()
+    {
+        float evaluatorStartRatio = pathEvaluator.CurrentStartRatio;
+
+        // 오프셋이 변경되었을 때만 업데이트
+        if (Mathf.Abs(animationStartOffset - evaluatorStartRatio) > 0.01f)
+        {
+            animationStartOffset = evaluatorStartRatio;
+
+            if (showDebugLogs)
+            {
+                string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
+                Debug.Log($"<color=cyan>[AngleDisplayController] 애니메이션 시작 오프셋 동기화: {animationStartOffset:P0} ({mode} 모드)</color>");
+            }
         }
     }
 
