@@ -84,11 +84,18 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("일반 모드 홀드 끝 비율 (0~1)")]
     [SerializeField] private float normalHoldEnd = 0.5f;
 
-    [Tooltip("확장 모드 홀드 시작 비율 (스트레칭/재평가) - 오프셋 30° 기준 45°와 동일")]
-    [SerializeField] private float extendedHoldStart = 0.25f;
+    [Tooltip("재평가 모드 홀드 시작 비율 (0°부터 시작, 45° 위치)")]
+    [SerializeField] private float extendedHoldStart = 0.5f;
 
-    [Tooltip("확장 모드 홀드 끝 비율 (스트레칭/재평가) - 오프셋 30° 기준 63°와 동일")]
-    [SerializeField] private float extendedHoldEnd = 0.55f;
+    [Tooltip("재평가 모드 홀드 끝 비율 (0°부터 시작, 63° 위치)")]
+    [SerializeField] private float extendedHoldEnd = 0.7f;
+
+    [Header("=== 스트레칭 모드 홀드 범위 ===")]
+    [Tooltip("스트레칭 모드 홀드 시작 비율 (오프셋 30° 기준, 45°와 동일)")]
+    [SerializeField] private float stretchingHoldStart = 0.25f;
+
+    [Tooltip("스트레칭 모드 홀드 끝 비율 (오프셋 30° 기준, 63°와 동일)")]
+    [SerializeField] private float stretchingHoldEnd = 0.55f;
 
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]
@@ -288,13 +295,35 @@ public class AngleDisplayController : MonoBehaviour
 
     /// <summary>
     /// 홀드 범위 업데이트 (fillAmount 적용)
-    /// ★ 오프셋 있을 때: axis가 해당 진행률에서 보여줄 각도 위치로 설정
+    /// ★ 스트레칭/재평가 구분: 스트레칭은 오프셋 있음, 재평가는 0°부터 시작
     /// </summary>
     private void UpdateHoldRange(bool extended)
     {
         isExtendedMode = extended;
-        currentHoldStart = extended ? extendedHoldStart : normalHoldStart;
-        currentHoldEnd = extended ? extendedHoldEnd : normalHoldEnd;
+
+        if (extended)
+        {
+            // 확장 모드: 스트레칭과 재평가 구분
+            bool isStretching = pathEvaluator != null && pathEvaluator.IsStretchingMode;
+            if (isStretching)
+            {
+                // 스트레칭: 오프셋 30° 기준, 0.25~0.55 (45°~63° 위치)
+                currentHoldStart = stretchingHoldStart;
+                currentHoldEnd = stretchingHoldEnd;
+            }
+            else
+            {
+                // 재평가: 0°부터 시작, 0.5~0.7 (45°~63° 위치)
+                currentHoldStart = extendedHoldStart;
+                currentHoldEnd = extendedHoldEnd;
+            }
+        }
+        else
+        {
+            // 일반 모드
+            currentHoldStart = normalHoldStart;
+            currentHoldEnd = normalHoldEnd;
+        }
 
         // ★ 오프셋 적용 시 axis가 해당 진행률에서 보여줄 실제 각도 계산
         float effectiveStartAngle = startAngle + angleDisplayOffset;
@@ -314,7 +343,7 @@ public class AngleDisplayController : MonoBehaviour
 
         if (showDebugLogs)
         {
-            string mode = extended ? "확장(스트레칭/재평가)" : "일반";
+            string mode = extended ? (pathEvaluator != null && pathEvaluator.IsStretchingMode ? "스트레칭" : "재평가") : "일반";
             Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°)</color>");
         }
     }
