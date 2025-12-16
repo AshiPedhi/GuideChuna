@@ -57,6 +57,9 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("홀드 끝점 표시 이미지 (fillAmount로 제어)")]
     [SerializeField] private Image holdEndImage;
 
+    [Tooltip("fillAmount 배율 (90도=0.25, 180도=0.5, 360도=1.0)")]
+    [SerializeField] private float fillAmountScale = 0.25f;
+
     [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
     [SerializeField] private bool syncHoldRangeWithEvaluator = true;
 
@@ -243,21 +246,21 @@ public class AngleDisplayController : MonoBehaviour
         currentHoldStart = extended ? extendedHoldStart : normalHoldStart;
         currentHoldEnd = extended ? extendedHoldEnd : normalHoldEnd;
 
-        // fillAmount 적용
+        // fillAmount 적용 (배율 곱하기: 90도=0.25)
         if (holdStartImage != null)
         {
-            holdStartImage.fillAmount = currentHoldStart;
+            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
         }
 
         if (holdEndImage != null)
         {
-            holdEndImage.fillAmount = currentHoldEnd;
+            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
         }
 
         if (showDebugLogs)
         {
             string mode = extended ? "확장(스트레칭/재평가)" : "일반";
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0})</color>");
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, fillAmount: {currentHoldStart * fillAmountScale:F3}~{currentHoldEnd * fillAmountScale:F3})</color>");
         }
     }
 
@@ -574,11 +577,12 @@ public class AngleDisplayController : MonoBehaviour
         currentHoldStart = Mathf.Clamp01(holdStart);
         currentHoldEnd = Mathf.Clamp01(holdEnd);
 
+        // fillAmount 적용 (배율 곱하기)
         if (holdStartImage != null)
-            holdStartImage.fillAmount = currentHoldStart;
+            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
 
         if (holdEndImage != null)
-            holdEndImage.fillAmount = currentHoldEnd;
+            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
 
         if (showDebugLogs)
             Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}</color>");
