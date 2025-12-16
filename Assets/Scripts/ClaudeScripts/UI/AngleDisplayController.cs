@@ -75,8 +75,8 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
     [SerializeField] private bool syncHoldRangeWithEvaluator = true;
 
-    [Tooltip("ChunaPathEvaluator와 애니메이션 시작 오프셋 동기화 (스트레칭 모드 자동 적용)")]
-    [SerializeField] private bool syncAnimationStartWithEvaluator = true;
+    [Tooltip("ChunaPathEvaluator와 각도 표시 오프셋 동기화 (스트레칭 모드 시작 각도 자동 적용)")]
+    [SerializeField] private bool syncAngleOffsetWithEvaluator = true;
 
     [Tooltip("일반 모드 홀드 시작 비율 (0~1)")]
     [SerializeField] private float normalHoldStart = 0.3f;
@@ -171,10 +171,10 @@ public class AngleDisplayController : MonoBehaviour
             SyncHoldRangeWithEvaluator();
         }
 
-        // ChunaPathEvaluator와 애니메이션 시작 오프셋 동기화 (스트레칭 모드)
-        if (syncAnimationStartWithEvaluator && pathEvaluator != null)
+        // ChunaPathEvaluator와 각도 표시 오프셋 동기화 (스트레칭 모드 시작 각도)
+        if (syncAngleOffsetWithEvaluator && pathEvaluator != null)
         {
-            SyncAnimationStartWithEvaluator();
+            SyncAngleOffsetWithEvaluator();
         }
     }
 
@@ -193,22 +193,26 @@ public class AngleDisplayController : MonoBehaviour
     }
 
     /// <summary>
-    /// ChunaPathEvaluator의 스트레칭 모드와 애니메이션 시작 오프셋 동기화
-    /// 스트레칭 모드면 애니메이션 시작 오프셋을 0.3으로 설정
+    /// ChunaPathEvaluator의 스트레칭 모드와 각도 표시 오프셋 동기화
+    /// 스트레칭 애니메이션이 시작 각도가 0이 아닐 때, 해당 각도를 오프셋으로 적용
+    /// 예: 스트레칭 시작 비율이 0.3이면 27° (0.3 * 90) 오프셋 적용
     /// </summary>
-    private void SyncAnimationStartWithEvaluator()
+    private void SyncAngleOffsetWithEvaluator()
     {
         float evaluatorStartRatio = pathEvaluator.CurrentStartRatio;
 
-        // 오프셋이 변경되었을 때만 업데이트
-        if (Mathf.Abs(animationStartOffset - evaluatorStartRatio) > 0.01f)
+        // 시작 비율을 각도로 변환 (예: 0.3 * 90 = 27도)
+        float targetAngleOffset = evaluatorStartRatio * (endAngle - startAngle);
+
+        // 오프셋이 변경되었을 때만 업데이트 (0.5도 이상 차이)
+        if (Mathf.Abs(angleDisplayOffset - targetAngleOffset) > 0.5f)
         {
-            animationStartOffset = evaluatorStartRatio;
+            angleDisplayOffset = targetAngleOffset;
 
             if (showDebugLogs)
             {
                 string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
-                Debug.Log($"<color=cyan>[AngleDisplayController] 애니메이션 시작 오프셋 동기화: {animationStartOffset:P0} ({mode} 모드)</color>");
+                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 시작 비율: {evaluatorStartRatio:P0})</color>");
             }
         }
     }
