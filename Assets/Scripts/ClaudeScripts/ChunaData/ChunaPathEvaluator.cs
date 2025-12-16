@@ -830,15 +830,11 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
                 Vector3 displacement = rightHandPos - userHoldReferencePosition;
 
-                // 방법 1: 축 방향 프로젝션 (방향 무관하게 절대값 사용)
+                // ★ 축 방향으로 프로젝션 (부호 있음 - 반대 방향은 음수)
                 float projectedDistance = Vector3.Dot(displacement, movementAxis);
-                float absProjectedDistance = Mathf.Abs(projectedDistance);
 
-                // 방법 2: 전체 이동 거리 (축 방향 무시)
-                float totalDisplacement = displacement.magnitude;
-
-                // 더 큰 값 사용 (둘 중 하나라도 이동했으면 인정)
-                float effectiveDistance = Mathf.Max(absProjectedDistance, totalDisplacement * 0.8f);
+                // ★ 반대 방향(음수)이면 0으로 처리 - 뒤로 가면 목이 안 돌아감
+                float effectiveDistance = Mathf.Max(0f, projectedDistance);
 
                 // ★ 핸드데이터 이동 거리가 너무 작으면 기본값 사용 (5cm)
                 float targetDistance = Mathf.Max(handDataTotalDistance, 0.05f);
@@ -849,34 +845,41 @@ public class ChunaPathEvaluator : MonoBehaviour
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
                     string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
-                    Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} (데이터거리:{handDataTotalDistance:F3}m)</color>");
-                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}</color>");
+                    string dirInfo = projectedDistance < 0 ? "(반대방향-무시)" : "";
+                    Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}, 축방향:{projectedDistance:F3}m</color>");
                 }
             }
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
-                float rotationAngle = Quaternion.Angle(userHoldReferenceRotation, rightHandRot);
+                // ★ 회전 방향 감지 (Y축 기준 - 목 회전)
+                Vector3 refForward = userHoldReferenceRotation * Vector3.forward;
+                Vector3 curForward = rightHandRot * Vector3.forward;
+                float signedAngle = Vector3.SignedAngle(refForward, curForward, Vector3.up);
+
+                // ★ 회전 방향 반전 옵션
+                if (invertRotationDirection)
+                {
+                    signedAngle = -signedAngle;
+                }
+
+                // ★ 반대 방향(음수)이면 0으로 처리
+                float effectiveAngle = Mathf.Max(0f, signedAngle);
 
                 // 핸드데이터 총 회전 각도로 나눠서 0~1 비율 계산
                 if (handDataTotalRotation > 1f)
                 {
-                    newRatio = Mathf.Clamp01(rotationAngle / handDataTotalRotation);
-
-                    // ★ 회전 방향 반전 옵션
-                    if (invertRotationDirection)
-                    {
-                        newRatio = 1f - newRatio;
-                    }
+                    newRatio = Mathf.Clamp01(effectiveAngle / handDataTotalRotation);
                 }
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
                     Vector3 refEuler = userHoldReferenceRotation.eulerAngles;
                     Vector3 curEuler = rightHandRot.eulerAngles;
-                    string invertInfo = invertRotationDirection ? "(반전)" : "";
-                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{rotationAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0} {invertInfo}</color>");
-                    Debug.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0})</color>");
+                    string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
+                    Debug.Log($"<color=yellow>[Relative Rotate] 회전:{effectiveAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0}), signed:{signedAngle:F1}°</color>");
                 }
             }
         }

@@ -859,36 +859,37 @@ public class ScenarioManager : MonoBehaviour
     // ========== 각도 표시 UI 제어 ==========
 
     /// <summary>
-    /// SubStep의 핸드데이터/애니메이션 이름에 따라 각도 표시 UI 표시/숨김
-    /// 동작별로 적절한 AngleDisplayController 선택
+    /// SubStep의 핸드데이터 이름에 따라 각도 표시 UI 표시/숨김
+    /// 핸드 데이터가 있을 때만 표시
     /// </summary>
     private void UpdateAngleDisplayVisibility(SubStepData subStep)
     {
-        // 핸드 데이터 파일명 또는 애니메이션 클립 이름에서 동작 타입 확인
         string handDataName = subStep?.handTrackingFileName ?? "";
-        string animClipName = subStep?.patientAnimationClip ?? "";
-        string combinedName = handDataName + "|" + animClipName;  // 둘 다 체크
 
         if (showDebugLog)
         {
             Debug.Log($"<color=yellow>[ScenarioManager] UpdateAngleDisplayVisibility 호출</color>");
             Debug.Log($"  - handTrackingFileName: '{handDataName}'");
-            Debug.Log($"  - patientAnimationClip: '{animClipName}'");
-            Debug.Log($"  - angleDisplay_LateralFlexion: {(angleDisplay_LateralFlexion != null ? "✓" : "✗ NULL")}");
-            Debug.Log($"  - angleDisplay_LeftRotation: {(angleDisplay_LeftRotation != null ? "✓" : "✗ NULL")}");
-            Debug.Log($"  - angleDisplay_RightRotation: {(angleDisplay_RightRotation != null ? "✓" : "✗ NULL")}");
         }
 
         // 모든 각도 표시 UI 숨김
         HideAllAngleDisplays();
 
-        // 핸드데이터/애니메이션 이름에 따라 적절한 UI 표시
-        AngleDisplayController targetDisplay = GetAngleDisplayForMovement(combinedName);
+        // ★ 핸드 데이터가 없으면 각도 표시 안 함
+        if (string.IsNullOrEmpty(handDataName))
+        {
+            if (showDebugLog)
+                Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김: 핸드 데이터 없음</color>");
+            return;
+        }
+
+        // 핸드데이터 이름에 따라 적절한 UI 표시
+        AngleDisplayController targetDisplay = GetAngleDisplayForMovement(handDataName);
 
         if (targetDisplay != null)
         {
             targetDisplay.Show();
-            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {combinedName}</color>");
+            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {handDataName}</color>");
         }
         else if (showDebugLog)
         {
