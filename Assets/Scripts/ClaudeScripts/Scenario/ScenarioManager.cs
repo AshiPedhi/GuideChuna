@@ -665,12 +665,19 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void OnAutoPlayCompletedHandler()
     {
-        Debug.Log("<color=green>[ScenarioManager] AutoPlay 완료 - 다음 SubStep으로 진행</color>");
+        Debug.Log("<color=green>[ScenarioManager] AutoPlay 완료</color>");
 
         // 이벤트 구독 해제
         if (chunaPathEvaluator != null)
         {
             chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+
+            // 가이드 모드일 경우 자동 진행하지 않고 토글 대기
+            if (chunaPathEvaluator.IsGuideMode)
+            {
+                Debug.Log("<color=magenta>[ScenarioManager] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                return;
+            }
         }
 
         // 다음 SubStep으로 직접 진행

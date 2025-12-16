@@ -517,6 +517,9 @@ public class ScenarioGuideUIController : MonoBehaviour
         {
             Debug.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
             scenarioManager.NextSubStep();
+
+            // 토글 상태 초기화 (다음 클릭을 위해)
+            startToggle.isOn = false;
         }
     }
 
