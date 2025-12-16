@@ -22,8 +22,8 @@ public class TrainingResultTracker : MonoBehaviour
     [Tooltip("SubStep 스킵 판정 시간 (초)")]
     [SerializeField] private float skipTimeThreshold = 20f;
 
-    [Header("=== 경고음 설정 ===")]
-    [Tooltip("경고음 AudioSource")]
+    [Header("=== 효과음 설정 ===")]
+    [Tooltip("효과음 AudioSource")]
     [SerializeField] private AudioSource warningAudioSource;
 
     [Tooltip("접근 경고 비프음 클립")]
@@ -32,7 +32,10 @@ public class TrainingResultTracker : MonoBehaviour
     [Tooltip("한계 초과 경고음 클립")]
     [SerializeField] private AudioClip limitExceededClip;
 
-    [Tooltip("경고음 활성화")]
+    [Tooltip("홀드 완료 효과음 (딩동)")]
+    [SerializeField] private AudioClip holdCompleteClip;
+
+    [Tooltip("효과음 활성화")]
     [SerializeField] private bool enableWarningAudio = true;
 
     [Tooltip("비프음 시작 구간 (홀드 끝 범위의 몇 % 전부터)")]
@@ -118,6 +121,8 @@ public class TrainingResultTracker : MonoBehaviour
             pathEvaluator.OnUserFrameChanged += HandleUserFrameChanged;
             pathEvaluator.OnSimilarityUpdated += HandleSimilarityUpdated;
             pathEvaluator.OnEvaluationCompleted += HandleEvaluationCompleted;
+            pathEvaluator.OnStartHoldComplete += HandleHoldComplete;
+            pathEvaluator.OnMidHoldComplete += HandleHoldComplete;
         }
     }
 
@@ -129,6 +134,8 @@ public class TrainingResultTracker : MonoBehaviour
             pathEvaluator.OnUserFrameChanged -= HandleUserFrameChanged;
             pathEvaluator.OnSimilarityUpdated -= HandleSimilarityUpdated;
             pathEvaluator.OnEvaluationCompleted -= HandleEvaluationCompleted;
+            pathEvaluator.OnStartHoldComplete -= HandleHoldComplete;
+            pathEvaluator.OnMidHoldComplete -= HandleHoldComplete;
         }
     }
 
@@ -197,6 +204,25 @@ public class TrainingResultTracker : MonoBehaviour
         // 경고음 중지
         StopApproachBeep();
         isOverLimit = false;
+    }
+
+    /// <summary>
+    /// 홀드 완료 핸들러 (시작 홀드 / 중간 홀드 완료 시)
+    /// </summary>
+    private void HandleHoldComplete()
+    {
+        if (!isTracking) return;
+
+        // 경고음 중지
+        StopApproachBeep();
+        isOverLimit = false;
+        isInApproachZone = false;
+
+        // 홀드 완료 효과음 재생
+        PlayHoldCompleteSound();
+
+        if (showDebugLogs)
+            Debug.Log("<color=green>[TrainingResultTracker] 홀드 완료 - 딩동!</color>");
     }
 
     // ========== 접근 경고 시스템 ==========
@@ -313,6 +339,39 @@ public class TrainingResultTracker : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("<color=red>[TrainingResultTracker] 한계 초과 경고음!</color>");
+    }
+
+    /// <summary>
+    /// 홀드 완료 효과음 재생 (딩동)
+    /// </summary>
+    private void PlayHoldCompleteSound()
+    {
+        if (!enableWarningAudio || warningAudioSource == null) return;
+
+        if (holdCompleteClip != null)
+        {
+            warningAudioSource.pitch = 1f;
+            warningAudioSource.PlayOneShot(holdCompleteClip, 1f);
+        }
+        else if (approachBeepClip != null)
+        {
+            // holdCompleteClip이 없으면 approachBeepClip을 높은 음으로 2번 재생
+            StartCoroutine(PlayDoubleBeep());
+        }
+    }
+
+    /// <summary>
+    /// 홀드 완료 대체 효과음 (비프 2번)
+    /// </summary>
+    private IEnumerator PlayDoubleBeep()
+    {
+        if (warningAudioSource == null || approachBeepClip == null) yield break;
+
+        warningAudioSource.pitch = 1.5f;
+        warningAudioSource.PlayOneShot(approachBeepClip, 0.8f);
+        yield return new WaitForSeconds(0.15f);
+        warningAudioSource.pitch = 1.8f;
+        warningAudioSource.PlayOneShot(approachBeepClip, 0.8f);
     }
 
     // ========== Public API ==========
