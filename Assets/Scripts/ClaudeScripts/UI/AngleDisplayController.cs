@@ -80,6 +80,16 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("환자 모델의 Animator (PatientAnimation 모드용, 자동 찾기)")]
     [SerializeField] private Animator patientAnimator;
 
+    [Header("=== 자동 표시/숨김 ===")]
+    [Tooltip("평가 시작 시 자동으로 표시, 완료 시 자동으로 숨김")]
+    [SerializeField] private bool autoShowHide = true;
+
+    [Tooltip("시작 시 숨김 상태로 시작")]
+    [SerializeField] private bool hideOnStart = true;
+
+    [Tooltip("표시/숨김할 대상 게임오브젝트 (비어있으면 자기 자신)")]
+    [SerializeField] private GameObject displayTarget;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
 
@@ -118,6 +128,14 @@ public class AngleDisplayController : MonoBehaviour
 
     void Start()
     {
+        // displayTarget이 비어있으면 자기 자신으로 설정
+        if (displayTarget == null)
+            displayTarget = gameObject;
+
+        // 시작 시 숨김
+        if (hideOnStart)
+            Hide();
+
         Initialize();
     }
 
@@ -249,6 +267,13 @@ public class AngleDisplayController : MonoBehaviour
         {
             pathEvaluator.OnUserFrameChanged += HandleUserFrameChanged;
             pathEvaluator.OnProgressChanged += HandleProgressChanged;
+
+            // 자동 표시/숨김 이벤트 구독
+            if (autoShowHide)
+            {
+                pathEvaluator.OnEvaluationStarted += HandleEvaluationStarted;
+                pathEvaluator.OnEvaluationCompleted += HandleEvaluationCompleted;
+            }
         }
     }
 
@@ -258,6 +283,36 @@ public class AngleDisplayController : MonoBehaviour
         {
             pathEvaluator.OnUserFrameChanged -= HandleUserFrameChanged;
             pathEvaluator.OnProgressChanged -= HandleProgressChanged;
+
+            // 자동 표시/숨김 이벤트 구독 해제
+            pathEvaluator.OnEvaluationStarted -= HandleEvaluationStarted;
+            pathEvaluator.OnEvaluationCompleted -= HandleEvaluationCompleted;
+        }
+    }
+
+    /// <summary>
+    /// 평가 시작 핸들러 - 자동 표시
+    /// </summary>
+    private void HandleEvaluationStarted()
+    {
+        if (autoShowHide)
+        {
+            Show();
+            if (showDebugLogs)
+                Debug.Log("<color=green>[AngleDisplayController] 평가 시작 - 표시</color>");
+        }
+    }
+
+    /// <summary>
+    /// 평가 완료 핸들러 - 자동 숨김
+    /// </summary>
+    private void HandleEvaluationCompleted(ChunaPathEvaluator.EvaluationSession session)
+    {
+        if (autoShowHide)
+        {
+            Hide();
+            if (showDebugLogs)
+                Debug.Log("<color=orange>[AngleDisplayController] 평가 완료 - 숨김</color>");
         }
     }
 
@@ -403,6 +458,29 @@ public class AngleDisplayController : MonoBehaviour
     }
 
     // ========== Public API ==========
+
+    /// <summary>
+    /// 각도 표시 UI 보이기
+    /// </summary>
+    public void Show()
+    {
+        if (displayTarget != null)
+            displayTarget.SetActive(true);
+    }
+
+    /// <summary>
+    /// 각도 표시 UI 숨기기
+    /// </summary>
+    public void Hide()
+    {
+        if (displayTarget != null)
+            displayTarget.SetActive(false);
+    }
+
+    /// <summary>
+    /// 현재 표시 상태
+    /// </summary>
+    public bool IsVisible => displayTarget != null && displayTarget.activeSelf;
 
     /// <summary>
     /// 각도 범위 설정
