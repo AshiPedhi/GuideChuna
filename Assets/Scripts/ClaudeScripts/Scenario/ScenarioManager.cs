@@ -57,16 +57,13 @@ public class ScenarioManager : MonoBehaviour
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
     [Header("=== 각도 표시 UI (동작별) ===")]
-    [Tooltip("좌측굴 각도 표시")]
-    [SerializeField] private AngleDisplayController angleDisplay_LeftLateralFlexion;
+    [Tooltip("측굴 각도 표시 (우측굴)")]
+    [SerializeField] private AngleDisplayController angleDisplay_LateralFlexion;
 
-    [Tooltip("우측굴 각도 표시")]
-    [SerializeField] private AngleDisplayController angleDisplay_RightLateralFlexion;
-
-    [Tooltip("좌회전 각도 표시")]
+    [Tooltip("좌회전 각도 표시 (환측/전부)")]
     [SerializeField] private AngleDisplayController angleDisplay_LeftRotation;
 
-    [Tooltip("우회전 각도 표시")]
+    [Tooltip("우회전 각도 표시 (건측/후부)")]
     [SerializeField] private AngleDisplayController angleDisplay_RightRotation;
 
     [Header("=== 퀴즈 패널 ===")]
@@ -826,20 +823,16 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private AngleDisplayController GetAngleDisplayForStep(string stepName)
     {
-        // 좌측굴
-        if (stepName.Contains("좌측굴") || stepName.Contains("좌 측굴"))
-            return angleDisplay_LeftLateralFlexion;
+        // 측굴 (우측굴)
+        if (stepName.Contains("측굴"))
+            return angleDisplay_LateralFlexion;
 
-        // 우측굴
-        if (stepName.Contains("우측굴") || stepName.Contains("우 측굴"))
-            return angleDisplay_RightLateralFlexion;
-
-        // 좌회전
-        if (stepName.Contains("좌회전") || stepName.Contains("좌 회전"))
+        // 좌회전 (환측/전부)
+        if (stepName.Contains("환측") || stepName.Contains("전부"))
             return angleDisplay_LeftRotation;
 
-        // 우회전
-        if (stepName.Contains("우회전") || stepName.Contains("우 회전"))
+        // 우회전 (건측/후부)
+        if (stepName.Contains("건측") || stepName.Contains("후부"))
             return angleDisplay_RightRotation;
 
         return null;
@@ -850,8 +843,7 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void HideAllAngleDisplays()
     {
-        angleDisplay_LeftLateralFlexion?.Hide();
-        angleDisplay_RightLateralFlexion?.Hide();
+        angleDisplay_LateralFlexion?.Hide();
         angleDisplay_LeftRotation?.Hide();
         angleDisplay_RightRotation?.Hide();
     }
