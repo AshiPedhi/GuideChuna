@@ -56,9 +56,18 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
-    [Header("=== 각도 표시 UI ===")]
-    [Tooltip("각도 표시 컨트롤러 (회전/측굴 단계에서 자동 표시)")]
-    [SerializeField] private AngleDisplayController angleDisplayController;
+    [Header("=== 각도 표시 UI (동작별) ===")]
+    [Tooltip("좌측굴 각도 표시")]
+    [SerializeField] private AngleDisplayController angleDisplay_LeftLateralFlexion;
+
+    [Tooltip("우측굴 각도 표시")]
+    [SerializeField] private AngleDisplayController angleDisplay_RightLateralFlexion;
+
+    [Tooltip("좌회전 각도 표시")]
+    [SerializeField] private AngleDisplayController angleDisplay_LeftRotation;
+
+    [Tooltip("우회전 각도 표시")]
+    [SerializeField] private AngleDisplayController angleDisplay_RightRotation;
 
     [Header("=== 퀴즈 패널 ===")]
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
@@ -793,24 +802,57 @@ public class ScenarioManager : MonoBehaviour
 
     /// <summary>
     /// 현재 Step 이름에 따라 각도 표시 UI 표시/숨김
-    /// 회전 또는 측굴 단계에서만 표시
+    /// 동작별로 적절한 AngleDisplayController 선택
     /// </summary>
     private void UpdateAngleDisplayVisibility()
     {
-        if (angleDisplayController == null) return;
-
         string stepName = currentStep?.stepName ?? "";
-        bool shouldShow = stepName.Contains("회전") || stepName.Contains("측굴");
 
-        if (shouldShow)
+        // 모든 각도 표시 UI 숨김
+        HideAllAngleDisplays();
+
+        // Step 이름에 따라 적절한 UI 표시
+        AngleDisplayController targetDisplay = GetAngleDisplayForStep(stepName);
+
+        if (targetDisplay != null)
         {
-            angleDisplayController.Show();
-            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시 (Step: {stepName})</color>");
+            targetDisplay.Show();
+            Debug.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {stepName}</color>");
         }
-        else
-        {
-            angleDisplayController.Hide();
-            Debug.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김 (Step: {stepName})</color>");
-        }
+    }
+
+    /// <summary>
+    /// Step 이름에 따라 적절한 AngleDisplayController 반환
+    /// </summary>
+    private AngleDisplayController GetAngleDisplayForStep(string stepName)
+    {
+        // 좌측굴
+        if (stepName.Contains("좌측굴") || stepName.Contains("좌 측굴"))
+            return angleDisplay_LeftLateralFlexion;
+
+        // 우측굴
+        if (stepName.Contains("우측굴") || stepName.Contains("우 측굴"))
+            return angleDisplay_RightLateralFlexion;
+
+        // 좌회전
+        if (stepName.Contains("좌회전") || stepName.Contains("좌 회전"))
+            return angleDisplay_LeftRotation;
+
+        // 우회전
+        if (stepName.Contains("우회전") || stepName.Contains("우 회전"))
+            return angleDisplay_RightRotation;
+
+        return null;
+    }
+
+    /// <summary>
+    /// 모든 각도 표시 UI 숨김
+    /// </summary>
+    private void HideAllAngleDisplays()
+    {
+        angleDisplay_LeftLateralFlexion?.Hide();
+        angleDisplay_RightLateralFlexion?.Hide();
+        angleDisplay_LeftRotation?.Hide();
+        angleDisplay_RightRotation?.Hide();
     }
 }
