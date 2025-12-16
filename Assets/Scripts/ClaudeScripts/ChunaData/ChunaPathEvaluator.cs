@@ -1552,13 +1552,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 회전 방향 설정 (핸드데이터 기준)
         if (isAffectedSide)
         {
-            invertRotationDirection = false;  // 환측: 기본 방향
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환측 감지 (핸드데이터: {handDataName}) - 회전 방향: 기본</color>");
+            invertRotationDirection = true;   // 환측: 반전 방향
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 환측 감지 (핸드데이터: {handDataName}) - 회전 방향: 반전</color>");
         }
         else if (isHealthySide)
         {
-            invertRotationDirection = true;   // 건측: 반대 방향
-            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 건측 감지 (핸드데이터: {handDataName}) - 회전 방향: 반전</color>");
+            invertRotationDirection = false;  // 건측: 기본 방향
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 건측 감지 (핸드데이터: {handDataName}) - 회전 방향: 기본</color>");
         }
 
         // 모드 설정 (stepName 기준)
