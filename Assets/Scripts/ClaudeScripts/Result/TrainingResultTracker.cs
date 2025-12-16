@@ -121,7 +121,8 @@ public class TrainingResultTracker : MonoBehaviour
 
     void Update()
     {
-        if (!isTracking || pathEvaluator == null) return;
+        // 경고음은 추적 여부와 관계없이 항상 체크
+        if (pathEvaluator == null) return;
 
         // 현재 프레임 진행률 체크 (경고음용)
         CheckApproachWarning();
@@ -186,8 +187,7 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleUserFrameChanged(int currentFrame, int totalFrames, float ratio)
     {
-        if (!isTracking) return;
-
+        // 경고음용 접근 비율은 추적 여부와 관계없이 항상 업데이트
         UpdateApproachRatio(ratio);
     }
 
@@ -283,7 +283,8 @@ public class TrainingResultTracker : MonoBehaviour
 
         if (isOverLimit)
         {
-            // 한계 초과 시 비프 중지 (별도 경고음이 울림)
+            // 한계 초과 시 경고음 재생 (아직 안 울렸으면)
+            // HandleLimitWarning에서 한 번만 울리도록 처리됨
             StopApproachBeep();
             return;
         }
@@ -297,6 +298,9 @@ public class TrainingResultTracker : MonoBehaviour
             {
                 PlayApproachBeep();
                 lastBeepTime = Time.time;
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                    Debug.Log($"<color=yellow>[TrainingResultTracker] 접근 경고 비프 (비율: {currentApproachRatio:P0}, 간격: {beepInterval:F2}s)</color>");
             }
         }
         else

@@ -209,6 +209,9 @@ public class AngleDisplayController : MonoBehaviour
         {
             angleDisplayOffset = targetAngleOffset;
 
+            // ★ 오프셋 변경 시 홀드 범위 fillAmount도 업데이트
+            UpdateHoldRange(isExtendedMode);
+
             if (showDebugLogs)
             {
                 string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
@@ -292,21 +295,26 @@ public class AngleDisplayController : MonoBehaviour
         currentHoldStart = extended ? extendedHoldStart : normalHoldStart;
         currentHoldEnd = extended ? extendedHoldEnd : normalHoldEnd;
 
-        // fillAmount 적용 (배율 곱하기: 90도=0.25)
+        // ★ 각도 오프셋을 fillAmount로 변환 (360도 = 1.0)
+        float offsetInFillAmount = angleDisplayOffset / 360f;
+
+        // fillAmount 적용 (배율 곱하기: 90도=0.25) + 오프셋
         if (holdStartImage != null)
         {
-            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
+            holdStartImage.fillAmount = (currentHoldStart * fillAmountScale) + offsetInFillAmount;
         }
 
         if (holdEndImage != null)
         {
-            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
+            holdEndImage.fillAmount = (currentHoldEnd * fillAmountScale) + offsetInFillAmount;
         }
 
         if (showDebugLogs)
         {
             string mode = extended ? "확장(스트레칭/재평가)" : "일반";
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, fillAmount: {currentHoldStart * fillAmountScale:F3}~{currentHoldEnd * fillAmountScale:F3})</color>");
+            float startFill = (currentHoldStart * fillAmountScale) + offsetInFillAmount;
+            float endFill = (currentHoldEnd * fillAmountScale) + offsetInFillAmount;
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, fillAmount: {startFill:F3}~{endFill:F3}, 오프셋: {angleDisplayOffset:F1}°)</color>");
         }
     }
 
@@ -654,15 +662,18 @@ public class AngleDisplayController : MonoBehaviour
         currentHoldStart = Mathf.Clamp01(holdStart);
         currentHoldEnd = Mathf.Clamp01(holdEnd);
 
-        // fillAmount 적용 (배율 곱하기)
+        // ★ 각도 오프셋을 fillAmount로 변환
+        float offsetInFillAmount = angleDisplayOffset / 360f;
+
+        // fillAmount 적용 (배율 곱하기) + 오프셋
         if (holdStartImage != null)
-            holdStartImage.fillAmount = currentHoldStart * fillAmountScale;
+            holdStartImage.fillAmount = (currentHoldStart * fillAmountScale) + offsetInFillAmount;
 
         if (holdEndImage != null)
-            holdEndImage.fillAmount = currentHoldEnd * fillAmountScale;
+            holdEndImage.fillAmount = (currentHoldEnd * fillAmountScale) + offsetInFillAmount;
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}</color>");
+            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0} (오프셋: {angleDisplayOffset:F1}°)</color>");
     }
 
     /// <summary>
