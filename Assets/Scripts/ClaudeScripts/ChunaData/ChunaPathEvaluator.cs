@@ -185,18 +185,25 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
     [SerializeField] private float limitBarrierRatio = 0.5f;
 
-    [Header("=== 스트레칭/재평가 확장 제한 ===")]
-    [Tooltip("스트레칭/재평가 시 확장된 제한 장벽 (0~1)")]
+    [Header("=== 재평가 확장 제한 ===")]
+    [Tooltip("재평가 시 확장된 제한 장벽 (0~1)")]
     [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
 
-    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 시작 구간")]
+    [Tooltip("재평가 시 확장된 중간 홀드 시작 구간 (0°기준)")]
     [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
 
-    [Tooltip("스트레칭/재평가 시 확장된 중간 홀드 종료 구간")]
-    [SerializeField] private float extendedMidHoldEndRatio = 0.65f;
+    [Tooltip("재평가 시 확장된 중간 홀드 종료 구간 (0°기준)")]
+    [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
+    [Header("=== 스트레칭 전용 설정 ===")]
     [Tooltip("스트레칭 시 시작 위치 (0~1, 30%부터 시작)")]
     [SerializeField] private float extendedStartRatio = 0.3f;
+
+    [Tooltip("스트레칭 시 홀드 시작 구간 (30°오프셋 기준, 45°와 동일)")]
+    [SerializeField] private float stretchingMidHoldStartRatio = 0.25f;
+
+    [Tooltip("스트레칭 시 홀드 종료 구간 (30°오프셋 기준, 63°와 동일)")]
+    [SerializeField] private float stretchingMidHoldEndRatio = 0.55f;
 
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
@@ -303,8 +310,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
-    private float currentMidHoldStart => isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio;  // 홀드 시작 (확장: 50%, 일반: 30%)
-    private float currentMidHoldEnd => isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio;
+    // ★ 홀드 범위: 스트레칭과 재평가 구분
+    private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
+                                         (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
+    private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
+                                       (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
     private float currentStartRatio => 0f;  // ★ 애니메이션은 항상 0프레임부터 시작
     private float currentAngleDisplayOffset => isStretchingMode ? extendedStartRatio : 0f;  // ★ 각도 표시 오프셋 (스트레칭만 30%)
 
@@ -600,6 +610,14 @@ public class ChunaPathEvaluator : MonoBehaviour
                 {
                     Debug.Log("<color=green>[StartHold] 홀드 완료! (StartHold 전용 모드 - 바로 완료)</color>");
                     ChangePhase(EvaluationPhase.Completed);
+
+                    // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+                    if (isGuideMode)
+                    {
+                        Debug.Log("<color=magenta>[StartHold] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                        return;
+                    }
+
                     CompleteEvaluation();
                     return;
                 }
@@ -1278,6 +1296,15 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // 평가 완료 처리
         ChangePhase(EvaluationPhase.Completed);
+
+        // ★ 가이드 모드: 토글로만 진행 (자동 완료 안 함)
+        if (isGuideMode)
+        {
+            Debug.Log("<color=magenta>[AutoPlay] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+            OnAutoPlayCompleted?.Invoke();
+            return;
+        }
+
         CompleteEvaluation();
 
         // 완료 이벤트
@@ -1550,6 +1577,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// AngleDisplayController에서 사용
     /// </summary>
     public float CurrentAngleDisplayOffset => currentAngleDisplayOffset;
+
+    /// <summary>
+    /// 현재 홀드 시작 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// </summary>
+    public float CurrentMidHoldStart => currentMidHoldStart;
+
+    /// <summary>
+    /// 현재 홀드 종료 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// </summary>
+    public float CurrentMidHoldEnd => currentMidHoldEnd;
 
     /// <summary>
     /// 현재 제한 비율 반환 (확장 모드 여부에 따라)

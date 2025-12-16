@@ -299,33 +299,39 @@ public class AngleDisplayController : MonoBehaviour
 
     /// <summary>
     /// 홀드 범위 업데이트 (fillAmount 적용)
-    /// ★ 스트레칭/재평가 구분: 스트레칭은 오프셋 있음, 재평가는 0°부터 시작
+    /// ★ ChunaPathEvaluator의 값을 직접 사용 (스트레칭/재평가/일반 자동 구분)
     /// </summary>
     private void UpdateHoldRange(bool extended)
     {
         isExtendedMode = extended;
 
-        if (extended)
+        // ★ ChunaPathEvaluator에서 현재 홀드 범위 직접 가져오기
+        if (pathEvaluator != null)
         {
-            // 확장 모드: 스트레칭과 재평가 구분 (로컬 isStretchingMode 사용)
-            if (isStretchingMode)
-            {
-                // 스트레칭: 오프셋 30° 기준, 0.25~0.55 (45°~63° 위치)
-                currentHoldStart = stretchingHoldStart;
-                currentHoldEnd = stretchingHoldEnd;
-            }
-            else
-            {
-                // 재평가: 0°부터 시작, 0.5~0.7 (45°~63° 위치)
-                currentHoldStart = extendedHoldStart;
-                currentHoldEnd = extendedHoldEnd;
-            }
+            currentHoldStart = pathEvaluator.CurrentMidHoldStart;
+            currentHoldEnd = pathEvaluator.CurrentMidHoldEnd;
         }
         else
         {
-            // 일반 모드
-            currentHoldStart = normalHoldStart;
-            currentHoldEnd = normalHoldEnd;
+            // pathEvaluator가 없으면 로컬 값 사용
+            if (extended)
+            {
+                if (isStretchingMode)
+                {
+                    currentHoldStart = stretchingHoldStart;
+                    currentHoldEnd = stretchingHoldEnd;
+                }
+                else
+                {
+                    currentHoldStart = extendedHoldStart;
+                    currentHoldEnd = extendedHoldEnd;
+                }
+            }
+            else
+            {
+                currentHoldStart = normalHoldStart;
+                currentHoldEnd = normalHoldEnd;
+            }
         }
 
         // ★ 오프셋 적용 시 axis가 해당 진행률에서 보여줄 실제 각도 계산
