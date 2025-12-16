@@ -1522,6 +1522,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// Step 이름에 따라 확장 제한 모드 자동 설정
     /// "재평가"가 포함되면 확장 모드 활성화 (스트레칭은 기본 50% 유지)
+    /// "환측"/"건측"에 따라 회전 방향 자동 설정
     /// </summary>
     public void SetExtendedLimitModeFromStepName(string stepName)
     {
@@ -1536,6 +1537,21 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 시작 위치 30%: 스트레칭만 적용
         bool isReEvaluation = stepName.Contains("재평가");
         bool isStretching = stepName.Contains("스트레칭");
+
+        // ★ 환측/건측에 따라 회전 방향 설정
+        bool isAffectedSide = stepName.Contains("환측");
+        bool isHealthySide = stepName.Contains("건측");
+
+        if (isAffectedSide)
+        {
+            invertRotationDirection = false;  // 환측: 기본 방향
+            Debug.Log("<color=cyan>[ChunaPathEvaluator] 환측 감지 - 회전 방향: 기본</color>");
+        }
+        else if (isHealthySide)
+        {
+            invertRotationDirection = true;   // 건측: 반대 방향
+            Debug.Log("<color=cyan>[ChunaPathEvaluator] 건측 감지 - 회전 방향: 반전</color>");
+        }
 
         if (isStretching)
         {
@@ -1555,6 +1571,21 @@ public class ChunaPathEvaluator : MonoBehaviour
             isStretchingMode = false;
         }
     }
+
+    /// <summary>
+    /// 회전 방향 반전 설정 (수동)
+    /// </summary>
+    public void SetInvertRotationDirection(bool invert)
+    {
+        invertRotationDirection = invert;
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 회전 방향 반전: {invert}</color>");
+    }
+
+    /// <summary>
+    /// 현재 회전 방향 반전 여부
+    /// </summary>
+    public bool InvertRotationDirection => invertRotationDirection;
 
     void OnDestroy()
     {
