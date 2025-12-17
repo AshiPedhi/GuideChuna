@@ -10,6 +10,10 @@ using UnityEngine.SceneManagement;
 /// - WaitForSeconds 객체 캐싱으로 GC Allocation 최소화
 /// - AsyncOperation 최적화
 /// - 리소스 정리 강화
+///
+/// Camera X 보존:
+/// - 씬 전환 시 Camera X를 DontDestroyOnLoad 영역으로 임시 이동
+/// - 씬 로드 완료 후 CameraLocateCtrl이 위치 재설정
 /// </summary>
 public class SceneLoader : MonoBehaviour
 {
@@ -33,6 +37,11 @@ public class SceneLoader : MonoBehaviour
     #region Cached Wait Objects (Quest Optimization)
     private WaitForFixedUpdate cachedWaitForFixedUpdate;
     private WaitForEndOfFrame cachedWaitForEndOfFrame;
+    #endregion
+
+    #region Camera X Preservation
+    private const string CAMERA_X_NAME = "Camera X";
+    private GameObject preservedCameraX;
     #endregion
 
     #region Unity Lifecycle
@@ -83,6 +92,10 @@ public class SceneLoader : MonoBehaviour
     public void LoadSceneWithLoading(string sceneName)
     {
         Debug.Log($"[SceneLoader] 로딩씬을 통해 '{sceneName}' 씬 로드 시작");
+
+        // Camera X 보존
+        PreserveCameraX();
+
         StartCoroutine(LoadSceneWithLoadingCoroutine(sceneName));
     }
 
@@ -93,7 +106,14 @@ public class SceneLoader : MonoBehaviour
     public void LoadSceneDirect(string sceneName)
     {
         Debug.Log($"[SceneLoader] '{sceneName}' 씬 직접 로드");
+
+        // Camera X 보존
+        PreserveCameraX();
+
         SceneManager.LoadScene(sceneName);
+
+        // 씬 로드 후 Camera X 복원 (다음 프레임에)
+        StartCoroutine(RestoreCameraXNextFrame());
     }
 
     /// <summary>
@@ -103,7 +123,54 @@ public class SceneLoader : MonoBehaviour
     public void LoadSceneAsync(string sceneName)
     {
         Debug.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드");
+
+        // Camera X 보존
+        PreserveCameraX();
+
         StartCoroutine(LoadSceneAsyncCoroutine(sceneName));
+    }
+    #endregion
+
+    #region Camera X Preservation Methods
+    /// <summary>
+    /// Camera X를 DontDestroyOnLoad 영역(SceneLoader 자식)으로 임시 이동
+    /// </summary>
+    private void PreserveCameraX()
+    {
+        GameObject cameraX = GameObject.Find(CAMERA_X_NAME);
+        if (cameraX != null)
+        {
+            // SceneLoader의 자식으로 이동 (DontDestroyOnLoad 영역)
+            cameraX.transform.SetParent(transform);
+            preservedCameraX = cameraX;
+            Debug.Log($"[SceneLoader] Camera X 보존됨 (씬 전환 중 삭제 방지)");
+        }
+        else
+        {
+            preservedCameraX = null;
+            Debug.Log($"[SceneLoader] Camera X를 찾지 못함 (보존 스킵)");
+        }
+    }
+
+    /// <summary>
+    /// Camera X를 씬으로 복원 (부모 해제)
+    /// CameraLocateCtrl이 새 씬에서 위치를 재설정함
+    /// </summary>
+    private void RestoreCameraX()
+    {
+        if (preservedCameraX != null)
+        {
+            // 부모 해제 (루트로 이동)
+            preservedCameraX.transform.SetParent(null);
+            Debug.Log($"[SceneLoader] Camera X 복원됨 (CameraLocateCtrl이 위치 재설정 예정)");
+            preservedCameraX = null;
+        }
+    }
+
+    private IEnumerator RestoreCameraXNextFrame()
+    {
+        yield return null;
+        RestoreCameraX();
     }
     #endregion
 
@@ -141,6 +208,9 @@ public class SceneLoader : MonoBehaviour
             yield return null;
         }
 
+        // 8. Camera X 복원
+        RestoreCameraX();
+
         Debug.Log($"[SceneLoader] '{targetSceneName}' 씬 로드 완료");
     }
 
@@ -170,6 +240,9 @@ public class SceneLoader : MonoBehaviour
             yield return null;
         }
 
+        // Camera X 복원
+        RestoreCameraX();
+
         Debug.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드 완료");
     }
     #endregion
@@ -191,6 +264,14 @@ public class SceneLoader : MonoBehaviour
     {
         string currentScene = GetCurrentSceneName();
         LoadScene(currentScene, useLoadingScene);
+    }
+
+    /// <summary>
+    /// 예전 MoveSceneManager와의 호환성을 위한 메서드
+    /// </summary>
+    public void MoveScene(string sceneName)
+    {
+        LoadSceneWithLoading(sceneName);
     }
     #endregion
 }
