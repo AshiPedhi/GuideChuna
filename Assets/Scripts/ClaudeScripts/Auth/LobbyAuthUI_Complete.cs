@@ -158,22 +158,35 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnDestroy()
     {
         UnsubscribeFromEvents();
+    }
 
-        // 씬 전환이 아닌 애플리케이션 종료 시에만 로그아웃 시도
-        // (씬 전환 시에는 로그인 상태 유지를 위해 로그아웃하지 않음)
-        // Application.isQuitting을 체크할 수 없으므로 주석 처리
-        // if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
-        // {
-        //     try
-        //     {
-        //         Debug.Log($"[LobbyUI] OnDestroy - 로그아웃 시도: {currentUsername}");
-        //         PerformLogoutAsync().Forget();
-        //     }
-        //     catch (Exception e)
-        //     {
-        //         Debug.LogWarning($"[LobbyUI] OnDestroy 로그아웃 실패 (무시): {e.Message}");
-        //     }
-        // }
+    /// <summary>
+    /// 앱 종료 시 호출 - 로그아웃 후 종료
+    /// </summary>
+    private void OnApplicationQuit()
+    {
+        Debug.Log("[LobbyUI] OnApplicationQuit 호출");
+
+        // 로그인 상태면 동기적으로 로그아웃 시도
+        if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
+        {
+            Debug.Log($"[LobbyUI] 앱 종료 전 로그아웃 시도: {currentUsername}");
+
+            try
+            {
+                // 동기적으로 로그아웃 API 호출 (타임아웃 3초)
+                var logoutTask = authService.LogoffAsync(currentDeviceSN, currentUsername, "VR_CHUNA");
+                logoutTask.AsTask().Wait(TimeSpan.FromSeconds(3));
+                Debug.Log("[LobbyUI] ✅ 앱 종료 전 로그아웃 성공");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[LobbyUI] ⚠️ 앱 종료 전 로그아웃 실패 (무시): {e.Message}");
+            }
+
+            // PlayerPrefs 로그인 정보 삭제
+            ClearSavedLoginInfo();
+        }
     }
     #endregion
 
@@ -752,11 +765,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     }
 
     /// <summary>
-    /// 애플리케이션 종료 (로그아웃 없이 바로 종료)
+    /// 애플리케이션 종료 (로그아웃 후 종료)
     /// </summary>
     private async UniTaskVoid ExitApplication()
     {
-        Debug.Log("[LobbyUI] 애플리케이션 종료 (로그아웃 없이 바로 종료)");
+        Debug.Log("[LobbyUI] 애플리케이션 종료 시작");
+
+        // 로그인 상태면 로그아웃 먼저 수행
+        if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
+        {
+            Debug.Log($"[LobbyUI] 종료 전 로그아웃 시도: {currentUsername}");
+
+            try
+            {
+                await authService.LogoffAsync(currentDeviceSN, currentUsername, "VR_CHUNA");
+                Debug.Log("[LobbyUI] ✅ 종료 전 로그아웃 성공");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[LobbyUI] ⚠️ 종료 전 로그아웃 실패 (무시): {e.Message}");
+            }
+
+            // PlayerPrefs 로그인 정보 삭제
+            ClearSavedLoginInfo();
+        }
+
+        Debug.Log("[LobbyUI] 애플리케이션 종료");
 
         // 애플리케이션 종료
 #if UNITY_EDITOR
