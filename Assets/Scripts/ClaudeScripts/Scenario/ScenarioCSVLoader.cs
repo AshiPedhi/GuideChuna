@@ -5,15 +5,16 @@ using System.Text;
 
 /// <summary>
 /// CSV 파일에서 시나리오 데이터를 로드하는 클래스
-/// 
+///
 /// [CSV 구조]
-/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip
-/// 
+/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime
+///
 /// [수정 내역]
 /// - RFC 4180 표준 CSV 파싱 (큰따옴표 안의 줄바꿈 처리) ✅
 /// - CSV 컬럼 순서에 정확히 맞게 파싱
 /// - 한글 인코딩 자동 감지 (UTF-8, EUC-KR)
 /// - 조건 타입 자동 결정 로직 추가
+/// - 가이드 영상 구간 (videoStartTime, videoEndTime) 추가 - 분:초 형식 지원
 /// </summary>
 public class ScenarioCSVLoader : MonoBehaviour
 {
@@ -231,6 +232,20 @@ public class ScenarioCSVLoader : MonoBehaviour
                     movementType = values[13].Trim().ToLower();
                 }
 
+                // videoStartTime (15번째 컬럼, 선택사항) - 분:초 형식
+                string videoStartTime = "";
+                if (values.Count >= 15 && !string.IsNullOrEmpty(values[14]))
+                {
+                    videoStartTime = values[14].Trim();
+                }
+
+                // videoEndTime (16번째 컬럼, 선택사항) - 분:초 형식
+                string videoEndTime = "";
+                if (values.Count >= 16 && !string.IsNullOrEmpty(values[15]))
+                {
+                    videoEndTime = values[15].Trim();
+                }
+
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
@@ -305,7 +320,9 @@ public class ScenarioCSVLoader : MonoBehaviour
                     conditionType = conditionType,
                     conditionParams = conditionParams,
                     patientAnimationClip = patientAnimationClip,
-                    movementType = movementType
+                    movementType = movementType,
+                    videoStartTime = videoStartTime,
+                    videoEndTime = videoEndTime
                 };
 
                 currentStep.subSteps.Add(subStep);
@@ -315,7 +332,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                     string handInfo = !string.IsNullOrEmpty(handTrackingFileName) ? $"핸드={handTrackingFileName}" : "핸드없음";
                     string animInfo = !string.IsNullOrEmpty(patientAnimationClip) ? $"애니메이션={patientAnimationClip}" : "";
                     string moveInfo = !string.IsNullOrEmpty(movementType) ? $"이동={movementType}" : "";
-                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo} {moveInfo}");
+                    string videoInfo = !string.IsNullOrEmpty(videoStartTime) ? $"영상={videoStartTime}~{videoEndTime}" : "";
+                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo} {moveInfo} {videoInfo}");
                 }
             }
             catch (System.Exception e)
