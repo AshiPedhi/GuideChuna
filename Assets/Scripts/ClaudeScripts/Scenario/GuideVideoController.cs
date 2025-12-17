@@ -9,19 +9,17 @@ using System;
 /// - VideoPlayer를 사용하여 특정 구간만 재생
 /// - 분:초 형식의 시간 지원 (SubStepData와 연동)
 /// - 구간 반복 재생 지원
-/// - ScenarioManager 이벤트와 연동
+/// - ScenarioEventSystem 이벤트와 연동
 ///
 /// 사용법:
 /// 1. VideoPlayer 컴포넌트가 있는 오브젝트에 추가
-/// 2. ScenarioManager 참조 연결
-/// 3. CSV에 videoStartTime, videoEndTime 추가 (예: "0:30", "1:45")
+/// 2. CSV에 videoStartTime, videoEndTime 추가 (예: "0:30", "1:45")
 /// </summary>
 [RequireComponent(typeof(VideoPlayer))]
 public class GuideVideoController : MonoBehaviour
 {
     [Header("=== 컴포넌트 참조 ===")]
     [SerializeField] private VideoPlayer videoPlayer;
-    [SerializeField] private ScenarioManager scenarioManager;
 
     [Header("=== 재생 설정 ===")]
     [Tooltip("구간 끝에 도달하면 반복 재생")]
@@ -51,22 +49,16 @@ public class GuideVideoController : MonoBehaviour
 
     private void OnEnable()
     {
-        // ScenarioManager 이벤트 구독
-        if (scenarioManager != null)
-        {
-            scenarioManager.OnSubStepStarted += OnSubStepStarted;
-            scenarioManager.OnStepCompleted += OnStepCompleted;
-        }
+        // ScenarioEventSystem 이벤트 구독
+        ScenarioEventSystem.Instance.OnSubStepStarted += OnSubStepStarted;
+        ScenarioEventSystem.Instance.OnStepCompleted += OnStepCompleted;
     }
 
     private void OnDisable()
     {
-        // ScenarioManager 이벤트 해제
-        if (scenarioManager != null)
-        {
-            scenarioManager.OnSubStepStarted -= OnSubStepStarted;
-            scenarioManager.OnStepCompleted -= OnStepCompleted;
-        }
+        // ScenarioEventSystem 이벤트 해제
+        ScenarioEventSystem.Instance.OnSubStepStarted -= OnSubStepStarted;
+        ScenarioEventSystem.Instance.OnStepCompleted -= OnStepCompleted;
     }
 
     private void Update()
@@ -266,27 +258,5 @@ public class GuideVideoController : MonoBehaviour
         int mins = (int)(seconds / 60f);
         int secs = (int)(seconds % 60f);
         return $"{mins}:{secs:D2}";
-    }
-
-    /// <summary>
-    /// ScenarioManager 설정 (런타임에서 설정 시)
-    /// </summary>
-    public void SetScenarioManager(ScenarioManager manager)
-    {
-        // 기존 이벤트 해제
-        if (scenarioManager != null)
-        {
-            scenarioManager.OnSubStepStarted -= OnSubStepStarted;
-            scenarioManager.OnStepCompleted -= OnStepCompleted;
-        }
-
-        scenarioManager = manager;
-
-        // 새 이벤트 구독
-        if (scenarioManager != null)
-        {
-            scenarioManager.OnSubStepStarted += OnSubStepStarted;
-            scenarioManager.OnStepCompleted += OnStepCompleted;
-        }
     }
 }
