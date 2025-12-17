@@ -22,6 +22,10 @@ public class RenderManager : MonoBehaviour
     public SignalingManager sm;
     public VideoStreamSender vss;
 
+    [Header("미러링 오브젝트 (Camera X)")]
+    [Tooltip("로그인 전까지 비활성화할 미러링용 오브젝트")]
+    [SerializeField] private GameObject mirroringObject;
+
     [Header("디버그")]
     [SerializeField] private bool enableDebugLogs = true;
 
@@ -47,18 +51,61 @@ public class RenderManager : MonoBehaviour
             instance = this;
             _cachedIceServers = new List<IceServer>(4);
 
-            // ★★★ 중요: SignalingManager 자동 시작 방지 ★★★
-            // Awake()에서 비활성화하여 Start()가 실행되지 않도록 함
-            if (sm != null)
-            {
-                sm.enabled = false;
-                Debug.Log("[RenderManager] SignalingManager 비활성화됨 (로그인 전까지)");
-            }
+            // ★★★ 중요: 미러링 오브젝트(Camera X) 비활성화 ★★★
+            // 게임오브젝트 자체를 비활성화하여 SignalingManager 자동 시작 완전 차단
+            DisableMirroringObject();
         }
         else
         {
             Destroy(gameObject);
             return;
+        }
+    }
+
+    /// <summary>
+    /// 미러링 오브젝트 비활성화
+    /// </summary>
+    private void DisableMirroringObject()
+    {
+        // mirroringObject가 설정되어 있으면 사용, 아니면 sm.gameObject 사용
+        GameObject targetObj = mirroringObject;
+        if (targetObj == null && sm != null)
+        {
+            targetObj = sm.gameObject;
+        }
+
+        if (targetObj != null && targetObj != this.gameObject)
+        {
+            targetObj.SetActive(false);
+            Debug.Log($"[RenderManager] 미러링 오브젝트 비활성화됨: {targetObj.name} (로그인 전까지)");
+        }
+        else if (sm != null)
+        {
+            // 같은 게임오브젝트면 컴포넌트만 비활성화
+            sm.enabled = false;
+            Debug.Log("[RenderManager] SignalingManager 컴포넌트 비활성화됨 (로그인 전까지)");
+        }
+    }
+
+    /// <summary>
+    /// 미러링 오브젝트 활성화
+    /// </summary>
+    private void EnableMirroringObject()
+    {
+        GameObject targetObj = mirroringObject;
+        if (targetObj == null && sm != null)
+        {
+            targetObj = sm.gameObject;
+        }
+
+        if (targetObj != null && targetObj != this.gameObject)
+        {
+            targetObj.SetActive(true);
+            Debug.Log($"[RenderManager] 미러링 오브젝트 활성화됨: {targetObj.name}");
+        }
+        else if (sm != null)
+        {
+            sm.enabled = true;
         }
     }
 
@@ -284,16 +331,15 @@ public class RenderManager : MonoBehaviour
             isConnected = false;
             connectionAttempts = 0;
 
-            // SignalingManager 활성화 (Awake에서 비활성화됨)
-            sm.enabled = true;
-            LogDebug("SignalingManager 활성화됨");
+            // 미러링 오브젝트 활성화 (Awake에서 비활성화됨)
+            EnableMirroringObject();
 
             // Signaling 설정
             if (!SetupSignaling(currentMirroringData.serverIP, currentMirroringData.portNo))
             {
                 LogWarning("Signaling 설정 실패. 미러링 시작 불가.");
                 isConnecting = false;
-                sm.enabled = false;
+                DisableMirroringObject();
                 return;
             }
 
@@ -332,20 +378,21 @@ public class RenderManager : MonoBehaviour
             connectionAttempts = 0;
             hasInitialized = false;
 
-            // SignalingManager 안전 중지 및 비활성화
+            // SignalingManager 안전 중지
             if (sm != null)
             {
                 try
                 {
                     sm.Stop();
-                    sm.enabled = false;
-                    LogDebug("SignalingManager 중지 및 비활성화됨");
                 }
                 catch (Exception e)
                 {
                     LogWarning($"SignalingManager 중지 중 오류: {e.Message}");
                 }
             }
+
+            // 미러링 오브젝트 비활성화
+            DisableMirroringObject();
 
             LogDebug("미러링 중지됨");
         }
