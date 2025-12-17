@@ -1452,6 +1452,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         else
         {
             startHoldOnly = false;
+            // ★ 등척성 운동이 아니면 기본값(3초)으로 초기화
+            startHoldDuration = 3f;
+            Debug.Log($"<color=cyan>[ChunaPathEvaluator] 일반 모드 - startHoldDuration 기본값 복원: {startHoldDuration}초</color>");
         }
 
         // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정

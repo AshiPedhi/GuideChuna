@@ -126,8 +126,16 @@ public class ScenarioConditionManager : MonoBehaviour
         Debug.Log($"[ConditionManager] 가이드 스텝: {scenarioManager.CurrentStep.IsGuideStep()}");
 
         // 가이드 스텝(Step번호 0)은 항상 토글로 수동 진행
+        // ★ 단, 나레이션이 있으면 나레이션 먼저 재생
         if (scenarioManager.CurrentStep.IsGuideStep())
         {
+            if (subStep.HasNarration())
+            {
+                Debug.Log("[ConditionManager] 가이드 스텝 - 나레이션 먼저 재생 후 토글 대기");
+                HandleNarrationThenManual(subStep);
+                return;
+            }
+
             Debug.Log("[ConditionManager] 가이드 스텝 - 토글로 수동 진행");
             currentCondition = null;
             StopConditionCheck();
@@ -351,6 +359,73 @@ public class ScenarioConditionManager : MonoBehaviour
         // 나레이션 재생 후 Duration 적용
         narrationCoroutine = StartCoroutine(PlayNarrationThenApplyDuration(clip, clipName, subStep));
         Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Duration: 나레이션 먼저 재생 ({clip.length:F1}초) → Duration {subStep.duration}초</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 + Manual 병합 조건 처리 (가이드 스텝용)
+    /// 나레이션 재생 완료 후 토글 대기
+    /// </summary>
+    private void HandleNarrationThenManual(SubStepData subStep)
+    {
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. 바로 토글 대기.");
+            HandleManualProgress();
+            return;
+        }
+
+        // 나레이션 재생 중에는 버튼 비활성화
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        // 나레이션 재생 후 Manual (토글 대기)
+        narrationCoroutine = StartCoroutine(PlayNarrationThenManual(clip, clipName, subStep));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Manual: 나레이션 먼저 재생 ({clip.length:F1}초) → 토글 대기</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 Manual (토글 대기) 코루틴
+    /// </summary>
+    private IEnumerator PlayNarrationThenManual(AudioClip clip, string clipName, SubStepData subStep)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            HandleManualProgress();
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → 토글 대기</color>");
+        currentNarrationClip = null;
+
+        // ★ 나레이션 완료 후 Duration 적용 (있으면)
+        if (subStep.duration > 0)
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
+            yield return new WaitForSeconds(subStep.duration);
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료</color>");
+        }
+
+        // Manual (토글 대기)
+        HandleManualProgress();
     }
 
     /// <summary>
