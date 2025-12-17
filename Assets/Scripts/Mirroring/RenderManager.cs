@@ -7,10 +7,10 @@ using System;
 
 /// <summary>
 /// VR 최적화 RenderManager - AuthenticationService 통합 버전
-/// 
+///
 /// [주요 기능]
 /// - AuthEvents를 통한 로그인/로그아웃 감지
-/// - 게스트 모드와 로그인 모드 자동 전환
+/// - 로그인 후에만 미러링 시작 (게스트 모드 비활성화)
 /// - 메모리 최적화 (VR 환경 특화)
 /// - 미러링 데이터 동적 업데이트
 /// </summary>
@@ -22,17 +22,10 @@ public class RenderManager : MonoBehaviour
     public SignalingManager sm;
     public VideoStreamSender vss;
 
-    [Header("게스트 모드 설정")]
-    public string guestServerIP = "localhost";
-    public int guestPortNo = 80;
-    public string guestVideoQuality = "low";
-    public bool enableGuestMode = true;
-
     [Header("디버그")]
     [SerializeField] private bool enableDebugLogs = true;
 
     private MirroringData currentMirroringData;
-    private bool isGuestMode = true;
     private bool hasInitialized = false;
     private Coroutine runCoroutine;
 
@@ -85,19 +78,8 @@ public class RenderManager : MonoBehaviour
             yield break;
         }
 
-        // 게스트 모드가 활성화되어 있으면 자동 시작
-        if (enableGuestMode)
-        {
-            try
-            {
-                LogDebug("게스트 모드로 미러링 시작");
-                StartGuestMode();
-            }
-            catch (Exception e)
-            {
-                LogError($"게스트 모드 시작 실패: {e.Message}");
-            }
-        }
+        // 로그인 후에만 미러링 시작 - 여기서는 초기화만 완료
+        LogDebug("RenderManager 초기화 완료. 로그인 후 미러링이 시작됩니다.");
     }
 
     private void OnDestroy()
@@ -169,56 +151,15 @@ public class RenderManager : MonoBehaviour
         {
             LogDebug($"로그아웃 감지: {username}");
 
-            // 게스트 모드로 복귀
-            if (enableGuestMode)
-            {
-                StopMirroring();
-                StartGuestMode();
-            }
-            else
-            {
-                StopMirroring();
-            }
+            // 미러링 중지 (게스트 모드 없음)
+            StopMirroring();
+            currentMirroringData = null;
+
+            LogDebug("미러링 중지됨. 다시 로그인하면 미러링이 시작됩니다.");
         }
         catch (Exception e)
         {
             LogError($"로그아웃 처리 실패: {e.Message}");
-        }
-    }
-    #endregion
-
-    #region Guest Mode
-    /// <summary>
-    /// 게스트 모드로 미러링 시작
-    /// </summary>
-    public void StartGuestMode()
-    {
-        try
-        {
-            // 서버 주소 유효성 체크
-            if (string.IsNullOrEmpty(guestServerIP))
-            {
-                LogWarning("게스트 서버 IP가 설정되지 않았습니다. 미러링 비활성화.");
-                return;
-            }
-
-            isGuestMode = true;
-
-            currentMirroringData = new MirroringData
-            {
-                serverIP = guestServerIP,
-                portNo = guestPortNo,
-                videoQuality = guestVideoQuality,
-                mirroring = "on"
-            };
-
-            LogDebug($"게스트 모드 설정: {guestServerIP}:{guestPortNo}");
-            StartMirroring();
-        }
-        catch (Exception e)
-        {
-            LogError($"게스트 모드 시작 실패: {e.Message}");
-            isGuestMode = false;
         }
     }
     #endregion
@@ -236,21 +177,15 @@ public class RenderManager : MonoBehaviour
 
             // AuthenticationService에서 로그온 데이터가 이미 처리되었으므로
             // LobbyAuthUI나 다른 매니저에서 미러링 데이터를 가져와야 함
-            // 여기서는 임시로 대기 후 재시작
             await UniTask.Delay(500);
 
             // 외부에서 SetMirroringData를 호출해줘야 함
-            LogDebug($"사용자 모드 전환 대기 중: {username}");
+            LogDebug($"사용자 모드 전환 대기 중: {username} - SetMirroringData() 호출 대기");
         }
         catch (Exception e)
         {
             LogError($"사용자 모드 전환 실패: {e.Message}");
-
-            // 실패 시 게스트 모드로 복귀
-            if (enableGuestMode)
-            {
-                StartGuestMode();
-            }
+            // 게스트 모드 없음 - 미러링 비활성화 상태 유지
         }
     }
 
@@ -283,7 +218,6 @@ public class RenderManager : MonoBehaviour
             }
 
             currentMirroringData = mirroringData;
-            isGuestMode = false;
 
             LogDebug($"미러링 데이터 설정: {mirroringData.serverIP}:{mirroringData.portNo}");
             StartMirroring();
@@ -355,7 +289,7 @@ public class RenderManager : MonoBehaviour
             // 실행
             runCoroutine = StartCoroutine(Run());
 
-            LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo} | 모드: {(isGuestMode ? "게스트" : "로그인")} | 품질: {currentMirroringData.videoQuality}");
+            LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo} | 품질: {currentMirroringData.videoQuality}");
         }
         catch (Exception e)
         {
@@ -641,7 +575,7 @@ public class RenderManager : MonoBehaviour
     /// <summary>
     /// 현재 미러링 정보 가져오기
     /// </summary>
-    public void GetCurrentMirroringInfo(out string serverIP, out int port, out string quality, out bool isGuest)
+    public void GetCurrentMirroringInfo(out string serverIP, out int port, out string quality)
     {
         if (currentMirroringData != null)
         {
@@ -655,8 +589,6 @@ public class RenderManager : MonoBehaviour
             port = 0;
             quality = "None";
         }
-
-        isGuest = isGuestMode;
     }
 
     /// <summary>
