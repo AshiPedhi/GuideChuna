@@ -1539,6 +1539,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     #endregion
 
     #region Debug Helpers
+    [ContextMenu("Debug - Clear All Saved Data (Reset)")]
+    public void Debug_ClearAllSavedData()
+    {
+        Debug.Log("[LobbyUI] ========== 저장된 모든 데이터 초기화 ==========");
+
+        // 로그인 정보 삭제
+        PlayerPrefs.DeleteKey("LOGIN_USERNAME");
+        PlayerPrefs.DeleteKey("LOGIN_USERID");
+
+        // 디바이스 정보 삭제
+        PlayerPrefs.DeleteKey("DEVICE_SN");
+
+        // 모든 PlayerPrefs 저장
+        PlayerPrefs.Save();
+
+        // 현재 상태 초기화
+        currentUsername = string.Empty;
+        currentUserID = 0;
+        currentDeviceSN = string.Empty;
+        currentOrgID = string.Empty;
+        savedDeviceSN = string.Empty;
+
+        Debug.Log("[LobbyUI] ✅ 모든 저장 데이터 초기화 완료");
+        Debug.Log("[LobbyUI] 앱을 재시작하세요.");
+    }
+
     [ContextMenu("Test - Show Grade Selection")]
     private void Debug_ShowGradeSelection()
     {
