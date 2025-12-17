@@ -521,7 +521,7 @@ public class GuideVideoController : MonoBehaviour
     /// <summary>
     /// 시나리오 완료 시 호출
     /// </summary>
-    private void OnScenarioCompleted()
+    private void OnScenarioCompleted(ScenarioData scenario)
     {
         hasScenarioStarted = false;
         pendingSubStep = null;
