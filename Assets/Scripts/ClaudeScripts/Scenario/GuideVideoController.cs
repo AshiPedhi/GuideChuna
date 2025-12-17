@@ -10,16 +10,25 @@ using System;
 /// - 분:초 형식의 시간 지원 (SubStepData와 연동)
 /// - 구간 반복 재생 지원
 /// - ScenarioEventSystem 이벤트와 연동
+/// - 시나리오 이름으로 영상 자동 로드
 ///
 /// 사용법:
 /// 1. VideoPlayer 컴포넌트가 있는 오브젝트에 추가
-/// 2. CSV에 videoStartTime, videoEndTime 추가 (예: "0:30", "1:45")
+/// 2. Resources/Videos/ 폴더에 시나리오 이름과 동일한 영상 파일 저장 (예: "상부승모근.mp4")
+/// 3. CSV에 videoStartTime, videoEndTime 추가 (예: "0-30", "1-45" - 엑셀 호환용 "-" 구분자)
 /// </summary>
 [RequireComponent(typeof(VideoPlayer))]
 public class GuideVideoController : MonoBehaviour
 {
     [Header("=== 컴포넌트 참조 ===")]
     [SerializeField] private VideoPlayer videoPlayer;
+
+    [Header("=== 영상 설정 ===")]
+    [Tooltip("영상 파일 경로 (Resources 폴더 기준, 예: Videos/상부승모근)")]
+    [SerializeField] private string videoFolderPath = "Videos";
+
+    [Tooltip("시나리오 시작 시 자동으로 영상 로드")]
+    [SerializeField] private bool autoLoadOnScenarioStart = true;
 
     [Header("=== 재생 설정 ===")]
     [Tooltip("구간 끝에 도달하면 반복 재생")]
@@ -35,11 +44,13 @@ public class GuideVideoController : MonoBehaviour
     private float currentStartTime = 0f;
     private float currentEndTime = 0f;
     private bool isPlayingSegment = false;
+    private string currentVideoName = "";
 
     // 이벤트
     public event Action OnSegmentStarted;
     public event Action OnSegmentEnded;
     public event Action<float> OnSegmentProgress;  // 0~1 진행률
+    public event Action<string> OnVideoLoaded;     // 영상 로드 완료
 
     private void Awake()
     {
@@ -50,6 +61,7 @@ public class GuideVideoController : MonoBehaviour
     private void OnEnable()
     {
         // ScenarioEventSystem 이벤트 구독
+        ScenarioEventSystem.Instance.OnScenarioStarted += OnScenarioStarted;
         ScenarioEventSystem.Instance.OnSubStepStarted += OnSubStepStarted;
         ScenarioEventSystem.Instance.OnStepCompleted += OnStepCompleted;
     }
@@ -57,6 +69,7 @@ public class GuideVideoController : MonoBehaviour
     private void OnDisable()
     {
         // ScenarioEventSystem 이벤트 해제
+        ScenarioEventSystem.Instance.OnScenarioStarted -= OnScenarioStarted;
         ScenarioEventSystem.Instance.OnSubStepStarted -= OnSubStepStarted;
         ScenarioEventSystem.Instance.OnStepCompleted -= OnStepCompleted;
     }
@@ -93,6 +106,67 @@ public class GuideVideoController : MonoBehaviour
                 StopSegment();
             }
         }
+    }
+
+    /// <summary>
+    /// 시나리오 시작 시 호출 - 영상 자동 로드
+    /// </summary>
+    private void OnScenarioStarted(ScenarioData scenario)
+    {
+        if (!autoLoadOnScenarioStart || scenario == null) return;
+
+        LoadVideoByName(scenario.scenarioName);
+    }
+
+    /// <summary>
+    /// 시나리오 이름으로 영상 로드 (Resources 폴더에서)
+    /// </summary>
+    public bool LoadVideoByName(string scenarioName)
+    {
+        if (videoPlayer == null)
+        {
+            Debug.LogError("[GuideVideo] VideoPlayer가 없습니다!");
+            return false;
+        }
+
+        string videoPath = $"{videoFolderPath}/{scenarioName}";
+        VideoClip clip = Resources.Load<VideoClip>(videoPath);
+
+        if (clip != null)
+        {
+            videoPlayer.clip = clip;
+            currentVideoName = scenarioName;
+
+            if (showDebugLog)
+                Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath}</color>");
+
+            OnVideoLoaded?.Invoke(scenarioName);
+            return true;
+        }
+        else
+        {
+            Debug.LogWarning($"[GuideVideo] 영상을 찾을 수 없습니다: Resources/{videoPath}");
+            Debug.LogWarning($"[GuideVideo] 영상 파일을 Assets/Resources/{videoFolderPath}/ 폴더에 넣어주세요!");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// URL로 영상 로드 (스트리밍용)
+    /// </summary>
+    public void LoadVideoByUrl(string url)
+    {
+        if (videoPlayer == null)
+        {
+            Debug.LogError("[GuideVideo] VideoPlayer가 없습니다!");
+            return;
+        }
+
+        videoPlayer.source = VideoSource.Url;
+        videoPlayer.url = url;
+
+        if (showDebugLog)
+            Debug.Log($"[GuideVideo] URL 영상 설정: {url}");
     }
 
     /// <summary>
@@ -134,6 +208,12 @@ public class GuideVideoController : MonoBehaviour
             return;
         }
 
+        if (videoPlayer.clip == null && string.IsNullOrEmpty(videoPlayer.url))
+        {
+            Debug.LogWarning("[GuideVideo] 로드된 영상이 없습니다!");
+            return;
+        }
+
         if (startSeconds >= endSeconds)
         {
             Debug.LogWarning($"[GuideVideo] 잘못된 구간: {startSeconds} >= {endSeconds}");
@@ -155,7 +235,7 @@ public class GuideVideoController : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 구간 재생 (분:초 형식)
+    /// 특정 구간 재생 (분:초 또는 분-초 형식)
     /// </summary>
     public void PlaySegment(string startTime, string endTime)
     {
@@ -214,6 +294,11 @@ public class GuideVideoController : MonoBehaviour
     public bool IsPlaying => isPlayingSegment && videoPlayer != null && videoPlayer.isPlaying;
 
     /// <summary>
+    /// 현재 로드된 영상 이름
+    /// </summary>
+    public string CurrentVideoName => currentVideoName;
+
+    /// <summary>
     /// 현재 구간 진행률 (0~1)
     /// </summary>
     public float GetSegmentProgress()
@@ -226,12 +311,18 @@ public class GuideVideoController : MonoBehaviour
 
     /// <summary>
     /// 분:초 형식을 초 단위로 변환
+    /// 지원 형식: "1:30", "1-30", "90" (초 단위)
     /// </summary>
     private float ParseTimeToSeconds(string timeStr)
     {
         if (string.IsNullOrEmpty(timeStr)) return 0f;
 
-        string[] parts = timeStr.Split(':');
+        timeStr = timeStr.Trim();
+
+        // ":" 또는 "-" 구분자 지원
+        char[] separators = { ':', '-' };
+        string[] parts = timeStr.Split(separators);
+
         if (parts.Length == 2)
         {
             if (int.TryParse(parts[0], out int minutes) && int.TryParse(parts[1], out int seconds))

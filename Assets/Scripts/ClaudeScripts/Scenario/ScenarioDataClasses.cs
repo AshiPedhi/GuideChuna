@@ -72,15 +72,24 @@ public class SubStepData
     }
 
     /// <summary>
-    /// 분:초 형식을 초 단위로 변환 (예: "1:30" -> 90초)
+    /// 분:초 형식을 초 단위로 변환
+    /// 지원 형식: "1:30", "1-30", "90" (초 단위)
+    /// 엑셀에서 시간으로 인식하는 문제 때문에 "-" 구분자도 지원
     /// </summary>
     private float ParseTimeToSeconds(string timeStr)
     {
         if (string.IsNullOrEmpty(timeStr)) return 0f;
 
-        string[] parts = timeStr.Split(':');
+        // 공백 제거
+        timeStr = timeStr.Trim();
+
+        // ":" 또는 "-" 구분자 지원
+        char[] separators = { ':', '-' };
+        string[] parts = timeStr.Split(separators);
+
         if (parts.Length == 2)
         {
+            // 분:초 또는 분-초 형식
             if (int.TryParse(parts[0], out int minutes) && int.TryParse(parts[1], out int seconds))
             {
                 return minutes * 60f + seconds;
