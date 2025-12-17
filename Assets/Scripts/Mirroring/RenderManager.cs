@@ -36,6 +36,13 @@ public class RenderManager : MonoBehaviour
     private bool hasInitialized = false;
     private Coroutine runCoroutine;
 
+    // 연결 상태 추적
+    private bool isConnecting = false;
+    private bool isConnected = false;
+    private int connectionAttempts = 0;
+    private const int MAX_CONNECTION_ATTEMPTS = 3;
+    private const float CONNECTION_RETRY_DELAY = 2f;
+
     // 메모리 최적화를 위한 재사용 가능한 리스트
     private List<IceServer> _cachedIceServers;
 
@@ -64,11 +71,32 @@ public class RenderManager : MonoBehaviour
     {
         yield return new WaitForSeconds(0.5f);
 
+        // 컴포넌트 유효성 체크
+        if (sm == null || vss == null)
+        {
+            LogWarning("SignalingManager 또는 VideoStreamSender가 연결되지 않았습니다. 미러링 비활성화.");
+            yield break;
+        }
+
+        // VideoStreamSender 활성화 상태 체크
+        if (!vss.isActiveAndEnabled)
+        {
+            LogWarning("VideoStreamSender가 비활성화 상태입니다. 미러링 비활성화.");
+            yield break;
+        }
+
         // 게스트 모드가 활성화되어 있으면 자동 시작
         if (enableGuestMode)
         {
-            LogDebug("게스트 모드로 미러링 시작");
-            StartGuestMode();
+            try
+            {
+                LogDebug("게스트 모드로 미러링 시작");
+                StartGuestMode();
+            }
+            catch (Exception e)
+            {
+                LogError($"게스트 모드 시작 실패: {e.Message}");
+            }
         }
     }
 
@@ -119,10 +147,17 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     private void OnLoginSuccess(string username, int userID)
     {
-        LogDebug($"로그인 감지: {username} (ID: {userID})");
+        try
+        {
+            LogDebug($"로그인 감지: {username} (ID: {userID})");
 
-        // 미러링 데이터를 가져와서 사용자 모드로 전환
-        SwitchToUserModeAsync(username).Forget();
+            // 미러링 데이터를 가져와서 사용자 모드로 전환
+            SwitchToUserModeAsync(username).Forget();
+        }
+        catch (Exception e)
+        {
+            LogError($"로그인 처리 실패: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -130,17 +165,24 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     private void OnLogoutCompleted(string username)
     {
-        LogDebug($"로그아웃 감지: {username}");
+        try
+        {
+            LogDebug($"로그아웃 감지: {username}");
 
-        // 게스트 모드로 복귀
-        if (enableGuestMode)
-        {
-            StopMirroring();
-            StartGuestMode();
+            // 게스트 모드로 복귀
+            if (enableGuestMode)
+            {
+                StopMirroring();
+                StartGuestMode();
+            }
+            else
+            {
+                StopMirroring();
+            }
         }
-        else
+        catch (Exception e)
         {
-            StopMirroring();
+            LogError($"로그아웃 처리 실패: {e.Message}");
         }
     }
     #endregion
@@ -151,17 +193,33 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public void StartGuestMode()
     {
-        isGuestMode = true;
-
-        currentMirroringData = new MirroringData
+        try
         {
-            serverIP = guestServerIP,
-            portNo = guestPortNo,
-            videoQuality = guestVideoQuality,
-            mirroring = "on"
-        };
+            // 서버 주소 유효성 체크
+            if (string.IsNullOrEmpty(guestServerIP))
+            {
+                LogWarning("게스트 서버 IP가 설정되지 않았습니다. 미러링 비활성화.");
+                return;
+            }
 
-        StartMirroring();
+            isGuestMode = true;
+
+            currentMirroringData = new MirroringData
+            {
+                serverIP = guestServerIP,
+                portNo = guestPortNo,
+                videoQuality = guestVideoQuality,
+                mirroring = "on"
+            };
+
+            LogDebug($"게스트 모드 설정: {guestServerIP}:{guestPortNo}");
+            StartMirroring();
+        }
+        catch (Exception e)
+        {
+            LogError($"게스트 모드 시작 실패: {e.Message}");
+            isGuestMode = false;
+        }
     }
     #endregion
 
@@ -201,25 +259,39 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public void SetMirroringData(MirroringData mirroringData)
     {
-        if (mirroringData == null)
+        try
         {
-            LogWarning("미러링 데이터가 null입니다.");
-            return;
-        }
+            if (mirroringData == null)
+            {
+                LogWarning("미러링 데이터가 null입니다.");
+                return;
+            }
 
-        // mirroring이 off면 중지
-        if (mirroringData.mirroring == "off")
+            // mirroring이 off면 중지
+            if (mirroringData.mirroring == "off")
+            {
+                LogDebug("미러링 off 설정됨");
+                StopMirroring();
+                return;
+            }
+
+            // 서버 주소 유효성 체크
+            if (string.IsNullOrEmpty(mirroringData.serverIP))
+            {
+                LogWarning("미러링 서버 IP가 비어있습니다.");
+                return;
+            }
+
+            currentMirroringData = mirroringData;
+            isGuestMode = false;
+
+            LogDebug($"미러링 데이터 설정: {mirroringData.serverIP}:{mirroringData.portNo}");
+            StartMirroring();
+        }
+        catch (Exception e)
         {
-            LogDebug("미러링 off 설정됨");
-            StopMirroring();
-            return;
+            LogError($"미러링 데이터 설정 실패: {e.Message}");
         }
-
-        currentMirroringData = mirroringData;
-        isGuestMode = false;
-
-        LogDebug($"미러링 데이터 설정: {mirroringData.serverIP}:{mirroringData.portNo}");
-        StartMirroring();
     }
     #endregion
 
@@ -229,29 +301,68 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     private void StartMirroring()
     {
-        if (currentMirroringData == null)
+        try
         {
-            LogError("미러링 데이터가 없습니다.");
-            return;
-        }
+            // 이미 연결 중이면 무시
+            if (isConnecting)
+            {
+                LogDebug("이미 연결 중입니다. 중복 요청 무시.");
+                return;
+            }
 
-        // 기존 실행 중지
-        if (runCoroutine != null)
+            if (currentMirroringData == null)
+            {
+                LogWarning("미러링 데이터가 없습니다.");
+                return;
+            }
+
+            // 컴포넌트 유효성 체크
+            if (sm == null)
+            {
+                LogWarning("SignalingManager가 null입니다. 미러링 시작 불가.");
+                return;
+            }
+
+            if (vss == null || !vss.isActiveAndEnabled)
+            {
+                LogWarning("VideoStreamSender가 null이거나 비활성화 상태입니다. 미러링 시작 불가.");
+                return;
+            }
+
+            // 기존 실행 중지
+            if (runCoroutine != null)
+            {
+                StopCoroutine(runCoroutine);
+                runCoroutine = null;
+            }
+
+            // 연결 상태 초기화
+            isConnecting = true;
+            isConnected = false;
+            connectionAttempts = 0;
+
+            // Signaling 설정
+            if (!SetupSignaling(currentMirroringData.serverIP, currentMirroringData.portNo))
+            {
+                LogWarning("Signaling 설정 실패. 미러링 시작 불가.");
+                isConnecting = false;
+                return;
+            }
+
+            // 품질 설정
+            SetQuality(currentMirroringData.videoQuality);
+
+            // 실행
+            runCoroutine = StartCoroutine(Run());
+
+            LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo} | 모드: {(isGuestMode ? "게스트" : "로그인")} | 품질: {currentMirroringData.videoQuality}");
+        }
+        catch (Exception e)
         {
-            StopCoroutine(runCoroutine);
-            runCoroutine = null;
+            LogError($"미러링 시작 실패: {e.Message}");
+            isConnecting = false;
+            isConnected = false;
         }
-
-        // Signaling 설정
-        SetupSignaling(currentMirroringData.serverIP, currentMirroringData.portNo);
-
-        // 품질 설정
-        SetQuality(currentMirroringData.videoQuality);
-
-        // 실행
-        runCoroutine = StartCoroutine(Run());
-
-        LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo} | 모드: {(isGuestMode ? "게스트" : "로그인")} | 품질: {currentMirroringData.videoQuality}");
     }
 
     /// <summary>
@@ -259,35 +370,90 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public void StopMirroring()
     {
-        if (runCoroutine != null)
+        try
         {
-            StopCoroutine(runCoroutine);
-            runCoroutine = null;
-        }
+            if (runCoroutine != null)
+            {
+                StopCoroutine(runCoroutine);
+                runCoroutine = null;
+            }
 
-        LogDebug("미러링 중지됨");
+            // 연결 상태 초기화
+            isConnecting = false;
+            isConnected = false;
+            connectionAttempts = 0;
+            hasInitialized = false;
+
+            // SignalingManager 안전 중지
+            if (sm != null)
+            {
+                try
+                {
+                    sm.Stop();
+                }
+                catch (Exception e)
+                {
+                    LogWarning($"SignalingManager 중지 중 오류: {e.Message}");
+                }
+            }
+
+            LogDebug("미러링 중지됨");
+        }
+        catch (Exception e)
+        {
+            LogError($"미러링 중지 실패: {e.Message}");
+        }
     }
     #endregion
 
     #region Signaling Setup
-    private void SetupSignaling(string serverIP, int port)
+    private bool SetupSignaling(string serverIP, int port)
     {
-        if (sm == null)
+        try
         {
-            LogError("SignalingManager가 null입니다.");
-            return;
-        }
+            if (sm == null)
+            {
+                LogError("SignalingManager가 null입니다.");
+                return false;
+            }
 
-        // IceServer 리스트 재사용 (메모리 할당 최소화)
-        _cachedIceServers.Clear();
-        var iceServerEnumerator = sm.GetSignalingSettings().iceServers.GetEnumerator();
-        while (iceServerEnumerator.MoveNext())
+            // 서버 주소 유효성 체크
+            if (string.IsNullOrEmpty(serverIP))
+            {
+                LogError("서버 IP가 비어있습니다.");
+                return false;
+            }
+
+            if (port <= 0 || port > 65535)
+            {
+                LogError($"잘못된 포트 번호: {port}");
+                return false;
+            }
+
+            // IceServer 리스트 재사용 (메모리 할당 최소화)
+            _cachedIceServers.Clear();
+
+            var signalingSettings = sm.GetSignalingSettings();
+            if (signalingSettings != null && signalingSettings.iceServers != null)
+            {
+                var iceServerEnumerator = signalingSettings.iceServers.GetEnumerator();
+                while (iceServerEnumerator.MoveNext())
+                {
+                    _cachedIceServers.Add(iceServerEnumerator.Current);
+                }
+            }
+
+            var wss = new WebSocketSignalingSettings($"ws://{serverIP}:{port}", _cachedIceServers.ToArray());
+            sm.SetSignalingSettings(wss);
+
+            LogDebug($"Signaling 설정 완료: ws://{serverIP}:{port}");
+            return true;
+        }
+        catch (Exception e)
         {
-            _cachedIceServers.Add(iceServerEnumerator.Current);
+            LogError($"Signaling 설정 실패: {e.Message}");
+            return false;
         }
-
-        var wss = new WebSocketSignalingSettings($"ws://{serverIP}:{port}", _cachedIceServers.ToArray());
-        sm.SetSignalingSettings(wss);
     }
     #endregion
 
@@ -355,6 +521,7 @@ public class RenderManager : MonoBehaviour
         if (vss == null || !vss.isActiveAndEnabled)
         {
             LogError("VideoStreamSender가 null이거나 비활성화되었습니다.");
+            isConnecting = false;
             yield break;
         }
 
@@ -367,8 +534,12 @@ public class RenderManager : MonoBehaviour
         if (vss == null || !vss.isActiveAndEnabled)
         {
             LogError("VideoStreamSender가 null이거나 비활성화되었습니다.");
+            isConnecting = false;
             return;
         }
+
+        connectionAttempts++;
+        LogDebug($"연결 시도 {connectionAttempts}/{MAX_CONNECTION_ATTEMPTS}...");
 
         try
         {
@@ -385,19 +556,83 @@ public class RenderManager : MonoBehaviour
             {
                 LogDebug($"🎥 Track 생성 완료! ID: {vss.Track.Id}");
                 hasInitialized = true;
+                isConnected = true;
+                isConnecting = false;
+                connectionAttempts = 0;
             }
             else // 타임아웃
             {
-                LogWarning("Track 생성 타임아웃 (10초)");
+                LogWarning($"Track 생성 타임아웃 (10초) - 시도 {connectionAttempts}/{MAX_CONNECTION_ATTEMPTS}");
+
+                // 재시도 로직
+                if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
+                {
+                    LogDebug($"{CONNECTION_RETRY_DELAY}초 후 재시도...");
+                    await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cts);
+
+                    // SignalingManager 중지 후 재시작
+                    try
+                    {
+                        sm.Stop();
+                        await UniTask.Delay(500, cancellationToken: cts);
+                    }
+                    catch (Exception stopEx)
+                    {
+                        LogWarning($"재시도 전 중지 실패: {stopEx.Message}");
+                    }
+
+                    // 재시도
+                    await RunAsync();
+                }
+                else
+                {
+                    LogError($"최대 연결 시도 횟수 초과 ({MAX_CONNECTION_ATTEMPTS}회). 미러링 비활성화.");
+                    isConnecting = false;
+                    isConnected = false;
+                    hasInitialized = false;
+                }
             }
         }
         catch (OperationCanceledException)
         {
             LogDebug("RunAsync 취소됨 (정상 종료)");
+            isConnecting = false;
         }
         catch (Exception e)
         {
-            LogError($"RunAsync 실패: {e.Message}\n{e.StackTrace}");
+            LogError($"RunAsync 실패: {e.Message}");
+            isConnecting = false;
+            isConnected = false;
+
+            // 재시도 로직
+            if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
+            {
+                try
+                {
+                    LogDebug($"{CONNECTION_RETRY_DELAY}초 후 재시도...");
+                    var cts = this.GetCancellationTokenOnDestroy();
+                    await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cts);
+
+                    // SignalingManager 중지
+                    try
+                    {
+                        sm.Stop();
+                        await UniTask.Delay(500, cancellationToken: cts);
+                    }
+                    catch { }
+
+                    isConnecting = true;
+                    await RunAsync();
+                }
+                catch (OperationCanceledException)
+                {
+                    LogDebug("재시도 취소됨");
+                }
+            }
+            else
+            {
+                LogError($"최대 연결 시도 횟수 초과. 미러링 비활성화.");
+            }
         }
     }
     #endregion
@@ -429,7 +664,55 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public bool IsMirroringActive()
     {
-        return runCoroutine != null && hasInitialized;
+        return isConnected && hasInitialized;
+    }
+
+    /// <summary>
+    /// 연결 시도 중인지 확인
+    /// </summary>
+    public bool IsConnecting => isConnecting;
+
+    /// <summary>
+    /// 연결 성공 여부
+    /// </summary>
+    public bool IsConnected => isConnected;
+
+    /// <summary>
+    /// 연결 상태 문자열 반환 (UI 표시용)
+    /// </summary>
+    public string GetConnectionStatus()
+    {
+        if (isConnected && hasInitialized)
+            return "연결됨";
+        else if (isConnecting)
+            return $"연결 중... ({connectionAttempts}/{MAX_CONNECTION_ATTEMPTS})";
+        else if (currentMirroringData == null)
+            return "미설정";
+        else
+            return "연결 끊김";
+    }
+
+    /// <summary>
+    /// 수동 재연결 시도
+    /// </summary>
+    public void TryReconnect()
+    {
+        if (isConnecting)
+        {
+            LogWarning("이미 연결 중입니다.");
+            return;
+        }
+
+        if (currentMirroringData != null)
+        {
+            LogDebug("수동 재연결 시도...");
+            StopMirroring();
+            StartMirroring();
+        }
+        else
+        {
+            LogWarning("미러링 데이터가 없어 재연결할 수 없습니다.");
+        }
     }
     #endregion
 
