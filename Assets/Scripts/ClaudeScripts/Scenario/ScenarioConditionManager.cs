@@ -122,6 +122,10 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private void OnSubStepStarted(SubStepData subStep)
     {
+        // ★ 이전 SubStep의 나레이션/조건 체크 중단 (토글로 빠르게 진행 시 충돌 방지)
+        StopNarration();
+        StopConditionCheck();
+
         Debug.Log($"<color=cyan>[ConditionManager] ===== OnSubStepStarted 호출 =====</color>");
         Debug.Log($"[ConditionManager] Phase: {scenarioManager.CurrentPhase.phaseName}, Step: {scenarioManager.CurrentStep.stepName}, SubStep: {subStep.subStepNo}");
         Debug.Log($"[ConditionManager] Duration: {subStep.duration}초");
