@@ -3327,135 +3327,6 @@ SkinnedMeshRenderer:
     m_Center: {x: -0.08462602, y: 0.018837288, z: -0.013709355}
     m_Extent: {x: 0.1069836, y: 0.05242701, z: 0.07775007}
   m_DirtyAABB: 0
---- !u!1 &45192870
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 45192872}
-  - component: {fileID: 45192871}
-  m_Layer: 0
-  m_Name: AudioSource
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!82 &45192871
-AudioSource:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 45192870}
-  m_Enabled: 1
-  serializedVersion: 4
-  OutputAudioMixerGroup: {fileID: 0}
-  m_audioClip: {fileID: 0}
-  m_Resource: {fileID: 0}
-  m_PlayOnAwake: 1
-  m_Volume: 1
-  m_Pitch: 1
-  Loop: 0
-  Mute: 0
-  Spatialize: 0
-  SpatializePostEffects: 0
-  Priority: 128
-  DopplerLevel: 1
-  MinDistance: 1
-  MaxDistance: 500
-  Pan2D: 0
-  rolloffMode: 0
-  BypassEffects: 0
-  BypassListenerEffects: 0
-  BypassReverbZones: 0
-  rolloffCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    - serializedVersion: 3
-      time: 1
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  panLevelCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  spreadCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 0
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  reverbZoneMixCustomCurve:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 0
-      weightedMode: 0
-      inWeight: 0.33333334
-      outWeight: 0.33333334
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
---- !u!4 &45192872
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 45192870}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.16837, y: 1.64472, z: 3.85783}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &46949912
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -97275,6 +97146,7 @@ MonoBehaviour:
   rotationWeight: 0.5
   useRelativeMovement: 1
   invertRotationDirection: 0
+  rotationDetectionAxis: 0
   showDebugLogs: 1
   startHoldDuration: 2
   midHoldDuration: 3
@@ -97285,6 +97157,8 @@ MonoBehaviour:
   extendedMidHoldStartRatio: 0.5
   extendedMidHoldEndRatio: 0.7
   extendedStartRatio: 0.3
+  stretchingMidHoldStartRatio: 0.25
+  stretchingMidHoldEndRatio: 0.55
   leftHandDriftThreshold: 0.15
 --- !u!1 &1036904081
 GameObject:
@@ -103168,7 +103042,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: 0.702
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.y
@@ -112039,7 +111913,10 @@ MonoBehaviour:
   startAngle: 0
   endAngle: 90
   rotationAxis: 2
-  invertAngle: 1
+  invertAngle: 0
+  angleDisplayOffset: 0
+  animationStartOffset: 0
+  animationEndOffset: 1
   angleText: {fileID: 0}
   angleFormat: "{0:F0}\xB0"
   warningAngle: 30
@@ -112052,10 +111929,13 @@ MonoBehaviour:
   holdEndImage: {fileID: 1179838838}
   fillAmountScale: 0.25
   syncHoldRangeWithEvaluator: 1
+  syncAngleOffsetWithEvaluator: 1
   normalHoldStart: 0.3
   normalHoldEnd: 0.5
   extendedHoldStart: 0.5
   extendedHoldEnd: 0.65
+  stretchingHoldStart: 0.25
+  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
@@ -129869,7 +129749,7 @@ MonoBehaviour:
   angleDisplay_LeftRotation: {fileID: 1917125866}
   angleDisplay_RightRotation: {fileID: 1179838840}
   quizPanel: {fileID: 0}
-  resultTracker: {fileID: 0}
+  resultTracker: {fileID: 1338513808}
   showDebugLog: 1
 --- !u!114 &1338513806
 MonoBehaviour:
@@ -129920,11 +129800,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TrainingResultTracker
   pathEvaluator: {fileID: 1035274494}
   skipTimeThreshold: 20
-  warningAudioSource: {fileID: 45192871}
+  warningAudioSource: {fileID: 0}
   approachBeepClip: {fileID: 8300000, guid: 86a386abc4b4c3e4b9eb5c6b47ddd9f4, type: 3}
   limitExceededClip: {fileID: 8300000, guid: 3c102518a1a411944a4ba687c37e516e, type: 3}
   holdCompleteClip: {fileID: 8300000, guid: 395a63d5a3491d541a508a0b11bbdddc, type: 3}
-  enableWarningAudio: 0
+  enableWarningAudio: 1
   beepStartOffset: 0.3
   minBeepInterval: 0.1
   maxBeepInterval: 0.8
@@ -204127,7 +204007,10 @@ MonoBehaviour:
   startAngle: 0
   endAngle: 90
   rotationAxis: 2
-  invertAngle: 1
+  invertAngle: 0
+  angleDisplayOffset: 0
+  animationStartOffset: 0
+  animationEndOffset: 1
   angleText: {fileID: 0}
   angleFormat: "{0:F0}\xB0"
   warningAngle: 30
@@ -204140,10 +204023,13 @@ MonoBehaviour:
   holdEndImage: {fileID: 1917125864}
   fillAmountScale: 0.25
   syncHoldRangeWithEvaluator: 1
+  syncAngleOffsetWithEvaluator: 1
   normalHoldStart: 0.3
   normalHoldEnd: 0.5
   extendedHoldStart: 0.5
   extendedHoldEnd: 0.65
+  stretchingHoldStart: 0.25
+  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
@@ -242459,7 +242345,10 @@ MonoBehaviour:
   startAngle: 0
   endAngle: 90
   rotationAxis: 2
-  invertAngle: 1
+  invertAngle: 0
+  angleDisplayOffset: 0
+  animationStartOffset: 0
+  animationEndOffset: 1
   angleText: {fileID: 0}
   angleFormat: "{0:F0}\xB0"
   warningAngle: 30
@@ -242472,10 +242361,13 @@ MonoBehaviour:
   holdEndImage: {fileID: 779107161}
   fillAmountScale: 0.25
   syncHoldRangeWithEvaluator: 1
+  syncAngleOffsetWithEvaluator: 1
   normalHoldStart: 0.3
   normalHoldEnd: 0.5
   extendedHoldStart: 0.5
   extendedHoldEnd: 0.65
+  stretchingHoldStart: 0.25
+  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
@@ -270541,4 +270433,3 @@ SceneRoots:
   - {fileID: 1406233888}
   - {fileID: 1035274493}
   - {fileID: 737871733}
-  - {fileID: 45192872}

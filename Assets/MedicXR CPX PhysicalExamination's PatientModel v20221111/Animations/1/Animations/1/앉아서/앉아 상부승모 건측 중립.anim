@@ -39,6 +39,262 @@ AnimationClip:
       m_PostInfinity: 2
       m_RotationOrder: 4
     path: "\uADFC\uC721\uACE8\uACA9"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.47840747, y: 8.343409, z: 6.071926}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.011, y: -0.104, z: -6.394}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: 7.88537, y: -29.217075, z: -4.596815}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.025, y: -0.103, z: -7.022}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: 9.171481, y: -5.286704, z: -5.584074}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.03, y: -0.103, z: -5.51}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -1.1687037, y: -19.803001, z: -3.1717405}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.025, y: -0.103, z: -3.451}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -51.84341, y: -1.1736295, z: 2.5385187}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: 0, y: -0.104, z: 0}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: 0.043, y: 0.095, z: -4.403556}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: 0.043, y: 0.095, z: -0.148}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.03922222, y: 1.1431112, z: -1.1074815}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.077, y: -0.808, z: -1.106}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: 2.0535927, y: 15.880518, z: -7.1318517}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: 0.021, y: 0.102, z: -7.52}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.38711113, y: 10.216592, z: 2.188074}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: 0.004, y: 0.104, z: 2.234}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -1.213111, y: 5.3631115, z: -0.7952222}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.002, y: -0.208, z: -0.553}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
   m_PositionCurves:
   - curve:
       serializedVersion: 2
@@ -65,6 +321,262 @@ AnimationClip:
       m_PostInfinity: 2
       m_RotationOrder: 4
     path: "\uADFC\uC721\uACE8\uACA9"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.1530411, y: 0.024817081, z: 0.00000020771697}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.1530411, y: 0.024817081, z: 0.00000020771697}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.023171844, y: -0.000022868462, z: -0.00000083175405}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.023162784, y: -0.000018810253, z: -0.00000003837124}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.023164837, y: -0.000019585867, z: 0.000001225708}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.023162777, y: -0.000018742126, z: -0.00000000671389}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.023166236, y: -0.000022006976, z: 0.0000022905474}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.023164243, y: -0.000020339572, z: 0.000000032139155}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.023165518, y: -0.000019266834, z: 0.000004343701}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.023188718, y: -0.000030550233, z: 0.000018678804}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.0214825, y: 0.00000020666985, z: -0.000000047435623}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.0214825, y: 0.00000020666985, z: -0.000000047435623}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.016568065, y: 0.0000075604935, z: -0.0000011437284}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.016568495, y: 0.00000685562, z: -0.000000033808043}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.016678054, y: 0.0000019436293, z: -0.0000010701413}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.01667729, y: 0.0000001464605, z: -0.000000021465837}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.01447542, y: 0.000001901316, z: -0.0000009823966}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.014474485, y: -0.0000006045939, z: 0.000000017204513}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+  - curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: {x: -0.015889317, y: 0.0000032539615, z: -0.0000010748433}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      - serializedVersion: 3
+        time: 1
+        value: {x: -0.015889637, y: 0.0000029704704, z: -0.000000037277786}
+        inSlope: {x: 0, y: 0, z: 0}
+        outSlope: {x: 0, y: 0, z: 0}
+        tangentMode: 0
+        weightedMode: 0
+        inWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+        outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
   m_ScaleCurves: []
   m_FloatCurves:
   - serializedVersion: 2
@@ -283,7 +795,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0
+        value: 0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -313,7 +825,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0
+        value: 0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1513,7 +2025,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.65
+        value: -0.6
         inSlope: -0.06393486
         outSlope: -0.06393486
         tangentMode: 0
@@ -1603,7 +2115,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.65
+        value: -0.6
         inSlope: 0.036066175
         outSlope: 0.036066175
         tangentMode: 0
@@ -4066,6 +4578,168 @@ AnimationClip:
   m_ClipBindingConstant:
     genericBindings:
     - serializedVersion: 2
+      path: 3910184998
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3585522759
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 534368310
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1731607947
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1500515951
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 777751014
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 2113944279
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3785972300
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 646537077
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3910184998
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3585522759
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 534368310
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1731607947
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 98706491
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1500515951
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 777751014
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 2113944279
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3785972300
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
       path: 2996632885
       attribute: 3500035321
       script: {fileID: 0}
@@ -4535,6 +5209,24 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 3407339264
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 646537077
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 98706491
       attribute: 1
       script: {fileID: 0}
       typeID: 4
@@ -5518,7 +6210,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0
+        value: 0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -5548,7 +6240,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0
+        value: 0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6748,7 +7440,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.65
+        value: -0.6
         inSlope: -0.06393486
         outSlope: -0.06393486
         tangentMode: 0
@@ -6838,7 +7530,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.65
+        value: -0.6
         inSlope: 0.036066175
         outSlope: 0.036066175
         tangentMode: 0
@@ -9472,6 +10164,1842 @@ AnimationClip:
     classID: 4
     script: {fileID: 0}
     flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.1530411
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.1530411
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.024817081
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.024817081
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.00000020771697
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.00000020771697
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.47840747
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.011
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 8.343409
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.104
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 6.071926
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -6.394
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.023171844
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.023162784
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.000022868462
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000018810253
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.00000083175405
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.00000003837124
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 7.88537
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.025
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -29.217075
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.103
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -4.596815
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -7.022
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.023164837
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.023162777
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.000019585867
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000018742126
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.000001225708
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.00000000671389
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 9.171481
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.03
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -5.286704
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.103
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -5.584074
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -5.51
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.023166236
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.023164243
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.000022006976
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000020339572
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.0000022905474
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.000000032139155
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -1.1687037
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.025
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -19.803001
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.103
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -3.1717405
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -3.451
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.023165518
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.023188718
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.000019266834
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000030550233
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.000004343701
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.000018678804
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -51.84341
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -1.1736295
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.104
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 2.5385187
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.0214825
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.0214825
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.00000020666985
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.00000020666985
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.000000047435623
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000000047435623
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.043
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.043
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.095
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.095
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -4.403556
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.148
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.016568065
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.016568495
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.0000075604935
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.00000685562
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.0000011437284
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000000033808043
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.03922222
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.077
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 1.1431112
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.808
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -1.1074815
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -1.106
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.016678054
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.01667729
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.0000019436293
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.0000001464605
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.0000010701413
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000000021465837
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 2.0535927
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.021
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 15.880518
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.102
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -7.1318517
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -7.52
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.01447542
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.014474485
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.000001901316
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.0000006045939
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.0000009823966
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.000000017204513
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.38711113
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.004
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 10.216592
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.104
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 2.188074
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 2.234
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.015889317
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.015889637
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 0.0000032539615
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: 0.0000029704704
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.0000010748433
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.000000037277786
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalPosition.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -1.213111
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.002
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: 5.3631115
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.208
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve:
+      - serializedVersion: 3
+        time: 0
+        value: -0.7952222
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      - serializedVersion: 3
+        time: 1
+        value: -0.553
+        inSlope: 0
+        outSlope: 0
+        tangentMode: 136
+        weightedMode: 0
+        inWeight: 0.33333334
+        outWeight: 0.33333334
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: localEulerAnglesRaw.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 16
   m_EulerEditorCurves:
   - serializedVersion: 2
     curve:
@@ -9480,7 +12008,151 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
     attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
     path: "\uADFC\uC721\uACE8\uACA9"
     classID: 4
     script: {fileID: 0}
@@ -9504,8 +12176,242 @@ AnimationClip:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
+    attribute: m_LocalEulerAngles.x
     path: "\uADFC\uC721\uACE8\uACA9"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
+      Neck4"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091/Bone092"
     classID: 4
     script: {fileID: 0}
     flags: 0

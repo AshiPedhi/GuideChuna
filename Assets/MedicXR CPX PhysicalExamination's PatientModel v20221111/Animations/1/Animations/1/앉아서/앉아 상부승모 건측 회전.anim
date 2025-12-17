@@ -157,7 +157,7 @@ AnimationClip:
         outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
       - serializedVersion: 3
         time: 1
-        value: {x: 0, y: -0.104, z: 0}
+        value: {x: -37.356, y: -0.104, z: 0}
         inSlope: {x: 0, y: 0, z: 0}
         outSlope: {x: 0, y: 0, z: 0}
         tangentMode: 0
@@ -430,7 +430,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: {x: -0.0231626, y: -0.000018371584, z: 0}
+        value: {x: -0.023188718, y: -0.000030550233, z: 0.000018678804}
         inSlope: {x: 0, y: 0, z: 0}
         outSlope: {x: 0, y: 0, z: 0}
         tangentMode: 0
@@ -439,7 +439,7 @@ AnimationClip:
         outWeight: {x: 0.33333334, y: 0.33333334, z: 0.33333334}
       - serializedVersion: 3
         time: 1
-        value: {x: -0.0231626, y: -0.000018371584, z: 0}
+        value: {x: -0.023184208, y: -0.00002728636, z: 0.000008393659}
         inSlope: {x: 0, y: 0, z: 0}
         outSlope: {x: 0, y: 0, z: 0}
         tangentMode: 0
@@ -585,9 +585,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -615,9 +615,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -645,9 +645,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -765,7 +765,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.70176345
+        value: 0.6836042
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -795,7 +795,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
+        value: -0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -855,7 +855,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.7124101
+        value: 0.6939753
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -915,7 +915,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.13446271
+        value: 0.17081106
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -945,7 +945,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.60525155
+        value: -0.49601445
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -975,7 +975,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.4746413
+        value: 0.48978642
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1005,7 +1005,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5235736
+        value: 0.5084377
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1035,7 +1035,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.49253535
+        value: 0.50814533
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1065,7 +1065,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5079325
+        value: 0.49334496
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1125,7 +1125,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.13669324
+        value: 0.17302376
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1155,7 +1155,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.605025
+        value: -0.49565354
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1185,7 +1185,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.48417488
+        value: 0.49959338
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1215,7 +1215,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5145157
+        value: 0.49966764
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1245,7 +1245,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.48315397
+        value: 0.49849427
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1275,7 +1275,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5171176
+        value: 0.5022375
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1335,7 +1335,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.09617534
+        value: 0.101666555
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1365,7 +1365,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.09373218
+        value: 0.012254186
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1395,7 +1395,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.43851817
+        value: -0.45284724
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1425,7 +1425,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.54199314
+        value: -0.5578391
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1455,7 +1455,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5321229
+        value: 0.5154873
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1485,7 +1485,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.4804066
+        value: -0.46692416
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1545,7 +1545,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.105935514
+        value: 0.11137205
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1575,7 +1575,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.093123116
+        value: 0.013452254
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1605,9 +1605,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5328275
-        inSlope: 0
-        outSlope: 0
+        value: 0.54894465
+        inSlope: 0.000003352761
+        outSlope: 0.000003352761
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1635,7 +1635,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.44229776
+        value: 0.45653182
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1665,7 +1665,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.47732252
+        value: -0.46372712
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1695,7 +1695,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.54095376
+        value: 0.5245912
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -1726,8 +1726,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0.00008710754
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.000043753967
+        outSlope: -0.000043753967
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1816,8 +1816,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0.0000003415094
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00000512264
+        outSlope: -0.00000512264
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1845,9 +1845,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.00000025613298
-        inSlope: 0
-        outSlope: 0
+        value: 0.00000025613207
+        inSlope: -0.000015367923
+        outSlope: -0.000015367923
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1875,9 +1875,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.000000042688562
-        inSlope: 0
-        outSlope: 0
+        value: -0.000000042688676
+        inSlope: 0.0000025613203
+        outSlope: 0.0000025613203
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1905,9 +1905,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000008537752
-        inSlope: 0
-        outSlope: 0
+        value: 0.0000008537734
+        inSlope: 0.0000512264
+        outSlope: 0.0000512264
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1936,8 +1936,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.0000614717
+        outSlope: 0.0000614717
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -1965,9 +1965,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -1.8189894e-12
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: -0.000056349043
+        outSlope: -0.000056349043
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2055,9 +2055,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 0
+        value: -0.00000055495275
+        inSlope: -0.0000025613233
+        outSlope: -0.0000025613233
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2086,8 +2086,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.5
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.00003329719
+        outSlope: 0.00003329719
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2115,9 +2115,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.3750001
-        inSlope: -0.75
-        outSlope: -0.75
+        value: 0
+        inSlope: -0.0000358585
+        outSlope: -0.0000358585
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2137,8 +2137,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.000056349054
+        outSlope: 0.000056349054
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2166,9 +2166,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000004553469
-        inSlope: 0
-        outSlope: 0
+        value: 0.000000455346
+        inSlope: -0.000027320759
+        outSlope: -0.000027320759
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2197,8 +2197,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.0000012682888
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.00006882826
+        outSlope: 0.00006882826
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2226,9 +2226,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.00000045534497
-        inSlope: 0
-        outSlope: 0
+        value: 0.00000045534588
+        inSlope: -0.000027320752
+        outSlope: -0.000027320752
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2256,9 +2256,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000006645412
-        inSlope: 0
-        outSlope: 0
+        value: 0.000000664543
+        inSlope: -0.00003260352
+        outSlope: -0.00003260352
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2317,8 +2317,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 1.6023243e-11
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00012874542
+        outSlope: -0.00012874542
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2827,8 +2827,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -1.1
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00007043625
+        outSlope: -0.00007043625
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -2857,8 +2857,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.000015666743
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.0000030947556
+        outSlope: -0.0000030947556
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -3097,8 +3097,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -1.1
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.000005549518
+        outSlope: 0.000005549518
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -3126,9 +3126,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000013546546
-        inSlope: 0
-        outSlope: 0
+        value: 0.000013546539
+        inSlope: 0.00016733962
+        outSlope: 0.00016733962
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -4569,87 +4569,6 @@ AnimationClip:
   m_ClipBindingConstant:
     genericBindings:
     - serializedVersion: 2
-      path: 0
-      attribute: 51
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 52
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 55
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 56
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3407339264
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 646537077
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3910184998
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3585522759
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 534368310
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
       path: 1731607947
       attribute: 1
       script: {fileID: 0}
@@ -4659,142 +4578,7 @@ AnimationClip:
       isIntCurve: 0
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
-      path: 98706491
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 1500515951
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 777751014
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 2113944279
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3785972300
-      attribute: 1
-      script: {fileID: 0}
-      typeID: 4
-      customType: 0
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3407339264
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 646537077
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3910184998
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3585522759
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 534368310
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
       path: 1731607947
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 98706491
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 1500515951
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 777751014
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 2113944279
-      attribute: 4
-      script: {fileID: 0}
-      typeID: 4
-      customType: 4
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 3785972300
       attribute: 4
       script: {fileID: 0}
       typeID: 4
@@ -4831,33 +4615,6 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 7
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 8
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 9
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 10
       script: {fileID: 0}
       typeID: 95
@@ -4867,34 +4624,7 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 11
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 12
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 13
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 14
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -4957,15 +4687,6 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 21
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 22
       script: {fileID: 0}
       typeID: 95
@@ -5020,15 +4741,6 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 28
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 29
       script: {fileID: 0}
       typeID: 95
@@ -5075,15 +4787,6 @@ AnimationClip:
     - serializedVersion: 2
       path: 0
       attribute: 34
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 35
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -5155,24 +4858,6 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 43
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 44
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 45
       script: {fileID: 0}
       typeID: 95
@@ -5227,6 +4912,24 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
+      attribute: 51
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 52
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
       attribute: 53
       script: {fileID: 0}
       typeID: 95
@@ -5237,6 +4940,24 @@ AnimationClip:
     - serializedVersion: 2
       path: 0
       attribute: 54
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 55
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 56
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -5281,7 +5002,7 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 61
+      attribute: 62
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -5290,7 +5011,322 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 62
+      attribute: 79
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 80
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 88
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 89
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3407339264
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 646537077
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3910184998
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3585522759
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 534368310
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 98706491
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1500515951
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 777751014
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 2113944279
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3785972300
+      attribute: 1
+      script: {fileID: 0}
+      typeID: 4
+      customType: 0
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3407339264
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 646537077
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3910184998
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3585522759
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 534368310
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 98706491
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 1500515951
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 777751014
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 2113944279
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 3785972300
+      attribute: 4
+      script: {fileID: 0}
+      typeID: 4
+      customType: 4
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 7
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 8
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 9
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 11
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 12
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 14
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 21
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 28
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 35
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 43
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 44
+      script: {fileID: 0}
+      typeID: 95
+      customType: 8
+      isPPtrCurve: 0
+      isIntCurve: 0
+      isSerializeReferenceCurve: 0
+    - serializedVersion: 2
+      path: 0
+      attribute: 61
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -5443,24 +5479,6 @@ AnimationClip:
       isSerializeReferenceCurve: 0
     - serializedVersion: 2
       path: 0
-      attribute: 79
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 80
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
       attribute: 81
       script: {fileID: 0}
       typeID: 95
@@ -5516,24 +5534,6 @@ AnimationClip:
     - serializedVersion: 2
       path: 0
       attribute: 87
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 88
-      script: {fileID: 0}
-      typeID: 95
-      customType: 8
-      isPPtrCurve: 0
-      isIntCurve: 0
-      isSerializeReferenceCurve: 0
-    - serializedVersion: 2
-      path: 0
-      attribute: 89
       script: {fileID: 0}
       typeID: 95
       customType: 8
@@ -5991,9 +5991,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -6021,9 +6021,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -6051,9 +6051,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000000014901161
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: 0.39131755
+        outSlope: 0.39131755
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -6171,7 +6171,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.70176345
+        value: 0.6836042
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6201,7 +6201,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
+        value: -0
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6261,7 +6261,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.7124101
+        value: 0.6939753
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6321,7 +6321,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.13446271
+        value: 0.17081106
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6351,7 +6351,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.60525155
+        value: -0.49601445
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6381,7 +6381,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.4746413
+        value: 0.48978642
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6411,7 +6411,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5235736
+        value: 0.5084377
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6441,7 +6441,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.49253535
+        value: 0.50814533
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6471,7 +6471,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5079325
+        value: 0.49334496
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6531,7 +6531,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.13669324
+        value: 0.17302376
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6561,7 +6561,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.605025
+        value: -0.49565354
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6591,7 +6591,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.48417488
+        value: 0.49959338
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6621,7 +6621,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5145157
+        value: 0.49966764
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6651,7 +6651,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.48315397
+        value: 0.49849427
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6681,7 +6681,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5171176
+        value: 0.5022375
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6741,7 +6741,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.09617534
+        value: 0.101666555
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6771,7 +6771,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.09373218
+        value: 0.012254186
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6801,7 +6801,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.43851817
+        value: -0.45284724
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6831,7 +6831,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.54199314
+        value: -0.5578391
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6861,7 +6861,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5321229
+        value: 0.5154873
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6891,7 +6891,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.4804066
+        value: -0.46692416
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6951,7 +6951,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.105935514
+        value: 0.11137205
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -6981,7 +6981,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.093123116
+        value: 0.013452254
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -7011,9 +7011,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.5328275
-        inSlope: 0
-        outSlope: 0
+        value: 0.54894465
+        inSlope: 0.000003352761
+        outSlope: 0.000003352761
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7041,7 +7041,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.44229776
+        value: 0.45653182
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -7071,7 +7071,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.47732252
+        value: -0.46372712
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -7101,7 +7101,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.54095376
+        value: 0.5245912
         inSlope: 0
         outSlope: 0
         tangentMode: 0
@@ -7132,8 +7132,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0.00008710754
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.000043753967
+        outSlope: -0.000043753967
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7222,8 +7222,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0.0000003415094
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00000512264
+        outSlope: -0.00000512264
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7251,9 +7251,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.00000025613298
-        inSlope: 0
-        outSlope: 0
+        value: 0.00000025613207
+        inSlope: -0.000015367923
+        outSlope: -0.000015367923
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7281,9 +7281,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.000000042688562
-        inSlope: 0
-        outSlope: 0
+        value: -0.000000042688676
+        inSlope: 0.0000025613203
+        outSlope: 0.0000025613203
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7311,9 +7311,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000008537752
-        inSlope: 0
-        outSlope: 0
+        value: 0.0000008537734
+        inSlope: 0.0000512264
+        outSlope: 0.0000512264
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7342,8 +7342,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.0000614717
+        outSlope: 0.0000614717
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7371,9 +7371,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -1.8189894e-12
-        inSlope: 0
-        outSlope: 0
+        value: 0
+        inSlope: -0.000056349043
+        outSlope: -0.000056349043
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7461,9 +7461,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
-        inSlope: 0
-        outSlope: 0
+        value: -0.00000055495275
+        inSlope: -0.0000025613233
+        outSlope: -0.0000025613233
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7492,8 +7492,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.5
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.00003329719
+        outSlope: 0.00003329719
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7521,9 +7521,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.3750001
-        inSlope: -0.75
-        outSlope: -0.75
+        value: 0
+        inSlope: -0.0000358585
+        outSlope: -0.0000358585
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7543,8 +7543,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 0
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.000056349054
+        outSlope: 0.000056349054
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7572,9 +7572,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000004553469
-        inSlope: 0
-        outSlope: 0
+        value: 0.000000455346
+        inSlope: -0.000027320759
+        outSlope: -0.000027320759
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7603,8 +7603,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.0000012682888
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.00006882826
+        outSlope: 0.00006882826
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7632,9 +7632,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.00000045534497
-        inSlope: 0
-        outSlope: 0
+        value: 0.00000045534588
+        inSlope: -0.000027320752
+        outSlope: -0.000027320752
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7662,9 +7662,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.0000006645412
-        inSlope: 0
-        outSlope: 0
+        value: 0.000000664543
+        inSlope: -0.00003260352
+        outSlope: -0.00003260352
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -7723,8 +7723,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: 1.6023243e-11
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00012874542
+        outSlope: -0.00012874542
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -8233,8 +8233,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -1.1
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.00007043625
+        outSlope: -0.00007043625
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -8263,8 +8263,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -0.000015666743
-        inSlope: 0
-        outSlope: 0
+        inSlope: -0.0000030947556
+        outSlope: -0.0000030947556
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -8503,8 +8503,8 @@ AnimationClip:
       - serializedVersion: 3
         time: 0
         value: -1.1
-        inSlope: 0
-        outSlope: 0
+        inSlope: 0.000005549518
+        outSlope: 0.000005549518
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -8532,9 +8532,9 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0.000013546546
-        inSlope: 0
-        outSlope: 0
+        value: 0.000013546539
+        inSlope: 0.00016733962
+        outSlope: 0.00016733962
         tangentMode: 0
         weightedMode: 0
         inWeight: 0.33333334
@@ -10896,7 +10896,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.0231626
+        value: -0.023188718
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -10905,7 +10905,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: -0.0231626
+        value: -0.023184208
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -10928,7 +10928,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: -0.000018371584
+        value: -0.000030550233
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -10937,7 +10937,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: -0.000018371584
+        value: -0.00002728636
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -10960,7 +10960,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
+        value: 0.000018678804
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -10969,7 +10969,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: 0
+        value: 0.000008393659
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -11001,7 +11001,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: 0
+        value: -37.356
         inSlope: 0
         outSlope: 0
         tangentMode: 136
@@ -11991,117 +11991,6 @@ AnimationClip:
       m_PostInfinity: 2
       m_RotationOrder: 4
     attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
-      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
-      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
-      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
     path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
       Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3/Bip001
       Neck4"
@@ -12144,78 +12033,6 @@ AnimationClip:
       m_PostInfinity: 2
       m_RotationOrder: 4
     attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
     path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
       Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
     classID: 4
@@ -12244,42 +12061,6 @@ AnimationClip:
     attribute: m_LocalEulerAngles.x
     path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
       Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.z
-    path: "\uADFC\uC721\uACE8\uACA9"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.y
-    path: "\uADFC\uC721\uACE8\uACA9"
-    classID: 4
-    script: {fileID: 0}
-    flags: 0
-  - serializedVersion: 2
-    curve:
-      serializedVersion: 2
-      m_Curve: []
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-      m_RotationOrder: 4
-    attribute: m_LocalEulerAngles.x
-    path: "\uADFC\uC721\uACE8\uACA9"
     classID: 4
     script: {fileID: 0}
     flags: 0
@@ -12358,6 +12139,225 @@ AnimationClip:
     attribute: m_LocalEulerAngles.x
     path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
       Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/Bip001/Bip001 Pelvis/Bip001 Spine/Bip001 Spine1/Bip001
+      Spine2/Bip001 Spine3/Bip001 Neck/Bip001 Neck1/Bip001 Neck2/Bip001 Neck3"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.z
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.y
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
+    classID: 4
+    script: {fileID: 0}
+    flags: 0
+  - serializedVersion: 2
+    curve:
+      serializedVersion: 2
+      m_Curve: []
+      m_PreInfinity: 2
+      m_PostInfinity: 2
+      m_RotationOrder: 4
+    attribute: m_LocalEulerAngles.x
+    path: "\uADFC\uC721\uACE8\uACA9/SPINE_add00/Spine_AddNewBones01/SPINE_add01/Spine_AddNewBones03/SPINE_add02/Spine_AddNewBones05/SPINE_add03/Spine_AddNewBones07/SPINE_add04/Spine_AddNewBones09/SPINE_add05/Spine_AddNewBones11/SPINE_add06/Spine_AddNewBones13/SPINE_add07/Spine_AddNewBones15/SPINE_add08/Bone088/Bone089/Bone090/Bone091"
     classID: 4
     script: {fileID: 0}
     flags: 0
