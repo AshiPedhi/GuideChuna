@@ -62,6 +62,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("Survey Panel")]
     [Tooltip("설문 패널 (로그아웃/종료 시 표시)")]
     [SerializeField] private SurveyPanel surveyPanel;
+
+    [Header("Mirroring (Render Streaming)")]
+    [Tooltip("미러링용 Camera X 오브젝트 (로그인 시 활성화)")]
+    [SerializeField] private GameObject mirroringCameraObject;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -1067,15 +1071,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             Debug.Log($"[LobbyUI] 로그인 시작: {username}");
 
+            MirroringData mirroringData = null;
             try
             {
-                var mirroringData = await authService.LogonAsync(
+                mirroringData = await authService.LogonAsync(
                     currentDeviceSN,
                     username,
                     "VR_CHUNA"
                 );
 
-                Debug.Log($"[LobbyUI] 미러링 데이터 수신 완료");
+                Debug.Log($"[LobbyUI] 미러링 데이터 수신 완료: {mirroringData?.serverIP}:{mirroringData?.portNo}");
             }
             catch (Exception logonException)
             {
@@ -1109,12 +1114,64 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             // 안내 메시지 변경
             SetGuideMessage(scenarioGuideMessage);
 
+            // ★★★ 미러링 시작: Camera X 활성화 및 미러링 데이터 전달 ★★★
+            ActivateMirroring(mirroringData);
+
             Debug.Log($"[LobbyUI] ✅ 로그인 완료: {username} (ID: {userId})");
         }
         catch (Exception e)
         {
             Debug.LogError($"[LobbyUI] ❌ 로그인 실패: {e.Message}");
             ShowLoginError(e.Message);
+        }
+    }
+
+    /// <summary>
+    /// 미러링 활성화 (Camera X 활성화 + RenderManager에 데이터 전달)
+    /// </summary>
+    private void ActivateMirroring(MirroringData mirroringData)
+    {
+        // 미러링 데이터가 없거나 off면 미러링 안함
+        if (mirroringData == null || mirroringData.mirroring == "off")
+        {
+            Debug.Log("[LobbyUI] 미러링 비활성화 상태 (데이터 없음 또는 off)");
+            return;
+        }
+
+        // Camera X 활성화
+        if (mirroringCameraObject != null)
+        {
+            mirroringCameraObject.SetActive(true);
+            Debug.Log($"[LobbyUI] 미러링 카메라 활성화됨: {mirroringCameraObject.name}");
+
+            // RenderManager가 활성화되면 약간의 딜레이 후 데이터 전달
+            StartCoroutine(SetMirroringDataDelayed(mirroringData));
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] mirroringCameraObject가 설정되지 않음");
+
+            // 직접 RenderManager 찾아서 전달 시도
+            if (RenderManager.instance != null)
+            {
+                RenderManager.instance.SetMirroringData(mirroringData);
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator SetMirroringDataDelayed(MirroringData mirroringData)
+    {
+        // RenderManager.Start()가 실행될 시간을 줌
+        yield return new WaitForSeconds(0.1f);
+
+        if (RenderManager.instance != null)
+        {
+            RenderManager.instance.SetMirroringData(mirroringData);
+            Debug.Log($"[LobbyUI] RenderManager에 미러링 데이터 전달 완료");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] RenderManager.instance가 null");
         }
     }
 
@@ -1151,9 +1208,31 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning($"[LobbyUI] ⚠️ 로그아웃 API 실패 (무시하고 진행): {e.Message}");
         }
 
+        // 미러링 비활성화
+        DeactivateMirroring();
+
         // API 실패 여부와 관계없이 로컬 상태는 항상 초기화
         ClearUserInfo();
         Debug.Log($"[LobbyUI] ✅ 로그아웃 완료 (로컬 상태 초기화)");
+    }
+
+    /// <summary>
+    /// 미러링 비활성화 (Camera X 비활성화)
+    /// </summary>
+    private void DeactivateMirroring()
+    {
+        // RenderManager 미러링 중지
+        if (RenderManager.instance != null)
+        {
+            RenderManager.instance.StopMirroring();
+        }
+
+        // Camera X 비활성화
+        if (mirroringCameraObject != null)
+        {
+            mirroringCameraObject.SetActive(false);
+            Debug.Log($"[LobbyUI] 미러링 카메라 비활성화됨: {mirroringCameraObject.name}");
+        }
     }
     #endregion
 
