@@ -234,7 +234,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
-                    conditionType = DetermineConditionType(stepNo, stepName, handTrackingFileName, duration);
+                    conditionType = DetermineConditionType(stepNo, stepName, handTrackingFileName, duration, voiceInstruction);
                 }
 
                 // 현재 값 기억
@@ -416,7 +416,7 @@ public class ScenarioCSVLoader : MonoBehaviour
     /// <summary>
     /// 조건 타입 자동 결정
     /// </summary>
-    private string DetermineConditionType(int stepNo, string stepName, string handTrackingFileName, int duration)
+    private string DetermineConditionType(int stepNo, string stepName, string handTrackingFileName, int duration, string voiceInstruction = "")
     {
         // 1. 가이드 Step -> 토글 대기
         if (stepNo == 0 && stepName == "가이드")
@@ -430,13 +430,23 @@ public class ScenarioCSVLoader : MonoBehaviour
             return "HandPose";
         }
 
-        // 3. Duration이 있으면 -> Duration 조건
+        // 3. voiceInstruction이 있고 확장자가 포함되어 있으면 -> Narration 조건
+        // (텍스트가 아닌 오디오 파일명으로 간주)
+        if (!string.IsNullOrEmpty(voiceInstruction) &&
+            (voiceInstruction.Contains(".wav") || voiceInstruction.Contains(".mp3") ||
+             voiceInstruction.Contains(".ogg") || voiceInstruction.Contains("_") ||
+             !voiceInstruction.Contains(" ")))  // 파일명은 보통 공백이 없음
+        {
+            return "Narration";
+        }
+
+        // 4. Duration이 있으면 -> Duration 조건
         if (duration > 0)
         {
             return "Duration";
         }
 
-        // 4. 그 외 -> Manual (조건 없음, 자동 진행 또는 토글 대기)
+        // 5. 그 외 -> Manual (조건 없음, 자동 진행 또는 토글 대기)
         return "Manual";
     }
 }
