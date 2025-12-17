@@ -157,6 +157,14 @@ public class ScenarioConditionManager : MonoBehaviour
 
         Debug.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>");
 
+        // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
+        if (subStep.HasNarration() && conditionType == "HandPose")
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose 병합 조건 - 나레이션 먼저 재생</color>");
+            HandleNarrationThenHandPose(subStep, conditionKey);
+            return;
+        }
+
         switch (conditionType)
         {
             case "HandPose":
@@ -249,6 +257,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
     /// <summary>
     /// 나레이션 조건 처리 - voiceInstruction을 클립명으로 사용하여 로드 및 재생
+    /// (나레이션만 있는 경우 - 완료 후 다음 단계로 자동 진행)
     /// </summary>
     private void HandleNarrationCondition(SubStepData subStep)
     {
@@ -277,6 +286,86 @@ public class ScenarioConditionManager : MonoBehaviour
 
         narrationCoroutine = StartCoroutine(PlayNarrationAndProgress(clip, clipName));
         Debug.Log($"<color=cyan>[ConditionManager] 나레이션 재생 시작: {clipName} ({clip.length:F1}초)</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 + HandPose 병합 조건 처리
+    /// 나레이션 재생 완료 후 HandPose 조건 체크 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+    /// </summary>
+    private void HandleNarrationThenHandPose(SubStepData subStep, string conditionKey)
+    {
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. HandPose만 진행.");
+            // 나레이션 없이 HandPose 조건만 처리
+            StartHandPoseCondition(conditionKey, subStep);
+            return;
+        }
+
+        // 나레이션 재생 중에는 버튼 비활성화
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        // 나레이션 재생 후 HandPose 조건 시작
+        narrationCoroutine = StartCoroutine(PlayNarrationThenStartHandPose(clip, clipName, subStep, conditionKey));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose: 나레이션 먼저 재생 ({clip.length:F1}초)</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 HandPose 조건 시작 코루틴
+    /// </summary>
+    private IEnumerator PlayNarrationThenStartHandPose(AudioClip clip, string clipName, SubStepData subStep, string conditionKey)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            // 나레이션 없이 HandPose만 시작
+            StartHandPoseCondition(conditionKey, subStep);
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → HandPose 조건 시작</color>");
+        currentNarrationClip = null;
+
+        // ★ 나레이션 완료 후 HandPose 조건 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+        StartHandPoseCondition(conditionKey, subStep);
+    }
+
+    /// <summary>
+    /// HandPose 조건 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+    /// </summary>
+    private void StartHandPoseCondition(string conditionKey, SubStepData subStep)
+    {
+        if (conditionRegistry.ContainsKey(conditionKey))
+        {
+            currentCondition = conditionRegistry[conditionKey];
+            StartConditionCheck();  // 20초 타이머 포함
+            eventSystem.RequestButtonStateUpdate(false);
+            Debug.Log($"<color=magenta>[ConditionManager] HandPose 조건 시작 - 충돌체/가이드핸드 활성화, 20초 타이머 시작</color>");
+        }
+        else
+        {
+            Debug.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다: {conditionKey}. Duration/Manual로 전환.");
+            HandleDurationOrManual(subStep);
+        }
     }
 
     /// <summary>

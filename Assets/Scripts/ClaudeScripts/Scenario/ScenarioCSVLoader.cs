@@ -415,6 +415,7 @@ public class ScenarioCSVLoader : MonoBehaviour
 
     /// <summary>
     /// 조건 타입 자동 결정
+    /// ★ 핸드트래킹 + 나레이션 둘 다 있으면 HandPose 반환 (ConditionManager가 나레이션 먼저 재생 후 HandPose 진행)
     /// </summary>
     private string DetermineConditionType(int stepNo, string stepName, string handTrackingFileName, int duration, string voiceInstruction = "")
     {
@@ -425,13 +426,14 @@ public class ScenarioCSVLoader : MonoBehaviour
         }
 
         // 2. 핸드 트래킹이 있으면 -> HandPose 조건
+        // (나레이션이 있어도 HandPose 반환 - ConditionManager가 나레이션 먼저 재생 후 HandPose 진행)
         if (!string.IsNullOrEmpty(handTrackingFileName))
         {
             return "HandPose";
         }
 
-        // 3. voiceInstruction이 있고 확장자가 포함되어 있으면 -> Narration 조건
-        // (텍스트가 아닌 오디오 파일명으로 간주)
+        // 3. voiceInstruction이 있고 파일명 형식이면 -> Narration 조건
+        // (핸드 트래킹 없이 나레이션만 있는 경우)
         if (!string.IsNullOrEmpty(voiceInstruction) &&
             (voiceInstruction.Contains(".wav") || voiceInstruction.Contains(".mp3") ||
              voiceInstruction.Contains(".ogg") || voiceInstruction.Contains("_") ||
