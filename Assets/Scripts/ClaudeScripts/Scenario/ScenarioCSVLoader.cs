@@ -344,6 +344,26 @@ public class ScenarioCSVLoader : MonoBehaviour
             Debug.Log($"[ScenarioLoader]   시나리오 {scenario.scenarioNo}: {scenario.scenarioName} - {scenario.phases.Count}개 페이즈");
         }
 
+        // ★ 디버그: Step별 SubStep 수 상세 출력
+        Debug.Log($"<color=magenta>===== CSV 파싱 결과 상세 =====</color>");
+        foreach (var scenario in collection.scenarios)
+        {
+            foreach (var phase in scenario.phases)
+            {
+                Debug.Log($"<color=cyan>[{phase.phaseName}] Phase - Steps: {phase.steps.Count}</color>");
+                foreach (var step in phase.steps)
+                {
+                    Debug.Log($"<color=yellow>  Step {step.stepNo} ({step.stepName}): SubSteps = {step.subSteps.Count}</color>");
+                    foreach (var subStep in step.subSteps)
+                    {
+                        string handInfo = !string.IsNullOrEmpty(subStep.handTrackingFileName) ? subStep.handTrackingFileName : "(없음)";
+                        Debug.Log($"<color=white>    - SubStep {subStep.subStepNo}: {handInfo}</color>");
+                    }
+                }
+            }
+        }
+        Debug.Log($"<color=magenta>===== 파싱 결과 끝 =====</color>");
+
         return collection;
     }
 

@@ -422,11 +422,12 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void NextSubStep()
     {
-        // ★ 디버그: 현재 상태 출력
-        Debug.Log($"<color=cyan>[ScenarioManager.NextSubStep] 현재 상태:</color>");
-        Debug.Log($"  Phase: {currentPhase?.phaseName} ({currentPhaseIndex}/{currentScenario?.phases?.Count})");
-        Debug.Log($"  Step: {currentStep?.stepName} ({currentStepIndex}/{currentPhase?.steps?.Count})");
-        Debug.Log($"  SubStep: {currentSubStep?.subStepNo} ({currentSubStepIndex}/{currentStep?.subSteps?.Count})");
+        // ★ 디버그: 현재 상태 상세 출력
+        Debug.Log($"<color=cyan>===== [ScenarioManager.NextSubStep] 호출됨 =====</color>");
+        Debug.Log($"<color=cyan>  Phase: {currentPhase?.phaseName} (index {currentPhaseIndex}/{currentScenario?.phases?.Count})</color>");
+        Debug.Log($"<color=cyan>  Step: {currentStep?.stepName} (stepNo={currentStep?.stepNo}, index {currentStepIndex}/{currentPhase?.steps?.Count})</color>");
+        Debug.Log($"<color=cyan>  SubStep: {currentSubStep?.subStepNo} (index {currentSubStepIndex} / count {currentStep?.subSteps?.Count})</color>");
+        Debug.Log($"<color=cyan>  조건: {currentSubStepIndex} < {currentStep?.subSteps?.Count - 1} = {currentSubStepIndex < currentStep?.subSteps?.Count - 1}</color>");
 
         if (currentSubStep != null)
         {
@@ -439,6 +440,8 @@ public class ScenarioManager : MonoBehaviour
             currentSubStepIndex++;
             currentSubStep = currentStep.subSteps[currentSubStepIndex];
 
+            Debug.Log($"<color=green>[ScenarioManager.NextSubStep] → 다음 SubStep으로 진행: {currentSubStep.subStepNo}</color>");
+
             eventSystem.SubStepStarted(currentSubStep);
             UpdateUI();
             UpdateProgress();
@@ -447,7 +450,7 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        Debug.Log($"<color=yellow>[ScenarioManager.NextSubStep] SubStep 끝 → NextStep 호출</color>");
+        Debug.Log($"<color=yellow>[ScenarioManager.NextSubStep] SubStep 끝 (마지막 SubStep 도달) → NextStep 호출</color>");
         // SubStep 끝 -> Step 완료
         NextStep();
     }

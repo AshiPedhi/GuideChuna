@@ -112,9 +112,13 @@ public class ScenarioConditionManager : MonoBehaviour
         StopNarration();
     }
 
+    // ★ 조건 처리 대기용 코루틴
+    private Coroutine conditionProcessCoroutine;
+
     /// <summary>
     /// SubStep 시작 시 호출 - CSV 데이터 기반 자동 조건 처리
     /// ✅ conditionType 기반 자동 조건 등록
+    /// ★ 한 프레임 지연으로 조건 등록 타이밍 문제 해결
     /// </summary>
     private void OnSubStepStarted(SubStepData subStep)
     {
@@ -143,7 +147,24 @@ public class ScenarioConditionManager : MonoBehaviour
             return;
         }
 
-        // ✅ conditionType에 따른 조건 처리
+        // ★ 한 프레임 지연 후 조건 처리 (ScenarioManager에서 조건 등록할 시간 확보)
+        if (conditionProcessCoroutine != null)
+        {
+            StopCoroutine(conditionProcessCoroutine);
+        }
+        conditionProcessCoroutine = StartCoroutine(ProcessConditionByTypeDelayed(subStep));
+    }
+
+    /// <summary>
+    /// ★ 한 프레임 지연 후 조건 처리 (타이밍 문제 해결)
+    /// ScenarioManager.OnSubStepStartedForHandPose가 먼저 실행되어 조건을 등록하도록 함
+    /// </summary>
+    private IEnumerator ProcessConditionByTypeDelayed(SubStepData subStep)
+    {
+        // 한 프레임 대기 - 다른 이벤트 핸들러들이 먼저 실행되도록
+        yield return null;
+
+        Debug.Log($"<color=yellow>[ConditionManager] 한 프레임 대기 후 조건 처리 시작</color>");
         ProcessConditionByType(subStep);
     }
 
