@@ -402,6 +402,12 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void NextSubStep()
     {
+        // ★ 디버그: 현재 상태 출력
+        Debug.Log($"<color=cyan>[ScenarioManager.NextSubStep] 현재 상태:</color>");
+        Debug.Log($"  Phase: {currentPhase?.phaseName} ({currentPhaseIndex}/{currentScenario?.phases?.Count})");
+        Debug.Log($"  Step: {currentStep?.stepName} ({currentStepIndex}/{currentPhase?.steps?.Count})");
+        Debug.Log($"  SubStep: {currentSubStep?.subStepNo} ({currentSubStepIndex}/{currentStep?.subSteps?.Count})");
+
         if (currentSubStep != null)
         {
             eventSystem.SubStepCompleted(currentSubStep);
@@ -421,6 +427,7 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
+        Debug.Log($"<color=yellow>[ScenarioManager.NextSubStep] SubStep 끝 → NextStep 호출</color>");
         // SubStep 끝 -> Step 완료
         NextStep();
     }

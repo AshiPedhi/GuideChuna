@@ -84,6 +84,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("환자 모델의 Animator")]
     [SerializeField] private Animator patientAnimator;
 
+    [Tooltip("★ 카메라용 두 번째 환자 모델 Animator (선택)")]
+    [SerializeField] private Animator secondaryPatientAnimator;
+
     [Tooltip("프레임 레이트에 맞춰 애니메이션 동기화")]
     [SerializeField] private bool syncAnimationWithFrame = true;
 
@@ -970,6 +973,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         patientAnimator.Play(currentAnimationStateName, 0, normalizedTime);
         patientAnimator.speed = 0f;
 
+        // ★ 두 번째 환자 모델도 동기화
+        if (secondaryPatientAnimator != null)
+        {
+            secondaryPatientAnimator.Play(currentAnimationStateName, 0, normalizedTime);
+            secondaryPatientAnimator.speed = 0f;
+        }
+
         if (showDebugLogs && Time.frameCount % 30 == 0)
             Debug.Log($"[Animation] 동기화: {currentAnimationStateName} @ {normalizedTime:P0}");
     }
@@ -1179,6 +1189,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
             patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
             patientAnimator.speed = 0f;
+
+            // ★ 두 번째 환자 모델도 동기화
+            if (secondaryPatientAnimator != null)
+            {
+                secondaryPatientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
+                secondaryPatientAnimator.speed = 0f;
+            }
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
             {
@@ -1399,6 +1416,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 자동 재생 모드
             patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 1f;
+
+            // ★ 두 번째 환자 모델도 동기화
+            if (secondaryPatientAnimator != null)
+            {
+                secondaryPatientAnimator.Play(trimmedName, 0, 0f);
+                secondaryPatientAnimator.speed = 1f;
+            }
             Debug.Log($"<color=green>[Animation] ★ 자동 재생 시작: '{trimmedName}' (speed=1)</color>");
         }
         else if (playMode == AnimationPlayMode.SyncWithUser)
@@ -1406,6 +1430,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 사용자 동기화 모드 - 시작 위치로 설정
             patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 0f;
+
+            // ★ 두 번째 환자 모델도 동기화
+            if (secondaryPatientAnimator != null)
+            {
+                secondaryPatientAnimator.Play(trimmedName, 0, 0f);
+                secondaryPatientAnimator.speed = 0f;
+            }
             Debug.Log($"<color=green>[Animation] 동기화 모드 시작: '{trimmedName}' (첫 프레임, speed=0)</color>");
         }
     }
@@ -1482,6 +1513,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (patientAnimator != null)
         {
             patientAnimator.speed = 0f;
+        }
+        // ★ 두 번째 환자 모델도 정지
+        if (secondaryPatientAnimator != null)
+        {
+            secondaryPatientAnimator.speed = 0f;
         }
         currentAnimationStateName = null;
     }
@@ -2131,6 +2167,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 patientAnimator.Play(currentAnimationStateName, 0, currentStartRatio);
                 patientAnimator.speed = 0f;
+
+                // ★ 두 번째 환자 모델도 동기화
+                if (secondaryPatientAnimator != null)
+                {
+                    secondaryPatientAnimator.Play(currentAnimationStateName, 0, currentStartRatio);
+                    secondaryPatientAnimator.speed = 0f;
+                }
 
                 if (showDebugLogs)
                     Debug.Log($"<color=magenta>[ChunaPathEvaluator] 환자 애니메이션 시작 프레임 설정: {currentAnimationStateName} @ {currentStartRatio:P0}</color>");
