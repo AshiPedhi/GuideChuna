@@ -56,6 +56,21 @@ public class RenderManager : MonoBehaviour
 
     private void Start()
     {
+        // ★★★ 중요: SignalingManager 자동 시작 즉시 방지 ★★★
+        // SignalingManager는 기본적으로 Start()에서 자동 실행되므로 여기서 즉시 중지
+        if (sm != null)
+        {
+            try
+            {
+                sm.Stop();
+                LogDebug("SignalingManager 자동 시작 즉시 중지됨");
+            }
+            catch (Exception e)
+            {
+                LogWarning($"SignalingManager 즉시 중지 실패 (무시): {e.Message}");
+            }
+        }
+
         SubscribeToAuthEvents();
         StartCoroutine(DelayedInit());
     }
