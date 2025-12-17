@@ -43,6 +43,12 @@ public class ScenarioConditionManager : MonoBehaviour
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip completionSound;
 
+    [Header("=== 나레이션 설정 ===")]
+    [Tooltip("나레이션 전용 AudioSource (없으면 audioSource 사용)")]
+    [SerializeField] private AudioSource narrationAudioSource;
+    [Tooltip("나레이션 클립 폴더 경로 (Resources 기준)")]
+    [SerializeField] private string narrationFolderPath = "Narrations";
+
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 
@@ -57,6 +63,10 @@ public class ScenarioConditionManager : MonoBehaviour
 
     // 조건 레지스트리 (SubStep별로 조건을 등록)
     private Dictionary<string, IScenarioCondition> conditionRegistry = new Dictionary<string, IScenarioCondition>();
+
+    // 나레이션 관련
+    private AudioClip currentNarrationClip;
+    private Coroutine narrationCoroutine;
 
     // Quest 최적화: WaitForSeconds 캐싱
     private WaitForSeconds cachedCheckInterval;
@@ -97,14 +107,25 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 진행 중인 체크 중단
         StopConditionCheck();
+
+        // 나레이션 중지
+        StopNarration();
     }
+
+    // ★ 조건 처리 대기용 코루틴
+    private Coroutine conditionProcessCoroutine;
 
     /// <summary>
     /// SubStep 시작 시 호출 - CSV 데이터 기반 자동 조건 처리
     /// ✅ conditionType 기반 자동 조건 등록
+    /// ★ 한 프레임 지연으로 조건 등록 타이밍 문제 해결
     /// </summary>
     private void OnSubStepStarted(SubStepData subStep)
     {
+        // ★ 이전 SubStep의 나레이션/조건 체크 중단 (토글로 빠르게 진행 시 충돌 방지)
+        StopNarration();
+        StopConditionCheck();
+
         Debug.Log($"<color=cyan>[ConditionManager] ===== OnSubStepStarted 호출 =====</color>");
         Debug.Log($"[ConditionManager] Phase: {scenarioManager.CurrentPhase.phaseName}, Step: {scenarioManager.CurrentStep.stepName}, SubStep: {subStep.subStepNo}");
         Debug.Log($"[ConditionManager] Duration: {subStep.duration}초");
@@ -113,8 +134,16 @@ public class ScenarioConditionManager : MonoBehaviour
         Debug.Log($"[ConditionManager] 가이드 스텝: {scenarioManager.CurrentStep.IsGuideStep()}");
 
         // 가이드 스텝(Step번호 0)은 항상 토글로 수동 진행
+        // ★ 단, 나레이션이 있으면 나레이션 먼저 재생
         if (scenarioManager.CurrentStep.IsGuideStep())
         {
+            if (subStep.HasNarration())
+            {
+                Debug.Log("[ConditionManager] 가이드 스텝 - 나레이션 먼저 재생 후 토글 대기");
+                HandleNarrationThenManual(subStep);
+                return;
+            }
+
             Debug.Log("[ConditionManager] 가이드 스텝 - 토글로 수동 진행");
             currentCondition = null;
             StopConditionCheck();
@@ -122,7 +151,24 @@ public class ScenarioConditionManager : MonoBehaviour
             return;
         }
 
-        // ✅ conditionType에 따른 조건 처리
+        // ★ 한 프레임 지연 후 조건 처리 (ScenarioManager에서 조건 등록할 시간 확보)
+        if (conditionProcessCoroutine != null)
+        {
+            StopCoroutine(conditionProcessCoroutine);
+        }
+        conditionProcessCoroutine = StartCoroutine(ProcessConditionByTypeDelayed(subStep));
+    }
+
+    /// <summary>
+    /// ★ 한 프레임 지연 후 조건 처리 (타이밍 문제 해결)
+    /// ScenarioManager.OnSubStepStartedForHandPose가 먼저 실행되어 조건을 등록하도록 함
+    /// </summary>
+    private IEnumerator ProcessConditionByTypeDelayed(SubStepData subStep)
+    {
+        // 한 프레임 대기 - 다른 이벤트 핸들러들이 먼저 실행되도록
+        yield return null;
+
+        Debug.Log($"<color=yellow>[ConditionManager] 한 프레임 대기 후 조건 처리 시작</color>");
         ProcessConditionByType(subStep);
     }
 
@@ -143,6 +189,24 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         Debug.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>");
+
+        // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
+        if (subStep.HasNarration())
+        {
+            if (conditionType == "HandPose")
+            {
+                Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose 병합 조건 - 나레이션 먼저 재생</color>");
+                HandleNarrationThenHandPose(subStep, conditionKey);
+                return;
+            }
+            else
+            {
+                // 나레이션 + Duration 또는 나레이션만 있는 경우
+                Debug.Log($"<color=cyan>[ConditionManager] 나레이션 존재 - 나레이션 재생 후 Duration/Manual 적용</color>");
+                HandleNarrationThenDuration(subStep);
+                return;
+            }
+        }
 
         switch (conditionType)
         {
@@ -169,8 +233,7 @@ public class ScenarioConditionManager : MonoBehaviour
                 break;
 
             case "Narration":
-                Debug.LogWarning("[ConditionManager] Narration 조건은 아직 구현되지 않았습니다.");
-                HandleDurationOrManual(subStep);
+                HandleNarrationCondition(subStep);
                 break;
 
             case "Duration":
@@ -234,6 +297,355 @@ public class ScenarioConditionManager : MonoBehaviour
             HandleManualProgress();
         }
     }
+
+    /// <summary>
+    /// 나레이션 조건 처리 - voiceInstruction을 클립명으로 사용하여 로드 및 재생
+    /// (나레이션만 있는 경우 - 완료 후 다음 단계로 자동 진행)
+    /// </summary>
+    private void HandleNarrationCondition(SubStepData subStep)
+    {
+        if (!subStep.HasNarration())
+        {
+            Debug.LogWarning("[ConditionManager] voiceInstruction이 비어있습니다. Duration/Manual로 전환.");
+            HandleDurationOrManual(subStep);
+            return;
+        }
+
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
+            HandleDurationOrManual(subStep);
+            return;
+        }
+
+        // 나레이션 재생 및 완료 대기
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        narrationCoroutine = StartCoroutine(PlayNarrationAndProgress(clip, clipName));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 재생 시작: {clipName} ({clip.length:F1}초)</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 + HandPose 병합 조건 처리
+    /// 나레이션 재생 완료 후 HandPose 조건 체크 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+    /// </summary>
+    private void HandleNarrationThenHandPose(SubStepData subStep, string conditionKey)
+    {
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. HandPose만 진행.");
+            // 나레이션 없이 HandPose 조건만 처리
+            StartHandPoseCondition(conditionKey, subStep);
+            return;
+        }
+
+        // 나레이션 재생 중에는 버튼 비활성화
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        // 나레이션 재생 후 HandPose 조건 시작
+        narrationCoroutine = StartCoroutine(PlayNarrationThenStartHandPose(clip, clipName, subStep, conditionKey));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose: 나레이션 먼저 재생 ({clip.length:F1}초)</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 + Duration 병합 조건 처리
+    /// 나레이션 재생 완료 후 Duration 대기 → 다음 단계로 진행
+    /// </summary>
+    private void HandleNarrationThenDuration(SubStepData subStep)
+    {
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
+            HandleDurationOrManual(subStep);
+            return;
+        }
+
+        // 나레이션 재생 중에는 버튼 비활성화
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        // 나레이션 재생 후 Duration 적용
+        narrationCoroutine = StartCoroutine(PlayNarrationThenApplyDuration(clip, clipName, subStep));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Duration: 나레이션 먼저 재생 ({clip.length:F1}초) → Duration {subStep.duration}초</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 + Manual 병합 조건 처리 (가이드 스텝용)
+    /// 나레이션 재생 완료 후 토글 대기
+    /// </summary>
+    private void HandleNarrationThenManual(SubStepData subStep)
+    {
+        // 나레이션 클립 로드
+        string clipName = subStep.voiceInstruction.Trim();
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. 바로 토글 대기.");
+            HandleManualProgress();
+            return;
+        }
+
+        // 나레이션 재생 중에는 버튼 비활성화
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        // 나레이션 재생 후 Manual (토글 대기)
+        narrationCoroutine = StartCoroutine(PlayNarrationThenManual(clip, clipName, subStep));
+        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Manual: 나레이션 먼저 재생 ({clip.length:F1}초) → 토글 대기</color>");
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 Manual (토글 대기) 코루틴
+    /// </summary>
+    private IEnumerator PlayNarrationThenManual(AudioClip clip, string clipName, SubStepData subStep)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            HandleManualProgress();
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → 토글 대기</color>");
+        currentNarrationClip = null;
+
+        // ★ 나레이션 완료 후 Duration 적용 (있으면)
+        if (subStep.duration > 0)
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
+            yield return new WaitForSeconds(subStep.duration);
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료</color>");
+        }
+
+        // Manual (토글 대기)
+        HandleManualProgress();
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 HandPose 조건 시작 코루틴
+    /// </summary>
+    private IEnumerator PlayNarrationThenStartHandPose(AudioClip clip, string clipName, SubStepData subStep, string conditionKey)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            // 나레이션 없이 HandPose만 시작
+            StartHandPoseCondition(conditionKey, subStep);
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → HandPose 조건 시작</color>");
+        currentNarrationClip = null;
+
+        // ★ 나레이션 완료 후 HandPose 조건 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+        StartHandPoseCondition(conditionKey, subStep);
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 Duration 적용 코루틴
+    /// </summary>
+    private IEnumerator PlayNarrationThenApplyDuration(AudioClip clip, string clipName, SubStepData subStep)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            // 나레이션 없이 Duration/Manual만 적용
+            HandleDurationOrManual(subStep);
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
+        currentNarrationClip = null;
+
+        // ★ 나레이션 완료 후 Duration 적용
+        if (subStep.duration > 0)
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
+            yield return new WaitForSeconds(subStep.duration);
+            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
+
+            // 다음 SubStep으로 진행
+            if (scenarioManager != null)
+            {
+                scenarioManager.NextSubStep();
+            }
+        }
+        else
+        {
+            // Duration 없으면 Manual (토글 대기)
+            Debug.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
+            HandleManualProgress();
+        }
+    }
+
+    /// <summary>
+    /// HandPose 조건 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
+    /// </summary>
+    private void StartHandPoseCondition(string conditionKey, SubStepData subStep)
+    {
+        if (conditionRegistry.ContainsKey(conditionKey))
+        {
+            currentCondition = conditionRegistry[conditionKey];
+            StartConditionCheck();  // 20초 타이머 포함
+            eventSystem.RequestButtonStateUpdate(false);
+            Debug.Log($"<color=magenta>[ConditionManager] HandPose 조건 시작 - 충돌체/가이드핸드 활성화, 20초 타이머 시작</color>");
+        }
+        else
+        {
+            Debug.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다: {conditionKey}. Duration/Manual로 전환.");
+            HandleDurationOrManual(subStep);
+        }
+    }
+
+    /// <summary>
+    /// Resources 폴더에서 나레이션 클립 로드
+    /// </summary>
+    private AudioClip LoadNarrationClip(string clipName)
+    {
+        // 확장자 제거 (있을 경우)
+        if (clipName.EndsWith(".wav") || clipName.EndsWith(".mp3") || clipName.EndsWith(".ogg"))
+        {
+            clipName = System.IO.Path.GetFileNameWithoutExtension(clipName);
+        }
+
+        // Resources 폴더에서 로드
+        string fullPath = string.IsNullOrEmpty(narrationFolderPath)
+            ? clipName
+            : $"{narrationFolderPath}/{clipName}";
+
+        AudioClip clip = Resources.Load<AudioClip>(fullPath);
+
+        if (clip == null)
+        {
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: Resources/{fullPath}");
+        }
+        else
+        {
+            Debug.Log($"[ConditionManager] 나레이션 클립 로드 성공: {fullPath} ({clip.length:F1}초)");
+        }
+
+        return clip;
+    }
+
+    /// <summary>
+    /// 나레이션 재생 후 자동 진행
+    /// </summary>
+    private IEnumerator PlayNarrationAndProgress(AudioClip clip, string clipName)
+    {
+        currentNarrationClip = clip;
+
+        // AudioSource 선택 (narrationAudioSource 우선, 없으면 audioSource 사용)
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null)
+        {
+            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            yield break;
+        }
+
+        // 나레이션 재생
+        targetSource.clip = clip;
+        targetSource.Play();
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        // 클립 재생 완료까지 대기
+        yield return new WaitForSeconds(clip.length);
+
+        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
+
+        currentNarrationClip = null;
+
+        // 다음 SubStep으로 진행
+        if (scenarioManager != null)
+        {
+            scenarioManager.NextSubStep();
+        }
+    }
+
+    /// <summary>
+    /// 나레이션 중지
+    /// </summary>
+    public void StopNarration()
+    {
+        if (narrationCoroutine != null)
+        {
+            StopCoroutine(narrationCoroutine);
+            narrationCoroutine = null;
+        }
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource != null && targetSource.isPlaying && currentNarrationClip != null)
+        {
+            targetSource.Stop();
+        }
+
+        currentNarrationClip = null;
+        Debug.Log("[ConditionManager] 나레이션 중지됨");
+    }
+
+    /// <summary>
+    /// 나레이션 재생 중인지 확인
+    /// </summary>
+    public bool IsPlayingNarration => currentNarrationClip != null;
 
     /// <summary>
     /// 수동 진행 처리 (토글 버튼 활성화 및 초기화)
@@ -485,6 +897,30 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 조건 체크 활성화 여부
     /// </summary>
     public bool IsCheckingCondition => isCheckingCondition;
+
+    /// <summary>
+    /// 외부에서 나레이션 재생 (완료 후 자동 진행 없음)
+    /// </summary>
+    public void PlayNarration(string clipName)
+    {
+        AudioClip clip = LoadNarrationClip(clipName);
+        if (clip == null) return;
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource != null)
+        {
+            targetSource.PlayOneShot(clip);
+            Debug.Log($"[ConditionManager] 나레이션 재생 (OneShot): {clipName}");
+        }
+    }
+
+    /// <summary>
+    /// 외부에서 나레이션 재생 (완료 후 자동 진행)
+    /// </summary>
+    public void PlayNarrationWithProgress(SubStepData subStep)
+    {
+        HandleNarrationCondition(subStep);
+    }
 }
 
 // ========== 조건 클래스들 ==========

@@ -70,6 +70,12 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
     [SerializeField] private QuizPanel quizPanel;
 
+    [Header("=== 실습 완료 UI ===")]
+    [Tooltip("실습 결과 패널 (완료 시 표시, 없으면 건너뜀)")]
+    [SerializeField] private GameObject resultPanel;
+    [Tooltip("종료 확인 팝업 컨트롤러")]
+    [SerializeField] private ExitPopupController exitPopupController;
+
     [Header("=== 결과 추적 ===")]
     [Tooltip("훈련 결과 추적기 (자동 찾기)")]
     [SerializeField] private TrainingResultTracker resultTracker;
@@ -95,6 +101,9 @@ public class ScenarioManager : MonoBehaviour
     private string selectedMode = "";
     private string selectedDifficulty = "";
 
+    // 시나리오 완료 상태
+    private bool isScenarioCompleted = false;
+
     // 프로퍼티
     public ScenarioData CurrentScenario => currentScenario;
     public PhaseData CurrentPhase => currentPhase;
@@ -103,6 +112,7 @@ public class ScenarioManager : MonoBehaviour
     public bool IsLastSubStep => currentSubStepIndex >= currentStep.subSteps.Count - 1;
     public bool IsLastStep => currentStepIndex >= currentPhase.steps.Count - 1;
     public bool IsLastPhase => currentPhaseIndex >= currentScenario.phases.Count - 1;
+    public bool IsScenarioCompleted => isScenarioCompleted;
 
     // 모드 정보 프로퍼티
     public string SelectedMode => selectedMode;
@@ -139,6 +149,16 @@ public class ScenarioManager : MonoBehaviour
             if (quizPanel != null)
             {
                 Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
+            }
+        }
+
+        // ✅ ExitPopupController 찾기
+        if (exitPopupController == null)
+        {
+            exitPopupController = FindObjectOfType<ExitPopupController>();
+            if (exitPopupController != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ ExitPopupController 자동 찾기 성공");
             }
         }
 
@@ -300,10 +320,31 @@ public class ScenarioManager : MonoBehaviour
         currentPhaseIndex = 0;
         currentStepIndex = 0;
         currentSubStepIndex = 0;
+        isScenarioCompleted = false;  // 시나리오 시작 시 완료 상태 초기화
 
         currentPhase = currentScenario.phases[0];
         currentStep = currentPhase.steps[0];
         currentSubStep = currentStep.subSteps[0];
+
+        // ★ 시나리오 전체 구조 디버그 출력
+        Debug.Log($"<color=magenta>===== 시나리오 구조 디버그 =====</color>");
+        Debug.Log($"<color=magenta>총 Phase 수: {currentScenario.phases.Count}</color>");
+        for (int pi = 0; pi < currentScenario.phases.Count; pi++)
+        {
+            var phase = currentScenario.phases[pi];
+            Debug.Log($"<color=cyan>  [{pi}] Phase: {phase.phaseName} (Steps: {phase.steps.Count})</color>");
+            for (int si = 0; si < phase.steps.Count; si++)
+            {
+                var step = phase.steps[si];
+                Debug.Log($"<color=yellow>    [{si}] Step {step.stepNo}: {step.stepName} (SubSteps: {step.subSteps.Count})</color>");
+                for (int ssi = 0; ssi < step.subSteps.Count; ssi++)
+                {
+                    var subStep = step.subSteps[ssi];
+                    Debug.Log($"<color=white>      [{ssi}] SubStep {subStep.subStepNo}: {subStep.handTrackingFileName ?? "(없음)"}</color>");
+                }
+            }
+        }
+        Debug.Log($"<color=magenta>===== 구조 디버그 끝 =====</color>");
 
         Debug.Log($"<color=yellow>[ScenarioManager] 초기 상태 설정 완료</color>");
         Debug.Log($"<color=yellow>  - Phase: {currentPhase.phaseName}</color>");
@@ -381,6 +422,13 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void NextSubStep()
     {
+        // ★ 디버그: 현재 상태 상세 출력
+        Debug.Log($"<color=cyan>===== [ScenarioManager.NextSubStep] 호출됨 =====</color>");
+        Debug.Log($"<color=cyan>  Phase: {currentPhase?.phaseName} (index {currentPhaseIndex}/{currentScenario?.phases?.Count})</color>");
+        Debug.Log($"<color=cyan>  Step: {currentStep?.stepName} (stepNo={currentStep?.stepNo}, index {currentStepIndex}/{currentPhase?.steps?.Count})</color>");
+        Debug.Log($"<color=cyan>  SubStep: {currentSubStep?.subStepNo} (index {currentSubStepIndex} / count {currentStep?.subSteps?.Count})</color>");
+        Debug.Log($"<color=cyan>  조건: {currentSubStepIndex} < {currentStep?.subSteps?.Count - 1} = {currentSubStepIndex < currentStep?.subSteps?.Count - 1}</color>");
+
         if (currentSubStep != null)
         {
             eventSystem.SubStepCompleted(currentSubStep);
@@ -392,6 +440,8 @@ public class ScenarioManager : MonoBehaviour
             currentSubStepIndex++;
             currentSubStep = currentStep.subSteps[currentSubStepIndex];
 
+            Debug.Log($"<color=green>[ScenarioManager.NextSubStep] → 다음 SubStep으로 진행: {currentSubStep.subStepNo}</color>");
+
             eventSystem.SubStepStarted(currentSubStep);
             UpdateUI();
             UpdateProgress();
@@ -400,6 +450,7 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
+        Debug.Log($"<color=yellow>[ScenarioManager.NextSubStep] SubStep 끝 (마지막 SubStep 도달) → NextStep 호출</color>");
         // SubStep 끝 -> Step 완료
         NextStep();
     }
@@ -498,11 +549,49 @@ public class ScenarioManager : MonoBehaviour
             }
         }
 
+        // ★ 시나리오 완료 상태 설정
+        isScenarioCompleted = true;
+
         eventSystem.ScenarioCompleted(currentScenario);
         Log($"시나리오 완료: {currentScenario.scenarioName}");
 
+        // ★ 실습 결과 패널 표시 (할당되어 있으면)
+        ShowResultPanel();
+
         // 퀴즈 패널 표시
         ShowQuizPanel();
+    }
+
+    /// <summary>
+    /// 실습 결과 패널 표시 (실습 완료 후)
+    /// </summary>
+    private void ShowResultPanel()
+    {
+        if (resultPanel != null)
+        {
+            resultPanel.SetActive(true);
+            Debug.Log("[ScenarioManager] 실습 결과 패널 표시");
+        }
+        else
+        {
+            Debug.Log("[ScenarioManager] 실습 결과 패널이 없어 건너뜁니다.");
+        }
+    }
+
+    /// <summary>
+    /// 종료 팝업 표시 (다음 버튼 클릭 시 - 실습 완료 후)
+    /// </summary>
+    public void ShowExitPopup()
+    {
+        if (exitPopupController != null)
+        {
+            exitPopupController.ShowPopup();
+            Debug.Log("[ScenarioManager] 종료 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[ScenarioManager] ExitPopupController가 없습니다.");
+        }
     }
 
     /// <summary>

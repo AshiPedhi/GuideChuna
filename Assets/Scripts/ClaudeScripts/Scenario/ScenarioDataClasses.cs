@@ -54,6 +54,11 @@ public class SubStepData
     public bool HasPatientAnimation() => !string.IsNullOrEmpty(patientAnimationClip);
 
     /// <summary>
+    /// 나레이션 클립이 있는지 확인 (voiceInstruction을 클립 파일명으로 사용)
+    /// </summary>
+    public bool HasNarration() => !string.IsNullOrEmpty(voiceInstruction);
+
+    /// <summary>
     /// 애니메이션 재생 모드 결정
     /// - 핸드 트래킹 O + 애니메이션 O → 진행도 동기화
     /// - 핸드 트래킹 X + 애니메이션 O → 자동 재생

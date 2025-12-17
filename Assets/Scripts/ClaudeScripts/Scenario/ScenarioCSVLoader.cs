@@ -234,7 +234,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
-                    conditionType = DetermineConditionType(stepNo, stepName, handTrackingFileName, duration);
+                    conditionType = DetermineConditionType(stepNo, stepName, handTrackingFileName, duration, voiceInstruction);
                 }
 
                 // 현재 값 기억
@@ -344,6 +344,26 @@ public class ScenarioCSVLoader : MonoBehaviour
             Debug.Log($"[ScenarioLoader]   시나리오 {scenario.scenarioNo}: {scenario.scenarioName} - {scenario.phases.Count}개 페이즈");
         }
 
+        // ★ 디버그: Step별 SubStep 수 상세 출력
+        Debug.Log($"<color=magenta>===== CSV 파싱 결과 상세 =====</color>");
+        foreach (var scenario in collection.scenarios)
+        {
+            foreach (var phase in scenario.phases)
+            {
+                Debug.Log($"<color=cyan>[{phase.phaseName}] Phase - Steps: {phase.steps.Count}</color>");
+                foreach (var step in phase.steps)
+                {
+                    Debug.Log($"<color=yellow>  Step {step.stepNo} ({step.stepName}): SubSteps = {step.subSteps.Count}</color>");
+                    foreach (var subStep in step.subSteps)
+                    {
+                        string handInfo = !string.IsNullOrEmpty(subStep.handTrackingFileName) ? subStep.handTrackingFileName : "(없음)";
+                        Debug.Log($"<color=white>    - SubStep {subStep.subStepNo}: {handInfo}</color>");
+                    }
+                }
+            }
+        }
+        Debug.Log($"<color=magenta>===== 파싱 결과 끝 =====</color>");
+
         return collection;
     }
 
@@ -415,8 +435,9 @@ public class ScenarioCSVLoader : MonoBehaviour
 
     /// <summary>
     /// 조건 타입 자동 결정
+    /// ★ 핸드트래킹 + 나레이션 둘 다 있으면 HandPose 반환 (ConditionManager가 나레이션 먼저 재생 후 HandPose 진행)
     /// </summary>
-    private string DetermineConditionType(int stepNo, string stepName, string handTrackingFileName, int duration)
+    private string DetermineConditionType(int stepNo, string stepName, string handTrackingFileName, int duration, string voiceInstruction = "")
     {
         // 1. 가이드 Step -> 토글 대기
         if (stepNo == 0 && stepName == "가이드")
@@ -425,18 +446,29 @@ public class ScenarioCSVLoader : MonoBehaviour
         }
 
         // 2. 핸드 트래킹이 있으면 -> HandPose 조건
+        // (나레이션이 있어도 HandPose 반환 - ConditionManager가 나레이션 먼저 재생 후 HandPose 진행)
         if (!string.IsNullOrEmpty(handTrackingFileName))
         {
             return "HandPose";
         }
 
-        // 3. Duration이 있으면 -> Duration 조건
+        // 3. voiceInstruction이 있고 파일명 형식이면 -> Narration 조건
+        // (핸드 트래킹 없이 나레이션만 있는 경우)
+        if (!string.IsNullOrEmpty(voiceInstruction) &&
+            (voiceInstruction.Contains(".wav") || voiceInstruction.Contains(".mp3") ||
+             voiceInstruction.Contains(".ogg") || voiceInstruction.Contains("_") ||
+             !voiceInstruction.Contains(" ")))  // 파일명은 보통 공백이 없음
+        {
+            return "Narration";
+        }
+
+        // 4. Duration이 있으면 -> Duration 조건
         if (duration > 0)
         {
             return "Duration";
         }
 
-        // 4. 그 외 -> Manual (조건 없음, 자동 진행 또는 토글 대기)
+        // 5. 그 외 -> Manual (조건 없음, 자동 진행 또는 토글 대기)
         return "Manual";
     }
 }
