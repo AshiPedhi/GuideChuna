@@ -81,17 +81,31 @@ public class GuideVideoController : MonoBehaviour
     private void OnEnable()
     {
         // ScenarioEventSystem 이벤트 구독
-        ScenarioEventSystem.Instance.OnScenarioStarted += OnScenarioStarted;
-        ScenarioEventSystem.Instance.OnSubStepStarted += OnSubStepStarted;
-        ScenarioEventSystem.Instance.OnStepCompleted += OnStepCompleted;
+        try
+        {
+            ScenarioEventSystem.Instance.OnScenarioStarted += OnScenarioStarted;
+            ScenarioEventSystem.Instance.OnSubStepStarted += OnSubStepStarted;
+            ScenarioEventSystem.Instance.OnStepCompleted += OnStepCompleted;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[GuideVideo] 이벤트 구독 실패: {e.Message}");
+        }
     }
 
     private void OnDisable()
     {
         // ScenarioEventSystem 이벤트 해제
-        ScenarioEventSystem.Instance.OnScenarioStarted -= OnScenarioStarted;
-        ScenarioEventSystem.Instance.OnSubStepStarted -= OnSubStepStarted;
-        ScenarioEventSystem.Instance.OnStepCompleted -= OnStepCompleted;
+        try
+        {
+            ScenarioEventSystem.Instance.OnScenarioStarted -= OnScenarioStarted;
+            ScenarioEventSystem.Instance.OnSubStepStarted -= OnSubStepStarted;
+            ScenarioEventSystem.Instance.OnStepCompleted -= OnStepCompleted;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[GuideVideo] 이벤트 해제 실패: {e.Message}");
+        }
 
         // 코루틴 정리
         if (loopDelayCoroutine != null)
@@ -103,35 +117,47 @@ public class GuideVideoController : MonoBehaviour
 
     private void Update()
     {
-        if (!isPlayingSegment || videoPlayer == null || !videoPlayer.isPlaying || isWaitingForLoop)
+        if (!isPlayingSegment || videoPlayer == null || isWaitingForLoop)
             return;
 
-        // 현재 재생 시간 체크
-        double currentTime = videoPlayer.time;
-
-        // 진행률 이벤트
-        if (currentEndTime > currentStartTime)
+        // VideoPlayer 상태 안전 체크
+        try
         {
-            float progress = Mathf.Clamp01((float)(currentTime - currentStartTime) / (currentEndTime - currentStartTime));
-            OnSegmentProgress?.Invoke(progress);
+            if (!videoPlayer.isPlaying)
+                return;
+
+            // 현재 재생 시간 체크
+            double currentTime = videoPlayer.time;
+
+            // 진행률 이벤트
+            if (currentEndTime > currentStartTime)
+            {
+                float progress = Mathf.Clamp01((float)(currentTime - currentStartTime) / (currentEndTime - currentStartTime));
+                OnSegmentProgress?.Invoke(progress);
+            }
+
+            // 구간 끝에 도달
+            if (currentTime >= currentEndTime - timeBuffer)
+            {
+                if (loopSegment && isGuideEnabled)
+                {
+                    // 1초 대기 후 반복 재생
+                    if (loopDelayCoroutine != null)
+                        StopCoroutine(loopDelayCoroutine);
+
+                    loopDelayCoroutine = StartCoroutine(LoopWithDelay());
+                }
+                else
+                {
+                    // 정지
+                    StopSegment();
+                }
+            }
         }
-
-        // 구간 끝에 도달
-        if (currentTime >= currentEndTime - timeBuffer)
+        catch (System.Exception e)
         {
-            if (loopSegment && isGuideEnabled)
-            {
-                // 1초 대기 후 반복 재생
-                if (loopDelayCoroutine != null)
-                    StopCoroutine(loopDelayCoroutine);
-
-                loopDelayCoroutine = StartCoroutine(LoopWithDelay());
-            }
-            else
-            {
-                // 정지
-                StopSegment();
-            }
+            Debug.LogWarning($"[GuideVideo] Update 오류: {e.Message}");
+            isPlayingSegment = false;
         }
     }
 
@@ -210,9 +236,16 @@ public class GuideVideoController : MonoBehaviour
     /// </summary>
     private void OnScenarioStarted(ScenarioData scenario)
     {
-        if (!autoLoadOnScenarioStart || scenario == null) return;
+        try
+        {
+            if (!autoLoadOnScenarioStart || scenario == null) return;
 
-        LoadVideoByName(scenario.scenarioName);
+            LoadVideoByName(scenario.scenarioName);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[GuideVideo] 시나리오 시작 처리 실패: {e.Message}");
+        }
     }
 
     /// <summary>
@@ -220,30 +253,48 @@ public class GuideVideoController : MonoBehaviour
     /// </summary>
     public bool LoadVideoByName(string scenarioName)
     {
-        if (videoPlayer == null)
+        try
         {
-            Debug.LogError("[GuideVideo] VideoPlayer가 없습니다!");
-            return false;
+            if (videoPlayer == null)
+            {
+                Debug.LogWarning("[GuideVideo] VideoPlayer가 없습니다!");
+                return false;
+            }
+
+            if (string.IsNullOrEmpty(scenarioName))
+            {
+                Debug.LogWarning("[GuideVideo] 시나리오 이름이 비어있습니다!");
+                return false;
+            }
+
+            string videoPath = $"{videoFolderPath}/{scenarioName}";
+            VideoClip clip = Resources.Load<VideoClip>(videoPath);
+
+            if (clip != null)
+            {
+                videoPlayer.clip = clip;
+                currentVideoName = scenarioName;
+
+                if (showDebugLog)
+                    Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath}</color>");
+
+                OnVideoLoaded?.Invoke(scenarioName);
+                return true;
+            }
+            else
+            {
+                // 영상 없어도 크래시 안 함 - 경고만 출력
+                if (showDebugLog)
+                {
+                    Debug.LogWarning($"[GuideVideo] 영상을 찾을 수 없습니다: Resources/{videoPath}");
+                    Debug.LogWarning($"[GuideVideo] 영상 파일을 Assets/Resources/{videoFolderPath}/ 폴더에 넣어주세요!");
+                }
+                return false;
+            }
         }
-
-        string videoPath = $"{videoFolderPath}/{scenarioName}";
-        VideoClip clip = Resources.Load<VideoClip>(videoPath);
-
-        if (clip != null)
+        catch (System.Exception e)
         {
-            videoPlayer.clip = clip;
-            currentVideoName = scenarioName;
-
-            if (showDebugLog)
-                Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath}</color>");
-
-            OnVideoLoaded?.Invoke(scenarioName);
-            return true;
-        }
-        else
-        {
-            Debug.LogWarning($"[GuideVideo] 영상을 찾을 수 없습니다: Resources/{videoPath}");
-            Debug.LogWarning($"[GuideVideo] 영상 파일을 Assets/Resources/{videoFolderPath}/ 폴더에 넣어주세요!");
+            Debug.LogWarning($"[GuideVideo] 영상 로드 실패: {e.Message}");
             return false;
         }
     }
@@ -271,30 +322,37 @@ public class GuideVideoController : MonoBehaviour
     /// </summary>
     private void OnSubStepStarted(SubStepData subStep)
     {
-        if (subStep == null) return;
-
-        // 현재 SubStep 저장
-        pendingSubStep = subStep;
-
-        // 대기 중인 반복 재생 취소
-        if (loopDelayCoroutine != null)
+        try
         {
-            StopCoroutine(loopDelayCoroutine);
-            loopDelayCoroutine = null;
-            isWaitingForLoop = false;
+            if (subStep == null) return;
+
+            // 현재 SubStep 저장
+            pendingSubStep = subStep;
+
+            // 대기 중인 반복 재생 취소
+            if (loopDelayCoroutine != null)
+            {
+                StopCoroutine(loopDelayCoroutine);
+                loopDelayCoroutine = null;
+                isWaitingForLoop = false;
+            }
+
+            // 가이드 활성화 상태일 때만 재생
+            if (isGuideEnabled && subStep.HasVideoSegment())
+            {
+                float startTime = subStep.GetVideoStartSeconds();
+                float endTime = subStep.GetVideoEndSeconds();
+                PlaySegmentInternal(startTime, endTime);
+            }
+            else if (isPlayingSegment)
+            {
+                // 가이드 비활성화 상태면 정지
+                StopSegment();
+            }
         }
-
-        // 가이드 활성화 상태일 때만 재생
-        if (isGuideEnabled && subStep.HasVideoSegment())
+        catch (System.Exception e)
         {
-            float startTime = subStep.GetVideoStartSeconds();
-            float endTime = subStep.GetVideoEndSeconds();
-            PlaySegmentInternal(startTime, endTime);
-        }
-        else if (isPlayingSegment)
-        {
-            // 가이드 비활성화 상태면 정지
-            StopSegment();
+            Debug.LogWarning($"[GuideVideo] SubStep 처리 실패: {e.Message}");
         }
     }
 
