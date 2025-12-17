@@ -70,6 +70,12 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
     [SerializeField] private QuizPanel quizPanel;
 
+    [Header("=== 실습 완료 UI ===")]
+    [Tooltip("실습 결과 패널 (완료 시 표시, 없으면 건너뜀)")]
+    [SerializeField] private GameObject resultPanel;
+    [Tooltip("종료 확인 팝업 컨트롤러")]
+    [SerializeField] private ExitPopupController exitPopupController;
+
     [Header("=== 결과 추적 ===")]
     [Tooltip("훈련 결과 추적기 (자동 찾기)")]
     [SerializeField] private TrainingResultTracker resultTracker;
@@ -95,6 +101,9 @@ public class ScenarioManager : MonoBehaviour
     private string selectedMode = "";
     private string selectedDifficulty = "";
 
+    // 시나리오 완료 상태
+    private bool isScenarioCompleted = false;
+
     // 프로퍼티
     public ScenarioData CurrentScenario => currentScenario;
     public PhaseData CurrentPhase => currentPhase;
@@ -103,6 +112,7 @@ public class ScenarioManager : MonoBehaviour
     public bool IsLastSubStep => currentSubStepIndex >= currentStep.subSteps.Count - 1;
     public bool IsLastStep => currentStepIndex >= currentPhase.steps.Count - 1;
     public bool IsLastPhase => currentPhaseIndex >= currentScenario.phases.Count - 1;
+    public bool IsScenarioCompleted => isScenarioCompleted;
 
     // 모드 정보 프로퍼티
     public string SelectedMode => selectedMode;
@@ -139,6 +149,16 @@ public class ScenarioManager : MonoBehaviour
             if (quizPanel != null)
             {
                 Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
+            }
+        }
+
+        // ✅ ExitPopupController 찾기
+        if (exitPopupController == null)
+        {
+            exitPopupController = FindObjectOfType<ExitPopupController>();
+            if (exitPopupController != null)
+            {
+                Debug.Log("[ScenarioManager] ✅ ExitPopupController 자동 찾기 성공");
             }
         }
 
@@ -300,6 +320,7 @@ public class ScenarioManager : MonoBehaviour
         currentPhaseIndex = 0;
         currentStepIndex = 0;
         currentSubStepIndex = 0;
+        isScenarioCompleted = false;  // 시나리오 시작 시 완료 상태 초기화
 
         currentPhase = currentScenario.phases[0];
         currentStep = currentPhase.steps[0];
@@ -498,11 +519,49 @@ public class ScenarioManager : MonoBehaviour
             }
         }
 
+        // ★ 시나리오 완료 상태 설정
+        isScenarioCompleted = true;
+
         eventSystem.ScenarioCompleted(currentScenario);
         Log($"시나리오 완료: {currentScenario.scenarioName}");
 
+        // ★ 실습 결과 패널 표시 (할당되어 있으면)
+        ShowResultPanel();
+
         // 퀴즈 패널 표시
         ShowQuizPanel();
+    }
+
+    /// <summary>
+    /// 실습 결과 패널 표시 (실습 완료 후)
+    /// </summary>
+    private void ShowResultPanel()
+    {
+        if (resultPanel != null)
+        {
+            resultPanel.SetActive(true);
+            Debug.Log("[ScenarioManager] 실습 결과 패널 표시");
+        }
+        else
+        {
+            Debug.Log("[ScenarioManager] 실습 결과 패널이 없어 건너뜁니다.");
+        }
+    }
+
+    /// <summary>
+    /// 종료 팝업 표시 (다음 버튼 클릭 시 - 실습 완료 후)
+    /// </summary>
+    public void ShowExitPopup()
+    {
+        if (exitPopupController != null)
+        {
+            exitPopupController.ShowPopup();
+            Debug.Log("[ScenarioManager] 종료 확인 팝업 표시");
+        }
+        else
+        {
+            Debug.LogWarning("[ScenarioManager] ExitPopupController가 없습니다.");
+        }
     }
 
     /// <summary>
