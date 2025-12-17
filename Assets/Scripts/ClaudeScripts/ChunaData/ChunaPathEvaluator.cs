@@ -2472,8 +2472,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         if (loadedFrames == null || loadedFrames.Count == 0) return 0f;
 
-        // 가장 가까운 프레임 찾기
-        int frameIndex = checkpointIndex >= 0 ? checkpointIndex * checkpointFrameInterval : currentGuideFrameIndex;
+        // ★ 유사도 계산 기준 프레임: 사용자 손 위치와 가장 가까운 프레임 사용
+        // checkpointIndex가 지정되면 체크포인트 기준, 아니면 userHandFrameIndex(사용자 손 위치 기준)
+        int frameIndex = checkpointIndex >= 0 ? checkpointIndex * checkpointFrameInterval : userHandFrameIndex;
         frameIndex = Mathf.Clamp(frameIndex, 0, loadedFrames.Count - 1);
 
         PoseFrame frame = loadedFrames[frameIndex];
@@ -2490,6 +2491,25 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         return 0f;
+    }
+
+    /// <summary>
+    /// ★ 실시간 유사도 가져오기 (사용자 손 위치와 가장 가까운 가이드 프레임과 비교)
+    /// HandFeedbackUI에서 사용
+    /// </summary>
+    public float GetRealTimeSimilarity(bool isLeftHand)
+    {
+        return CalculateCurrentSimilarity(isLeftHand, -1);
+    }
+
+    /// <summary>
+    /// ★ 양손 실시간 유사도 가져오기
+    /// </summary>
+    public (float left, float right) GetRealTimeSimilarityBoth()
+    {
+        float leftSim = CalculateCurrentSimilarity(true, -1);
+        float rightSim = CalculateCurrentSimilarity(false, -1);
+        return (leftSim, rightSim);
     }
 
     // ========== 점수 계산 ==========
