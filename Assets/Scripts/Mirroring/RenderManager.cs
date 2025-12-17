@@ -46,6 +46,14 @@ public class RenderManager : MonoBehaviour
         {
             instance = this;
             _cachedIceServers = new List<IceServer>(4);
+
+            // ★★★ 중요: SignalingManager 자동 시작 방지 ★★★
+            // Awake()에서 비활성화하여 Start()가 실행되지 않도록 함
+            if (sm != null)
+            {
+                sm.enabled = false;
+                Debug.Log("[RenderManager] SignalingManager 비활성화됨 (로그인 전까지)");
+            }
         }
         else
         {
@@ -56,21 +64,7 @@ public class RenderManager : MonoBehaviour
 
     private void Start()
     {
-        // ★★★ 중요: SignalingManager 자동 시작 즉시 방지 ★★★
-        // SignalingManager는 기본적으로 Start()에서 자동 실행되므로 여기서 즉시 중지
-        if (sm != null)
-        {
-            try
-            {
-                sm.Stop();
-                LogDebug("SignalingManager 자동 시작 즉시 중지됨");
-            }
-            catch (Exception e)
-            {
-                LogWarning($"SignalingManager 즉시 중지 실패 (무시): {e.Message}");
-            }
-        }
-
+        // SignalingManager는 Awake()에서 이미 비활성화됨
         SubscribeToAuthEvents();
         StartCoroutine(DelayedInit());
     }
@@ -290,11 +284,16 @@ public class RenderManager : MonoBehaviour
             isConnected = false;
             connectionAttempts = 0;
 
+            // SignalingManager 활성화 (Awake에서 비활성화됨)
+            sm.enabled = true;
+            LogDebug("SignalingManager 활성화됨");
+
             // Signaling 설정
             if (!SetupSignaling(currentMirroringData.serverIP, currentMirroringData.portNo))
             {
                 LogWarning("Signaling 설정 실패. 미러링 시작 불가.");
                 isConnecting = false;
+                sm.enabled = false;
                 return;
             }
 
@@ -333,12 +332,14 @@ public class RenderManager : MonoBehaviour
             connectionAttempts = 0;
             hasInitialized = false;
 
-            // SignalingManager 안전 중지
+            // SignalingManager 안전 중지 및 비활성화
             if (sm != null)
             {
                 try
                 {
                     sm.Stop();
+                    sm.enabled = false;
+                    LogDebug("SignalingManager 중지 및 비활성화됨");
                 }
                 catch (Exception e)
                 {
