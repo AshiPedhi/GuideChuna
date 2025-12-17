@@ -326,6 +326,26 @@ public class ScenarioManager : MonoBehaviour
         currentStep = currentPhase.steps[0];
         currentSubStep = currentStep.subSteps[0];
 
+        // ★ 시나리오 전체 구조 디버그 출력
+        Debug.Log($"<color=magenta>===== 시나리오 구조 디버그 =====</color>");
+        Debug.Log($"<color=magenta>총 Phase 수: {currentScenario.phases.Count}</color>");
+        for (int pi = 0; pi < currentScenario.phases.Count; pi++)
+        {
+            var phase = currentScenario.phases[pi];
+            Debug.Log($"<color=cyan>  [{pi}] Phase: {phase.phaseName} (Steps: {phase.steps.Count})</color>");
+            for (int si = 0; si < phase.steps.Count; si++)
+            {
+                var step = phase.steps[si];
+                Debug.Log($"<color=yellow>    [{si}] Step {step.stepNo}: {step.stepName} (SubSteps: {step.subSteps.Count})</color>");
+                for (int ssi = 0; ssi < step.subSteps.Count; ssi++)
+                {
+                    var subStep = step.subSteps[ssi];
+                    Debug.Log($"<color=white>      [{ssi}] SubStep {subStep.subStepNo}: {subStep.handTrackingFileName ?? "(없음)"}</color>");
+                }
+            }
+        }
+        Debug.Log($"<color=magenta>===== 구조 디버그 끝 =====</color>");
+
         Debug.Log($"<color=yellow>[ScenarioManager] 초기 상태 설정 완료</color>");
         Debug.Log($"<color=yellow>  - Phase: {currentPhase.phaseName}</color>");
         Debug.Log($"<color=yellow>  - Step: {currentStep.stepName}</color>");
