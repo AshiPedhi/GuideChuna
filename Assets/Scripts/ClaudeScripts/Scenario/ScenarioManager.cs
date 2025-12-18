@@ -126,50 +126,57 @@ public class ScenarioManager : MonoBehaviour
     {
         eventSystem = ScenarioEventSystem.Instance;
 
+        // Quest 최적화: FindObjectOfType 호출 최소화 - Inspector에서 직접 연결 권장
         // ✅ ConditionManager 찾기
         if (conditionManager == null)
         {
             conditionManager = FindObjectOfType<ScenarioConditionManager>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (conditionManager != null)
+                Debug.Log("[ScenarioManager] ✅ ScenarioConditionManager 자동 찾기 성공");
+            else
+                Debug.LogWarning("[ScenarioManager] ⚠️ ScenarioConditionManager를 찾을 수 없습니다");
+#endif
         }
 
         // ✅ UI Positioner 찾기
         if (uiPositioner == null)
         {
             uiPositioner = FindObjectOfType<ScenarioUIPositioner>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (uiPositioner != null)
-            {
                 Debug.Log("[ScenarioManager] ✅ ScenarioUIPositioner 자동 찾기 성공");
-            }
+#endif
         }
 
         // ✅ QuizPanel 찾기
         if (quizPanel == null)
         {
             quizPanel = FindObjectOfType<QuizPanel>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (quizPanel != null)
-            {
                 Debug.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
-            }
+#endif
         }
 
         // ✅ ExitPopupController 찾기
         if (exitPopupController == null)
         {
             exitPopupController = FindObjectOfType<ExitPopupController>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (exitPopupController != null)
-            {
                 Debug.Log("[ScenarioManager] ✅ ExitPopupController 자동 찾기 성공");
-            }
+#endif
         }
 
         // ✅ TrainingResultTracker 찾기
         if (resultTracker == null)
         {
             resultTracker = FindObjectOfType<TrainingResultTracker>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (resultTracker != null)
-            {
                 Debug.Log("[ScenarioManager] ✅ TrainingResultTracker 자동 찾기 성공");
-            }
+#endif
         }
 
         // ✅ HandPose 시스템 초기화
@@ -178,68 +185,94 @@ public class ScenarioManager : MonoBehaviour
 
     /// <summary>
     /// HandPose 시스템 초기화 (프레임 기반 + 체크포인트 기반)
+    /// Quest 최적화: 재귀 호출 방지 및 Debug.Log 조건부 컴파일
     /// </summary>
     private void InitializeHandPoseSystem()
     {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log("<color=cyan>[ScenarioManager] 손 동작 평가 시스템 초기화 중...</color>");
         Debug.Log($"<color=cyan>[ScenarioManager] 현재 평가 모드: {evaluationMode}</color>");
+#endif
 
         // ========== 프레임 기반 시스템 초기화 ==========
         if (evaluationMode == EvaluationMode.FrameBased)
         {
-            // HandPoseTrainingController 찾기
-            if (trainingController == null)
-            {
-                trainingController = FindObjectOfType<HandPoseTrainingController>();
-            }
-
-            if (trainingController == null)
-            {
-                Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
-                return;
-            }
-
-            // HandPoseTrainingControllerBridge 찾기 또는 생성
-            trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
-
-            if (trainingControllerBridge == null)
-            {
-                Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
-                trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
-            }
-
-            Debug.Log("<color=green>[ScenarioManager] ✓ 프레임 기반 평가 시스템 초기화 완료!</color>");
+            InitializeFrameBasedSystem();
         }
-
         // ========== 체크포인트 기반 시스템 초기화 ==========
-        if (evaluationMode == EvaluationMode.CheckpointBased)
+        else if (evaluationMode == EvaluationMode.CheckpointBased)
         {
-            // ChunaPathEvaluator 찾기
-            if (chunaPathEvaluator == null)
-            {
-                chunaPathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
-            }
-
-            if (chunaPathEvaluator == null)
-            {
-                Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator를 찾을 수 없습니다. 체크포인트 기반 평가가 비활성화됩니다.");
-                Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
-                evaluationMode = EvaluationMode.FrameBased;
-                InitializeHandPoseSystem(); // 재귀 호출로 프레임 기반 초기화
-                return;
-            }
-
-            // ChunaPathEvaluatorBridge 찾기 또는 생성
-            chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
-
-            if (chunaPathEvaluatorBridge == null)
-            {
-                Debug.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
-                chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
-            }
-
-            Debug.Log("<color=green>[ScenarioManager] ✓ 체크포인트 기반 평가 시스템 초기화 완료!</color>");
+            InitializeCheckpointBasedSystem();
         }
+    }
+
+    /// <summary>
+    /// 프레임 기반 평가 시스템 초기화
+    /// </summary>
+    private void InitializeFrameBasedSystem()
+    {
+        // HandPoseTrainingController 찾기
+        if (trainingController == null)
+        {
+            trainingController = FindObjectOfType<HandPoseTrainingController>();
+        }
+
+        if (trainingController == null)
+        {
+            Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
+            return;
+        }
+
+        // HandPoseTrainingControllerBridge 찾기 또는 생성
+        trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
+
+        if (trainingControllerBridge == null)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
+#endif
+            trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log("<color=green>[ScenarioManager] ✓ 프레임 기반 평가 시스템 초기화 완료!</color>");
+#endif
+    }
+
+    /// <summary>
+    /// 체크포인트 기반 평가 시스템 초기화
+    /// </summary>
+    private void InitializeCheckpointBasedSystem()
+    {
+        // ChunaPathEvaluator 찾기
+        if (chunaPathEvaluator == null)
+        {
+            chunaPathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+        }
+
+        if (chunaPathEvaluator == null)
+        {
+            Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator를 찾을 수 없습니다. 체크포인트 기반 평가가 비활성화됩니다.");
+            Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
+            evaluationMode = EvaluationMode.FrameBased;
+            InitializeFrameBasedSystem();  // 재귀 대신 직접 호출
+            return;
+        }
+
+        // ChunaPathEvaluatorBridge 찾기 또는 생성
+        chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
+
+        if (chunaPathEvaluatorBridge == null)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
+#endif
+            chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
+        }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log("<color=green>[ScenarioManager] ✓ 체크포인트 기반 평가 시스템 초기화 완료!</color>");
+#endif
     }
 
     private void OnEnable()

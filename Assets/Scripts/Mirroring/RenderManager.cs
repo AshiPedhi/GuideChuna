@@ -543,6 +543,10 @@ public class RenderManager : MonoBehaviour
     #endregion
 
     #region Logging
+    /// <summary>
+    /// Quest 최적화: 조건부 컴파일로 릴리스 빌드에서 로그 제거
+    /// </summary>
+    [System.Diagnostics.Conditional("UNITY_EDITOR"), System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
     private void LogDebug(string message)
     {
         if (enableDebugLogs)
@@ -551,6 +555,7 @@ public class RenderManager : MonoBehaviour
         }
     }
 
+    [System.Diagnostics.Conditional("UNITY_EDITOR"), System.Diagnostics.Conditional("DEVELOPMENT_BUILD")]
     private void LogWarning(string message)
     {
         if (enableDebugLogs)

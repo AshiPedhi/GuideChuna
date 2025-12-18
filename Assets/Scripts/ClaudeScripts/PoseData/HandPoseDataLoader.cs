@@ -14,6 +14,7 @@ using System.Globalization;
 /// - UTF-8, EUC-KR 자동 인코딩 감지
 /// - 프레임 데이터 파싱
 /// - OpenXRRoot Transform 데이터 포함
+/// - Quest 최적화: CSV 데이터 캐싱
 ///
 /// 사용법:
 /// var loader = new HandPoseDataLoader();
@@ -21,6 +22,34 @@ using System.Globalization;
 /// </summary>
 public class HandPoseDataLoader
 {
+    // Quest 최적화: CSV 데이터 캐싱 (씬 전환 시에도 유지)
+    private static Dictionary<string, LoadResult> cachedResults = new Dictionary<string, LoadResult>();
+
+    /// <summary>
+    /// 캐시 초기화 (씬 전환 시 메모리 정리용)
+    /// </summary>
+    public static void ClearCache()
+    {
+        cachedResults.Clear();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        Debug.Log("[HandPoseDataLoader] 캐시 초기화됨");
+#endif
+    }
+
+    /// <summary>
+    /// 특정 파일의 캐시 제거
+    /// </summary>
+    public static void RemoveFromCache(string resourcePath)
+    {
+        if (cachedResults.ContainsKey(resourcePath))
+        {
+            cachedResults.Remove(resourcePath);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"[HandPoseDataLoader] 캐시에서 제거됨: {resourcePath}");
+#endif
+        }
+    }
+
     /// <summary>
     /// 포즈 데이터 (조인트별 로컬 좌표)
     /// </summary>
@@ -58,17 +87,28 @@ public class HandPoseDataLoader
     }
 
     /// <summary>
-    /// Resources 폴더에서 CSV 로드
+    /// Resources 폴더에서 CSV 로드 (캐싱 지원)
+    /// Quest 최적화: 동일한 파일을 다시 로드하지 않고 캐시 사용
     /// </summary>
     /// <param name="resourcePath">Resources 폴더 기준 경로 (확장자 제외). 예: "HandPoseData/등척성운동"</param>
-    public LoadResult LoadFromResources(string resourcePath)
+    /// <param name="useCache">캐시 사용 여부 (기본: true)</param>
+    public LoadResult LoadFromResources(string resourcePath, bool useCache = true)
     {
-        LoadResult result = new LoadResult();
-
         // .csv 확장자 제거
         string fileNameWithoutExt = resourcePath;
         if (fileNameWithoutExt.EndsWith(".csv"))
             fileNameWithoutExt = fileNameWithoutExt.Substring(0, fileNameWithoutExt.Length - 4);
+
+        // Quest 최적화: 캐시에서 찾기
+        if (useCache && cachedResults.TryGetValue(fileNameWithoutExt, out LoadResult cachedResult))
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"<color=yellow>[HandPoseDataLoader] ✓ 캐시에서 로드: {fileNameWithoutExt} ({cachedResult.frames.Count} 프레임)</color>");
+#endif
+            return cachedResult;
+        }
+
+        LoadResult result = new LoadResult();
 
         // Resources에서 로드
         TextAsset csvFile = Resources.Load<TextAsset>(fileNameWithoutExt);
@@ -80,13 +120,26 @@ public class HandPoseDataLoader
             return result;
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         Debug.Log($"<color=green>[HandPoseDataLoader] ✓ Resources에서 CSV 로드 성공: {fileNameWithoutExt}</color>");
+#endif
 
         // CSV 텍스트 디코딩 (한글 지원)
         string csvText = DecodeCSVText(csvFile.bytes);
 
         // 파싱
-        return ParseCSV(csvText);
+        result = ParseCSV(csvText);
+
+        // Quest 최적화: 성공하면 캐시에 저장
+        if (result.success && useCache)
+        {
+            cachedResults[fileNameWithoutExt] = result;
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            Debug.Log($"<color=cyan>[HandPoseDataLoader] ✓ 캐시에 저장: {fileNameWithoutExt}</color>");
+#endif
+        }
+
+        return result;
     }
 
     /// <summary>

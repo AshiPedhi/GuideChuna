@@ -52,6 +52,10 @@ public class ScenarioConditionManager : MonoBehaviour
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 
+    [Header("=== 시스템 참조 ===")]
+    [Tooltip("ScenarioManager 참조 (자동 찾기 가능)")]
+    [SerializeField] private ScenarioManager scenarioManager;
+
     // 현재 조건
     private IScenarioCondition currentCondition;
     private bool isCheckingCondition = false;
@@ -59,7 +63,6 @@ public class ScenarioConditionManager : MonoBehaviour
 
     // 이벤트 시스템
     private ScenarioEventSystem eventSystem;
-    private ScenarioManager scenarioManager;
 
     // 조건 레지스트리 (SubStep별로 조건을 등록)
     private Dictionary<string, IScenarioCondition> conditionRegistry = new Dictionary<string, IScenarioCondition>();
@@ -75,12 +78,27 @@ public class ScenarioConditionManager : MonoBehaviour
     void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+
+        // Quest 최적화: FindObjectOfType 호출 최소화 - Inspector에서 직접 연결 권장
+        if (scenarioManager == null)
+        {
+            scenarioManager = FindObjectOfType<ScenarioManager>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (scenarioManager != null)
+                Debug.Log("[ConditionManager] ✅ ScenarioManager 자동 찾기 성공");
+            else
+                Debug.LogWarning("[ConditionManager] ⚠️ ScenarioManager를 찾을 수 없습니다");
+#endif
+        }
 
         // GuideUIController가 설정되지 않았으면 자동으로 찾기
         if (guideUIController == null)
         {
             guideUIController = FindObjectOfType<ScenarioGuideUIController>();
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (guideUIController != null)
+                Debug.Log("[ConditionManager] ✅ ScenarioGuideUIController 자동 찾기 성공");
+#endif
         }
 
         // Quest 최적화: WaitForSeconds 객체 캐싱

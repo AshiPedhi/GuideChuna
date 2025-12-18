@@ -36,6 +36,9 @@ public class ChunaLimitChecker : MonoBehaviour
     private LimitCheckResult currentLeftResult = new LimitCheckResult();
     private LimitCheckResult currentRightResult = new LimitCheckResult();
 
+    // Quest 최적화: 캐시된 참조 (FindObjectOfType 반복 호출 방지)
+    private bool pathEvaluatorSearched = false;
+
     // 이벤트
     public event Action<LimitCheckResult, LimitCheckResult> OnLimitStatusChanged;
 
@@ -103,6 +106,7 @@ public class ChunaLimitChecker : MonoBehaviour
 
     /// <summary>
     /// 프레임 비율 기반 상태 업데이트
+    /// Quest 최적화: LimitCheckResult 객체 재사용 (GC 부담 감소)
     /// </summary>
     private void UpdateLimitStatus()
     {
@@ -113,29 +117,25 @@ public class ChunaLimitChecker : MonoBehaviour
         LimitStatus newStatus = GetStatusFromRatio(ratio);
 
         // 결과 업데이트 (왼손은 항상 Safe, 오른손만 체크)
-        LimitCheckResult prevRight = currentRightResult;
+        // Quest 최적화: 객체 재사용 - 새로 생성하지 않고 값만 변경
+        LimitStatus prevRightStatus = currentRightResult.overallStatus;
 
-        currentLeftResult = new LimitCheckResult
-        {
-            overallStatus = LimitStatus.Safe,
-            frameRatio = ratio,
-            currentFrame = currentFrame,
-            totalFrames = totalFrames
-        };
+        currentLeftResult.overallStatus = LimitStatus.Safe;
+        currentLeftResult.frameRatio = ratio;
+        currentLeftResult.currentFrame = currentFrame;
+        currentLeftResult.totalFrames = totalFrames;
 
-        currentRightResult = new LimitCheckResult
-        {
-            overallStatus = newStatus,
-            frameRatio = ratio,
-            currentFrame = currentFrame,
-            totalFrames = totalFrames
-        };
+        currentRightResult.overallStatus = newStatus;
+        currentRightResult.frameRatio = ratio;
+        currentRightResult.currentFrame = currentFrame;
+        currentRightResult.totalFrames = totalFrames;
 
         // 상태 변경 감지
-        if (prevRight.overallStatus != newStatus)
+        if (prevRightStatus != newStatus)
         {
             OnLimitStatusChanged?.Invoke(currentLeftResult, currentRightResult);
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
             if (showDebugLogs)
             {
                 string color = newStatus == LimitStatus.Safe ? "green" :
@@ -143,6 +143,7 @@ public class ChunaLimitChecker : MonoBehaviour
                               (newStatus == LimitStatus.Danger ? "orange" : "red"));
                 Debug.Log($"<color={color}>[ChunaLimitChecker] 상태: {newStatus}, 프레임: {currentFrame}/{totalFrames} ({ratio:P0})</color>");
             }
+#endif
         }
     }
 
@@ -160,12 +161,15 @@ public class ChunaLimitChecker : MonoBehaviour
 
     /// <summary>
     /// 현재 진행률 가져오기
+    /// Quest 최적화: FindObjectOfType을 한 번만 호출하고 캐시
     /// </summary>
     private float GetCurrentProgress()
     {
-        if (pathEvaluator == null)
+        // 이미 검색했고 null이면 더 이상 검색하지 않음
+        if (pathEvaluator == null && !pathEvaluatorSearched)
         {
             pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluatorSearched = true;
         }
 
         return pathEvaluator != null ? pathEvaluator.GetCurrentProgress() : 0f;
@@ -200,11 +204,23 @@ public class ChunaLimitChecker : MonoBehaviour
     public void Reset()
     {
         isInitialized = false;
-        currentLeftResult = new LimitCheckResult();
-        currentRightResult = new LimitCheckResult();
+        pathEvaluatorSearched = false;  // 캐시 플래그 리셋
 
+        // Quest 최적화: 객체 재사용 - 값만 초기화
+        currentLeftResult.overallStatus = LimitStatus.Safe;
+        currentLeftResult.frameRatio = 0f;
+        currentLeftResult.currentFrame = 0;
+        currentLeftResult.totalFrames = 0;
+
+        currentRightResult.overallStatus = LimitStatus.Safe;
+        currentRightResult.frameRatio = 0f;
+        currentRightResult.currentFrame = 0;
+        currentRightResult.totalFrames = 0;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
         if (showDebugLogs)
             Debug.Log("[ChunaLimitChecker] 리셋됨");
+#endif
     }
 
     /// <summary>
