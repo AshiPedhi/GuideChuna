@@ -43,6 +43,70 @@ public class SubStepData
     [Tooltip("이동 감지 방식: position(위치 기반), rotation(회전 기반), 비어있으면 자동 감지")]
     public string movementType;
 
+    [Header("가이드 영상 구간")]
+    [Tooltip("영상 시작 시간 (분:초 형식, 예: 1:30)")]
+    public string videoStartTime;
+
+    [Tooltip("영상 끝 시간 (분:초 형식, 예: 2:45)")]
+    public string videoEndTime;
+
+    /// <summary>
+    /// 가이드 영상 구간이 있는지 확인
+    /// </summary>
+    public bool HasVideoSegment() => !string.IsNullOrEmpty(videoStartTime) && !string.IsNullOrEmpty(videoEndTime);
+
+    /// <summary>
+    /// 영상 시작 시간을 초 단위로 변환
+    /// </summary>
+    public float GetVideoStartSeconds()
+    {
+        return ParseTimeToSeconds(videoStartTime);
+    }
+
+    /// <summary>
+    /// 영상 끝 시간을 초 단위로 변환
+    /// </summary>
+    public float GetVideoEndSeconds()
+    {
+        return ParseTimeToSeconds(videoEndTime);
+    }
+
+    /// <summary>
+    /// 분:초 형식을 초 단위로 변환
+    /// 지원 형식: "1:30", "1-30", "90" (초 단위)
+    /// 엑셀에서 시간으로 인식하는 문제 때문에 "-" 구분자도 지원
+    /// </summary>
+    private float ParseTimeToSeconds(string timeStr)
+    {
+        if (string.IsNullOrEmpty(timeStr)) return 0f;
+
+        // 공백 제거
+        timeStr = timeStr.Trim();
+
+        // ":" 또는 "-" 구분자 지원
+        char[] separators = { ':', '-' };
+        string[] parts = timeStr.Split(separators);
+
+        if (parts.Length == 2)
+        {
+            // 분:초 또는 분-초 형식
+            if (int.TryParse(parts[0], out int minutes) && int.TryParse(parts[1], out int seconds))
+            {
+                return minutes * 60f + seconds;
+            }
+        }
+        else if (parts.Length == 1)
+        {
+            // 초만 있는 경우 (예: "90")
+            if (float.TryParse(parts[0], out float seconds))
+            {
+                return seconds;
+            }
+        }
+
+        return 0f;
+    }
+
     /// <summary>
     /// 핸드 트래킹이 있는지 확인
     /// </summary>

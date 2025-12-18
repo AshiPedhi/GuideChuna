@@ -393,24 +393,10 @@ public class HandPoseTrainingController : MonoBehaviour
             }
         }
 
-        // UI 업데이트 (양손 모두 항상 업데이트)
+        // UI 업데이트 (양손 유사도 표시)
         if (handFeedbackUI != null)
         {
-            handFeedbackUI.UpdateLeftHandInfo(
-                leftSimilarity,
-                currentProgress,
-                cachedMaxFrameIndex,
-                leftConsecutive,
-                consecutiveFramesRequired
-            );
-
-            handFeedbackUI.UpdateRightHandInfo(
-                rightSimilarity,
-                currentProgress,
-                cachedMaxFrameIndex,
-                rightConsecutive,
-                consecutiveFramesRequired
-            );
+            handFeedbackUI.UpdateSimilarity(leftSimilarity, rightSimilarity);
         }
 
         // 유사도에 따라 플레이어 핸드 색상 변경 (양손 모두)

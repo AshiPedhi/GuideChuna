@@ -62,6 +62,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("Survey Panel")]
     [Tooltip("설문 패널 (로그아웃/종료 시 표시)")]
     [SerializeField] private SurveyPanel surveyPanel;
+
+    [Header("Mirroring (Render Streaming)")]
+    [Tooltip("미러링용 Camera X 오브젝트 (로그인 시 활성화)")]
+    [SerializeField] private GameObject mirroringCameraObject;
     #endregion
 
     #region UI References - Grade Selection Panel
@@ -158,22 +162,35 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private void OnDestroy()
     {
         UnsubscribeFromEvents();
+    }
 
-        // 씬 전환이 아닌 애플리케이션 종료 시에만 로그아웃 시도
-        // (씬 전환 시에는 로그인 상태 유지를 위해 로그아웃하지 않음)
-        // Application.isQuitting을 체크할 수 없으므로 주석 처리
-        // if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
-        // {
-        //     try
-        //     {
-        //         Debug.Log($"[LobbyUI] OnDestroy - 로그아웃 시도: {currentUsername}");
-        //         PerformLogoutAsync().Forget();
-        //     }
-        //     catch (Exception e)
-        //     {
-        //         Debug.LogWarning($"[LobbyUI] OnDestroy 로그아웃 실패 (무시): {e.Message}");
-        //     }
-        // }
+    /// <summary>
+    /// 앱 종료 시 호출 - 로그아웃 후 종료
+    /// </summary>
+    private void OnApplicationQuit()
+    {
+        Debug.Log("[LobbyUI] OnApplicationQuit 호출");
+
+        // 로그인 상태면 동기적으로 로그아웃 시도
+        if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
+        {
+            Debug.Log($"[LobbyUI] 앱 종료 전 로그아웃 시도: {currentUsername}");
+
+            try
+            {
+                // 동기적으로 로그아웃 API 호출 (타임아웃 3초)
+                var logoutTask = authService.LogoffAsync(currentDeviceSN, currentUsername, "VR_CHUNA");
+                logoutTask.AsTask().Wait(TimeSpan.FromSeconds(3));
+                Debug.Log("[LobbyUI] ✅ 앱 종료 전 로그아웃 성공");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[LobbyUI] ⚠️ 앱 종료 전 로그아웃 실패 (무시): {e.Message}");
+            }
+
+            // PlayerPrefs 로그인 정보 삭제
+            ClearSavedLoginInfo();
+        }
     }
     #endregion
 
@@ -752,11 +769,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     }
 
     /// <summary>
-    /// 애플리케이션 종료 (로그아웃 없이 바로 종료)
+    /// 애플리케이션 종료 (로그아웃 후 종료)
     /// </summary>
     private async UniTaskVoid ExitApplication()
     {
-        Debug.Log("[LobbyUI] 애플리케이션 종료 (로그아웃 없이 바로 종료)");
+        Debug.Log("[LobbyUI] 애플리케이션 종료 시작");
+
+        // 로그인 상태면 로그아웃 먼저 수행
+        if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
+        {
+            Debug.Log($"[LobbyUI] 종료 전 로그아웃 시도: {currentUsername}");
+
+            try
+            {
+                await authService.LogoffAsync(currentDeviceSN, currentUsername, "VR_CHUNA");
+                Debug.Log("[LobbyUI] ✅ 종료 전 로그아웃 성공");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[LobbyUI] ⚠️ 종료 전 로그아웃 실패 (무시): {e.Message}");
+            }
+
+            // PlayerPrefs 로그인 정보 삭제
+            ClearSavedLoginInfo();
+        }
+
+        Debug.Log("[LobbyUI] 애플리케이션 종료");
 
         // 애플리케이션 종료
 #if UNITY_EDITOR
@@ -1033,15 +1071,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             Debug.Log($"[LobbyUI] 로그인 시작: {username}");
 
+            MirroringData mirroringData = null;
             try
             {
-                var mirroringData = await authService.LogonAsync(
+                mirroringData = await authService.LogonAsync(
                     currentDeviceSN,
                     username,
                     "VR_CHUNA"
                 );
 
-                Debug.Log($"[LobbyUI] 미러링 데이터 수신 완료");
+                Debug.Log($"[LobbyUI] 미러링 데이터 수신 완료: {mirroringData?.serverIP}:{mirroringData?.portNo}");
             }
             catch (Exception logonException)
             {
@@ -1075,12 +1114,64 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             // 안내 메시지 변경
             SetGuideMessage(scenarioGuideMessage);
 
+            // ★★★ 미러링 시작: Camera X 활성화 및 미러링 데이터 전달 ★★★
+            ActivateMirroring(mirroringData);
+
             Debug.Log($"[LobbyUI] ✅ 로그인 완료: {username} (ID: {userId})");
         }
         catch (Exception e)
         {
             Debug.LogError($"[LobbyUI] ❌ 로그인 실패: {e.Message}");
             ShowLoginError(e.Message);
+        }
+    }
+
+    /// <summary>
+    /// 미러링 활성화 (Camera X 활성화 + RenderManager에 데이터 전달)
+    /// </summary>
+    private void ActivateMirroring(MirroringData mirroringData)
+    {
+        // 미러링 데이터가 없거나 off면 미러링 안함
+        if (mirroringData == null || mirroringData.mirroring == "off")
+        {
+            Debug.Log("[LobbyUI] 미러링 비활성화 상태 (데이터 없음 또는 off)");
+            return;
+        }
+
+        // Camera X 활성화
+        if (mirroringCameraObject != null)
+        {
+            mirroringCameraObject.SetActive(true);
+            Debug.Log($"[LobbyUI] 미러링 카메라 활성화됨: {mirroringCameraObject.name}");
+
+            // RenderManager가 활성화되면 약간의 딜레이 후 데이터 전달
+            StartCoroutine(SetMirroringDataDelayed(mirroringData));
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] mirroringCameraObject가 설정되지 않음");
+
+            // 직접 RenderManager 찾아서 전달 시도
+            if (RenderManager.instance != null)
+            {
+                RenderManager.instance.SetMirroringData(mirroringData);
+            }
+        }
+    }
+
+    private System.Collections.IEnumerator SetMirroringDataDelayed(MirroringData mirroringData)
+    {
+        // RenderManager.Start()가 실행될 시간을 줌
+        yield return new WaitForSeconds(0.1f);
+
+        if (RenderManager.instance != null)
+        {
+            RenderManager.instance.SetMirroringData(mirroringData);
+            Debug.Log($"[LobbyUI] RenderManager에 미러링 데이터 전달 완료");
+        }
+        else
+        {
+            Debug.LogWarning("[LobbyUI] RenderManager.instance가 null");
         }
     }
 
@@ -1117,9 +1208,31 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning($"[LobbyUI] ⚠️ 로그아웃 API 실패 (무시하고 진행): {e.Message}");
         }
 
+        // 미러링 비활성화
+        DeactivateMirroring();
+
         // API 실패 여부와 관계없이 로컬 상태는 항상 초기화
         ClearUserInfo();
         Debug.Log($"[LobbyUI] ✅ 로그아웃 완료 (로컬 상태 초기화)");
+    }
+
+    /// <summary>
+    /// 미러링 비활성화 (Camera X 비활성화)
+    /// </summary>
+    private void DeactivateMirroring()
+    {
+        // RenderManager 미러링 중지
+        if (RenderManager.instance != null)
+        {
+            RenderManager.instance.StopMirroring();
+        }
+
+        // Camera X 비활성화
+        if (mirroringCameraObject != null)
+        {
+            mirroringCameraObject.SetActive(false);
+            Debug.Log($"[LobbyUI] 미러링 카메라 비활성화됨: {mirroringCameraObject.name}");
+        }
     }
     #endregion
 
@@ -1505,6 +1618,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     #endregion
 
     #region Debug Helpers
+    [ContextMenu("Debug - Clear All Saved Data (Reset)")]
+    public void Debug_ClearAllSavedData()
+    {
+        Debug.Log("[LobbyUI] ========== 저장된 모든 데이터 초기화 ==========");
+
+        // 로그인 정보 삭제
+        PlayerPrefs.DeleteKey("LOGIN_USERNAME");
+        PlayerPrefs.DeleteKey("LOGIN_USERID");
+
+        // 디바이스 정보 삭제
+        PlayerPrefs.DeleteKey("DEVICE_SN");
+
+        // 모든 PlayerPrefs 저장
+        PlayerPrefs.Save();
+
+        // 현재 상태 초기화
+        currentUsername = string.Empty;
+        currentUserID = 0;
+        currentDeviceSN = string.Empty;
+        currentOrgID = string.Empty;
+        savedDeviceSN = string.Empty;
+
+        Debug.Log("[LobbyUI] ✅ 모든 저장 데이터 초기화 완료");
+        Debug.Log("[LobbyUI] 앱을 재시작하세요.");
+    }
+
     [ContextMenu("Test - Show Grade Selection")]
     private void Debug_ShowGradeSelection()
     {
