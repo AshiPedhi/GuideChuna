@@ -376,9 +376,8 @@ public class ExitPopupController : MonoBehaviour
     {
         Time.timeScale = 1f; // 시간 정상화
 
-        // 현재 씬 다시 로드
-        Scene currentScene = SceneManager.GetActiveScene();
-        SceneManager.LoadScene(currentScene.name);
+        // SceneLoader를 통해 씬 전환 (Camera X 보존)
+        SceneLoader.ReloadCurrentScene(useLoadingScene: true);
     }
 
     /// <summary>
@@ -390,7 +389,8 @@ public class ExitPopupController : MonoBehaviour
 
         if (!string.IsNullOrEmpty(mainMenuSceneName))
         {
-            SceneManager.LoadScene(mainMenuSceneName);
+            // SceneLoader를 통해 씬 전환 (Camera X 보존)
+            SceneLoader.LoadScene(mainMenuSceneName, useLoadingScene: true);
         }
         else
         {

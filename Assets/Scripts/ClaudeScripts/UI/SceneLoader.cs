@@ -163,7 +163,26 @@ public class SceneLoader : MonoBehaviour
             // 부모 해제 (루트로 이동)
             preservedCameraX.transform.SetParent(null);
             Debug.Log($"[SceneLoader] Camera X 복원됨 (CameraLocateCtrl이 위치 재설정 예정)");
+
+            // 미러링 재연결 시도 (SignalingManager 재시작)
+            StartCoroutine(TryReconnectMirroringDelayed());
+
             preservedCameraX = null;
+        }
+    }
+
+    /// <summary>
+    /// 씬 전환 후 미러링 재연결 시도
+    /// </summary>
+    private IEnumerator TryReconnectMirroringDelayed()
+    {
+        // CameraLocateCtrl이 Camera X 위치를 재설정할 시간을 줌
+        yield return new WaitForSeconds(0.5f);
+
+        if (RenderManager.instance != null && RenderManager.instance.IsConnected)
+        {
+            Debug.Log("[SceneLoader] 미러링 재연결 시도...");
+            RenderManager.instance.TryReconnect();
         }
     }
 
