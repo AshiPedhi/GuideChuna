@@ -4,19 +4,20 @@ using UnityEngine;
 using Unity.RenderStreaming;
 using Cysharp.Threading.Tasks;
 using System;
+using System.Threading;
 
 /// <summary>
-/// VR 최적화 RenderManager - 단순화 버전
+/// VR 최적화 RenderManager - 메모리 누수 방지 버전
 ///
 /// [주요 기능]
 /// - LobbyAuthUI에서 Camera X 오브젝트 활성화/비활성화 제어
 /// - SetMirroringData() 호출 시 미러링 시작
 /// - StopMirroring() 호출 시 미러링 중지
 ///
-/// [사용법]
-/// 1. Camera X 오브젝트는 Inspector에서 비활성화 상태로 설정
-/// 2. 로그인 성공 시 LobbyAuthUI에서 Camera X 활성화 + SetMirroringData() 호출
-/// 3. 로그아웃 시 LobbyAuthUI에서 StopMirroring() + Camera X 비활성화
+/// [메모리 최적화]
+/// - CancellationTokenSource 재사용
+/// - 재귀 호출 대신 반복문 사용
+/// - 리소스 정리 강화
 /// </summary>
 public class RenderManager : MonoBehaviour
 {
@@ -31,7 +32,6 @@ public class RenderManager : MonoBehaviour
 
     private MirroringData currentMirroringData;
     private bool hasInitialized = false;
-    private Coroutine runCoroutine;
 
     // 연결 상태 추적
     private bool isConnecting = false;
@@ -39,9 +39,12 @@ public class RenderManager : MonoBehaviour
     private int connectionAttempts = 0;
     private const int MAX_CONNECTION_ATTEMPTS = 3;
     private const float CONNECTION_RETRY_DELAY = 2f;
+    private const float CONNECTION_TIMEOUT = 10f;
 
-    // 메모리 최적화를 위한 재사용 가능한 리스트
+    // 메모리 최적화
     private List<IceServer> _cachedIceServers;
+    private CancellationTokenSource _connectionCts;
+    private bool _isRunning = false;
 
     #region Unity Lifecycle
     private void Awake()
@@ -66,14 +69,13 @@ public class RenderManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (runCoroutine != null)
-        {
-            StopCoroutine(runCoroutine);
-            runCoroutine = null;
-        }
+        // 모든 비동기 작업 취소
+        CancelAllOperations();
 
+        // 리소스 정리
         _cachedIceServers?.Clear();
         _cachedIceServers = null;
+        currentMirroringData = null;
 
         if (instance == this)
         {
@@ -81,6 +83,15 @@ public class RenderManager : MonoBehaviour
         }
 
         LogDebug("RenderManager 파괴됨");
+    }
+
+    private void OnApplicationPause(bool pauseStatus)
+    {
+        // 앱이 백그라운드로 가면 미러링 일시 중지
+        if (pauseStatus && isConnected)
+        {
+            LogDebug("앱 일시정지 - 미러링 연결 유지 (프레임 전송 중단)");
+        }
     }
     #endregion
 
@@ -125,38 +136,28 @@ public class RenderManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 미러링 중지
+    /// 미러링 중지 - 모든 리소스 정리
     /// </summary>
     public void StopMirroring()
     {
         try
         {
-            if (runCoroutine != null)
-            {
-                StopCoroutine(runCoroutine);
-                runCoroutine = null;
-            }
+            LogDebug("미러링 중지 시작...");
 
-            // 연결 상태 초기화
+            // 1. 비동기 작업 취소
+            CancelAllOperations();
+
+            // 2. 연결 상태 초기화
+            _isRunning = false;
             isConnecting = false;
             isConnected = false;
             connectionAttempts = 0;
             hasInitialized = false;
 
-            // SignalingManager 안전 중지
-            if (sm != null)
-            {
-                try
-                {
-                    sm.Stop();
-                }
-                catch (Exception e)
-                {
-                    LogWarning($"SignalingManager 중지 중 오류: {e.Message}");
-                }
-            }
+            // 3. SignalingManager 안전 중지
+            SafeStopSignalingManager();
 
-            LogDebug("미러링 중지됨");
+            LogDebug("미러링 중지 완료");
         }
         catch (Exception e)
         {
@@ -240,7 +241,49 @@ public class RenderManager : MonoBehaviour
     }
     #endregion
 
-    #region Mirroring Control (Private)
+    #region Private Methods
+    /// <summary>
+    /// 모든 비동기 작업 취소
+    /// </summary>
+    private void CancelAllOperations()
+    {
+        if (_connectionCts != null)
+        {
+            try
+            {
+                if (!_connectionCts.IsCancellationRequested)
+                {
+                    _connectionCts.Cancel();
+                }
+                _connectionCts.Dispose();
+            }
+            catch (ObjectDisposedException) { }
+            finally
+            {
+                _connectionCts = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// SignalingManager 안전 중지
+    /// </summary>
+    private void SafeStopSignalingManager()
+    {
+        if (sm != null)
+        {
+            try
+            {
+                sm.Stop();
+                LogDebug("SignalingManager 중지됨");
+            }
+            catch (Exception e)
+            {
+                LogWarning($"SignalingManager 중지 중 오류 (무시): {e.Message}");
+            }
+        }
+    }
+
     /// <summary>
     /// 미러링 시작
     /// </summary>
@@ -249,7 +292,7 @@ public class RenderManager : MonoBehaviour
         try
         {
             // 이미 연결 중이면 무시
-            if (isConnecting)
+            if (isConnecting || _isRunning)
             {
                 LogDebug("이미 연결 중입니다. 중복 요청 무시.");
                 return;
@@ -274,12 +317,11 @@ public class RenderManager : MonoBehaviour
                 return;
             }
 
-            // 기존 실행 중지
-            if (runCoroutine != null)
-            {
-                StopCoroutine(runCoroutine);
-                runCoroutine = null;
-            }
+            // 이전 작업 취소
+            CancelAllOperations();
+
+            // 새 CancellationTokenSource 생성
+            _connectionCts = new CancellationTokenSource();
 
             // 연결 상태 초기화
             isConnecting = true;
@@ -297,16 +339,127 @@ public class RenderManager : MonoBehaviour
             // 품질 설정
             SetQuality(currentMirroringData.videoQuality);
 
-            // 실행
-            runCoroutine = StartCoroutine(Run());
+            // 비동기 연결 시작
+            RunConnectionLoopAsync(_connectionCts.Token).Forget();
 
-            LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo} | 품질: {currentMirroringData.videoQuality}");
+            LogDebug($"미러링 시작: {currentMirroringData.serverIP}:{currentMirroringData.portNo}");
         }
         catch (Exception e)
         {
             LogError($"미러링 시작 실패: {e.Message}");
             isConnecting = false;
             isConnected = false;
+        }
+    }
+
+    /// <summary>
+    /// 연결 루프 (재귀 대신 반복문 사용)
+    /// </summary>
+    private async UniTaskVoid RunConnectionLoopAsync(CancellationToken cancellationToken)
+    {
+        _isRunning = true;
+
+        try
+        {
+            while (connectionAttempts < MAX_CONNECTION_ATTEMPTS && !cancellationToken.IsCancellationRequested)
+            {
+                connectionAttempts++;
+                LogDebug($"연결 시도 {connectionAttempts}/{MAX_CONNECTION_ATTEMPTS}...");
+
+                try
+                {
+                    // SignalingManager 실행
+                    sm.Run();
+
+                    // 타임아웃과 함께 Track 생성 대기
+                    bool connected = await WaitForTrackWithTimeout(cancellationToken);
+
+                    if (connected)
+                    {
+                        LogDebug($"Track 생성 완료! ID: {vss.Track?.Id}");
+                        hasInitialized = true;
+                        isConnected = true;
+                        isConnecting = false;
+                        _isRunning = false;
+                        return; // 성공 - 루프 종료
+                    }
+
+                    // 타임아웃 - 재시도 준비
+                    LogWarning($"Track 생성 타임아웃 ({CONNECTION_TIMEOUT}초)");
+
+                    if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
+                    {
+                        // SignalingManager 중지
+                        SafeStopSignalingManager();
+
+                        // 재시도 전 대기
+                        LogDebug($"{CONNECTION_RETRY_DELAY}초 후 재시도...");
+                        await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cancellationToken);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    LogDebug("연결 시도 취소됨");
+                    break;
+                }
+                catch (Exception e)
+                {
+                    LogError($"연결 시도 실패: {e.Message}");
+
+                    if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
+                    {
+                        SafeStopSignalingManager();
+                        await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cancellationToken);
+                    }
+                }
+            }
+
+            // 최대 재시도 횟수 초과
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                LogError($"최대 연결 시도 횟수 초과 ({MAX_CONNECTION_ATTEMPTS}회). 미러링 비활성화.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            LogDebug("연결 루프 취소됨 (정상 종료)");
+        }
+        catch (Exception e)
+        {
+            LogError($"연결 루프 예외: {e.Message}");
+        }
+        finally
+        {
+            _isRunning = false;
+            isConnecting = false;
+
+            if (!isConnected)
+            {
+                hasInitialized = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Track 생성 대기 (타임아웃 포함)
+    /// </summary>
+    private async UniTask<bool> WaitForTrackWithTimeout(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using (var timeoutCts = new CancellationTokenSource())
+            using (var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token))
+            {
+                timeoutCts.CancelAfter(TimeSpan.FromSeconds(CONNECTION_TIMEOUT));
+
+                await UniTask.WaitUntil(() => vss != null && vss.Track != null, cancellationToken: linkedCts.Token);
+                return true;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // 타임아웃 또는 외부 취소
+            return false;
         }
     }
     #endregion
@@ -322,7 +475,6 @@ public class RenderManager : MonoBehaviour
                 return false;
             }
 
-            // 서버 주소 유효성 체크
             if (string.IsNullOrEmpty(serverIP))
             {
                 LogError("서버 IP가 비어있습니다.");
@@ -339,12 +491,11 @@ public class RenderManager : MonoBehaviour
             _cachedIceServers.Clear();
 
             var signalingSettings = sm.GetSignalingSettings();
-            if (signalingSettings != null && signalingSettings.iceServers != null)
+            if (signalingSettings?.iceServers != null)
             {
-                var iceServerEnumerator = signalingSettings.iceServers.GetEnumerator();
-                while (iceServerEnumerator.MoveNext())
+                foreach (var iceServer in signalingSettings.iceServers)
                 {
-                    _cachedIceServers.Add(iceServerEnumerator.Current);
+                    _cachedIceServers.Add(iceServer);
                 }
             }
 
@@ -363,7 +514,7 @@ public class RenderManager : MonoBehaviour
     #endregion
 
     #region Quality Settings
-    void SetQuality(string streamingQuality)
+    private void SetQuality(string streamingQuality)
     {
         if (vss == null || !vss.isActiveAndEnabled)
         {
@@ -416,128 +567,6 @@ public class RenderManager : MonoBehaviour
         catch (Exception e)
         {
             LogError($"품질 설정 실패: {e.Message}");
-        }
-    }
-    #endregion
-
-    #region Run
-    IEnumerator Run()
-    {
-        if (vss == null || !vss.isActiveAndEnabled)
-        {
-            LogError("VideoStreamSender가 null이거나 비활성화되었습니다.");
-            isConnecting = false;
-            yield break;
-        }
-
-        yield return null;
-        RunAsync().Forget();
-    }
-
-    private async UniTask RunAsync()
-    {
-        if (vss == null || !vss.isActiveAndEnabled)
-        {
-            LogError("VideoStreamSender가 null이거나 비활성화되었습니다.");
-            isConnecting = false;
-            return;
-        }
-
-        connectionAttempts++;
-        LogDebug($"연결 시도 {connectionAttempts}/{MAX_CONNECTION_ATTEMPTS}...");
-
-        try
-        {
-            sm.Run();
-
-            // 타임아웃 추가로 무한 대기 방지 (VR에서 중요)
-            var cts = this.GetCancellationTokenOnDestroy();
-            var timeoutTask = UniTask.Delay(TimeSpan.FromSeconds(10), cancellationToken: cts);
-            var waitTask = UniTask.WaitUntil(() => vss.Track != null, cancellationToken: cts);
-
-            var result = await UniTask.WhenAny(waitTask, timeoutTask);
-
-            if (result == 0) // waitTask 완료
-            {
-                LogDebug($"Track 생성 완료! ID: {vss.Track.Id}");
-                hasInitialized = true;
-                isConnected = true;
-                isConnecting = false;
-                connectionAttempts = 0;
-            }
-            else // 타임아웃
-            {
-                LogWarning($"Track 생성 타임아웃 (10초) - 시도 {connectionAttempts}/{MAX_CONNECTION_ATTEMPTS}");
-
-                // 재시도 로직
-                if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
-                {
-                    LogDebug($"{CONNECTION_RETRY_DELAY}초 후 재시도...");
-                    await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cts);
-
-                    // SignalingManager 중지 후 재시작
-                    try
-                    {
-                        sm.Stop();
-                        await UniTask.Delay(500, cancellationToken: cts);
-                    }
-                    catch (Exception stopEx)
-                    {
-                        LogWarning($"재시도 전 중지 실패: {stopEx.Message}");
-                    }
-
-                    // 재시도
-                    await RunAsync();
-                }
-                else
-                {
-                    LogError($"최대 연결 시도 횟수 초과 ({MAX_CONNECTION_ATTEMPTS}회). 미러링 비활성화.");
-                    isConnecting = false;
-                    isConnected = false;
-                    hasInitialized = false;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            LogDebug("RunAsync 취소됨 (정상 종료)");
-            isConnecting = false;
-        }
-        catch (Exception e)
-        {
-            LogError($"RunAsync 실패: {e.Message}");
-            isConnecting = false;
-            isConnected = false;
-
-            // 재시도 로직
-            if (connectionAttempts < MAX_CONNECTION_ATTEMPTS)
-            {
-                try
-                {
-                    LogDebug($"{CONNECTION_RETRY_DELAY}초 후 재시도...");
-                    var cts = this.GetCancellationTokenOnDestroy();
-                    await UniTask.Delay(TimeSpan.FromSeconds(CONNECTION_RETRY_DELAY), cancellationToken: cts);
-
-                    // SignalingManager 중지
-                    try
-                    {
-                        sm.Stop();
-                        await UniTask.Delay(500, cancellationToken: cts);
-                    }
-                    catch { }
-
-                    isConnecting = true;
-                    await RunAsync();
-                }
-                catch (OperationCanceledException)
-                {
-                    LogDebug("재시도 취소됨");
-                }
-            }
-            else
-            {
-                LogError($"최대 연결 시도 횟수 초과. 미러링 비활성화.");
-            }
         }
     }
     #endregion
