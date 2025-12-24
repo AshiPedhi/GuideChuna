@@ -71,6 +71,9 @@ public class InfoPanelController : MonoBehaviour
     [Tooltip("결과 요약 UI (없으면 자동 검색)")]
     [SerializeField] private ChunaResultSummaryUI resultSummaryUI;
 
+    [Tooltip("동적 결과 테이블 UI (없으면 자동 검색)")]
+    [SerializeField] private DynamicResultTableUI dynamicResultTableUI;
+
     [Tooltip("ModeSelectionManager (없으면 자동 검색)")]
     [SerializeField] private ModeSelectionManagerV2 modeSelectionManager;
 
@@ -119,6 +122,9 @@ public class InfoPanelController : MonoBehaviour
 
         if (resultSummaryUI == null)
             resultSummaryUI = FindObjectOfType<ChunaResultSummaryUI>();
+
+        if (dynamicResultTableUI == null)
+            dynamicResultTableUI = FindObjectOfType<DynamicResultTableUI>();
 
         if (modeSelectionManager == null)
             modeSelectionManager = FindObjectOfType<ModeSelectionManagerV2>();
@@ -529,10 +535,17 @@ public class InfoPanelController : MonoBehaviour
     /// </summary>
     private void RefreshResultUI()
     {
-        if (resultSummaryUI != null)
+        // DynamicResultTableUI 우선 사용
+        if (dynamicResultTableUI != null)
+        {
+            dynamicResultTableUI.ForceRefresh();
+            Debug.Log("[InfoPanel] 동적 결과 테이블 갱신");
+        }
+        // 기존 ChunaResultSummaryUI 폴백
+        else if (resultSummaryUI != null)
         {
             resultSummaryUI.Show();
-            Debug.Log("[InfoPanel] 수행결과 UI 갱신");
+            Debug.Log("[InfoPanel] 결과 요약 UI 갱신");
         }
     }
     #endregion
