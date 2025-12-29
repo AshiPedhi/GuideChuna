@@ -3,12 +3,16 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 시나리오 가이드 UI 전용 컨트롤러
+/// 시나리오 가이드 UI 전용 컨트롤러 (시나리오 진행 UI)
+///
+/// [역할]
 /// - stepName 표시
 /// - Phase 이미지 (중부/전부/후부) 진행 상태 표시
 /// - 시작 토글 제어 (가이드 스텝에서만 표시)
 /// - 진행 원형 표시 (Duration)
-/// - 가이드 영상 토글 (GuideVideoController 연동)
+///
+/// [참고]
+/// - 가이드 영상 토글은 InfoPanelController에서 처리합니다.
 /// </summary>
 public class ScenarioGuideUIController : MonoBehaviour
 {
@@ -61,15 +65,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     [Tooltip("완료 아이콘")]
     [SerializeField] private GameObject completeIcon;
 
-    [Header("=== 가이드 영상 토글 ===")]
-    [Tooltip("가이드 영상 토글 버튼")]
-    [SerializeField] private Toggle guideVideoToggle;
-
-    [Tooltip("가이드 영상 토글 텍스트")]
-    [SerializeField] private TextMeshProUGUI guideVideoToggleText;
-
-    [Tooltip("GuideVideoController 참조 (없으면 자동 검색)")]
-    [SerializeField] private GuideVideoController guideVideoController;
+    // [REMOVED] 가이드 영상 토글은 InfoPanelController로 이전됨
 
     [Header("=== 홀드 연동 (ChunaPathEvaluator) ===")]
     [Tooltip("홀드 상태와 연동할 ChunaPathEvaluator (없으면 시간 기반으로 진행)")]
@@ -95,24 +91,10 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem = ScenarioEventSystem.Instance;
         scenarioManager = FindObjectOfType<ScenarioManager>();
 
-        // GuideVideoController 자동 검색
-        if (guideVideoController == null)
-        {
-            guideVideoController = FindObjectOfType<GuideVideoController>();
-        }
-
         // 시작 토글 이벤트 연결
         if (startToggle != null)
         {
             startToggle.onValueChanged.AddListener(OnStartToggleChanged);
-        }
-
-        // 가이드 영상 토글 이벤트 연결
-        if (guideVideoToggle != null)
-        {
-            guideVideoToggle.onValueChanged.AddListener(OnGuideVideoToggleChanged);
-            guideVideoToggle.isOn = false;  // 기본값: 비활성화
-            UpdateGuideVideoToggleText(false);
         }
     }
 
@@ -643,77 +625,5 @@ public class ScenarioGuideUIController : MonoBehaviour
         }
     }
 
-    #region 가이드 영상 토글
-
-    /// <summary>
-    /// 가이드 영상 토글 변경 시 호출
-    /// </summary>
-    private void OnGuideVideoToggleChanged(bool isOn)
-    {
-        Debug.Log($"<color=yellow>[GuideUI] 가이드 영상 토글: {(isOn ? "ON" : "OFF")}</color>");
-
-        // GuideVideoController에 상태 전달
-        if (guideVideoController != null)
-        {
-            guideVideoController.SetGuideEnabled(isOn);
-        }
-        else
-        {
-            Debug.LogWarning("[GuideUI] GuideVideoController를 찾을 수 없습니다!");
-        }
-
-        // 토글 텍스트 업데이트
-        UpdateGuideVideoToggleText(isOn);
-    }
-
-    /// <summary>
-    /// 가이드 영상 토글 텍스트 업데이트
-    /// </summary>
-    private void UpdateGuideVideoToggleText(bool isOn)
-    {
-        if (guideVideoToggleText != null)
-        {
-            guideVideoToggleText.text = isOn ? "영상 ON" : "영상 OFF";
-        }
-    }
-
-    /// <summary>
-    /// 가이드 영상 활성화 (외부 호출용)
-    /// </summary>
-    public void EnableGuideVideo()
-    {
-        if (guideVideoToggle != null)
-        {
-            guideVideoToggle.isOn = true;
-        }
-    }
-
-    /// <summary>
-    /// 가이드 영상 비활성화 (외부 호출용)
-    /// </summary>
-    public void DisableGuideVideo()
-    {
-        if (guideVideoToggle != null)
-        {
-            guideVideoToggle.isOn = false;
-        }
-    }
-
-    /// <summary>
-    /// 가이드 영상 토글 (외부 호출용)
-    /// </summary>
-    public void ToggleGuideVideo()
-    {
-        if (guideVideoToggle != null)
-        {
-            guideVideoToggle.isOn = !guideVideoToggle.isOn;
-        }
-    }
-
-    /// <summary>
-    /// 가이드 영상 활성화 상태 확인
-    /// </summary>
-    public bool IsGuideVideoEnabled => guideVideoToggle != null && guideVideoToggle.isOn;
-
-    #endregion
+    // [REMOVED] 가이드 영상 토글 관련 코드는 InfoPanelController로 이전됨
 }

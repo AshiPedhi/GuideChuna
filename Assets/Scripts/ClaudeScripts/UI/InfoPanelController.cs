@@ -1,0 +1,912 @@
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+
+/// <summary>
+/// 정보 패널 통합 컨트롤러 (옵션 A - 전체 통합)
+///
+/// [페이지 구성]
+/// - 모드 선택 페이지: 시나리오 시작 전 모드/난이도 선택
+/// - 근골격 페이지: RenderTexture RawImage (근골격 표시)
+/// - 전문가 영상 페이지: 영상 재생 (토글 on일 때만 재생)
+/// - 수행결과 페이지: 현재까지의 실습 결과 표시
+///
+/// [토글 그룹]
+/// - 콘텐츠 그룹: 근골격, 전문가 영상, 수행결과 (상호 배타적)
+/// - 메뉴 그룹: 설정, 메인으로 (상호 배타적)
+///
+/// [기존 코드 대체]
+/// - QuickMenuController → 삭제 (설정/메인 버튼 이전)
+/// - ModeSelectionManagerV2 → 단순화 (모드 데이터만 관리)
+/// </summary>
+public class InfoPanelController : MonoBehaviour
+{
+    #region 페이지 오브젝트
+    [Header("═══ 페이지 오브젝트 ═══")]
+    [Tooltip("모드 선택 페이지 (시나리오 시작 전)")]
+    [SerializeField] private GameObject modeSelectionPage;
+
+    [Tooltip("근골격 RenderTexture 페이지")]
+    [SerializeField] private GameObject skeletonPage;
+
+    [Tooltip("전문가 영상 페이지")]
+    [SerializeField] private GameObject expertVideoPage;
+
+    [Tooltip("수행결과 페이지")]
+    [SerializeField] private GameObject resultPage;
+    #endregion
+
+    #region 모드 선택 UI
+    [Header("═══ 모드 선택 (실습/평가) ═══")]
+    [SerializeField] private Toggle practiceToggle;
+    [SerializeField] private Toggle evaluationToggle;
+    [SerializeField] private TextMeshProUGUI practiceLabel;
+    [SerializeField] private TextMeshProUGUI evaluationLabel;
+
+    [Header("═══ 난이도 선택 ═══")]
+    [SerializeField] private Toggle beginnerToggle;
+    [SerializeField] private Toggle intermediateToggle;
+    [SerializeField] private Toggle advancedToggle;
+    [SerializeField] private TextMeshProUGUI beginnerDescription;
+    [SerializeField] private TextMeshProUGUI intermediateDescription;
+    [SerializeField] private TextMeshProUGUI advancedDescription;
+
+    [Header("═══ 시나리오 정보 ═══")]
+    [SerializeField] private TextMeshProUGUI scenarioTitleText;
+    #endregion
+
+    #region 콘텐츠 토글 그룹
+    [Header("═══ 콘텐츠 토글 (그룹 1) ═══")]
+    [Tooltip("근골격 토글 버튼")]
+    [SerializeField] private Toggle skeletonToggle;
+
+    [Tooltip("전문가 영상 토글 버튼")]
+    [SerializeField] private Toggle expertVideoToggle;
+
+    [Tooltip("수행결과 토글 버튼")]
+    [SerializeField] private Toggle resultToggle;
+    #endregion
+
+    #region 메뉴 토글 그룹
+    [Header("═══ 메뉴 토글 (그룹 2) ═══")]
+    [Tooltip("설정 토글 버튼")]
+    [SerializeField] private Toggle settingsToggle;
+
+    [Tooltip("메인으로 토글 버튼")]
+    [SerializeField] private Toggle mainMenuToggle;
+    #endregion
+
+    #region 팝업 연결
+    [Header("═══ 팝업 연결 ═══")]
+    [Tooltip("설정 팝업")]
+    [SerializeField] private GameObject settingsPopup;
+
+    [Tooltip("메인으로 이동 확인 팝업")]
+    [SerializeField] private GameObject exitConfirmPopup;
+    #endregion
+
+    #region 컨트롤러 참조
+    [Header("═══ 컨트롤러 참조 ═══")]
+    [Tooltip("가이드 영상 컨트롤러 (없으면 자동 검색)")]
+    [SerializeField] private GuideVideoController guideVideoController;
+
+    [Tooltip("동적 결과 테이블 UI (없으면 자동 검색)")]
+    [SerializeField] private DynamicResultTableUI dynamicResultTableUI;
+
+    [Tooltip("ScenarioManager (없으면 자동 검색)")]
+    [SerializeField] private ScenarioManager scenarioManager;
+
+    [Tooltip("설정 컨트롤러 (환자 위치 조정 자동 off용)")]
+    [SerializeField] private PracticeSettingsController practiceSettingsController;
+
+    [Tooltip("시나리오 진행 UI (가이드패널)")]
+    [SerializeField] private GameObject scenarioProgressUI;
+    #endregion
+
+    #region 토글 컬러 설정
+    [Header("═══ 토글 컬러 설정 ═══")]
+    [SerializeField] private bool useCustomColors = true;
+    [SerializeField] private Color activeColor = new Color(0.2f, 0.8f, 1f, 1f);
+    [SerializeField] private Color inactiveColor = new Color(0.5f, 0.5f, 0.5f, 1f);
+    #endregion
+
+    #region 토글 아이콘
+    [Header("═══ 토글 아이콘 (선택) ═══")]
+    [SerializeField] private Image skeletonIcon;
+    [SerializeField] private Image expertVideoIcon;
+    [SerializeField] private Image resultIcon;
+    [SerializeField] private Image settingsIcon;
+    [SerializeField] private Image mainMenuIcon;
+    #endregion
+
+    // 상태 추적
+    private bool isScenarioStarted = false;
+    private ContentPage currentContentPage = ContentPage.ModeSelection;
+    private bool isSettingsOpen = false;
+    private bool isExitPopupOpen = false;
+
+    // 모드 선택 상태
+    private ModeType selectedMode = ModeType.None;
+    private DifficultyType selectedDifficulty = DifficultyType.Intermediate;
+
+    // 콘텐츠 페이지 열거형
+    public enum ContentPage
+    {
+        None,
+        ModeSelection,
+        Skeleton,
+        ExpertVideo,
+        Result
+    }
+
+    // 모드 타입
+    public enum ModeType
+    {
+        None,
+        Practice,
+        Evaluation
+    }
+
+    // 난이도 타입
+    public enum DifficultyType
+    {
+        Beginner,
+        Intermediate,
+        Advanced
+    }
+
+    // 이벤트
+    public event Action<ModeType, DifficultyType> OnModeSelected;
+    public event Action OnSimulationStarted;
+
+    #region Unity Lifecycle
+    void Awake()
+    {
+        // 컨트롤러 자동 검색
+        if (guideVideoController == null)
+            guideVideoController = FindObjectOfType<GuideVideoController>();
+
+        if (dynamicResultTableUI == null)
+            dynamicResultTableUI = FindObjectOfType<DynamicResultTableUI>();
+
+        if (scenarioManager == null)
+            scenarioManager = FindObjectOfType<ScenarioManager>();
+
+        if (practiceSettingsController == null)
+            practiceSettingsController = FindObjectOfType<PracticeSettingsController>();
+    }
+
+    void Start()
+    {
+        InitializePanel();
+        SetupToggleListeners();
+        SetupModeSelectionListeners();
+        UpdateAllToggleColors();
+    }
+
+    void OnEnable()
+    {
+        SubscribeScenarioEvents();
+    }
+
+    void OnDisable()
+    {
+        UnsubscribeScenarioEvents();
+    }
+
+    void OnDestroy()
+    {
+        RemoveAllListeners();
+    }
+    #endregion
+
+    #region 이벤트 구독
+    private void SubscribeScenarioEvents()
+    {
+        try
+        {
+            ScenarioEventSystem.Instance.OnScenarioStarted += OnScenarioStarted;
+            ScenarioEventSystem.Instance.OnScenarioCompleted += OnScenarioCompleted;
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[InfoPanel] 이벤트 구독 실패: {e.Message}");
+        }
+    }
+
+    private void UnsubscribeScenarioEvents()
+    {
+        try
+        {
+            ScenarioEventSystem.Instance.OnScenarioStarted -= OnScenarioStarted;
+            ScenarioEventSystem.Instance.OnScenarioCompleted -= OnScenarioCompleted;
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"[InfoPanel] 이벤트 해제 실패: {e.Message}");
+        }
+    }
+    #endregion
+
+    #region 초기화
+    private void InitializePanel()
+    {
+        // 초기 상태: 모드 선택 페이지
+        ShowContentPage(ContentPage.ModeSelection);
+
+        // 시나리오 진행 UI 숨김 (시나리오 시작 전)
+        if (scenarioProgressUI != null)
+            scenarioProgressUI.SetActive(false);
+
+        // 팝업 숨김
+        if (settingsPopup != null)
+            settingsPopup.SetActive(false);
+
+        if (exitConfirmPopup != null)
+            exitConfirmPopup.SetActive(false);
+
+        // 콘텐츠 토글 초기화 (모두 off, 시나리오 시작 전에는 비활성화)
+        SetToggleWithoutNotify(skeletonToggle, false);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, false);
+        SetContentTogglesInteractable(false);
+
+        // 메뉴 토글 초기화
+        SetToggleWithoutNotify(settingsToggle, false);
+        SetToggleWithoutNotify(mainMenuToggle, false);
+
+        // 모드 선택 초기화
+        InitializeModeSelection();
+
+        isSettingsOpen = false;
+        isExitPopupOpen = false;
+
+        Debug.Log("[InfoPanel] 패널 초기화 완료");
+    }
+
+    private void InitializeModeSelection()
+    {
+        // 기본값: 중급자
+        selectedDifficulty = DifficultyType.Intermediate;
+        selectedMode = ModeType.None;
+
+        // 모드 토글 초기화
+        SetToggleWithoutNotify(practiceToggle, false);
+        SetToggleWithoutNotify(evaluationToggle, false);
+
+        // 난이도 토글 초기화 (중급자 기본 선택)
+        SetToggleWithoutNotify(beginnerToggle, false);
+        SetToggleWithoutNotify(intermediateToggle, true);
+        SetToggleWithoutNotify(advancedToggle, false);
+
+        // 설명 텍스트 설정
+        SetupModeDescriptions();
+    }
+
+    private void SetupModeDescriptions()
+    {
+        if (practiceLabel != null)
+            practiceLabel.text = "안내에 따라 과정 학습";
+
+        if (evaluationLabel != null)
+            evaluationLabel.text = "학습 내용 테스트";
+
+        if (beginnerDescription != null)
+            beginnerDescription.text = "최초 학습자를 위한 레벨입니다";
+
+        if (intermediateDescription != null)
+            intermediateDescription.text = "실습 경험자를 위한 레벨입니다";
+
+        if (advancedDescription != null)
+            advancedDescription.text = "숙련자를 위한 레벨입니다";
+    }
+
+    private void SetupToggleListeners()
+    {
+        // 콘텐츠 토글 그룹
+        if (skeletonToggle != null)
+        {
+            skeletonToggle.onValueChanged.RemoveAllListeners();
+            skeletonToggle.onValueChanged.AddListener(OnSkeletonToggleChanged);
+        }
+
+        if (expertVideoToggle != null)
+        {
+            expertVideoToggle.onValueChanged.RemoveAllListeners();
+            expertVideoToggle.onValueChanged.AddListener(OnExpertVideoToggleChanged);
+        }
+
+        if (resultToggle != null)
+        {
+            resultToggle.onValueChanged.RemoveAllListeners();
+            resultToggle.onValueChanged.AddListener(OnResultToggleChanged);
+        }
+
+        // 메뉴 토글 그룹
+        if (settingsToggle != null)
+        {
+            settingsToggle.onValueChanged.RemoveAllListeners();
+            settingsToggle.onValueChanged.AddListener(OnSettingsToggleChanged);
+        }
+
+        if (mainMenuToggle != null)
+        {
+            mainMenuToggle.onValueChanged.RemoveAllListeners();
+            mainMenuToggle.onValueChanged.AddListener(OnMainMenuToggleChanged);
+        }
+    }
+
+    private void SetupModeSelectionListeners()
+    {
+        // 모드 토글
+        if (practiceToggle != null)
+        {
+            practiceToggle.onValueChanged.RemoveAllListeners();
+            practiceToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn) OnModeToggleChanged(ModeType.Practice);
+            });
+        }
+
+        if (evaluationToggle != null)
+        {
+            evaluationToggle.onValueChanged.RemoveAllListeners();
+            evaluationToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn) OnModeToggleChanged(ModeType.Evaluation);
+            });
+        }
+
+        // 난이도 토글
+        if (beginnerToggle != null)
+        {
+            beginnerToggle.onValueChanged.RemoveAllListeners();
+            beginnerToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn) OnDifficultyToggleChanged(DifficultyType.Beginner);
+            });
+        }
+
+        if (intermediateToggle != null)
+        {
+            intermediateToggle.onValueChanged.RemoveAllListeners();
+            intermediateToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn) OnDifficultyToggleChanged(DifficultyType.Intermediate);
+            });
+        }
+
+        if (advancedToggle != null)
+        {
+            advancedToggle.onValueChanged.RemoveAllListeners();
+            advancedToggle.onValueChanged.AddListener((isOn) => {
+                if (isOn) OnDifficultyToggleChanged(DifficultyType.Advanced);
+            });
+        }
+    }
+
+    private void RemoveAllListeners()
+    {
+        if (skeletonToggle != null) skeletonToggle.onValueChanged.RemoveAllListeners();
+        if (expertVideoToggle != null) expertVideoToggle.onValueChanged.RemoveAllListeners();
+        if (resultToggle != null) resultToggle.onValueChanged.RemoveAllListeners();
+        if (settingsToggle != null) settingsToggle.onValueChanged.RemoveAllListeners();
+        if (mainMenuToggle != null) mainMenuToggle.onValueChanged.RemoveAllListeners();
+        if (practiceToggle != null) practiceToggle.onValueChanged.RemoveAllListeners();
+        if (evaluationToggle != null) evaluationToggle.onValueChanged.RemoveAllListeners();
+        if (beginnerToggle != null) beginnerToggle.onValueChanged.RemoveAllListeners();
+        if (intermediateToggle != null) intermediateToggle.onValueChanged.RemoveAllListeners();
+        if (advancedToggle != null) advancedToggle.onValueChanged.RemoveAllListeners();
+    }
+    #endregion
+
+    #region 모드 선택 핸들러
+    private void OnModeToggleChanged(ModeType mode)
+    {
+        selectedMode = mode;
+        Debug.Log($"[InfoPanel] 모드 선택: {mode}");
+
+        UpdateModeSelectionColors();
+        OnModeSelected?.Invoke(selectedMode, selectedDifficulty);
+
+        // 모드 선택 시 자동으로 시나리오 시작
+        StartSimulation();
+    }
+
+    private void OnDifficultyToggleChanged(DifficultyType difficulty)
+    {
+        selectedDifficulty = difficulty;
+        Debug.Log($"[InfoPanel] 난이도 선택: {difficulty}");
+
+        UpdateModeSelectionColors();
+        UpdateDifficultyDescriptions();
+    }
+
+    private void UpdateDifficultyDescriptions()
+    {
+        Color activeTextColor = Color.white;
+        Color inactiveTextColor = new Color(1f, 1f, 1f, 0.6f);
+
+        if (beginnerDescription != null)
+            beginnerDescription.color = (selectedDifficulty == DifficultyType.Beginner) ? activeTextColor : inactiveTextColor;
+
+        if (intermediateDescription != null)
+            intermediateDescription.color = (selectedDifficulty == DifficultyType.Intermediate) ? activeTextColor : inactiveTextColor;
+
+        if (advancedDescription != null)
+            advancedDescription.color = (selectedDifficulty == DifficultyType.Advanced) ? activeTextColor : inactiveTextColor;
+    }
+
+    private void UpdateModeSelectionColors()
+    {
+        if (!useCustomColors) return;
+
+        // 모드 토글 색상
+        UpdateToggleColor(practiceToggle, null, selectedMode == ModeType.Practice);
+        UpdateToggleColor(evaluationToggle, null, selectedMode == ModeType.Evaluation);
+
+        // 난이도 토글 색상
+        UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyType.Beginner);
+        UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyType.Intermediate);
+        UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyType.Advanced);
+    }
+    #endregion
+
+    #region 시뮬레이션 시작
+    /// <summary>
+    /// 시나리오 시뮬레이션 시작
+    /// </summary>
+    public void StartSimulation()
+    {
+        if (selectedMode == ModeType.None)
+        {
+            Debug.LogWarning("[InfoPanel] 모드를 선택해주세요!");
+            return;
+        }
+
+        Debug.Log($"<color=green>[InfoPanel] 시뮬레이션 시작 - 모드: {selectedMode}, 난이도: {selectedDifficulty}</color>");
+
+        // ScenarioManager에 모드 정보 전달
+        if (scenarioManager != null)
+        {
+            scenarioManager.SetModeInfo(GetModeText(), GetDifficultyText());
+            scenarioManager.StartScenario();
+        }
+        else
+        {
+            Debug.LogError("[InfoPanel] ScenarioManager를 찾을 수 없습니다!");
+        }
+
+        // 설정 저장
+        PlayerPrefs.SetString("SelectedMode", selectedMode.ToString());
+        PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty.ToString());
+        PlayerPrefs.Save();
+
+        OnSimulationStarted?.Invoke();
+    }
+
+    private string GetModeText()
+    {
+        switch (selectedMode)
+        {
+            case ModeType.Practice: return "실습";
+            case ModeType.Evaluation: return "평가";
+            default: return "미선택";
+        }
+    }
+
+    private string GetDifficultyText()
+    {
+        switch (selectedDifficulty)
+        {
+            case DifficultyType.Beginner: return "초급자";
+            case DifficultyType.Intermediate: return "중급자";
+            case DifficultyType.Advanced: return "상급자";
+            default: return "중급자";
+        }
+    }
+    #endregion
+
+    #region 콘텐츠 토글 핸들러
+    private void OnSkeletonToggleChanged(bool isOn)
+    {
+        Debug.Log($"[InfoPanel] 근골격 토글: {(isOn ? "ON" : "OFF")}");
+
+        if (isOn)
+        {
+            SetToggleWithoutNotify(expertVideoToggle, false);
+            SetToggleWithoutNotify(resultToggle, false);
+            StopExpertVideo();
+            ShowContentPage(ContentPage.Skeleton);
+        }
+
+        UpdateAllToggleColors();
+    }
+
+    private void OnExpertVideoToggleChanged(bool isOn)
+    {
+        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}");
+
+        if (isOn)
+        {
+            SetToggleWithoutNotify(skeletonToggle, false);
+            SetToggleWithoutNotify(resultToggle, false);
+            ShowContentPage(ContentPage.ExpertVideo);
+            PlayExpertVideo();
+        }
+        else
+        {
+            StopExpertVideo();
+            if (isScenarioStarted && currentContentPage == ContentPage.ExpertVideo)
+            {
+                SetToggleWithoutNotify(skeletonToggle, true);
+                ShowContentPage(ContentPage.Skeleton);
+            }
+        }
+
+        UpdateAllToggleColors();
+    }
+
+    private void OnResultToggleChanged(bool isOn)
+    {
+        Debug.Log($"[InfoPanel] 수행결과 토글: {(isOn ? "ON" : "OFF")}");
+
+        if (isOn)
+        {
+            SetToggleWithoutNotify(skeletonToggle, false);
+            SetToggleWithoutNotify(expertVideoToggle, false);
+            StopExpertVideo();
+            ShowContentPage(ContentPage.Result);
+            RefreshResultUI();
+        }
+
+        UpdateAllToggleColors();
+    }
+    #endregion
+
+    #region 메뉴 토글 핸들러
+    private void OnSettingsToggleChanged(bool isOn)
+    {
+        Debug.Log($"[InfoPanel] 설정 토글: {(isOn ? "ON" : "OFF")}");
+
+        if (isOn)
+        {
+            SetToggleWithoutNotify(mainMenuToggle, false);
+            CloseExitPopupInternal();
+
+            if (settingsPopup != null)
+            {
+                settingsPopup.SetActive(true);
+                isSettingsOpen = true;
+            }
+        }
+        else
+        {
+            if (settingsPopup != null)
+            {
+                settingsPopup.SetActive(false);
+                isSettingsOpen = false;
+
+                if (practiceSettingsController != null)
+                    practiceSettingsController.ForceDisablePatientPositionController();
+            }
+        }
+
+        UpdateAllToggleColors();
+    }
+
+    private void OnMainMenuToggleChanged(bool isOn)
+    {
+        Debug.Log($"[InfoPanel] 메인으로 토글: {(isOn ? "ON" : "OFF")}");
+
+        if (isOn)
+        {
+            SetToggleWithoutNotify(settingsToggle, false);
+            CloseSettingsPopupInternal();
+
+            if (exitConfirmPopup != null)
+            {
+                exitConfirmPopup.SetActive(true);
+                isExitPopupOpen = true;
+            }
+            else
+            {
+                // 팝업 없으면 바로 로비로
+                ReturnToLobby();
+            }
+        }
+        else
+        {
+            CloseExitPopupInternal();
+        }
+
+        UpdateAllToggleColors();
+    }
+
+    private void CloseSettingsPopupInternal()
+    {
+        if (settingsPopup != null && isSettingsOpen)
+        {
+            settingsPopup.SetActive(false);
+            isSettingsOpen = false;
+        }
+    }
+
+    private void CloseExitPopupInternal()
+    {
+        if (exitConfirmPopup != null && isExitPopupOpen)
+        {
+            exitConfirmPopup.SetActive(false);
+            isExitPopupOpen = false;
+        }
+    }
+    #endregion
+
+    #region 페이지 전환
+    private void ShowContentPage(ContentPage page)
+    {
+        currentContentPage = page;
+
+        // 모든 페이지 숨김
+        if (modeSelectionPage != null) modeSelectionPage.SetActive(false);
+        if (skeletonPage != null) skeletonPage.SetActive(false);
+        if (expertVideoPage != null) expertVideoPage.SetActive(false);
+        if (resultPage != null) resultPage.SetActive(false);
+
+        // 선택된 페이지만 표시
+        switch (page)
+        {
+            case ContentPage.ModeSelection:
+                if (modeSelectionPage != null) modeSelectionPage.SetActive(true);
+                break;
+            case ContentPage.Skeleton:
+                if (skeletonPage != null) skeletonPage.SetActive(true);
+                break;
+            case ContentPage.ExpertVideo:
+                if (expertVideoPage != null) expertVideoPage.SetActive(true);
+                break;
+            case ContentPage.Result:
+                if (resultPage != null) resultPage.SetActive(true);
+                break;
+        }
+
+        Debug.Log($"[InfoPanel] 페이지 전환: {page}");
+    }
+
+    private void SetContentTogglesInteractable(bool interactable)
+    {
+        if (skeletonToggle != null) skeletonToggle.interactable = interactable;
+        if (expertVideoToggle != null) expertVideoToggle.interactable = interactable;
+        if (resultToggle != null) resultToggle.interactable = interactable;
+    }
+    #endregion
+
+    #region 전문가 영상 제어
+    private void PlayExpertVideo()
+    {
+        if (guideVideoController != null)
+        {
+            guideVideoController.SetGuideEnabled(true);
+            Debug.Log("[InfoPanel] 전문가 영상 재생 시작");
+        }
+    }
+
+    private void StopExpertVideo()
+    {
+        if (guideVideoController != null)
+        {
+            guideVideoController.SetGuideEnabled(false);
+            Debug.Log("[InfoPanel] 전문가 영상 정지");
+        }
+    }
+    #endregion
+
+    #region 결과 UI
+    private void RefreshResultUI()
+    {
+        if (dynamicResultTableUI != null)
+        {
+            dynamicResultTableUI.ForceRefresh();
+            Debug.Log("[InfoPanel] 동적 결과 테이블 갱신");
+        }
+    }
+    #endregion
+
+    #region 시나리오 이벤트
+    private void OnScenarioStarted(ScenarioData scenario)
+    {
+        isScenarioStarted = true;
+
+        // 콘텐츠 토글 활성화
+        SetContentTogglesInteractable(true);
+
+        // 근골격 페이지로 자동 전환
+        SetToggleWithoutNotify(skeletonToggle, true);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, false);
+        ShowContentPage(ContentPage.Skeleton);
+
+        // 시나리오 진행 UI 표시
+        if (scenarioProgressUI != null)
+            scenarioProgressUI.SetActive(true);
+
+        UpdateAllToggleColors();
+
+        Debug.Log("[InfoPanel] 시나리오 시작 - 근골격 페이지로 전환");
+    }
+
+    private void OnScenarioCompleted(ScenarioData scenario)
+    {
+        isScenarioStarted = false;
+
+        // 결과 페이지로 자동 전환
+        SetToggleWithoutNotify(skeletonToggle, false);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, true);
+        ShowContentPage(ContentPage.Result);
+        RefreshResultUI();
+
+        // 시나리오 진행 UI 숨김
+        if (scenarioProgressUI != null)
+            scenarioProgressUI.SetActive(false);
+
+        UpdateAllToggleColors();
+
+        Debug.Log("[InfoPanel] 시나리오 완료 - 결과 페이지로 전환");
+    }
+    #endregion
+
+    #region 토글 컬러
+    private void UpdateAllToggleColors()
+    {
+        if (!useCustomColors) return;
+
+        // 콘텐츠 토글
+        UpdateToggleColor(skeletonToggle, skeletonIcon, IsToggleOn(skeletonToggle));
+        UpdateToggleColor(expertVideoToggle, expertVideoIcon, IsToggleOn(expertVideoToggle));
+        UpdateToggleColor(resultToggle, resultIcon, IsToggleOn(resultToggle));
+
+        // 메뉴 토글
+        UpdateToggleColor(settingsToggle, settingsIcon, isSettingsOpen);
+        UpdateToggleColor(mainMenuToggle, mainMenuIcon, isExitPopupOpen);
+
+        // 모드 선택 토글
+        UpdateModeSelectionColors();
+    }
+
+    private void UpdateToggleColor(Toggle toggle, Image icon, bool isActive)
+    {
+        if (toggle == null) return;
+
+        ColorBlock colors = toggle.colors;
+
+        if (isActive)
+        {
+            colors.normalColor = activeColor;
+            colors.highlightedColor = activeColor * 1.2f;
+            colors.pressedColor = activeColor * 0.8f;
+            colors.selectedColor = activeColor;
+        }
+        else
+        {
+            colors.normalColor = inactiveColor;
+            colors.highlightedColor = inactiveColor * 1.2f;
+            colors.pressedColor = inactiveColor * 0.8f;
+            colors.selectedColor = inactiveColor;
+        }
+
+        toggle.colors = colors;
+
+        if (icon != null)
+            icon.color = isActive ? activeColor : inactiveColor;
+    }
+    #endregion
+
+    #region Public API
+    public void CloseAllPopups()
+    {
+        CloseSettingsPopupInternal();
+        CloseExitPopupInternal();
+        SetToggleWithoutNotify(settingsToggle, false);
+        SetToggleWithoutNotify(mainMenuToggle, false);
+        UpdateAllToggleColors();
+    }
+
+    public void CloseSettingsPopup()
+    {
+        SetToggleWithoutNotify(settingsToggle, false);
+        OnSettingsToggleChanged(false);
+    }
+
+    public void CloseExitPopup()
+    {
+        SetToggleWithoutNotify(mainMenuToggle, false);
+        OnMainMenuToggleChanged(false);
+    }
+
+    /// <summary>
+    /// Exit 확인 (ExitPopupController에서 호출)
+    /// </summary>
+    public void OnExitConfirm()
+    {
+        CloseExitPopup();
+        ReturnToLobby();
+    }
+
+    /// <summary>
+    /// Exit 취소 (ExitPopupController에서 호출)
+    /// </summary>
+    public void OnExitCancel()
+    {
+        CloseExitPopup();
+    }
+
+    private void ReturnToLobby()
+    {
+        Debug.Log("[InfoPanel] 로비로 이동...");
+        SceneLoader.LoadScene("Lobby", useLoadingScene: true);
+    }
+
+    public void ShowSkeletonPage()
+    {
+        if (!isScenarioStarted) return;
+        SetToggleWithoutNotify(skeletonToggle, true);
+        OnSkeletonToggleChanged(true);
+    }
+
+    public void ShowExpertVideoPage()
+    {
+        if (!isScenarioStarted) return;
+        SetToggleWithoutNotify(expertVideoToggle, true);
+        OnExpertVideoToggleChanged(true);
+    }
+
+    public void ShowResultPage()
+    {
+        if (!isScenarioStarted) return;
+        SetToggleWithoutNotify(resultToggle, true);
+        OnResultToggleChanged(true);
+    }
+
+    public void ShowModeSelectionPage()
+    {
+        SetContentTogglesInteractable(false);
+        SetToggleWithoutNotify(skeletonToggle, false);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, false);
+        StopExpertVideo();
+        ShowContentPage(ContentPage.ModeSelection);
+        UpdateAllToggleColors();
+    }
+
+    public void ResetModeSelection()
+    {
+        InitializeModeSelection();
+        UpdateModeSelectionColors();
+    }
+
+    public void SetScenarioTitle(string title)
+    {
+        if (scenarioTitleText != null)
+            scenarioTitleText.text = title;
+    }
+
+    // Properties
+    public ContentPage CurrentPage => currentContentPage;
+    public bool IsSettingsOpen => isSettingsOpen;
+    public bool IsExitPopupOpen => isExitPopupOpen;
+    public bool IsScenarioStarted => isScenarioStarted;
+    public ModeType SelectedMode => selectedMode;
+    public DifficultyType SelectedDifficulty => selectedDifficulty;
+    #endregion
+
+    #region 유틸리티
+    private void SetToggleWithoutNotify(Toggle toggle, bool value)
+    {
+        if (toggle != null)
+            toggle.SetIsOnWithoutNotify(value);
+    }
+
+    private bool IsToggleOn(Toggle toggle)
+    {
+        return toggle != null && toggle.isOn;
+    }
+    #endregion
+}
