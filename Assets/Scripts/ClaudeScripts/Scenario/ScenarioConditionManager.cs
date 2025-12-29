@@ -112,6 +112,12 @@ public class ScenarioConditionManager : MonoBehaviour
         StopNarration();
     }
 
+    void OnDestroy()
+    {
+        // ★ 모든 조건 비활성화 및 이벤트 구독 해제 (메모리 누수 방지)
+        ClearAllConditions();
+    }
+
     // ★ 조건 처리 대기용 코루틴
     private Coroutine conditionProcessCoroutine;
 
@@ -847,7 +853,9 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (conditionRegistry.ContainsKey(key))
         {
-            Debug.LogWarning($"[ConditionManager] 조건이 이미 등록되어 있습니다: {key}");
+            // ★ 이전 조건의 이벤트 구독 해제 (메모리 누수 방지)
+            DeactivateCondition(conditionRegistry[key]);
+            Debug.LogWarning($"[ConditionManager] 이전 조건 비활성화 후 새 조건으로 교체: {key}");
             conditionRegistry[key] = condition;
         }
         else
@@ -867,6 +875,8 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (conditionRegistry.ContainsKey(key))
         {
+            // ★ 조건의 이벤트 구독 해제 (메모리 누수 방지)
+            DeactivateCondition(conditionRegistry[key]);
             conditionRegistry.Remove(key);
             Debug.Log($"[ConditionManager] 조건 등록 해제: {key}");
         }
@@ -877,8 +887,28 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     public void ClearAllConditions()
     {
+        // ★ 모든 조건의 이벤트 구독 해제 (메모리 누수 방지)
+        foreach (var condition in conditionRegistry.Values)
+        {
+            DeactivateCondition(condition);
+        }
         conditionRegistry.Clear();
         Debug.Log("[ConditionManager] 모든 조건 등록 해제");
+    }
+
+    /// <summary>
+    /// ★ 조건 비활성화 헬퍼 (이벤트 구독 해제)
+    /// </summary>
+    private void DeactivateCondition(IScenarioCondition condition)
+    {
+        if (condition is HandPoseCondition handPoseCondition)
+        {
+            handPoseCondition.Deactivate();
+        }
+        else if (condition is CheckpointPoseCondition checkpointCondition)
+        {
+            checkpointCondition.Deactivate();
+        }
     }
 
     /// <summary>
@@ -1072,12 +1102,37 @@ public class HandPoseCondition : IScenarioCondition
     {
         isCompleted = true;
         Debug.Log($"<color=green>[HandPoseCondition] 전체 시퀀스 완료: {fileName}</color>");
+        // ★ 완료 시 이벤트 구독 해제 (메모리 누수 방지)
+        Unsubscribe();
     }
 
     private void OnProgressThresholdReached()
     {
         isCompleted = true;
         Debug.Log($"<color=green>[HandPoseCondition] 진행률 목표 달성으로 완료: {fileName}</color>");
+        // ★ 완료 시 이벤트 구독 해제 (메모리 누수 방지)
+        Unsubscribe();
+    }
+
+    /// <summary>
+    /// ★ 이벤트 구독 해제 (메모리 누수 방지)
+    /// </summary>
+    private void Unsubscribe()
+    {
+        if (eventBridge != null)
+        {
+            eventBridge.OnSequenceCompleted -= OnSequenceCompleted;
+            eventBridge.OnProgressThresholdReached -= OnProgressThresholdReached;
+        }
+    }
+
+    /// <summary>
+    /// ★ 조건 비활성화 및 이벤트 구독 해제
+    /// </summary>
+    public void Deactivate()
+    {
+        Unsubscribe();
+        Debug.Log($"<color=orange>[HandPoseCondition] 비활성화됨: {fileName}</color>");
     }
 
     public bool IsConditionMet()

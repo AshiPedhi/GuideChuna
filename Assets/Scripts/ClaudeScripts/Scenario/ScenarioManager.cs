@@ -258,6 +258,12 @@ public class ScenarioManager : MonoBehaviour
         {
             eventSystem.OnSubStepStarted -= OnSubStepStartedForHandPose;
         }
+
+        // ★ AutoPlay 이벤트 구독 해제 (메모리 누수 방지)
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        }
     }
 
     /// <summary>
