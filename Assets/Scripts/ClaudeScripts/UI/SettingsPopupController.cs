@@ -43,9 +43,9 @@ public class SettingsPopupController : MonoBehaviour
     private SettingsData currentSettings;
     private SettingsData tempSettings;
 
-    // ModeSelectionManagerV2 참조
-    private ModeSelectionManagerV2 modeSelectionManager;
-    
+    // InfoPanelController 참조 (팝업 상태 알림용 - 선택적)
+    private InfoPanelController infoPanelController;
+
     [System.Serializable]
     public class SettingsData
     {
@@ -63,8 +63,8 @@ public class SettingsPopupController : MonoBehaviour
     
     void Awake()
     {
-        // ModeSelectionManagerV2 찾기
-        modeSelectionManager = FindObjectOfType<ModeSelectionManagerV2>();
+        // InfoPanelController 찾기 (선택적)
+        infoPanelController = FindObjectOfType<InfoPanelController>();
 
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null)
@@ -357,22 +357,17 @@ public class SettingsPopupController : MonoBehaviour
 
     public void ShowPopup()
     {
-        // 메뉴 숨기기 알림
-        if (modeSelectionManager != null)
-        {
-            modeSelectionManager.OnPopupOpened();
-        }
-
+        // 팝업 표시 (InfoPanelController가 팝업 상태를 직접 관리)
         gameObject.SetActive(true);
         StartCoroutine(AnimateOpen());
     }
-    
+
     public void ClosePopup()
     {
-        // 메뉴 복원 알림
-        if (modeSelectionManager != null)
+        // 팝업 닫기 - InfoPanelController에 알림
+        if (infoPanelController != null)
         {
-            modeSelectionManager.OnPopupClosed();
+            infoPanelController.CloseSettingsPopup();
         }
 
         StartCoroutine(AnimateClose());

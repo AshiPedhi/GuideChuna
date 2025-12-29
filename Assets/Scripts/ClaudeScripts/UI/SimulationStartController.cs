@@ -4,24 +4,29 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+/// <summary>
+/// 시뮬레이션 시작 버튼 컨트롤러
+/// InfoPanelController와 연동하여 모드/난이도 선택 상태에 따라 시작 버튼 표시
+/// </summary>
 public class SimulationStartController : MonoBehaviour
 {
     [Header("═══ 시작 버튼 ═══")]
     [SerializeField] private Button startButton;
     [SerializeField] private GameObject startButtonObject;
     [SerializeField] private TextMeshProUGUI startButtonText;
-    
+
     [Header("═══ 애니메이션 ═══")]
     [SerializeField] private float pulseSpeed = 1.5f;
     [SerializeField] private float pulseScale = 1.1f;
-    
-    private ModeSelectionManagerV2 modeManager;
+
+    // InfoPanelController 참조 (ModeSelectionManagerV2 대체)
+    private InfoPanelController infoPanelController;
     private bool isReadyToStart = false;
     private Coroutine pulseCoroutine;
-    
+
     void Awake()
     {
-        modeManager = FindObjectOfType<ModeSelectionManagerV2>();
+        infoPanelController = FindObjectOfType<InfoPanelController>();
     }
     
     void Start()
@@ -52,16 +57,16 @@ public class SimulationStartController : MonoBehaviour
     
     public void UpdateStartButtonState()
     {
-        if (modeManager == null) return;
-        
+        if (infoPanelController == null) return;
+
         // 모드가 선택되었는지 확인
-        bool isModeSelected = (modeManager.GetSelectedMode() != ModeSelectionManagerV2.ModeType.None);
-        
+        bool isModeSelected = (infoPanelController.SelectedMode != InfoPanelController.ModeType.None);
+
         // 시작 버튼 표시/숨김
         if (startButtonObject != null)
         {
             startButtonObject.SetActive(isModeSelected);
-            
+
             if (isModeSelected && !isReadyToStart)
             {
                 isReadyToStart = true;
@@ -73,50 +78,50 @@ public class SimulationStartController : MonoBehaviour
                 StopPulseAnimation();
             }
         }
-        
+
         // 버튼 상호작용 가능 여부
         if (startButton != null)
         {
             startButton.interactable = isModeSelected;
         }
-        
+
         // 버튼 텍스트 업데이트
         UpdateButtonText();
     }
-    
+
     void UpdateButtonText()
     {
-        if (startButtonText == null || modeManager == null) return;
-        
+        if (startButtonText == null || infoPanelController == null) return;
+
         string mode = "";
         string difficulty = "";
-        
-        switch (modeManager.GetSelectedMode())
+
+        switch (infoPanelController.SelectedMode)
         {
-            case ModeSelectionManagerV2.ModeType.Practice:
+            case InfoPanelController.ModeType.Practice:
                 mode = "실습";
                 break;
-            case ModeSelectionManagerV2.ModeType.Evaluation:
+            case InfoPanelController.ModeType.Evaluation:
                 mode = "평가";
                 break;
             default:
                 mode = "";
                 break;
         }
-        
-        switch (modeManager.GetSelectedDifficulty())
+
+        switch (infoPanelController.SelectedDifficulty)
         {
-            case ModeSelectionManagerV2.DifficultyType.Beginner:
+            case InfoPanelController.DifficultyType.Beginner:
                 difficulty = "초급";
                 break;
-            case ModeSelectionManagerV2.DifficultyType.Intermediate:
+            case InfoPanelController.DifficultyType.Intermediate:
                 difficulty = "중급";
                 break;
-            case ModeSelectionManagerV2.DifficultyType.Advanced:
+            case InfoPanelController.DifficultyType.Advanced:
                 difficulty = "상급";
                 break;
         }
-        
+
         if (!string.IsNullOrEmpty(mode))
         {
             startButtonText.text = $"{difficulty} {mode} 시작";
@@ -174,18 +179,18 @@ public class SimulationStartController : MonoBehaviour
     
     void OnStartButtonClick()
     {
-        if (modeManager == null) return;
-        
+        if (infoPanelController == null) return;
+
         Debug.Log("시뮬레이션 시작!");
-        
+
         // 선택 정보 로그
-        Debug.Log($"- 모드: {modeManager.GetSelectedMode()}");
-        Debug.Log($"- 난이도: {modeManager.GetSelectedDifficulty()}");
-        
+        Debug.Log($"- 모드: {infoPanelController.SelectedMode}");
+        Debug.Log($"- 난이도: {infoPanelController.SelectedDifficulty}");
+
         // 페이드 아웃 효과
         StartCoroutine(StartSimulationWithFade());
     }
-    
+
     IEnumerator StartSimulationWithFade()
     {
         // 화면 페이드 아웃 (필요시 CanvasGroup 사용)
@@ -198,12 +203,12 @@ public class SimulationStartController : MonoBehaviour
                 canvasGroup = canvas.gameObject.AddComponent<CanvasGroup>();
             }
         }
-        
+
         if (canvasGroup != null)
         {
             float fadeTime = 0.5f;
             float elapsed = 0f;
-            
+
             while (elapsed < fadeTime)
             {
                 elapsed += Time.deltaTime;
@@ -211,9 +216,12 @@ public class SimulationStartController : MonoBehaviour
                 yield return null;
             }
         }
-        
-        // 실제 시뮬레이션 시작
-        modeManager.StartSimulation();
+
+        // 실제 시뮬레이션 시작 - InfoPanelController를 통해 시작
+        if (infoPanelController != null)
+        {
+            infoPanelController.StartSimulation();
+        }
     }
     
     // ModeSelectionManagerV2에서 호출할 수 있는 public 메서드

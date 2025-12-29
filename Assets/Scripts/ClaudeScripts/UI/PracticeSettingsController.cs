@@ -55,13 +55,13 @@ public class PracticeSettingsController : MonoBehaviour
     private Material[][] originalPatientMeshMaterials;
     private Material[][] originalSkeletonMeshMaterials;
 
-    // QuickMenuController 참조 (설정 토글 off 감지용)
-    private QuickMenuController quickMenuController;
+    // InfoPanelController 참조 (설정 상태 관리용 - 선택적)
+    private InfoPanelController infoPanelController;
 
     void Awake()
     {
-        // QuickMenuController 찾기
-        quickMenuController = FindObjectOfType<QuickMenuController>();
+        // InfoPanelController 찾기 (선택적)
+        infoPanelController = FindObjectOfType<InfoPanelController>();
 
         // 헤드셋 Transform 자동 찾기 (할당 안 되어 있으면)
         if (headsetTransform == null)

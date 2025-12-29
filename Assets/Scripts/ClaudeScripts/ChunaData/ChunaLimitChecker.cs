@@ -36,6 +36,9 @@ public class ChunaLimitChecker : MonoBehaviour
     private LimitCheckResult currentLeftResult = new LimitCheckResult();
     private LimitCheckResult currentRightResult = new LimitCheckResult();
 
+    // 참조 캐싱 완료 플래그
+    private bool referencesSearched = false;
+
     // 이벤트
     public event Action<LimitCheckResult, LimitCheckResult> OnLimitStatusChanged;
 
@@ -53,7 +56,9 @@ public class ChunaLimitChecker : MonoBehaviour
 
     void Start()
     {
+        // 한 번만 검색
         FindHandReferences();
+        referencesSearched = true;
     }
 
     void Update()
@@ -159,15 +164,11 @@ public class ChunaLimitChecker : MonoBehaviour
     }
 
     /// <summary>
-    /// 현재 진행률 가져오기
+    /// 현재 진행률 가져오기 (캐싱된 참조 사용)
     /// </summary>
     private float GetCurrentProgress()
     {
-        if (pathEvaluator == null)
-        {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
-        }
-
+        // pathEvaluator가 없으면 0 반환 (Initialize에서 찾음)
         return pathEvaluator != null ? pathEvaluator.GetCurrentProgress() : 0f;
     }
 
