@@ -46,42 +46,42 @@ public class HandPoseComparator
     [System.Serializable]
     public class ComparisonSettings
     {
-        [Header("조인트 비교 임계값")]
-        public float positionThreshold = 0.05f;     // 5cm
-        public float rotationThreshold = 15f;        // 15도
-        public float similarityPercentage = 0.7f;    // 70%
+        [Header("조인트 비교 임계값 (완화됨 - 손모양보다 손목 위치/회전 중시)")]
+        public float positionThreshold = 0.08f;     // 8cm (완화)
+        public float rotationThreshold = 25f;        // 25도 (완화)
+        public float similarityPercentage = 0.5f;    // 50% (완화 - 대략적 손모양만 맞으면 OK)
 
-        [Header("손 전체 비교 설정")]
+        [Header("손목 위치/회전 비교 설정 (핵심)")]
         public bool compareHandPosition = true;
-        public float handPositionThreshold = 0.1f;   // 10cm
+        public float handPositionThreshold = 0.08f;   // 8cm (정밀화)
         public bool compareHandRotation = true;
-        public float handRotationThreshold = 20f;    // 20도
+        public float handRotationThreshold = 15f;    // 15도 (정밀화 - 회전 매칭 강화)
 
         [Header("연속 프레임 검증 (노이즈 필터링)")]
         [Tooltip("통과로 인정하기 위해 필요한 연속 프레임 수 (1 = 즉시 통과, 3 = 3프레임 연속)")]
         public int consecutiveFramesRequired = 3;
 
-        [Header("관절별 가중치 (중요도)")]
-        [Tooltip("손목 관절 가중치 (가장 중요)")]
-        public float wristWeight = 2.0f;
-        [Tooltip("손가락 끝 관절 가중치")]
-        public float fingerTipWeight = 1.5f;
-        [Tooltip("기타 관절 가중치")]
-        public float otherJointWeight = 1.0f;
+        [Header("관절별 가중치 (손목 강조)")]
+        [Tooltip("손목 관절 가중치 (가장 중요 - 상향)")]
+        public float wristWeight = 3.0f;
+        [Tooltip("손가락 끝 관절 가중치 (하향)")]
+        public float fingerTipWeight = 1.0f;
+        [Tooltip("기타 관절 가중치 (하향)")]
+        public float otherJointWeight = 0.5f;
 
-        [Header("적응형 임계값 (관절별 조정)")]
+        [Header("적응형 임계값 (관절별 조정 - 완화)")]
         [Tooltip("손목은 위치 변화가 크므로 임계값 완화")]
-        public float wristPositionMultiplier = 1.5f;  // 7.5cm
+        public float wristPositionMultiplier = 2.0f;  // 16cm (완화)
         [Tooltip("손가락 끝은 회전 변화가 크므로 임계값 완화")]
-        public float fingerTipRotationMultiplier = 1.5f; // 22.5도
+        public float fingerTipRotationMultiplier = 2.0f; // 50도 (완화)
 
-        [Header("유사도 통합 가중치")]
-        [Tooltip("조인트 포즈 가중치 (0~1)")]
-        public float jointSimilarityWeight = 0.4f;
-        [Tooltip("손목 위치 가중치 (0~1)")]
+        [Header("유사도 통합 가중치 (손목 위치/회전 강조)")]
+        [Tooltip("조인트 포즈 가중치 (0~1) - 하향")]
+        public float jointSimilarityWeight = 0.2f;
+        [Tooltip("손목 위치 가중치 (0~1) - 핵심")]
         public float handPositionWeight = 0.4f;
-        [Tooltip("손목 회전 가중치 (0~1)")]
-        public float handRotationWeight = 0.2f;
+        [Tooltip("손목 회전 가중치 (0~1) - 상향")]
+        public float handRotationWeight = 0.4f;
 
         [Header("디버그")]
         [Tooltip("실패한 관절 상세 로그 출력")]
@@ -265,40 +265,36 @@ public class HandPoseComparator
             result.leftHandSimilarity = jointSimilarity;
         }
 
-        // 위치/회전 오차가 크면 유사도 강제 하향 (빨강색 강제)
-        bool forceRed = false;
-
-        // 위치 오차가 임계값의 1.5배 이상이면 빨강색 강제
-        if (result.leftHandPositionError > settings.handPositionThreshold * 1.5f)
+        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
+        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
+        if (result.leftHandPositionError > settings.handPositionThreshold * 2f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.1f); // 10% 이하로 강제
-            forceRed = true;
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 빨강색 강제 (유사도: {result.leftHandSimilarity:P0})");
+                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 1.5배 이상이면 빨강색 강제
-        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 1.5f)
+        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
+        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 2f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.1f); // 10% 이하로 강제
-            forceRed = true;
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 빨강색 강제 (유사도: {result.leftHandSimilarity:P0})");
+                Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 위치 오차가 임계값 이상이면 유사도 페널티 (20% 이하)
-        else if (result.leftHandPositionError > settings.handPositionThreshold)
+        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
+        else if (result.leftHandPositionError > settings.handPositionThreshold * 1.5f ||
+                 (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 1.5f))
         {
-            float penalty = Mathf.Clamp01((result.leftHandPositionError - settings.handPositionThreshold) / settings.handPositionThreshold);
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.2f * (1f - penalty)); // 최대 20%
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
+                Debug.LogWarning($"[HandPoseComparator] 왼손 위치/회전 오차 큼 - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
 
@@ -407,40 +403,36 @@ public class HandPoseComparator
             result.rightHandSimilarity = jointSimilarity;
         }
 
-        // 위치/회전 오차가 크면 유사도 강제 하향 (빨강색 강제)
-        bool forceRed = false;
-
-        // 위치 오차가 임계값의 1.5배 이상이면 빨강색 강제
-        if (result.rightHandPositionError > settings.handPositionThreshold * 1.5f)
+        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
+        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
+        if (result.rightHandPositionError > settings.handPositionThreshold * 2f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.1f); // 10% 이하로 강제
-            forceRed = true;
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 빨강색 강제 (유사도: {result.rightHandSimilarity:P0})");
+                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 1.5배 이상이면 빨강색 강제
-        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 1.5f)
+        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
+        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 2f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.1f); // 10% 이하로 강제
-            forceRed = true;
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 빨강색 강제 (유사도: {result.rightHandSimilarity:P0})");
+                Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 위치 오차가 임계값 이상이면 유사도 페널티 (20% 이하)
-        else if (result.rightHandPositionError > settings.handPositionThreshold)
+        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
+        else if (result.rightHandPositionError > settings.handPositionThreshold * 1.5f ||
+                 (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 1.5f))
         {
-            float penalty = Mathf.Clamp01((result.rightHandPositionError - settings.handPositionThreshold) / settings.handPositionThreshold);
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.2f * (1f - penalty)); // 최대 20%
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
+                Debug.LogWarning($"[HandPoseComparator] 오른손 위치/회전 오차 큼 - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
 
@@ -674,18 +666,51 @@ public class HandPoseComparator
         // 위치 오차 계산
         positionError = Vector3.Distance(playerPos, targetPos);
 
-        // 위치 유사도 계산 (0~1, 임계값 기준으로 역비례)
-        // positionError가 0이면 1.0, threshold이면 0.0
-        positionSimilarity = Mathf.Clamp01(1f - (positionError / settings.handPositionThreshold));
+        // ★ 위치 유사도 계산 (부드러운 곡선 - 작은 오차에 관대)
+        float normalizedPosError = positionError / settings.handPositionThreshold;
 
-        // 회전 오차 계산
+        if (normalizedPosError <= 0.5f)
+        {
+            // 작은 오차 (4cm 이하): 유사도 85~100%
+            positionSimilarity = 1f - (normalizedPosError * 0.3f);
+        }
+        else if (normalizedPosError <= 1f)
+        {
+            // 중간 오차 (4~8cm): 유사도 50~85%
+            positionSimilarity = 0.85f - ((normalizedPosError - 0.5f) * 0.7f);
+        }
+        else
+        {
+            // 큰 오차 (8cm 초과): 유사도 0~50%
+            positionSimilarity = Mathf.Max(0f, 0.5f - ((normalizedPosError - 1f) * 0.5f));
+        }
+
+        // 회전 오차 계산 (최적화: 부드러운 곡선 적용)
         if (settings.compareHandRotation)
         {
             rotationError = Quaternion.Angle(targetTransform.rotation, targetRootRotation);
 
-            // 회전 유사도 계산 (0~1, 임계값 기준으로 역비례)
-            // rotationError가 0이면 1.0, threshold이면 0.0
-            rotationSimilarity = Mathf.Clamp01(1f - (rotationError / settings.handRotationThreshold));
+            // ★ 회전 유사도 계산 (부드러운 곡선 - 작은 오차에 관대)
+            // 임계값의 50% 이하: 유사도 80~100% (관대)
+            // 임계값의 50~100%: 유사도 40~80% (점진적 감소)
+            // 임계값 초과: 유사도 0~40% (엄격)
+            float normalizedError = rotationError / settings.handRotationThreshold;
+
+            if (normalizedError <= 0.5f)
+            {
+                // 작은 오차: 부드럽게 감소 (100% → 80%)
+                rotationSimilarity = 1f - (normalizedError * 0.4f);
+            }
+            else if (normalizedError <= 1f)
+            {
+                // 중간 오차: 선형 감소 (80% → 40%)
+                rotationSimilarity = 0.8f - ((normalizedError - 0.5f) * 0.8f);
+            }
+            else
+            {
+                // 큰 오차: 빠르게 감소 (40% → 0%)
+                rotationSimilarity = Mathf.Max(0f, 0.4f - ((normalizedError - 1f) * 0.4f));
+            }
         }
         else
         {
