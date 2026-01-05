@@ -897,67 +897,66 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
         if (useRelativeMovement)
         {
-            if (isPositionBasedMovement)
+            // ★★★ 피벗 기반 모드: 위치/회전 구분 없이 피벗 각도 사용 (측굴, 회전 동작 모두) ★★★
+            if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
             {
-                // ★★★ 피벗 기반 각도 계산 (호 움직임 - 직선 거리 대신 각도 사용) ★★★
-                if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
+                // 피벗에서 현재 손 위치로의 방향
+                Vector3 pivotCurrentDirection = (rightHandPos - pivotTransform.position).normalized;
+
+                // 각도 측정 평면의 법선 축 결정
+                Vector3 planeNormal = GetPivotPlaneNormal();
+
+                // 시작 방향과 현재 방향 사이의 부호 있는 각도
+                float signedAngle = Vector3.SignedAngle(pivotStartDirection, pivotCurrentDirection, planeNormal);
+
+                // 각도 반전 옵션
+                if (invertPivotAngle)
                 {
-                    // 피벗에서 현재 손 위치로의 방향
-                    Vector3 pivotCurrentDirection = (rightHandPos - pivotTransform.position).normalized;
-
-                    // 각도 측정 평면의 법선 축 결정
-                    Vector3 planeNormal = GetPivotPlaneNormal();
-
-                    // 시작 방향과 현재 방향 사이의 부호 있는 각도
-                    float signedAngle = Vector3.SignedAngle(pivotStartDirection, pivotCurrentDirection, planeNormal);
-
-                    // 각도 반전 옵션
-                    if (invertPivotAngle)
-                    {
-                        signedAngle = -signedAngle;
-                    }
-
-                    // 반대 방향(음수)이면 0으로 처리
-                    float effectiveAngle = Mathf.Max(0f, signedAngle);
-
-                    // 목표 각도 대비 진행률 계산
-                    newRatio = Mathf.Clamp01(effectiveAngle / targetAngle);
-
-                    if (showDebugLogs && Time.frameCount % 30 == 0)
-                    {
-                        string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
-                        string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
-                        Debug.Log($"<color=magenta>[Pivot Angle] 각도:{effectiveAngle:F1}° / 목표:{targetAngle:F0}° = {newRatio:P0} {dirInfo}</color>");
-                        Debug.Log($"<color=cyan>  피벗:{pivotTransform.position}, 현재:{rightHandPos} {posSource}, signed:{signedAngle:F1}°</color>");
-                    }
+                    signedAngle = -signedAngle;
                 }
-                // 기존 직선 거리 기반 계산 (피벗 미설정 시 폴백)
-                else
+
+                // 반대 방향(음수)이면 0으로 처리
+                float effectiveAngle = Mathf.Max(0f, signedAngle);
+
+                // 목표 각도 대비 진행률 계산
+                newRatio = Mathf.Clamp01(effectiveAngle / targetAngle);
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
-                    // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
-                    Vector3 displacement = rightHandPos - userHoldReferencePosition;
-
-                    // ★ 축 방향으로 프로젝션 (부호 있음 - 반대 방향은 음수)
-                    float projectedDistance = Vector3.Dot(displacement, movementAxis);
-
-                    // ★ 반대 방향(음수)이면 0으로 처리 - 뒤로 가면 목이 안 돌아감
-                    float effectiveDistance = Mathf.Max(0f, projectedDistance);
-
-                    // ★ 핸드데이터 이동 거리가 너무 작으면 기본값 사용 (5cm)
-                    float targetDistance = Mathf.Max(handDataTotalDistance, 0.05f);
-
-                    // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
-                    newRatio = Mathf.Clamp01(effectiveDistance / targetDistance);
-
-                    if (showDebugLogs && Time.frameCount % 30 == 0)
-                    {
-                        string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
-                        string dirInfo = projectedDistance < 0 ? "(반대방향-무시)" : "";
-                        Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} {dirInfo}</color>");
-                        Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}, 축방향:{projectedDistance:F3}m</color>");
-                    }
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
+                    string moveType = isPositionBasedMovement ? "위치기반" : "회전기반";
+                    Debug.Log($"<color=magenta>[Pivot Angle - {moveType}] 각도:{effectiveAngle:F1}° / 목표:{targetAngle:F0}° = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  피벗:{pivotTransform.position}, 현재:{rightHandPos} {posSource}, signed:{signedAngle:F1}°</color>");
                 }
             }
+            // 기존 방식: 위치 기반 (직선 거리)
+            else if (isPositionBasedMovement)
+            {
+                // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
+                Vector3 displacement = rightHandPos - userHoldReferencePosition;
+
+                // ★ 축 방향으로 프로젝션 (부호 있음 - 반대 방향은 음수)
+                float projectedDistance = Vector3.Dot(displacement, movementAxis);
+
+                // ★ 반대 방향(음수)이면 0으로 처리 - 뒤로 가면 목이 안 돌아감
+                float effectiveDistance = Mathf.Max(0f, projectedDistance);
+
+                // ★ 핸드데이터 이동 거리가 너무 작으면 기본값 사용 (5cm)
+                float targetDistance = Mathf.Max(handDataTotalDistance, 0.05f);
+
+                // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
+                newRatio = Mathf.Clamp01(effectiveDistance / targetDistance);
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    string dirInfo = projectedDistance < 0 ? "(반대방향-무시)" : "";
+                    Debug.Log($"<color=yellow>[Position Move] 이동:{effectiveDistance:F3}m / 목표:{targetDistance:F3}m = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}, 축방향:{projectedDistance:F3}m</color>");
+                }
+            }
+            // 기존 방식: 회전 기반 (손목 회전)
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
