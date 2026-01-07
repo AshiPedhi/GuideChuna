@@ -20,8 +20,7 @@ namespace ChunaTraining
     public enum NarrationType
     {
         BeginnerGuided,     // 초급: "안내에 따라 손을 올려보세요", "안내하는 방향에 맞춰..."
-        IntermediateSimple, // 중급: "환자의 머리를 견측 회전 시키세요", "측굴합니다"
-        None                // 상급: 나래이션 없음 또는 최소화
+        IntermediateSimple  // 중급/상급: "환자의 머리를 견측 회전 시키세요", "측굴합니다"
     }
 
     /// <summary>
@@ -167,8 +166,11 @@ namespace ChunaTraining
         public int maxAttempts = 0;
 
         [Header("=== 시도 횟수 추적 (상급자용) ===")]
-        [Tooltip("시도 횟수 기록 여부")]
+        [Tooltip("시도 횟수 기록 여부 (타임아웃 후 다음 버튼 누른 횟수)")]
         public bool trackAttempts = false;
+
+        [Tooltip("단계별 제한 시간 (초) - 초과 시 다음 버튼 활성화")]
+        public float stepTimeLimit = 20f;
 
         [Tooltip("평가 모드 직전 체험 (상급자)")]
         public bool isPreEvaluationMode = false;
@@ -214,6 +216,7 @@ namespace ChunaTraining
                     preset.requiredHoldTime = 1.5f;
                     preset.maxAttempts = 0;
                     preset.trackAttempts = false;
+                    preset.stepTimeLimit = 0f;  // 무제한
                     preset.isPreEvaluationMode = false;
                     break;
 
@@ -245,6 +248,7 @@ namespace ChunaTraining
                     preset.requiredHoldTime = 2f;
                     preset.maxAttempts = 0;
                     preset.trackAttempts = false;
+                    preset.stepTimeLimit = 0f;  // 무제한
                     preset.isPreEvaluationMode = false;
                     break;
 
@@ -257,9 +261,9 @@ namespace ChunaTraining
                     preset.showMovementPath = false;
                     preset.showTargetPosition = false;
                     preset.showHandColorFeedback = false;
-                    // 나래이션 없음
-                    preset.narrationType = NarrationType.None;
-                    preset.playNarration = false;
+                    // 나래이션: 중급과 동일 (간단 안내)
+                    preset.narrationType = NarrationType.IntermediateSimple;
+                    preset.playNarration = true;
                     preset.playHintAudio = false;
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = true;
@@ -271,12 +275,13 @@ namespace ChunaTraining
                     preset.autoAdvanceStep = false;
                     preset.showRetryGuidance = false;
                     preset.showPositionHint = false;
-                    preset.unlimitedTime = true;
+                    preset.unlimitedTime = false;  // 시간 제한 있음
                     preset.similarityThreshold = 0.7f;
                     preset.requiredHoldTime = 2f;
                     preset.maxAttempts = 0;
-                    // 상급자: 시도 횟수만 추적
+                    // 상급자: 시도 횟수 추적 (20초 타임아웃)
                     preset.trackAttempts = true;
+                    preset.stepTimeLimit = 20f;
                     preset.isPreEvaluationMode = true;
                     break;
             }

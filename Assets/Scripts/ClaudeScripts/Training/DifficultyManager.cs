@@ -203,6 +203,7 @@ namespace ChunaTraining
         public float RequiredHoldTime => currentPreset?.requiredHoldTime ?? 2f;
         public int MaxAttempts => currentPreset?.maxAttempts ?? 0;
         public bool TrackAttempts => currentPreset?.trackAttempts ?? false;
+        public float StepTimeLimit => currentPreset?.stepTimeLimit ?? 0f;  // 0 = 무제한
         public bool IsPreEvaluationMode => currentPreset?.isPreEvaluationMode ?? false;
 
         #endregion
