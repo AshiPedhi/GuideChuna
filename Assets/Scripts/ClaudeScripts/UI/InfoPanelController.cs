@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using ChunaTraining;  // DifficultyLevel, DifficultyManager 사용
 
 /// <summary>
 /// 정보 패널 통합 컨트롤러 (옵션 A - 전체 통합)
@@ -128,7 +129,7 @@ public class InfoPanelController : MonoBehaviour
 
     // 모드 선택 상태
     private ModeType selectedMode = ModeType.None;
-    private DifficultyType selectedDifficulty = DifficultyType.Intermediate;
+    private DifficultyLevel selectedDifficulty = DifficultyLevel.Intermediate;
 
     // 콘텐츠 페이지 열거형
     public enum ContentPage
@@ -148,16 +149,10 @@ public class InfoPanelController : MonoBehaviour
         Evaluation
     }
 
-    // 난이도 타입
-    public enum DifficultyType
-    {
-        Beginner,
-        Intermediate,
-        Advanced
-    }
+    // 난이도 타입 - ChunaTraining.DifficultyLevel 사용 (중복 제거)
 
     // 이벤트
-    public event Action<ModeType, DifficultyType> OnModeSelected;
+    public event Action<ModeType, DifficultyLevel> OnModeSelected;
     public event Action OnSimulationStarted;
 
     #region Unity Lifecycle
@@ -268,7 +263,7 @@ public class InfoPanelController : MonoBehaviour
     private void InitializeModeSelection()
     {
         // 기본값: 중급자
-        selectedDifficulty = DifficultyType.Intermediate;
+        selectedDifficulty = DifficultyLevel.Intermediate;
         selectedMode = ModeType.None;
 
         // 모드 토글 초기화
@@ -361,7 +356,7 @@ public class InfoPanelController : MonoBehaviour
         {
             beginnerToggle.onValueChanged.RemoveAllListeners();
             beginnerToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Beginner);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Beginner);
             });
         }
 
@@ -369,7 +364,7 @@ public class InfoPanelController : MonoBehaviour
         {
             intermediateToggle.onValueChanged.RemoveAllListeners();
             intermediateToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Intermediate);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Intermediate);
             });
         }
 
@@ -377,7 +372,7 @@ public class InfoPanelController : MonoBehaviour
         {
             advancedToggle.onValueChanged.RemoveAllListeners();
             advancedToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Advanced);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Advanced);
             });
         }
     }
@@ -410,10 +405,16 @@ public class InfoPanelController : MonoBehaviour
         StartSimulation();
     }
 
-    private void OnDifficultyToggleChanged(DifficultyType difficulty)
+    private void OnDifficultyToggleChanged(DifficultyLevel difficulty)
     {
         selectedDifficulty = difficulty;
         Debug.Log($"[InfoPanel] 난이도 선택: {difficulty}");
+
+        // ★ DifficultyManager에 난이도 전달 (연동)
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyManager.Instance.SetDifficulty(difficulty);
+        }
 
         UpdateModeSelectionColors();
         UpdateDifficultyDescriptions();
@@ -425,13 +426,13 @@ public class InfoPanelController : MonoBehaviour
         Color inactiveTextColor = new Color(1f, 1f, 1f, 0.6f);
 
         if (beginnerDescription != null)
-            beginnerDescription.color = (selectedDifficulty == DifficultyType.Beginner) ? activeTextColor : inactiveTextColor;
+            beginnerDescription.color = (selectedDifficulty == DifficultyLevel.Beginner) ? activeTextColor : inactiveTextColor;
 
         if (intermediateDescription != null)
-            intermediateDescription.color = (selectedDifficulty == DifficultyType.Intermediate) ? activeTextColor : inactiveTextColor;
+            intermediateDescription.color = (selectedDifficulty == DifficultyLevel.Intermediate) ? activeTextColor : inactiveTextColor;
 
         if (advancedDescription != null)
-            advancedDescription.color = (selectedDifficulty == DifficultyType.Advanced) ? activeTextColor : inactiveTextColor;
+            advancedDescription.color = (selectedDifficulty == DifficultyLevel.Advanced) ? activeTextColor : inactiveTextColor;
     }
 
     private void UpdateModeSelectionColors()
@@ -443,9 +444,9 @@ public class InfoPanelController : MonoBehaviour
         UpdateToggleColor(evaluationToggle, null, selectedMode == ModeType.Evaluation);
 
         // 난이도 토글 색상
-        UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyType.Beginner);
-        UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyType.Intermediate);
-        UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyType.Advanced);
+        UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyLevel.Beginner);
+        UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyLevel.Intermediate);
+        UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyLevel.Advanced);
     }
     #endregion
 
@@ -496,9 +497,9 @@ public class InfoPanelController : MonoBehaviour
     {
         switch (selectedDifficulty)
         {
-            case DifficultyType.Beginner: return "초급자";
-            case DifficultyType.Intermediate: return "중급자";
-            case DifficultyType.Advanced: return "상급자";
+            case DifficultyLevel.Beginner: return "초급자";
+            case DifficultyLevel.Intermediate: return "중급자";
+            case DifficultyLevel.Advanced: return "상급자";
             default: return "중급자";
         }
     }
@@ -894,7 +895,7 @@ public class InfoPanelController : MonoBehaviour
     public bool IsExitPopupOpen => isExitPopupOpen;
     public bool IsScenarioStarted => isScenarioStarted;
     public ModeType SelectedMode => selectedMode;
-    public DifficultyType SelectedDifficulty => selectedDifficulty;
+    public DifficultyLevel SelectedDifficulty => selectedDifficulty;
     #endregion
 
     #region 유틸리티
