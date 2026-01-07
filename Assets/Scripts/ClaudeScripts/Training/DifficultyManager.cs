@@ -128,8 +128,9 @@ namespace ChunaTraining
             {
                 Debug.Log($"<color=cyan>[DifficultyManager] 프리셋 적용: {currentPreset.presetName}</color>");
                 Debug.Log($"  - 가이드 핸드: {currentPreset.showGuideHands}");
-                Debug.Log($"  - 나레이션: {currentPreset.playNarration}");
-                Debug.Log($"  - 유사도 기준: {currentPreset.similarityThreshold:P0}");
+                Debug.Log($"  - 나래이션 타입: {currentPreset.narrationType}");
+                Debug.Log($"  - 시도 횟수 추적: {currentPreset.trackAttempts}");
+                Debug.Log($"  - 평가 전 체험: {currentPreset.isPreEvaluationMode}");
             }
         }
 
@@ -163,6 +164,7 @@ namespace ChunaTraining
 
         #region 편의 메서드 - 음성 안내
 
+        public NarrationType NarrationType => currentPreset?.narrationType ?? NarrationType.BeginnerGuided;
         public bool PlayNarration => currentPreset?.playNarration ?? true;
         public bool PlayHintAudio => currentPreset?.playHintAudio ?? true;
         public bool PlayFeedbackSound => currentPreset?.playFeedbackSound ?? true;
@@ -200,6 +202,8 @@ namespace ChunaTraining
         public float SimilarityThreshold => currentPreset?.similarityThreshold ?? 0.7f;
         public float RequiredHoldTime => currentPreset?.requiredHoldTime ?? 2f;
         public int MaxAttempts => currentPreset?.maxAttempts ?? 0;
+        public bool TrackAttempts => currentPreset?.trackAttempts ?? false;
+        public bool IsPreEvaluationMode => currentPreset?.isPreEvaluationMode ?? false;
 
         #endregion
 
