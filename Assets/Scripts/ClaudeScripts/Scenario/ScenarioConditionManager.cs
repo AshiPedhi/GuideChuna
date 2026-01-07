@@ -620,11 +620,14 @@ public class ScenarioConditionManager : MonoBehaviour
         if (DifficultyManager.Instance == null)
             return "Intermediate";  // 기본값
 
-        switch (DifficultyManager.Instance.NarrationType)
+        switch (DifficultyManager.Instance.CurrentLevel)
         {
-            case NarrationType.BeginnerGuided:
+            case DifficultyLevel.Beginner:
                 return "Beginner";
-            case NarrationType.IntermediateSimple:
+            case DifficultyLevel.Intermediate:
+                return "Intermediate";
+            case DifficultyLevel.Advanced:
+                return "Advanced";
             default:
                 return "Intermediate";
         }
