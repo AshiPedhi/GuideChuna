@@ -169,6 +169,22 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("회전 감지 축 (Y=목회전, Z=측굴, X=굴곡/신전)")]
     [SerializeField] private RotationDetectionAxis rotationDetectionAxis = RotationDetectionAxis.Y;
 
+    [Header("=== ★ 피벗 기반 진행률 설정 (호 움직임용) ===")]
+    [Tooltip("피벗 기반 각도 측정 사용 (직선 거리 대신 피벗 중심 각도로 진행률 계산)")]
+    [SerializeField] private bool usePivotBasedProgress = true;
+
+    [Tooltip("피벗 포인트 (환자 목/경추 위치) - 회전의 중심점")]
+    [SerializeField] private Transform pivotTransform;
+
+    [Tooltip("목표 각도 (도) - 애니메이션의 최대 회전 각도")]
+    [SerializeField] private float targetAngle = 90f;
+
+    [Tooltip("각도 측정 평면의 법선 축 (측굴=Z, 회전=Y, 굴신=X)")]
+    [SerializeField] private RotationDetectionAxis pivotPlaneAxis = RotationDetectionAxis.Z;
+
+    [Tooltip("피벗 각도 반전 (각도가 반대로 측정될 때)")]
+    [SerializeField] private bool invertPivotAngle = false;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -295,6 +311,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
+
+    // ★ 피벗 기반 진행률 계산용
+    private Vector3 pivotStartDirection;        // 피벗→시작손위치 방향 (정규화)
 
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
@@ -650,6 +669,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                     string wristInfo = rightWristBone != null ? rightWristBone.name : "루트";
                     string posSource = rightHandCollider != null ? "콜라이더" : "transform";
                     Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition} [{posSource}], 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
+
+                    // ★ 피벗 기반 진행률용: 피벗→손 방향 저장
+                    if (usePivotBasedProgress && pivotTransform != null)
+                    {
+                        pivotStartDirection = (userHoldReferencePosition - pivotTransform.position).normalized;
+                        Debug.Log($"<color=magenta>[StartHold] 피벗 기준 저장 - 피벗:{pivotTransform.position}, 시작방향:{pivotStartDirection}, 목표각도:{targetAngle}°</color>");
+                    }
                 }
                 else
                 {
@@ -871,7 +897,41 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
         if (useRelativeMovement)
         {
-            if (isPositionBasedMovement)
+            // ★★★ 피벗 기반 모드: 위치/회전 구분 없이 피벗 각도 사용 (측굴, 회전 동작 모두) ★★★
+            if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
+            {
+                // 피벗에서 현재 손 위치로의 방향
+                Vector3 pivotCurrentDirection = (rightHandPos - pivotTransform.position).normalized;
+
+                // 각도 측정 평면의 법선 축 결정
+                Vector3 planeNormal = GetPivotPlaneNormal();
+
+                // 시작 방향과 현재 방향 사이의 부호 있는 각도
+                float signedAngle = Vector3.SignedAngle(pivotStartDirection, pivotCurrentDirection, planeNormal);
+
+                // 각도 반전 옵션
+                if (invertPivotAngle)
+                {
+                    signedAngle = -signedAngle;
+                }
+
+                // 반대 방향(음수)이면 0으로 처리
+                float effectiveAngle = Mathf.Max(0f, signedAngle);
+
+                // 목표 각도 대비 진행률 계산
+                newRatio = Mathf.Clamp01(effectiveAngle / targetAngle);
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
+                    string moveType = isPositionBasedMovement ? "위치기반" : "회전기반";
+                    Debug.Log($"<color=magenta>[Pivot Angle - {moveType}] 각도:{effectiveAngle:F1}° / 목표:{targetAngle:F0}° = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  피벗:{pivotTransform.position}, 현재:{rightHandPos} {posSource}, signed:{signedAngle:F1}°</color>");
+                }
+            }
+            // 기존 방식: 위치 기반 (직선 거리)
+            else if (isPositionBasedMovement)
             {
                 // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
                 Vector3 displacement = rightHandPos - userHoldReferencePosition;
@@ -896,6 +956,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}, 축방향:{projectedDistance:F3}m</color>");
                 }
             }
+            // 기존 방식: 회전 기반 (손목 회전)
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
@@ -1771,6 +1832,24 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ 피벗 각도 측정 평면의 법선 축 반환
+    /// </summary>
+    private Vector3 GetPivotPlaneNormal()
+    {
+        switch (pivotPlaneAxis)
+        {
+            case RotationDetectionAxis.Y:
+                return Vector3.up;      // Y축 기준 평면 (XZ 평면에서 각도 측정)
+            case RotationDetectionAxis.Z:
+                return Vector3.forward; // Z축 기준 평면 (XY 평면에서 각도 측정) - 측굴용
+            case RotationDetectionAxis.X:
+                return Vector3.right;   // X축 기준 평면 (YZ 평면에서 각도 측정)
+            default:
+                return Vector3.forward; // 기본: 측굴용 (Z축)
+        }
+    }
+
+    /// <summary>
     /// 회전 감지 축 설정
     /// </summary>
     public void SetRotationDetectionAxis(RotationDetectionAxis axis)
@@ -1788,6 +1867,34 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 현재 회전 감지 축
     /// </summary>
     public RotationDetectionAxis CurrentRotationAxis => rotationDetectionAxis;
+
+    /// <summary>
+    /// ★ 피벗 기반 진행률 설정
+    /// </summary>
+    public void SetPivotSettings(Transform pivot, float angle, RotationDetectionAxis planeAxis, bool invert = false)
+    {
+        pivotTransform = pivot;
+        targetAngle = angle;
+        pivotPlaneAxis = planeAxis;
+        invertPivotAngle = invert;
+        usePivotBasedProgress = pivot != null;
+
+        if (showDebugLogs)
+        {
+            string axisName = planeAxis == RotationDetectionAxis.Y ? "Y(XZ평면)" :
+                             planeAxis == RotationDetectionAxis.Z ? "Z(XY평면-측굴)" : "X(YZ평면)";
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 피벗 설정 - 피벗:{(pivot != null ? pivot.name : "없음")}, 목표각도:{angle}°, 평면:{axisName}, 반전:{invert}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 피벗 기반 진행률 활성화 여부
+    /// </summary>
+    public bool UsePivotBasedProgress
+    {
+        get => usePivotBasedProgress;
+        set => usePivotBasedProgress = value;
+    }
 
     void OnDestroy()
     {
