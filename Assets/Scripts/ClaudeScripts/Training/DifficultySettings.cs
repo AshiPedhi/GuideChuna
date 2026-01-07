@@ -166,11 +166,8 @@ namespace ChunaTraining
         public int maxAttempts = 0;
 
         [Header("=== 시도 횟수 추적 (상급자용) ===")]
-        [Tooltip("시도 횟수 기록 여부 (타임아웃 후 다음 버튼 누른 횟수)")]
+        [Tooltip("시도 횟수 기록 여부 (기존 타임아웃 시스템에서 다음 버튼 누를 때 카운트)")]
         public bool trackAttempts = false;
-
-        [Tooltip("단계별 제한 시간 (초) - 초과 시 다음 버튼 활성화")]
-        public float stepTimeLimit = 20f;
 
         [Tooltip("평가 모드 직전 체험 (상급자)")]
         public bool isPreEvaluationMode = false;
@@ -216,7 +213,6 @@ namespace ChunaTraining
                     preset.requiredHoldTime = 1.5f;
                     preset.maxAttempts = 0;
                     preset.trackAttempts = false;
-                    preset.stepTimeLimit = 0f;  // 무제한
                     preset.isPreEvaluationMode = false;
                     break;
 
@@ -248,7 +244,6 @@ namespace ChunaTraining
                     preset.requiredHoldTime = 2f;
                     preset.maxAttempts = 0;
                     preset.trackAttempts = false;
-                    preset.stepTimeLimit = 0f;  // 무제한
                     preset.isPreEvaluationMode = false;
                     break;
 
@@ -279,9 +274,8 @@ namespace ChunaTraining
                     preset.similarityThreshold = 0.7f;
                     preset.requiredHoldTime = 2f;
                     preset.maxAttempts = 0;
-                    // 상급자: 시도 횟수 추적 (20초 타임아웃)
+                    // 상급자: 시도 횟수 추적 (기존 타임아웃 시스템 활용)
                     preset.trackAttempts = true;
-                    preset.stepTimeLimit = 20f;
                     preset.isPreEvaluationMode = true;
                     break;
             }
