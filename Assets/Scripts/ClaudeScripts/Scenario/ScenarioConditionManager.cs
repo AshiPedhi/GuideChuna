@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using ChunaTraining;  // DifficultyManager, NarrationType 사용
 
 /// <summary>
 /// 시나리오 조건 체크 인터페이스
@@ -563,6 +564,10 @@ public class ScenarioConditionManager : MonoBehaviour
 
     /// <summary>
     /// Resources 폴더에서 나레이션 클립 로드
+    /// ★ 난이도별 다른 나래이션 로드 지원
+    /// - BeginnerGuided: Narrations/Beginner/{clipName}
+    /// - IntermediateSimple: Narrations/Intermediate/{clipName}
+    /// - Fallback: Narrations/{clipName} (공통)
     /// </summary>
     private AudioClip LoadNarrationClip(string clipName)
     {
@@ -572,23 +577,57 @@ public class ScenarioConditionManager : MonoBehaviour
             clipName = System.IO.Path.GetFileNameWithoutExtension(clipName);
         }
 
-        // Resources 폴더에서 로드
-        string fullPath = string.IsNullOrEmpty(narrationFolderPath)
+        // ★ 난이도별 서브폴더 결정
+        string difficultyFolder = GetNarrationSubfolder();
+
+        // 1차 시도: 난이도별 폴더에서 로드
+        string difficultyPath = string.IsNullOrEmpty(narrationFolderPath)
+            ? $"{difficultyFolder}/{clipName}"
+            : $"{narrationFolderPath}/{difficultyFolder}/{clipName}";
+
+        AudioClip clip = Resources.Load<AudioClip>(difficultyPath);
+
+        if (clip != null)
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] 난이도별 나래이션 로드 성공: {difficultyPath} ({clip.length:F1}초)</color>");
+            return clip;
+        }
+
+        // 2차 시도: 공통 폴더에서 로드 (Fallback)
+        string fallbackPath = string.IsNullOrEmpty(narrationFolderPath)
             ? clipName
             : $"{narrationFolderPath}/{clipName}";
 
-        AudioClip clip = Resources.Load<AudioClip>(fullPath);
+        clip = Resources.Load<AudioClip>(fallbackPath);
 
-        if (clip == null)
+        if (clip != null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: Resources/{fullPath}");
+            Debug.Log($"[ConditionManager] 공통 나래이션 로드 성공 (Fallback): {fallbackPath} ({clip.length:F1}초)");
         }
         else
         {
-            Debug.Log($"[ConditionManager] 나레이션 클립 로드 성공: {fullPath} ({clip.length:F1}초)");
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: {difficultyPath} 또는 {fallbackPath}");
         }
 
         return clip;
+    }
+
+    /// <summary>
+    /// ★ 현재 난이도에 따른 나래이션 서브폴더 반환
+    /// </summary>
+    private string GetNarrationSubfolder()
+    {
+        if (DifficultyManager.Instance == null)
+            return "Intermediate";  // 기본값
+
+        switch (DifficultyManager.Instance.NarrationType)
+        {
+            case NarrationType.BeginnerGuided:
+                return "Beginner";
+            case NarrationType.IntermediateSimple:
+            default:
+                return "Intermediate";
+        }
     }
 
     /// <summary>
