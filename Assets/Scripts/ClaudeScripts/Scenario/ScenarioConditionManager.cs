@@ -53,6 +53,13 @@ public class ScenarioConditionManager : MonoBehaviour
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 
+    [Header("=== 단계 피드백 UI ===")]
+    [Tooltip("단계 완료 시 유사도 피드백 UI")]
+    [SerializeField] private StepFeedbackUI stepFeedbackUI;
+
+    [Tooltip("ChunaPathEvaluator 참조 (유사도 가져오기용)")]
+    [SerializeField] private ChunaPathEvaluator pathEvaluator;
+
     // 현재 조건
     private IScenarioCondition currentCondition;
     private bool isCheckingCondition = false;
@@ -82,6 +89,18 @@ public class ScenarioConditionManager : MonoBehaviour
         if (guideUIController == null)
         {
             guideUIController = FindObjectOfType<ScenarioGuideUIController>();
+        }
+
+        // StepFeedbackUI 자동 찾기
+        if (stepFeedbackUI == null)
+        {
+            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>();
+        }
+
+        // ChunaPathEvaluator 자동 찾기
+        if (pathEvaluator == null)
+        {
+            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
         }
 
         // Quest 최적화: WaitForSeconds 객체 캐싱
@@ -620,11 +639,14 @@ public class ScenarioConditionManager : MonoBehaviour
         if (DifficultyManager.Instance == null)
             return "Intermediate";  // 기본값
 
-        switch (DifficultyManager.Instance.NarrationType)
+        switch (DifficultyManager.Instance.CurrentLevel)
         {
-            case NarrationType.BeginnerGuided:
+            case DifficultyLevel.Beginner:
                 return "Beginner";
-            case NarrationType.IntermediateSimple:
+            case DifficultyLevel.Intermediate:
+                return "Intermediate";
+            case DifficultyLevel.Advanced:
+                return "Advanced";
             default:
                 return "Intermediate";
         }
@@ -791,6 +813,9 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator OnConditionCompleted()
     {
+        // ★ 단계 피드백 UI 표시 (유사도 기반)
+        ShowStepFeedback();
+
         // 완료 알림 표시
         ShowCompletionAlert();
 
@@ -808,6 +833,46 @@ public class ScenarioConditionManager : MonoBehaviour
         {
             scenarioManager.NextSubStep();
         }
+    }
+
+    /// <summary>
+    /// ★ 단계 피드백 UI 표시
+    /// </summary>
+    private void ShowStepFeedback()
+    {
+        if (stepFeedbackUI == null) return;
+
+        // 현재 유사도 가져오기
+        float currentSimilarity = GetCurrentSimilarity();
+
+        // 피드백 표시
+        stepFeedbackUI.ShowFeedback(currentSimilarity);
+
+        Debug.Log($"<color=green>[ConditionManager] 단계 피드백 표시: {currentSimilarity:P0}</color>");
+    }
+
+    /// <summary>
+    /// ★ 현재 유사도 가져오기
+    /// </summary>
+    private float GetCurrentSimilarity()
+    {
+        // ChunaPathEvaluator에서 최근 유사도 가져오기
+        if (pathEvaluator != null)
+        {
+            // 좌우 손 유사도 가져오기
+            var (leftSim, rightSim) = pathEvaluator.GetRealTimeSimilarityBoth();
+
+            // 둘 다 0이 아닌 경우 평균, 하나만 있으면 그 값 사용
+            if (leftSim > 0 && rightSim > 0)
+                return (leftSim + rightSim) / 2f;
+            else if (rightSim > 0)
+                return rightSim;
+            else if (leftSim > 0)
+                return leftSim;
+        }
+
+        // 기본값 (데이터 없을 시)
+        return 0.5f;
     }
 
     /// <summary>

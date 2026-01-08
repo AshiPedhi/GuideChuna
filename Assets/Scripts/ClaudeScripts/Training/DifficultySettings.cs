@@ -271,7 +271,7 @@ namespace ChunaTraining
                     preset.showRetryGuidance = false;
                     preset.showPositionHint = false;
                     preset.unlimitedTime = false;  // 시간 제한 있음
-                    preset.similarityThreshold = 0.7f;
+                    preset.similarityThreshold = 0.75f;  // 상급자: 75%
                     preset.requiredHoldTime = 2f;
                     preset.maxAttempts = 0;
                     // 상급자: 시도 횟수 추적 (기존 타임아웃 시스템 활용)
