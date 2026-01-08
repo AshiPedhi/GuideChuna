@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 
 /// <summary>
 /// 시나리오 가이드 UI 전용 컨트롤러 (시나리오 진행 UI)
@@ -10,9 +11,11 @@ using TMPro;
 /// - Phase 이미지 (중부/전부/후부) 진행 상태 표시
 /// - 시작 토글 제어 (가이드 스텝에서만 표시)
 /// - 진행 원형 표시 (Duration)
+/// - 가이드 콘텐츠 섹션 제어 (피드백 표시 시 숨김/복원)
 ///
 /// [참고]
 /// - 가이드 영상 토글은 InfoPanelController에서 처리합니다.
+/// - 피드백 UI는 별도의 StepFeedbackUI 컴포넌트에서 처리합니다.
 /// </summary>
 public class ScenarioGuideUIController : MonoBehaviour
 {
@@ -64,6 +67,10 @@ public class ScenarioGuideUIController : MonoBehaviour
 
     [Tooltip("완료 아이콘")]
     [SerializeField] private GameObject completeIcon;
+
+    [Header("=== 가이드 콘텐츠 섹션 ===")]
+    [Tooltip("안내 콘텐츠 섹션 (피드백 시 숨김/복원용)")]
+    [SerializeField] private GameObject guideContentSection;
 
     // [REMOVED] 가이드 영상 토글은 InfoPanelController로 이전됨
 
@@ -626,4 +633,35 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     // [REMOVED] 가이드 영상 토글 관련 코드는 InfoPanelController로 이전됨
+
+    // ========== ★ 가이드 콘텐츠 섹션 제어 (분리된 피드백 UI용) ==========
+
+    /// <summary>
+    /// 가이드 콘텐츠 섹션 숨김 (피드백 표시 전 호출)
+    /// </summary>
+    public void HideGuideContent()
+    {
+        if (guideContentSection != null)
+        {
+            guideContentSection.SetActive(false);
+            Debug.Log("[GuideUI] 가이드 콘텐츠 숨김");
+        }
+    }
+
+    /// <summary>
+    /// 가이드 콘텐츠 섹션 복원 (피드백 완료 후 호출)
+    /// </summary>
+    public void ShowGuideContent()
+    {
+        if (guideContentSection != null)
+        {
+            guideContentSection.SetActive(true);
+            Debug.Log("[GuideUI] 가이드 콘텐츠 복원");
+        }
+    }
+
+    /// <summary>
+    /// 가이드 콘텐츠 섹션 참조 반환
+    /// </summary>
+    public GameObject GuideContentSection => guideContentSection;
 }
