@@ -36,7 +36,8 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
     [SerializeField] private float progressTimeout = 20f;
 
-    [Header("=== 완료 알림 UI ===")]
+    [Header("=== 완료 알림 UI (Final Fallback) ===")]
+    [Tooltip("피드백 UI가 없을 때 사용되는 간단한 완료 알림")]
     [SerializeField] private GameObject completionAlertPanel;
     [SerializeField] private TMPro.TextMeshProUGUI completionAlertText;
 
@@ -53,8 +54,8 @@ public class ScenarioConditionManager : MonoBehaviour
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 
-    [Header("=== 단계 피드백 UI ===")]
-    [Tooltip("단계 완료 시 유사도 피드백 UI")]
+    [Header("=== 단계 피드백 UI (Fallback) ===")]
+    [Tooltip("단계 완료 시 유사도 피드백 UI (guideUIController 없을 때 사용)")]
     [SerializeField] private StepFeedbackUI stepFeedbackUI;
 
     [Tooltip("ChunaPathEvaluator 참조 (유사도 가져오기용)")]
@@ -807,28 +808,32 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 조건 완료 시 처리 (완료 알림 + 딜레이)
+    /// 조건 완료 시 처리 (완료 사운드 + 피드백 + 다음 단계)
     /// HandPose 조건 등 등록된 조건에서 사용
-    /// Quest 최적화: WaitForSeconds 캐싱
+    /// ★ 통합 피드백 UI 사용 (guideUIController)
     /// </summary>
     private IEnumerator OnConditionCompleted()
     {
-        // ★ 단계 피드백 UI 표시 (유사도 기반)
-        ShowStepFeedback();
-
-        // 완료 알림 표시
-        ShowCompletionAlert();
-
-        // 완료 사운드 재생
+        // 1. 완료 사운드 재생 (딩동)
         PlayCompletionSound();
 
-        // 딜레이 (Quest 최적화: 캐시된 객체 사용)
-        yield return cachedCompletionDelay;
+        // 2. ★ 통합 피드백 UI 표시 (guideUIController 사용)
+        float feedbackWaitTime = ShowStepFeedback();
 
-        // 완료 알림 숨김
-        HideCompletionAlert();
+        // 3. 피드백 표시 시간만큼 대기 (피드백 내부에서 자동으로 복귀함)
+        if (feedbackWaitTime > 0)
+        {
+            yield return new WaitForSeconds(feedbackWaitTime + 0.5f);  // 피드백 시간 + 여유
+        }
+        else
+        {
+            // 피드백 UI 없을 경우 기존 방식
+            ShowCompletionAlert();
+            yield return cachedCompletionDelay;
+            HideCompletionAlert();
+        }
 
-        // 다음 SubStep으로 진행
+        // 4. 다음 SubStep으로 진행
         if (scenarioManager != null)
         {
             scenarioManager.NextSubStep();
@@ -836,19 +841,32 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// ★ 단계 피드백 UI 표시
+    /// ★ 단계 피드백 UI 표시 (통합 피드백 우선 사용)
     /// </summary>
-    private void ShowStepFeedback()
+    /// <returns>피드백 표시 시간 (초), 0이면 피드백 UI 없음</returns>
+    private float ShowStepFeedback()
     {
-        if (stepFeedbackUI == null) return;
-
         // 현재 유사도 가져오기
         float currentSimilarity = GetCurrentSimilarity();
 
-        // 피드백 표시
-        stepFeedbackUI.ShowFeedback(currentSimilarity);
+        // 1순위: guideUIController의 통합 피드백 사용
+        if (guideUIController != null)
+        {
+            float waitTime = guideUIController.ShowFeedback(currentSimilarity);
+            Debug.Log($"<color=green>[ConditionManager] 통합 피드백 표시: {currentSimilarity:P0} (대기 {waitTime}초)</color>");
+            return waitTime;
+        }
 
-        Debug.Log($"<color=green>[ConditionManager] 단계 피드백 표시: {currentSimilarity:P0}</color>");
+        // 2순위: 별도 StepFeedbackUI 사용 (fallback)
+        if (stepFeedbackUI != null)
+        {
+            stepFeedbackUI.ShowFeedback(currentSimilarity);
+            Debug.Log($"<color=green>[ConditionManager] StepFeedbackUI 피드백 표시: {currentSimilarity:P0}</color>");
+            return 2.5f;  // StepFeedbackUI 기본 표시 시간
+        }
+
+        Debug.Log($"<color=yellow>[ConditionManager] 피드백 UI 없음 - 유사도: {currentSimilarity:P0}</color>");
+        return 0f;
     }
 
     /// <summary>
