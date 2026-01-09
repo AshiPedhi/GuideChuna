@@ -661,38 +661,67 @@ public class HandPoseResampler : EditorWindow
 
             List<FrameData> result = new List<FrameData>();
 
-            // 스케일 축 결정
+            // 시작 위치와 방향
+            Vector3 startPos = parsedFrames[0].rightWristWorldPos;
+            Vector3 endPos = parsedFrames[parsedFrames.Count - 1].rightWristWorldPos;
+            Vector3 midPos = parsedFrames[parsedFrames.Count / 2].rightWristWorldPos;
+
+            // 이동 평면의 법선 계산 (세 점으로 평면 결정)
+            Vector3 v1 = midPos - startPos;
+            Vector3 v2 = endPos - startPos;
+            Vector3 planeNormal = Vector3.Cross(v1, v2).normalized;
+
+            // 평면이 거의 평평하면 (직선 이동) Y축 사용
+            if (planeNormal.magnitude < 0.1f)
+            {
+                planeNormal = Vector3.up;
+            }
+
+            // 스케일 축 결정 (Auto면 계산된 평면 법선 사용)
             Vector3 axisVector = GetScaleAxisVector();
+            if (axisVector == Vector3.zero)
+            {
+                axisVector = planeNormal;
+            }
+
+            // 시작 방향 (피벗에서 첫 프레임으로)
+            Vector3 startDir = (startPos - pivot).normalized;
+            float startRadius = Vector3.Distance(startPos, pivot);
+
+            Debug.Log($"<color=yellow>[스케일링] 피벗: {pivot}, 축: {axisVector}, 시작반경: {startRadius:F3}m</color>");
+            Debug.Log($"<color=yellow>[스케일링] 원본각도: {pivotBasedAngle:F1}° → 목표: {targetAngle:F1}° (비율: {scaleRatio:F2}x)</color>");
 
             for (int i = 0; i < parsedFrames.Count; i++)
             {
                 var frame = CloneFrame(parsedFrames[i]);
 
-                // 오른손 Wrist 위치 스케일링
-                Vector3 fromPivot = frame.rightWristWorldPos - pivot;
+                // 현재 프레임의 피벗 기준 방향과 거리
+                Vector3 currentPos = parsedFrames[i].rightWristWorldPos;
+                Vector3 fromPivot = currentPos - pivot;
+                float currentRadius = fromPivot.magnitude;
+                Vector3 currentDir = fromPivot.normalized;
 
-                // 피벗 기준 각도 스케일링
-                if (axisVector != Vector3.zero)
+                // 시작 방향 대비 현재 각도 (부호 있음)
+                float currentAngle = Vector3.SignedAngle(startDir, currentDir, axisVector);
+
+                // 새 각도 = 현재 각도 * 스케일 비율
+                float newAngle = currentAngle * scaleRatio;
+
+                // 새 위치 계산: 피벗에서 시작방향을 newAngle만큼 회전
+                Quaternion rotation = Quaternion.AngleAxis(newAngle, axisVector);
+                Vector3 newDir = rotation * startDir;
+                Vector3 newPos = pivot + newDir * currentRadius;
+
+                frame.rightWristWorldPos = newPos;
+
+                // Wrist 조인트도 업데이트
+                foreach (var joint in frame.rightJoints)
                 {
-                    // 특정 축 기준 회전 스케일링
-                    Quaternion rotation = Quaternion.AngleAxis(
-                        Vector3.SignedAngle(
-                            (parsedFrames[0].rightWristWorldPos - pivot).normalized,
-                            fromPivot.normalized,
-                            axisVector) * (scaleRatio - 1f),
-                        axisVector);
-                    fromPivot = rotation * fromPivot;
+                    if (joint.jointId == 1)
+                    {
+                        joint.worldPosition = newPos;
+                    }
                 }
-                else
-                {
-                    // 전체 방향으로 스케일링 (거리 기반)
-                    fromPivot *= scaleRatio;
-                }
-
-                frame.rightWristWorldPos = pivot + fromPivot;
-
-                // 조인트 World Position도 업데이트
-                UpdateJointWorldPositions(frame, parsedFrames[i], scaleRatio, pivot, axisVector);
 
                 frame.frameIndex = i;
                 result.Add(frame);
@@ -700,13 +729,21 @@ public class HandPoseResampler : EditorWindow
                 EditorUtility.DisplayProgressBar("스케일링", $"프레임 {i + 1}/{parsedFrames.Count}", (float)i / parsedFrames.Count);
             }
 
+            // 결과 각도 검증
+            Vector3 resultStartDir = (result[0].rightWristWorldPos - pivot).normalized;
+            Vector3 resultEndDir = (result[result.Count - 1].rightWristWorldPos - pivot).normalized;
+            float resultAngle = Vector3.Angle(resultStartDir, resultEndDir);
+
             SaveFramesToCSV(result, "_scaled");
             EditorUtility.ClearProgressBar();
+
+            Debug.Log($"<color=green>[스케일링] 완료! 결과 각도: {resultAngle:F1}°</color>");
 
             EditorUtility.DisplayDialog("완료",
                 $"각도 스케일링 완료!\n\n" +
                 $"원본 각도: {pivotBasedAngle:F1}°\n" +
                 $"목표 각도: {targetAngle:F1}°\n" +
+                $"결과 각도: {resultAngle:F1}°\n" +
                 $"스케일 비율: {scaleRatio:F2}x",
                 "확인");
         }
@@ -819,27 +856,43 @@ public class HandPoseResampler : EditorWindow
             // 1. 각도 스케일링
             Vector3 pivot = estimatedPivot;
             float scaleRatio = targetAngle / Mathf.Max(0.1f, pivotBasedAngle);
+
+            // 시작/중간/끝 위치로 이동 평면 계산
+            Vector3 startPos = parsedFrames[0].rightWristWorldPos;
+            Vector3 endPos = parsedFrames[parsedFrames.Count - 1].rightWristWorldPos;
+            Vector3 midPos = parsedFrames[parsedFrames.Count / 2].rightWristWorldPos;
+
+            Vector3 v1 = midPos - startPos;
+            Vector3 v2 = endPos - startPos;
+            Vector3 planeNormal = Vector3.Cross(v1, v2).normalized;
+            if (planeNormal.magnitude < 0.1f) planeNormal = Vector3.up;
+
             Vector3 axisVector = GetScaleAxisVector();
+            if (axisVector == Vector3.zero) axisVector = planeNormal;
+
+            Vector3 startDir = (startPos - pivot).normalized;
 
             List<FrameData> scaled = new List<FrameData>();
             for (int i = 0; i < parsedFrames.Count; i++)
             {
                 var frame = CloneFrame(parsedFrames[i]);
-                Vector3 fromPivot = frame.rightWristWorldPos - pivot;
 
-                if (axisVector != Vector3.zero)
+                Vector3 currentPos = parsedFrames[i].rightWristWorldPos;
+                Vector3 fromPivot = currentPos - pivot;
+                float currentRadius = fromPivot.magnitude;
+
+                // 현재 각도 계산 후 스케일 적용
+                float currentAngle = Vector3.SignedAngle(startDir, fromPivot.normalized, axisVector);
+                float newAngle = currentAngle * scaleRatio;
+
+                Quaternion rotation = Quaternion.AngleAxis(newAngle, axisVector);
+                Vector3 newPos = pivot + rotation * startDir * currentRadius;
+
+                frame.rightWristWorldPos = newPos;
+                foreach (var joint in frame.rightJoints)
                 {
-                    Quaternion rotation = Quaternion.AngleAxis(
-                        Vector3.SignedAngle(
-                            (parsedFrames[0].rightWristWorldPos - pivot).normalized,
-                            fromPivot.normalized,
-                            axisVector) * (scaleRatio - 1f),
-                        axisVector);
-                    fromPivot = rotation * fromPivot;
+                    if (joint.jointId == 1) joint.worldPosition = newPos;
                 }
-
-                frame.rightWristWorldPos = pivot + fromPivot;
-                UpdateJointWorldPositions(frame, parsedFrames[i], scaleRatio, pivot, axisVector);
                 scaled.Add(frame);
             }
 
