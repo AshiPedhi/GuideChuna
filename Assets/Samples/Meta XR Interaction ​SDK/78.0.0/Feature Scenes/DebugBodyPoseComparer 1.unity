@@ -513,7 +513,6 @@ GameObject:
   m_Component:
   - component: {fileID: 177890660}
   - component: {fileID: 177890662}
-  - component: {fileID: 177890663}
   m_Layer: 0
   m_Name: PoseRecorder
   m_TagString: Untagged
@@ -564,55 +563,6 @@ MonoBehaviour:
   isWaitingToRecord: 0
   recordedFrames: 0
   remainingTime: 0
---- !u!114 &177890663
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 177890658}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2bca8529646f0274aa3d8d6f044c2d4a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HandPosePlayer
-  leftHandVisual: {fileID: 1244681664}
-  rightHandVisual: {fileID: 120135652}
-  leftHandMapper: {fileID: 1433342950}
-  rightHandMapper: {fileID: 1908702802}
-  leftOpenXRRoot: {fileID: 1473451098}
-  rightOpenXRRoot: {fileID: 379903267}
-  playerLeftHand: {fileID: 2105003843}
-  playerRightHand: {fileID: 2105003842}
-  playbackInterval: 0.05
-  positionThreshold: 0.05
-  rotationThreshold: 15
-  similarityPercentage: 0.7
-  compareHandPosition: 0
-  handPositionThreshold: 0.1
-  compareHandRotation: 0
-  handRotationThreshold: 20
-  referencePoint: {fileID: 1268818018}
-  showReplayHands: 1
-  replayHandMaterial: {fileID: 2100000, guid: cf0df939110ab354daff02b2b42e4748, type: 2}
-  replayHandAlpha: 0.5
-  replayHandColor: {r: 0.3, g: 0.5, b: 1, a: 0.5}
-  playLeftHand: 0
-  playRightHand: 0
-  compareLeftHand: 0
-  compareRightHand: 0
-  keyJoints: 0100000004000000090000000e0000001300000018000000
-  integrateWithScenario: 0
-  enableLoopPlayback: 1
-  playbackLengthRatio: 1
-  similarityReferenceValue: 0.7
-  enableHandPositionComparison: 1
-  enableHandRotationComparison: 1
-  comparisonInterval: 0.5
-  showDebugGizmos: 1
-  showPositionLines: 1
-  gizmoSphereSize: 0.02
-  playbackMode: 1
 --- !u!1 &199082899
 GameObject:
   m_ObjectHideFlags: 0
@@ -1298,11 +1248,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1474478358}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!4 &379903267 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 3811367379284561000, guid: 34a22dd67c1e5344591237fdd61e78ec, type: 3}
-  m_PrefabInstance: {fileID: 120135651}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &380543159
 GameObject:
   m_ObjectHideFlags: 0
@@ -3260,11 +3205,6 @@ MonoBehaviour:
 --- !u!4 &1433342951 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 6536860776232889757, guid: 70d02a90551f23042a882cdceeaf8e3a, type: 3}
-  m_PrefabInstance: {fileID: 1244681663}
-  m_PrefabAsset: {fileID: 0}
---- !u!4 &1473451098 stripped
-Transform:
-  m_CorrespondingSourceObject: {fileID: 652411596507001759, guid: 70d02a90551f23042a882cdceeaf8e3a, type: 3}
   m_PrefabInstance: {fileID: 1244681663}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1474478357
@@ -6094,7 +6034,7 @@ MonoBehaviour:
   timelineSlider: {fileID: 1488648586}
   startPointSlider: {fileID: 1275581417}
   endPointSlider: {fileID: 1622262027}
-  handPosePlayer: {fileID: 177890663}
+  handPosePlayer: {fileID: 0}
   currentTime: 0
   startTime: 0
   endTime: 0
@@ -7700,7 +7640,7 @@ PrefabInstance:
     - target: {fileID: 7516989854015812293, guid: d2d6934a666a18d46b8b7a3864dc9f63, type: 3}
       propertyPath: _whenSelect.m_PersistentCalls.m_Calls.Array.data[0].m_Target
       value: 
-      objectReference: {fileID: 177890663}
+      objectReference: {fileID: 0}
     - target: {fileID: 7516989854015812293, guid: d2d6934a666a18d46b8b7a3864dc9f63, type: 3}
       propertyPath: _whenSelect.m_PersistentCalls.m_Calls.Array.data[1].m_Target
       value: 
