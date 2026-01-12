@@ -265,32 +265,32 @@ public class HandPoseComparator
             result.leftHandSimilarity = jointSimilarity;
         }
 
-        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
-        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        if (result.leftHandPositionError > settings.handPositionThreshold * 2f)
+        // ★ 페널티 시스템 (대폭 완화 - 기본 유사도 유지, 극단적 오차만 페널티)
+        // 위치 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        if (result.leftHandPositionError > settings.handPositionThreshold * 4f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 2f)
+        // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 4f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
-        else if (result.leftHandPositionError > settings.handPositionThreshold * 1.5f ||
-                 (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 1.5f))
+        // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
+        else if (result.leftHandPositionError > settings.handPositionThreshold * 3f ||
+                 (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 3f))
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.5f); // 50% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
@@ -403,32 +403,32 @@ public class HandPoseComparator
             result.rightHandSimilarity = jointSimilarity;
         }
 
-        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
-        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        if (result.rightHandPositionError > settings.handPositionThreshold * 2f)
+        // ★ 페널티 시스템 (대폭 완화 - 기본 유사도 유지, 극단적 오차만 페널티)
+        // 위치 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        if (result.rightHandPositionError > settings.handPositionThreshold * 4f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 2f)
+        // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 4f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
-        else if (result.rightHandPositionError > settings.handPositionThreshold * 1.5f ||
-                 (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 1.5f))
+        // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
+        else if (result.rightHandPositionError > settings.handPositionThreshold * 3f ||
+                 (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 3f))
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.5f); // 50% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
