@@ -42,6 +42,16 @@ public class HandPoseResampler : EditorWindow
     private Color rightHandColor = new Color(1f, 0.4f, 0.3f, 1f);
     private bool loopPlayback = true;
 
+    // ===== 비교 모드 설정 =====
+    private bool compareMode = false;
+    private string compareFilePath = "";
+    private List<FrameData> compareFrames = new List<FrameData>();
+    private bool isCompareAnalyzed = false;
+    private Color compareLeftColor = new Color(0.2f, 1f, 0.5f, 0.7f);
+    private Color compareRightColor = new Color(1f, 0.8f, 0.2f, 0.7f);
+    private Vector3 compareOffset = new Vector3(0.3f, 0, 0);
+    private bool syncByFrame = true; // true: 프레임 동기화, false: 시간 동기화
+
     // 핸드 조인트 연결 정의 (parent → child)
     private static readonly int[][] fingerBones = new int[][]
     {
@@ -190,37 +200,89 @@ public class HandPoseResampler : EditorWindow
 
         FrameData frame = parsedFrames[Mathf.Clamp(currentFrameIndex, 0, parsedFrames.Count - 1)];
 
-        // 왼손 그리기
+        // 메인 데이터 - 왼손 그리기
         if (showLeftHand && frame.leftJoints.Count > 0)
         {
-            DrawHand(frame.leftJoints, leftHandColor, true);
+            DrawHand(frame.leftJoints, leftHandColor, true, Vector3.zero);
         }
 
-        // 오른손 그리기
+        // 메인 데이터 - 오른손 그리기
         if (showRightHand && frame.rightJoints.Count > 0)
         {
-            DrawHand(frame.rightJoints, rightHandColor, false);
+            DrawHand(frame.rightJoints, rightHandColor, false, Vector3.zero);
+        }
+
+        // 비교 모드: 두 번째 데이터셋 그리기
+        if (compareMode && isCompareAnalyzed && compareFrames.Count > 0)
+        {
+            int compareIndex = GetCompareFrameIndex();
+            FrameData compareFrame = compareFrames[Mathf.Clamp(compareIndex, 0, compareFrames.Count - 1)];
+
+            // 비교 데이터 - 왼손 그리기
+            if (showLeftHand && compareFrame.leftJoints.Count > 0)
+            {
+                DrawHand(compareFrame.leftJoints, compareLeftColor, true, compareOffset);
+            }
+
+            // 비교 데이터 - 오른손 그리기
+            if (showRightHand && compareFrame.rightJoints.Count > 0)
+            {
+                DrawHand(compareFrame.rightJoints, compareRightColor, false, compareOffset);
+            }
         }
 
         // 프레임 정보 표시
         Handles.BeginGUI();
-        GUILayout.BeginArea(new Rect(10, 10, 200, 80));
+        float infoHeight = compareMode && isCompareAnalyzed ? 110 : 80;
+        GUILayout.BeginArea(new Rect(10, 10, 220, infoHeight));
         GUI.backgroundColor = new Color(0, 0, 0, 0.7f);
         GUILayout.BeginVertical(EditorStyles.helpBox);
         GUILayout.Label($"Frame: {currentFrameIndex + 1}/{parsedFrames.Count}", EditorStyles.whiteLabel);
         GUILayout.Label($"Time: {frame.timestamp:F2}s", EditorStyles.whiteLabel);
         GUILayout.Label(isPlaying ? "▶ Playing" : "⏸ Paused", EditorStyles.whiteLabel);
+
+        if (compareMode && isCompareAnalyzed)
+        {
+            int compareIndex = GetCompareFrameIndex();
+            GUILayout.Label($"Compare: {compareIndex + 1}/{compareFrames.Count}", EditorStyles.whiteLabel);
+        }
+
         GUILayout.EndVertical();
         GUILayout.EndArea();
         Handles.EndGUI();
     }
 
-    private void DrawHand(List<JointData> joints, Color color, bool isLeft)
+    private int GetCompareFrameIndex()
+    {
+        if (compareFrames.Count == 0) return 0;
+
+        if (syncByFrame)
+        {
+            // 프레임 인덱스 동기화 (비율 기반)
+            float ratio = (float)currentFrameIndex / Mathf.Max(1, parsedFrames.Count - 1);
+            return Mathf.RoundToInt(ratio * (compareFrames.Count - 1));
+        }
+        else
+        {
+            // 시간 동기화
+            float currentTime = parsedFrames[currentFrameIndex].timestamp;
+            for (int i = 0; i < compareFrames.Count; i++)
+            {
+                if (compareFrames[i].timestamp >= currentTime)
+                {
+                    return i;
+                }
+            }
+            return compareFrames.Count - 1;
+        }
+    }
+
+    private void DrawHand(List<JointData> joints, Color color, bool isLeft, Vector3 additionalOffset)
     {
         if (joints.Count < 26) return;
 
         // 조인트 위치 계산 (로컬 → 월드)
-        Vector3[] worldPositions = CalculateWorldPositions(joints, isLeft);
+        Vector3[] worldPositions = CalculateWorldPositions(joints, isLeft, additionalOffset);
 
         Handles.color = color;
 
@@ -261,18 +323,19 @@ public class HandPoseResampler : EditorWindow
         }
     }
 
-    private Vector3[] CalculateWorldPositions(List<JointData> joints, bool isLeft)
+    private Vector3[] CalculateWorldPositions(List<JointData> joints, bool isLeft, Vector3 additionalOffset)
     {
         Vector3[] positions = new Vector3[joints.Count];
 
         // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
-        Vector3 rootPos = previewOffset;
+        Vector3 totalOffset = previewOffset + additionalOffset;
+        Vector3 rootPos = totalOffset;
         Quaternion rootRot = Quaternion.identity;
 
         var wristJoint = joints.FirstOrDefault(j => j.jointId == 1);
         if (wristJoint != null && wristJoint.worldPosition != Vector3.zero)
         {
-            rootPos = wristJoint.worldPosition * previewScale + previewOffset;
+            rootPos = wristJoint.worldPosition * previewScale + totalOffset;
             rootRot = wristJoint.worldRotation;
         }
 
@@ -290,11 +353,11 @@ public class HandPoseResampler : EditorWindow
         }
 
         // 손가락별로 계산
-        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 2, 3, 4, 5 }, 0); // Thumb
-        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 6, 7, 8, 9, 10 }, 0); // Index
-        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 11, 12, 13, 14, 15 }, 0); // Middle
-        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 16, 17, 18, 19, 20 }, 0); // Ring
-        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 21, 22, 23, 24, 25 }, 0); // Pinky
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 2, 3, 4, 5 }, 0, totalOffset); // Thumb
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 6, 7, 8, 9, 10 }, 0, totalOffset); // Index
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 11, 12, 13, 14, 15 }, 0, totalOffset); // Middle
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 16, 17, 18, 19, 20 }, 0, totalOffset); // Ring
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 21, 22, 23, 24, 25 }, 0, totalOffset); // Pinky
 
         // 결과 배열에 복사
         for (int i = 0; i < joints.Count; i++)
@@ -314,7 +377,7 @@ public class HandPoseResampler : EditorWindow
     }
 
     private void CalculateFingerPositions(List<JointData> joints, Dictionary<int, Vector3> positions,
-        Dictionary<int, Quaternion> rotations, int[] fingerJoints, int parentId)
+        Dictionary<int, Quaternion> rotations, int[] fingerJoints, int parentId, Vector3 totalOffset)
     {
         int currentParent = parentId;
 
@@ -323,7 +386,7 @@ public class HandPoseResampler : EditorWindow
             var joint = joints.FirstOrDefault(j => j.jointId == jointId);
             if (joint == null) continue;
 
-            Vector3 parentPos = positions.ContainsKey(currentParent) ? positions[currentParent] : previewOffset;
+            Vector3 parentPos = positions.ContainsKey(currentParent) ? positions[currentParent] : totalOffset;
             Quaternion parentRot = rotations.ContainsKey(currentParent) ? rotations[currentParent] : Quaternion.identity;
 
             Vector3 worldPos = parentPos + parentRot * (joint.localPosition * previewScale);
@@ -517,6 +580,84 @@ public class HandPoseResampler : EditorWindow
 
         EditorGUILayout.Space(10);
 
+        // ===== 비교 모드 =====
+        EditorGUILayout.LabelField("비교 모드", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        compareMode = EditorGUILayout.Toggle("비교 모드 활성화", compareMode);
+
+        if (compareMode)
+        {
+            EditorGUILayout.Space(5);
+
+            // 비교 파일 선택
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("비교 파일:", GUILayout.Width(60));
+            compareFilePath = EditorGUILayout.TextField(compareFilePath);
+            if (GUILayout.Button("찾기", GUILayout.Width(50)))
+            {
+                string initialPath = string.IsNullOrEmpty(compareFilePath)
+                    ? Application.dataPath + "/Resources/HandPoseData"
+                    : Path.GetDirectoryName(compareFilePath);
+
+                string path = EditorUtility.OpenFilePanel("비교할 CSV 파일 선택", initialPath, "csv");
+                if (!string.IsNullOrEmpty(path))
+                {
+                    compareFilePath = path;
+                    isCompareAnalyzed = false;
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // 빠른 선택 버튼
+            EditorGUILayout.BeginHorizontal();
+            EditorGUILayout.LabelField("빠른 선택:", GUILayout.Width(60));
+            if (GUILayout.Button("측굴", GUILayout.Width(55))) SelectCompareFile("측굴");
+            if (GUILayout.Button("건측회전", GUILayout.Width(60))) SelectCompareFile("건측회전");
+            if (GUILayout.Button("환측회전", GUILayout.Width(60))) SelectCompareFile("환측회전");
+            if (GUILayout.Button("등척성", GUILayout.Width(50))) SelectCompareFile("등척성운동");
+            EditorGUILayout.EndHorizontal();
+
+            // 분석 버튼
+            GUI.enabled = !string.IsNullOrEmpty(compareFilePath) && File.Exists(compareFilePath);
+            GUI.backgroundColor = isCompareAnalyzed ? Color.gray : new Color(0.5f, 0.8f, 1f);
+            if (GUILayout.Button(isCompareAnalyzed ? "비교 데이터 로드됨" : "비교 데이터 로드", GUILayout.Height(25)))
+            {
+                LoadCompareData();
+            }
+            GUI.backgroundColor = Color.white;
+            GUI.enabled = true;
+
+            if (isCompareAnalyzed)
+            {
+                EditorGUILayout.LabelField($"  → {compareFrames.Count} 프레임 로드됨", EditorStyles.miniLabel);
+
+                EditorGUILayout.Space(5);
+
+                // 동기화 방식
+                syncByFrame = EditorGUILayout.Toggle("프레임 동기화", syncByFrame);
+                EditorGUILayout.LabelField(syncByFrame ? "  (프레임 비율로 동기화)" : "  (타임스탬프로 동기화)", EditorStyles.miniLabel);
+
+                EditorGUILayout.Space(5);
+
+                // 비교 데이터 색상
+                EditorGUILayout.LabelField("비교 데이터 색상:", EditorStyles.miniLabel);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.LabelField("왼손", GUILayout.Width(40));
+                compareLeftColor = EditorGUILayout.ColorField(compareLeftColor);
+                EditorGUILayout.LabelField("오른손", GUILayout.Width(45));
+                compareRightColor = EditorGUILayout.ColorField(compareRightColor);
+                EditorGUILayout.EndHorizontal();
+
+                // 비교 오프셋
+                compareOffset = EditorGUILayout.Vector3Field("비교 위치 오프셋", compareOffset);
+            }
+        }
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
         // ===== 변환 설정 =====
         EditorGUILayout.LabelField("미리보기 변환", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -539,6 +680,38 @@ public class HandPoseResampler : EditorWindow
 
         // 키보드 단축키 처리
         HandleKeyboardShortcuts();
+    }
+
+    private void SelectCompareFile(string fileName)
+    {
+        string resourcePath = Application.dataPath + "/Resources/HandPoseData/" + fileName + ".csv";
+        if (File.Exists(resourcePath))
+        {
+            compareFilePath = resourcePath;
+            isCompareAnalyzed = false;
+        }
+        else
+        {
+            Debug.LogWarning($"파일을 찾을 수 없습니다: {resourcePath}");
+        }
+    }
+
+    private void LoadCompareData()
+    {
+        try
+        {
+            compareFrames = ParseCSV(compareFilePath);
+            if (compareFrames.Count > 0)
+            {
+                isCompareAnalyzed = true;
+                Debug.Log($"<color=green>[비교 모드] 로드 완료: {compareFrames.Count} 프레임</color>");
+            }
+        }
+        catch (Exception e)
+        {
+            EditorUtility.DisplayDialog("오류", $"비교 파일 로드 실패: {e.Message}", "확인");
+            Debug.LogError($"[비교 모드] 로드 오류: {e}");
+        }
     }
 
     private void TogglePlayback()
