@@ -934,14 +934,7 @@ public class InfoPanelController : MonoBehaviour
         var animator = toggle.GetComponent<Animator>();
         if (animator != null && animator.isActiveAndEnabled)
         {
-            // 토글 상태에 따라 Animator 트리거 설정
             animator.SetBool("IsOn", value);
-
-            // 또는 트리거 방식 (컨트롤러에 따라)
-            if (value)
-                animator.SetTrigger("On");
-            else
-                animator.SetTrigger("Off");
         }
     }
 
