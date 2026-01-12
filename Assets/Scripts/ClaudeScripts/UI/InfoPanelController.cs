@@ -277,6 +277,16 @@ public class InfoPanelController : MonoBehaviour
 
         // 설명 텍스트 설정
         SetupModeDescriptions();
+
+        // ★ DifficultyManager에 초기 난이도 전달
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyManager.Instance.SetDifficulty(selectedDifficulty);
+        }
+
+        // ★ 초기 색상 업데이트
+        UpdateModeSelectionColors();
+        UpdateDifficultyDescriptions();
     }
 
     private void SetupModeDescriptions()
