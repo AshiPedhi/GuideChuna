@@ -129,7 +129,7 @@ public class InfoPanelController : MonoBehaviour
 
     // 모드 선택 상태
     private ModeType selectedMode = ModeType.None;
-    private DifficultyLevel selectedDifficulty = DifficultyLevel.Intermediate;
+    private DifficultyLevel selectedDifficulty = DifficultyLevel.Beginner;
 
     // 콘텐츠 페이지 열거형
     public enum ContentPage
@@ -262,17 +262,17 @@ public class InfoPanelController : MonoBehaviour
 
     private void InitializeModeSelection()
     {
-        // 기본값: 중급자
-        selectedDifficulty = DifficultyLevel.Intermediate;
+        // 기본값: 초급자
+        selectedDifficulty = DifficultyLevel.Beginner;
         selectedMode = ModeType.None;
 
         // 모드 토글 초기화
         SetToggleWithoutNotify(practiceToggle, false);
         SetToggleWithoutNotify(evaluationToggle, false);
 
-        // 난이도 토글 초기화 (중급자 기본 선택)
-        SetToggleWithoutNotify(beginnerToggle, false);
-        SetToggleWithoutNotify(intermediateToggle, true);
+        // 난이도 토글 초기화 (초급자 기본 선택)
+        SetToggleWithoutNotify(beginnerToggle, true);
+        SetToggleWithoutNotify(intermediateToggle, false);
         SetToggleWithoutNotify(advancedToggle, false);
 
         // 설명 텍스트 설정
