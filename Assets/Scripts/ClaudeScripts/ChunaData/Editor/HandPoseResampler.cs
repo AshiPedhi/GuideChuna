@@ -15,13 +15,49 @@ using System.Globalization;
 /// - 스케일링: 각도 확대/축소 (피벗 기반)
 /// - 변환: 회전, 오프셋 적용
 /// - 프리셋: 시술별 자동 설정
+/// - 미리보기: VR 없이 에디터에서 핸드 포즈 확인
 /// </summary>
 public class HandPoseResampler : EditorWindow
 {
     // ===== 탭 관리 =====
-    private enum EditorTab { Resample, Trim, Scale, Transform, Preset }
-    private EditorTab currentTab = EditorTab.Resample;
-    private string[] tabNames = { "리샘플링", "트리밍", "각도 스케일", "변환", "프리셋" };
+    private enum EditorTab { Preview, Resample, Trim, Scale, Transform, Preset }
+    private EditorTab currentTab = EditorTab.Preview;
+    private string[] tabNames = { "미리보기", "리샘플링", "트리밍", "각도 스케일", "변환", "프리셋" };
+
+    // ===== 미리보기 설정 =====
+    private bool isPlaying = false;
+    private float playbackSpeed = 1.0f;
+    private int currentFrameIndex = 0;
+    private double lastUpdateTime = 0;
+    private float previewScale = 1.0f;
+    private Vector3 previewOffset = new Vector3(0, 1, 0);
+    private bool showLeftHand = true;
+    private bool showRightHand = true;
+    private bool showBones = true;
+    private bool showJoints = true;
+    private float jointSize = 0.008f;
+    private float boneThickness = 3f;
+    private Color leftHandColor = new Color(0.2f, 0.6f, 1f, 1f);
+    private Color rightHandColor = new Color(1f, 0.4f, 0.3f, 1f);
+    private bool loopPlayback = true;
+
+    // 핸드 조인트 연결 정의 (parent → child)
+    private static readonly int[][] fingerBones = new int[][]
+    {
+        // Thumb: 2→3→4→5
+        new int[] { 2, 3, 4, 5 },
+        // Index: 6→7→8→9→10
+        new int[] { 6, 7, 8, 9, 10 },
+        // Middle: 11→12→13→14→15
+        new int[] { 11, 12, 13, 14, 15 },
+        // Ring: 16→17→18→19→20
+        new int[] { 16, 17, 18, 19, 20 },
+        // Pinky: 21→22→23→24→25
+        new int[] { 21, 22, 23, 24, 25 }
+    };
+
+    // 손목에서 각 손가락 시작점으로의 연결
+    private static readonly int[] wristToFingerStart = new int[] { 2, 6, 11, 16, 21 };
 
     // ===== 공통 설정 =====
     private string sourceFilePath = "";
@@ -75,7 +111,210 @@ public class HandPoseResampler : EditorWindow
     public static void ShowWindow()
     {
         var window = GetWindow<HandPoseResampler>("Hand Pose Editor");
-        window.minSize = new Vector2(500, 600);
+        window.minSize = new Vector2(500, 700);
+    }
+
+    private void OnEnable()
+    {
+        SceneView.duringSceneGui += OnSceneGUI;
+        EditorApplication.update += OnEditorUpdate;
+    }
+
+    private void OnDisable()
+    {
+        SceneView.duringSceneGui -= OnSceneGUI;
+        EditorApplication.update -= OnEditorUpdate;
+        isPlaying = false;
+    }
+
+    private void OnEditorUpdate()
+    {
+        if (!isPlaying || parsedFrames.Count < 2) return;
+
+        double currentTime = EditorApplication.timeSinceStartup;
+        float deltaTime = (float)(currentTime - lastUpdateTime);
+        lastUpdateTime = currentTime;
+
+        // 다음 프레임으로 진행
+        float frameTime = parsedFrames[currentFrameIndex].timestamp;
+        float nextFrameTime = currentFrameIndex < parsedFrames.Count - 1
+            ? parsedFrames[currentFrameIndex + 1].timestamp
+            : frameTime + 0.033f;
+
+        float frameDuration = nextFrameTime - frameTime;
+        if (frameDuration <= 0) frameDuration = 0.033f;
+
+        if (deltaTime * playbackSpeed >= frameDuration)
+        {
+            currentFrameIndex++;
+            if (currentFrameIndex >= parsedFrames.Count)
+            {
+                if (loopPlayback)
+                {
+                    currentFrameIndex = 0;
+                }
+                else
+                {
+                    currentFrameIndex = parsedFrames.Count - 1;
+                    isPlaying = false;
+                }
+            }
+            SceneView.RepaintAll();
+            Repaint();
+        }
+    }
+
+    private void OnSceneGUI(SceneView sceneView)
+    {
+        if (!isAnalyzed || parsedFrames.Count == 0) return;
+        if (currentTab != EditorTab.Preview) return;
+
+        FrameData frame = parsedFrames[Mathf.Clamp(currentFrameIndex, 0, parsedFrames.Count - 1)];
+
+        // 왼손 그리기
+        if (showLeftHand && frame.leftJoints.Count > 0)
+        {
+            DrawHand(frame.leftJoints, leftHandColor, true);
+        }
+
+        // 오른손 그리기
+        if (showRightHand && frame.rightJoints.Count > 0)
+        {
+            DrawHand(frame.rightJoints, rightHandColor, false);
+        }
+
+        // 프레임 정보 표시
+        Handles.BeginGUI();
+        GUILayout.BeginArea(new Rect(10, 10, 200, 80));
+        GUI.backgroundColor = new Color(0, 0, 0, 0.7f);
+        GUILayout.BeginVertical(EditorStyles.helpBox);
+        GUILayout.Label($"Frame: {currentFrameIndex + 1}/{parsedFrames.Count}", EditorStyles.whiteLabel);
+        GUILayout.Label($"Time: {frame.timestamp:F2}s", EditorStyles.whiteLabel);
+        GUILayout.Label(isPlaying ? "▶ Playing" : "⏸ Paused", EditorStyles.whiteLabel);
+        GUILayout.EndVertical();
+        GUILayout.EndArea();
+        Handles.EndGUI();
+    }
+
+    private void DrawHand(List<JointData> joints, Color color, bool isLeft)
+    {
+        if (joints.Count < 26) return;
+
+        // 조인트 위치 계산 (로컬 → 월드)
+        Vector3[] worldPositions = CalculateWorldPositions(joints, isLeft);
+
+        Handles.color = color;
+
+        // 조인트 그리기
+        if (showJoints)
+        {
+            for (int i = 0; i < worldPositions.Length; i++)
+            {
+                Handles.SphereHandleCap(0, worldPositions[i], Quaternion.identity, jointSize * previewScale, EventType.Repaint);
+            }
+        }
+
+        // 본(뼈) 그리기
+        if (showBones)
+        {
+            // 손목에서 각 손가락 시작점으로
+            foreach (int fingerStart in wristToFingerStart)
+            {
+                if (fingerStart < worldPositions.Length)
+                {
+                    Handles.DrawLine(worldPositions[0], worldPositions[fingerStart], boneThickness);
+                }
+            }
+
+            // 각 손가락 본
+            foreach (int[] finger in fingerBones)
+            {
+                for (int i = 0; i < finger.Length - 1; i++)
+                {
+                    int from = finger[i];
+                    int to = finger[i + 1];
+                    if (from < worldPositions.Length && to < worldPositions.Length)
+                    {
+                        Handles.DrawLine(worldPositions[from], worldPositions[to], boneThickness);
+                    }
+                }
+            }
+        }
+    }
+
+    private Vector3[] CalculateWorldPositions(List<JointData> joints, bool isLeft)
+    {
+        Vector3[] positions = new Vector3[joints.Count];
+
+        // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
+        Vector3 rootPos = previewOffset;
+        Quaternion rootRot = Quaternion.identity;
+
+        var wristJoint = joints.FirstOrDefault(j => j.jointId == 1);
+        if (wristJoint != null && wristJoint.worldPosition != Vector3.zero)
+        {
+            rootPos = wristJoint.worldPosition * previewScale + previewOffset;
+            rootRot = wristJoint.worldRotation;
+        }
+
+        // 각 조인트의 월드 위치 계산
+        // 간단한 방법: 로컬 포지션을 누적하여 월드 위치 계산
+        Dictionary<int, Vector3> calculatedPos = new Dictionary<int, Vector3>();
+        Dictionary<int, Quaternion> calculatedRot = new Dictionary<int, Quaternion>();
+
+        // Joint 0 (WristRoot)
+        var joint0 = joints.FirstOrDefault(j => j.jointId == 0);
+        if (joint0 != null)
+        {
+            calculatedPos[0] = rootPos;
+            calculatedRot[0] = rootRot;
+        }
+
+        // 손가락별로 계산
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 2, 3, 4, 5 }, 0); // Thumb
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 6, 7, 8, 9, 10 }, 0); // Index
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 11, 12, 13, 14, 15 }, 0); // Middle
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 16, 17, 18, 19, 20 }, 0); // Ring
+        CalculateFingerPositions(joints, calculatedPos, calculatedRot, new int[] { 21, 22, 23, 24, 25 }, 0); // Pinky
+
+        // 결과 배열에 복사
+        for (int i = 0; i < joints.Count; i++)
+        {
+            int jointId = joints[i].jointId;
+            if (calculatedPos.ContainsKey(jointId))
+            {
+                positions[i] = calculatedPos[jointId];
+            }
+            else
+            {
+                positions[i] = rootPos + joints[i].localPosition * previewScale;
+            }
+        }
+
+        return positions;
+    }
+
+    private void CalculateFingerPositions(List<JointData> joints, Dictionary<int, Vector3> positions,
+        Dictionary<int, Quaternion> rotations, int[] fingerJoints, int parentId)
+    {
+        int currentParent = parentId;
+
+        foreach (int jointId in fingerJoints)
+        {
+            var joint = joints.FirstOrDefault(j => j.jointId == jointId);
+            if (joint == null) continue;
+
+            Vector3 parentPos = positions.ContainsKey(currentParent) ? positions[currentParent] : previewOffset;
+            Quaternion parentRot = rotations.ContainsKey(currentParent) ? rotations[currentParent] : Quaternion.identity;
+
+            Vector3 worldPos = parentPos + parentRot * (joint.localPosition * previewScale);
+            Quaternion worldRot = parentRot * joint.localRotation;
+
+            positions[jointId] = worldPos;
+            rotations[jointId] = worldRot;
+
+            currentParent = jointId;
+        }
     }
 
     private void OnGUI()
@@ -89,12 +328,21 @@ public class HandPoseResampler : EditorWindow
         if (isAnalyzed)
         {
             DrawAnalysisResult();
-            EditorGUILayout.Space(15);
+        }
 
-            // 탭 선택
-            currentTab = (EditorTab)GUILayout.Toolbar((int)currentTab, tabNames);
-            EditorGUILayout.Space(10);
+        EditorGUILayout.Space(15);
 
+        // 탭 선택 (항상 표시)
+        currentTab = (EditorTab)GUILayout.Toolbar((int)currentTab, tabNames);
+        EditorGUILayout.Space(10);
+
+        // 미리보기 탭은 분석 전에도 접근 가능 (데이터 없으면 안내 메시지)
+        if (currentTab == EditorTab.Preview)
+        {
+            DrawPreviewTab();
+        }
+        else if (isAnalyzed)
+        {
             switch (currentTab)
             {
                 case EditorTab.Resample:
@@ -114,18 +362,259 @@ public class HandPoseResampler : EditorWindow
                     break;
             }
         }
+        else
+        {
+            EditorGUILayout.HelpBox("CSV 파일을 선택하고 '데이터 분석' 버튼을 눌러주세요.", MessageType.Warning);
+        }
 
         EditorGUILayout.EndScrollView();
     }
 
     #region UI Drawing
 
+    private void DrawPreviewTab()
+    {
+        EditorGUILayout.LabelField("핸드 포즈 미리보기", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "VR 없이 에디터에서 핸드 포즈를 확인합니다.\n" +
+            "Scene 뷰에서 핸드 스켈레톤을 볼 수 있습니다.\n" +
+            "키보드: Space=재생/정지, ←→=프레임 이동",
+            MessageType.Info);
+
+        // 데이터가 없으면 안내 메시지
+        if (!isAnalyzed || parsedFrames.Count == 0)
+        {
+            EditorGUILayout.Space(20);
+            EditorGUILayout.HelpBox(
+                "미리보기를 사용하려면:\n" +
+                "1. 위에서 CSV 파일을 선택하세요\n" +
+                "2. '데이터 분석' 버튼을 클릭하세요\n" +
+                "3. Scene 뷰를 열어두세요",
+                MessageType.Warning);
+            return;
+        }
+
+        EditorGUILayout.Space(10);
+
+        // ===== 재생 컨트롤 =====
+        EditorGUILayout.LabelField("재생 컨트롤", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        // 재생/정지 버튼
+        EditorGUILayout.BeginHorizontal();
+
+        GUI.backgroundColor = new Color(0.3f, 0.8f, 0.3f);
+        if (GUILayout.Button(isPlaying ? "⏸ 정지" : "▶ 재생", GUILayout.Height(35)))
+        {
+            TogglePlayback();
+        }
+
+        GUI.backgroundColor = new Color(0.8f, 0.8f, 0.3f);
+        if (GUILayout.Button("⏮ 처음", GUILayout.Height(35), GUILayout.Width(60)))
+        {
+            currentFrameIndex = 0;
+            SceneView.RepaintAll();
+        }
+
+        if (GUILayout.Button("⏭ 끝", GUILayout.Height(35), GUILayout.Width(60)))
+        {
+            currentFrameIndex = Mathf.Max(0, parsedFrames.Count - 1);
+            SceneView.RepaintAll();
+        }
+
+        GUI.backgroundColor = Color.white;
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(5);
+
+        // 타임라인 슬라이더
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("프레임:", GUILayout.Width(50));
+        int newFrame = EditorGUILayout.IntSlider(currentFrameIndex, 0, Mathf.Max(0, parsedFrames.Count - 1));
+        if (newFrame != currentFrameIndex)
+        {
+            currentFrameIndex = newFrame;
+            SceneView.RepaintAll();
+        }
+        EditorGUILayout.EndHorizontal();
+
+        // 시간 표시
+        if (parsedFrames.Count > 0 && currentFrameIndex < parsedFrames.Count)
+        {
+            float currentTime = parsedFrames[currentFrameIndex].timestamp;
+            float totalTime = parsedFrames[parsedFrames.Count - 1].timestamp;
+            EditorGUILayout.LabelField($"시간: {currentTime:F2}s / {totalTime:F2}s");
+
+            // 프로그레스 바
+            Rect progressRect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(8));
+            EditorGUI.DrawRect(progressRect, new Color(0.2f, 0.2f, 0.2f));
+            float progress = totalTime > 0 ? currentTime / totalTime : 0;
+            progressRect.width *= progress;
+            EditorGUI.DrawRect(progressRect, new Color(0.3f, 0.7f, 1f));
+        }
+
+        EditorGUILayout.Space(5);
+
+        // 재생 옵션
+        EditorGUILayout.BeginHorizontal();
+        playbackSpeed = EditorGUILayout.Slider("재생 속도", playbackSpeed, 0.1f, 3f);
+        EditorGUILayout.EndHorizontal();
+
+        loopPlayback = EditorGUILayout.Toggle("반복 재생", loopPlayback);
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
+        // ===== 표시 설정 =====
+        EditorGUILayout.LabelField("표시 설정", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        EditorGUILayout.BeginHorizontal();
+        showLeftHand = EditorGUILayout.Toggle("왼손", showLeftHand, GUILayout.Width(100));
+        leftHandColor = EditorGUILayout.ColorField(leftHandColor);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.BeginHorizontal();
+        showRightHand = EditorGUILayout.Toggle("오른손", showRightHand, GUILayout.Width(100));
+        rightHandColor = EditorGUILayout.ColorField(rightHandColor);
+        EditorGUILayout.EndHorizontal();
+
+        EditorGUILayout.Space(5);
+
+        showJoints = EditorGUILayout.Toggle("조인트 표시", showJoints);
+        showBones = EditorGUILayout.Toggle("본(뼈) 표시", showBones);
+
+        if (showJoints)
+        {
+            jointSize = EditorGUILayout.Slider("조인트 크기", jointSize, 0.002f, 0.03f);
+        }
+        if (showBones)
+        {
+            boneThickness = EditorGUILayout.Slider("본 두께", boneThickness, 1f, 10f);
+        }
+
+        EditorGUILayout.EndVertical();
+
+        EditorGUILayout.Space(10);
+
+        // ===== 변환 설정 =====
+        EditorGUILayout.LabelField("미리보기 변환", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        previewScale = EditorGUILayout.Slider("스케일", previewScale, 0.1f, 5f);
+        previewOffset = EditorGUILayout.Vector3Field("오프셋", previewOffset);
+
+        if (GUILayout.Button("Scene 뷰로 포커스"))
+        {
+            FocusSceneViewOnHands();
+        }
+
+        EditorGUILayout.EndVertical();
+
+        // Scene 뷰 업데이트 요청
+        if (GUI.changed)
+        {
+            SceneView.RepaintAll();
+        }
+
+        // 키보드 단축키 처리
+        HandleKeyboardShortcuts();
+    }
+
+    private void TogglePlayback()
+    {
+        isPlaying = !isPlaying;
+        if (isPlaying)
+        {
+            lastUpdateTime = EditorApplication.timeSinceStartup;
+            if (currentFrameIndex >= parsedFrames.Count - 1)
+            {
+                currentFrameIndex = 0;
+            }
+        }
+        SceneView.RepaintAll();
+    }
+
+    private void FocusSceneViewOnHands()
+    {
+        if (parsedFrames.Count == 0) return;
+
+        FrameData frame = parsedFrames[currentFrameIndex];
+        Vector3 focusPos = previewOffset;
+
+        // 오른손 월드 위치가 있으면 사용
+        if (frame.rightJoints.Count > 0)
+        {
+            var wrist = frame.rightJoints.FirstOrDefault(j => j.jointId == 1);
+            if (wrist != null && wrist.worldPosition != Vector3.zero)
+            {
+                focusPos = wrist.worldPosition * previewScale + previewOffset;
+            }
+        }
+
+        SceneView sceneView = SceneView.lastActiveSceneView;
+        if (sceneView != null)
+        {
+            sceneView.LookAt(focusPos, Quaternion.Euler(30, -45, 0), 0.5f);
+        }
+    }
+
+    private void HandleKeyboardShortcuts()
+    {
+        Event e = Event.current;
+        if (e.type != EventType.KeyDown) return;
+
+        switch (e.keyCode)
+        {
+            case KeyCode.Space:
+                TogglePlayback();
+                e.Use();
+                break;
+
+            case KeyCode.LeftArrow:
+                if (currentFrameIndex > 0)
+                {
+                    currentFrameIndex--;
+                    SceneView.RepaintAll();
+                    Repaint();
+                }
+                e.Use();
+                break;
+
+            case KeyCode.RightArrow:
+                if (currentFrameIndex < parsedFrames.Count - 1)
+                {
+                    currentFrameIndex++;
+                    SceneView.RepaintAll();
+                    Repaint();
+                }
+                e.Use();
+                break;
+
+            case KeyCode.Home:
+                currentFrameIndex = 0;
+                SceneView.RepaintAll();
+                Repaint();
+                e.Use();
+                break;
+
+            case KeyCode.End:
+                currentFrameIndex = Mathf.Max(0, parsedFrames.Count - 1);
+                SceneView.RepaintAll();
+                Repaint();
+                e.Use();
+                break;
+        }
+    }
+
     private void DrawHeader()
     {
         EditorGUILayout.Space(10);
         EditorGUILayout.LabelField("핸드 포즈 CSV 에디터", EditorStyles.boldLabel);
         EditorGUILayout.HelpBox(
-            "녹화된 CSV 데이터를 편집합니다.\n" +
+            "녹화된 CSV 데이터를 편집하고 미리봅니다.\n" +
+            "• 미리보기: VR 없이 Scene 뷰에서 재생/확인\n" +
             "• 리샘플링: 프레임 간격 균등화\n" +
             "• 트리밍: 필요한 구간만 추출\n" +
             "• 스케일: 각도 확대/축소\n" +
