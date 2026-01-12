@@ -28,7 +28,8 @@ public class HandPoseResampler : EditorWindow
     private bool isPlaying = false;
     private float playbackSpeed = 1.0f;
     private int currentFrameIndex = 0;
-    private double lastUpdateTime = 0;
+    private double playbackStartTime = 0;
+    private float playbackStartTimestamp = 0;
     private float previewScale = 1.0f;
     private Vector3 previewOffset = new Vector3(0, 1, 0);
     private bool showLeftHand = true;
@@ -131,34 +132,52 @@ public class HandPoseResampler : EditorWindow
     {
         if (!isPlaying || parsedFrames.Count < 2) return;
 
+        // 경과 시간 계산
         double currentTime = EditorApplication.timeSinceStartup;
-        float deltaTime = (float)(currentTime - lastUpdateTime);
-        lastUpdateTime = currentTime;
+        float elapsedTime = (float)(currentTime - playbackStartTime) * playbackSpeed;
+        float targetTimestamp = playbackStartTimestamp + elapsedTime;
 
-        // 다음 프레임으로 진행
-        float frameTime = parsedFrames[currentFrameIndex].timestamp;
-        float nextFrameTime = currentFrameIndex < parsedFrames.Count - 1
-            ? parsedFrames[currentFrameIndex + 1].timestamp
-            : frameTime + 0.033f;
+        // 총 재생 시간
+        float totalDuration = parsedFrames[parsedFrames.Count - 1].timestamp - parsedFrames[0].timestamp;
 
-        float frameDuration = nextFrameTime - frameTime;
-        if (frameDuration <= 0) frameDuration = 0.033f;
-
-        if (deltaTime * playbackSpeed >= frameDuration)
+        // 루프 처리
+        if (targetTimestamp > parsedFrames[parsedFrames.Count - 1].timestamp)
         {
-            currentFrameIndex++;
-            if (currentFrameIndex >= parsedFrames.Count)
+            if (loopPlayback)
             {
-                if (loopPlayback)
-                {
-                    currentFrameIndex = 0;
-                }
-                else
-                {
-                    currentFrameIndex = parsedFrames.Count - 1;
-                    isPlaying = false;
-                }
+                // 처음부터 다시 시작
+                playbackStartTime = currentTime;
+                playbackStartTimestamp = parsedFrames[0].timestamp;
+                currentFrameIndex = 0;
             }
+            else
+            {
+                currentFrameIndex = parsedFrames.Count - 1;
+                isPlaying = false;
+            }
+            SceneView.RepaintAll();
+            Repaint();
+            return;
+        }
+
+        // 현재 시간에 맞는 프레임 찾기
+        int newFrameIndex = currentFrameIndex;
+        for (int i = currentFrameIndex; i < parsedFrames.Count; i++)
+        {
+            if (parsedFrames[i].timestamp <= targetTimestamp)
+            {
+                newFrameIndex = i;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        // 프레임이 변경되었으면 업데이트
+        if (newFrameIndex != currentFrameIndex)
+        {
+            currentFrameIndex = newFrameIndex;
             SceneView.RepaintAll();
             Repaint();
         }
@@ -527,11 +546,14 @@ public class HandPoseResampler : EditorWindow
         isPlaying = !isPlaying;
         if (isPlaying)
         {
-            lastUpdateTime = EditorApplication.timeSinceStartup;
+            // 끝에 도달했으면 처음부터
             if (currentFrameIndex >= parsedFrames.Count - 1)
             {
                 currentFrameIndex = 0;
             }
+            // 현재 프레임의 타임스탬프부터 재생 시작
+            playbackStartTime = EditorApplication.timeSinceStartup;
+            playbackStartTimestamp = parsedFrames[currentFrameIndex].timestamp;
         }
         SceneView.RepaintAll();
     }
