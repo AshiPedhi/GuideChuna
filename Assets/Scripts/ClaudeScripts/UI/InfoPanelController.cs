@@ -786,29 +786,38 @@ public class InfoPanelController : MonoBehaviour
     {
         if (toggle == null) return;
 
-        ColorBlock colors = toggle.colors;
-
-        if (isActive)
+        // Animation 기반 토글인 경우 Animator로 상태 변경
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
         {
-            colors.normalColor = activeColor;
-            colors.highlightedColor = activeColor * 1.2f;
-            colors.pressedColor = activeColor * 0.8f;
-            colors.selectedColor = activeColor;
+            animator.SetBool("IsOn", isActive);
         }
         else
         {
-            colors.normalColor = inactiveColor;
-            colors.highlightedColor = inactiveColor * 1.2f;
-            colors.pressedColor = inactiveColor * 0.8f;
-            colors.selectedColor = inactiveColor;
-        }
+            // Color Tint 기반 토글인 경우 기존 방식 사용
+            ColorBlock colors = toggle.colors;
 
-        toggle.colors = colors;
+            if (isActive)
+            {
+                colors.normalColor = activeColor;
+                colors.highlightedColor = activeColor * 1.2f;
+                colors.pressedColor = activeColor * 0.8f;
+                colors.selectedColor = activeColor;
+            }
+            else
+            {
+                colors.normalColor = inactiveColor;
+                colors.highlightedColor = inactiveColor * 1.2f;
+                colors.pressedColor = inactiveColor * 0.8f;
+                colors.selectedColor = inactiveColor;
+            }
 
-        // ★ targetGraphic 색상 즉시 업데이트 (애니메이션 효과)
-        if (toggle.targetGraphic != null)
-        {
-            toggle.targetGraphic.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
+            toggle.colors = colors;
+
+            if (toggle.targetGraphic != null)
+            {
+                toggle.targetGraphic.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
+            }
         }
 
         if (icon != null)
@@ -917,8 +926,23 @@ public class InfoPanelController : MonoBehaviour
     #region 유틸리티
     private void SetToggleWithoutNotify(Toggle toggle, bool value)
     {
-        if (toggle != null)
-            toggle.SetIsOnWithoutNotify(value);
+        if (toggle == null) return;
+
+        toggle.SetIsOnWithoutNotify(value);
+
+        // Animation 기반 토글의 경우 Animator 상태 수동 업데이트
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
+        {
+            // 토글 상태에 따라 Animator 트리거 설정
+            animator.SetBool("IsOn", value);
+
+            // 또는 트리거 방식 (컨트롤러에 따라)
+            if (value)
+                animator.SetTrigger("On");
+            else
+                animator.SetTrigger("Off");
+        }
     }
 
     private bool IsToggleOn(Toggle toggle)
