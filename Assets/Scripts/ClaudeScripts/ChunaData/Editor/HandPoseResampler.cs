@@ -147,17 +147,18 @@ public class HandPoseResampler : EditorWindow
         float elapsedTime = (float)(currentTime - playbackStartTime) * playbackSpeed;
         float targetTimestamp = playbackStartTimestamp + elapsedTime;
 
-        // 총 재생 시간
-        float totalDuration = parsedFrames[parsedFrames.Count - 1].timestamp - parsedFrames[0].timestamp;
+        float firstTimestamp = parsedFrames[0].timestamp;
+        float lastTimestamp = parsedFrames[parsedFrames.Count - 1].timestamp;
+        float totalDuration = lastTimestamp - firstTimestamp;
 
         // 루프 처리
-        if (targetTimestamp > parsedFrames[parsedFrames.Count - 1].timestamp)
+        if (targetTimestamp > lastTimestamp)
         {
             if (loopPlayback)
             {
                 // 처음부터 다시 시작
                 playbackStartTime = currentTime;
-                playbackStartTimestamp = parsedFrames[0].timestamp;
+                playbackStartTimestamp = firstTimestamp;
                 currentFrameIndex = 0;
             }
             else
@@ -170,19 +171,8 @@ public class HandPoseResampler : EditorWindow
             return;
         }
 
-        // 현재 시간에 맞는 프레임 찾기
-        int newFrameIndex = currentFrameIndex;
-        for (int i = currentFrameIndex; i < parsedFrames.Count; i++)
-        {
-            if (parsedFrames[i].timestamp <= targetTimestamp)
-            {
-                newFrameIndex = i;
-            }
-            else
-            {
-                break;
-            }
-        }
+        // 현재 시간에 맞는 프레임 찾기 (이진 검색으로 최적화)
+        int newFrameIndex = FindFrameAtTimestamp(targetTimestamp);
 
         // 프레임이 변경되었으면 업데이트
         if (newFrameIndex != currentFrameIndex)
@@ -191,6 +181,36 @@ public class HandPoseResampler : EditorWindow
             SceneView.RepaintAll();
             Repaint();
         }
+    }
+
+    /// <summary>
+    /// 주어진 타임스탬프에 해당하는 프레임 인덱스를 찾습니다.
+    /// 이진 검색을 사용하여 효율적으로 검색합니다.
+    /// </summary>
+    private int FindFrameAtTimestamp(float targetTimestamp)
+    {
+        if (parsedFrames.Count == 0) return 0;
+        if (targetTimestamp <= parsedFrames[0].timestamp) return 0;
+        if (targetTimestamp >= parsedFrames[parsedFrames.Count - 1].timestamp)
+            return parsedFrames.Count - 1;
+
+        int left = 0;
+        int right = parsedFrames.Count - 1;
+
+        while (left < right)
+        {
+            int mid = (left + right + 1) / 2;
+            if (parsedFrames[mid].timestamp <= targetTimestamp)
+            {
+                left = mid;
+            }
+            else
+            {
+                right = mid - 1;
+            }
+        }
+
+        return left;
     }
 
     private void OnSceneGUI(SceneView sceneView)
@@ -1285,7 +1305,8 @@ public class HandPoseResampler : EditorWindow
 
             if (trimMode == TrimMode.ByFrame)
             {
-                for (int i = trimStartFrame; i < trimEndFrame && i < parsedFrames.Count; i++)
+                // trimEndFrame을 "포함"하도록 수정 (<=)
+                for (int i = trimStartFrame; i <= trimEndFrame && i < parsedFrames.Count; i++)
                 {
                     var frame = CloneFrame(parsedFrames[i]);
                     frame.frameIndex = result.Count;
@@ -1317,6 +1338,13 @@ public class HandPoseResampler : EditorWindow
                 EditorUtility.ClearProgressBar();
                 EditorUtility.DisplayDialog("오류", "트리밍 결과 프레임이 부족합니다.", "확인");
                 return;
+            }
+
+            // ★ 중요: timestamp를 0부터 시작하도록 재조정
+            float startTimestamp = result[0].timestamp;
+            for (int i = 0; i < result.Count; i++)
+            {
+                result[i].timestamp -= startTimestamp;
             }
 
             SaveFramesToCSV(result, "_trimmed");
