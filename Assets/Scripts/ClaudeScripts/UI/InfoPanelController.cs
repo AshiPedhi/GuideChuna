@@ -805,8 +805,14 @@ public class InfoPanelController : MonoBehaviour
 
         toggle.colors = colors;
 
+        // ★ targetGraphic 색상 즉시 업데이트 (애니메이션 효과)
+        if (toggle.targetGraphic != null)
+        {
+            toggle.targetGraphic.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
+        }
+
         if (icon != null)
-            icon.color = isActive ? activeColor : inactiveColor;
+            icon.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
     }
     #endregion
 
