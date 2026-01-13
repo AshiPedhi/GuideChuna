@@ -44,6 +44,7 @@ public class HandPoseResampler : EditorWindow
 
     // ===== 변환 미리보기 설정 =====
     private bool previewTransform = false;  // 변환 탭의 설정을 미리보기에 적용
+    private bool previewAngleScale = false;  // 각도 스케일 탭의 설정을 미리보기에 적용
 
     // ===== 환자 모델 따라가기 =====
     private bool followPatient = false;  // 환자 모델 위치 따라가기
@@ -385,6 +386,12 @@ public class HandPoseResampler : EditorWindow
             // 변환 설정이 활성화되면 월드 위치에 변환 적용
             Vector3 transformedWorldPos = wristJoint.worldPosition;
             Quaternion transformedWorldRot = wristJoint.worldRotation;
+
+            // 각도 스케일 미리보기 적용
+            if (previewAngleScale && isAnalyzed && parsedFrames.Count > 1 && pivotBasedAngle > 0.1f)
+            {
+                transformedWorldPos = ApplyAngleScaleToPosition(transformedWorldPos);
+            }
 
             if (previewTransform)
             {
@@ -746,6 +753,22 @@ public class HandPoseResampler : EditorWindow
                 MessageType.Info);
         }
 
+        // 각도 스케일 미리보기 토글
+        GUI.enabled = isAnalyzed && pivotBasedAngle > 0.1f;
+        previewAngleScale = EditorGUILayout.Toggle("각도 스케일 미리보기", previewAngleScale);
+        GUI.enabled = true;
+
+        if (previewAngleScale && isAnalyzed)
+        {
+            float scaleRatio = targetAngle / Mathf.Max(0.1f, pivotBasedAngle);
+            EditorGUILayout.HelpBox(
+                $"각도 스케일 탭 설정이 적용됩니다:\n" +
+                $"• 원본 각도: {pivotBasedAngle:F1}°\n" +
+                $"• 목표 각도: {targetAngle:F1}°\n" +
+                $"• 스케일 비율: {scaleRatio:F2}x",
+                MessageType.Info);
+        }
+
         EditorGUILayout.Space(5);
 
         // ===== 환자 모델 따라가기 =====
@@ -898,6 +921,53 @@ public class HandPoseResampler : EditorWindow
 
         Debug.LogWarning("<color=yellow>[HandPoseResampler] Scene에서 환자 모델을 찾을 수 없습니다.</color>");
         patientTransform = null;
+    }
+
+    /// <summary>
+    /// 각도 스케일링을 적용한 새 위치 계산
+    /// </summary>
+    private Vector3 ApplyAngleScaleToPosition(Vector3 currentWorldPos)
+    {
+        if (parsedFrames.Count < 2 || pivotBasedAngle < 0.1f) return currentWorldPos;
+
+        Vector3 pivot = useEstimatedPivot ? estimatedPivot : customPivot;
+        float scaleRatio = targetAngle / Mathf.Max(0.1f, pivotBasedAngle);
+
+        // 첫 프레임 기준 시작 위치/방향
+        Vector3 startPos = parsedFrames[0].rightWristWorldPos;
+
+        // 이동 평면의 법선 계산
+        Vector3 endPos = parsedFrames[parsedFrames.Count - 1].rightWristWorldPos;
+        Vector3 midPos = parsedFrames[parsedFrames.Count / 2].rightWristWorldPos;
+        Vector3 v1 = midPos - startPos;
+        Vector3 v2 = endPos - startPos;
+        Vector3 planeNormal = Vector3.Cross(v1, v2).normalized;
+        if (planeNormal.magnitude < 0.1f) planeNormal = Vector3.up;
+
+        // 스케일 축 결정
+        Vector3 axisVector = GetScaleAxisVector();
+        if (axisVector == Vector3.zero) axisVector = planeNormal;
+
+        // 시작 방향 (피벗에서 첫 프레임으로)
+        Vector3 startDir = (startPos - pivot).normalized;
+
+        // 현재 위치의 피벗 기준 방향과 거리
+        Vector3 fromPivot = currentWorldPos - pivot;
+        float currentRadius = fromPivot.magnitude;
+        Vector3 currentDir = fromPivot.normalized;
+
+        // 시작 방향 대비 현재 각도
+        float currentAngle = Vector3.SignedAngle(startDir, currentDir, axisVector);
+
+        // 새 각도 = 현재 각도 * 스케일 비율
+        float newAngle = currentAngle * scaleRatio;
+
+        // 새 위치 계산
+        Quaternion rotation = Quaternion.AngleAxis(newAngle, axisVector);
+        Vector3 newDir = rotation * startDir;
+        Vector3 newPos = pivot + newDir * currentRadius;
+
+        return newPos;
     }
 
     private void HandleKeyboardShortcuts()
