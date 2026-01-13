@@ -92,16 +92,16 @@ public class ScenarioConditionManager : MonoBehaviour
             guideUIController = FindObjectOfType<ScenarioGuideUIController>();
         }
 
-        // StepFeedbackUI 자동 찾기
+        // StepFeedbackUI 자동 찾기 (비활성화된 오브젝트도 포함)
         if (stepFeedbackUI == null)
         {
-            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>();
+            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);
         }
 
-        // ChunaPathEvaluator 자동 찾기
+        // ChunaPathEvaluator 자동 찾기 (비활성화된 오브젝트도 포함)
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>(true);
         }
 
         // Quest 최적화: WaitForSeconds 객체 캐싱
@@ -818,6 +818,16 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 현재 유사도 가져오기
         float currentSimilarity = GetCurrentSimilarity();
+
+        // ★ StepFeedbackUI가 null이면 다시 찾기 (첫 단계에서 못 찾은 경우 대비)
+        if (stepFeedbackUI == null)
+        {
+            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);  // includeInactive = true
+            if (stepFeedbackUI != null)
+            {
+                Debug.Log("<color=yellow>[ConditionManager] StepFeedbackUI 재탐색 성공</color>");
+            }
+        }
 
         // 2. 피드백 UI가 있는 경우 분리 방식으로 표시
         if (stepFeedbackUI != null)
