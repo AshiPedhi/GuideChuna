@@ -42,6 +42,9 @@ public class HandPoseResampler : EditorWindow
     private Color rightHandColor = new Color(1f, 0.4f, 0.3f, 1f);
     private bool loopPlayback = true;
 
+    // ===== 변환 미리보기 설정 =====
+    private bool previewTransform = false;  // 변환 탭의 설정을 미리보기에 적용
+
     // ===== 비교 모드 설정 =====
     private bool compareMode = false;
     private string compareFilePath = "";
@@ -347,6 +350,11 @@ public class HandPoseResampler : EditorWindow
     {
         Vector3[] positions = new Vector3[joints.Count];
 
+        // 변환 탭 미리보기가 활성화된 경우, 변환 설정을 먼저 적용
+        Quaternion transformRotation = previewTransform ? Quaternion.Euler(rotationOffset) : Quaternion.identity;
+        Vector3 transformOffset = previewTransform ? positionOffset : Vector3.zero;
+        float transformScale = previewTransform ? uniformScale : 1f;
+
         // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
         Vector3 totalOffset = previewOffset + additionalOffset;
         Vector3 rootPos = totalOffset;
@@ -355,8 +363,18 @@ public class HandPoseResampler : EditorWindow
         var wristJoint = joints.FirstOrDefault(j => j.jointId == 1);
         if (wristJoint != null && wristJoint.worldPosition != Vector3.zero)
         {
-            rootPos = wristJoint.worldPosition * previewScale + totalOffset;
-            rootRot = wristJoint.worldRotation;
+            // 변환 설정이 활성화되면 월드 위치에 변환 적용
+            Vector3 transformedWorldPos = wristJoint.worldPosition;
+            Quaternion transformedWorldRot = wristJoint.worldRotation;
+
+            if (previewTransform)
+            {
+                transformedWorldPos = transformRotation * (transformedWorldPos * transformScale) + transformOffset;
+                transformedWorldRot = transformRotation * transformedWorldRot;
+            }
+
+            rootPos = transformedWorldPos * previewScale + totalOffset;
+            rootRot = transformedWorldRot;
         }
 
         // 각 조인트의 월드 위치 계산
@@ -684,6 +702,23 @@ public class HandPoseResampler : EditorWindow
 
         previewScale = EditorGUILayout.Slider("스케일", previewScale, 0.1f, 5f);
         previewOffset = EditorGUILayout.Vector3Field("오프셋", previewOffset);
+
+        EditorGUILayout.Space(5);
+
+        // 변환 탭 설정 미리보기 토글
+        previewTransform = EditorGUILayout.Toggle("변환 탭 설정 미리보기", previewTransform);
+
+        if (previewTransform)
+        {
+            EditorGUILayout.HelpBox(
+                $"변환 탭 설정이 적용됩니다:\n" +
+                $"• 회전: ({rotationOffset.x:F1}°, {rotationOffset.y:F1}°, {rotationOffset.z:F1}°)\n" +
+                $"• 위치: ({positionOffset.x:F3}m, {positionOffset.y:F3}m, {positionOffset.z:F3}m)\n" +
+                $"• 스케일: {uniformScale:F2}x",
+                MessageType.Info);
+        }
+
+        EditorGUILayout.Space(5);
 
         if (GUILayout.Button("Scene 뷰로 포커스"))
         {
