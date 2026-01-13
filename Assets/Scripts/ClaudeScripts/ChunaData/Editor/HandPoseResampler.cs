@@ -49,6 +49,7 @@ public class HandPoseResampler : EditorWindow
     private bool followPatient = false;  // 환자 모델 위치 따라가기
     private Transform patientTransform = null;  // 환자 모델 Transform
     private Vector3 recordedPatientOffset = Vector3.zero;  // 녹화 시 환자 위치 오프셋
+    private Vector3 recordedPatientRotation = Vector3.zero;  // 녹화 시 환자 회전 (Euler)
 
     // ===== 비교 모드 설정 =====
     private bool compareMode = false;
@@ -360,15 +361,21 @@ public class HandPoseResampler : EditorWindow
         Vector3 transformOffset = previewTransform ? positionOffset : Vector3.zero;
         float transformScale = previewTransform ? uniformScale : 1f;
 
-        // 환자 모델 위치 따라가기
-        Vector3 patientOffset = Vector3.zero;
+        // 환자 모델 위치/회전 따라가기
+        Vector3 patientPosOffset = Vector3.zero;
+        Quaternion patientRotOffset = Quaternion.identity;
         if (followPatient && patientTransform != null)
         {
-            patientOffset = patientTransform.position - recordedPatientOffset;
+            // 녹화 시점 대비 환자의 회전 변화량
+            Quaternion recordedRot = Quaternion.Euler(recordedPatientRotation);
+            patientRotOffset = patientTransform.rotation * Quaternion.Inverse(recordedRot);
+
+            // 위치 오프셋 (환자 회전 고려)
+            patientPosOffset = patientTransform.position - recordedPatientOffset;
         }
 
         // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
-        Vector3 totalOffset = previewOffset + additionalOffset + patientOffset;
+        Vector3 totalOffset = previewOffset + additionalOffset;
         Vector3 rootPos = totalOffset;
         Quaternion rootRot = Quaternion.identity;
 
@@ -383,6 +390,15 @@ public class HandPoseResampler : EditorWindow
             {
                 transformedWorldPos = transformRotation * (transformedWorldPos * transformScale) + transformOffset;
                 transformedWorldRot = transformRotation * transformedWorldRot;
+            }
+
+            // 환자 모델 따라가기: 회전 및 위치 적용
+            if (followPatient && patientTransform != null)
+            {
+                // 녹화 시 환자 위치 기준으로 상대 위치 계산 후 현재 환자 위치/회전 적용
+                Vector3 relativePos = transformedWorldPos - recordedPatientOffset;
+                transformedWorldPos = patientRotOffset * relativePos + patientTransform.position;
+                transformedWorldRot = patientRotOffset * transformedWorldRot;
             }
 
             rootPos = transformedWorldPos * previewScale + totalOffset;
@@ -748,15 +764,20 @@ public class HandPoseResampler : EditorWindow
         {
             if (patientTransform != null)
             {
-                EditorGUILayout.LabelField($"  → {patientTransform.name} (위치: {patientTransform.position.x:F2}, {patientTransform.position.y:F2}, {patientTransform.position.z:F2})", EditorStyles.miniLabel);
+                Vector3 rot = patientTransform.rotation.eulerAngles;
+                EditorGUILayout.LabelField($"  → {patientTransform.name}", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"     위치: ({patientTransform.position.x:F2}, {patientTransform.position.y:F2}, {patientTransform.position.z:F2})", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"     회전: ({rot.x:F1}°, {rot.y:F1}°, {rot.z:F1}°)", EditorStyles.miniLabel);
             }
             else
             {
                 EditorGUILayout.HelpBox("환자 모델을 찾을 수 없습니다.\n'환자 찾기' 버튼을 클릭하거나\nScene에 'Patient' 태그 오브젝트가 있는지 확인하세요.", MessageType.Warning);
             }
 
-            recordedPatientOffset = EditorGUILayout.Vector3Field("녹화 시 환자 오프셋", recordedPatientOffset);
-            EditorGUILayout.LabelField("  (녹화 당시 환자 위치, 보통 0,0,0)", EditorStyles.miniLabel);
+            EditorGUILayout.Space(3);
+            EditorGUILayout.LabelField("녹화 당시 환자 상태:", EditorStyles.miniLabel);
+            recordedPatientOffset = EditorGUILayout.Vector3Field("  위치", recordedPatientOffset);
+            recordedPatientRotation = EditorGUILayout.Vector3Field("  회전 (°)", recordedPatientRotation);
         }
 
         EditorGUILayout.Space(5);
