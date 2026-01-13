@@ -45,6 +45,11 @@ public class HandPoseResampler : EditorWindow
     // ===== 변환 미리보기 설정 =====
     private bool previewTransform = false;  // 변환 탭의 설정을 미리보기에 적용
 
+    // ===== 환자 모델 따라가기 =====
+    private bool followPatient = false;  // 환자 모델 위치 따라가기
+    private Transform patientTransform = null;  // 환자 모델 Transform
+    private Vector3 recordedPatientOffset = Vector3.zero;  // 녹화 시 환자 위치 오프셋
+
     // ===== 비교 모드 설정 =====
     private bool compareMode = false;
     private string compareFilePath = "";
@@ -355,8 +360,15 @@ public class HandPoseResampler : EditorWindow
         Vector3 transformOffset = previewTransform ? positionOffset : Vector3.zero;
         float transformScale = previewTransform ? uniformScale : 1f;
 
+        // 환자 모델 위치 따라가기
+        Vector3 patientOffset = Vector3.zero;
+        if (followPatient && patientTransform != null)
+        {
+            patientOffset = patientTransform.position - recordedPatientOffset;
+        }
+
         // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
-        Vector3 totalOffset = previewOffset + additionalOffset;
+        Vector3 totalOffset = previewOffset + additionalOffset + patientOffset;
         Vector3 rootPos = totalOffset;
         Quaternion rootRot = Quaternion.identity;
 
@@ -720,6 +732,35 @@ public class HandPoseResampler : EditorWindow
 
         EditorGUILayout.Space(5);
 
+        // ===== 환자 모델 따라가기 =====
+        EditorGUILayout.LabelField("환자 모델 따라가기", EditorStyles.miniBoldLabel);
+
+        EditorGUILayout.BeginHorizontal();
+        followPatient = EditorGUILayout.Toggle("환자 위치 추적", followPatient);
+
+        if (GUILayout.Button("환자 찾기", GUILayout.Width(70)))
+        {
+            FindPatientInScene();
+        }
+        EditorGUILayout.EndHorizontal();
+
+        if (followPatient)
+        {
+            if (patientTransform != null)
+            {
+                EditorGUILayout.LabelField($"  → {patientTransform.name} (위치: {patientTransform.position.x:F2}, {patientTransform.position.y:F2}, {patientTransform.position.z:F2})", EditorStyles.miniLabel);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("환자 모델을 찾을 수 없습니다.\n'환자 찾기' 버튼을 클릭하거나\nScene에 'Patient' 태그 오브젝트가 있는지 확인하세요.", MessageType.Warning);
+            }
+
+            recordedPatientOffset = EditorGUILayout.Vector3Field("녹화 시 환자 오프셋", recordedPatientOffset);
+            EditorGUILayout.LabelField("  (녹화 당시 환자 위치, 보통 0,0,0)", EditorStyles.miniLabel);
+        }
+
+        EditorGUILayout.Space(5);
+
         if (GUILayout.Button("Scene 뷰로 포커스"))
         {
             FocusSceneViewOnHands();
@@ -808,6 +849,34 @@ public class HandPoseResampler : EditorWindow
         {
             sceneView.LookAt(focusPos, Quaternion.Euler(30, -45, 0), 0.5f);
         }
+    }
+
+    private void FindPatientInScene()
+    {
+        // Patient 태그로 찾기
+        GameObject patient = GameObject.FindGameObjectWithTag("Patient");
+        if (patient != null)
+        {
+            patientTransform = patient.transform;
+            Debug.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음: {patient.name}</color>");
+            return;
+        }
+
+        // 태그로 못 찾으면 이름으로 찾기
+        string[] patientNames = { "Patient", "환자", "Chuna_Patient", "PatientModel" };
+        foreach (var name in patientNames)
+        {
+            GameObject obj = GameObject.Find(name);
+            if (obj != null)
+            {
+                patientTransform = obj.transform;
+                Debug.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음 (이름): {obj.name}</color>");
+                return;
+            }
+        }
+
+        Debug.LogWarning("<color=yellow>[HandPoseResampler] Scene에서 환자 모델을 찾을 수 없습니다.</color>");
+        patientTransform = null;
     }
 
     private void HandleKeyboardShortcuts()
