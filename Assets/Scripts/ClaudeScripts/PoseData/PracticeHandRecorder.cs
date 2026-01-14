@@ -183,7 +183,11 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (!isRecording) return;
 
-        // 마지막 프레임에 도달하면 녹화 종료 (totalFrames - 1 이상이면 종료)
+        // 오토플레이 진행 이벤트는 무시 (totalFrames가 1인 경우)
+        // 실제 핸드 데이터 프레임이 있을 때만 체크
+        if (totalFrames <= 1) return;
+
+        // 마지막 프레임에 도달하면 녹화 종료
         if (currentFrame >= totalFrames - 1)
         {
             Debug.Log($"<color=yellow>[PracticeHandRecorder] 마지막 프레임 도달 ({currentFrame + 1}/{totalFrames}) - 녹화 종료</color>");
