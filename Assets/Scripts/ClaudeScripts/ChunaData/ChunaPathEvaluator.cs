@@ -176,8 +176,14 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("피벗 포인트 (환자 목/경추 위치) - 회전의 중심점")]
     [SerializeField] private Transform pivotTransform;
 
+    [Tooltip("CSV 데이터에서 목표 각도 자동 계산")]
+    [SerializeField] private bool autoCalculateTargetAngle = true;
+
     [Tooltip("목표 각도 (도) - 애니메이션의 최대 회전 각도")]
     [SerializeField] private float targetAngle = 90f;
+
+    [Tooltip("데이터에서 계산된 총 각도 (읽기 전용)")]
+    [SerializeField] private float calculatedDataAngle = 0f;
 
     [Tooltip("각도 측정 평면의 법선 축 (측굴=Z, 회전=Y, 굴신=X)")]
     [SerializeField] private RotationDetectionAxis pivotPlaneAxis = RotationDetectionAxis.Z;
@@ -862,6 +868,57 @@ public class ChunaPathEvaluator : MonoBehaviour
     public string GetCurrentProcedureName()
     {
         return currentProcedureName;
+    }
+
+    /// <summary>
+    /// 데이터에서 계산된 총 각도 반환
+    /// </summary>
+    public float GetCalculatedDataAngle()
+    {
+        return calculatedDataAngle;
+    }
+
+    /// <summary>
+    /// 현재 목표 각도 반환
+    /// </summary>
+    public float GetTargetAngle()
+    {
+        return targetAngle;
+    }
+
+    /// <summary>
+    /// 비율로 목표 각도 설정 (0~1 범위, calculatedDataAngle 기준)
+    /// 예: SetTargetAngleByRatio(0.5f) → 데이터 총 각도의 50%를 목표로 설정
+    /// </summary>
+    public void SetTargetAngleByRatio(float ratio)
+    {
+        if (calculatedDataAngle <= 0.1f)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 데이터 각도가 계산되지 않음. CSV 먼저 로드 필요");
+            return;
+        }
+
+        ratio = Mathf.Clamp01(ratio);
+        targetAngle = calculatedDataAngle * ratio;
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 설정: {targetAngle:F1}° ({ratio:P0} of {calculatedDataAngle:F1}°)</color>");
+        }
+    }
+
+    /// <summary>
+    /// 목표 각도 직접 설정
+    /// </summary>
+    public void SetTargetAngle(float angle)
+    {
+        targetAngle = angle;
+        autoCalculateTargetAngle = false;  // 수동 설정 시 자동 계산 비활성화
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 수동 설정: {targetAngle:F1}°</color>");
+        }
     }
 
     /// <summary>
@@ -2118,6 +2175,52 @@ public class ChunaPathEvaluator : MonoBehaviour
         Debug.Log($"<color=cyan>[HandData] 시작위치: {startPos}, 끝위치: {endPos}</color>");
         Debug.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
         Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
+
+        // ★ 피벗 기반 총 각도 자동 계산
+        CalculatePivotBasedAngle();
+    }
+
+    /// <summary>
+    /// 피벗 기반으로 핸드데이터의 총 각도 계산 (첫 프레임 ~ 마지막 프레임)
+    /// </summary>
+    private void CalculatePivotBasedAngle()
+    {
+        if (loadedFrames == null || loadedFrames.Count < 2) return;
+        if (pivotTransform == null)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 피벗이 설정되지 않아 각도 자동 계산 불가");
+            return;
+        }
+
+        Vector3 pivotPos = pivotTransform.position;
+        Vector3 startPos = loadedFrames[0].rightWristWorldPos;
+        Vector3 endPos = loadedFrames[loadedFrames.Count - 1].rightWristWorldPos;
+
+        // 피벗에서 시작/끝 위치로의 방향
+        Vector3 startDir = (startPos - pivotPos).normalized;
+        Vector3 endDir = (endPos - pivotPos).normalized;
+
+        // 평면 법선 기준 각도 계산
+        Vector3 planeNormal = GetPivotPlaneNormal();
+
+        // 부호 있는 각도 계산
+        float signedAngle = Vector3.SignedAngle(startDir, endDir, planeNormal);
+        calculatedDataAngle = Mathf.Abs(signedAngle);
+
+        // 각도가 너무 작으면 (직선 이동) 손목 회전 각도 사용
+        if (calculatedDataAngle < 5f)
+        {
+            calculatedDataAngle = handDataTotalRotation;
+        }
+
+        // 자동 계산 활성화 시 targetAngle 설정
+        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle;
+            Debug.Log($"<color=green>[ChunaPathEvaluator] ★ 목표 각도 자동 설정: {targetAngle:F1}° (데이터 기반)</color>");
+        }
+
+        Debug.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
     }
 
     /// <summary>
