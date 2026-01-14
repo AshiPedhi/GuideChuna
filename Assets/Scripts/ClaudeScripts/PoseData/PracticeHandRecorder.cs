@@ -27,6 +27,9 @@ public class PracticeHandRecorder : MonoBehaviour
     [Tooltip("ChunaPathEvaluator - 자동 탐색됨")]
     [SerializeField] private ChunaPathEvaluator pathEvaluator;
 
+    [Tooltip("ScenarioManager - 자동 탐색됨")]
+    [SerializeField] private ScenarioManager scenarioManager;
+
     [Tooltip("기준점 - 환자 모델 (Patient 태그로 자동 탐색)")]
     [SerializeField] private Transform referencePoint;
 
@@ -46,7 +49,8 @@ public class PracticeHandRecorder : MonoBehaviour
     [Header("=== 녹화 상태 (읽기 전용) ===")]
     [SerializeField] private bool isRecording = false;
     [SerializeField] private int recordedFrames = 0;
-    [SerializeField] private string currentProcedureName = "";
+    [SerializeField] private string currentPhaseName = "";
+    [SerializeField] private string currentStepName = "";
     [SerializeField] private string lastSavedFilePath = "";
 
     // 내부 데이터
@@ -80,6 +84,12 @@ public class PracticeHandRecorder : MonoBehaviour
         if (pathEvaluator == null)
         {
             pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+        }
+
+        // ScenarioManager 자동 탐색
+        if (scenarioManager == null)
+        {
+            scenarioManager = FindObjectOfType<ScenarioManager>();
         }
     }
 
@@ -139,11 +149,17 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         // 핸드 데이터가 있는지 확인
         hasHandDataInCurrentStep = pathEvaluator.GetLoadedFrameCount() > 0;
-        currentProcedureName = pathEvaluator.GetCurrentProcedureName();
+
+        // 현재 페이즈/단계 이름 저장
+        if (scenarioManager != null)
+        {
+            currentPhaseName = scenarioManager.CurrentPhase?.phaseName ?? "";
+            currentStepName = scenarioManager.CurrentStep?.stepName ?? "";
+        }
 
         if (hasHandDataInCurrentStep)
         {
-            Debug.Log($"<color=cyan>[PracticeHandRecorder] SubStep {subStepIndex}: 핸드 데이터 있음 ({pathEvaluator.GetLoadedFrameCount()} 프레임) - 녹화 대기</color>");
+            Debug.Log($"<color=cyan>[PracticeHandRecorder] {currentPhaseName}/{currentStepName}: 핸드 데이터 있음 ({pathEvaluator.GetLoadedFrameCount()} 프레임) - 녹화 대기</color>");
         }
     }
 
@@ -392,13 +408,32 @@ public class PracticeHandRecorder : MonoBehaviour
 
     private string GenerateFileName()
     {
-        string baseName = string.IsNullOrEmpty(currentProcedureName) ? "Practice" : currentProcedureName;
+        // 파일명 형식: {페이즈}_{단계}_핸드데이터_{타임스탬프}
+        string phaseName = string.IsNullOrEmpty(currentPhaseName) ? "Unknown" : SanitizeFileName(currentPhaseName);
+        string stepName = string.IsNullOrEmpty(currentStepName) ? "Unknown" : SanitizeFileName(currentStepName);
+
+        string baseName = $"{phaseName}_{stepName}_핸드데이터";
 
         if (includeTimestamp)
         {
             return $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}";
         }
         return baseName;
+    }
+
+    /// <summary>
+    /// 파일명에 사용할 수 없는 문자 제거
+    /// </summary>
+    private string SanitizeFileName(string name)
+    {
+        char[] invalidChars = Path.GetInvalidFileNameChars();
+        foreach (char c in invalidChars)
+        {
+            name = name.Replace(c, '_');
+        }
+        // 공백도 언더스코어로 변경
+        name = name.Replace(' ', '_');
+        return name;
     }
 
     private void EnsureSaveFolder()
