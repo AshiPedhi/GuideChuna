@@ -362,6 +362,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action<float> OnLimitWarning;                       // 제한장벽 경고 (현재 비율)
     public event Action<float> OnLeftHandDrifted;                    // 왼손 이탈 (이탈 거리)
     public event Action<int, int, float> OnUserFrameChanged;         // 사용자 손 프레임 변경 (현재, 총, 비율)
+    public event Action<int> OnSubStepStarted;                       // SubStep 시작 (인덱스)
 
     /// <summary>
     /// 평가 세션 데이터
@@ -845,6 +846,22 @@ public class ChunaPathEvaluator : MonoBehaviour
     public int GetTotalFrameCount()
     {
         return loadedFrames != null ? loadedFrames.Count : 0;
+    }
+
+    /// <summary>
+    /// 로드된 프레임 수 (핸드 데이터 유무 확인용)
+    /// </summary>
+    public int GetLoadedFrameCount()
+    {
+        return loadedFrames != null ? loadedFrames.Count : 0;
+    }
+
+    /// <summary>
+    /// 현재 시술 이름 반환
+    /// </summary>
+    public string GetCurrentProcedureName()
+    {
+        return currentProcedureName;
     }
 
     /// <summary>
@@ -2262,6 +2279,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
+
+        // ★ SubStep 시작 이벤트 발생 (녹화 등에서 사용)
+        OnSubStepStarted?.Invoke(0);
 
         // 시작 위치 대기 중 시작 프레임 표시 (가이드 핸드 + 환자 애니메이션)
         // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
