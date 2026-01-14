@@ -2273,7 +2273,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 측굴 운동 감지 시 자동으로 프리셋 적용
+    /// 운동 종류 감지 후 자동으로 프리셋 적용 (측굴, 회전)
     /// </summary>
     private void ApplyLateralBendingPresetIfNeeded(string csvFileName)
     {
@@ -2285,33 +2285,55 @@ public class ChunaPathEvaluator : MonoBehaviour
                                 csvFileName.ToLower().Contains("lateral") ||
                                 csvFileName.ToLower().Contains("sidebend");
 
-        if (!isLateralBending) return;
+        // 회전 키워드 감지
+        bool isRotation = csvFileName.Contains("회전") ||
+                          csvFileName.ToLower().Contains("rotation") ||
+                          csvFileName.ToLower().Contains("rotate");
 
-        // 측굴 감지됨 - 프리셋 적용
-        Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 측굴 운동 감지 - 프리셋 적용</color>");
-
-        // 기본 가이드 비율을 제한장벽 확인 모드로 설정 (0~0.5)
-        defaultGuideRatio = lateralBending_LimitCheckRatio;
-
-        // 제한장벽 위치 설정
-        limitBarrierRatio = lateralBending_LimitCheckRatio;
-
-        // 재평가 시 확장 제한 설정
-        extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
-
-        // 스트레칭 모드 범위 설정
-        extendedStartRatio = lateralBending_StretchStartRatio;
-        stretchingMidHoldEndRatio = lateralBending_StretchEndRatio - lateralBending_StretchStartRatio;
-
-        // targetAngle 재계산 (비율 적용)
-        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        if (isLateralBending)
         {
-            targetAngle = calculatedDataAngle * defaultGuideRatio;
-        }
+            // 측굴 감지됨 - 프리셋 적용
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 측굴 운동 감지 - 프리셋 적용</color>");
 
-        Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
-        Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
-        Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
+            // 기본 가이드 비율을 제한장벽 확인 모드로 설정 (0~0.5)
+            defaultGuideRatio = lateralBending_LimitCheckRatio;
+
+            // 제한장벽 위치 설정
+            limitBarrierRatio = lateralBending_LimitCheckRatio;
+
+            // 재평가 시 확장 제한 설정
+            extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
+
+            // 스트레칭 모드 범위 설정
+            extendedStartRatio = lateralBending_StretchStartRatio;
+            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio - lateralBending_StretchStartRatio;
+
+            // targetAngle 재계산 (비율 적용)
+            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+            {
+                targetAngle = calculatedDataAngle * defaultGuideRatio;
+            }
+
+            Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
+            Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+            Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
+        }
+        else if (isRotation)
+        {
+            // 회전 감지됨 - 0.5 비율 적용
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 회전 운동 감지 - 가이드 비율 0.5 적용</color>");
+
+            defaultGuideRatio = 0.5f;
+            limitBarrierRatio = 0.5f;
+
+            // targetAngle 재계산 (비율 적용)
+            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+            {
+                targetAngle = calculatedDataAngle * defaultGuideRatio;
+            }
+
+            Debug.Log($"<color=cyan>  - 가이드 범위: 0 ~ 50% ({targetAngle:F1}°)</color>");
+        }
     }
 
     /// <summary>
