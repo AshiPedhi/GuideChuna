@@ -234,6 +234,22 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("스트레칭 시 홀드 종료 구간 (30°오프셋 기준, 63°와 동일)")]
     [SerializeField] private float stretchingMidHoldEndRatio = 0.55f;
 
+    [Header("=== ★ 측굴 자동 프리셋 ===")]
+    [Tooltip("측굴 운동 자동 감지 및 프리셋 적용")]
+    [SerializeField] private bool autoApplyLateralBendingPreset = true;
+
+    [Tooltip("측굴 - 제한장벽 확인 모드 가이드 비율 (0~0.5)")]
+    [SerializeField] private float lateralBending_LimitCheckRatio = 0.5f;
+
+    [Tooltip("측굴 - 스트레칭 모드 시작 비율")]
+    [SerializeField] private float lateralBending_StretchStartRatio = 0.4f;
+
+    [Tooltip("측굴 - 스트레칭 모드 종료 비율")]
+    [SerializeField] private float lateralBending_StretchEndRatio = 0.7f;
+
+    [Tooltip("측굴 - 재평가 모드 가이드 비율 (0~0.7)")]
+    [SerializeField] private float lateralBending_ReEvalRatio = 0.7f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
 
@@ -2115,6 +2131,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 핸드데이터 이동량 계산 (시작-끝 프레임 간)
         CalculateHandDataMovement();
 
+        // ★ 측굴 자동 프리셋 적용
+        ApplyLateralBendingPresetIfNeeded(csvFileName);
+
         // ★ 충돌 모드에서는 체크포인트 생성 건너뛰기
         if (useCollisionMode)
         {
@@ -2251,6 +2270,84 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         Debug.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
+    }
+
+    /// <summary>
+    /// 측굴 운동 감지 시 자동으로 프리셋 적용
+    /// </summary>
+    private void ApplyLateralBendingPresetIfNeeded(string csvFileName)
+    {
+        if (!autoApplyLateralBendingPreset) return;
+        if (string.IsNullOrEmpty(csvFileName)) return;
+
+        // 측굴 키워드 감지
+        bool isLateralBending = csvFileName.Contains("측굴") ||
+                                csvFileName.ToLower().Contains("lateral") ||
+                                csvFileName.ToLower().Contains("sidebend");
+
+        if (!isLateralBending) return;
+
+        // 측굴 감지됨 - 프리셋 적용
+        Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 측굴 운동 감지 - 프리셋 적용</color>");
+
+        // 기본 가이드 비율을 제한장벽 확인 모드로 설정 (0~0.5)
+        defaultGuideRatio = lateralBending_LimitCheckRatio;
+
+        // 제한장벽 위치 설정
+        limitBarrierRatio = lateralBending_LimitCheckRatio;
+
+        // 재평가 시 확장 제한 설정
+        extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
+
+        // 스트레칭 모드 범위 설정
+        extendedStartRatio = lateralBending_StretchStartRatio;
+        stretchingMidHoldEndRatio = lateralBending_StretchEndRatio - lateralBending_StretchStartRatio;
+
+        // targetAngle 재계산 (비율 적용)
+        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+        }
+
+        Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
+        Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+        Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
+    }
+
+    /// <summary>
+    /// 측굴 모드 수동 전환 (제한장벽 확인 / 스트레칭 / 재평가)
+    /// </summary>
+    public enum LateralBendingMode { LimitCheck, Stretching, ReEvaluation }
+
+    public void SetLateralBendingMode(LateralBendingMode mode)
+    {
+        switch (mode)
+        {
+            case LateralBendingMode.LimitCheck:
+                defaultGuideRatio = lateralBending_LimitCheckRatio;
+                limitBarrierRatio = lateralBending_LimitCheckRatio;
+                Debug.Log($"<color=green>[측굴] 제한장벽 확인 모드: 0 ~ {lateralBending_LimitCheckRatio:P0}</color>");
+                break;
+
+            case LateralBendingMode.Stretching:
+                defaultGuideRatio = lateralBending_StretchEndRatio;
+                extendedStartRatio = lateralBending_StretchStartRatio;
+                Debug.Log($"<color=green>[측굴] 스트레칭 모드: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+                break;
+
+            case LateralBendingMode.ReEvaluation:
+                defaultGuideRatio = lateralBending_ReEvalRatio;
+                extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
+                Debug.Log($"<color=green>[측굴] 재평가 모드: 0 ~ {lateralBending_ReEvalRatio:P0}</color>");
+                break;
+        }
+
+        // targetAngle 재계산
+        if (calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            Debug.Log($"<color=cyan>  목표 각도: {targetAngle:F1}°</color>");
+        }
     }
 
     /// <summary>
