@@ -1135,6 +1135,21 @@ public class HandPoseResampler : EditorWindow
 
         if (trimMode == TrimMode.ByFrame)
         {
+            // === 프레임 범위 슬라이더 ===
+            EditorGUILayout.Space(5);
+            EditorGUILayout.LabelField("구간 설정", EditorStyles.boldLabel);
+
+            // MinMax 슬라이더로 범위 선택
+            float startFloat = trimStartFrame;
+            float endFloat = trimEndFrame;
+            EditorGUILayout.MinMaxSlider(
+                $"프레임 범위: {trimStartFrame} ~ {trimEndFrame}",
+                ref startFloat, ref endFloat,
+                0, originalFrameCount - 1);
+            trimStartFrame = Mathf.RoundToInt(startFloat);
+            trimEndFrame = Mathf.RoundToInt(endFloat);
+
+            // 직접 입력 필드
             EditorGUILayout.BeginHorizontal();
             trimStartFrame = EditorGUILayout.IntField("시작 프레임", trimStartFrame);
             trimEndFrame = EditorGUILayout.IntField("끝 프레임", trimEndFrame);
@@ -1144,6 +1159,43 @@ public class HandPoseResampler : EditorWindow
             trimEndFrame = Mathf.Clamp(trimEndFrame, trimStartFrame + 1, originalFrameCount);
 
             EditorGUILayout.LabelField($"  → {trimEndFrame - trimStartFrame} 프레임 추출");
+
+            // === 미리보기 기반 지점 설정 ===
+            EditorGUILayout.Space(10);
+            EditorGUILayout.LabelField("미리보기로 지점 설정", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox("Preview 탭에서 원하는 프레임으로 이동 후 버튼을 눌러 설정하세요.", MessageType.Info);
+
+            EditorGUILayout.LabelField($"현재 미리보기 프레임: {currentFrameIndex}");
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button($"▶ 시작 지점 설정 ({currentFrameIndex})", GUILayout.Height(25)))
+            {
+                trimStartFrame = currentFrameIndex;
+                if (trimEndFrame <= trimStartFrame)
+                    trimEndFrame = Mathf.Min(trimStartFrame + 1, originalFrameCount - 1);
+            }
+            if (GUILayout.Button($"◀ 종료 지점 설정 ({currentFrameIndex})", GUILayout.Height(25)))
+            {
+                trimEndFrame = currentFrameIndex;
+                if (trimStartFrame >= trimEndFrame)
+                    trimStartFrame = Mathf.Max(0, trimEndFrame - 1);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // 설정된 구간으로 이동 버튼
+            EditorGUILayout.Space(5);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("시작 지점으로 이동"))
+            {
+                currentFrameIndex = trimStartFrame;
+                SceneView.RepaintAll();
+            }
+            if (GUILayout.Button("종료 지점으로 이동"))
+            {
+                currentFrameIndex = trimEndFrame;
+                SceneView.RepaintAll();
+            }
+            EditorGUILayout.EndHorizontal();
         }
         else
         {
