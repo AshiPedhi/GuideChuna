@@ -414,15 +414,27 @@ public class PracticeHandRecorder : MonoBehaviour
 
     private string GenerateFileName()
     {
-        // 파일명 형식: {페이즈}_{단계}_핸드데이터_{타임스탬프}
+        // 파일명 형식: {페이즈}_{단계}_핸드데이터_{원본파일명} - {타임스탬프}
         string phaseName = string.IsNullOrEmpty(currentPhaseName) ? "Unknown" : SanitizeFileName(currentPhaseName);
         string stepName = string.IsNullOrEmpty(currentStepName) ? "Unknown" : SanitizeFileName(currentStepName);
 
-        string baseName = $"{phaseName}_{stepName}_핸드데이터";
+        // 원본 핸드데이터 파일명 가져오기
+        string originalFileName = "";
+        if (pathEvaluator != null)
+        {
+            originalFileName = pathEvaluator.GetCurrentProcedureName();
+        }
+        if (string.IsNullOrEmpty(originalFileName))
+        {
+            originalFileName = "Unknown";
+        }
+        originalFileName = SanitizeFileName(originalFileName);
+
+        string baseName = $"{phaseName}_{stepName}_핸드데이터_{originalFileName}";
 
         if (includeTimestamp)
         {
-            return $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}";
+            return $"{baseName} - {DateTime.Now:yyyyMMdd_HHmmss}";
         }
         return baseName;
     }
