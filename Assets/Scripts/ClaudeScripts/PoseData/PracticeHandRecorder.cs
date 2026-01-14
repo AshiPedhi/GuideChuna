@@ -27,8 +27,11 @@ public class PracticeHandRecorder : MonoBehaviour
     [Tooltip("ChunaPathEvaluator - 자동 탐색됨")]
     [SerializeField] private ChunaPathEvaluator pathEvaluator;
 
-    [Tooltip("기준점 (환자 위치 등)")]
+    [Tooltip("기준점 - 환자 모델 (Patient 태그로 자동 탐색)")]
     [SerializeField] private Transform referencePoint;
+
+    [Tooltip("자동으로 Patient 태그 오브젝트 찾기")]
+    [SerializeField] private bool autoFindPatient = true;
 
     [Header("=== 녹화 설정 ===")]
     [SerializeField] private bool autoRecordEnabled = true;
@@ -84,10 +87,10 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (pathEvaluator != null)
         {
-            pathEvaluator.OnStartHoldComplete += OnStartHoldComplete;
-            pathEvaluator.OnMidHoldComplete += OnMidHoldComplete;
-            pathEvaluator.OnEvaluationComplete += OnEvaluationComplete;
-            pathEvaluator.OnSubStepStarted += OnSubStepStarted;
+            pathEvaluator.OnStartHoldComplete += OnStartHoldCompleteHandler;
+            pathEvaluator.OnMidHoldComplete += OnMidHoldCompleteHandler;
+            pathEvaluator.OnEvaluationCompleted += OnEvaluationCompletedHandler;
+            pathEvaluator.OnSubStepStarted += OnSubStepStartedHandler;
             Debug.Log("<color=cyan>[PracticeHandRecorder] ChunaPathEvaluator 이벤트 연결됨</color>");
         }
         else
@@ -100,10 +103,10 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (pathEvaluator != null)
         {
-            pathEvaluator.OnStartHoldComplete -= OnStartHoldComplete;
-            pathEvaluator.OnMidHoldComplete -= OnMidHoldComplete;
-            pathEvaluator.OnEvaluationComplete -= OnEvaluationComplete;
-            pathEvaluator.OnSubStepStarted -= OnSubStepStarted;
+            pathEvaluator.OnStartHoldComplete -= OnStartHoldCompleteHandler;
+            pathEvaluator.OnMidHoldComplete -= OnMidHoldCompleteHandler;
+            pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompletedHandler;
+            pathEvaluator.OnSubStepStarted -= OnSubStepStartedHandler;
         }
 
         // 녹화 중이면 저장
@@ -116,6 +119,7 @@ public class PracticeHandRecorder : MonoBehaviour
     private void Start()
     {
         FindOpenXRRoots();
+        FindPatientReference();
         EnsureSaveFolder();
     }
 
@@ -131,7 +135,7 @@ public class PracticeHandRecorder : MonoBehaviour
     /// <summary>
     /// SubStep 시작 시 핸드 데이터 유무 확인
     /// </summary>
-    private void OnSubStepStarted(int subStepIndex)
+    private void OnSubStepStartedHandler(int subStepIndex)
     {
         // 핸드 데이터가 있는지 확인
         hasHandDataInCurrentStep = pathEvaluator.GetLoadedFrameCount() > 0;
@@ -146,7 +150,7 @@ public class PracticeHandRecorder : MonoBehaviour
     /// <summary>
     /// 시작 홀드 완료 - 녹화 시작
     /// </summary>
-    private void OnStartHoldComplete()
+    private void OnStartHoldCompleteHandler()
     {
         if (!autoRecordEnabled) return;
         if (!hasHandDataInCurrentStep) return;
@@ -157,7 +161,7 @@ public class PracticeHandRecorder : MonoBehaviour
     /// <summary>
     /// 중간 홀드(종료 홀드) 완료 - 녹화 종료
     /// </summary>
-    private void OnMidHoldComplete()
+    private void OnMidHoldCompleteHandler()
     {
         if (isRecording)
         {
@@ -168,7 +172,7 @@ public class PracticeHandRecorder : MonoBehaviour
     /// <summary>
     /// 평가 완료 - 녹화 중이면 저장
     /// </summary>
-    private void OnEvaluationComplete(float score)
+    private void OnEvaluationCompletedHandler(ChunaPathEvaluator.EvaluationSession session)
     {
         if (isRecording)
         {
@@ -438,6 +442,35 @@ public class PracticeHandRecorder : MonoBehaviour
                 parent = parent.parent;
             }
         }
+    }
+
+    private void FindPatientReference()
+    {
+        if (!autoFindPatient || referencePoint != null) return;
+
+        // Patient 태그로 찾기
+        GameObject patient = GameObject.FindGameObjectWithTag("Patient");
+        if (patient != null)
+        {
+            referencePoint = patient.transform;
+            Debug.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정: {patient.name}</color>");
+            return;
+        }
+
+        // 태그로 못 찾으면 이름으로 찾기
+        string[] patientNames = { "Patient", "환자", "Chuna_Patient", "PatientModel" };
+        foreach (var name in patientNames)
+        {
+            GameObject obj = GameObject.Find(name);
+            if (obj != null)
+            {
+                referencePoint = obj.transform;
+                Debug.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정 (이름): {obj.name}</color>");
+                return;
+            }
+        }
+
+        Debug.LogWarning("[PracticeHandRecorder] 환자 기준점을 찾을 수 없습니다. 월드 좌표로 녹화됩니다.");
     }
 
     // === Public API ===
