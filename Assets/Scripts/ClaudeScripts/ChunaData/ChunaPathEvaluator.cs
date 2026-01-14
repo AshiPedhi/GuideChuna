@@ -179,6 +179,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("CSV 데이터에서 목표 각도 자동 계산")]
     [SerializeField] private bool autoCalculateTargetAngle = true;
 
+    [Tooltip("기본 가이드 비율 (0~1, 1.0=전체범위, 0.5=절반)")]
+    [Range(0.1f, 1f)]
+    [SerializeField] private float defaultGuideRatio = 1f;
+
     [Tooltip("목표 각도 (도) - 애니메이션의 최대 회전 각도")]
     [SerializeField] private float targetAngle = 90f;
 
@@ -918,6 +922,32 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs)
         {
             Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 수동 설정: {targetAngle:F1}°</color>");
+        }
+    }
+
+    /// <summary>
+    /// 기본 가이드 비율 가져오기
+    /// </summary>
+    public float GetDefaultGuideRatio()
+    {
+        return defaultGuideRatio;
+    }
+
+    /// <summary>
+    /// 기본 가이드 비율 설정 (0~1)
+    /// </summary>
+    public void SetDefaultGuideRatio(float ratio)
+    {
+        defaultGuideRatio = Mathf.Clamp(ratio, 0.1f, 1f);
+
+        // 이미 데이터가 로드된 상태면 targetAngle 재계산
+        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            if (showDebugLogs)
+            {
+                Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 재설정: {targetAngle:F1}° (비율 {defaultGuideRatio:P0})</color>");
+            }
         }
     }
 
@@ -2213,11 +2243,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             calculatedDataAngle = handDataTotalRotation;
         }
 
-        // 자동 계산 활성화 시 targetAngle 설정
+        // 자동 계산 활성화 시 targetAngle 설정 (비율 적용)
         if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
         {
-            targetAngle = calculatedDataAngle;
-            Debug.Log($"<color=green>[ChunaPathEvaluator] ★ 목표 각도 자동 설정: {targetAngle:F1}° (데이터 기반)</color>");
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            Debug.Log($"<color=green>[ChunaPathEvaluator] ★ 목표 각도 자동 설정: {targetAngle:F1}° (데이터 {calculatedDataAngle:F1}° × 비율 {defaultGuideRatio:P0})</color>");
         }
 
         Debug.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
