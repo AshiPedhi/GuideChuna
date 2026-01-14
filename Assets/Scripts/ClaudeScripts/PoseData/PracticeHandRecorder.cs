@@ -11,7 +11,7 @@ using System.Globalization;
 /// 실습 진행 중 손 동작을 자동으로 녹화하는 컴포넌트
 /// - 시나리오에 핸드 데이터가 있는 단계에서만 녹화
 /// - 시작 홀드 완료 후 녹화 시작
-/// - 종료 홀드(MidHold) 완료 시 녹화 종료
+/// - 핸드 데이터의 마지막 프레임 도달 시 녹화 종료
 /// </summary>
 public class PracticeHandRecorder : MonoBehaviour
 {
@@ -60,6 +60,7 @@ public class PracticeHandRecorder : MonoBehaviour
     private int currentFrameIndex = 0;
     private StringBuilder csvBuilder = new StringBuilder(1024 * 100);
     private bool hasHandDataInCurrentStep = false;
+    private int totalHandDataFrames = 0;  // 핸드 데이터 총 프레임 수
 
     // 이벤트
     public event Action<string> OnRecordingStarted;  // 파일명 전달
@@ -98,7 +99,7 @@ public class PracticeHandRecorder : MonoBehaviour
         if (pathEvaluator != null)
         {
             pathEvaluator.OnStartHoldComplete += OnStartHoldCompleteHandler;
-            pathEvaluator.OnMidHoldComplete += OnMidHoldCompleteHandler;
+            pathEvaluator.OnUserFrameChanged += OnUserFrameChangedHandler;
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompletedHandler;
             pathEvaluator.OnSubStepStarted += OnSubStepStartedHandler;
             Debug.Log("<color=cyan>[PracticeHandRecorder] ChunaPathEvaluator 이벤트 연결됨</color>");
@@ -114,7 +115,7 @@ public class PracticeHandRecorder : MonoBehaviour
         if (pathEvaluator != null)
         {
             pathEvaluator.OnStartHoldComplete -= OnStartHoldCompleteHandler;
-            pathEvaluator.OnMidHoldComplete -= OnMidHoldCompleteHandler;
+            pathEvaluator.OnUserFrameChanged -= OnUserFrameChangedHandler;
             pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompletedHandler;
             pathEvaluator.OnSubStepStarted -= OnSubStepStartedHandler;
         }
@@ -148,7 +149,8 @@ public class PracticeHandRecorder : MonoBehaviour
     private void OnSubStepStartedHandler(int subStepIndex)
     {
         // 핸드 데이터가 있는지 확인
-        hasHandDataInCurrentStep = pathEvaluator.GetLoadedFrameCount() > 0;
+        totalHandDataFrames = pathEvaluator.GetLoadedFrameCount();
+        hasHandDataInCurrentStep = totalHandDataFrames > 0;
 
         // 현재 페이즈/단계 이름 저장
         if (scenarioManager != null)
@@ -159,7 +161,7 @@ public class PracticeHandRecorder : MonoBehaviour
 
         if (hasHandDataInCurrentStep)
         {
-            Debug.Log($"<color=cyan>[PracticeHandRecorder] {currentPhaseName}/{currentStepName}: 핸드 데이터 있음 ({pathEvaluator.GetLoadedFrameCount()} 프레임) - 녹화 대기</color>");
+            Debug.Log($"<color=cyan>[PracticeHandRecorder] {currentPhaseName}/{currentStepName}: 핸드 데이터 있음 ({totalHandDataFrames} 프레임) - 녹화 대기</color>");
         }
     }
 
@@ -175,12 +177,16 @@ public class PracticeHandRecorder : MonoBehaviour
     }
 
     /// <summary>
-    /// 중간 홀드(종료 홀드) 완료 - 녹화 종료
+    /// 프레임 변경 시 마지막 프레임 도달 확인 - 녹화 종료
     /// </summary>
-    private void OnMidHoldCompleteHandler()
+    private void OnUserFrameChangedHandler(int currentFrame, int totalFrames, float ratio)
     {
-        if (isRecording)
+        if (!isRecording) return;
+
+        // 마지막 프레임에 도달하면 녹화 종료 (totalFrames - 1 이상이면 종료)
+        if (currentFrame >= totalFrames - 1)
         {
+            Debug.Log($"<color=yellow>[PracticeHandRecorder] 마지막 프레임 도달 ({currentFrame + 1}/{totalFrames}) - 녹화 종료</color>");
             StopRecordingAndSave();
         }
     }
