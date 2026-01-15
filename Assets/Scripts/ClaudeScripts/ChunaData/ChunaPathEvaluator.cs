@@ -2242,8 +2242,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         Vector3 pivotPos = pivotTransform.position;
-        Vector3 startPos = loadedFrames[0].rightWristWorldPos;
-        Vector3 endPos = loadedFrames[loadedFrames.Count - 1].rightWristWorldPos;
+        Vector3 startPos = loadedFrames[0].rightRootPosition;
+        Vector3 endPos = loadedFrames[loadedFrames.Count - 1].rightRootPosition;
 
         // 피벗에서 시작/끝 위치로의 방향
         Vector3 startDir = (startPos - pivotPos).normalized;
