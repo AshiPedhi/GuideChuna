@@ -95,6 +95,12 @@ public class StepFeedbackUI : MonoBehaviour
     /// <param name="targetSimilarity">목표 유사도 (0~1), null이면 DifficultyManager에서 가져옴</param>
     public void ShowFeedback(float currentSimilarity, float? targetSimilarity = null)
     {
+        // ★ 코루틴 시작 전 자신의 GameObject 활성화 필수
+        if (!gameObject.activeInHierarchy)
+        {
+            gameObject.SetActive(true);
+        }
+
         // 목표 유사도 결정
         float target = targetSimilarity ?? GetTargetSimilarity();
 
