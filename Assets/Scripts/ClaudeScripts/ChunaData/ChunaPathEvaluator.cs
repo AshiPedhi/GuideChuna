@@ -225,14 +225,35 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
     [Header("=== 스트레칭 전용 설정 ===")]
-    [Tooltip("스트레칭 시 시작 위치 (0~1, 40%부터 시작)")]
+    [Tooltip("스트레칭 시 시작 위치 (0~1)")]
     [SerializeField] private float extendedStartRatio = 0.4f;
 
-    [Tooltip("스트레칭 시 홀드 시작 구간 (25%부터 시작)")]
-    [SerializeField] private float stretchingMidHoldStartRatio = 0.25f;
+    [Tooltip("스트레칭 시 홀드 시작 구간 (재평가와 동일)")]
+    [SerializeField] private float stretchingMidHoldStartRatio = 0.5f;
 
-    [Tooltip("스트레칭 시 홀드 종료 구간 (30°오프셋 기준, 63°와 동일)")]
-    [SerializeField] private float stretchingMidHoldEndRatio = 0.55f;
+    [Tooltip("스트레칭 시 홀드 종료 구간 (재평가와 동일)")]
+    [SerializeField] private float stretchingMidHoldEndRatio = 0.7f;
+
+    [Header("=== ★ 가이드 핸드 재생 범위 ===")]
+    [Tooltip("회전(건측/환측) 가이드 시작")]
+    [SerializeField] private float guideRotation_Start = 0f;
+    [Tooltip("회전(건측/환측) 가이드 끝")]
+    [SerializeField] private float guideRotation_End = 0.4f;
+
+    [Tooltip("제한장벽 측굴 가이드 시작")]
+    [SerializeField] private float guideLimitCheck_Start = 0f;
+    [Tooltip("제한장벽 측굴 가이드 끝")]
+    [SerializeField] private float guideLimitCheck_End = 0.4f;
+
+    [Tooltip("스트레칭 가이드 시작")]
+    [SerializeField] private float guideStretching_Start = 0.35f;
+    [Tooltip("스트레칭 가이드 끝")]
+    [SerializeField] private float guideStretching_End = 0.65f;
+
+    [Tooltip("재평가 가이드 시작")]
+    [SerializeField] private float guideReEval_Start = 0f;
+    [Tooltip("재평가 가이드 끝")]
+    [SerializeField] private float guideReEval_End = 0.65f;
 
     [Header("=== ★ 측굴 자동 프리셋 ===")]
     [Tooltip("측굴 운동 자동 감지 및 프리셋 적용")]
@@ -367,14 +388,20 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
     private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
+    private bool isRotationMode = false;        // 회전 모드 (건측/환측 회전)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     // ★ 홀드 범위: 스트레칭과 재평가 구분
     private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
                                          (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
     private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
                                        (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
-    private float currentStartRatio => 0f;  // ★ 애니메이션은 항상 0프레임부터 시작
-    private float currentAngleDisplayOffset => isStretchingMode ? extendedStartRatio : 0f;  // ★ 각도 표시 오프셋 (스트레칭만 30%)
+
+    // ★ 가이드 핸드 재생 범위 (런타임)
+    private float runtimeGuideStartRatio = 0f;
+    private float runtimeGuideEndRatio = 0.4f;
+    private float currentStartRatio => runtimeGuideStartRatio;
+    private float currentEndRatio => runtimeGuideEndRatio;
+    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
 
     // 결과
     private EvaluationSession currentSession;
@@ -2339,11 +2366,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
         else if (isRotation)
         {
-            // 회전 감지됨 - 0.5 비율 적용
-            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 회전 운동 감지 - 가이드 비율 0.5 적용</color>");
+            // 회전 감지됨 - 가이드 0 ~ 0.4
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 회전 운동 감지 - 가이드 범위 설정</color>");
 
-            defaultGuideRatio = 0.5f;
-            limitBarrierRatio = 0.5f;
+            defaultGuideRatio = 0.4f;
+            limitBarrierRatio = 0.4f;
+            isRotationMode = true;
+
+            // ★ 가이드 재생 범위: 0 ~ 0.4
+            runtimeGuideStartRatio = guideRotation_Start;
+            runtimeGuideEndRatio = guideRotation_End;
 
             // targetAngle 재계산 (비율 적용)
             if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
@@ -2351,7 +2383,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                 targetAngle = calculatedDataAngle * defaultGuideRatio;
             }
 
-            Debug.Log($"<color=cyan>  - 가이드 범위: 0 ~ 50% ({targetAngle:F1}°)</color>");
+            Debug.Log($"<color=cyan>  - 가이드 범위: {guideRotation_Start:P0} ~ {guideRotation_End:P0} ({targetAngle:F1}°)</color>");
         }
     }
 
@@ -2367,19 +2399,33 @@ public class ChunaPathEvaluator : MonoBehaviour
             case LateralBendingMode.LimitCheck:
                 defaultGuideRatio = lateralBending_LimitCheckRatio;
                 limitBarrierRatio = lateralBending_LimitCheckRatio;
-                Debug.Log($"<color=green>[측굴] 제한장벽 확인 모드: 0 ~ {lateralBending_LimitCheckRatio:P0}</color>");
+                // ★ 가이드 재생 범위: 0 ~ 0.4
+                runtimeGuideStartRatio = guideLimitCheck_Start;
+                runtimeGuideEndRatio = guideLimitCheck_End;
+                isStretchingMode = false;
+                isExtendedLimitMode = false;
+                Debug.Log($"<color=green>[측굴] 제한장벽 확인 모드: 가이드 {guideLimitCheck_Start:P0} ~ {guideLimitCheck_End:P0}</color>");
                 break;
 
             case LateralBendingMode.Stretching:
                 defaultGuideRatio = lateralBending_StretchEndRatio;
-                extendedStartRatio = lateralBending_StretchStartRatio;
-                Debug.Log($"<color=green>[측굴] 스트레칭 모드: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+                // ★ 가이드 재생 범위: 0.35 ~ 0.65
+                runtimeGuideStartRatio = guideStretching_Start;
+                runtimeGuideEndRatio = guideStretching_End;
+                isStretchingMode = true;
+                isExtendedLimitMode = true;
+                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {guideStretching_Start:P0} ~ {guideStretching_End:P0}</color>");
                 break;
 
             case LateralBendingMode.ReEvaluation:
                 defaultGuideRatio = lateralBending_ReEvalRatio;
                 extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
-                Debug.Log($"<color=green>[측굴] 재평가 모드: 0 ~ {lateralBending_ReEvalRatio:P0}</color>");
+                // ★ 가이드 재생 범위: 0 ~ 0.65
+                runtimeGuideStartRatio = guideReEval_Start;
+                runtimeGuideEndRatio = guideReEval_End;
+                isStretchingMode = false;
+                isExtendedLimitMode = true;
+                Debug.Log($"<color=green>[측굴] 재평가 모드: 가이드 {guideReEval_Start:P0} ~ {guideReEval_End:P0}</color>");
                 break;
         }
 
@@ -3134,7 +3180,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         float frameTime = 1f / 30f;
-        currentGuideFrameIndex = 0;
+
+        // ★ 시작/끝 프레임 인덱스 계산 (런타임 가이드 범위 사용)
+        int startFrameIdx = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+        int endFrameIdx = Mathf.RoundToInt(currentEndRatio * (loadedFrames.Count - 1));
+        startFrameIdx = Mathf.Clamp(startFrameIdx, 0, loadedFrames.Count - 1);
+        endFrameIdx = Mathf.Clamp(endFrameIdx, startFrameIdx, loadedFrames.Count - 1);
+
+        currentGuideFrameIndex = startFrameIdx;
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[가이드] 재생 범위: {startFrameIdx} ~ {endFrameIdx} (비율: {currentStartRatio:P0} ~ {currentEndRatio:P0})</color>");
 
         while (true)
         {
@@ -3177,7 +3233,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             currentGuideFrameIndex++;
-            if (currentGuideFrameIndex >= loadedFrames.Count)
+            // ★ 끝 프레임에 도달하면 시작으로 돌아감
+            if (currentGuideFrameIndex > endFrameIdx)
             {
                 if (loopGuideHands)
                 {
@@ -3188,7 +3245,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                             Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 1회 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
                         yield return new WaitForSeconds(loopDelaySeconds);
                     }
-                    currentGuideFrameIndex = 0;
+                    currentGuideFrameIndex = startFrameIdx;
                 }
                 else
                 {
