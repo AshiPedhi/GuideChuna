@@ -225,8 +225,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
     [Header("=== 스트레칭 전용 설정 ===")]
-    [Tooltip("스트레칭 시 시작 위치 (0~1, 30%부터 시작)")]
-    [SerializeField] private float extendedStartRatio = 0.3f;
+    [Tooltip("스트레칭 시 시작 위치 (0~1, 40%부터 시작)")]
+    [SerializeField] private float extendedStartRatio = 0.4f;
 
     [Tooltip("스트레칭 시 홀드 시작 구간 (40%부터 시작)")]
     [SerializeField] private float stretchingMidHoldStartRatio = 0.4f;
