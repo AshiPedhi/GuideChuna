@@ -250,6 +250,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("측굴 - 재평가 모드 가이드 비율 (0~0.7)")]
     [SerializeField] private float lateralBending_ReEvalRatio = 0.7f;
 
+    [Header("=== ★ 간소화된 손 유사도 체크 ===")]
+    [Tooltip("간소화된 손 유사도 체크 사용 (왼손: 손바닥 방향+주먹, 오른손: 경로+손모양)")]
+    [SerializeField] private bool useSimplifiedHandComparison = true;
+
+    [Tooltip("오른손 가중치 (0~1, 기본 0.7 = 70%)")]
+    [SerializeField] private float rightHandSimilarityWeight = 0.7f;
+
+    [Tooltip("왼손 가중치 (0~1, 기본 0.3 = 30%)")]
+    [SerializeField] private float leftHandSimilarityWeight = 0.3f;
+
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
 
@@ -461,6 +471,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (poseComparator == null)
         {
             poseComparator = new HandPoseComparator();
+        }
+
+        // ★ 손 유사도 가중치 동기화
+        if (poseComparator != null)
+        {
+            var settings = poseComparator.GetSettings();
+            settings.rightHandWeight = rightHandSimilarityWeight;
+            settings.leftHandWeight = leftHandSimilarityWeight;
         }
 
         if (checkpointParent == null)
@@ -2304,9 +2322,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 재평가 시 확장 제한 설정
             extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
 
-            // 스트레칭 모드 범위 설정
+            // 스트레칭 모드 범위 설정 (시작 0.4, 종료 0.7)
             extendedStartRatio = lateralBending_StretchStartRatio;
-            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio - lateralBending_StretchStartRatio;
+            stretchingMidHoldStartRatio = lateralBending_StretchStartRatio;
+            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio;
 
             // targetAngle 재계산 (비율 적용)
             if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
@@ -2859,15 +2878,33 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         PoseFrame frame = loadedFrames[frameIndex];
 
-        if (isLeftHand && playerLeftHand != null)
+        // ★ 간소화된 비교 모드 사용 시
+        if (useSimplifiedHandComparison)
         {
-            var result = poseComparator.CompareLeftPose(playerLeftHand, frame, frameIndex);
-            return result.leftHandSimilarity;
+            if (isLeftHand && playerLeftHand != null)
+            {
+                var result = poseComparator.CompareLeftPoseSimplified(playerLeftHand, frame, frameIndex);
+                return result.leftHandSimilarity;
+            }
+            else if (!isLeftHand && playerRightHand != null)
+            {
+                var result = poseComparator.CompareRightPoseSimplified(playerRightHand, frame, frameIndex);
+                return result.rightHandSimilarity;
+            }
         }
-        else if (!isLeftHand && playerRightHand != null)
+        else
         {
-            var result = poseComparator.CompareRightPose(playerRightHand, frame, frameIndex);
-            return result.rightHandSimilarity;
+            // 기존 상세 비교 모드
+            if (isLeftHand && playerLeftHand != null)
+            {
+                var result = poseComparator.CompareLeftPose(playerLeftHand, frame, frameIndex);
+                return result.leftHandSimilarity;
+            }
+            else if (!isLeftHand && playerRightHand != null)
+            {
+                var result = poseComparator.CompareRightPose(playerRightHand, frame, frameIndex);
+                return result.rightHandSimilarity;
+            }
         }
 
         return 0f;
@@ -2892,6 +2929,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         return (leftSim, rightSim);
     }
 
+    /// <summary>
+    /// ★ 가중치 적용된 통합 유사도 가져오기 (오른손 70%, 왼손 30%)
+    /// </summary>
+    public float GetWeightedRealTimeSimilarity()
+    {
+        float leftSim = CalculateCurrentSimilarity(true, -1);
+        float rightSim = CalculateCurrentSimilarity(false, -1);
+        return leftSim * leftHandSimilarityWeight + rightSim * rightHandSimilarityWeight;
+    }
+
     // ========== 점수 계산 ==========
 
     private void CalculateAverageSimilarity()
@@ -2904,12 +2951,17 @@ public class ChunaPathEvaluator : MonoBehaviour
             totalLeft += snapshot.leftSimilarity;
             totalRight += snapshot.rightSimilarity;
 
-            float avg = (snapshot.leftSimilarity + snapshot.rightSimilarity) / 2f;
-            if (avg < currentSession.minSimilarity) currentSession.minSimilarity = avg;
-            if (avg > currentSession.maxSimilarity) currentSession.maxSimilarity = avg;
+            // ★ 가중치 적용된 평균 유사도 계산 (오른손 70%, 왼손 30%)
+            float weightedAvg = snapshot.leftSimilarity * leftHandSimilarityWeight +
+                               snapshot.rightSimilarity * rightHandSimilarityWeight;
+            if (weightedAvg < currentSession.minSimilarity) currentSession.minSimilarity = weightedAvg;
+            if (weightedAvg > currentSession.maxSimilarity) currentSession.maxSimilarity = weightedAvg;
         }
 
-        currentSession.averageSimilarity = (totalLeft + totalRight) / (currentSession.metricsHistory.Count * 2);
+        // ★ 가중치 적용된 전체 평균
+        float avgLeft = totalLeft / currentSession.metricsHistory.Count;
+        float avgRight = totalRight / currentSession.metricsHistory.Count;
+        currentSession.averageSimilarity = avgLeft * leftHandSimilarityWeight + avgRight * rightHandSimilarityWeight;
     }
 
     private void CalculateLimitStatistics()
