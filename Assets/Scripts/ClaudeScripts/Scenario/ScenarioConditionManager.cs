@@ -566,6 +566,9 @@ public class ScenarioConditionManager : MonoBehaviour
             yield return new WaitForSeconds(subStep.duration);
             Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
 
+            // ★ 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
+            yield return WaitForNarrationComplete();
+
             // 다음 SubStep으로 진행
             if (scenarioManager != null)
             {
@@ -732,6 +735,37 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 나레이션 재생 중인지 확인
     /// </summary>
     public bool IsPlayingNarration => currentNarrationClip != null;
+
+    /// <summary>
+    /// ★ 나레이션(홀드 후 포함)이 재생 중인지 확인
+    /// </summary>
+    private bool IsAnyNarrationPlaying()
+    {
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        return targetSource != null && targetSource.isPlaying;
+    }
+
+    /// <summary>
+    /// ★ 나레이션 완료까지 대기하는 코루틴
+    /// </summary>
+    private IEnumerator WaitForNarrationComplete()
+    {
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null || !targetSource.isPlaying)
+        {
+            yield break;
+        }
+
+        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료 대기 중...</color>");
+
+        while (targetSource.isPlaying)
+        {
+            yield return null;
+        }
+
+        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료됨 - 다음 단계 진행</color>");
+    }
 
     /// <summary>
     /// ★ 시작 홀드 완료 시 초급자용 2차 나래이션 재생
@@ -927,7 +961,10 @@ public class ScenarioConditionManager : MonoBehaviour
             HideCompletionAlert();
         }
 
-        // 3. 다음 SubStep으로 진행
+        // ★ 3. 나래이션이 아직 재생 중이면 완료까지 대기
+        yield return WaitForNarrationComplete();
+
+        // 4. 다음 SubStep으로 진행
         if (scenarioManager != null)
         {
             scenarioManager.NextSubStep();
@@ -965,6 +1002,9 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // duration만큼 대기
         yield return new WaitForSeconds(duration);
+
+        // ★ 나래이션이 아직 재생 중이면 완료까지 대기
+        yield return WaitForNarrationComplete();
 
         // 완료 알림 없이 바로 다음 SubStep으로 진행
         if (scenarioManager != null)
