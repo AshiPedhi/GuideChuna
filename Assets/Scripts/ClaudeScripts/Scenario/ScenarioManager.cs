@@ -757,6 +757,7 @@ public class ScenarioManager : MonoBehaviour
 
     /// <summary>
     /// AutoPlay 완료 핸들러
+    /// ★ 나래이션 완료를 기다린 후 진행
     /// </summary>
     private void OnAutoPlayCompletedHandler()
     {
@@ -775,8 +776,16 @@ public class ScenarioManager : MonoBehaviour
             }
         }
 
-        // 다음 SubStep으로 직접 진행
-        NextSubStep();
+        // ★ 나래이션 완료를 기다린 후 다음 SubStep으로 진행
+        if (conditionManager != null)
+        {
+            conditionManager.WaitForNarrationThenNextStep();
+        }
+        else
+        {
+            // conditionManager 없으면 바로 진행 (fallback)
+            NextSubStep();
+        }
     }
 
     /// <summary>

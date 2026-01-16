@@ -768,6 +768,25 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ 나래이션 완료 후 다음 단계로 진행 (외부 호출용)
+    /// ScenarioManager.OnAutoPlayCompletedHandler 등에서 사용
+    /// </summary>
+    public void WaitForNarrationThenNextStep()
+    {
+        StartCoroutine(WaitForNarrationThenNextStepCoroutine());
+    }
+
+    private IEnumerator WaitForNarrationThenNextStepCoroutine()
+    {
+        yield return WaitForNarrationComplete();
+
+        if (scenarioManager != null)
+        {
+            scenarioManager.NextSubStep();
+        }
+    }
+
+    /// <summary>
     /// ★ 시작 홀드 완료 시 초급자용 2차 나래이션 재생
     /// 파일명 규칙: {원본클립명}_홀드후
     /// </summary>
