@@ -76,6 +76,7 @@ public class ScenarioConditionManager : MonoBehaviour
     // 나레이션 관련
     private AudioClip currentNarrationClip;
     private Coroutine narrationCoroutine;
+    private string currentVoiceClipName;  // ★ 현재 재생 중인 나래이션 클립명 (홀드 후 나래이션용)
 
     // Quest 최적화: WaitForSeconds 캐싱
     private WaitForSeconds cachedCheckInterval;
@@ -119,12 +120,24 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 이벤트 구독
         eventSystem.OnSubStepStarted += OnSubStepStarted;
+
+        // ★ ChunaPathEvaluator 시작홀드 완료 이벤트 구독 (홀드 후 나래이션용)
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnStartHoldComplete += OnStartHoldCompleteForNarration;
+        }
     }
 
     void OnDisable()
     {
         // 이벤트 구독 해제
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
+
+        // ★ ChunaPathEvaluator 이벤트 구독 해제
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnStartHoldComplete -= OnStartHoldCompleteForNarration;
+        }
 
         // 진행 중인 체크 중단
         StopConditionCheck();
@@ -340,6 +353,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -366,6 +380,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -394,6 +409,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -421,6 +437,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -707,6 +724,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         currentNarrationClip = null;
+        currentVoiceClipName = null;  // ★ 홀드 후 나래이션용 클립명 초기화
         Debug.Log("[ConditionManager] 나레이션 중지됨");
     }
 
@@ -714,6 +732,50 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 나레이션 재생 중인지 확인
     /// </summary>
     public bool IsPlayingNarration => currentNarrationClip != null;
+
+    /// <summary>
+    /// ★ 시작 홀드 완료 시 초급자용 2차 나래이션 재생
+    /// 파일명 규칙: {원본클립명}_홀드후
+    /// </summary>
+    private void OnStartHoldCompleteForNarration()
+    {
+        // 현재 클립명이 없으면 스킵
+        if (string.IsNullOrEmpty(currentVoiceClipName))
+        {
+            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 현재 클립명 없음");
+            return;
+        }
+
+        // 초급자 모드인지 확인
+        if (DifficultyManager.Instance == null ||
+            DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner)
+        {
+            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아님");
+            return;
+        }
+
+        // 홀드 후 나래이션 클립명 생성
+        string afterHoldClipName = $"{currentVoiceClipName}_홀드후";
+
+        // 클립 로드 시도
+        AudioClip afterHoldClip = LoadNarrationClip(afterHoldClipName);
+
+        if (afterHoldClip == null)
+        {
+            Debug.Log($"[ConditionManager] 홀드 후 나래이션 없음: {afterHoldClipName}");
+            return;
+        }
+
+        // 나래이션 재생
+        Debug.Log($"<color=yellow>[ConditionManager] ★ 홀드 후 나래이션 재생: {afterHoldClipName} ({afterHoldClip.length:F1}초)</color>");
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource != null)
+        {
+            targetSource.clip = afterHoldClip;
+            targetSource.Play();
+        }
+    }
 
     /// <summary>
     /// 수동 진행 처리 (토글 버튼 활성화 및 초기화)
