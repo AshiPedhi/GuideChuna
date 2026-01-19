@@ -97,7 +97,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private HandTransformMapper leftGuideHand;
     [SerializeField] private HandTransformMapper rightGuideHand;
     [SerializeField] private bool showGuideHands = true;
-    [SerializeField] private Color guideHandColor = new Color(0.3f, 0.7f, 1f, 0.5f);
+    [SerializeField] private Color guideHandColor = new Color(0.5f, 1f, 0.4f, 0.5f);  // ★ 연두색
+
+    [Header("=== 가이드 손 접촉 시 투명도 ===")]
+    [Tooltip("사용자 손이 환자에 접촉 시 가이드 손 투명도 조절")]
+    [SerializeField] private bool fadeOnTouch = true;
+
+    [Tooltip("접촉 시 가이드 손 투명도 (0=완전 투명, 1=불투명)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float touchAlpha = 0.15f;
 
     [Tooltip("가이드 핸드 재생 속도 (1 = 원본 속도)")]
     [SerializeField] private float guidePlaybackSpeed = 1f;
@@ -3120,11 +3128,18 @@ public class ChunaPathEvaluator : MonoBehaviour
         startFrameIndex = Mathf.Clamp(startFrameIndex, 0, loadedFrames.Count - 1);
         PoseFrame firstFrame = loadedFrames[startFrameIndex];
 
+        // ★ 접촉 시 투명도 조절
+        float currentAlpha = guideHandColor.a;
+        if (fadeOnTouch && (isLeftHandTouchingPatient || isRightHandTouchingPatient))
+        {
+            currentAlpha = touchAlpha;
+        }
+
         // 왼손 첫 프레임 표시
         if (leftGuideHand != null)
         {
             leftGuideHand.SetVisible(true);
-            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
             if (leftGuideHand.Root != null)
             {
@@ -3142,7 +3157,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (rightGuideHand != null)
         {
             rightGuideHand.SetVisible(true);
-            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
             if (rightGuideHand.Root != null)
             {
@@ -3198,10 +3213,17 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             PoseFrame frame = loadedFrames[currentGuideFrameIndex];
 
+            // ★ 접촉 시 투명도 조절 - 사용자 손이 환자에 닿으면 가이드 손을 더 투명하게
+            float currentAlpha = guideHandColor.a;
+            if (fadeOnTouch && (isLeftHandTouchingPatient || isRightHandTouchingPatient))
+            {
+                currentAlpha = touchAlpha;
+            }
+
             if (leftGuideHand != null)
             {
                 leftGuideHand.SetVisible(true);
-                leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (leftGuideHand.Root != null)
                 {
@@ -3218,7 +3240,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (rightGuideHand != null)
             {
                 rightGuideHand.SetVisible(true);
-                rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (rightGuideHand.Root != null)
                 {
