@@ -270,8 +270,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("측굴 - 제한장벽 확인 모드 가이드 비율 (0~0.5)")]
     [SerializeField] private float lateralBending_LimitCheckRatio = 0.5f;
 
-    [Tooltip("측굴 - 스트레칭 모드 시작 비율")]
-    [SerializeField] private float lateralBending_StretchStartRatio = 0.4f;
+    [Tooltip("측굴 - 스트레칭 모드 시작 비율 (재평가와 동일)")]
+    [SerializeField] private float lateralBending_StretchStartRatio = 0.5f;
 
     [Tooltip("측굴 - 스트레칭 모드 종료 비율")]
     [SerializeField] private float lateralBending_StretchEndRatio = 0.7f;
@@ -409,8 +409,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float runtimeGuideEndRatio = 0.4f;
     private float currentStartRatio => runtimeGuideStartRatio;
     private float currentEndRatio => runtimeGuideEndRatio;
-    // ★ 각도 표시 오프셋: 스트레칭/재평가 모두 0으로 설정 (동일한 각도 범위 표시)
-    private float currentAngleDisplayOffset => 0f;
+    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
 
     // 결과
     private EvaluationSession currentSession;
