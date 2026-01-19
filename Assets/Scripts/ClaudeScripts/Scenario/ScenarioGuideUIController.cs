@@ -241,6 +241,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// - duration > 0: ProgressCircle 표시
     /// - 토글이 표시되면 ProgressCircle 숨김
     /// - ★ HandTracking이 있으면 HoldProgressIndicator가 표시하므로 ProgressCircle 숨김
+    /// - ★ 나래이션이 있으면 ProgressCircle 숨김 (나래이션 완료까지 대기하므로 duration 의미 없음)
     /// </summary>
     private void HandleProgressCircleVisibility(SubStepData subStep)
     {
@@ -254,6 +255,15 @@ public class ScenarioGuideUIController : MonoBehaviour
             return;
         }
 
+        // ★ 나래이션이 있는 경우 ProgressCircle 숨김
+        // (나래이션 완료까지 대기하므로 duration 타이머가 의미 없음)
+        if (subStep.HasNarration())
+        {
+            HideProgressCircle();
+            Debug.Log("[GuideUI] 나래이션 존재 - ProgressCircle 숨김 (나래이션 완료까지 대기)");
+            return;
+        }
+
         // ★ HandTracking이 있는 경우 HoldProgressIndicator가 홀드 상태를 표시하므로 ProgressCircle 숨김
         // (등척성운동 등에서 홀드 타이머와 Duration 타이머가 겹치는 문제 해결)
         if (subStep.HasHandTracking())
@@ -263,7 +273,7 @@ public class ScenarioGuideUIController : MonoBehaviour
             return;
         }
 
-        // Duration이 있는 경우 ProgressCircle 표시 (HandTracking이 없는 경우만)
+        // Duration이 있는 경우 ProgressCircle 표시 (HandTracking, 나래이션 없는 경우만)
         if (subStep.duration > 0)
         {
             StartProgress(subStep.duration);
