@@ -533,22 +533,34 @@ public class InfoPanelController : MonoBehaviour
 
     private void OnExpertVideoToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}");
+        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}, 시나리오시작:{isScenarioStarted}, 현재페이지:{currentContentPage}");
 
         if (isOn)
         {
+            // 다른 콘텐츠 토글 끄기
             SetToggleWithoutNotify(skeletonToggle, false);
             SetToggleWithoutNotify(resultToggle, false);
+
+            // 전문가 영상 페이지 표시 및 재생
             ShowContentPage(ContentPage.ExpertVideo);
             PlayExpertVideo();
         }
         else
         {
+            // 영상 정지
             StopExpertVideo();
-            if (isScenarioStarted && currentContentPage == ContentPage.ExpertVideo)
+
+            // ★ 시나리오 시작 여부에 따라 다른 페이지로 전환
+            if (isScenarioStarted)
             {
+                // 시나리오 진행 중: 근골격 페이지로 전환
                 SetToggleWithoutNotify(skeletonToggle, true);
                 ShowContentPage(ContentPage.Skeleton);
+            }
+            else
+            {
+                // 시나리오 시작 전: 모드 선택 페이지로 전환
+                ShowContentPage(ContentPage.ModeSelection);
             }
         }
 
@@ -794,34 +806,41 @@ public class InfoPanelController : MonoBehaviour
         }
         else
         {
-            // Color Tint 기반 토글인 경우 기존 방식 사용
+            // ★ 색상 계산 시 값이 1을 초과하지 않도록 Clamp 적용
+            Color baseColor = isActive ? activeColor : inactiveColor;
+            Color highlightColor = new Color(
+                Mathf.Min(baseColor.r * 1.1f, 1f),
+                Mathf.Min(baseColor.g * 1.1f, 1f),
+                Mathf.Min(baseColor.b * 1.1f, 1f),
+                baseColor.a
+            );
+            Color pressedColor = new Color(
+                baseColor.r * 0.9f,
+                baseColor.g * 0.9f,
+                baseColor.b * 0.9f,
+                baseColor.a
+            );
+
+            // Color Tint 기반 토글인 경우
             ColorBlock colors = toggle.colors;
-
-            if (isActive)
-            {
-                colors.normalColor = activeColor;
-                colors.highlightedColor = activeColor * 1.2f;
-                colors.pressedColor = activeColor * 0.8f;
-                colors.selectedColor = activeColor;
-            }
-            else
-            {
-                colors.normalColor = inactiveColor;
-                colors.highlightedColor = inactiveColor * 1.2f;
-                colors.pressedColor = inactiveColor * 0.8f;
-                colors.selectedColor = inactiveColor;
-            }
-
+            colors.normalColor = baseColor;
+            colors.highlightedColor = highlightColor;
+            colors.pressedColor = pressedColor;
+            colors.selectedColor = baseColor;
             toggle.colors = colors;
 
+            // ★ targetGraphic 직접 색상 설정 (CrossFadeColor 대신 즉시 적용)
             if (toggle.targetGraphic != null)
             {
-                toggle.targetGraphic.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
+                toggle.targetGraphic.color = baseColor;
             }
         }
 
+        // 아이콘 색상도 즉시 적용
         if (icon != null)
-            icon.CrossFadeColor(isActive ? activeColor : inactiveColor, 0.1f, true, true);
+        {
+            icon.color = isActive ? activeColor : inactiveColor;
+        }
     }
     #endregion
 
