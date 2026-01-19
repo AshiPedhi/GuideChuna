@@ -83,6 +83,30 @@ public class HandPoseComparator
         [Tooltip("손목 회전 가중치 (0~1) - 상향")]
         public float handRotationWeight = 0.4f;
 
+        [Header("양손 가중치 설정")]
+        [Tooltip("오른손 가중치 (0~1, 기본 0.7 = 70%)")]
+        public float rightHandWeight = 0.7f;
+        [Tooltip("왼손 가중치 (0~1, 기본 0.3 = 30%)")]
+        public float leftHandWeight = 0.3f;
+
+        [Header("간소화된 손 체크 설정")]
+        [Tooltip("왼손: 손바닥이 아래를 향하는지 체크 (기본 true)")]
+        public bool leftHandCheckPalmDown = true;
+        [Tooltip("왼손: 주먹 쥐지 않았는지 체크 (기본 true)")]
+        public bool leftHandCheckNotFisted = true;
+        [Tooltip("오른손: 경로 근접도 체크 (기본 true)")]
+        public bool rightHandCheckPathProximity = true;
+        [Tooltip("오른손: 손 모양 체크 (너무 펴지거나 쥐지 않았는지)")]
+        public bool rightHandCheckHandShape = true;
+
+        [Header("손 모양 임계값")]
+        [Tooltip("주먹 쥔 정도 임계값 (이 값 이상이면 주먹으로 판정, 기본 0.7)")]
+        public float fistThreshold = 0.7f;
+        [Tooltip("손이 너무 펴진 정도 임계값 (이 값 이하면 너무 펴진 것으로 판정, 기본 0.2)")]
+        public float openHandThreshold = 0.2f;
+        [Tooltip("손바닥 아래 방향 임계값 (각도, 기본 45도)")]
+        public float palmDownAngleThreshold = 45f;
+
         [Header("디버그")]
         [Tooltip("실패한 관절 상세 로그 출력")]
         public bool showDetailedLogs = false;
@@ -265,32 +289,32 @@ public class HandPoseComparator
             result.leftHandSimilarity = jointSimilarity;
         }
 
-        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
-        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        if (result.leftHandPositionError > settings.handPositionThreshold * 2f)
+        // ★ 페널티 시스템 (대폭 완화 - 기본 유사도 유지, 극단적 오차만 페널티)
+        // 위치 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        if (result.leftHandPositionError > settings.handPositionThreshold * 4f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 2f)
+        // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        else if (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 4f)
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
-        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
-        else if (result.leftHandPositionError > settings.handPositionThreshold * 1.5f ||
-                 (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 1.5f))
+        // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
+        else if (result.leftHandPositionError > settings.handPositionThreshold * 3f ||
+                 (settings.compareHandRotation && result.leftHandRotationError > settings.handRotationThreshold * 3f))
         {
-            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.3f); // 30% 이하
+            result.leftHandSimilarity = Mathf.Min(result.leftHandSimilarity, 0.5f); // 50% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
@@ -403,32 +427,32 @@ public class HandPoseComparator
             result.rightHandSimilarity = jointSimilarity;
         }
 
-        // ★ 페널티 시스템 (완화됨 - 손목 위치/회전 중심)
-        // 위치 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        if (result.rightHandPositionError > settings.handPositionThreshold * 2f)
+        // ★ 페널티 시스템 (대폭 완화 - 기본 유사도 유지, 극단적 오차만 페널티)
+        // 위치 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        if (result.rightHandPositionError > settings.handPositionThreshold * 4f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 회전 오차가 임계값의 2배 이상이면 빨강색 강제 (완화)
-        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 2f)
+        // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
+        else if (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 4f)
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.15f); // 15% 이하로 강제
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하로 강제
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
-        // 위치/회전 오차가 임계값의 1.5배 이상이면 페널티 (30% 이하, 완화)
-        else if (result.rightHandPositionError > settings.handPositionThreshold * 1.5f ||
-                 (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 1.5f))
+        // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
+        else if (result.rightHandPositionError > settings.handPositionThreshold * 3f ||
+                 (settings.compareHandRotation && result.rightHandRotationError > settings.handRotationThreshold * 3f))
         {
-            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.3f); // 30% 이하
+            result.rightHandSimilarity = Mathf.Min(result.rightHandSimilarity, 0.5f); // 50% 이하
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
@@ -761,5 +785,353 @@ public class HandPoseComparator
     public (int leftCount, int rightCount) GetConsecutiveCounts()
     {
         return (leftConsecutiveSuccessCount, rightConsecutiveSuccessCount);
+    }
+
+    // ========== 간소화된 손 체크 메서드 ==========
+
+    /// <summary>
+    /// 손바닥이 아래를 향하는지 체크
+    /// </summary>
+    public bool IsPalmFacingDown(HandVisual hand, out float palmAngle)
+    {
+        palmAngle = 180f;
+
+        if (hand == null || hand.Joints == null || hand.Joints.Count == 0)
+            return false;
+
+        // 손목 Transform 가져오기
+        Transform wrist = hand.Joints[(int)HandJointId.HandWristRoot];
+        if (wrist == null)
+            return false;
+
+        // 손바닥 방향 계산 (손목의 -up 방향이 손바닥 방향)
+        // 손바닥이 아래를 향하면 -wrist.up과 Vector3.down의 각도가 작음
+        Vector3 palmNormal = -wrist.up;
+        palmAngle = Vector3.Angle(palmNormal, Vector3.down);
+
+        return palmAngle <= settings.palmDownAngleThreshold;
+    }
+
+    /// <summary>
+    /// 손의 주먹 쥔 정도 계산 (0 = 완전히 펴짐, 1 = 완전히 쥠)
+    /// </summary>
+    public float GetFistLevel(HandVisual hand)
+    {
+        if (hand == null || hand.Joints == null || hand.Joints.Count == 0)
+            return 0f;
+
+        float totalCurl = 0f;
+        int fingerCount = 0;
+
+        // 각 손가락의 굽힘 정도 계산 (엄지 제외, 검지~새끼)
+        HandJointId[] fingerBases = {
+            HandJointId.HandIndex1,
+            HandJointId.HandMiddle1,
+            HandJointId.HandRing1,
+            HandJointId.HandPinky1
+        };
+
+        HandJointId[] fingerTips = {
+            HandJointId.HandIndex3,
+            HandJointId.HandMiddle3,
+            HandJointId.HandRing3,
+            HandJointId.HandPinky3
+        };
+
+        Transform wrist = hand.Joints[(int)HandJointId.HandWristRoot];
+        if (wrist == null)
+            return 0f;
+
+        for (int i = 0; i < fingerBases.Length; i++)
+        {
+            int baseIndex = (int)fingerBases[i];
+            int tipIndex = (int)fingerTips[i];
+
+            if (baseIndex >= hand.Joints.Count || tipIndex >= hand.Joints.Count)
+                continue;
+
+            Transform fingerBase = hand.Joints[baseIndex];
+            Transform fingerTip = hand.Joints[tipIndex];
+
+            if (fingerBase == null || fingerTip == null)
+                continue;
+
+            // 손목에서 손가락 끝까지의 거리 vs 손목에서 손가락 기저부까지의 거리
+            // 주먹을 쥐면 손가락 끝이 손목에 가까워짐
+            float baseDistance = Vector3.Distance(wrist.position, fingerBase.position);
+            float tipDistance = Vector3.Distance(wrist.position, fingerTip.position);
+
+            // 정상적인 펴진 손: tipDistance > baseDistance * 2
+            // 쥔 주먹: tipDistance ≈ baseDistance
+            float expectedTipDistance = baseDistance * 2.5f; // 펴진 손일 때 예상 거리
+            float curlRatio = 1f - Mathf.Clamp01(tipDistance / expectedTipDistance);
+
+            totalCurl += curlRatio;
+            fingerCount++;
+        }
+
+        return fingerCount > 0 ? totalCurl / fingerCount : 0f;
+    }
+
+    /// <summary>
+    /// 손 모양 유사도 계산 (너무 펴지거나 주먹 쥐지 않았으면 높은 점수)
+    /// </summary>
+    public float GetHandShapeSimilarity(HandVisual hand, out bool isTooOpen, out bool isTooFisted)
+    {
+        float fistLevel = GetFistLevel(hand);
+
+        isTooOpen = fistLevel < settings.openHandThreshold;
+        isTooFisted = fistLevel > settings.fistThreshold;
+
+        if (isTooOpen)
+        {
+            // 너무 펴짐 - 0.2 이하일 때 유사도 감소
+            return Mathf.Lerp(0.5f, 1f, fistLevel / settings.openHandThreshold);
+        }
+        else if (isTooFisted)
+        {
+            // 너무 쥐어짐 - 0.7 이상일 때 유사도 감소
+            return Mathf.Lerp(1f, 0.5f, (fistLevel - settings.fistThreshold) / (1f - settings.fistThreshold));
+        }
+        else
+        {
+            // 적정 범위 내 (0.2 ~ 0.7) - 높은 유사도
+            return 1f;
+        }
+    }
+
+    /// <summary>
+    /// ★ 간소화된 왼손 유사도 계산
+    /// 손바닥이 아래를 향하고 주먹을 쥐지 않았는지만 체크
+    /// </summary>
+    public SimilarityResult CompareLeftPoseSimplified(HandVisual playerLeftHand, PoseFrame guideFrame, int currentFrameIndex = 0)
+    {
+        SimilarityResult result = new SimilarityResult();
+
+        if (playerLeftHand == null || guideFrame == null)
+        {
+            leftConsecutiveSuccessCount = 0;
+            return result;
+        }
+
+        if (playerLeftHand.Hand == null || !playerLeftHand.Hand.IsTrackedDataValid)
+        {
+            leftConsecutiveSuccessCount = 0;
+            return result;
+        }
+
+        float palmSimilarity = 1f;
+        float shapeSimilarity = 1f;
+        bool palmOk = true;
+        bool shapeOk = true;
+
+        // 1. 손바닥 방향 체크 (아래를 향해야 함)
+        if (settings.leftHandCheckPalmDown)
+        {
+            float palmAngle;
+            palmOk = IsPalmFacingDown(playerLeftHand, out palmAngle);
+
+            // 부드러운 유사도 계산
+            if (palmAngle <= settings.palmDownAngleThreshold)
+            {
+                palmSimilarity = 1f;
+            }
+            else if (palmAngle <= settings.palmDownAngleThreshold * 2f)
+            {
+                palmSimilarity = Mathf.Lerp(1f, 0.5f, (palmAngle - settings.palmDownAngleThreshold) / settings.palmDownAngleThreshold);
+            }
+            else
+            {
+                palmSimilarity = Mathf.Lerp(0.5f, 0f, (palmAngle - settings.palmDownAngleThreshold * 2f) / (180f - settings.palmDownAngleThreshold * 2f));
+            }
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                Debug.Log($"[HandPoseComparator] 왼손 손바닥 각도: {palmAngle:F1}° (임계값: {settings.palmDownAngleThreshold}°) → 유사도: {palmSimilarity:P0}");
+            }
+        }
+
+        // 2. 주먹 쥐지 않았는지 체크
+        if (settings.leftHandCheckNotFisted)
+        {
+            bool isTooOpen, isTooFisted;
+            shapeSimilarity = GetHandShapeSimilarity(playerLeftHand, out isTooOpen, out isTooFisted);
+            shapeOk = !isTooFisted; // 왼손은 주먹 쥐었는지만 체크
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                float fistLevel = GetFistLevel(playerLeftHand);
+                Debug.Log($"[HandPoseComparator] 왼손 주먹 정도: {fistLevel:P0} (임계값: {settings.fistThreshold:P0}) → 유사도: {shapeSimilarity:P0}");
+            }
+        }
+
+        // 통합 유사도 계산
+        result.leftHandSimilarity = (palmSimilarity + shapeSimilarity) / 2f;
+        result.leftHandPassed = palmOk && shapeOk;
+        result.leftHandPositionPassed = true; // 위치는 체크하지 않음
+        result.overallPassed = result.leftHandPassed;
+
+        // 연속 프레임 검증
+        if (result.leftHandPassed)
+        {
+            leftConsecutiveSuccessCount++;
+        }
+        else
+        {
+            leftConsecutiveSuccessCount = 0;
+        }
+
+        if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
+        {
+            Debug.Log($"[HandPoseComparator] 왼손 간소화 체크 - 손바닥:{palmSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.leftHandSimilarity:P0}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// ★ 간소화된 오른손 유사도 계산
+    /// 경로 근접도와 손 모양(너무 펴지거나 주먹 쥐지 않았는지)만 체크
+    /// </summary>
+    public SimilarityResult CompareRightPoseSimplified(HandVisual playerRightHand, PoseFrame guideFrame, int currentFrameIndex = 0)
+    {
+        SimilarityResult result = new SimilarityResult();
+
+        if (playerRightHand == null || guideFrame == null)
+        {
+            rightConsecutiveSuccessCount = 0;
+            return result;
+        }
+
+        if (playerRightHand.Hand == null || !playerRightHand.Hand.IsTrackedDataValid)
+        {
+            rightConsecutiveSuccessCount = 0;
+            return result;
+        }
+
+        float positionSimilarity = 1f;
+        float shapeSimilarity = 1f;
+        bool positionOk = true;
+        bool shapeOk = true;
+
+        // 1. 경로 근접도 체크 (위치)
+        if (settings.rightHandCheckPathProximity)
+        {
+            // OpenXRRoot 또는 손목 위치 사용
+            Transform targetTransform = rightOpenXRRoot;
+            if (targetTransform == null && playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+            {
+                targetTransform = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+            }
+
+            if (targetTransform != null)
+            {
+                Vector3 targetPos = guideFrame.rightRootPosition;
+                if (referencePoint != null)
+                {
+                    targetPos = referencePoint.position + guideFrame.rightRootPosition;
+                }
+
+                Vector3 playerPos = targetTransform.position;
+                float positionError = Vector3.Distance(playerPos, targetPos);
+                result.rightHandPositionError = positionError;
+
+                // 부드러운 위치 유사도 계산
+                float normalizedError = positionError / settings.handPositionThreshold;
+                if (normalizedError <= 1f)
+                {
+                    positionSimilarity = 1f - (normalizedError * 0.3f); // 0~8cm: 70~100%
+                }
+                else if (normalizedError <= 2f)
+                {
+                    positionSimilarity = 0.7f - ((normalizedError - 1f) * 0.4f); // 8~16cm: 30~70%
+                }
+                else
+                {
+                    positionSimilarity = Mathf.Max(0f, 0.3f - ((normalizedError - 2f) * 0.15f)); // 16cm+: 0~30%
+                }
+
+                positionOk = positionError <= settings.handPositionThreshold * 2f; // 16cm 이내면 OK
+
+                if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+                {
+                    Debug.Log($"[HandPoseComparator] 오른손 위치 오차: {positionError:F3}m (임계값: {settings.handPositionThreshold}m) → 유사도: {positionSimilarity:P0}");
+                }
+            }
+        }
+
+        // 2. 손 모양 체크 (너무 펴지거나 쥐지 않았는지)
+        if (settings.rightHandCheckHandShape)
+        {
+            bool isTooOpen, isTooFisted;
+            shapeSimilarity = GetHandShapeSimilarity(playerRightHand, out isTooOpen, out isTooFisted);
+            shapeOk = !isTooOpen && !isTooFisted;
+
+            if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
+            {
+                float fistLevel = GetFistLevel(playerRightHand);
+                Debug.Log($"[HandPoseComparator] 오른손 주먹 정도: {fistLevel:P0} (너무 펴짐:{isTooOpen}, 너무 쥐어짐:{isTooFisted}) → 유사도: {shapeSimilarity:P0}");
+            }
+        }
+
+        // 통합 유사도 계산 (위치에 더 높은 가중치)
+        result.rightHandSimilarity = (positionSimilarity * 0.7f + shapeSimilarity * 0.3f);
+        result.rightHandPassed = positionOk && shapeOk;
+        result.rightHandPositionPassed = positionOk;
+        result.overallPassed = result.rightHandPassed;
+
+        // 연속 프레임 검증
+        if (result.rightHandPassed)
+        {
+            rightConsecutiveSuccessCount++;
+        }
+        else
+        {
+            rightConsecutiveSuccessCount = 0;
+        }
+
+        if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
+        {
+            Debug.Log($"[HandPoseComparator] 오른손 간소화 체크 - 위치:{positionSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.rightHandSimilarity:P0}");
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// ★ 간소화된 양손 유사도 비교 (오른손 가중치 높음)
+    /// </summary>
+    public SimilarityResult CompareBothHandsSimplified(HandVisual playerLeftHand, HandVisual playerRightHand, PoseFrame guideFrame, int currentFrameIndex = 0)
+    {
+        SimilarityResult result = new SimilarityResult();
+
+        // 왼손 비교 (간소화)
+        var leftResult = CompareLeftPoseSimplified(playerLeftHand, guideFrame, currentFrameIndex);
+        result.leftHandSimilarity = leftResult.leftHandSimilarity;
+        result.leftHandPassed = leftResult.leftHandPassed;
+        result.leftHandPositionError = leftResult.leftHandPositionError;
+        result.leftHandRotationError = leftResult.leftHandRotationError;
+        result.leftHandPositionPassed = leftResult.leftHandPositionPassed;
+
+        // 오른손 비교 (간소화)
+        var rightResult = CompareRightPoseSimplified(playerRightHand, guideFrame, currentFrameIndex);
+        result.rightHandSimilarity = rightResult.rightHandSimilarity;
+        result.rightHandPassed = rightResult.rightHandPassed;
+        result.rightHandPositionError = rightResult.rightHandPositionError;
+        result.rightHandRotationError = rightResult.rightHandRotationError;
+        result.rightHandPositionPassed = rightResult.rightHandPositionPassed;
+
+        // 전체 합격 여부 (양손 모두 통과해야 함)
+        result.overallPassed = result.leftHandPassed && result.rightHandPassed;
+
+        return result;
+    }
+
+    /// <summary>
+    /// ★ 가중치 적용된 통합 유사도 계산 (오른손 70%, 왼손 30%)
+    /// </summary>
+    public float GetWeightedSimilarity(float leftSimilarity, float rightSimilarity)
+    {
+        return leftSimilarity * settings.leftHandWeight + rightSimilarity * settings.rightHandWeight;
     }
 }

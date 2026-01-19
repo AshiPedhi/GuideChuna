@@ -97,7 +97,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private HandTransformMapper leftGuideHand;
     [SerializeField] private HandTransformMapper rightGuideHand;
     [SerializeField] private bool showGuideHands = true;
-    [SerializeField] private Color guideHandColor = new Color(0.3f, 0.7f, 1f, 0.5f);
+    [SerializeField] private Color guideHandColor = new Color(0.5f, 1f, 0.4f, 0.5f);  // ★ 연두색
+
+    [Header("=== 가이드 손 접촉 시 투명도 ===")]
+    [Tooltip("사용자 손이 환자에 접촉 시 가이드 손 투명도 조절")]
+    [SerializeField] private bool fadeOnTouch = true;
+
+    [Tooltip("접촉 시 가이드 손 투명도 (0=완전 투명, 1=불투명)")]
+    [Range(0f, 1f)]
+    [SerializeField] private float touchAlpha = 0.15f;
 
     [Tooltip("가이드 핸드 재생 속도 (1 = 원본 속도)")]
     [SerializeField] private float guidePlaybackSpeed = 1f;
@@ -169,6 +177,32 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("회전 감지 축 (Y=목회전, Z=측굴, X=굴곡/신전)")]
     [SerializeField] private RotationDetectionAxis rotationDetectionAxis = RotationDetectionAxis.Y;
 
+    [Header("=== ★ 피벗 기반 진행률 설정 (호 움직임용) ===")]
+    [Tooltip("피벗 기반 각도 측정 사용 (직선 거리 대신 피벗 중심 각도로 진행률 계산)")]
+    [SerializeField] private bool usePivotBasedProgress = true;
+
+    [Tooltip("피벗 포인트 (환자 목/경추 위치) - 회전의 중심점")]
+    [SerializeField] private Transform pivotTransform;
+
+    [Tooltip("CSV 데이터에서 목표 각도 자동 계산")]
+    [SerializeField] private bool autoCalculateTargetAngle = true;
+
+    [Tooltip("기본 가이드 비율 (0~1, 1.0=전체범위, 0.5=절반)")]
+    [Range(0.1f, 1f)]
+    [SerializeField] private float defaultGuideRatio = 1f;
+
+    [Tooltip("목표 각도 (도) - 애니메이션의 최대 회전 각도")]
+    [SerializeField] private float targetAngle = 90f;
+
+    [Tooltip("데이터에서 계산된 총 각도 (읽기 전용)")]
+    [SerializeField] private float calculatedDataAngle = 0f;
+
+    [Tooltip("각도 측정 평면의 법선 축 (측굴=Z, 회전=Y, 굴신=X)")]
+    [SerializeField] private RotationDetectionAxis pivotPlaneAxis = RotationDetectionAxis.Z;
+
+    [Tooltip("피벗 각도 반전 (각도가 반대로 측정될 때)")]
+    [SerializeField] private bool invertPivotAngle = false;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -199,14 +233,61 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
     [Header("=== 스트레칭 전용 설정 ===")]
-    [Tooltip("스트레칭 시 시작 위치 (0~1, 30%부터 시작)")]
-    [SerializeField] private float extendedStartRatio = 0.3f;
+    [Tooltip("스트레칭 시 시작 위치 (0~1)")]
+    [SerializeField] private float extendedStartRatio = 0.4f;
 
-    [Tooltip("스트레칭 시 홀드 시작 구간 (30°오프셋 기준, 45°와 동일)")]
-    [SerializeField] private float stretchingMidHoldStartRatio = 0.25f;
+    [Tooltip("스트레칭 시 홀드 시작 구간 (재평가와 동일)")]
+    [SerializeField] private float stretchingMidHoldStartRatio = 0.5f;
 
-    [Tooltip("스트레칭 시 홀드 종료 구간 (30°오프셋 기준, 63°와 동일)")]
-    [SerializeField] private float stretchingMidHoldEndRatio = 0.55f;
+    [Tooltip("스트레칭 시 홀드 종료 구간 (재평가와 동일)")]
+    [SerializeField] private float stretchingMidHoldEndRatio = 0.7f;
+
+    [Header("=== ★ 가이드 핸드 재생 범위 ===")]
+    [Tooltip("회전(건측/환측) 가이드 시작")]
+    [SerializeField] private float guideRotation_Start = 0f;
+    [Tooltip("회전(건측/환측) 가이드 끝")]
+    [SerializeField] private float guideRotation_End = 0.4f;
+
+    [Tooltip("제한장벽 측굴 가이드 시작")]
+    [SerializeField] private float guideLimitCheck_Start = 0f;
+    [Tooltip("제한장벽 측굴 가이드 끝")]
+    [SerializeField] private float guideLimitCheck_End = 0.4f;
+
+    [Tooltip("스트레칭 가이드 시작")]
+    [SerializeField] private float guideStretching_Start = 0.35f;
+    [Tooltip("스트레칭 가이드 끝")]
+    [SerializeField] private float guideStretching_End = 0.65f;
+
+    [Tooltip("재평가 가이드 시작")]
+    [SerializeField] private float guideReEval_Start = 0f;
+    [Tooltip("재평가 가이드 끝")]
+    [SerializeField] private float guideReEval_End = 0.65f;
+
+    [Header("=== ★ 측굴 자동 프리셋 ===")]
+    [Tooltip("측굴 운동 자동 감지 및 프리셋 적용")]
+    [SerializeField] private bool autoApplyLateralBendingPreset = true;
+
+    [Tooltip("측굴 - 제한장벽 확인 모드 가이드 비율 (0~0.5)")]
+    [SerializeField] private float lateralBending_LimitCheckRatio = 0.5f;
+
+    [Tooltip("측굴 - 스트레칭 모드 시작 비율 (재평가와 동일)")]
+    [SerializeField] private float lateralBending_StretchStartRatio = 0.5f;
+
+    [Tooltip("측굴 - 스트레칭 모드 종료 비율")]
+    [SerializeField] private float lateralBending_StretchEndRatio = 0.7f;
+
+    [Tooltip("측굴 - 재평가 모드 가이드 비율 (0~0.7)")]
+    [SerializeField] private float lateralBending_ReEvalRatio = 0.7f;
+
+    [Header("=== ★ 간소화된 손 유사도 체크 ===")]
+    [Tooltip("간소화된 손 유사도 체크 사용 (왼손: 손바닥 방향+주먹, 오른손: 경로+손모양)")]
+    [SerializeField] private bool useSimplifiedHandComparison = true;
+
+    [Tooltip("오른손 가중치 (0~1, 기본 0.7 = 70%)")]
+    [SerializeField] private float rightHandSimilarityWeight = 0.7f;
+
+    [Tooltip("왼손 가중치 (0~1, 기본 0.3 = 30%)")]
+    [SerializeField] private float leftHandSimilarityWeight = 0.3f;
 
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
@@ -296,6 +377,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
 
+    // ★ 피벗 기반 진행률 계산용
+    private Vector3 pivotStartDirection;        // 피벗→시작손위치 방향 (정규화)
+
     // 환자 애니메이션
     private AnimationClip currentAnimationClip;
     private string currentAnimationStateName;
@@ -312,14 +396,20 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
     private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
+    private bool isRotationMode = false;        // 회전 모드 (건측/환측 회전)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
     // ★ 홀드 범위: 스트레칭과 재평가 구분
     private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
                                          (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
     private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
                                        (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
-    private float currentStartRatio => 0f;  // ★ 애니메이션은 항상 0프레임부터 시작
-    private float currentAngleDisplayOffset => isStretchingMode ? extendedStartRatio : 0f;  // ★ 각도 표시 오프셋 (스트레칭만 30%)
+
+    // ★ 가이드 핸드 재생 범위 (런타임)
+    private float runtimeGuideStartRatio = 0f;
+    private float runtimeGuideEndRatio = 0.4f;
+    private float currentStartRatio => runtimeGuideStartRatio;
+    private float currentEndRatio => runtimeGuideEndRatio;
+    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
 
     // 결과
     private EvaluationSession currentSession;
@@ -343,6 +433,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action<float> OnLimitWarning;                       // 제한장벽 경고 (현재 비율)
     public event Action<float> OnLeftHandDrifted;                    // 왼손 이탈 (이탈 거리)
     public event Action<int, int, float> OnUserFrameChanged;         // 사용자 손 프레임 변경 (현재, 총, 비율)
+    public event Action<int> OnSubStepStarted;                       // SubStep 시작 (인덱스)
 
     /// <summary>
     /// 평가 세션 데이터
@@ -415,6 +506,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (poseComparator == null)
         {
             poseComparator = new HandPoseComparator();
+        }
+
+        // ★ 손 유사도 가중치 동기화
+        if (poseComparator != null)
+        {
+            var settings = poseComparator.GetSettings();
+            settings.rightHandWeight = rightHandSimilarityWeight;
+            settings.leftHandWeight = leftHandSimilarityWeight;
         }
 
         if (checkpointParent == null)
@@ -650,6 +749,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                     string wristInfo = rightWristBone != null ? rightWristBone.name : "루트";
                     string posSource = rightHandCollider != null ? "콜라이더" : "transform";
                     Debug.Log($"<color=cyan>[StartHold] 기준 저장 - 위치:{userHoldReferencePosition} [{posSource}], 회전:({euler.x:F0},{euler.y:F0},{euler.z:F0}) [{wristInfo}]</color>");
+
+                    // ★ 피벗 기반 진행률용: 피벗→손 방향 저장
+                    if (usePivotBasedProgress && pivotTransform != null)
+                    {
+                        pivotStartDirection = (userHoldReferencePosition - pivotTransform.position).normalized;
+                        Debug.Log($"<color=magenta>[StartHold] 피벗 기준 저장 - 피벗:{pivotTransform.position}, 시작방향:{pivotStartDirection}, 목표각도:{targetAngle}°</color>");
+                    }
                 }
                 else
                 {
@@ -822,6 +928,99 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// 로드된 프레임 수 (핸드 데이터 유무 확인용)
+    /// </summary>
+    public int GetLoadedFrameCount()
+    {
+        return loadedFrames != null ? loadedFrames.Count : 0;
+    }
+
+    /// <summary>
+    /// 현재 시술 이름 반환
+    /// </summary>
+    public string GetCurrentProcedureName()
+    {
+        return currentProcedureName;
+    }
+
+    /// <summary>
+    /// 데이터에서 계산된 총 각도 반환
+    /// </summary>
+    public float GetCalculatedDataAngle()
+    {
+        return calculatedDataAngle;
+    }
+
+    /// <summary>
+    /// 현재 목표 각도 반환
+    /// </summary>
+    public float GetTargetAngle()
+    {
+        return targetAngle;
+    }
+
+    /// <summary>
+    /// 비율로 목표 각도 설정 (0~1 범위, calculatedDataAngle 기준)
+    /// 예: SetTargetAngleByRatio(0.5f) → 데이터 총 각도의 50%를 목표로 설정
+    /// </summary>
+    public void SetTargetAngleByRatio(float ratio)
+    {
+        if (calculatedDataAngle <= 0.1f)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 데이터 각도가 계산되지 않음. CSV 먼저 로드 필요");
+            return;
+        }
+
+        ratio = Mathf.Clamp01(ratio);
+        targetAngle = calculatedDataAngle * ratio;
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 설정: {targetAngle:F1}° ({ratio:P0} of {calculatedDataAngle:F1}°)</color>");
+        }
+    }
+
+    /// <summary>
+    /// 목표 각도 직접 설정
+    /// </summary>
+    public void SetTargetAngle(float angle)
+    {
+        targetAngle = angle;
+        autoCalculateTargetAngle = false;  // 수동 설정 시 자동 계산 비활성화
+
+        if (showDebugLogs)
+        {
+            Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 수동 설정: {targetAngle:F1}°</color>");
+        }
+    }
+
+    /// <summary>
+    /// 기본 가이드 비율 가져오기
+    /// </summary>
+    public float GetDefaultGuideRatio()
+    {
+        return defaultGuideRatio;
+    }
+
+    /// <summary>
+    /// 기본 가이드 비율 설정 (0~1)
+    /// </summary>
+    public void SetDefaultGuideRatio(float ratio)
+    {
+        defaultGuideRatio = Mathf.Clamp(ratio, 0.1f, 1f);
+
+        // 이미 데이터가 로드된 상태면 targetAngle 재계산
+        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            if (showDebugLogs)
+            {
+                Debug.Log($"<color=green>[ChunaPathEvaluator] 목표 각도 재설정: {targetAngle:F1}° (비율 {defaultGuideRatio:P0})</color>");
+            }
+        }
+    }
+
+    /// <summary>
     /// 현재 가이드 프레임 인덱스 가져오기
     /// </summary>
     public int GetCurrentGuideFrameIndex()
@@ -871,7 +1070,41 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
         if (useRelativeMovement)
         {
-            if (isPositionBasedMovement)
+            // ★★★ 피벗 기반 모드: 위치/회전 구분 없이 피벗 각도 사용 (측굴, 회전 동작 모두) ★★★
+            if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
+            {
+                // 피벗에서 현재 손 위치로의 방향
+                Vector3 pivotCurrentDirection = (rightHandPos - pivotTransform.position).normalized;
+
+                // 각도 측정 평면의 법선 축 결정
+                Vector3 planeNormal = GetPivotPlaneNormal();
+
+                // 시작 방향과 현재 방향 사이의 부호 있는 각도
+                float signedAngle = Vector3.SignedAngle(pivotStartDirection, pivotCurrentDirection, planeNormal);
+
+                // 각도 반전 옵션
+                if (invertPivotAngle)
+                {
+                    signedAngle = -signedAngle;
+                }
+
+                // 반대 방향(음수)이면 0으로 처리
+                float effectiveAngle = Mathf.Max(0f, signedAngle);
+
+                // 목표 각도 대비 진행률 계산
+                newRatio = Mathf.Clamp01(effectiveAngle / targetAngle);
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
+                    string moveType = isPositionBasedMovement ? "위치기반" : "회전기반";
+                    Debug.Log($"<color=magenta>[Pivot Angle - {moveType}] 각도:{effectiveAngle:F1}° / 목표:{targetAngle:F0}° = {newRatio:P0} {dirInfo}</color>");
+                    Debug.Log($"<color=cyan>  피벗:{pivotTransform.position}, 현재:{rightHandPos} {posSource}, signed:{signedAngle:F1}°</color>");
+                }
+            }
+            // 기존 방식: 위치 기반 (직선 거리)
+            else if (isPositionBasedMovement)
             {
                 // 위치 기반: 기준 위치에서 얼마나 이동했는지 계산
                 Vector3 displacement = rightHandPos - userHoldReferencePosition;
@@ -896,6 +1129,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Debug.Log($"<color=cyan>  기준:{userHoldReferencePosition}, 현재:{rightHandPos} {posSource}, 축방향:{projectedDistance:F3}m</color>");
                 }
             }
+            // 기존 방식: 회전 기반 (손목 회전)
             else
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
@@ -1771,6 +2005,24 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ 피벗 각도 측정 평면의 법선 축 반환
+    /// </summary>
+    private Vector3 GetPivotPlaneNormal()
+    {
+        switch (pivotPlaneAxis)
+        {
+            case RotationDetectionAxis.Y:
+                return Vector3.up;      // Y축 기준 평면 (XZ 평면에서 각도 측정)
+            case RotationDetectionAxis.Z:
+                return Vector3.forward; // Z축 기준 평면 (XY 평면에서 각도 측정) - 측굴용
+            case RotationDetectionAxis.X:
+                return Vector3.right;   // X축 기준 평면 (YZ 평면에서 각도 측정)
+            default:
+                return Vector3.forward; // 기본: 측굴용 (Z축)
+        }
+    }
+
+    /// <summary>
     /// 회전 감지 축 설정
     /// </summary>
     public void SetRotationDetectionAxis(RotationDetectionAxis axis)
@@ -1788,6 +2040,34 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 현재 회전 감지 축
     /// </summary>
     public RotationDetectionAxis CurrentRotationAxis => rotationDetectionAxis;
+
+    /// <summary>
+    /// ★ 피벗 기반 진행률 설정
+    /// </summary>
+    public void SetPivotSettings(Transform pivot, float angle, RotationDetectionAxis planeAxis, bool invert = false)
+    {
+        pivotTransform = pivot;
+        targetAngle = angle;
+        pivotPlaneAxis = planeAxis;
+        invertPivotAngle = invert;
+        usePivotBasedProgress = pivot != null;
+
+        if (showDebugLogs)
+        {
+            string axisName = planeAxis == RotationDetectionAxis.Y ? "Y(XZ평면)" :
+                             planeAxis == RotationDetectionAxis.Z ? "Z(XY평면-측굴)" : "X(YZ평면)";
+            Debug.Log($"<color=magenta>[ChunaPathEvaluator] 피벗 설정 - 피벗:{(pivot != null ? pivot.name : "없음")}, 목표각도:{angle}°, 평면:{axisName}, 반전:{invert}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 피벗 기반 진행률 활성화 여부
+    /// </summary>
+    public bool UsePivotBasedProgress
+    {
+        get => usePivotBasedProgress;
+        set => usePivotBasedProgress = value;
+    }
 
     void OnDestroy()
     {
@@ -1904,6 +2184,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 핸드데이터 이동량 계산 (시작-끝 프레임 간)
         CalculateHandDataMovement();
 
+        // ★ 측굴 자동 프리셋 적용
+        ApplyLateralBendingPresetIfNeeded(csvFileName);
+
         // ★ 충돌 모드에서는 체크포인트 생성 건너뛰기
         if (useCollisionMode)
         {
@@ -1994,6 +2277,172 @@ public class ChunaPathEvaluator : MonoBehaviour
         Debug.Log($"<color=cyan>[HandData] 시작위치: {startPos}, 끝위치: {endPos}</color>");
         Debug.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
         Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
+
+        // ★ 피벗 기반 총 각도 자동 계산
+        CalculatePivotBasedAngle();
+    }
+
+    /// <summary>
+    /// 피벗 기반으로 핸드데이터의 총 각도 계산 (첫 프레임 ~ 마지막 프레임)
+    /// </summary>
+    private void CalculatePivotBasedAngle()
+    {
+        if (loadedFrames == null || loadedFrames.Count < 2) return;
+        if (pivotTransform == null)
+        {
+            Debug.LogWarning("[ChunaPathEvaluator] 피벗이 설정되지 않아 각도 자동 계산 불가");
+            return;
+        }
+
+        Vector3 pivotPos = pivotTransform.position;
+        Vector3 startPos = loadedFrames[0].rightRootPosition;
+        Vector3 endPos = loadedFrames[loadedFrames.Count - 1].rightRootPosition;
+
+        // 피벗에서 시작/끝 위치로의 방향
+        Vector3 startDir = (startPos - pivotPos).normalized;
+        Vector3 endDir = (endPos - pivotPos).normalized;
+
+        // 평면 법선 기준 각도 계산
+        Vector3 planeNormal = GetPivotPlaneNormal();
+
+        // 부호 있는 각도 계산
+        float signedAngle = Vector3.SignedAngle(startDir, endDir, planeNormal);
+        calculatedDataAngle = Mathf.Abs(signedAngle);
+
+        // 각도가 너무 작으면 (직선 이동) 손목 회전 각도 사용
+        if (calculatedDataAngle < 5f)
+        {
+            calculatedDataAngle = handDataTotalRotation;
+        }
+
+        // 자동 계산 활성화 시 targetAngle 설정 (비율 적용)
+        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            Debug.Log($"<color=green>[ChunaPathEvaluator] ★ 목표 각도 자동 설정: {targetAngle:F1}° (데이터 {calculatedDataAngle:F1}° × 비율 {defaultGuideRatio:P0})</color>");
+        }
+
+        Debug.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
+    }
+
+    /// <summary>
+    /// 운동 종류 감지 후 자동으로 프리셋 적용 (측굴, 회전)
+    /// </summary>
+    private void ApplyLateralBendingPresetIfNeeded(string csvFileName)
+    {
+        if (!autoApplyLateralBendingPreset) return;
+        if (string.IsNullOrEmpty(csvFileName)) return;
+
+        // 측굴 키워드 감지
+        bool isLateralBending = csvFileName.Contains("측굴") ||
+                                csvFileName.ToLower().Contains("lateral") ||
+                                csvFileName.ToLower().Contains("sidebend");
+
+        // 회전 키워드 감지
+        bool isRotation = csvFileName.Contains("회전") ||
+                          csvFileName.ToLower().Contains("rotation") ||
+                          csvFileName.ToLower().Contains("rotate");
+
+        if (isLateralBending)
+        {
+            // 측굴 감지됨 - 프리셋 적용
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 측굴 운동 감지 - 프리셋 적용</color>");
+
+            // 기본 가이드 비율을 제한장벽 확인 모드로 설정 (0~0.5)
+            defaultGuideRatio = lateralBending_LimitCheckRatio;
+
+            // 제한장벽 위치 설정
+            limitBarrierRatio = lateralBending_LimitCheckRatio;
+
+            // 재평가 시 확장 제한 설정
+            extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
+
+            // 스트레칭 모드 범위 설정 (시작 0.4, 종료 0.7)
+            extendedStartRatio = lateralBending_StretchStartRatio;
+            stretchingMidHoldStartRatio = lateralBending_StretchStartRatio;
+            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio;
+
+            // targetAngle 재계산 (비율 적용)
+            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+            {
+                targetAngle = calculatedDataAngle * defaultGuideRatio;
+            }
+
+            Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
+            Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+            Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
+        }
+        else if (isRotation)
+        {
+            // 회전 감지됨 - 가이드 0 ~ 0.4
+            Debug.Log($"<color=yellow>[ChunaPathEvaluator] ★ 회전 운동 감지 - 가이드 범위 설정</color>");
+
+            defaultGuideRatio = 0.4f;
+            limitBarrierRatio = 0.4f;
+            isRotationMode = true;
+
+            // ★ 가이드 재생 범위: 0 ~ 0.4
+            runtimeGuideStartRatio = guideRotation_Start;
+            runtimeGuideEndRatio = guideRotation_End;
+
+            // targetAngle 재계산 (비율 적용)
+            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
+            {
+                targetAngle = calculatedDataAngle * defaultGuideRatio;
+            }
+
+            Debug.Log($"<color=cyan>  - 가이드 범위: {guideRotation_Start:P0} ~ {guideRotation_End:P0} ({targetAngle:F1}°)</color>");
+        }
+    }
+
+    /// <summary>
+    /// 측굴 모드 수동 전환 (제한장벽 확인 / 스트레칭 / 재평가)
+    /// </summary>
+    public enum LateralBendingMode { LimitCheck, Stretching, ReEvaluation }
+
+    public void SetLateralBendingMode(LateralBendingMode mode)
+    {
+        switch (mode)
+        {
+            case LateralBendingMode.LimitCheck:
+                defaultGuideRatio = lateralBending_LimitCheckRatio;
+                limitBarrierRatio = lateralBending_LimitCheckRatio;
+                // ★ 가이드 재생 범위: 0 ~ 0.4
+                runtimeGuideStartRatio = guideLimitCheck_Start;
+                runtimeGuideEndRatio = guideLimitCheck_End;
+                isStretchingMode = false;
+                isExtendedLimitMode = false;
+                Debug.Log($"<color=green>[측굴] 제한장벽 확인 모드: 가이드 {guideLimitCheck_Start:P0} ~ {guideLimitCheck_End:P0}</color>");
+                break;
+
+            case LateralBendingMode.Stretching:
+                defaultGuideRatio = lateralBending_StretchEndRatio;
+                // ★ 가이드 재생 범위: 0.35 ~ 0.65
+                runtimeGuideStartRatio = guideStretching_Start;
+                runtimeGuideEndRatio = guideStretching_End;
+                isStretchingMode = true;
+                isExtendedLimitMode = true;
+                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {guideStretching_Start:P0} ~ {guideStretching_End:P0}</color>");
+                break;
+
+            case LateralBendingMode.ReEvaluation:
+                defaultGuideRatio = lateralBending_ReEvalRatio;
+                extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
+                // ★ 가이드 재생 범위: 0 ~ 0.65
+                runtimeGuideStartRatio = guideReEval_Start;
+                runtimeGuideEndRatio = guideReEval_End;
+                isStretchingMode = false;
+                isExtendedLimitMode = true;
+                Debug.Log($"<color=green>[측굴] 재평가 모드: 가이드 {guideReEval_Start:P0} ~ {guideReEval_End:P0}</color>");
+                break;
+        }
+
+        // targetAngle 재계산
+        if (calculatedDataAngle > 0.1f)
+        {
+            targetAngle = calculatedDataAngle * defaultGuideRatio;
+            Debug.Log($"<color=cyan>  목표 각도: {targetAngle:F1}°</color>");
+        }
     }
 
     /// <summary>
@@ -2155,6 +2604,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("<color=green>[ChunaPathEvaluator] 평가 시작 - 시작 위치 대기 중...</color>");
+
+        // ★ SubStep 시작 이벤트 발생 (녹화 등에서 사용)
+        OnSubStepStarted?.Invoke(0);
 
         // 시작 위치 대기 중 시작 프레임 표시 (가이드 핸드 + 환자 애니메이션)
         // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
@@ -2480,15 +2932,33 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         PoseFrame frame = loadedFrames[frameIndex];
 
-        if (isLeftHand && playerLeftHand != null)
+        // ★ 간소화된 비교 모드 사용 시
+        if (useSimplifiedHandComparison)
         {
-            var result = poseComparator.CompareLeftPose(playerLeftHand, frame, frameIndex);
-            return result.leftHandSimilarity;
+            if (isLeftHand && playerLeftHand != null)
+            {
+                var result = poseComparator.CompareLeftPoseSimplified(playerLeftHand, frame, frameIndex);
+                return result.leftHandSimilarity;
+            }
+            else if (!isLeftHand && playerRightHand != null)
+            {
+                var result = poseComparator.CompareRightPoseSimplified(playerRightHand, frame, frameIndex);
+                return result.rightHandSimilarity;
+            }
         }
-        else if (!isLeftHand && playerRightHand != null)
+        else
         {
-            var result = poseComparator.CompareRightPose(playerRightHand, frame, frameIndex);
-            return result.rightHandSimilarity;
+            // 기존 상세 비교 모드
+            if (isLeftHand && playerLeftHand != null)
+            {
+                var result = poseComparator.CompareLeftPose(playerLeftHand, frame, frameIndex);
+                return result.leftHandSimilarity;
+            }
+            else if (!isLeftHand && playerRightHand != null)
+            {
+                var result = poseComparator.CompareRightPose(playerRightHand, frame, frameIndex);
+                return result.rightHandSimilarity;
+            }
         }
 
         return 0f;
@@ -2513,6 +2983,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         return (leftSim, rightSim);
     }
 
+    /// <summary>
+    /// ★ 가중치 적용된 통합 유사도 가져오기 (오른손 70%, 왼손 30%)
+    /// </summary>
+    public float GetWeightedRealTimeSimilarity()
+    {
+        float leftSim = CalculateCurrentSimilarity(true, -1);
+        float rightSim = CalculateCurrentSimilarity(false, -1);
+        return leftSim * leftHandSimilarityWeight + rightSim * rightHandSimilarityWeight;
+    }
+
     // ========== 점수 계산 ==========
 
     private void CalculateAverageSimilarity()
@@ -2525,12 +3005,17 @@ public class ChunaPathEvaluator : MonoBehaviour
             totalLeft += snapshot.leftSimilarity;
             totalRight += snapshot.rightSimilarity;
 
-            float avg = (snapshot.leftSimilarity + snapshot.rightSimilarity) / 2f;
-            if (avg < currentSession.minSimilarity) currentSession.minSimilarity = avg;
-            if (avg > currentSession.maxSimilarity) currentSession.maxSimilarity = avg;
+            // ★ 가중치 적용된 평균 유사도 계산 (오른손 70%, 왼손 30%)
+            float weightedAvg = snapshot.leftSimilarity * leftHandSimilarityWeight +
+                               snapshot.rightSimilarity * rightHandSimilarityWeight;
+            if (weightedAvg < currentSession.minSimilarity) currentSession.minSimilarity = weightedAvg;
+            if (weightedAvg > currentSession.maxSimilarity) currentSession.maxSimilarity = weightedAvg;
         }
 
-        currentSession.averageSimilarity = (totalLeft + totalRight) / (currentSession.metricsHistory.Count * 2);
+        // ★ 가중치 적용된 전체 평균
+        float avgLeft = totalLeft / currentSession.metricsHistory.Count;
+        float avgRight = totalRight / currentSession.metricsHistory.Count;
+        currentSession.averageSimilarity = avgLeft * leftHandSimilarityWeight + avgRight * rightHandSimilarityWeight;
     }
 
     private void CalculateLimitStatistics()
@@ -2643,11 +3128,18 @@ public class ChunaPathEvaluator : MonoBehaviour
         startFrameIndex = Mathf.Clamp(startFrameIndex, 0, loadedFrames.Count - 1);
         PoseFrame firstFrame = loadedFrames[startFrameIndex];
 
+        // ★ 접촉 시 투명도 조절
+        float currentAlpha = guideHandColor.a;
+        if (fadeOnTouch && (isLeftHandTouchingPatient || isRightHandTouchingPatient))
+        {
+            currentAlpha = touchAlpha;
+        }
+
         // 왼손 첫 프레임 표시
         if (leftGuideHand != null)
         {
             leftGuideHand.SetVisible(true);
-            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
             if (leftGuideHand.Root != null)
             {
@@ -2665,7 +3157,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (rightGuideHand != null)
         {
             rightGuideHand.SetVisible(true);
-            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
             if (rightGuideHand.Root != null)
             {
@@ -2703,7 +3195,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         float frameTime = 1f / 30f;
-        currentGuideFrameIndex = 0;
+
+        // ★ 시작/끝 프레임 인덱스 계산 (런타임 가이드 범위 사용)
+        int startFrameIdx = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
+        int endFrameIdx = Mathf.RoundToInt(currentEndRatio * (loadedFrames.Count - 1));
+        startFrameIdx = Mathf.Clamp(startFrameIdx, 0, loadedFrames.Count - 1);
+        endFrameIdx = Mathf.Clamp(endFrameIdx, startFrameIdx, loadedFrames.Count - 1);
+
+        currentGuideFrameIndex = startFrameIdx;
+
+        if (showDebugLogs)
+            Debug.Log($"<color=cyan>[가이드] 재생 범위: {startFrameIdx} ~ {endFrameIdx} (비율: {currentStartRatio:P0} ~ {currentEndRatio:P0})</color>");
 
         while (true)
         {
@@ -2711,10 +3213,17 @@ public class ChunaPathEvaluator : MonoBehaviour
 
             PoseFrame frame = loadedFrames[currentGuideFrameIndex];
 
+            // ★ 접촉 시 투명도 조절 - 사용자 손이 환자에 닿으면 가이드 손을 더 투명하게
+            float currentAlpha = guideHandColor.a;
+            if (fadeOnTouch && (isLeftHandTouchingPatient || isRightHandTouchingPatient))
+            {
+                currentAlpha = touchAlpha;
+            }
+
             if (leftGuideHand != null)
             {
                 leftGuideHand.SetVisible(true);
-                leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (leftGuideHand.Root != null)
                 {
@@ -2731,7 +3240,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             if (rightGuideHand != null)
             {
                 rightGuideHand.SetVisible(true);
-                rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (rightGuideHand.Root != null)
                 {
@@ -2746,7 +3255,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             currentGuideFrameIndex++;
-            if (currentGuideFrameIndex >= loadedFrames.Count)
+            // ★ 끝 프레임에 도달하면 시작으로 돌아감
+            if (currentGuideFrameIndex > endFrameIdx)
             {
                 if (loopGuideHands)
                 {
@@ -2757,7 +3267,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                             Debug.Log($"[ChunaPathEvaluator] 가이드 핸드 1회 재생 완료, {loopDelaySeconds}초 대기 후 재시작");
                         yield return new WaitForSeconds(loopDelaySeconds);
                     }
-                    currentGuideFrameIndex = 0;
+                    currentGuideFrameIndex = startFrameIdx;
                 }
                 else
                 {

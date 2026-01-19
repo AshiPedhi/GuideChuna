@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using ChunaTraining;  // DifficultyLevel, DifficultyManager 사용
 
 /// <summary>
 /// 정보 패널 통합 컨트롤러 (옵션 A - 전체 통합)
@@ -128,7 +129,7 @@ public class InfoPanelController : MonoBehaviour
 
     // 모드 선택 상태
     private ModeType selectedMode = ModeType.None;
-    private DifficultyType selectedDifficulty = DifficultyType.Intermediate;
+    private DifficultyLevel selectedDifficulty = DifficultyLevel.Beginner;
 
     // 콘텐츠 페이지 열거형
     public enum ContentPage
@@ -148,16 +149,10 @@ public class InfoPanelController : MonoBehaviour
         Evaluation
     }
 
-    // 난이도 타입
-    public enum DifficultyType
-    {
-        Beginner,
-        Intermediate,
-        Advanced
-    }
+    // 난이도 타입 - ChunaTraining.DifficultyLevel 사용 (중복 제거)
 
     // 이벤트
-    public event Action<ModeType, DifficultyType> OnModeSelected;
+    public event Action<ModeType, DifficultyLevel> OnModeSelected;
     public event Action OnSimulationStarted;
 
     #region Unity Lifecycle
@@ -267,21 +262,31 @@ public class InfoPanelController : MonoBehaviour
 
     private void InitializeModeSelection()
     {
-        // 기본값: 중급자
-        selectedDifficulty = DifficultyType.Intermediate;
+        // 기본값: 초급자
+        selectedDifficulty = DifficultyLevel.Beginner;
         selectedMode = ModeType.None;
 
         // 모드 토글 초기화
         SetToggleWithoutNotify(practiceToggle, false);
         SetToggleWithoutNotify(evaluationToggle, false);
 
-        // 난이도 토글 초기화 (중급자 기본 선택)
-        SetToggleWithoutNotify(beginnerToggle, false);
-        SetToggleWithoutNotify(intermediateToggle, true);
+        // 난이도 토글 초기화 (초급자 기본 선택)
+        SetToggleWithoutNotify(beginnerToggle, true);
+        SetToggleWithoutNotify(intermediateToggle, false);
         SetToggleWithoutNotify(advancedToggle, false);
 
         // 설명 텍스트 설정
         SetupModeDescriptions();
+
+        // ★ DifficultyManager에 초기 난이도 전달
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyManager.Instance.SetDifficulty(selectedDifficulty);
+        }
+
+        // ★ 초기 색상 업데이트
+        UpdateModeSelectionColors();
+        UpdateDifficultyDescriptions();
     }
 
     private void SetupModeDescriptions()
@@ -361,7 +366,7 @@ public class InfoPanelController : MonoBehaviour
         {
             beginnerToggle.onValueChanged.RemoveAllListeners();
             beginnerToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Beginner);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Beginner);
             });
         }
 
@@ -369,7 +374,7 @@ public class InfoPanelController : MonoBehaviour
         {
             intermediateToggle.onValueChanged.RemoveAllListeners();
             intermediateToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Intermediate);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Intermediate);
             });
         }
 
@@ -377,7 +382,7 @@ public class InfoPanelController : MonoBehaviour
         {
             advancedToggle.onValueChanged.RemoveAllListeners();
             advancedToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnDifficultyToggleChanged(DifficultyType.Advanced);
+                if (isOn) OnDifficultyToggleChanged(DifficultyLevel.Advanced);
             });
         }
     }
@@ -410,10 +415,16 @@ public class InfoPanelController : MonoBehaviour
         StartSimulation();
     }
 
-    private void OnDifficultyToggleChanged(DifficultyType difficulty)
+    private void OnDifficultyToggleChanged(DifficultyLevel difficulty)
     {
         selectedDifficulty = difficulty;
         Debug.Log($"[InfoPanel] 난이도 선택: {difficulty}");
+
+        // ★ DifficultyManager에 난이도 전달 (연동)
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyManager.Instance.SetDifficulty(difficulty);
+        }
 
         UpdateModeSelectionColors();
         UpdateDifficultyDescriptions();
@@ -425,13 +436,13 @@ public class InfoPanelController : MonoBehaviour
         Color inactiveTextColor = new Color(1f, 1f, 1f, 0.6f);
 
         if (beginnerDescription != null)
-            beginnerDescription.color = (selectedDifficulty == DifficultyType.Beginner) ? activeTextColor : inactiveTextColor;
+            beginnerDescription.color = (selectedDifficulty == DifficultyLevel.Beginner) ? activeTextColor : inactiveTextColor;
 
         if (intermediateDescription != null)
-            intermediateDescription.color = (selectedDifficulty == DifficultyType.Intermediate) ? activeTextColor : inactiveTextColor;
+            intermediateDescription.color = (selectedDifficulty == DifficultyLevel.Intermediate) ? activeTextColor : inactiveTextColor;
 
         if (advancedDescription != null)
-            advancedDescription.color = (selectedDifficulty == DifficultyType.Advanced) ? activeTextColor : inactiveTextColor;
+            advancedDescription.color = (selectedDifficulty == DifficultyLevel.Advanced) ? activeTextColor : inactiveTextColor;
     }
 
     private void UpdateModeSelectionColors()
@@ -443,9 +454,9 @@ public class InfoPanelController : MonoBehaviour
         UpdateToggleColor(evaluationToggle, null, selectedMode == ModeType.Evaluation);
 
         // 난이도 토글 색상
-        UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyType.Beginner);
-        UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyType.Intermediate);
-        UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyType.Advanced);
+        UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyLevel.Beginner);
+        UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyLevel.Intermediate);
+        UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyLevel.Advanced);
     }
     #endregion
 
@@ -496,9 +507,9 @@ public class InfoPanelController : MonoBehaviour
     {
         switch (selectedDifficulty)
         {
-            case DifficultyType.Beginner: return "초급자";
-            case DifficultyType.Intermediate: return "중급자";
-            case DifficultyType.Advanced: return "상급자";
+            case DifficultyLevel.Beginner: return "초급자";
+            case DifficultyLevel.Intermediate: return "중급자";
+            case DifficultyLevel.Advanced: return "상급자";
             default: return "중급자";
         }
     }
@@ -522,22 +533,34 @@ public class InfoPanelController : MonoBehaviour
 
     private void OnExpertVideoToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}");
+        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}, 시나리오시작:{isScenarioStarted}, 현재페이지:{currentContentPage}");
 
         if (isOn)
         {
+            // 다른 콘텐츠 토글 끄기
             SetToggleWithoutNotify(skeletonToggle, false);
             SetToggleWithoutNotify(resultToggle, false);
+
+            // 전문가 영상 페이지 표시 및 재생
             ShowContentPage(ContentPage.ExpertVideo);
             PlayExpertVideo();
         }
         else
         {
+            // 영상 정지
             StopExpertVideo();
-            if (isScenarioStarted && currentContentPage == ContentPage.ExpertVideo)
+
+            // ★ 시나리오 시작 여부에 따라 다른 페이지로 전환
+            if (isScenarioStarted)
             {
+                // 시나리오 진행 중: 근골격 페이지로 전환
                 SetToggleWithoutNotify(skeletonToggle, true);
                 ShowContentPage(ContentPage.Skeleton);
+            }
+            else
+            {
+                // 시나리오 시작 전: 모드 선택 페이지로 전환
+                ShowContentPage(ContentPage.ModeSelection);
             }
         }
 
@@ -775,27 +798,49 @@ public class InfoPanelController : MonoBehaviour
     {
         if (toggle == null) return;
 
-        ColorBlock colors = toggle.colors;
-
-        if (isActive)
+        // Animation 기반 토글인 경우 Animator로 상태 변경
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
         {
-            colors.normalColor = activeColor;
-            colors.highlightedColor = activeColor * 1.2f;
-            colors.pressedColor = activeColor * 0.8f;
-            colors.selectedColor = activeColor;
+            animator.SetBool("IsOn", isActive);
         }
         else
         {
-            colors.normalColor = inactiveColor;
-            colors.highlightedColor = inactiveColor * 1.2f;
-            colors.pressedColor = inactiveColor * 0.8f;
-            colors.selectedColor = inactiveColor;
+            // ★ 색상 계산 시 값이 1을 초과하지 않도록 Clamp 적용
+            Color baseColor = isActive ? activeColor : inactiveColor;
+            Color highlightColor = new Color(
+                Mathf.Min(baseColor.r * 1.1f, 1f),
+                Mathf.Min(baseColor.g * 1.1f, 1f),
+                Mathf.Min(baseColor.b * 1.1f, 1f),
+                baseColor.a
+            );
+            Color pressedColor = new Color(
+                baseColor.r * 0.9f,
+                baseColor.g * 0.9f,
+                baseColor.b * 0.9f,
+                baseColor.a
+            );
+
+            // Color Tint 기반 토글인 경우
+            ColorBlock colors = toggle.colors;
+            colors.normalColor = baseColor;
+            colors.highlightedColor = highlightColor;
+            colors.pressedColor = pressedColor;
+            colors.selectedColor = baseColor;
+            toggle.colors = colors;
+
+            // ★ targetGraphic 직접 색상 설정 (CrossFadeColor 대신 즉시 적용)
+            if (toggle.targetGraphic != null)
+            {
+                toggle.targetGraphic.color = baseColor;
+            }
         }
 
-        toggle.colors = colors;
-
+        // 아이콘 색상도 즉시 적용
         if (icon != null)
+        {
             icon.color = isActive ? activeColor : inactiveColor;
+        }
     }
     #endregion
 
@@ -894,14 +939,22 @@ public class InfoPanelController : MonoBehaviour
     public bool IsExitPopupOpen => isExitPopupOpen;
     public bool IsScenarioStarted => isScenarioStarted;
     public ModeType SelectedMode => selectedMode;
-    public DifficultyType SelectedDifficulty => selectedDifficulty;
+    public DifficultyLevel SelectedDifficulty => selectedDifficulty;
     #endregion
 
     #region 유틸리티
     private void SetToggleWithoutNotify(Toggle toggle, bool value)
     {
-        if (toggle != null)
-            toggle.SetIsOnWithoutNotify(value);
+        if (toggle == null) return;
+
+        toggle.SetIsOnWithoutNotify(value);
+
+        // Animation 기반 토글의 경우 Animator 상태 수동 업데이트
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
+        {
+            animator.SetBool("IsOn", value);
+        }
     }
 
     private bool IsToggleOn(Toggle toggle)

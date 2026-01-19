@@ -334,10 +334,9 @@ public class AngleDisplayController : MonoBehaviour
             }
         }
 
-        // ★ 오프셋 적용 시 axis가 해당 진행률에서 보여줄 실제 각도 계산
-        float effectiveStartAngle = startAngle + angleDisplayOffset;
-        float angleAtHoldStart = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldStart);
-        float angleAtHoldEnd = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldEnd);
+        // ★ 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산 (스트레칭/재평가 동일 위치)
+        float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
+        float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
 
         // fillAmount = 각도 / 360 (axis 위치와 동기화)
         if (holdStartImage != null)
@@ -703,10 +702,9 @@ public class AngleDisplayController : MonoBehaviour
         currentHoldStart = Mathf.Clamp01(holdStart);
         currentHoldEnd = Mathf.Clamp01(holdEnd);
 
-        // ★ axis가 해당 진행률에서 보여줄 실제 각도 계산
-        float effectiveStartAngle = startAngle + angleDisplayOffset;
-        float angleAtHoldStart = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldStart);
-        float angleAtHoldEnd = Mathf.Lerp(effectiveStartAngle, endAngle, currentHoldEnd);
+        // ★ 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산
+        float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
+        float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
 
         // fillAmount = 각도 / 360 (axis 위치와 동기화)
         if (holdStartImage != null)

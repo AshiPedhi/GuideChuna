@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using ChunaTraining;  // DifficultyLevel 사용
 
 /// <summary>
 /// 시뮬레이션 시작 버튼 컨트롤러
@@ -111,13 +112,13 @@ public class SimulationStartController : MonoBehaviour
 
         switch (infoPanelController.SelectedDifficulty)
         {
-            case InfoPanelController.DifficultyType.Beginner:
+            case DifficultyLevel.Beginner:
                 difficulty = "초급";
                 break;
-            case InfoPanelController.DifficultyType.Intermediate:
+            case DifficultyLevel.Intermediate:
                 difficulty = "중급";
                 break;
-            case InfoPanelController.DifficultyType.Advanced:
+            case DifficultyLevel.Advanced:
                 difficulty = "상급";
                 break;
         }

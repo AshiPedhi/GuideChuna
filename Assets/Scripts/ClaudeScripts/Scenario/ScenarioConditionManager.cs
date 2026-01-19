@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using ChunaTraining;  // DifficultyManager, NarrationType 사용
 
 /// <summary>
 /// 시나리오 조건 체크 인터페이스
@@ -35,7 +36,8 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
     [SerializeField] private float progressTimeout = 20f;
 
-    [Header("=== 완료 알림 UI ===")]
+    [Header("=== 완료 알림 UI (Final Fallback) ===")]
+    [Tooltip("피드백 UI가 없을 때 사용되는 간단한 완료 알림")]
     [SerializeField] private GameObject completionAlertPanel;
     [SerializeField] private TMPro.TextMeshProUGUI completionAlertText;
 
@@ -52,6 +54,13 @@ public class ScenarioConditionManager : MonoBehaviour
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 
+    [Header("=== 단계 피드백 UI ===")]
+    [Tooltip("단계 완료 시 유사도 피드백 UI (별도 컴포넌트)")]
+    [SerializeField] private StepFeedbackUI stepFeedbackUI;
+
+    [Tooltip("ChunaPathEvaluator 참조 (유사도 가져오기용)")]
+    [SerializeField] private ChunaPathEvaluator pathEvaluator;
+
     // 현재 조건
     private IScenarioCondition currentCondition;
     private bool isCheckingCondition = false;
@@ -67,6 +76,7 @@ public class ScenarioConditionManager : MonoBehaviour
     // 나레이션 관련
     private AudioClip currentNarrationClip;
     private Coroutine narrationCoroutine;
+    private string currentVoiceClipName;  // ★ 현재 재생 중인 나래이션 클립명 (홀드 후 나래이션용)
 
     // Quest 최적화: WaitForSeconds 캐싱
     private WaitForSeconds cachedCheckInterval;
@@ -81,6 +91,18 @@ public class ScenarioConditionManager : MonoBehaviour
         if (guideUIController == null)
         {
             guideUIController = FindObjectOfType<ScenarioGuideUIController>();
+        }
+
+        // StepFeedbackUI 자동 찾기 (비활성화된 오브젝트도 포함)
+        if (stepFeedbackUI == null)
+        {
+            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);
+        }
+
+        // ChunaPathEvaluator 자동 찾기 (비활성화된 오브젝트도 포함)
+        if (pathEvaluator == null)
+        {
+            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>(true);
         }
 
         // Quest 최적화: WaitForSeconds 객체 캐싱
@@ -98,12 +120,24 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 이벤트 구독
         eventSystem.OnSubStepStarted += OnSubStepStarted;
+
+        // ★ ChunaPathEvaluator 시작홀드 완료 이벤트 구독 (홀드 후 나래이션용)
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnStartHoldComplete += OnStartHoldCompleteForNarration;
+        }
     }
 
     void OnDisable()
     {
         // 이벤트 구독 해제
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
+
+        // ★ ChunaPathEvaluator 이벤트 구독 해제
+        if (pathEvaluator != null)
+        {
+            pathEvaluator.OnStartHoldComplete -= OnStartHoldCompleteForNarration;
+        }
 
         // 진행 중인 체크 중단
         StopConditionCheck();
@@ -319,6 +353,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -345,6 +380,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -373,6 +409,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -400,6 +437,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 나레이션 클립 로드
         string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;  // ★ 홀드 후 나래이션용 클립명 저장
         AudioClip clip = LoadNarrationClip(clipName);
 
         if (clip == null)
@@ -528,6 +566,9 @@ public class ScenarioConditionManager : MonoBehaviour
             yield return new WaitForSeconds(subStep.duration);
             Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
 
+            // ★ 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
+            yield return WaitForNarrationComplete();
+
             // 다음 SubStep으로 진행
             if (scenarioManager != null)
             {
@@ -563,6 +604,10 @@ public class ScenarioConditionManager : MonoBehaviour
 
     /// <summary>
     /// Resources 폴더에서 나레이션 클립 로드
+    /// ★ 난이도별 다른 나래이션 로드 지원
+    /// - BeginnerGuided: Narrations/Beginner/{clipName}
+    /// - IntermediateSimple: Narrations/Intermediate/{clipName}
+    /// - Fallback: Narrations/{clipName} (공통)
     /// </summary>
     private AudioClip LoadNarrationClip(string clipName)
     {
@@ -572,23 +617,60 @@ public class ScenarioConditionManager : MonoBehaviour
             clipName = System.IO.Path.GetFileNameWithoutExtension(clipName);
         }
 
-        // Resources 폴더에서 로드
-        string fullPath = string.IsNullOrEmpty(narrationFolderPath)
+        // ★ 난이도별 서브폴더 결정
+        string difficultyFolder = GetNarrationSubfolder();
+
+        // 1차 시도: 난이도별 폴더에서 로드
+        string difficultyPath = string.IsNullOrEmpty(narrationFolderPath)
+            ? $"{difficultyFolder}/{clipName}"
+            : $"{narrationFolderPath}/{difficultyFolder}/{clipName}";
+
+        AudioClip clip = Resources.Load<AudioClip>(difficultyPath);
+
+        if (clip != null)
+        {
+            Debug.Log($"<color=cyan>[ConditionManager] 난이도별 나래이션 로드 성공: {difficultyPath} ({clip.length:F1}초)</color>");
+            return clip;
+        }
+
+        // 2차 시도: 공통 폴더에서 로드 (Fallback)
+        string fallbackPath = string.IsNullOrEmpty(narrationFolderPath)
             ? clipName
             : $"{narrationFolderPath}/{clipName}";
 
-        AudioClip clip = Resources.Load<AudioClip>(fullPath);
+        clip = Resources.Load<AudioClip>(fallbackPath);
 
-        if (clip == null)
+        if (clip != null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: Resources/{fullPath}");
+            Debug.Log($"[ConditionManager] 공통 나래이션 로드 성공 (Fallback): {fallbackPath} ({clip.length:F1}초)");
         }
         else
         {
-            Debug.Log($"[ConditionManager] 나레이션 클립 로드 성공: {fullPath} ({clip.length:F1}초)");
+            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: {difficultyPath} 또는 {fallbackPath}");
         }
 
         return clip;
+    }
+
+    /// <summary>
+    /// ★ 현재 난이도에 따른 나래이션 서브폴더 반환
+    /// </summary>
+    private string GetNarrationSubfolder()
+    {
+        if (DifficultyManager.Instance == null)
+            return "Intermediate";  // 기본값
+
+        switch (DifficultyManager.Instance.CurrentLevel)
+        {
+            case DifficultyLevel.Beginner:
+                return "Beginner";
+            case DifficultyLevel.Intermediate:
+                return "Intermediate";
+            case DifficultyLevel.Advanced:
+                return "Advanced";
+            default:
+                return "Intermediate";
+        }
     }
 
     /// <summary>
@@ -645,6 +727,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         currentNarrationClip = null;
+        currentVoiceClipName = null;  // ★ 홀드 후 나래이션용 클립명 초기화
         Debug.Log("[ConditionManager] 나레이션 중지됨");
     }
 
@@ -652,6 +735,100 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 나레이션 재생 중인지 확인
     /// </summary>
     public bool IsPlayingNarration => currentNarrationClip != null;
+
+    /// <summary>
+    /// ★ 나레이션(홀드 후 포함)이 재생 중인지 확인
+    /// </summary>
+    private bool IsAnyNarrationPlaying()
+    {
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        return targetSource != null && targetSource.isPlaying;
+    }
+
+    /// <summary>
+    /// ★ 나레이션 완료까지 대기하는 코루틴
+    /// </summary>
+    private IEnumerator WaitForNarrationComplete()
+    {
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+
+        if (targetSource == null || !targetSource.isPlaying)
+        {
+            yield break;
+        }
+
+        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료 대기 중...</color>");
+
+        while (targetSource.isPlaying)
+        {
+            yield return null;
+        }
+
+        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료됨 - 다음 단계 진행</color>");
+    }
+
+    /// <summary>
+    /// ★ 나래이션 완료 후 다음 단계로 진행 (외부 호출용)
+    /// ScenarioManager.OnAutoPlayCompletedHandler 등에서 사용
+    /// </summary>
+    public void WaitForNarrationThenNextStep()
+    {
+        StartCoroutine(WaitForNarrationThenNextStepCoroutine());
+    }
+
+    private IEnumerator WaitForNarrationThenNextStepCoroutine()
+    {
+        yield return WaitForNarrationComplete();
+
+        if (scenarioManager != null)
+        {
+            scenarioManager.NextSubStep();
+        }
+    }
+
+    /// <summary>
+    /// ★ 시작 홀드 완료 시 초급자용 2차 나래이션 재생
+    /// 파일명 규칙: {원본클립명}_홀드후
+    /// </summary>
+    private void OnStartHoldCompleteForNarration()
+    {
+        // 현재 클립명이 없으면 스킵
+        if (string.IsNullOrEmpty(currentVoiceClipName))
+        {
+            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 현재 클립명 없음");
+            return;
+        }
+
+        // 초급자 모드인지 확인
+        if (DifficultyManager.Instance == null ||
+            DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner)
+        {
+            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아님");
+            return;
+        }
+
+        // 홀드 후 나래이션 클립명 생성
+        string afterHoldClipName = $"{currentVoiceClipName}_홀드후";
+
+        // 클립 로드 시도
+        AudioClip afterHoldClip = LoadNarrationClip(afterHoldClipName);
+
+        if (afterHoldClip == null)
+        {
+            Debug.Log($"[ConditionManager] 홀드 후 나래이션 없음: {afterHoldClipName}");
+            return;
+        }
+
+        // 나래이션 재생
+        Debug.Log($"<color=yellow>[ConditionManager] ★ 홀드 후 나래이션 재생: {afterHoldClipName} ({afterHoldClip.length:F1}초)</color>");
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource != null)
+        {
+            targetSource.clip = afterHoldClip;
+            targetSource.Play();
+        }
+    }
 
     /// <summary>
     /// 수동 진행 처리 (토글 버튼 활성화 및 초기화)
@@ -746,29 +923,95 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 조건 완료 시 처리 (완료 알림 + 딜레이)
-    /// HandPose 조건 등 등록된 조건에서 사용
-    /// Quest 최적화: WaitForSeconds 캐싱
+    /// 조건 완료 시 처리 (완료 사운드 + 피드백 + 다음 단계)
+    /// ★ 분리 방식: guideContent 숨김 → StepFeedbackUI 표시 → 대기 → 복원 → 다음 단계
     /// </summary>
     private IEnumerator OnConditionCompleted()
     {
-        // 완료 알림 표시
-        ShowCompletionAlert();
-
-        // 완료 사운드 재생
+        // 1. 완료 사운드 재생 (딩동)
         PlayCompletionSound();
 
-        // 딜레이 (Quest 최적화: 캐시된 객체 사용)
-        yield return cachedCompletionDelay;
+        // 현재 유사도 가져오기
+        float currentSimilarity = GetCurrentSimilarity();
 
-        // 완료 알림 숨김
-        HideCompletionAlert();
+        // ★ StepFeedbackUI가 null이면 다시 찾기 (첫 단계에서 못 찾은 경우 대비)
+        if (stepFeedbackUI == null)
+        {
+            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);  // includeInactive = true
+            if (stepFeedbackUI != null)
+            {
+                Debug.Log("<color=yellow>[ConditionManager] StepFeedbackUI 재탐색 성공</color>");
+            }
+        }
 
-        // 다음 SubStep으로 진행
+        // 2. 피드백 UI가 있는 경우 분리 방식으로 표시
+        if (stepFeedbackUI != null)
+        {
+            // 2-1. 가이드 콘텐츠 숨김
+            if (guideUIController != null)
+            {
+                guideUIController.HideGuideContent();
+            }
+
+            // 2-2. 피드백 UI 표시 및 애니메이션 시작
+            stepFeedbackUI.gameObject.SetActive(true);
+            stepFeedbackUI.ShowFeedback(currentSimilarity);
+
+            Debug.Log($"<color=green>[ConditionManager] 피드백 표시: {currentSimilarity:P0}</color>");
+
+            // 2-3. 피드백 표시 시간만큼 대기 (StepFeedbackUI 내부에서 자동 숨김됨)
+            yield return new WaitForSeconds(3.0f);  // 2.5초 표시 + 0.5초 여유
+
+            // 2-4. 피드백 UI 숨김 (혹시 안 숨겨졌을 경우 대비)
+            stepFeedbackUI.Hide();
+            stepFeedbackUI.gameObject.SetActive(false);
+
+            // 2-5. 가이드 콘텐츠 복원
+            if (guideUIController != null)
+            {
+                guideUIController.ShowGuideContent();
+            }
+        }
+        else
+        {
+            // 피드백 UI 없을 경우 기존 방식 (completionAlertPanel)
+            ShowCompletionAlert();
+            yield return cachedCompletionDelay;
+            HideCompletionAlert();
+        }
+
+        // ★ 3. 나래이션이 아직 재생 중이면 완료까지 대기
+        yield return WaitForNarrationComplete();
+
+        // 4. 다음 SubStep으로 진행
         if (scenarioManager != null)
         {
             scenarioManager.NextSubStep();
         }
+    }
+
+    /// <summary>
+    /// ★ 현재 유사도 가져오기
+    /// </summary>
+    private float GetCurrentSimilarity()
+    {
+        // ChunaPathEvaluator에서 최근 유사도 가져오기
+        if (pathEvaluator != null)
+        {
+            // 좌우 손 유사도 가져오기
+            var (leftSim, rightSim) = pathEvaluator.GetRealTimeSimilarityBoth();
+
+            // 둘 다 0이 아닌 경우 평균, 하나만 있으면 그 값 사용
+            if (leftSim > 0 && rightSim > 0)
+                return (leftSim + rightSim) / 2f;
+            else if (rightSim > 0)
+                return rightSim;
+            else if (leftSim > 0)
+                return leftSim;
+        }
+
+        // 기본값 (데이터 없을 시)
+        return 0.5f;
     }
 
     /// <summary>
@@ -778,6 +1021,9 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // duration만큼 대기
         yield return new WaitForSeconds(duration);
+
+        // ★ 나래이션이 아직 재생 중이면 완료까지 대기
+        yield return WaitForNarrationComplete();
 
         // 완료 알림 없이 바로 다음 SubStep으로 진행
         if (scenarioManager != null)

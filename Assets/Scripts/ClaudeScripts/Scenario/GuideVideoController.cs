@@ -81,6 +81,13 @@ public class GuideVideoController : MonoBehaviour
         if (videoPlayer == null)
             videoPlayer = GetComponent<VideoPlayer>();
 
+        // ★ 자동 재생 방지 - 반드시 토글로 활성화해야 재생
+        if (videoPlayer != null)
+        {
+            videoPlayer.playOnAwake = false;
+            videoPlayer.Stop();
+        }
+
         scenarioManager = FindObjectOfType<ScenarioManager>();
     }
 
@@ -560,8 +567,11 @@ public class GuideVideoController : MonoBehaviour
                 videoPlayer.clip = clip;
                 currentVideoName = scenarioName;
 
+                // ★ 로드 후 자동 재생 방지 - 토글 활성화 전까지 재생 안 함
+                videoPlayer.Stop();
+
                 if (showDebugLog)
-                    Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath}</color>");
+                    Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath} (재생 대기 중 - 토글로 활성화 필요)</color>");
 
                 OnVideoLoaded?.Invoke(scenarioName);
                 return true;
