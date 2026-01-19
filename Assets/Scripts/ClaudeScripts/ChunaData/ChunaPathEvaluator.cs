@@ -409,7 +409,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float runtimeGuideEndRatio = 0.4f;
     private float currentStartRatio => runtimeGuideStartRatio;
     private float currentEndRatio => runtimeGuideEndRatio;
-    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
+    // ★ 각도 표시 오프셋: 스트레칭/재평가 모두 0으로 설정 (동일한 각도 범위 표시)
+    private float currentAngleDisplayOffset => 0f;
 
     // 결과
     private EvaluationSession currentSession;
