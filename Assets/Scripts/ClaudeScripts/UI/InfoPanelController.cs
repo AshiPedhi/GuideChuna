@@ -247,9 +247,10 @@ public class InfoPanelController : MonoBehaviour
         SetToggleWithoutNotify(resultToggle, false);
         SetContentTogglesInteractable(false);
 
-        // 메뉴 토글 초기화
+        // 메뉴 토글 초기화 (모두 off, 시나리오 시작 전에는 비활성화)
         SetToggleWithoutNotify(settingsToggle, false);
         SetToggleWithoutNotify(mainMenuToggle, false);
+        SetMenuTogglesInteractable(false);
 
         // 모드 선택 초기화
         InitializeModeSelection();
@@ -699,6 +700,12 @@ public class InfoPanelController : MonoBehaviour
         if (expertVideoToggle != null) expertVideoToggle.interactable = interactable;
         if (resultToggle != null) resultToggle.interactable = interactable;
     }
+
+    private void SetMenuTogglesInteractable(bool interactable)
+    {
+        if (settingsToggle != null) settingsToggle.interactable = interactable;
+        if (mainMenuToggle != null) mainMenuToggle.interactable = interactable;
+    }
     #endregion
 
     #region 전문가 영상 제어
@@ -739,6 +746,9 @@ public class InfoPanelController : MonoBehaviour
 
         // 콘텐츠 토글 활성화
         SetContentTogglesInteractable(true);
+
+        // 메뉴 토글 활성화 (설정, 메인으로)
+        SetMenuTogglesInteractable(true);
 
         // 근골격 페이지로 자동 전환
         SetToggleWithoutNotify(skeletonToggle, true);
