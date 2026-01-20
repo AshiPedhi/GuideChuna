@@ -34,21 +34,21 @@ public class DualCameraRecorder : MonoBehaviour
 
     [Header("═══ 녹화 설정 ═══")]
     [Tooltip("녹화 해상도 너비")]
-    [SerializeField] private int recordWidth = 1920;
+    [SerializeField] private int recordWidth = 1280;
 
     [Tooltip("녹화 해상도 높이")]
-    [SerializeField] private int recordHeight = 1080;
+    [SerializeField] private int recordHeight = 720;
 
-    [Tooltip("녹화 FPS (낮을수록 용량 절약)")]
-    [Range(10, 60)]
-    [SerializeField] private int recordFPS = 30;
+    [Tooltip("녹화 FPS (낮을수록 성능 좋음, VR은 10~15 추천)")]
+    [Range(5, 30)]
+    [SerializeField] private int recordFPS = 10;
 
     [Tooltip("이미지 포맷")]
     [SerializeField] private ImageFormat imageFormat = ImageFormat.JPG;
 
-    [Tooltip("JPG 품질 (1-100)")]
+    [Tooltip("JPG 품질 (1-100, 낮을수록 용량 작음)")]
     [Range(1, 100)]
-    [SerializeField] private int jpgQuality = 85;
+    [SerializeField] private int jpgQuality = 75;
 
     [Header("═══ 자동 녹화 설정 ═══")]
     [Tooltip("시나리오 시작 시 자동 녹화")]
@@ -96,6 +96,10 @@ public class DualCameraRecorder : MonoBehaviour
     // 프레임 캡처 타이밍
     private float lastCaptureTime = 0f;
     private float captureInterval = 0f;
+
+    // 인코딩 상태 (끊김 방지용)
+    private bool isEncoding1 = false;
+    private bool isEncoding2 = false;
 
     // 비동기 저장 큐
     private Queue<FrameData> saveQueue = new Queue<FrameData>();
@@ -364,14 +368,14 @@ public class DualCameraRecorder : MonoBehaviour
     {
         frameCount++;
 
-        // 카메라 1 캡처
-        if (recordCamera1 != null && renderTexture1 != null)
+        // 카메라 1 캡처 (인코딩 중이면 스킵)
+        if (recordCamera1 != null && renderTexture1 != null && !isEncoding1)
         {
             CaptureFromCamera(renderTexture1, 1);
         }
 
-        // 카메라 2 캡처
-        if (recordCamera2 != null && renderTexture2 != null)
+        // 카메라 2 캡처 (인코딩 중이면 스킵)
+        if (recordCamera2 != null && renderTexture2 != null && !isEncoding2)
         {
             CaptureFromCamera(renderTexture2, 2);
         }
@@ -379,6 +383,10 @@ public class DualCameraRecorder : MonoBehaviour
 
     private void CaptureFromCamera(RenderTexture rt, int cameraIndex)
     {
+        // 인코딩 플래그 설정
+        if (cameraIndex == 1) isEncoding1 = true;
+        else isEncoding2 = true;
+
         // AsyncGPUReadback 사용 (성능 최적화)
         AsyncGPUReadback.Request(rt, 0, TextureFormat.RGB24, (request) =>
         {
@@ -386,10 +394,18 @@ public class DualCameraRecorder : MonoBehaviour
             {
                 if (showDebugLogs)
                     Debug.LogWarning($"[DualCameraRecorder] GPU 읽기 오류 (카메라 {cameraIndex})");
+                // 인코딩 플래그 해제
+                if (cameraIndex == 1) isEncoding1 = false;
+                else isEncoding2 = false;
                 return;
             }
 
-            if (!isRecording && saveQueue.Count == 0) return;
+            if (!isRecording && saveQueue.Count == 0)
+            {
+                if (cameraIndex == 1) isEncoding1 = false;
+                else isEncoding2 = false;
+                return;
+            }
 
             // 메인 스레드에서 Texture2D 생성 및 인코딩
             StartCoroutine(EncodeAndSaveFrame(request, cameraIndex, frameCount));
@@ -435,6 +451,10 @@ public class DualCameraRecorder : MonoBehaviour
         {
             saveQueue.Enqueue(frameData);
         }
+
+        // 인코딩 완료 - 플래그 해제
+        if (cameraIndex == 1) isEncoding1 = false;
+        else isEncoding2 = false;
 
         yield return null;
     }
