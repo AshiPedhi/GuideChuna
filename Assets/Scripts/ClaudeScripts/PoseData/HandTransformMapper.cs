@@ -275,11 +275,22 @@ public class HandTransformMapper : MonoBehaviour
         SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
         foreach (var renderer in renderers)
         {
-            if (renderer.material != null && renderer.material.HasProperty("_Color"))
+            if (renderer.material != null)
             {
-                Color color = renderer.material.color;
-                color.a = alpha;
-                renderer.material.color = color;
+                Material mat = renderer.material;
+
+                if (mat.HasProperty("_Color"))
+                {
+                    Color color = mat.color;
+                    color.a = alpha;
+                    mat.color = color;
+                }
+
+                // OculusHand 쉐이더 Opacity 프로퍼티 지원
+                if (mat.HasProperty("_Opacity"))
+                {
+                    mat.SetFloat("_Opacity", alpha);
+                }
             }
         }
     }
@@ -364,6 +375,11 @@ public class HandTransformMapper : MonoBehaviour
                     Color glowColor = finalColor * 1.5f;
                     glowColor.a = finalColor.a;
                     mat.SetColor("_GlowColor", glowColor);
+                }
+                // OculusHand 쉐이더 Opacity 프로퍼티 지원
+                if (mat.HasProperty("_Opacity"))
+                {
+                    mat.SetFloat("_Opacity", alpha);
                 }
             }
         }
