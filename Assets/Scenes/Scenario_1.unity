@@ -18910,7 +18910,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: 781b75b5de7c1dd4b92e4a2c35298bae, type: 2}
     - target: {fileID: 1396279134995418964, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Name
-      value: Title
+      value: Label (1)
       objectReference: {fileID: 0}
     - target: {fileID: 1861521771991926428, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Sprite
@@ -34228,6 +34228,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 400002, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 24172765}
+    - targetCorrespondingSourceObject: {fileID: 400002, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1039960729}
     - targetCorrespondingSourceObject: {fileID: 482130, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1919037602}
@@ -42495,7 +42498,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: 781b75b5de7c1dd4b92e4a2c35298bae, type: 2}
     - target: {fileID: 1396279134995418964, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Name
-      value: Title
+      value: Label (1)
       objectReference: {fileID: 0}
     - target: {fileID: 1861521771991926428, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Sprite
@@ -42551,7 +42554,7 @@ PrefabInstance:
       objectReference: {fileID: -3235188485281582575, guid: 561f4e50cf36d5a498aa8dd400160e55, type: 2}
     - target: {fileID: 5614022670084783633, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_fontColor32.rgba
-      value: 3875536895
+      value: 4294967295
       objectReference: {fileID: 0}
     - target: {fileID: 5614022670084783633, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_hasFontAssetChanged
@@ -48992,7 +48995,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &488003131
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -49012,9 +49015,9 @@ MonoBehaviour:
   recordFPS: 15
   imageFormat: 1
   jpgQuality: 80
-  autoRecordOnScenarioStart: 1
+  autoRecordOnScenarioStart: 0
   maxRecordDuration: 300
-  autoSaveOnSceneChange: 1
+  autoSaveOnSceneChange: 0
   saveFolderName: Recordings
   customSavePath: 
   showDebugLogs: 1
@@ -49033,7 +49036,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 951085923}
-  - {fileID: 1039960729}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &488087689
@@ -89448,7 +89450,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: 781b75b5de7c1dd4b92e4a2c35298bae, type: 2}
     - target: {fileID: 1396279134995418964, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Name
-      value: Title
+      value: Label (1)
       objectReference: {fileID: 0}
     - target: {fileID: 1861521771991926428, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Sprite
@@ -104146,7 +104148,7 @@ MonoBehaviour:
   leftGuideHand: {fileID: 1934093183}
   rightGuideHand: {fileID: 1505337751}
   showGuideHands: 1
-  guideHandColor: {r: 0.3, g: 0.7, b: 1, a: 0.5}
+  guideHandColor: {r: 0.2980392, g: 1, b: 0.38679984, a: 0.69803923}
   fadeOnTouch: 1
   touchAlpha: 0.15
   guidePlaybackSpeed: 1
@@ -104465,13 +104467,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1039960728}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.10692078, y: -0.5686694, z: 0.07486672, w: 0.81214416}
-  m_LocalPosition: {x: 0.7, y: 1.25, z: 0.1}
+  m_LocalRotation: {x: 0.13052616, y: 0, z: 0, w: 0.9914449}
+  m_LocalPosition: {x: 0, y: -0.1, z: -0.2}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 488003132}
-  m_LocalEulerAnglesHint: {x: 15, y: -70, z: 0}
+  m_Father: {fileID: 323287901}
+  m_LocalEulerAnglesHint: {x: 15, y: 0, z: 0}
 --- !u!20 &1039960731
 Camera:
   m_ObjectHideFlags: 0
@@ -115568,7 +115570,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: 781b75b5de7c1dd4b92e4a2c35298bae, type: 2}
     - target: {fileID: 1396279134995418964, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Name
-      value: Title
+      value: Label (1)
       objectReference: {fileID: 0}
     - target: {fileID: 1861521771991926428, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Sprite
@@ -231459,7 +231461,7 @@ PrefabInstance:
       objectReference: {fileID: 9100000, guid: 781b75b5de7c1dd4b92e4a2c35298bae, type: 2}
     - target: {fileID: 1396279134995418964, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Name
-      value: Title
+      value: Label (1)
       objectReference: {fileID: 0}
     - target: {fileID: 1861521771991926428, guid: 040567cd4431b484e9999e28a102d366, type: 3}
       propertyPath: m_Sprite
