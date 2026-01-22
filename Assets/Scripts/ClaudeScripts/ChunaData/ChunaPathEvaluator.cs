@@ -1236,6 +1236,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         Bounds patientBounds = patientHeadCollider.bounds;
         Vector3 patientCenter = patientBounds.center;
 
+        // 이전 접촉 상태 저장
+        bool wasTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+
         // 왼손 충돌 감지
         if (playerLeftHand != null)
         {
@@ -1256,6 +1259,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
 
+        // ★ 접촉 상태가 변경되면 가이드 핸드 투명도 즉시 업데이트
+        bool isTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+        if (fadeOnTouch && wasTouchingPatient != isTouchingPatient)
+        {
+            UpdateGuideHandAlphaOnTouch(isTouchingPatient);
+        }
+
         // 디버그: 양손 충돌 상태 표시
         if (showDebugLogs && Time.frameCount % 60 == 0)
         {
@@ -1272,6 +1282,30 @@ public class ChunaPathEvaluator : MonoBehaviour
                 string rStatus = isRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
                 Debug.Log($"<color=cyan>[오른손] {rStatus} [{shapeInfo}]</color>");
             }
+        }
+    }
+
+    /// <summary>
+    /// ★ 접촉 상태 변경 시 가이드 핸드 투명도 즉시 업데이트
+    /// </summary>
+    private void UpdateGuideHandAlphaOnTouch(bool isTouching)
+    {
+        float targetAlpha = isTouching ? touchAlpha : guideHandColor.a;
+
+        if (leftGuideHand != null)
+        {
+            leftGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
+        }
+
+        if (rightGuideHand != null)
+        {
+            rightGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
+        }
+
+        if (showDebugLogs)
+        {
+            string state = isTouching ? "접촉" : "미접촉";
+            Debug.Log($"<color=yellow>[GuideHand] {state} → 투명도: {targetAlpha:F2}</color>");
         }
     }
 
