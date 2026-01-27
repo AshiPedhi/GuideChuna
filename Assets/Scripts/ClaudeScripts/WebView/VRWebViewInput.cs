@@ -53,10 +53,62 @@ public class VRWebViewInput : MonoBehaviour
     private OVRHand activeHand;
     private OVRSkeleton activeSkeleton;
     private Vector2 lastTouchPoint;
+    private bool isInitialized = false;
 
     void Start()
     {
         ValidateReferences();
+        StartCoroutine(InitializeWebView());
+    }
+
+    /// <summary>
+    /// WebView 초기화 (약간의 딜레이 후 실행)
+    /// </summary>
+    private System.Collections.IEnumerator InitializeWebView()
+    {
+        Debug.Log("[VRWebView] ★ 초기화 시작...");
+
+        // 1프레임 대기
+        yield return null;
+
+        if (browser == null)
+        {
+            Debug.LogError("[VRWebView] ★ Browser가 null입니다!");
+            yield break;
+        }
+
+        // WebView 상태 확인
+        Debug.Log($"[VRWebView] ★ Browser 타입: {browser.GetType().Name}");
+        Debug.Log($"[VRWebView] ★ URL: {browser.url}");
+        Debug.Log($"[VRWebView] ★ View Size: {browser.viewSize}");
+        Debug.Log($"[VRWebView] ★ Tex Size: {browser.texSize}");
+        Debug.Log($"[VRWebView] ★ Capture Mode: {browser.captureMode}");
+
+        // Init 호출
+        try
+        {
+            browser.Init();
+            Debug.Log("[VRWebView] ★ browser.Init() 호출 완료");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[VRWebView] ★ Init 에러: {e.Message}");
+        }
+
+        // 잠시 대기 후 상태 확인
+        yield return new WaitForSeconds(1f);
+
+        Debug.Log($"[VRWebView] ★ 초기화 후 State: {browser.state}");
+
+        // URL 로드 시도
+        if (!string.IsNullOrEmpty(browser.url))
+        {
+            Debug.Log($"[VRWebView] ★ URL 로드 시도: {browser.url}");
+            browser.LoadUrl(browser.url);
+        }
+
+        isInitialized = true;
+        Debug.Log("[VRWebView] ★ 초기화 완료!");
     }
 
     void Update()
