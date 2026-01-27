@@ -186,6 +186,16 @@ public class VRWebViewInput : MonoBehaviour
     {
         if (browser == null || webViewRect == null) return;
 
+        // ★ WebView 프레임 강제 업데이트
+        try
+        {
+            browser.UpdateFrame();
+        }
+        catch (System.Exception e)
+        {
+            // 에러 무시 (매 프레임 로그 방지)
+        }
+
         // 활성화된 손 찾기
         FindActiveHand();
 
