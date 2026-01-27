@@ -138,6 +138,48 @@ public class VRWebViewInput : MonoBehaviour
 
         isInitialized = true;
         Debug.Log("[VRWebView] === INIT COMPLETE ===");
+
+        // 텍스처 상태 모니터링 시작
+        StartCoroutine(MonitorTextureState());
+    }
+
+    /// <summary>
+    /// 텍스처 상태 모니터링 (디버깅용)
+    /// </summary>
+    private System.Collections.IEnumerator MonitorTextureState()
+    {
+        var rawImage = browser.rawImage;
+
+        for (int i = 0; i < 10; i++)
+        {
+            yield return new WaitForSeconds(1f);
+
+            Debug.Log($"[VRWebView] --- Texture Check #{i + 1} ---");
+
+            if (rawImage == null)
+            {
+                Debug.LogError("[VRWebView] rawImage is NULL!");
+                continue;
+            }
+
+            Debug.Log($"[VRWebView] RawImage enabled: {rawImage.enabled}");
+            Debug.Log($"[VRWebView] RawImage gameObject active: {rawImage.gameObject.activeInHierarchy}");
+
+            if (rawImage.texture != null)
+            {
+                Debug.Log($"[VRWebView] Texture exists! Size: {rawImage.texture.width}x{rawImage.texture.height}");
+                Debug.Log($"[VRWebView] Texture name: {rawImage.texture.name}");
+            }
+            else
+            {
+                Debug.LogWarning("[VRWebView] Texture is NULL!");
+            }
+
+            Debug.Log($"[VRWebView] Browser state: {browser.state}");
+            Debug.Log($"[VRWebView] Current URL: {browser.GetUrl()}");
+        }
+
+        Debug.Log("[VRWebView] Texture monitoring ended");
     }
 
     void Update()
