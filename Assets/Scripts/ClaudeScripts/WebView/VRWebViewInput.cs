@@ -66,49 +66,78 @@ public class VRWebViewInput : MonoBehaviour
     /// </summary>
     private System.Collections.IEnumerator InitializeWebView()
     {
-        Debug.Log("[VRWebView] ★ 초기화 시작...");
+        Debug.Log("[VRWebView] === INIT START ===");
 
         // 1프레임 대기
         yield return null;
 
+        Debug.Log("[VRWebView] Frame waited, checking browser...");
+
         if (browser == null)
         {
-            Debug.LogError("[VRWebView] ★ Browser가 null입니다!");
+            Debug.LogError("[VRWebView] ERROR: Browser is NULL!");
             yield break;
         }
 
-        // WebView 상태 확인
-        Debug.Log($"[VRWebView] ★ Browser 타입: {browser.GetType().Name}");
-        Debug.Log($"[VRWebView] ★ URL: {browser.url}");
-        Debug.Log($"[VRWebView] ★ View Size: {browser.viewSize}");
-        Debug.Log($"[VRWebView] ★ Tex Size: {browser.texSize}");
-        Debug.Log($"[VRWebView] ★ Capture Mode: {browser.captureMode}");
+        Debug.Log("[VRWebView] Browser is valid, getting info...");
 
-        // Init 호출
+        // WebView 상태 확인
         try
         {
-            browser.Init();
-            Debug.Log("[VRWebView] ★ browser.Init() 호출 완료");
+            Debug.Log($"[VRWebView] Browser Type: {browser.GetType().Name}");
+            Debug.Log($"[VRWebView] URL: {browser.url}");
+            Debug.Log($"[VRWebView] View Size: {browser.viewSize}");
+            Debug.Log($"[VRWebView] Tex Size: {browser.texSize}");
+            Debug.Log($"[VRWebView] Capture Mode: {browser.captureMode}");
+            Debug.Log($"[VRWebView] Current State: {browser.state}");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[VRWebView] ★ Init 에러: {e.Message}");
+            Debug.LogError($"[VRWebView] ERROR getting info: {e.Message}");
+        }
+
+        // Init 호출
+        Debug.Log("[VRWebView] Calling browser.Init()...");
+        try
+        {
+            browser.Init();
+            Debug.Log("[VRWebView] browser.Init() called successfully");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[VRWebView] ERROR in Init(): {e.Message}\n{e.StackTrace}");
         }
 
         // 잠시 대기 후 상태 확인
-        yield return new WaitForSeconds(1f);
+        Debug.Log("[VRWebView] Waiting 2 seconds...");
+        yield return new WaitForSeconds(2f);
 
-        Debug.Log($"[VRWebView] ★ 초기화 후 State: {browser.state}");
+        try
+        {
+            Debug.Log($"[VRWebView] State after init: {browser.state}");
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogError($"[VRWebView] ERROR checking state: {e.Message}");
+        }
 
         // URL 로드 시도
         if (!string.IsNullOrEmpty(browser.url))
         {
-            Debug.Log($"[VRWebView] ★ URL 로드 시도: {browser.url}");
-            browser.LoadUrl(browser.url);
+            Debug.Log($"[VRWebView] Loading URL: {browser.url}");
+            try
+            {
+                browser.LoadUrl(browser.url);
+                Debug.Log("[VRWebView] LoadUrl() called");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError($"[VRWebView] ERROR in LoadUrl(): {e.Message}");
+            }
         }
 
         isInitialized = true;
-        Debug.Log("[VRWebView] ★ 초기화 완료!");
+        Debug.Log("[VRWebView] === INIT COMPLETE ===");
     }
 
     void Update()
