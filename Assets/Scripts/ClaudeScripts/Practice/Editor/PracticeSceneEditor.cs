@@ -353,14 +353,15 @@ public class PracticeSceneEditor : EditorWindow
             LateralFlexionDetector lfd = detectorObj.AddComponent<LateralFlexionDetector>();
             lfd.SetPracticeManager(pm);
 
-            // OVRHand 찾아서 연결
+            // OVRHand 찾아서 연결 (이름으로 구분)
             var hands = Object.FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
             SerializedObject lfdSO = new SerializedObject(lfd);
             foreach (var hand in hands)
             {
-                if (hand.HandType == OVRHand.Hand.HandLeft)
+                string handName = hand.gameObject.name.ToLower();
+                if (handName.Contains("left"))
                     lfdSO.FindProperty("leftHand").objectReferenceValue = hand;
-                else if (hand.HandType == OVRHand.Hand.HandRight)
+                else if (handName.Contains("right"))
                     lfdSO.FindProperty("rightHand").objectReferenceValue = hand;
             }
             lfdSO.ApplyModifiedProperties();
