@@ -8,20 +8,15 @@ using TLab.WebView;
 public class SystemKeyboardBridge : MonoBehaviour
 {
     [Header("=== WebView ===")]
-    [SerializeField] private BrowserInputField browserInputField;
+    [Tooltip("Browser 컴포넌트 (WebView 또는 GeckoView)")]
+    [SerializeField] private Browser browser;
+
+    [Header("=== 설정 ===")]
+    [Tooltip("키보드 타입")]
+    [SerializeField] private TouchScreenKeyboardType keyboardType = TouchScreenKeyboardType.Default;
 
     private TouchScreenKeyboard keyboard;
     private bool isKeyboardOpen = false;
-
-    void Start()
-    {
-        // BrowserInputField의 키보드 이벤트 연결
-        if (browserInputField != null)
-        {
-            // TLabWebView의 포커스 이벤트에 연결
-            browserInputField.onFocus.AddListener(OnInputFieldFocused);
-        }
-    }
 
     void Update()
     {
@@ -29,21 +24,21 @@ public class SystemKeyboardBridge : MonoBehaviour
     }
 
     /// <summary>
-    /// 입력 필드 포커스 시 시스템 키보드 열기
+    /// 시스템 키보드 열기 (외부에서 호출)
     /// </summary>
-    private void OnInputFieldFocused(string currentText)
+    public void OpenKeyboard()
     {
-        OpenSystemKeyboard(currentText);
+        OpenSystemKeyboard("");
     }
 
     /// <summary>
-    /// 시스템 키보드 열기 (외부에서 호출 가능)
+    /// 시스템 키보드 열기 (초기 텍스트 지정)
     /// </summary>
     public void OpenSystemKeyboard(string initialText = "")
     {
         keyboard = TouchScreenKeyboard.Open(
             initialText,
-            TouchScreenKeyboardType.Default,
+            keyboardType,
             false,  // autocorrection
             false,  // multiline
             false,  // secure
@@ -67,10 +62,13 @@ public class SystemKeyboardBridge : MonoBehaviour
         {
             string text = keyboard.text;
 
-            // BrowserInputField에 텍스트 전달
-            if (browserInputField != null)
+            // Browser에 텍스트 입력 (각 문자를 키 이벤트로 전송)
+            if (browser != null && !string.IsNullOrEmpty(text))
             {
-                browserInputField.OnSubmit(text);
+                foreach (char c in text)
+                {
+                    browser.KeyEvent(c);
+                }
             }
 
             Debug.Log($"[SystemKeyboard] Done: {text}");
@@ -87,5 +85,13 @@ public class SystemKeyboardBridge : MonoBehaviour
             keyboard = null;
             isKeyboardOpen = false;
         }
+    }
+
+    /// <summary>
+    /// Browser 설정
+    /// </summary>
+    public void SetBrowser(Browser newBrowser)
+    {
+        browser = newBrowser;
     }
 }
