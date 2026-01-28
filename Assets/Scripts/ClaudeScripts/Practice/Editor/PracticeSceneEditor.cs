@@ -16,11 +16,11 @@ public class PracticeSceneEditor : EditorWindow
     public static void SetupPracticeScene()
     {
         if (!EditorUtility.DisplayDialog("연습 모드 설정",
-            "현재 씬에 연습 모드 컴포넌트를 추가하시겠습니까?\n\n" +
-            "추가되는 항목:\n" +
-            "- PracticeManager\n" +
-            "- PracticeUI (Canvas)\n" +
-            "- 각종 감지 스크립트",
+            "현재 씬을 연습 모드로 설정하시겠습니까?\n\n" +
+            "처리 항목:\n" +
+            "- 시나리오 관련 컴포넌트 비활성화\n" +
+            "- PracticeManager 추가\n" +
+            "- 기존 UI/버튼 연결",
             "설정", "취소"))
         {
             return;
@@ -32,20 +32,18 @@ public class PracticeSceneEditor : EditorWindow
         // 2. PracticeManager 생성
         GameObject practiceManager = CreatePracticeManager();
 
-        // 3. PracticeUI 생성
-        GameObject practiceUI = CreatePracticeUI();
-
-        // 4. 감지 스크립트 연결
+        // 3. 감지 스크립트 연결
         SetupDetectors(practiceManager);
 
-        // 5. 기존 씬 오브젝트와 연결
+        // 4. 기존 씬 오브젝트와 연결 (기존 UI 사용)
         ConnectExistingObjects(practiceManager);
 
         // 씬 저장 표시
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
 
         EditorUtility.DisplayDialog("완료", "연습 모드 설정이 완료되었습니다!\n\n" +
-            "인스펙터에서 PracticeManager의 참조들을 확인하고 필요시 수동으로 연결해주세요.", "확인");
+            "기존 UI를 그대로 사용합니다.\n" +
+            "인스펙터에서 PracticeManager의 버튼 연결을 확인해주세요.", "확인");
 
         // PracticeManager 선택
         Selection.activeGameObject = practiceManager;
