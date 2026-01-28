@@ -26,16 +26,19 @@ public class PracticeSceneEditor : EditorWindow
             return;
         }
 
-        // 1. PracticeManager 생성
+        // 1. 충돌하는 컴포넌트 비활성화
+        DisableConflictingComponents();
+
+        // 2. PracticeManager 생성
         GameObject practiceManager = CreatePracticeManager();
 
-        // 2. PracticeUI 생성
+        // 3. PracticeUI 생성
         GameObject practiceUI = CreatePracticeUI();
 
-        // 3. 감지 스크립트 연결
+        // 4. 감지 스크립트 연결
         SetupDetectors(practiceManager);
 
-        // 4. 기존 씬 오브젝트와 연결
+        // 5. 기존 씬 오브젝트와 연결
         ConnectExistingObjects(practiceManager);
 
         // 씬 저장 표시
@@ -63,6 +66,71 @@ public class PracticeSceneEditor : EditorWindow
 
         Debug.Log("[PracticeEditor] PracticeManager created");
         return managerObj;
+    }
+
+    /// <summary>
+    /// 시나리오 모드와 충돌하는 컴포넌트 비활성화 (에디터 시점)
+    /// </summary>
+    private static void DisableConflictingComponents()
+    {
+        int disabledCount = 0;
+
+        // ScenarioManager 비활성화
+        var scenarioManager = Object.FindFirstObjectByType<ScenarioManager>();
+        if (scenarioManager != null)
+        {
+            scenarioManager.enabled = false;
+            disabledCount++;
+            Debug.Log("[PracticeEditor] ScenarioManager disabled");
+        }
+
+        // ScenarioConditionManager 비활성화
+        var conditionManager = Object.FindFirstObjectByType<ScenarioConditionManager>();
+        if (conditionManager != null)
+        {
+            conditionManager.enabled = false;
+            disabledCount++;
+            Debug.Log("[PracticeEditor] ScenarioConditionManager disabled");
+        }
+
+        // HandPoseTrainingController 비활성화
+        var trainingController = Object.FindFirstObjectByType<HandPoseTrainingController>();
+        if (trainingController != null)
+        {
+            trainingController.enabled = false;
+            disabledCount++;
+            Debug.Log("[PracticeEditor] HandPoseTrainingController disabled");
+        }
+
+        // TrainingResultTracker 비활성화
+        var resultTracker = Object.FindFirstObjectByType<TrainingResultTracker>();
+        if (resultTracker != null)
+        {
+            resultTracker.enabled = false;
+            disabledCount++;
+            Debug.Log("[PracticeEditor] TrainingResultTracker disabled");
+        }
+
+        // QuizPanel 게임오브젝트 비활성화
+        var quizPanel = Object.FindFirstObjectByType<QuizPanel>();
+        if (quizPanel != null)
+        {
+            quizPanel.gameObject.SetActive(false);
+            disabledCount++;
+            Debug.Log("[PracticeEditor] QuizPanel disabled");
+        }
+
+        // 결과 패널 비활성화
+        var resultPanels = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+            .Where(g => g.name.ToLower().Contains("result") && g.name.ToLower().Contains("panel"));
+        foreach (var panel in resultPanels)
+        {
+            panel.SetActive(false);
+            disabledCount++;
+            Debug.Log($"[PracticeEditor] {panel.name} disabled");
+        }
+
+        Debug.Log($"[PracticeEditor] Disabled {disabledCount} conflicting components");
     }
 
     private static GameObject CreatePracticeUI()

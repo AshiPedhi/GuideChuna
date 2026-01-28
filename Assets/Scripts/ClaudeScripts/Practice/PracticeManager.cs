@@ -67,6 +67,9 @@ public class PracticeManager : MonoBehaviour
     /// </summary>
     private void Initialize()
     {
+        // ★ 시나리오 모드와 충돌하는 컴포넌트 비활성화
+        DisableConflictingComponents();
+
         // 초기 위치 저장
         if (grabbableUI != null)
         {
@@ -90,6 +93,59 @@ public class PracticeManager : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("[Practice] Initialized");
+    }
+
+    /// <summary>
+    /// 시나리오 모드와 충돌하는 컴포넌트 비활성화
+    /// </summary>
+    private void DisableConflictingComponents()
+    {
+        // ScenarioManager 비활성화
+        var scenarioManager = FindFirstObjectByType<ScenarioManager>();
+        if (scenarioManager != null)
+        {
+            scenarioManager.enabled = false;
+            if (showDebugLogs)
+                Debug.Log("[Practice] ScenarioManager disabled");
+        }
+
+        // ScenarioConditionManager 비활성화
+        var conditionManager = FindFirstObjectByType<ScenarioConditionManager>();
+        if (conditionManager != null)
+        {
+            conditionManager.enabled = false;
+            if (showDebugLogs)
+                Debug.Log("[Practice] ScenarioConditionManager disabled");
+        }
+
+        // HandPoseTrainingController 비활성화 (연습모드에서는 직접 제어)
+        var trainingController = FindFirstObjectByType<HandPoseTrainingController>();
+        if (trainingController != null)
+        {
+            trainingController.enabled = false;
+            if (showDebugLogs)
+                Debug.Log("[Practice] HandPoseTrainingController disabled");
+        }
+
+        // TrainingResultTracker 비활성화
+        var resultTracker = FindFirstObjectByType<TrainingResultTracker>();
+        if (resultTracker != null)
+        {
+            resultTracker.enabled = false;
+            if (showDebugLogs)
+                Debug.Log("[Practice] TrainingResultTracker disabled");
+        }
+
+        // QuizPanel 비활성화
+        var quizPanel = FindFirstObjectByType<QuizPanel>();
+        if (quizPanel != null)
+        {
+            quizPanel.gameObject.SetActive(false);
+            if (showDebugLogs)
+                Debug.Log("[Practice] QuizPanel disabled");
+        }
+
+        // ExitPopupController는 유지 (연습에서도 나가기 필요)
     }
 
     /// <summary>
