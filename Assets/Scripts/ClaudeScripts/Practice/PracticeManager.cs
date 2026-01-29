@@ -820,6 +820,16 @@ public class PracticeManager : MonoBehaviour
     public int GetCurrentCount() => currentCount;
     public bool IsActive() => isStepActive;
 
+    /// <summary>
+    /// 외부에서 환자 위치 변경 시 호출
+    /// </summary>
+    public void OnPatientPositionChanged()
+    {
+        if (currentStep != 4 || !isStepActive) return;
+        if (showDebugLogs)
+            Debug.Log("[Practice] 환자 위치 변경됨!");
+    }
+
     #endregion
 
     void OnDestroy()
