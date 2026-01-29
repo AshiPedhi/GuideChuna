@@ -83,6 +83,7 @@ public class PracticeManager : MonoBehaviour
     private List<Toggle> sequentialToggles = new List<Toggle>();
     private int currentToggleIndex = 0;
     private Dictionary<Toggle, Color> originalToggleColors = new Dictionary<Toggle, Color>();
+    private HashSet<Toggle> clickedToggles = new HashSet<Toggle>(); // ★ 클릭된 토글 (색상 복원 제외)
     private Coroutine blinkCoroutine;
 
     // 홀드 연습
@@ -706,6 +707,8 @@ public class PracticeManager : MonoBehaviour
     private void SaveOriginalColors(List<Toggle> toggles)
     {
         originalToggleColors.Clear();
+        clickedToggles.Clear(); // ★ 클릭된 토글 목록도 초기화
+
         foreach (var toggle in toggles)
         {
             if (toggle != null)
@@ -756,6 +759,9 @@ public class PracticeManager : MonoBehaviour
         // 현재 하이라이트된 토글이고 켜졌을 때만 처리
         if (index == currentToggleIndex && isOn)
         {
+            // ★ 클릭된 토글 기록 (색상 복원 제외용)
+            clickedToggles.Add(clickedToggle);
+
             if (showDebugLogs)
                 Debug.Log($"[Practice] 토글 클릭 완료: {clickedToggle.name} ({index + 1}/{sequentialToggles.Count})");
 
@@ -833,10 +839,10 @@ public class PracticeManager : MonoBehaviour
             blinkCoroutine = null;
         }
 
-        // 모든 토글 원래 색상 복원
+        // 모든 토글 원래 색상 복원 (★ 클릭된 토글은 제외 - 토글 자체 색상 관리에 맡김)
         foreach (var kvp in originalToggleColors)
         {
-            if (kvp.Key != null)
+            if (kvp.Key != null && !clickedToggles.Contains(kvp.Key))
             {
                 // ★ 토글의 targetGraphic 또는 하위 Image 사용
                 var image = GetToggleImage(kvp.Key);
@@ -893,6 +899,7 @@ public class PracticeManager : MonoBehaviour
         isStepActive = false;
         isWaitingForHold = false;
         sequentialToggles.Clear();
+        clickedToggles.Clear(); // ★ 클릭된 토글 목록도 초기화
 
         StartStep(0);
 
