@@ -115,6 +115,17 @@ public class PracticeManager : MonoBehaviour
         // 토글 참조 자동 연결
         AutoConnectToggles();
 
+        // ★ 가이드 패널 처음부터 표시 (멘트 및 카운트 표시용)
+        if (scenarioProgressUI != null)
+        {
+            scenarioProgressUI.SetActive(true);
+            if (showDebugLogs)
+                Debug.Log("[Practice] 가이드 패널 표시 (연습 안내용)");
+        }
+
+        // ★ 모든 토글 초기 비활성화 (메인메뉴 제외)
+        DisableAllTogglesExceptMainMenu();
+
         // 연습 시작
         StartStep(0);
 
@@ -217,6 +228,81 @@ public class PracticeManager : MonoBehaviour
             Debug.Log($"[Practice] 토글 자동 연결 완료 - 난이도: {difficultyToggles.Count}개");
     }
 
+    #region 토글 Interactable 제어
+
+    /// <summary>
+    /// 모든 토글 비활성화 (메인메뉴 제외 - 언제든 나갈 수 있게)
+    /// </summary>
+    private void DisableAllTogglesExceptMainMenu()
+    {
+        // 난이도 토글
+        foreach (var toggle in difficultyToggles)
+        {
+            if (toggle != null) toggle.interactable = false;
+        }
+
+        // 모드 토글
+        if (practiceToggle != null) practiceToggle.interactable = false;
+        if (evaluationToggle != null) evaluationToggle.interactable = false;
+
+        // 콘텐츠 토글
+        if (skeletonToggle != null) skeletonToggle.interactable = false;
+        if (expertVideoToggle != null) expertVideoToggle.interactable = false;
+        if (resultToggle != null) resultToggle.interactable = false;
+
+        // 메뉴 토글 (설정은 비활성화, 메인메뉴는 항상 활성화)
+        if (settingsToggle != null) settingsToggle.interactable = false;
+        if (mainMenuToggle != null) mainMenuToggle.interactable = true; // ★ 항상 활성화
+
+        // 시작 토글
+        if (startToggle != null) startToggle.interactable = false;
+    }
+
+    /// <summary>
+    /// 특정 토글들만 활성화 (현재 단계에서 필요한 토글)
+    /// </summary>
+    private void EnableOnlyTheseToggles(params Toggle[] togglesToEnable)
+    {
+        DisableAllTogglesExceptMainMenu();
+
+        foreach (var toggle in togglesToEnable)
+        {
+            if (toggle != null) toggle.interactable = true;
+        }
+    }
+
+    /// <summary>
+    /// 콘텐츠 토글 상태 초기화 (모두 off → skeleton만 on)
+    /// </summary>
+    private void ResetContentToggleStates()
+    {
+        // 모든 콘텐츠 토글 off
+        if (skeletonToggle != null) skeletonToggle.SetIsOnWithoutNotify(false);
+        if (expertVideoToggle != null) expertVideoToggle.SetIsOnWithoutNotify(false);
+        if (resultToggle != null) resultToggle.SetIsOnWithoutNotify(false);
+        if (settingsToggle != null) settingsToggle.SetIsOnWithoutNotify(false);
+
+        // skeleton만 on
+        if (skeletonToggle != null) skeletonToggle.SetIsOnWithoutNotify(true);
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 콘텐츠 토글 상태 초기화 (skeleton만 on)");
+    }
+
+    /// <summary>
+    /// 현재 순차 토글만 활성화
+    /// </summary>
+    private void EnableCurrentToggleOnly()
+    {
+        if (currentToggleIndex >= 0 && currentToggleIndex < sequentialToggles.Count)
+        {
+            Toggle currentToggle = sequentialToggles[currentToggleIndex];
+            EnableOnlyTheseToggles(currentToggle);
+        }
+    }
+
+    #endregion
+
     private void DisableConflictingComponents()
     {
         // ScenarioManager 비활성화
@@ -290,6 +376,12 @@ public class PracticeManager : MonoBehaviour
         if (showDebugLogs)
             Debug.Log($"[Practice] Step {currentStep + 1} 완료!");
 
+        // ★ Step 3 완료 시 콘텐츠 토글 상태 초기화
+        if (currentStep == 2)
+        {
+            OnStep3Completed();
+        }
+
         StartCoroutine(TransitionToNextStep());
     }
 
@@ -305,6 +397,9 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep1_UIGrab()
     {
+        // Step 1에서는 토글 조작 불필요 - 모두 비활성화 (메인메뉴 제외)
+        DisableAllTogglesExceptMainMenu();
+
         ResetUIPosition();
 
         if (showDebugLogs)
@@ -370,6 +465,9 @@ public class PracticeManager : MonoBehaviour
             return;
         }
 
+        // ★ 현재 단계 토글만 활성화 (첫 번째: 난이도 토글)
+        EnableCurrentToggleOnly();
+
         currentToggleIndex = 0;
         SaveOriginalColors(sequentialToggles);
         SetupSequentialToggleListeners();
@@ -386,17 +484,6 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep3_ContentToggles()
     {
-        // 가이드 패널 표시 (시나리오 시작 시뮬레이션)
-        if (scenarioProgressUI != null)
-        {
-            scenarioProgressUI.SetActive(true);
-            if (showDebugLogs)
-                Debug.Log("[Practice] 가이드 패널 표시");
-        }
-
-        // 콘텐츠/메뉴 토글 interactable 활성화
-        EnableContentMenuToggles();
-
         // 순차 토글 리스트 구성: 근골격 → 전문가영상 → 수행결과 → 설정
         sequentialToggles.Clear();
 
@@ -417,6 +504,9 @@ public class PracticeManager : MonoBehaviour
             return;
         }
 
+        // ★ 현재 단계 토글만 활성화 (첫 번째: skeleton)
+        EnableCurrentToggleOnly();
+
         currentToggleIndex = 0;
         SaveOriginalColors(sequentialToggles);
         SetupSequentialToggleListeners();
@@ -427,16 +517,13 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
     }
 
-    private void EnableContentMenuToggles()
+    /// <summary>
+    /// Step 3 완료 후 호출 - 콘텐츠 토글 상태 초기화
+    /// </summary>
+    private void OnStep3Completed()
     {
-        // 콘텐츠 토글 활성화
-        if (skeletonToggle != null) skeletonToggle.interactable = true;
-        if (expertVideoToggle != null) expertVideoToggle.interactable = true;
-        if (resultToggle != null) resultToggle.interactable = true;
-
-        // 메뉴 토글 활성화
-        if (settingsToggle != null) settingsToggle.interactable = true;
-        if (mainMenuToggle != null) mainMenuToggle.interactable = true;
+        // ★ 모든 콘텐츠 토글 off → skeleton만 on 으로 초기화
+        ResetContentToggleStates();
     }
 
     #endregion
@@ -445,6 +532,9 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep4_PatientPosition()
     {
+        // ★ 설정 토글만 활성화 (환자 위치 조정을 위해)
+        EnableOnlyTheseToggles(settingsToggle);
+
         if (showDebugLogs)
             Debug.Log("[Practice] Step 4: 설정 패널에서 환자 위치를 조정해보세요");
 
@@ -513,6 +603,9 @@ public class PracticeManager : MonoBehaviour
 
         if (sequentialToggles.Count > 0)
         {
+            // ★ 시작 토글만 활성화
+            EnableCurrentToggleOnly();
+
             currentToggleIndex = 0;
             SaveOriginalColors(sequentialToggles);
             SetupSequentialToggleListeners();
@@ -531,6 +624,9 @@ public class PracticeManager : MonoBehaviour
     private void StartWaitingForHold()
     {
         isWaitingForHold = true;
+
+        // ★ 홀드 연습 중에는 토글 조작 불필요 (메인메뉴만 활성화)
+        DisableAllTogglesExceptMainMenu();
 
         // ChunaPathEvaluator 이벤트 구독
         if (chunaPathEvaluator != null)
@@ -675,8 +771,13 @@ public class PracticeManager : MonoBehaviour
     {
         if (index >= sequentialToggles.Count) return;
 
+        currentToggleIndex = index;
+
         // 이전 점멸 중지
         StopBlinking();
+
+        // ★ 현재 토글만 활성화 (다른 토글은 비활성화)
+        EnableCurrentToggleOnly();
 
         // 현재 토글 점멸 시작
         var currentToggle = sequentialToggles[index];
