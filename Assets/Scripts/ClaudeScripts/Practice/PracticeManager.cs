@@ -60,9 +60,8 @@ public class PracticeManager : MonoBehaviour
     private Coroutine blinkCoroutine;
     private int currentHighlightIndex = 0;
 
-    // 홀드 감지
+    // 홀드 연습
     private bool isWaitingForHold = false;
-    private bool wasHolding = false;
 
     // 상수
     private const int TOTAL_STEPS = 5;
@@ -164,14 +163,7 @@ public class PracticeManager : MonoBehaviour
             guideHandToggleButton.onClick.AddListener(OnGuideHandToggleClicked);
     }
 
-    void Update()
-    {
-        // Step 5: 홀드 감지
-        if (currentStep == 4 && isStepActive && isWaitingForHold)
-        {
-            CheckHoldState();
-        }
-    }
+    // Update 불필요 - 이벤트 기반으로 동작
 
     #region Step Management
 
@@ -462,16 +454,22 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 5: 홀드 연습 (3회)
+    #region Step 5: 홀드 연습 (전체 사이클 3회)
 
     private void StartStep5_HoldPractice()
     {
         currentCount = 0;
         isWaitingForHold = false;
-        wasHolding = false;
+
+        // ChunaPathEvaluator 이벤트 구독
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
+        }
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 5: 가이드 핸드를 켜고 홀드 구간에서 홀드하세요 (0/{HOLD_REQUIRED_COUNT})");
+            Debug.Log($"[Practice] Step 5: 가이드 핸드를 켜고 전체 동작을 수행하세요 (0/{HOLD_REQUIRED_COUNT})");
+        Debug.Log("[Practice] 사이클: 시작홀드 → 이동 → 중간홀드 → 완료");
     }
 
     private void OnGuideHandToggleClicked()
@@ -481,62 +479,63 @@ public class PracticeManager : MonoBehaviour
         isWaitingForHold = true;
 
         if (showDebugLogs)
-            Debug.Log("[Practice] 가이드 핸드 활성화 - 홀드 구간에서 홀드하세요");
-    }
-
-    private void CheckHoldState()
-    {
-        if (chunaPathEvaluator == null) return;
-
-        // ChunaPathEvaluator에서 현재 홀드 상태 확인
-        bool isCurrentlyHolding = IsInHoldZone();
-
-        // 홀드 시작 감지
-        if (isCurrentlyHolding && !wasHolding)
-        {
-            if (showDebugLogs)
-                Debug.Log("[Practice] 홀드 시작 감지!");
-        }
-        // 홀드 종료 감지 (홀드 완료)
-        else if (!isCurrentlyHolding && wasHolding)
-        {
-            currentCount++;
-            if (showDebugLogs)
-                Debug.Log($"[Practice] 홀드 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
-
-            if (currentCount >= HOLD_REQUIRED_COUNT)
-            {
-                isWaitingForHold = false;
-                CompleteCurrentStep();
-            }
-        }
-
-        wasHolding = isCurrentlyHolding;
-    }
-
-    private bool IsInHoldZone()
-    {
-        if (chunaPathEvaluator == null) return false;
-
-        // ChunaPathEvaluator의 CurrentPhase 확인
-        // StartHold 또는 MidHold 단계에서 홀드 중인 것으로 판단
-        var currentPhase = chunaPathEvaluator.CurrentPhase;
-        return currentPhase == EvaluationPhase.StartHold || currentPhase == EvaluationPhase.MidHold;
+            Debug.Log("[Practice] 가이드 핸드 활성화 - 전체 동작(홀드→이동→홀드→완료)을 수행하세요");
     }
 
     /// <summary>
-    /// 외부에서 홀드 완료 시 호출
+    /// ChunaPathEvaluator 단계 변경 이벤트 핸들러
     /// </summary>
-    public void OnHoldCompleted()
+    private void OnEvaluationPhaseChanged(EvaluationPhase newPhase)
+    {
+        if (currentStep != 4 || !isStepActive || !isWaitingForHold) return;
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 평가 단계 변경: {newPhase}");
+
+        // Completed 상태가 되면 1회 사이클 완료
+        if (newPhase == EvaluationPhase.Completed)
+        {
+            currentCount++;
+            if (showDebugLogs)
+                Debug.Log($"[Practice] ★ 사이클 {currentCount}/{HOLD_REQUIRED_COUNT} 완료!");
+
+            if (currentCount >= HOLD_REQUIRED_COUNT)
+            {
+                // 이벤트 구독 해제
+                if (chunaPathEvaluator != null)
+                {
+                    chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
+                }
+
+                isWaitingForHold = false;
+                CompleteCurrentStep();
+            }
+            else
+            {
+                // 다음 사이클을 위해 리셋
+                if (showDebugLogs)
+                    Debug.Log($"[Practice] 다음 사이클을 시작하세요... ({currentCount}/{HOLD_REQUIRED_COUNT})");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 외부에서 사이클 완료 시 호출 (수동)
+    /// </summary>
+    public void OnCycleCompleted()
     {
         if (currentStep != 4 || !isStepActive) return;
 
         currentCount++;
         if (showDebugLogs)
-            Debug.Log($"[Practice] 홀드 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
+            Debug.Log($"[Practice] 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
         if (currentCount >= HOLD_REQUIRED_COUNT)
         {
+            if (chunaPathEvaluator != null)
+            {
+                chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
+            }
             isWaitingForHold = false;
             CompleteCurrentStep();
         }

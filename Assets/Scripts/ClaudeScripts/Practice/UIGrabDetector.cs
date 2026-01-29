@@ -1,8 +1,9 @@
 using UnityEngine;
+using Oculus.Interaction;
 
 /// <summary>
-/// UI Grab 감지 - OVRGrabbable과 함께 사용
-/// Step 1: UI 옮기기 연습용
+/// UI Grab 감지 - Meta XR SDK 연동
+/// OVRGrabbable 또는 Interaction SDK의 Grabbable 자동 감지
 /// </summary>
 public class UIGrabDetector : MonoBehaviour
 {
@@ -17,23 +18,91 @@ public class UIGrabDetector : MonoBehaviour
     [Tooltip("디버그 로그")]
     [SerializeField] private bool showDebugLogs = true;
 
+    // 상태
     private Vector3 grabStartPosition;
     private bool isGrabbed = false;
 
+    // Meta XR 컴포넌트 (자동 감지)
+    private OVRGrabbable ovrGrabbable;
+    private Grabbable interactionGrabbable;
+
+    void Awake()
+    {
+        // OVRGrabbable 찾기
+        ovrGrabbable = GetComponent<OVRGrabbable>();
+
+        // Interaction SDK Grabbable 찾기
+        interactionGrabbable = GetComponent<Grabbable>();
+    }
+
+    void OnEnable()
+    {
+        // Interaction SDK 이벤트 연결
+        if (interactionGrabbable != null)
+        {
+            interactionGrabbable.WhenPointerEventRaised += OnPointerEvent;
+        }
+    }
+
+    void OnDisable()
+    {
+        // Interaction SDK 이벤트 해제
+        if (interactionGrabbable != null)
+        {
+            interactionGrabbable.WhenPointerEventRaised -= OnPointerEvent;
+        }
+    }
+
+    void Update()
+    {
+        // OVRGrabbable 상태 감지 (이벤트가 없으므로 폴링)
+        if (ovrGrabbable != null)
+        {
+            bool currentlyGrabbed = ovrGrabbable.isGrabbed;
+
+            if (currentlyGrabbed && !isGrabbed)
+            {
+                OnGrabBegin();
+            }
+            else if (!currentlyGrabbed && isGrabbed)
+            {
+                OnGrabEnd();
+            }
+        }
+    }
+
     /// <summary>
-    /// Grab 시작 시 호출 (OVRGrabbable 이벤트 또는 외부에서 호출)
+    /// Interaction SDK 포인터 이벤트 처리
+    /// </summary>
+    private void OnPointerEvent(PointerEvent evt)
+    {
+        switch (evt.Type)
+        {
+            case PointerEventType.Select:
+                OnGrabBegin();
+                break;
+            case PointerEventType.Unselect:
+                OnGrabEnd();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Grab 시작
     /// </summary>
     public void OnGrabBegin()
     {
+        if (isGrabbed) return;
+
         isGrabbed = true;
         grabStartPosition = transform.position;
 
         if (showDebugLogs)
-            Debug.Log($"[UIGrabDetector] Grab started at {grabStartPosition}");
+            Debug.Log($"[UIGrabDetector] Grab 시작 - 위치: {grabStartPosition}");
     }
 
     /// <summary>
-    /// Grab 종료 시 호출 (OVRGrabbable 이벤트 또는 외부에서 호출)
+    /// Grab 종료
     /// </summary>
     public void OnGrabEnd()
     {
@@ -43,12 +112,17 @@ public class UIGrabDetector : MonoBehaviour
         float distance = Vector3.Distance(grabStartPosition, transform.position);
 
         if (showDebugLogs)
-            Debug.Log($"[UIGrabDetector] Grab ended. Moved: {distance:F3}m");
+            Debug.Log($"[UIGrabDetector] Grab 종료 - 이동거리: {distance:F3}m");
 
-        // 충분히 이동했으면 성공으로 처리
+        // 충분히 이동했으면 성공
         if (distance >= moveThreshold)
         {
             NotifyPracticeManager();
+        }
+        else
+        {
+            if (showDebugLogs)
+                Debug.Log($"[UIGrabDetector] 이동 거리 부족 (필요: {moveThreshold}m)");
         }
     }
 
@@ -59,11 +133,20 @@ public class UIGrabDetector : MonoBehaviour
             practiceManager.OnUIGrabReleased();
 
             if (showDebugLogs)
-                Debug.Log("[UIGrabDetector] Notified PracticeManager");
+                Debug.Log("[UIGrabDetector] ✓ UI 옮기기 1회 완료!");
         }
         else
         {
-            Debug.LogWarning("[UIGrabDetector] PracticeManager not assigned!");
+            // PracticeManager 자동 찾기
+            practiceManager = FindFirstObjectByType<PracticeManager>();
+            if (practiceManager != null)
+            {
+                practiceManager.OnUIGrabReleased();
+            }
+            else
+            {
+                Debug.LogWarning("[UIGrabDetector] PracticeManager를 찾을 수 없습니다!");
+            }
         }
     }
 
@@ -74,4 +157,9 @@ public class UIGrabDetector : MonoBehaviour
     {
         practiceManager = manager;
     }
+
+    /// <summary>
+    /// 현재 Grab 상태
+    /// </summary>
+    public bool IsGrabbed => isGrabbed;
 }
