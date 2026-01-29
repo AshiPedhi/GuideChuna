@@ -373,19 +373,16 @@ public class PracticeSceneEditor : EditorWindow
         PracticeManager pm = practiceManagerObj.GetComponent<PracticeManager>();
         SerializedObject so = new SerializedObject(pm);
 
-        // PracticeUI 연결
-        PracticeUI practiceUI = Object.FindFirstObjectByType<PracticeUI>();
-        if (practiceUI != null)
-        {
-            so.FindProperty("practiceUI").objectReferenceValue = practiceUI;
-        }
-
-        // ChunaPathEvaluator 찾기
+        // ChunaPathEvaluator 찾기 (Step 5 홀드 감지용)
         var chunaEvaluator = Object.FindFirstObjectByType<ChunaPathEvaluator>();
         if (chunaEvaluator != null)
         {
-            so.FindProperty("guideHandDisplay").objectReferenceValue = chunaEvaluator;
-            Debug.Log("[PracticeEditor] ChunaPathEvaluator connected");
+            var prop = so.FindProperty("chunaPathEvaluator");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = chunaEvaluator;
+                Debug.Log("[PracticeEditor] ChunaPathEvaluator connected");
+            }
         }
 
         // 환자 모델 찾기 (Patient 태그 또는 이름으로)
@@ -409,7 +406,9 @@ public class PracticeSceneEditor : EditorWindow
         }
         if (patient != null)
         {
-            so.FindProperty("patientTransform").objectReferenceValue = patient.transform;
+            var patientProp = so.FindProperty("patientTransform");
+            if (patientProp != null)
+                patientProp.objectReferenceValue = patient.transform;
 
             // PatientPositionDetector 추가
             PatientPositionDetector ppd = patient.GetComponent<PatientPositionDetector>();
@@ -435,13 +434,16 @@ public class PracticeSceneEditor : EditorWindow
         if (difficultyButtons.Count > 0)
         {
             SerializedProperty diffBtnProp = so.FindProperty("difficultyButtons");
-            diffBtnProp.ClearArray();
-            for (int i = 0; i < difficultyButtons.Count; i++)
+            if (diffBtnProp != null)
             {
-                diffBtnProp.InsertArrayElementAtIndex(i);
-                diffBtnProp.GetArrayElementAtIndex(i).objectReferenceValue = difficultyButtons[i];
+                diffBtnProp.ClearArray();
+                for (int i = 0; i < difficultyButtons.Count; i++)
+                {
+                    diffBtnProp.InsertArrayElementAtIndex(i);
+                    diffBtnProp.GetArrayElementAtIndex(i).objectReferenceValue = difficultyButtons[i];
+                }
+                Debug.Log($"[PracticeEditor] Found {difficultyButtons.Count} difficulty buttons");
             }
-            Debug.Log($"[PracticeEditor] Found {difficultyButtons.Count} difficulty buttons");
         }
 
         // 설정 버튼 찾기
@@ -451,7 +453,9 @@ public class PracticeSceneEditor : EditorWindow
             b.name.ToLower().Contains("config"));
         if (settingsBtn != null)
         {
-            so.FindProperty("settingsButton").objectReferenceValue = settingsBtn;
+            var prop = so.FindProperty("settingsButton");
+            if (prop != null)
+                prop.objectReferenceValue = settingsBtn;
             Debug.Log("[PracticeEditor] Settings button found");
         }
 
@@ -462,7 +466,9 @@ public class PracticeSceneEditor : EditorWindow
             b.name.ToLower().Contains("hand"));
         if (guideHandBtn != null)
         {
-            so.FindProperty("guideHandToggleButton").objectReferenceValue = guideHandBtn;
+            var prop = so.FindProperty("guideHandToggleButton");
+            if (prop != null)
+                prop.objectReferenceValue = guideHandBtn;
             Debug.Log("[PracticeEditor] Guide hand toggle button found");
         }
 
@@ -475,7 +481,9 @@ public class PracticeSceneEditor : EditorWindow
             if (uiGrabbable == null)
                 uiGrabbable = grabbables[0];
 
-            so.FindProperty("grabbableUI").objectReferenceValue = uiGrabbable.transform;
+            var prop = so.FindProperty("grabbableUI");
+            if (prop != null)
+                prop.objectReferenceValue = uiGrabbable.transform;
 
             // UIGrabDetector 추가
             UIGrabDetector ugd = uiGrabbable.GetComponent<UIGrabDetector>();
@@ -484,6 +492,18 @@ public class PracticeSceneEditor : EditorWindow
                 ugd = uiGrabbable.gameObject.AddComponent<UIGrabDetector>();
                 ugd.SetPracticeManager(pm);
                 Debug.Log("[PracticeEditor] UIGrabDetector added to Grabbable UI");
+            }
+        }
+
+        // ExitPopupController 찾기 (완료 팝업용)
+        var exitPopup = Object.FindFirstObjectByType<ExitPopupController>();
+        if (exitPopup != null)
+        {
+            var prop = so.FindProperty("exitPopupController");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = exitPopup;
+                Debug.Log("[PracticeEditor] ExitPopupController connected");
             }
         }
 
