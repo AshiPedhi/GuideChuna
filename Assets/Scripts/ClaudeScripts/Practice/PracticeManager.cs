@@ -139,7 +139,7 @@ public class PracticeManager : MonoBehaviour
         HideAllHighlights();
 
         // ★ 모든 토글 초기 비활성화 (메인메뉴 제외)
-        DisableAllTogglesExceptMainMenu();
+        DisableAllTogglesExceptMainMenuAndDifficulty();
 
         // 토글 이벤트 리스너 설정
         SetupAllToggleListeners();
@@ -373,26 +373,27 @@ public class PracticeManager : MonoBehaviour
     #region 토글 Interactable 제어
 
     /// <summary>
-    /// 모든 토글 비활성화 (메인메뉴 제외)
+    /// 모든 토글 비활성화 (메인메뉴, 난이도 토글 제외)
     /// </summary>
-    private void DisableAllTogglesExceptMainMenu()
+    private void DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty()
     {
         foreach (var pair in allToggles)
         {
             if (pair.toggle != null)
             {
                 bool isMainMenu = (mainMenuToggle != null && pair.toggle == mainMenuToggle.toggle);
-                pair.toggle.interactable = isMainMenu;
+                bool isDifficulty = difficultyToggles.Contains(pair);
+                pair.toggle.interactable = isMainMenu || isDifficulty;
             }
         }
     }
 
     /// <summary>
-    /// 특정 토글만 활성화
+    /// 특정 토글만 활성화 (메인메뉴, 난이도는 항상 활성화)
     /// </summary>
     private void EnableOnlyThisToggle(ToggleHighlightPair targetPair)
     {
-        DisableAllTogglesExceptMainMenu();
+        DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty();
 
         if (targetPair != null && targetPair.toggle != null)
         {
@@ -405,7 +406,7 @@ public class PracticeManager : MonoBehaviour
     /// </summary>
     private void EnableToggles(List<ToggleHighlightPair> pairs)
     {
-        DisableAllTogglesExceptMainMenu();
+        DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty();
 
         foreach (var pair in pairs)
         {
@@ -525,7 +526,7 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep1_UIGrab()
     {
-        DisableAllTogglesExceptMainMenu();
+        DisableAllTogglesExceptMainMenuAndDifficulty();
 
         if (showDebugLogs)
             Debug.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
@@ -684,7 +685,14 @@ public class PracticeManager : MonoBehaviour
             currentToggleIndex = 0;
             StartHighlightToggle(0);
 
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 시작 토글 상태: interactable={startToggle.toggle.interactable}, isOn={startToggle.toggle.isOn}");
+
             yield return new WaitUntil(() => currentToggleIndex >= sequentialToggles.Count || !isStepActive);
+        }
+        else
+        {
+            Debug.LogWarning("[Practice] ⚠ startToggle이 할당되지 않았습니다!");
         }
 
         if (isStepActive)
@@ -700,7 +708,7 @@ public class PracticeManager : MonoBehaviour
         currentCount = 0;
         isWaitingForHold = true;
 
-        DisableAllTogglesExceptMainMenu();
+        DisableAllTogglesExceptMainMenuAndDifficulty();
 
         if (chunaPathEvaluator != null)
         {
