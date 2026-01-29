@@ -15,22 +15,22 @@ public class PracticeManager : MonoBehaviour
     private Quaternion uiInitialRotation;
 
     [Header("=== Step 2: 난이도 버튼 ===")]
-    [Tooltip("난이도 버튼들 (아무거나 클릭하면 반응 확인)")]
-    [SerializeField] private List<Button> difficultyButtons;
-    [Tooltip("실습모드 버튼 (클릭하면 다음 단계로)")]
-    [SerializeField] private Button practiceModeButton;
+    [Tooltip("난이도 토글들 (아무거나 클릭하면 반응 확인)")]
+    [SerializeField] private List<Toggle> difficultyToggles;
+    [Tooltip("실습모드 토글 (클릭하면 다음 단계로)")]
+    [SerializeField] private Toggle practiceModeToggle;
 
-    [Header("=== Step 3: 정보패널 버튼 (순서대로 하이라이트) ===")]
-    [Tooltip("순서대로 눌러야 할 버튼들")]
-    [SerializeField] private List<Button> panelButtons;
+    [Header("=== Step 3: 정보패널 토글 (순서대로 하이라이트) ===")]
+    [Tooltip("순서대로 눌러야 할 토글들")]
+    [SerializeField] private List<Toggle> panelToggles;
 
     [Header("=== Step 4: 환자 위치 조정 ===")]
-    [SerializeField] private Button settingsButton;
+    [SerializeField] private Toggle settingsToggle;
     [SerializeField] private Transform patientTransform;
 
     [Header("=== Step 5: 홀드 연습 ===")]
-    [Tooltip("가이드 핸드 토글 버튼")]
-    [SerializeField] private Button guideHandToggleButton;
+    [Tooltip("가이드 핸드 토글")]
+    [SerializeField] private Toggle guideHandToggle;
     [Tooltip("ChunaPathEvaluator (홀드 감지용)")]
     [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
 
@@ -55,8 +55,8 @@ public class PracticeManager : MonoBehaviour
     private bool difficultyClicked = false;
 
     // 하이라이트
-    private ButtonHighlighter buttonHighlighter;
-    private Dictionary<Button, Color> originalButtonColors = new Dictionary<Button, Color>();
+    private ToggleHighlighter toggleHighlighter;
+    private Dictionary<Toggle, Color> originalToggleColors = new Dictionary<Toggle, Color>();
     private Coroutine blinkCoroutine;
     private int currentHighlightIndex = 0;
 
@@ -85,11 +85,11 @@ public class PracticeManager : MonoBehaviour
             uiInitialRotation = grabbableUI.rotation;
         }
 
-        // ButtonHighlighter 컴포넌트 추가
-        buttonHighlighter = gameObject.AddComponent<ButtonHighlighter>();
+        // ToggleHighlighter 컴포넌트 추가
+        toggleHighlighter = gameObject.AddComponent<ToggleHighlighter>();
 
-        // 버튼 리스너 설정
-        SetupButtonListeners();
+        // 토글 리스너 설정
+        SetupToggleListeners();
 
         // 연습 시작
         StartStep(0);
@@ -141,26 +141,26 @@ public class PracticeManager : MonoBehaviour
         }
     }
 
-    private void SetupButtonListeners()
+    private void SetupToggleListeners()
     {
-        // 난이도 버튼 - 아무거나 클릭하면 반응
-        foreach (var btn in difficultyButtons)
+        // 난이도 토글 - 아무거나 클릭하면 반응
+        foreach (var toggle in difficultyToggles)
         {
-            if (btn != null)
-                btn.onClick.AddListener(OnDifficultyButtonClicked);
+            if (toggle != null)
+                toggle.onValueChanged.AddListener((_) => OnDifficultyToggleClicked());
         }
 
-        // 실습모드 버튼 - 다음 단계로
-        if (practiceModeButton != null)
-            practiceModeButton.onClick.AddListener(OnPracticeModeButtonClicked);
+        // 실습모드 토글 - 다음 단계로
+        if (practiceModeToggle != null)
+            practiceModeToggle.onValueChanged.AddListener((_) => OnPracticeModeToggleClicked());
 
-        // 설정 버튼
-        if (settingsButton != null)
-            settingsButton.onClick.AddListener(OnSettingsButtonClicked);
+        // 설정 토글
+        if (settingsToggle != null)
+            settingsToggle.onValueChanged.AddListener((_) => OnSettingsToggleClicked());
 
         // 가이드 핸드 토글
-        if (guideHandToggleButton != null)
-            guideHandToggleButton.onClick.AddListener(OnGuideHandToggleClicked);
+        if (guideHandToggle != null)
+            guideHandToggle.onValueChanged.AddListener((_) => OnGuideHandToggleClicked());
     }
 
     // Update 불필요 - 이벤트 기반으로 동작
@@ -247,17 +247,17 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 2: 난이도 버튼 + 실습모드 버튼
+    #region Step 2: 난이도 토글 + 실습모드 토글
 
     private void StartStep2_DifficultyButton()
     {
         difficultyClicked = false;
 
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 2: 난이도 버튼을 눌러보세요. 그 다음 실습모드 버튼을 누르세요.");
+            Debug.Log("[Practice] Step 2: 난이도 토글을 눌러보세요. 그 다음 실습모드 토글을 누르세요.");
     }
 
-    private void OnDifficultyButtonClicked()
+    private void OnDifficultyToggleClicked()
     {
         if (currentStep != 1 || !isStepActive) return;
 
@@ -265,88 +265,88 @@ public class PracticeManager : MonoBehaviour
         {
             difficultyClicked = true;
             if (showDebugLogs)
-                Debug.Log("[Practice] 난이도 버튼 반응 확인! 이제 실습모드 버튼을 누르세요.");
+                Debug.Log("[Practice] 난이도 토글 반응 확인! 이제 실습모드 토글을 누르세요.");
         }
     }
 
-    private void OnPracticeModeButtonClicked()
+    private void OnPracticeModeToggleClicked()
     {
         if (currentStep != 1 || !isStepActive) return;
 
         if (showDebugLogs)
-            Debug.Log("[Practice] 실습모드 버튼 클릭 - 다음 단계로!");
+            Debug.Log("[Practice] 실습모드 토글 클릭 - 다음 단계로!");
 
         CompleteCurrentStep();
     }
 
     #endregion
 
-    #region Step 3: 정보패널 버튼 (순서대로 하이라이트)
+    #region Step 3: 정보패널 토글 (순서대로 하이라이트)
 
     private void StartStep3_PanelButtons()
     {
         currentHighlightIndex = 0;
 
-        if (panelButtons == null || panelButtons.Count == 0)
+        if (panelToggles == null || panelToggles.Count == 0)
         {
             if (showDebugLogs)
-                Debug.Log("[Practice] Step 3: 패널 버튼이 없어서 건너뜁니다.");
+                Debug.Log("[Practice] Step 3: 패널 토글이 없어서 건너뜁니다.");
             CompleteCurrentStep();
             return;
         }
 
         // 원본 색상 저장
-        originalButtonColors.Clear();
-        foreach (var btn in panelButtons)
+        originalToggleColors.Clear();
+        foreach (var toggle in panelToggles)
         {
-            if (btn != null)
+            if (toggle != null)
             {
-                var image = btn.GetComponent<Image>();
+                var image = toggle.GetComponent<Image>();
                 if (image != null)
-                    originalButtonColors[btn] = image.color;
+                    originalToggleColors[toggle] = image.color;
             }
         }
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 3: 하이라이트된 버튼을 순서대로 눌러보세요 (총 {panelButtons.Count}개)");
+            Debug.Log($"[Practice] Step 3: 하이라이트된 토글을 순서대로 눌러보세요 (총 {panelToggles.Count}개)");
 
-        // 첫 버튼 하이라이트 시작
-        StartHighlightButton(0);
+        // 첫 토글 하이라이트 시작
+        StartHighlightToggle(0);
     }
 
-    private void StartHighlightButton(int index)
+    private void StartHighlightToggle(int index)
     {
-        if (index >= panelButtons.Count)
+        if (index >= panelToggles.Count)
         {
-            // 모든 버튼 완료
+            // 모든 토글 완료
             CompleteCurrentStep();
             return;
         }
 
         currentHighlightIndex = index;
 
-        // 이전 버튼 색상 복원
+        // 이전 토글 색상 복원
         StopBlinking();
 
-        // 현재 버튼 점멸 시작
-        var currentBtn = panelButtons[index];
-        if (currentBtn != null)
+        // 현재 토글 점멸 시작
+        var currentToggle = panelToggles[index];
+        if (currentToggle != null)
         {
             // 클릭 리스너 추가
-            currentBtn.onClick.AddListener(() => OnHighlightedButtonClicked(currentBtn));
-            blinkCoroutine = StartCoroutine(BlinkButton(currentBtn));
+            currentToggle.onValueChanged.AddListener((_) => OnHighlightedToggleClicked(currentToggle));
+            blinkCoroutine = StartCoroutine(BlinkToggle(currentToggle));
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] 버튼 하이라이트: {currentBtn.name} ({index + 1}/{panelButtons.Count})");
+                Debug.Log($"[Practice] 토글 하이라이트: {currentToggle.name} ({index + 1}/{panelToggles.Count})");
         }
     }
 
-    private IEnumerator BlinkButton(Button btn)
+    private IEnumerator BlinkToggle(Toggle toggle)
     {
-        var image = btn.GetComponent<Image>();
+        var image = toggle.GetComponent<Image>();
         if (image == null) yield break;
 
-        Color originalColor = originalButtonColors.ContainsKey(btn) ? originalButtonColors[btn] : image.color;
+        Color originalColor = originalToggleColors.ContainsKey(toggle) ? originalToggleColors[toggle] : image.color;
         bool isOn = false;
 
         while (true)
@@ -365,8 +365,8 @@ public class PracticeManager : MonoBehaviour
             blinkCoroutine = null;
         }
 
-        // 모든 버튼 원래 색상 복원
-        foreach (var kvp in originalButtonColors)
+        // 모든 토글 원래 색상 복원
+        foreach (var kvp in originalToggleColors)
         {
             if (kvp.Key != null)
             {
@@ -377,18 +377,18 @@ public class PracticeManager : MonoBehaviour
         }
     }
 
-    private void OnHighlightedButtonClicked(Button clickedBtn)
+    private void OnHighlightedToggleClicked(Toggle clickedToggle)
     {
         if (currentStep != 2 || !isStepActive) return;
 
-        // 현재 하이라이트된 버튼인지 확인
-        if (currentHighlightIndex < panelButtons.Count && panelButtons[currentHighlightIndex] == clickedBtn)
+        // 현재 하이라이트된 토글인지 확인
+        if (currentHighlightIndex < panelToggles.Count && panelToggles[currentHighlightIndex] == clickedToggle)
         {
             if (showDebugLogs)
-                Debug.Log($"[Practice] 버튼 클릭 완료: {clickedBtn.name}");
+                Debug.Log($"[Practice] 토글 클릭 완료: {clickedToggle.name}");
 
-            // 다음 버튼으로
-            StartHighlightButton(currentHighlightIndex + 1);
+            // 다음 토글로
+            StartHighlightToggle(currentHighlightIndex + 1);
         }
     }
 
@@ -399,10 +399,10 @@ public class PracticeManager : MonoBehaviour
     private void StartStep4_PatientPosition()
     {
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 4: 설정 버튼을 눌러 환자 위치를 조정해보세요");
+            Debug.Log("[Practice] Step 4: 설정 토글을 눌러 환자 위치를 조정해보세요");
     }
 
-    private void OnSettingsButtonClicked()
+    private void OnSettingsToggleClicked()
     {
         if (currentStep != 3 || !isStepActive) return;
 
@@ -476,10 +476,14 @@ public class PracticeManager : MonoBehaviour
     {
         if (currentStep != 4 || !isStepActive) return;
 
-        isWaitingForHold = true;
+        // 토글이 켜질 때만 반응
+        if (guideHandToggle != null && guideHandToggle.isOn)
+        {
+            isWaitingForHold = true;
 
-        if (showDebugLogs)
-            Debug.Log("[Practice] 가이드 핸드 활성화 - 전체 동작(홀드→이동→홀드→완료)을 수행하세요");
+            if (showDebugLogs)
+                Debug.Log("[Practice] 가이드 핸드 활성화 - 전체 동작(홀드→이동→홀드→완료)을 수행하세요");
+        }
     }
 
     /// <summary>

@@ -420,56 +420,56 @@ public class PracticeSceneEditor : EditorWindow
             }
         }
 
-        // UI 버튼들 찾기 (Canvas 내부에서)
-        var allButtons = Object.FindObjectsByType<Button>(FindObjectsSortMode.None);
+        // UI 토글들 찾기 (Canvas 내부에서)
+        var allToggles = Object.FindObjectsByType<Toggle>(FindObjectsSortMode.None);
 
-        // 난이도 버튼 찾기
-        var difficultyButtons = allButtons.Where(b =>
-            b.name.ToLower().Contains("difficulty") ||
-            b.name.ToLower().Contains("난이도") ||
-            b.name.ToLower().Contains("easy") ||
-            b.name.ToLower().Contains("normal") ||
-            b.name.ToLower().Contains("hard")).ToList();
+        // 난이도 토글 찾기
+        var difficultyToggles = allToggles.Where(t =>
+            t.name.ToLower().Contains("difficulty") ||
+            t.name.ToLower().Contains("난이도") ||
+            t.name.ToLower().Contains("easy") ||
+            t.name.ToLower().Contains("normal") ||
+            t.name.ToLower().Contains("hard")).ToList();
 
-        if (difficultyButtons.Count > 0)
+        if (difficultyToggles.Count > 0)
         {
-            SerializedProperty diffBtnProp = so.FindProperty("difficultyButtons");
-            if (diffBtnProp != null)
+            SerializedProperty diffToggleProp = so.FindProperty("difficultyToggles");
+            if (diffToggleProp != null)
             {
-                diffBtnProp.ClearArray();
-                for (int i = 0; i < difficultyButtons.Count; i++)
+                diffToggleProp.ClearArray();
+                for (int i = 0; i < difficultyToggles.Count; i++)
                 {
-                    diffBtnProp.InsertArrayElementAtIndex(i);
-                    diffBtnProp.GetArrayElementAtIndex(i).objectReferenceValue = difficultyButtons[i];
+                    diffToggleProp.InsertArrayElementAtIndex(i);
+                    diffToggleProp.GetArrayElementAtIndex(i).objectReferenceValue = difficultyToggles[i];
                 }
-                Debug.Log($"[PracticeEditor] Found {difficultyButtons.Count} difficulty buttons");
+                Debug.Log($"[PracticeEditor] Found {difficultyToggles.Count} difficulty toggles");
             }
         }
 
-        // 설정 버튼 찾기
-        var settingsBtn = allButtons.FirstOrDefault(b =>
-            b.name.ToLower().Contains("setting") ||
-            b.name.ToLower().Contains("설정") ||
-            b.name.ToLower().Contains("config"));
-        if (settingsBtn != null)
+        // 설정 토글 찾기
+        var settingsToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("setting") ||
+            t.name.ToLower().Contains("설정") ||
+            t.name.ToLower().Contains("config"));
+        if (settingsToggle != null)
         {
-            var prop = so.FindProperty("settingsButton");
+            var prop = so.FindProperty("settingsToggle");
             if (prop != null)
-                prop.objectReferenceValue = settingsBtn;
-            Debug.Log("[PracticeEditor] Settings button found");
+                prop.objectReferenceValue = settingsToggle;
+            Debug.Log("[PracticeEditor] Settings toggle found");
         }
 
-        // 가이드 핸드 토글 버튼 찾기
-        var guideHandBtn = allButtons.FirstOrDefault(b =>
-            b.name.ToLower().Contains("guide") ||
-            b.name.ToLower().Contains("가이드") ||
-            b.name.ToLower().Contains("hand"));
-        if (guideHandBtn != null)
+        // 가이드 핸드 토글 찾기
+        var guideHandToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("guide") ||
+            t.name.ToLower().Contains("가이드") ||
+            t.name.ToLower().Contains("hand"));
+        if (guideHandToggle != null)
         {
-            var prop = so.FindProperty("guideHandToggleButton");
+            var prop = so.FindProperty("guideHandToggle");
             if (prop != null)
-                prop.objectReferenceValue = guideHandBtn;
-            Debug.Log("[PracticeEditor] Guide hand toggle button found");
+                prop.objectReferenceValue = guideHandToggle;
+            Debug.Log("[PracticeEditor] Guide hand toggle found");
         }
 
         // Grabbable UI 찾기
