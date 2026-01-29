@@ -158,22 +158,29 @@ public class PracticeManager : MonoBehaviour
         if (exitPopupController == null)
             exitPopupController = FindFirstObjectByType<ExitPopupController>();
 
-        // ★ 가이드 패널 자동 검색 (ScenarioGuideUIController의 게임오브젝트 또는 이름으로)
+        // ★ 가이드 패널 자동 검색 (실제 UI 캔버스 오브젝트 - "가이드패널Root" 또는 "가이드패널")
+        // 주의: ScenarioGuideUIController는 GameManager에 있지만, 실제 UI 캔버스는 별도 오브젝트임
         if (scenarioProgressUI == null)
         {
-            if (scenarioGuideUIController != null)
+            var allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            foreach (var obj in allObjects)
             {
-                scenarioProgressUI = scenarioGuideUIController.gameObject;
+                string name = obj.name;
+                // 정확한 이름 매칭 우선
+                if (name == "가이드패널Root" || name == "가이드패널")
+                {
+                    scenarioProgressUI = obj;
+                    break;
+                }
             }
-            else
+
+            // 정확한 이름 없으면 패턴으로 검색
+            if (scenarioProgressUI == null)
             {
-                // 이름으로 검색
-                var allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
                 foreach (var obj in allObjects)
                 {
-                    string name = obj.name.ToLower();
-                    if (name.Contains("scenarioprogress") || name.Contains("guidepanel") ||
-                        name.Contains("scenario") && name.Contains("guide"))
+                    string nameLower = obj.name.ToLower();
+                    if (nameLower.Contains("가이드패널") || nameLower.Contains("guidepanel"))
                     {
                         scenarioProgressUI = obj;
                         break;
@@ -183,6 +190,8 @@ public class PracticeManager : MonoBehaviour
 
             if (scenarioProgressUI != null && showDebugLogs)
                 Debug.Log($"[Practice] 가이드 패널 자동 검색됨: {scenarioProgressUI.name}");
+            else if (showDebugLogs)
+                Debug.LogWarning("[Practice] 가이드 패널을 찾을 수 없습니다! (가이드패널Root 또는 가이드패널 오브젝트 필요)");
         }
     }
 
