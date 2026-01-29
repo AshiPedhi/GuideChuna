@@ -375,7 +375,7 @@ public class PracticeManager : MonoBehaviour
     /// <summary>
     /// 모든 토글 비활성화 (메인메뉴, 난이도 토글 제외)
     /// </summary>
-    private void DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty()
+    private void DisableAllTogglesExceptMainMenuAndDifficulty()
     {
         foreach (var pair in allToggles)
         {
@@ -393,7 +393,7 @@ public class PracticeManager : MonoBehaviour
     /// </summary>
     private void EnableOnlyThisToggle(ToggleHighlightPair targetPair)
     {
-        DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty();
+        DisableAllTogglesExceptMainMenuAndDifficulty();
 
         if (targetPair != null && targetPair.toggle != null)
         {
@@ -406,7 +406,7 @@ public class PracticeManager : MonoBehaviour
     /// </summary>
     private void EnableToggles(List<ToggleHighlightPair> pairs)
     {
-        DisableAllTogglesExceptMainMenuAndDifficultyAndDifficulty();
+        DisableAllTogglesExceptMainMenuAndDifficulty();
 
         foreach (var pair in pairs)
         {
