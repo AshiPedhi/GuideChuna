@@ -710,11 +710,29 @@ public class PracticeManager : MonoBehaviour
         {
             if (toggle != null)
             {
-                var image = toggle.GetComponent<Image>();
+                // ★ 토글의 targetGraphic 또는 하위 Image 사용
+                var image = GetToggleImage(toggle);
                 if (image != null)
                     originalToggleColors[toggle] = image.color;
             }
         }
+    }
+
+    /// <summary>
+    /// 토글의 점멸용 이미지 가져오기 (targetGraphic 우선, 없으면 하위 Image)
+    /// </summary>
+    private Image GetToggleImage(Toggle toggle)
+    {
+        if (toggle == null) return null;
+
+        // 1. targetGraphic이 Image인 경우
+        if (toggle.targetGraphic != null && toggle.targetGraphic is Image targetImage)
+        {
+            return targetImage;
+        }
+
+        // 2. 하위 자식에서 Image 찾기
+        return toggle.GetComponentInChildren<Image>();
     }
 
     private void SetupSequentialToggleListeners()
@@ -792,7 +810,8 @@ public class PracticeManager : MonoBehaviour
 
     private IEnumerator BlinkToggle(Toggle toggle)
     {
-        var image = toggle.GetComponent<Image>();
+        // ★ 토글의 targetGraphic 또는 하위 Image 사용
+        var image = GetToggleImage(toggle);
         if (image == null) yield break;
 
         Color originalColor = originalToggleColors.ContainsKey(toggle) ? originalToggleColors[toggle] : image.color;
@@ -819,7 +838,8 @@ public class PracticeManager : MonoBehaviour
         {
             if (kvp.Key != null)
             {
-                var image = kvp.Key.GetComponent<Image>();
+                // ★ 토글의 targetGraphic 또는 하위 Image 사용
+                var image = GetToggleImage(kvp.Key);
                 if (image != null)
                     image.color = kvp.Value;
             }
