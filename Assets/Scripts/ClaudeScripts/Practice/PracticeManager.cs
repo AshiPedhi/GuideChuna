@@ -116,12 +116,19 @@ public class PracticeManager : MonoBehaviour
         // 토글 참조 자동 연결
         AutoConnectToggles();
 
+        // ★ 모든 콘텐츠 토글 초기 상태 OFF로 설정 (최초에 skeleton이 on인 문제 해결)
+        InitializeAllToggleStates();
+
         // ★ 가이드 패널 처음부터 표시 (멘트 및 카운트 표시용)
         if (scenarioProgressUI != null)
         {
             scenarioProgressUI.SetActive(true);
             if (showDebugLogs)
                 Debug.Log("[Practice] 가이드 패널 표시 (연습 안내용)");
+        }
+        else
+        {
+            Debug.LogWarning("[Practice] 가이드 패널(scenarioProgressUI)을 찾을 수 없습니다!");
         }
 
         // ★ 모든 토글 초기 비활성화 (메인메뉴 제외)
@@ -150,6 +157,33 @@ public class PracticeManager : MonoBehaviour
 
         if (exitPopupController == null)
             exitPopupController = FindFirstObjectByType<ExitPopupController>();
+
+        // ★ 가이드 패널 자동 검색 (ScenarioGuideUIController의 게임오브젝트 또는 이름으로)
+        if (scenarioProgressUI == null)
+        {
+            if (scenarioGuideUIController != null)
+            {
+                scenarioProgressUI = scenarioGuideUIController.gameObject;
+            }
+            else
+            {
+                // 이름으로 검색
+                var allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+                foreach (var obj in allObjects)
+                {
+                    string name = obj.name.ToLower();
+                    if (name.Contains("scenarioprogress") || name.Contains("guidepanel") ||
+                        name.Contains("scenario") && name.Contains("guide"))
+                    {
+                        scenarioProgressUI = obj;
+                        break;
+                    }
+                }
+            }
+
+            if (scenarioProgressUI != null && showDebugLogs)
+                Debug.Log($"[Practice] 가이드 패널 자동 검색됨: {scenarioProgressUI.name}");
+        }
     }
 
     private void AutoConnectToggles()
@@ -273,6 +307,37 @@ public class PracticeManager : MonoBehaviour
     }
 
     /// <summary>
+    /// 모든 토글 초기 상태 설정 (시작 시 모두 OFF)
+    /// </summary>
+    private void InitializeAllToggleStates()
+    {
+        // 난이도 토글 모두 off
+        foreach (var toggle in difficultyToggles)
+        {
+            if (toggle != null) toggle.SetIsOnWithoutNotify(false);
+        }
+
+        // 모드 토글 off
+        if (practiceToggle != null) practiceToggle.SetIsOnWithoutNotify(false);
+        if (evaluationToggle != null) evaluationToggle.SetIsOnWithoutNotify(false);
+
+        // 콘텐츠 토글 모두 off
+        if (skeletonToggle != null) skeletonToggle.SetIsOnWithoutNotify(false);
+        if (expertVideoToggle != null) expertVideoToggle.SetIsOnWithoutNotify(false);
+        if (resultToggle != null) resultToggle.SetIsOnWithoutNotify(false);
+
+        // 메뉴 토글 off
+        if (settingsToggle != null) settingsToggle.SetIsOnWithoutNotify(false);
+        if (mainMenuToggle != null) mainMenuToggle.SetIsOnWithoutNotify(false);
+
+        // 시작 토글 off
+        if (startToggle != null) startToggle.SetIsOnWithoutNotify(false);
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 모든 토글 초기 상태 OFF로 설정");
+    }
+
+    /// <summary>
     /// 콘텐츠 토글 상태 초기화 (모두 off → skeleton만 on)
     /// </summary>
     private void ResetContentToggleStates()
@@ -344,6 +409,21 @@ public class PracticeManager : MonoBehaviour
         {
             quizPanel.gameObject.SetActive(false);
             if (showDebugLogs) Debug.Log("[Practice] QuizPanel disabled");
+        }
+
+        // ★ LateralFlexionDetector 비활성화 (연습 모드에서 간섭 방지)
+        var lateralFlexionDetector = FindFirstObjectByType<LateralFlexionDetector>();
+        if (lateralFlexionDetector != null)
+        {
+            lateralFlexionDetector.enabled = false;
+            if (showDebugLogs) Debug.Log("[Practice] LateralFlexionDetector disabled");
+        }
+
+        // ★ ChunaPathEvaluator는 Step 5 홀드 연습 전까지 비활성화
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.enabled = false;
+            if (showDebugLogs) Debug.Log("[Practice] ChunaPathEvaluator disabled (will enable at Step 5)");
         }
     }
 
@@ -439,17 +519,20 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 2: 모드 선택 (난이도 → 실습모드)
+    #region Step 2: 모드 선택 (난이도 3개 → 실습모드)
 
     private void StartStep2_ModeSelection()
     {
-        // 순차 토글 리스트 구성: 난이도 하나 → 실습모드
+        // ★ 순차 토글 리스트 구성: 난이도 3개(초급→중급→상급) → 실습모드
         sequentialToggles.Clear();
 
-        // 난이도 토글 중 첫 번째 (Beginner)
-        if (difficultyToggles.Count > 0 && difficultyToggles[0] != null)
+        // ★ 모든 난이도 토글 추가 (초급, 중급, 상급 순서대로)
+        foreach (var diffToggle in difficultyToggles)
         {
-            sequentialToggles.Add(difficultyToggles[0]);
+            if (diffToggle != null)
+            {
+                sequentialToggles.Add(diffToggle);
+            }
         }
 
         // 실습모드 토글
@@ -474,7 +557,7 @@ public class PracticeManager : MonoBehaviour
         SetupSequentialToggleListeners();
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 2: 모드 선택 - 토글을 순서대로 눌러주세요 (총 {sequentialToggles.Count}개)");
+            Debug.Log($"[Practice] Step 2: 난이도(초급→중급→상급) → 실습모드 순서로 눌러주세요 (총 {sequentialToggles.Count}개)");
 
         StartHighlightToggle(0);
     }
@@ -629,10 +712,13 @@ public class PracticeManager : MonoBehaviour
         // ★ 홀드 연습 중에는 토글 조작 불필요 (메인메뉴만 활성화)
         DisableAllTogglesExceptMainMenu();
 
-        // ChunaPathEvaluator 이벤트 구독
+        // ★ ChunaPathEvaluator 활성화 (Step 5에서만 사용)
         if (chunaPathEvaluator != null)
         {
+            chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
+            if (showDebugLogs)
+                Debug.Log("[Practice] ChunaPathEvaluator 활성화");
         }
 
         if (showDebugLogs)
