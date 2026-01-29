@@ -617,18 +617,6 @@ public class PracticeSceneEditor : EditorWindow
             }
         }
 
-        // ExitPopupController 찾기 (완료 팝업용)
-        var exitPopup = Object.FindFirstObjectByType<ExitPopupController>();
-        if (exitPopup != null)
-        {
-            var prop = so.FindProperty("exitPopupController");
-            if (prop != null)
-            {
-                prop.objectReferenceValue = exitPopup;
-                Debug.Log("[PracticeEditor] ExitPopupController connected");
-            }
-        }
-
         so.ApplyModifiedProperties();
     }
 
