@@ -5,7 +5,15 @@ using System.Collections.Generic;
 
 /// <summary>
 /// 연습 모드 관리자
-/// 기존 UI 사용, 버튼 하이라이트, 홀드 감지 연동
+/// 실제 시나리오 흐름을 따라 모든 토글을 순서대로 점멸시켜 사용자가 따라하도록 유도
+///
+/// 진행 순서:
+/// 1. UI 잡고 옮기기 (3회)
+/// 2. 난이도 토글 → 실습모드 토글 (시나리오 시작, 가이드 패널 표시)
+/// 3. 정보패널 토글 순차 점멸 (근골격 → 전문가영상 → 수행결과 → 설정)
+/// 4. 설정 패널에서 환자 위치 조정
+/// 5. 가이드 핸드 토글 → 홀드 연습 (3사이클)
+/// 6. 완료 팝업
 /// </summary>
 public class PracticeManager : MonoBehaviour
 {
@@ -14,30 +22,48 @@ public class PracticeManager : MonoBehaviour
     private Vector3 uiInitialPosition;
     private Quaternion uiInitialRotation;
 
-    [Header("=== Step 2: 난이도 버튼 ===")]
-    [Tooltip("난이도 토글들 (아무거나 클릭하면 반응 확인)")]
-    [SerializeField] private List<Toggle> difficultyToggles;
-    [Tooltip("실습모드 토글 (클릭하면 다음 단계로)")]
-    [SerializeField] private Toggle practiceModeToggle;
+    [Header("=== UI 컨트롤러 참조 ===")]
+    [Tooltip("InfoPanelController (모드선택, 콘텐츠/메뉴 토글)")]
+    [SerializeField] private InfoPanelController infoPanelController;
 
-    [Header("=== Step 3: 정보패널 토글 (순서대로 하이라이트) ===")]
-    [Tooltip("순서대로 눌러야 할 토글들")]
-    [SerializeField] private List<Toggle> panelToggles;
+    [Tooltip("ScenarioGuideUIController (가이드 패널, 시작 토글)")]
+    [SerializeField] private ScenarioGuideUIController scenarioGuideUIController;
+
+    [Tooltip("PracticeSettingsController (설정 패널)")]
+    [SerializeField] private PracticeSettingsController practiceSettingsController;
+
+    [Header("=== Step 2: 모드 선택 토글 ===")]
+    [Tooltip("난이도 토글들 (Beginner, Intermediate, Advanced)")]
+    [SerializeField] private List<Toggle> difficultyToggles;
+    [Tooltip("실습모드 토글")]
+    [SerializeField] private Toggle practiceToggle;
+    [Tooltip("평가모드 토글")]
+    [SerializeField] private Toggle evaluationToggle;
+
+    [Header("=== Step 3: 콘텐츠/메뉴 토글 ===")]
+    [Tooltip("근골격 토글")]
+    [SerializeField] private Toggle skeletonToggle;
+    [Tooltip("전문가 영상 토글")]
+    [SerializeField] private Toggle expertVideoToggle;
+    [Tooltip("수행결과 토글")]
+    [SerializeField] private Toggle resultToggle;
+    [Tooltip("설정 토글")]
+    [SerializeField] private Toggle settingsToggle;
+    [Tooltip("메인메뉴 토글")]
+    [SerializeField] private Toggle mainMenuToggle;
 
     [Header("=== Step 4: 환자 위치 조정 ===")]
-    [SerializeField] private Toggle settingsToggle;
     [SerializeField] private Transform patientTransform;
 
-    [Header("=== Step 5: 홀드 연습 ===")]
-    [Tooltip("가이드 핸드 토글")]
-    [SerializeField] private Toggle guideHandToggle;
+    [Header("=== Step 5: 가이드/홀드 ===")]
+    [Tooltip("시작 토글 (ScenarioGuideUIController)")]
+    [SerializeField] private Toggle startToggle;
+    [Tooltip("가이드 패널 GameObject")]
+    [SerializeField] private GameObject scenarioProgressUI;
     [Tooltip("ChunaPathEvaluator (홀드 감지용)")]
     [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
 
     [Header("=== 완료 팝업 ===")]
-    [Tooltip("완료 시 표시할 팝업 (ExitPopupController 등)")]
-    [SerializeField] private GameObject completionPopup;
-    [Tooltip("또는 ExitPopupController 직접 연결")]
     [SerializeField] private ExitPopupController exitPopupController;
 
     [Header("=== 하이라이트 설정 ===")]
@@ -52,19 +78,17 @@ public class PracticeManager : MonoBehaviour
     private int currentStep = 0;
     private int currentCount = 0;
     private bool isStepActive = false;
-    private bool difficultyClicked = false;
 
-    // 하이라이트
-    private ToggleHighlighter toggleHighlighter;
+    // 순차 토글 하이라이트
+    private List<Toggle> sequentialToggles = new List<Toggle>();
+    private int currentToggleIndex = 0;
     private Dictionary<Toggle, Color> originalToggleColors = new Dictionary<Toggle, Color>();
     private Coroutine blinkCoroutine;
-    private int currentHighlightIndex = 0;
 
     // 홀드 연습
     private bool isWaitingForHold = false;
 
     // 상수
-    private const int TOTAL_STEPS = 5;
     private const int HOLD_REQUIRED_COUNT = 3;
     private const int UI_GRAB_REQUIRED = 3;
 
@@ -78,6 +102,9 @@ public class PracticeManager : MonoBehaviour
         // 충돌 컴포넌트 비활성화
         DisableConflictingComponents();
 
+        // 컨트롤러 자동 검색
+        FindControllers();
+
         // 초기 위치 저장
         if (grabbableUI != null)
         {
@@ -85,17 +112,109 @@ public class PracticeManager : MonoBehaviour
             uiInitialRotation = grabbableUI.rotation;
         }
 
-        // ToggleHighlighter 컴포넌트 추가
-        toggleHighlighter = gameObject.AddComponent<ToggleHighlighter>();
-
-        // 토글 리스너 설정
-        SetupToggleListeners();
+        // 토글 참조 자동 연결
+        AutoConnectToggles();
 
         // 연습 시작
         StartStep(0);
 
         if (showDebugLogs)
             Debug.Log("[Practice] Initialized - 연습 모드 시작");
+    }
+
+    private void FindControllers()
+    {
+        if (infoPanelController == null)
+            infoPanelController = FindFirstObjectByType<InfoPanelController>();
+
+        if (scenarioGuideUIController == null)
+            scenarioGuideUIController = FindFirstObjectByType<ScenarioGuideUIController>();
+
+        if (practiceSettingsController == null)
+            practiceSettingsController = FindFirstObjectByType<PracticeSettingsController>();
+
+        if (chunaPathEvaluator == null)
+            chunaPathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+
+        if (exitPopupController == null)
+            exitPopupController = FindFirstObjectByType<ExitPopupController>();
+    }
+
+    private void AutoConnectToggles()
+    {
+        // InfoPanelController에서 토글 참조 가져오기 (Reflection 또는 public 프로퍼티 필요)
+        // 현재는 Inspector에서 수동 연결 필요
+        // 토글들이 비어있으면 씬에서 이름으로 검색
+        var allToggles = FindObjectsByType<Toggle>(FindObjectsSortMode.None);
+
+        foreach (var toggle in allToggles)
+        {
+            string name = toggle.name.ToLower();
+
+            // 난이도 토글
+            if (name.Contains("beginner") || name.Contains("초급"))
+            {
+                if (!difficultyToggles.Contains(toggle))
+                    difficultyToggles.Add(toggle);
+            }
+            else if (name.Contains("intermediate") || name.Contains("중급"))
+            {
+                if (!difficultyToggles.Contains(toggle))
+                    difficultyToggles.Add(toggle);
+            }
+            else if (name.Contains("advanced") || name.Contains("상급"))
+            {
+                if (!difficultyToggles.Contains(toggle))
+                    difficultyToggles.Add(toggle);
+            }
+            // 모드 토글
+            else if (name.Contains("practice") && name.Contains("toggle"))
+            {
+                if (practiceToggle == null)
+                    practiceToggle = toggle;
+            }
+            else if (name.Contains("evaluation") && name.Contains("toggle"))
+            {
+                if (evaluationToggle == null)
+                    evaluationToggle = toggle;
+            }
+            // 콘텐츠 토글
+            else if (name.Contains("skeleton"))
+            {
+                if (skeletonToggle == null)
+                    skeletonToggle = toggle;
+            }
+            else if (name.Contains("expert") || name.Contains("video"))
+            {
+                if (expertVideoToggle == null)
+                    expertVideoToggle = toggle;
+            }
+            else if (name.Contains("result"))
+            {
+                if (resultToggle == null)
+                    resultToggle = toggle;
+            }
+            // 메뉴 토글
+            else if (name.Contains("setting"))
+            {
+                if (settingsToggle == null)
+                    settingsToggle = toggle;
+            }
+            else if (name.Contains("main") && name.Contains("menu"))
+            {
+                if (mainMenuToggle == null)
+                    mainMenuToggle = toggle;
+            }
+            // 시작 토글
+            else if (name.Contains("start") && name.Contains("toggle"))
+            {
+                if (startToggle == null)
+                    startToggle = toggle;
+            }
+        }
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 토글 자동 연결 완료 - 난이도: {difficultyToggles.Count}개");
     }
 
     private void DisableConflictingComponents()
@@ -141,30 +260,6 @@ public class PracticeManager : MonoBehaviour
         }
     }
 
-    private void SetupToggleListeners()
-    {
-        // 난이도 토글 - 아무거나 클릭하면 반응
-        foreach (var toggle in difficultyToggles)
-        {
-            if (toggle != null)
-                toggle.onValueChanged.AddListener((_) => OnDifficultyToggleClicked());
-        }
-
-        // 실습모드 토글 - 다음 단계로
-        if (practiceModeToggle != null)
-            practiceModeToggle.onValueChanged.AddListener((_) => OnPracticeModeToggleClicked());
-
-        // 설정 토글
-        if (settingsToggle != null)
-            settingsToggle.onValueChanged.AddListener((_) => OnSettingsToggleClicked());
-
-        // 가이드 핸드 토글
-        if (guideHandToggle != null)
-            guideHandToggle.onValueChanged.AddListener((_) => OnGuideHandToggleClicked());
-    }
-
-    // Update 불필요 - 이벤트 기반으로 동작
-
     #region Step Management
 
     private void StartStep(int step)
@@ -179,8 +274,8 @@ public class PracticeManager : MonoBehaviour
         switch (step)
         {
             case 0: StartStep1_UIGrab(); break;
-            case 1: StartStep2_DifficultyButton(); break;
-            case 2: StartStep3_PanelButtons(); break;
+            case 1: StartStep2_ModeSelection(); break;
+            case 2: StartStep3_ContentToggles(); break;
             case 3: StartStep4_PatientPosition(); break;
             case 4: StartStep5_HoldPractice(); break;
             default: ShowCompletionPopup(); break;
@@ -190,6 +285,7 @@ public class PracticeManager : MonoBehaviour
     private void CompleteCurrentStep()
     {
         isStepActive = false;
+        StopBlinking();
 
         if (showDebugLogs)
             Debug.Log($"[Practice] Step {currentStep + 1} 완료!");
@@ -247,149 +343,100 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 2: 난이도 토글 + 실습모드 토글
+    #region Step 2: 모드 선택 (난이도 → 실습모드)
 
-    private void StartStep2_DifficultyButton()
+    private void StartStep2_ModeSelection()
     {
-        difficultyClicked = false;
+        // 순차 토글 리스트 구성: 난이도 하나 → 실습모드
+        sequentialToggles.Clear();
 
-        if (showDebugLogs)
-            Debug.Log("[Practice] Step 2: 난이도 토글을 눌러보세요. 그 다음 실습모드 토글을 누르세요.");
-    }
-
-    private void OnDifficultyToggleClicked()
-    {
-        if (currentStep != 1 || !isStepActive) return;
-
-        if (!difficultyClicked)
+        // 난이도 토글 중 첫 번째 (Beginner)
+        if (difficultyToggles.Count > 0 && difficultyToggles[0] != null)
         {
-            difficultyClicked = true;
-            if (showDebugLogs)
-                Debug.Log("[Practice] 난이도 토글 반응 확인! 이제 실습모드 토글을 누르세요.");
+            sequentialToggles.Add(difficultyToggles[0]);
         }
-    }
 
-    private void OnPracticeModeToggleClicked()
-    {
-        if (currentStep != 1 || !isStepActive) return;
+        // 실습모드 토글
+        if (practiceToggle != null)
+        {
+            sequentialToggles.Add(practiceToggle);
+        }
+
+        if (sequentialToggles.Count == 0)
+        {
+            if (showDebugLogs)
+                Debug.Log("[Practice] Step 2: 모드 선택 토글이 없어서 건너뜁니다.");
+            CompleteCurrentStep();
+            return;
+        }
+
+        currentToggleIndex = 0;
+        SaveOriginalColors(sequentialToggles);
+        SetupSequentialToggleListeners();
 
         if (showDebugLogs)
-            Debug.Log("[Practice] 실습모드 토글 클릭 - 다음 단계로!");
+            Debug.Log($"[Practice] Step 2: 모드 선택 - 토글을 순서대로 눌러주세요 (총 {sequentialToggles.Count}개)");
 
-        CompleteCurrentStep();
+        StartHighlightToggle(0);
     }
 
     #endregion
 
-    #region Step 3: 정보패널 토글 (순서대로 하이라이트)
+    #region Step 3: 콘텐츠/메뉴 토글 순차 점멸
 
-    private void StartStep3_PanelButtons()
+    private void StartStep3_ContentToggles()
     {
-        currentHighlightIndex = 0;
+        // 가이드 패널 표시 (시나리오 시작 시뮬레이션)
+        if (scenarioProgressUI != null)
+        {
+            scenarioProgressUI.SetActive(true);
+            if (showDebugLogs)
+                Debug.Log("[Practice] 가이드 패널 표시");
+        }
 
-        if (panelToggles == null || panelToggles.Count == 0)
+        // 콘텐츠/메뉴 토글 interactable 활성화
+        EnableContentMenuToggles();
+
+        // 순차 토글 리스트 구성: 근골격 → 전문가영상 → 수행결과 → 설정
+        sequentialToggles.Clear();
+
+        if (skeletonToggle != null)
+            sequentialToggles.Add(skeletonToggle);
+        if (expertVideoToggle != null)
+            sequentialToggles.Add(expertVideoToggle);
+        if (resultToggle != null)
+            sequentialToggles.Add(resultToggle);
+        if (settingsToggle != null)
+            sequentialToggles.Add(settingsToggle);
+
+        if (sequentialToggles.Count == 0)
         {
             if (showDebugLogs)
-                Debug.Log("[Practice] Step 3: 패널 토글이 없어서 건너뜁니다.");
+                Debug.Log("[Practice] Step 3: 콘텐츠 토글이 없어서 건너뜁니다.");
             CompleteCurrentStep();
             return;
         }
 
-        // 원본 색상 저장
-        originalToggleColors.Clear();
-        foreach (var toggle in panelToggles)
-        {
-            if (toggle != null)
-            {
-                var image = toggle.GetComponent<Image>();
-                if (image != null)
-                    originalToggleColors[toggle] = image.color;
-            }
-        }
+        currentToggleIndex = 0;
+        SaveOriginalColors(sequentialToggles);
+        SetupSequentialToggleListeners();
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 3: 하이라이트된 토글을 순서대로 눌러보세요 (총 {panelToggles.Count}개)");
+            Debug.Log($"[Practice] Step 3: 콘텐츠/메뉴 토글 - 순서대로 눌러주세요 (총 {sequentialToggles.Count}개)");
 
-        // 첫 토글 하이라이트 시작
         StartHighlightToggle(0);
     }
 
-    private void StartHighlightToggle(int index)
+    private void EnableContentMenuToggles()
     {
-        if (index >= panelToggles.Count)
-        {
-            // 모든 토글 완료
-            CompleteCurrentStep();
-            return;
-        }
+        // 콘텐츠 토글 활성화
+        if (skeletonToggle != null) skeletonToggle.interactable = true;
+        if (expertVideoToggle != null) expertVideoToggle.interactable = true;
+        if (resultToggle != null) resultToggle.interactable = true;
 
-        currentHighlightIndex = index;
-
-        // 이전 토글 색상 복원
-        StopBlinking();
-
-        // 현재 토글 점멸 시작
-        var currentToggle = panelToggles[index];
-        if (currentToggle != null)
-        {
-            // 클릭 리스너 추가
-            currentToggle.onValueChanged.AddListener((_) => OnHighlightedToggleClicked(currentToggle));
-            blinkCoroutine = StartCoroutine(BlinkToggle(currentToggle));
-
-            if (showDebugLogs)
-                Debug.Log($"[Practice] 토글 하이라이트: {currentToggle.name} ({index + 1}/{panelToggles.Count})");
-        }
-    }
-
-    private IEnumerator BlinkToggle(Toggle toggle)
-    {
-        var image = toggle.GetComponent<Image>();
-        if (image == null) yield break;
-
-        Color originalColor = originalToggleColors.ContainsKey(toggle) ? originalToggleColors[toggle] : image.color;
-        bool isOn = false;
-
-        while (true)
-        {
-            isOn = !isOn;
-            image.color = isOn ? highlightColor : originalColor;
-            yield return new WaitForSeconds(blinkInterval);
-        }
-    }
-
-    private void StopBlinking()
-    {
-        if (blinkCoroutine != null)
-        {
-            StopCoroutine(blinkCoroutine);
-            blinkCoroutine = null;
-        }
-
-        // 모든 토글 원래 색상 복원
-        foreach (var kvp in originalToggleColors)
-        {
-            if (kvp.Key != null)
-            {
-                var image = kvp.Key.GetComponent<Image>();
-                if (image != null)
-                    image.color = kvp.Value;
-            }
-        }
-    }
-
-    private void OnHighlightedToggleClicked(Toggle clickedToggle)
-    {
-        if (currentStep != 2 || !isStepActive) return;
-
-        // 현재 하이라이트된 토글인지 확인
-        if (currentHighlightIndex < panelToggles.Count && panelToggles[currentHighlightIndex] == clickedToggle)
-        {
-            if (showDebugLogs)
-                Debug.Log($"[Practice] 토글 클릭 완료: {clickedToggle.name}");
-
-            // 다음 토글로
-            StartHighlightToggle(currentHighlightIndex + 1);
-        }
+        // 메뉴 토글 활성화
+        if (settingsToggle != null) settingsToggle.interactable = true;
+        if (mainMenuToggle != null) mainMenuToggle.interactable = true;
     }
 
     #endregion
@@ -399,14 +446,9 @@ public class PracticeManager : MonoBehaviour
     private void StartStep4_PatientPosition()
     {
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 4: 설정 토글을 눌러 환자 위치를 조정해보세요");
-    }
+            Debug.Log("[Practice] Step 4: 설정 패널에서 환자 위치를 조정해보세요");
 
-    private void OnSettingsToggleClicked()
-    {
-        if (currentStep != 3 || !isStepActive) return;
-
-        // 설정 창이 열리면 환자 위치 변경 감지 시작
+        // 설정 패널이 열려있는지 확인
         StartCoroutine(WaitForPatientPositionChange());
     }
 
@@ -461,6 +503,35 @@ public class PracticeManager : MonoBehaviour
         currentCount = 0;
         isWaitingForHold = false;
 
+        // 시작 토글 점멸 (가이드 핸드 토글로 이동)
+        sequentialToggles.Clear();
+
+        if (startToggle != null)
+        {
+            sequentialToggles.Add(startToggle);
+        }
+
+        if (sequentialToggles.Count > 0)
+        {
+            currentToggleIndex = 0;
+            SaveOriginalColors(sequentialToggles);
+            SetupSequentialToggleListeners();
+            StartHighlightToggle(0);
+
+            if (showDebugLogs)
+                Debug.Log("[Practice] Step 5: 시작 토글을 눌러 홀드 연습을 시작하세요");
+        }
+        else
+        {
+            // 시작 토글 없으면 바로 홀드 대기
+            StartWaitingForHold();
+        }
+    }
+
+    private void StartWaitingForHold()
+    {
+        isWaitingForHold = true;
+
         // ChunaPathEvaluator 이벤트 구독
         if (chunaPathEvaluator != null)
         {
@@ -468,21 +539,9 @@ public class PracticeManager : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 5: 가이드 핸드를 켜고 전체 동작을 수행하세요 (0/{HOLD_REQUIRED_COUNT})");
-        Debug.Log("[Practice] 사이클: 시작홀드 → 이동 → 중간홀드 → 완료");
-    }
-
-    private void OnGuideHandToggleClicked()
-    {
-        if (currentStep != 4 || !isStepActive) return;
-
-        // 토글이 켜질 때만 반응
-        if (guideHandToggle != null && guideHandToggle.isOn)
         {
-            isWaitingForHold = true;
-
-            if (showDebugLogs)
-                Debug.Log("[Practice] 가이드 핸드 활성화 - 전체 동작(홀드→이동→홀드→완료)을 수행하세요");
+            Debug.Log($"[Practice] 홀드 연습 시작 - 전체 동작을 수행하세요 (0/{HOLD_REQUIRED_COUNT})");
+            Debug.Log("[Practice] 사이클: 시작홀드 → 이동 → 중간홀드 → 완료");
         }
     }
 
@@ -516,7 +575,6 @@ public class PracticeManager : MonoBehaviour
             }
             else
             {
-                // 다음 사이클을 위해 리셋
                 if (showDebugLogs)
                     Debug.Log($"[Practice] 다음 사이클을 시작하세요... ({currentCount}/{HOLD_REQUIRED_COUNT})");
             }
@@ -547,6 +605,128 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
+    #region 순차 토글 하이라이트 시스템
+
+    private void SaveOriginalColors(List<Toggle> toggles)
+    {
+        originalToggleColors.Clear();
+        foreach (var toggle in toggles)
+        {
+            if (toggle != null)
+            {
+                var image = toggle.GetComponent<Image>();
+                if (image != null)
+                    originalToggleColors[toggle] = image.color;
+            }
+        }
+    }
+
+    private void SetupSequentialToggleListeners()
+    {
+        // 각 토글에 리스너 추가
+        for (int i = 0; i < sequentialToggles.Count; i++)
+        {
+            int index = i; // 클로저용 로컬 변수
+            var toggle = sequentialToggles[i];
+            if (toggle != null)
+            {
+                toggle.onValueChanged.AddListener((isOn) => OnSequentialToggleClicked(toggle, index, isOn));
+            }
+        }
+    }
+
+    private void OnSequentialToggleClicked(Toggle clickedToggle, int index, bool isOn)
+    {
+        if (!isStepActive) return;
+
+        // 현재 하이라이트된 토글이고 켜졌을 때만 처리
+        if (index == currentToggleIndex && isOn)
+        {
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 토글 클릭 완료: {clickedToggle.name} ({index + 1}/{sequentialToggles.Count})");
+
+            // 다음 토글로
+            currentToggleIndex++;
+
+            if (currentToggleIndex >= sequentialToggles.Count)
+            {
+                // 모든 토글 완료
+                StopBlinking();
+
+                // Step 5에서 시작 토글 클릭 후 홀드 대기로 전환
+                if (currentStep == 4)
+                {
+                    StartWaitingForHold();
+                }
+                else
+                {
+                    CompleteCurrentStep();
+                }
+            }
+            else
+            {
+                // 다음 토글 하이라이트
+                StartHighlightToggle(currentToggleIndex);
+            }
+        }
+    }
+
+    private void StartHighlightToggle(int index)
+    {
+        if (index >= sequentialToggles.Count) return;
+
+        // 이전 점멸 중지
+        StopBlinking();
+
+        // 현재 토글 점멸 시작
+        var currentToggle = sequentialToggles[index];
+        if (currentToggle != null)
+        {
+            blinkCoroutine = StartCoroutine(BlinkToggle(currentToggle));
+
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 토글 하이라이트: {currentToggle.name} ({index + 1}/{sequentialToggles.Count})");
+        }
+    }
+
+    private IEnumerator BlinkToggle(Toggle toggle)
+    {
+        var image = toggle.GetComponent<Image>();
+        if (image == null) yield break;
+
+        Color originalColor = originalToggleColors.ContainsKey(toggle) ? originalToggleColors[toggle] : image.color;
+        bool isOn = false;
+
+        while (true)
+        {
+            isOn = !isOn;
+            image.color = isOn ? highlightColor : originalColor;
+            yield return new WaitForSeconds(blinkInterval);
+        }
+    }
+
+    private void StopBlinking()
+    {
+        if (blinkCoroutine != null)
+        {
+            StopCoroutine(blinkCoroutine);
+            blinkCoroutine = null;
+        }
+
+        // 모든 토글 원래 색상 복원
+        foreach (var kvp in originalToggleColors)
+        {
+            if (kvp.Key != null)
+            {
+                var image = kvp.Key.GetComponent<Image>();
+                if (image != null)
+                    image.color = kvp.Value;
+            }
+        }
+    }
+
+    #endregion
+
     #region Completion
 
     private void ShowCompletionPopup()
@@ -560,11 +740,6 @@ public class PracticeManager : MonoBehaviour
         if (exitPopupController != null)
         {
             exitPopupController.ShowPopup();
-        }
-        // 또는 직접 팝업 활성화
-        else if (completionPopup != null)
-        {
-            completionPopup.SetActive(true);
         }
         else
         {
@@ -596,6 +771,7 @@ public class PracticeManager : MonoBehaviour
         currentCount = 0;
         isStepActive = false;
         isWaitingForHold = false;
+        sequentialToggles.Clear();
 
         StartStep(0);
 
@@ -615,5 +791,11 @@ public class PracticeManager : MonoBehaviour
     void OnDestroy()
     {
         StopBlinking();
+
+        // 이벤트 구독 해제
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
+        }
     }
 }

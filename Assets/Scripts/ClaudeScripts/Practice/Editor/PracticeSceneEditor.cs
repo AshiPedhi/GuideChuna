@@ -373,6 +373,40 @@ public class PracticeSceneEditor : EditorWindow
         PracticeManager pm = practiceManagerObj.GetComponent<PracticeManager>();
         SerializedObject so = new SerializedObject(pm);
 
+        // UI 컨트롤러 연결
+        var infoPanelController = Object.FindFirstObjectByType<InfoPanelController>();
+        if (infoPanelController != null)
+        {
+            var prop = so.FindProperty("infoPanelController");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = infoPanelController;
+                Debug.Log("[PracticeEditor] InfoPanelController connected");
+            }
+        }
+
+        var scenarioGuideUIController = Object.FindFirstObjectByType<ScenarioGuideUIController>();
+        if (scenarioGuideUIController != null)
+        {
+            var prop = so.FindProperty("scenarioGuideUIController");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = scenarioGuideUIController;
+                Debug.Log("[PracticeEditor] ScenarioGuideUIController connected");
+            }
+        }
+
+        var practiceSettingsController = Object.FindFirstObjectByType<PracticeSettingsController>();
+        if (practiceSettingsController != null)
+        {
+            var prop = so.FindProperty("practiceSettingsController");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = practiceSettingsController;
+                Debug.Log("[PracticeEditor] PracticeSettingsController connected");
+            }
+        }
+
         // ChunaPathEvaluator 찾기 (Step 5 홀드 감지용)
         var chunaEvaluator = Object.FindFirstObjectByType<ChunaPathEvaluator>();
         if (chunaEvaluator != null)
@@ -382,6 +416,33 @@ public class PracticeSceneEditor : EditorWindow
             {
                 prop.objectReferenceValue = chunaEvaluator;
                 Debug.Log("[PracticeEditor] ChunaPathEvaluator connected");
+            }
+        }
+
+        // ExitPopupController 찾기
+        var exitPopup = Object.FindFirstObjectByType<ExitPopupController>();
+        if (exitPopup != null)
+        {
+            var prop = so.FindProperty("exitPopupController");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = exitPopup;
+                Debug.Log("[PracticeEditor] ExitPopupController connected");
+            }
+        }
+
+        // 시나리오 진행 UI (가이드 패널) 찾기
+        var scenarioProgressUIs = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None)
+            .Where(g => g.name.ToLower().Contains("scenario") && g.name.ToLower().Contains("progress") ||
+                       g.name.ToLower().Contains("guide") && g.name.ToLower().Contains("panel"));
+        var scenarioProgressUI = scenarioProgressUIs.FirstOrDefault();
+        if (scenarioProgressUI != null)
+        {
+            var prop = so.FindProperty("scenarioProgressUI");
+            if (prop != null)
+            {
+                prop.objectReferenceValue = scenarioProgressUI;
+                Debug.Log("[PracticeEditor] ScenarioProgressUI connected");
             }
         }
 
@@ -423,13 +484,14 @@ public class PracticeSceneEditor : EditorWindow
         // UI 토글들 찾기 (Canvas 내부에서)
         var allToggles = Object.FindObjectsByType<Toggle>(FindObjectsSortMode.None);
 
-        // 난이도 토글 찾기
+        // 난이도 토글 찾기 (Beginner, Intermediate, Advanced)
         var difficultyToggles = allToggles.Where(t =>
-            t.name.ToLower().Contains("difficulty") ||
-            t.name.ToLower().Contains("난이도") ||
-            t.name.ToLower().Contains("easy") ||
-            t.name.ToLower().Contains("normal") ||
-            t.name.ToLower().Contains("hard")).ToList();
+            t.name.ToLower().Contains("beginner") ||
+            t.name.ToLower().Contains("intermediate") ||
+            t.name.ToLower().Contains("advanced") ||
+            t.name.ToLower().Contains("초급") ||
+            t.name.ToLower().Contains("중급") ||
+            t.name.ToLower().Contains("상급")).ToList();
 
         if (difficultyToggles.Count > 0)
         {
@@ -446,11 +508,62 @@ public class PracticeSceneEditor : EditorWindow
             }
         }
 
-        // 설정 토글 찾기
+        // 실습모드 토글 찾기
+        var practiceToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("practice") && t.name.ToLower().Contains("toggle"));
+        if (practiceToggle != null)
+        {
+            var prop = so.FindProperty("practiceToggle");
+            if (prop != null)
+                prop.objectReferenceValue = practiceToggle;
+            Debug.Log("[PracticeEditor] Practice toggle found");
+        }
+
+        // 평가모드 토글 찾기
+        var evaluationToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("evaluation") && t.name.ToLower().Contains("toggle"));
+        if (evaluationToggle != null)
+        {
+            var prop = so.FindProperty("evaluationToggle");
+            if (prop != null)
+                prop.objectReferenceValue = evaluationToggle;
+            Debug.Log("[PracticeEditor] Evaluation toggle found");
+        }
+
+        // 콘텐츠 토글들 찾기
+        var skeletonToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("skeleton") || t.name.ToLower().Contains("근골격"));
+        if (skeletonToggle != null)
+        {
+            var prop = so.FindProperty("skeletonToggle");
+            if (prop != null)
+                prop.objectReferenceValue = skeletonToggle;
+            Debug.Log("[PracticeEditor] Skeleton toggle found");
+        }
+
+        var expertVideoToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("expert") || t.name.ToLower().Contains("video") || t.name.ToLower().Contains("전문가"));
+        if (expertVideoToggle != null)
+        {
+            var prop = so.FindProperty("expertVideoToggle");
+            if (prop != null)
+                prop.objectReferenceValue = expertVideoToggle;
+            Debug.Log("[PracticeEditor] Expert video toggle found");
+        }
+
+        var resultToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("result") || t.name.ToLower().Contains("결과"));
+        if (resultToggle != null)
+        {
+            var prop = so.FindProperty("resultToggle");
+            if (prop != null)
+                prop.objectReferenceValue = resultToggle;
+            Debug.Log("[PracticeEditor] Result toggle found");
+        }
+
+        // 메뉴 토글들 찾기
         var settingsToggle = allToggles.FirstOrDefault(t =>
-            t.name.ToLower().Contains("setting") ||
-            t.name.ToLower().Contains("설정") ||
-            t.name.ToLower().Contains("config"));
+            t.name.ToLower().Contains("setting") || t.name.ToLower().Contains("설정"));
         if (settingsToggle != null)
         {
             var prop = so.FindProperty("settingsToggle");
@@ -459,17 +572,26 @@ public class PracticeSceneEditor : EditorWindow
             Debug.Log("[PracticeEditor] Settings toggle found");
         }
 
-        // 가이드 핸드 토글 찾기
-        var guideHandToggle = allToggles.FirstOrDefault(t =>
-            t.name.ToLower().Contains("guide") ||
-            t.name.ToLower().Contains("가이드") ||
-            t.name.ToLower().Contains("hand"));
-        if (guideHandToggle != null)
+        var mainMenuToggle = allToggles.FirstOrDefault(t =>
+            (t.name.ToLower().Contains("main") && t.name.ToLower().Contains("menu")) ||
+            t.name.ToLower().Contains("메인"));
+        if (mainMenuToggle != null)
         {
-            var prop = so.FindProperty("guideHandToggle");
+            var prop = so.FindProperty("mainMenuToggle");
             if (prop != null)
-                prop.objectReferenceValue = guideHandToggle;
-            Debug.Log("[PracticeEditor] Guide hand toggle found");
+                prop.objectReferenceValue = mainMenuToggle;
+            Debug.Log("[PracticeEditor] Main menu toggle found");
+        }
+
+        // 시작 토글 찾기 (ScenarioGuideUIController)
+        var startToggle = allToggles.FirstOrDefault(t =>
+            t.name.ToLower().Contains("start") && t.name.ToLower().Contains("toggle"));
+        if (startToggle != null)
+        {
+            var prop = so.FindProperty("startToggle");
+            if (prop != null)
+                prop.objectReferenceValue = startToggle;
+            Debug.Log("[PracticeEditor] Start toggle found");
         }
 
         // Grabbable UI 찾기
