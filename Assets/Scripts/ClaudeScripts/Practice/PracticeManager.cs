@@ -485,7 +485,7 @@ public class PracticeManager : MonoBehaviour
     /// <summary>
     /// ChunaPathEvaluator 단계 변경 이벤트 핸들러
     /// </summary>
-    private void OnEvaluationPhaseChanged(EvaluationPhase newPhase)
+    private void OnEvaluationPhaseChanged(ChunaPathEvaluator.EvaluationPhase newPhase)
     {
         if (currentStep != 4 || !isStepActive || !isWaitingForHold) return;
 
@@ -493,7 +493,7 @@ public class PracticeManager : MonoBehaviour
             Debug.Log($"[Practice] 평가 단계 변경: {newPhase}");
 
         // Completed 상태가 되면 1회 사이클 완료
-        if (newPhase == EvaluationPhase.Completed)
+        if (newPhase == ChunaPathEvaluator.EvaluationPhase.Completed)
         {
             currentCount++;
             if (showDebugLogs)
