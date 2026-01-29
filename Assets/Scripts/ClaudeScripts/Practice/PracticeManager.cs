@@ -1,73 +1,82 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.Events;
 using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
-/// 연습 모드 전체 관리
-/// 5단계 연습을 하드코딩으로 관리
+/// 연습 모드 관리자
+/// 기존 UI 사용, 버튼 하이라이트, 홀드 감지 연동
 /// </summary>
 public class PracticeManager : MonoBehaviour
 {
-    [Header("=== UI 참조 ===")]
-    [SerializeField] private PracticeUI practiceUI;
-
     [Header("=== Step 1: UI 옮기기 ===")]
-    [Tooltip("그랩 가능한 UI 오브젝트")]
     [SerializeField] private Transform grabbableUI;
-    [SerializeField] private Vector3 uiInitialPosition;
-    [SerializeField] private Quaternion uiInitialRotation;
-    [SerializeField] private Button practiceSelectButton;
+    private Vector3 uiInitialPosition;
+    private Quaternion uiInitialRotation;
 
     [Header("=== Step 2: 난이도 버튼 ===")]
+    [Tooltip("난이도 버튼들 (아무거나 클릭하면 반응 확인)")]
     [SerializeField] private List<Button> difficultyButtons;
+    [Tooltip("실습모드 버튼 (클릭하면 다음 단계로)")]
     [SerializeField] private Button practiceModeButton;
 
-    [Header("=== Step 3: 패널 버튼 ===")]
+    [Header("=== Step 3: 정보패널 버튼 (순서대로 하이라이트) ===")]
+    [Tooltip("순서대로 눌러야 할 버튼들")]
     [SerializeField] private List<Button> panelButtons;
-    private HashSet<Button> clickedPanelButtons = new HashSet<Button>();
 
     [Header("=== Step 4: 환자 위치 조정 ===")]
     [SerializeField] private Button settingsButton;
     [SerializeField] private Transform patientTransform;
-    private Vector3 initialPatientPosition;
-    private bool patientPositionChanged = false;
 
-    [Header("=== Step 5: 가이드 핸드 ===")]
+    [Header("=== Step 5: 홀드 연습 ===")]
+    [Tooltip("가이드 핸드 토글 버튼")]
     [SerializeField] private Button guideHandToggleButton;
-    [SerializeField] private string handDataPath = "PoseData/practice_hand";
-    [Tooltip("가이드 핸드 표시 컴포넌트")]
-    [SerializeField] private MonoBehaviour guideHandDisplay;
+    [Tooltip("ChunaPathEvaluator (홀드 감지용)")]
+    [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
 
-    [Header("=== 완료 후 ===")]
-    [SerializeField] private Button mainMenuButton;
-    [SerializeField] private Button startPracticeButton;
+    [Header("=== 완료 팝업 ===")]
+    [Tooltip("완료 시 표시할 팝업 (ExitPopupController 등)")]
+    [SerializeField] private GameObject completionPopup;
+    [Tooltip("또는 ExitPopupController 직접 연결")]
+    [SerializeField] private ExitPopupController exitPopupController;
+
+    [Header("=== 하이라이트 설정 ===")]
+    [SerializeField] private float blinkInterval = 0.5f;
+    [SerializeField] private Color highlightColor = new Color(1f, 0.8f, 0.2f, 1f);
 
     [Header("=== 설정 ===")]
-    [SerializeField] private float stepTransitionDelay = 1.5f;
+    [SerializeField] private float stepTransitionDelay = 1.0f;
     [SerializeField] private bool showDebugLogs = true;
 
     // 상태
     private int currentStep = 0;
     private int currentCount = 0;
     private bool isStepActive = false;
+    private bool difficultyClicked = false;
+
+    // 하이라이트
+    private ButtonHighlighter buttonHighlighter;
+    private Dictionary<Button, Color> originalButtonColors = new Dictionary<Button, Color>();
+    private Coroutine blinkCoroutine;
+    private int currentHighlightIndex = 0;
+
+    // 홀드 감지
+    private bool isWaitingForHold = false;
+    private bool wasHolding = false;
 
     // 상수
     private const int TOTAL_STEPS = 5;
+    private const int HOLD_REQUIRED_COUNT = 3;
+    private const int UI_GRAB_REQUIRED = 3;
 
     void Start()
     {
         Initialize();
-        StartStep(0);
     }
 
-    /// <summary>
-    /// 초기화
-    /// </summary>
     private void Initialize()
     {
-        // ★ 시나리오 모드와 충돌하는 컴포넌트 비활성화
+        // 충돌 컴포넌트 비활성화
         DisableConflictingComponents();
 
         // 초기 위치 저장
@@ -77,27 +86,19 @@ public class PracticeManager : MonoBehaviour
             uiInitialRotation = grabbableUI.rotation;
         }
 
-        if (patientTransform != null)
-        {
-            initialPatientPosition = patientTransform.position;
-        }
+        // ButtonHighlighter 컴포넌트 추가
+        buttonHighlighter = gameObject.AddComponent<ButtonHighlighter>();
 
-        // 버튼 비활성화
-        SetButtonActive(practiceSelectButton, false);
-        SetButtonActive(practiceModeButton, false);
-        SetButtonActive(mainMenuButton, false);
-        SetButtonActive(startPracticeButton, false);
-
-        // 버튼 이벤트 연결
+        // 버튼 리스너 설정
         SetupButtonListeners();
 
+        // 연습 시작
+        StartStep(0);
+
         if (showDebugLogs)
-            Debug.Log("[Practice] Initialized");
+            Debug.Log("[Practice] Initialized - 연습 모드 시작");
     }
 
-    /// <summary>
-    /// 시나리오 모드와 충돌하는 컴포넌트 비활성화
-    /// </summary>
     private void DisableConflictingComponents()
     {
         // ScenarioManager 비활성화
@@ -105,8 +106,7 @@ public class PracticeManager : MonoBehaviour
         if (scenarioManager != null)
         {
             scenarioManager.enabled = false;
-            if (showDebugLogs)
-                Debug.Log("[Practice] ScenarioManager disabled");
+            if (showDebugLogs) Debug.Log("[Practice] ScenarioManager disabled");
         }
 
         // ScenarioConditionManager 비활성화
@@ -114,17 +114,15 @@ public class PracticeManager : MonoBehaviour
         if (conditionManager != null)
         {
             conditionManager.enabled = false;
-            if (showDebugLogs)
-                Debug.Log("[Practice] ScenarioConditionManager disabled");
+            if (showDebugLogs) Debug.Log("[Practice] ScenarioConditionManager disabled");
         }
 
-        // HandPoseTrainingController 비활성화 (연습모드에서는 직접 제어)
+        // HandPoseTrainingController 비활성화
         var trainingController = FindFirstObjectByType<HandPoseTrainingController>();
         if (trainingController != null)
         {
             trainingController.enabled = false;
-            if (showDebugLogs)
-                Debug.Log("[Practice] HandPoseTrainingController disabled");
+            if (showDebugLogs) Debug.Log("[Practice] HandPoseTrainingController disabled");
         }
 
         // TrainingResultTracker 비활성화
@@ -132,8 +130,7 @@ public class PracticeManager : MonoBehaviour
         if (resultTracker != null)
         {
             resultTracker.enabled = false;
-            if (showDebugLogs)
-                Debug.Log("[Practice] TrainingResultTracker disabled");
+            if (showDebugLogs) Debug.Log("[Practice] TrainingResultTracker disabled");
         }
 
         // QuizPanel 비활성화
@@ -141,49 +138,43 @@ public class PracticeManager : MonoBehaviour
         if (quizPanel != null)
         {
             quizPanel.gameObject.SetActive(false);
-            if (showDebugLogs)
-                Debug.Log("[Practice] QuizPanel disabled");
+            if (showDebugLogs) Debug.Log("[Practice] QuizPanel disabled");
         }
-
-        // ExitPopupController는 유지 (연습에서도 나가기 필요)
     }
 
-    /// <summary>
-    /// 버튼 리스너 설정
-    /// </summary>
     private void SetupButtonListeners()
     {
-        // Step 2: 난이도 버튼
+        // 난이도 버튼 - 아무거나 클릭하면 반응
         foreach (var btn in difficultyButtons)
         {
             if (btn != null)
-                btn.onClick.AddListener(() => OnDifficultyButtonClicked());
+                btn.onClick.AddListener(OnDifficultyButtonClicked);
         }
 
-        // Step 3: 패널 버튼
-        foreach (var btn in panelButtons)
-        {
-            if (btn != null)
-            {
-                Button capturedBtn = btn;
-                btn.onClick.AddListener(() => OnPanelButtonClicked(capturedBtn));
-            }
-        }
+        // 실습모드 버튼 - 다음 단계로
+        if (practiceModeButton != null)
+            practiceModeButton.onClick.AddListener(OnPracticeModeButtonClicked);
 
-        // Step 4: 설정 버튼
+        // 설정 버튼
         if (settingsButton != null)
             settingsButton.onClick.AddListener(OnSettingsButtonClicked);
 
-        // Step 5: 가이드 핸드 토글
+        // 가이드 핸드 토글
         if (guideHandToggleButton != null)
-            guideHandToggleButton.onClick.AddListener(OnGuideHandToggled);
+            guideHandToggleButton.onClick.AddListener(OnGuideHandToggleClicked);
+    }
+
+    void Update()
+    {
+        // Step 5: 홀드 감지
+        if (currentStep == 4 && isStepActive && isWaitingForHold)
+        {
+            CheckHoldState();
+        }
     }
 
     #region Step Management
 
-    /// <summary>
-    /// 단계 시작
-    /// </summary>
     private void StartStep(int step)
     {
         currentStep = step;
@@ -191,137 +182,66 @@ public class PracticeManager : MonoBehaviour
         isStepActive = true;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Starting Step {step + 1}");
+            Debug.Log($"[Practice] === Step {step + 1} 시작 ===");
 
         switch (step)
         {
-            case 0:
-                StartStep1_UIGrab();
-                break;
-            case 1:
-                StartStep2_DifficultyButton();
-                break;
-            case 2:
-                StartStep3_PanelButtons();
-                break;
-            case 3:
-                StartStep4_PatientPosition();
-                break;
-            case 4:
-                StartStep5_GuideHand();
-                break;
-            default:
-                ShowComplete();
-                break;
+            case 0: StartStep1_UIGrab(); break;
+            case 1: StartStep2_DifficultyButton(); break;
+            case 2: StartStep3_PanelButtons(); break;
+            case 3: StartStep4_PatientPosition(); break;
+            case 4: StartStep5_HoldPractice(); break;
+            default: ShowCompletionPopup(); break;
         }
     }
 
-    /// <summary>
-    /// 현재 단계 완료
-    /// </summary>
     private void CompleteCurrentStep()
     {
         isStepActive = false;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step {currentStep + 1} Completed!");
+            Debug.Log($"[Practice] Step {currentStep + 1} 완료!");
 
-        // 단계별 완료 처리
-        switch (currentStep)
-        {
-            case 0:
-                OnStep1Complete();
-                break;
-            case 1:
-                OnStep2Complete();
-                break;
-            case 2:
-                OnStep3Complete();
-                break;
-            case 3:
-                OnStep4Complete();
-                break;
-            case 4:
-                OnStep5Complete();
-                break;
-        }
-
-        // 다음 단계로
         StartCoroutine(TransitionToNextStep());
     }
 
     private IEnumerator TransitionToNextStep()
     {
-        practiceUI?.ShowStepComplete($"Step {currentStep + 1} 완료!");
-
         yield return new WaitForSeconds(stepTransitionDelay);
-
         StartStep(currentStep + 1);
-    }
-
-    /// <summary>
-    /// 동작 횟수 증가 (외부에서 호출)
-    /// </summary>
-    public void IncrementCount()
-    {
-        if (!isStepActive) return;
-
-        currentCount++;
-
-        int requiredCount = GetRequiredCountForStep(currentStep);
-        practiceUI?.UpdateProgress(currentCount, requiredCount);
-
-        if (showDebugLogs)
-            Debug.Log($"[Practice] Step {currentStep + 1}: {currentCount}/{requiredCount}");
-
-        if (requiredCount > 0 && currentCount >= requiredCount)
-        {
-            CompleteCurrentStep();
-        }
-    }
-
-    private int GetRequiredCountForStep(int step)
-    {
-        switch (step)
-        {
-            case 0: return 3; // UI 옮기기
-            case 1: return 3; // 난이도 버튼
-            case 2: return 0; // 패널 버튼 (모두 클릭 시 완료)
-            case 3: return 1; // 환자 위치
-            case 4: return 3; // 가이드 핸드
-            default: return 0;
-        }
     }
 
     #endregion
 
-    #region Step 1: UI 옮기기
+    #region Step 1: UI 옮기기 (3회)
 
     private void StartStep1_UIGrab()
     {
-        practiceUI?.ShowStep(
-            "Step 1: UI 옮기기",
-            "UI를 잡아서 원하는 위치로 옮겨보세요",
-            0, 3
-        );
-
-        // UI 위치 초기화
         ResetUIPosition();
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
     }
 
     /// <summary>
-    /// UI Grab 완료 시 호출 (OVRGrabbable 이벤트에서 호출)
+    /// UI Grab 완료 시 외부에서 호출 (UIGrabDetector에서)
     /// </summary>
     public void OnUIGrabReleased()
     {
         if (currentStep != 0 || !isStepActive) return;
-        IncrementCount();
-    }
 
-    private void OnStep1Complete()
-    {
-        ResetUIPosition();
-        SetButtonActive(practiceSelectButton, true);
+        currentCount++;
+        if (showDebugLogs)
+            Debug.Log($"[Practice] UI 옮기기: {currentCount}/{UI_GRAB_REQUIRED}");
+
+        if (currentCount >= UI_GRAB_REQUIRED)
+        {
+            CompleteCurrentStep();
+        }
+        else
+        {
+            ResetUIPosition();
+        }
     }
 
     private void ResetUIPosition()
@@ -335,66 +255,149 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 2: 난이도 버튼
+    #region Step 2: 난이도 버튼 + 실습모드 버튼
 
     private void StartStep2_DifficultyButton()
     {
-        practiceUI?.ShowStep(
-            "Step 2: 난이도 변경",
-            "난이도 선택 버튼을 눌러 난이도를 변경해보세요",
-            0, 3
-        );
+        difficultyClicked = false;
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] Step 2: 난이도 버튼을 눌러보세요. 그 다음 실습모드 버튼을 누르세요.");
     }
 
     private void OnDifficultyButtonClicked()
     {
         if (currentStep != 1 || !isStepActive) return;
-        IncrementCount();
+
+        if (!difficultyClicked)
+        {
+            difficultyClicked = true;
+            if (showDebugLogs)
+                Debug.Log("[Practice] 난이도 버튼 반응 확인! 이제 실습모드 버튼을 누르세요.");
+        }
     }
 
-    private void OnStep2Complete()
+    private void OnPracticeModeButtonClicked()
     {
-        SetButtonActive(practiceModeButton, true);
+        if (currentStep != 1 || !isStepActive) return;
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 실습모드 버튼 클릭 - 다음 단계로!");
+
+        CompleteCurrentStep();
     }
 
     #endregion
 
-    #region Step 3: 패널 버튼
+    #region Step 3: 정보패널 버튼 (순서대로 하이라이트)
 
     private void StartStep3_PanelButtons()
     {
-        clickedPanelButtons.Clear();
+        currentHighlightIndex = 0;
 
-        practiceUI?.ShowStep(
-            "Step 3: 패널 버튼",
-            "좌측 안내 패널의 버튼들을 모두 눌러보세요",
-            0, panelButtons.Count
-        );
+        if (panelButtons == null || panelButtons.Count == 0)
+        {
+            if (showDebugLogs)
+                Debug.Log("[Practice] Step 3: 패널 버튼이 없어서 건너뜁니다.");
+            CompleteCurrentStep();
+            return;
+        }
+
+        // 원본 색상 저장
+        originalButtonColors.Clear();
+        foreach (var btn in panelButtons)
+        {
+            if (btn != null)
+            {
+                var image = btn.GetComponent<Image>();
+                if (image != null)
+                    originalButtonColors[btn] = image.color;
+            }
+        }
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] Step 3: 하이라이트된 버튼을 순서대로 눌러보세요 (총 {panelButtons.Count}개)");
+
+        // 첫 버튼 하이라이트 시작
+        StartHighlightButton(0);
     }
 
-    private void OnPanelButtonClicked(Button btn)
+    private void StartHighlightButton(int index)
     {
-        if (currentStep != 2 || !isStepActive) return;
-
-        if (!clickedPanelButtons.Contains(btn))
+        if (index >= panelButtons.Count)
         {
-            clickedPanelButtons.Add(btn);
-            practiceUI?.UpdateProgress(clickedPanelButtons.Count, panelButtons.Count);
+            // 모든 버튼 완료
+            CompleteCurrentStep();
+            return;
+        }
+
+        currentHighlightIndex = index;
+
+        // 이전 버튼 색상 복원
+        StopBlinking();
+
+        // 현재 버튼 점멸 시작
+        var currentBtn = panelButtons[index];
+        if (currentBtn != null)
+        {
+            // 클릭 리스너 추가
+            currentBtn.onClick.AddListener(() => OnHighlightedButtonClicked(currentBtn));
+            blinkCoroutine = StartCoroutine(BlinkButton(currentBtn));
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] Panel button clicked: {clickedPanelButtons.Count}/{panelButtons.Count}");
+                Debug.Log($"[Practice] 버튼 하이라이트: {currentBtn.name} ({index + 1}/{panelButtons.Count})");
+        }
+    }
 
-            // 모든 버튼 클릭 완료
-            if (clickedPanelButtons.Count >= panelButtons.Count)
+    private IEnumerator BlinkButton(Button btn)
+    {
+        var image = btn.GetComponent<Image>();
+        if (image == null) yield break;
+
+        Color originalColor = originalButtonColors.ContainsKey(btn) ? originalButtonColors[btn] : image.color;
+        bool isOn = false;
+
+        while (true)
+        {
+            isOn = !isOn;
+            image.color = isOn ? highlightColor : originalColor;
+            yield return new WaitForSeconds(blinkInterval);
+        }
+    }
+
+    private void StopBlinking()
+    {
+        if (blinkCoroutine != null)
+        {
+            StopCoroutine(blinkCoroutine);
+            blinkCoroutine = null;
+        }
+
+        // 모든 버튼 원래 색상 복원
+        foreach (var kvp in originalButtonColors)
+        {
+            if (kvp.Key != null)
             {
-                CompleteCurrentStep();
+                var image = kvp.Key.GetComponent<Image>();
+                if (image != null)
+                    image.color = kvp.Value;
             }
         }
     }
 
-    private void OnStep3Complete()
+    private void OnHighlightedButtonClicked(Button clickedBtn)
     {
-        // 특별한 처리 없음
+        if (currentStep != 2 || !isStepActive) return;
+
+        // 현재 하이라이트된 버튼인지 확인
+        if (currentHighlightIndex < panelButtons.Count && panelButtons[currentHighlightIndex] == clickedBtn)
+        {
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 버튼 클릭 완료: {clickedBtn.name}");
+
+            // 다음 버튼으로
+            StartHighlightButton(currentHighlightIndex + 1);
+        }
     }
 
     #endregion
@@ -403,165 +406,181 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep4_PatientPosition()
     {
-        patientPositionChanged = false;
-
-        practiceUI?.ShowStep(
-            "Step 4: 환자 위치 조정",
-            "설정 버튼을 눌러 환자 위치를 조정해보세요",
-            0, 1
-        );
+        if (showDebugLogs)
+            Debug.Log("[Practice] Step 4: 설정 버튼을 눌러 환자 위치를 조정해보세요");
     }
 
     private void OnSettingsButtonClicked()
     {
         if (currentStep != 3 || !isStepActive) return;
 
-        // 설정 버튼 클릭 후 환자 위치 변경 감지 시작
+        // 설정 창이 열리면 환자 위치 변경 감지 시작
         StartCoroutine(WaitForPatientPositionChange());
     }
 
     private IEnumerator WaitForPatientPositionChange()
     {
-        if (patientTransform == null) yield break;
+        if (patientTransform == null)
+        {
+            yield return new WaitForSeconds(1f);
+            CompleteCurrentStep();
+            yield break;
+        }
 
-        Vector3 startPosition = patientTransform.position;
-
-        // 위치 변경 대기 (최대 30초)
+        Vector3 startPos = patientTransform.position;
         float timeout = 30f;
         float elapsed = 0f;
 
         while (elapsed < timeout)
         {
-            if (Vector3.Distance(patientTransform.position, startPosition) > 0.01f)
+            if (Vector3.Distance(patientTransform.position, startPos) > 0.01f)
             {
-                patientPositionChanged = true;
-                IncrementCount();
+                if (showDebugLogs)
+                    Debug.Log("[Practice] 환자 위치 변경 감지!");
+                CompleteCurrentStep();
                 yield break;
             }
-
             elapsed += Time.deltaTime;
             yield return null;
         }
+
+        // 타임아웃 시에도 완료 처리
+        CompleteCurrentStep();
     }
 
     /// <summary>
-    /// 환자 위치 변경 시 외부에서 호출
+    /// 외부에서 환자 위치 변경 시 호출
     /// </summary>
     public void OnPatientPositionChanged()
     {
-        if (currentStep != 3 || !isStepActive || patientPositionChanged) return;
+        if (currentStep != 3 || !isStepActive) return;
 
-        patientPositionChanged = true;
-        IncrementCount();
-    }
-
-    private void OnStep4Complete()
-    {
-        // 환자 위치 초기화 (선택)
-        // if (patientTransform != null)
-        //     patientTransform.position = initialPatientPosition;
+        if (showDebugLogs)
+            Debug.Log("[Practice] 환자 위치 변경됨!");
+        CompleteCurrentStep();
     }
 
     #endregion
 
-    #region Step 5: 가이드 핸드
+    #region Step 5: 홀드 연습 (3회)
 
-    private void StartStep5_GuideHand()
+    private void StartStep5_HoldPractice()
     {
-        practiceUI?.ShowStep(
-            "Step 5: 가이드 핸드",
-            "가이드 핸드를 활성화하고 측굴 동작을 따라해보세요",
-            0, 3
-        );
-
-        // 가이드 핸드 데이터 로드
-        LoadGuideHandData();
-    }
-
-    private void LoadGuideHandData()
-    {
-        if (guideHandDisplay == null) return;
-
-        // ReferenceHandDisplay 또는 ChunaPathEvaluator의 LoadHandData 메서드 호출
-        var loadMethod = guideHandDisplay.GetType().GetMethod("LoadHandData");
-        if (loadMethod != null)
-        {
-            loadMethod.Invoke(guideHandDisplay, new object[] { handDataPath });
-        }
+        currentCount = 0;
+        isWaitingForHold = false;
+        wasHolding = false;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Guide hand data loaded: {handDataPath}");
+            Debug.Log($"[Practice] Step 5: 가이드 핸드를 켜고 홀드 구간에서 홀드하세요 (0/{HOLD_REQUIRED_COUNT})");
     }
 
-    private void OnGuideHandToggled()
+    private void OnGuideHandToggleClicked()
     {
         if (currentStep != 4 || !isStepActive) return;
 
-        // 토글 후 측굴 동작 대기
-        StartCoroutine(WaitForLateralFlexion());
+        isWaitingForHold = true;
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 가이드 핸드 활성화 - 홀드 구간에서 홀드하세요");
     }
 
-    private IEnumerator WaitForLateralFlexion()
+    private void CheckHoldState()
     {
-        // 측굴 동작 감지 (간단히 시간 대기로 대체, 실제로는 각도 변화 감지)
-        yield return new WaitForSeconds(2f);
+        if (chunaPathEvaluator == null) return;
 
-        IncrementCount();
+        // ChunaPathEvaluator에서 현재 홀드 상태 확인
+        bool isCurrentlyHolding = IsInHoldZone();
+
+        // 홀드 시작 감지
+        if (isCurrentlyHolding && !wasHolding)
+        {
+            if (showDebugLogs)
+                Debug.Log("[Practice] 홀드 시작 감지!");
+        }
+        // 홀드 종료 감지 (홀드 완료)
+        else if (!isCurrentlyHolding && wasHolding)
+        {
+            currentCount++;
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 홀드 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
+
+            if (currentCount >= HOLD_REQUIRED_COUNT)
+            {
+                isWaitingForHold = false;
+                CompleteCurrentStep();
+            }
+        }
+
+        wasHolding = isCurrentlyHolding;
+    }
+
+    private bool IsInHoldZone()
+    {
+        if (chunaPathEvaluator == null) return false;
+
+        // ChunaPathEvaluator의 CurrentPhase 확인
+        // StartHold 또는 MidHold 단계에서 홀드 중인 것으로 판단
+        var currentPhase = chunaPathEvaluator.CurrentPhase;
+        return currentPhase == EvaluationPhase.StartHold || currentPhase == EvaluationPhase.MidHold;
     }
 
     /// <summary>
-    /// 측굴 동작 완료 시 외부에서 호출
+    /// 외부에서 홀드 완료 시 호출
     /// </summary>
-    public void OnLateralFlexionCompleted()
+    public void OnHoldCompleted()
     {
         if (currentStep != 4 || !isStepActive) return;
-        IncrementCount();
+
+        currentCount++;
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 홀드 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
+
+        if (currentCount >= HOLD_REQUIRED_COUNT)
+        {
+            isWaitingForHold = false;
+            CompleteCurrentStep();
+        }
     }
 
-    private void OnStep5Complete()
+    #endregion
+
+    #region Completion
+
+    private void ShowCompletionPopup()
     {
-        // 가이드 핸드 비활성화
-        if (guideHandDisplay != null)
+        isStepActive = false;
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] ★★★ 모든 연습 완료! ★★★");
+
+        // ExitPopupController 사용
+        if (exitPopupController != null)
         {
-            var setVisibleMethod = guideHandDisplay.GetType().GetMethod("SetVisible");
-            if (setVisibleMethod != null)
+            exitPopupController.ShowPopup();
+        }
+        // 또는 직접 팝업 활성화
+        else if (completionPopup != null)
+        {
+            completionPopup.SetActive(true);
+        }
+        else
+        {
+            // 팝업이 없으면 ExitPopupController 찾아서 사용
+            var popup = FindFirstObjectByType<ExitPopupController>();
+            if (popup != null)
             {
-                setVisibleMethod.Invoke(guideHandDisplay, new object[] { false });
+                popup.ShowPopup();
+            }
+            else
+            {
+                Debug.LogWarning("[Practice] 완료 팝업을 찾을 수 없습니다!");
             }
         }
     }
 
     #endregion
 
-    #region Complete
-
-    private void ShowComplete()
-    {
-        isStepActive = false;
-
-        practiceUI?.ShowComplete(
-            "연습 완료!",
-            "모든 연습을 완료했습니다.\n이제 실습을 시작해보세요!"
-        );
-
-        SetButtonActive(mainMenuButton, true);
-        SetButtonActive(startPracticeButton, true);
-
-        if (showDebugLogs)
-            Debug.Log("[Practice] All steps completed!");
-    }
-
-    #endregion
-
-    #region Utility
-
-    private void SetButtonActive(Button btn, bool active)
-    {
-        if (btn != null)
-        {
-            btn.interactable = active;
-        }
-    }
+    #region Public Methods
 
     /// <summary>
     /// 연습 재시작
@@ -569,21 +588,29 @@ public class PracticeManager : MonoBehaviour
     public void RestartPractice()
     {
         StopAllCoroutines();
-        Initialize();
+        StopBlinking();
+        currentStep = 0;
+        currentCount = 0;
+        isStepActive = false;
+        isWaitingForHold = false;
+
         StartStep(0);
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 연습 재시작");
     }
 
     /// <summary>
-    /// 특정 단계로 이동 (디버그용)
+    /// 현재 단계 정보
     /// </summary>
-    public void JumpToStep(int step)
-    {
-        if (step >= 0 && step < TOTAL_STEPS)
-        {
-            StopAllCoroutines();
-            StartStep(step);
-        }
-    }
+    public int GetCurrentStep() => currentStep;
+    public int GetCurrentCount() => currentCount;
+    public bool IsActive() => isStepActive;
 
     #endregion
+
+    void OnDestroy()
+    {
+        StopBlinking();
+    }
 }
