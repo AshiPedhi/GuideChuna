@@ -120,7 +120,8 @@ public class LateralFlexionDetector : MonoBehaviour
 
         if (practiceManager != null)
         {
-            practiceManager.OnLateralFlexionCompleted();
+            // 사이클 완료 알림 (Step 5에서 사용)
+            practiceManager.OnCycleCompleted();
         }
         else
         {
