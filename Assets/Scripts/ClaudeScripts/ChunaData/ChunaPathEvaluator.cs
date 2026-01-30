@@ -25,9 +25,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("데이터 기록 시 환자의 위치 오프셋")]
     [SerializeField] private Vector3 recordedPatientOffset = Vector3.zero;
 
-    [Header("=== 직접 할당 충돌체 (환자 머리) ===")]
+    [Header("=== 직접 할당 충돌체 (환자) ===")]
     [Tooltip("환자 머리에 부착된 충돌체 - 손이 닿으면 트래킹 시작")]
     [SerializeField] private Collider patientHeadCollider;
+
+    [Tooltip("환자 어깨에 부착된 충돌체 - 왼손 추가 감지용")]
+    [SerializeField] private Collider patientShoulderCollider;
 
     [Tooltip("손 충돌체 (왼손)")]
     [SerializeField] private Collider leftHandCollider;
@@ -1268,14 +1271,30 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 이전 접촉 상태 저장
         bool wasTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
 
-        // 왼손 충돌 감지
+        // 왼손 충돌 감지 (머리 + 어깨)
         if (playerLeftHand != null)
         {
             bool wasTouch = isLeftHandTouchingPatient;
-            isLeftHandTouchingPatient = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
+
+            // 머리 충돌 체크
+            bool touchingHead = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
+
+            // 어깨 충돌 체크 (어깨 콜라이더가 있는 경우)
+            bool touchingShoulder = false;
+            if (patientShoulderCollider != null)
+            {
+                Bounds shoulderBounds = patientShoulderCollider.bounds;
+                touchingShoulder = CheckHandCollision(playerLeftHand.transform, leftHandCollider, shoulderBounds, true);
+            }
+
+            // 머리 또는 어깨에 닿으면 접촉으로 판정
+            isLeftHandTouchingPatient = touchingHead || touchingShoulder;
 
             if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
-                Debug.Log("<color=green>[Collision] 왼손이 환자에게 닿음!</color>");
+            {
+                string touchTarget = touchingHead ? "머리" : "어깨";
+                Debug.Log($"<color=green>[Collision] 왼손이 환자 {touchTarget}에 닿음!</color>");
+            }
         }
 
         // 오른손 충돌 감지
