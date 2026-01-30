@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 using Oculus.Interaction;
 using Oculus.Interaction.Input;
 using static HandPoseDataLoader;
@@ -205,6 +207,27 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
+
+    [Header("=== 디버그 UI 표시 ===")]
+    [Tooltip("디버그 정보 표시 활성화")]
+    [SerializeField] private bool showDebugUI = false;
+
+    [Tooltip("FPS 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI fpsText;
+
+    [Tooltip("왼손 거리 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI leftHandDistanceText;
+
+    [Tooltip("오른손 거리 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI rightHandDistanceText;
+
+    [Tooltip("FPS 업데이트 간격 (초)")]
+    [SerializeField] private float fpsUpdateInterval = 0.5f;
+
+    // 디버그 UI용 내부 변수
+    private float fpsTimer = 0f;
+    private int frameCount = 0;
+    private float currentFps = 0f;
 
     [Header("=== 새로운 평가 흐름 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
@@ -531,6 +554,12 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     void Update()
     {
+        // 디버그 UI는 항상 업데이트
+        if (showDebugUI)
+        {
+            UpdateDebugUI();
+        }
+
         if (!isEvaluating) return;
 
         // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생
@@ -1307,6 +1336,78 @@ public class ChunaPathEvaluator : MonoBehaviour
             string state = isTouching ? "접촉" : "미접촉";
             Debug.Log($"<color=yellow>[GuideHand] {state} → 투명도: {targetAlpha:F2}</color>");
         }
+    }
+
+    /// <summary>
+    /// ★ 디버그 UI 업데이트 (FPS, 손 거리)
+    /// </summary>
+    private void UpdateDebugUI()
+    {
+        // FPS 계산
+        frameCount++;
+        fpsTimer += Time.unscaledDeltaTime;
+
+        if (fpsTimer >= fpsUpdateInterval)
+        {
+            currentFps = frameCount / fpsTimer;
+            frameCount = 0;
+            fpsTimer = 0f;
+
+            // FPS 텍스트 업데이트
+            if (fpsText != null)
+            {
+                fpsText.text = $"FPS: {currentFps:F1}";
+            }
+        }
+
+        // 왼손 거리 계산 및 표시
+        if (leftHandDistanceText != null)
+        {
+            float leftDistance = CalculateHandToGuideDistance(true);
+            string leftTouchStatus = isLeftHandTouchingPatient ? " [접촉]" : "";
+            leftHandDistanceText.text = $"왼손: {leftDistance:F3}m{leftTouchStatus}";
+        }
+
+        // 오른손 거리 계산 및 표시
+        if (rightHandDistanceText != null)
+        {
+            float rightDistance = CalculateHandToGuideDistance(false);
+            string rightTouchStatus = isRightHandTouchingPatient ? " [접촉]" : "";
+            rightHandDistanceText.text = $"오른손: {rightDistance:F3}m{rightTouchStatus}";
+        }
+    }
+
+    /// <summary>
+    /// 사용자 손과 가이드 핸드 간의 거리 계산
+    /// </summary>
+    private float CalculateHandToGuideDistance(bool isLeftHand)
+    {
+        Transform userHand = null;
+        HandTransformMapper guideHand = null;
+
+        if (isLeftHand)
+        {
+            if (playerLeftHand != null)
+                userHand = playerLeftHand.transform;
+            guideHand = leftGuideHand;
+        }
+        else
+        {
+            if (playerRightHand != null)
+                userHand = playerRightHand.transform;
+            guideHand = rightGuideHand;
+        }
+
+        // 사용자 손이 없으면 -1 반환
+        if (userHand == null)
+            return -1f;
+
+        // 가이드 핸드가 없거나 비활성화면 -1 반환
+        if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
+            return -1f;
+
+        // 루트 위치 간의 거리 계산
+        return Vector3.Distance(userHand.position, guideHand.Root.position);
     }
 
     /// <summary>
