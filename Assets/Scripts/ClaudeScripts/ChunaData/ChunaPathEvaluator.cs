@@ -1360,20 +1360,20 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
 
-        // 왼손 거리 계산 및 표시
+        // 왼손 거리 계산 및 표시 (mm 단위)
         if (leftHandDistanceText != null)
         {
-            float leftDistance = CalculateHandToGuideDistance(true);
+            float leftDistance = CalculateHandToGuideDistance(true) * 1000f; // m → mm
             string leftTouchStatus = isLeftHandTouchingPatient ? " [접촉]" : "";
-            leftHandDistanceText.text = $"왼손: {leftDistance:F3}m{leftTouchStatus}";
+            leftHandDistanceText.text = $"왼손: {leftDistance:F2}mm{leftTouchStatus}";
         }
 
-        // 오른손 거리 계산 및 표시
+        // 오른손 거리 계산 및 표시 (mm 단위)
         if (rightHandDistanceText != null)
         {
-            float rightDistance = CalculateHandToGuideDistance(false);
+            float rightDistance = CalculateHandToGuideDistance(false) * 1000f; // m → mm
             string rightTouchStatus = isRightHandTouchingPatient ? " [접촉]" : "";
-            rightHandDistanceText.text = $"오른손: {rightDistance:F3}m{rightTouchStatus}";
+            rightHandDistanceText.text = $"오른손: {rightDistance:F2}mm{rightTouchStatus}";
         }
     }
 
