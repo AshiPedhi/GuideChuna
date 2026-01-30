@@ -2646,6 +2646,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
         if (showFirstFrameWhileWaiting)
         {
+            // ★ 가이드 핸드 표시 전에 충돌 검사 먼저 수행 (접촉 시 투명도 반영)
+            if (useCollisionMode)
+            {
+                UpdateCollisionDetection();
+            }
+
             ShowGuideHandFirstFrame();
 
             // 환자 애니메이션도 시작 프레임으로 설정 (스트레칭은 30%, 일반은 0%)
