@@ -1334,26 +1334,41 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// ★ 접촉 상태 변경 시 가이드 핸드 투명도 즉시 업데이트
+    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드만 끄기/켜기
+    /// 어깨 접촉 → 왼손 가이드 끔, 머리 접촉 → 오른손 가이드 끔
     /// </summary>
     private void UpdateGuideHandAlphaOnTouch(bool isTouching)
     {
-        float targetAlpha = isTouching ? touchAlpha : guideHandColor.a;
-
+        // 왼손: 어깨 또는 머리 접촉 시 가이드 끔
         if (leftGuideHand != null)
         {
-            leftGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
+            if (isLeftHandTouchingPatient)
+            {
+                leftGuideHand.SetVisible(false);
+                if (showDebugLogs)
+                    Debug.Log("<color=yellow>[GuideHand] 왼손 접촉 → 왼손 가이드 끔</color>");
+            }
+            else
+            {
+                leftGuideHand.SetVisible(true);
+                leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            }
         }
 
+        // 오른손: 머리 접촉 시 가이드 끔
         if (rightGuideHand != null)
         {
-            rightGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
-        }
-
-        if (showDebugLogs)
-        {
-            string state = isTouching ? "접촉" : "미접촉";
-            Debug.Log($"<color=yellow>[GuideHand] {state} → 투명도: {targetAlpha:F2}</color>");
+            if (isRightHandTouchingPatient)
+            {
+                rightGuideHand.SetVisible(false);
+                if (showDebugLogs)
+                    Debug.Log("<color=yellow>[GuideHand] 오른손 접촉 → 오른손 가이드 끔</color>");
+            }
+            else
+            {
+                rightGuideHand.SetVisible(true);
+                rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+            }
         }
     }
 
@@ -1401,32 +1416,53 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     private float CalculateHandToGuideDistance(bool isLeftHand)
     {
-        Transform userHand = null;
+        Collider handCollider = null;
+        Transform wristBone = null;
+        Transform handVisualTransform = null;
         HandTransformMapper guideHand = null;
 
         if (isLeftHand)
         {
+            handCollider = leftHandCollider;
+            wristBone = leftWristBone;
             if (playerLeftHand != null)
-                userHand = playerLeftHand.transform;
+                handVisualTransform = playerLeftHand.transform;
             guideHand = leftGuideHand;
         }
         else
         {
+            handCollider = rightHandCollider;
+            wristBone = rightWristBone;
             if (playerRightHand != null)
-                userHand = playerRightHand.transform;
+                handVisualTransform = playerRightHand.transform;
             guideHand = rightGuideHand;
         }
 
-        // 사용자 손이 없으면 -1 반환
-        if (userHand == null)
-            return -1f;
-
-        // 가이드 핸드가 없거나 비활성화면 -1 반환
+        // 가이드 핸드가 없거나 비활성화면 0 반환
         if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
-            return -1f;
+            return 0f;
 
-        // 루트 위치 간의 거리 계산
-        return Vector3.Distance(userHand.position, guideHand.Root.position);
+        // 사용자 손 위치 결정 (우선순위: 콜라이더 > 손목본 > HandVisual)
+        Vector3 userHandPos;
+        if (handCollider != null)
+        {
+            userHandPos = handCollider.bounds.center;
+        }
+        else if (wristBone != null)
+        {
+            userHandPos = wristBone.position;
+        }
+        else if (handVisualTransform != null)
+        {
+            userHandPos = handVisualTransform.position;
+        }
+        else
+        {
+            return 0f; // 손 위치를 알 수 없음
+        }
+
+        // 가이드 핸드 루트 위치와 거리 계산
+        return Vector3.Distance(userHandPos, guideHand.Root.position);
     }
 
     /// <summary>
