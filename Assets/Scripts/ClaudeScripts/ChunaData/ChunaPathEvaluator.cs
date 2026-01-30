@@ -1334,41 +1334,29 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드만 끄기/켜기
-    /// 어깨 접촉 → 왼손 가이드 끔, 머리 접촉 → 오른손 가이드 끔
+    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드 알파값 조절
+    /// 왼손 접촉 → 왼손 가이드 투명하게, 오른손 접촉 → 오른손 가이드 투명하게
     /// </summary>
     private void UpdateGuideHandAlphaOnTouch(bool isTouching)
     {
-        // 왼손: 어깨 또는 머리 접촉 시 가이드 끔
+        // 왼손: 접촉 시 투명하게
         if (leftGuideHand != null)
         {
-            if (isLeftHandTouchingPatient)
-            {
-                leftGuideHand.SetVisible(false);
-                if (showDebugLogs)
-                    Debug.Log("<color=yellow>[GuideHand] 왼손 접촉 → 왼손 가이드 끔</color>");
-            }
-            else
-            {
-                leftGuideHand.SetVisible(true);
-                leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-            }
+            float leftAlpha = isLeftHandTouchingPatient ? touchAlpha : guideHandColor.a;
+            leftGuideHand.SetColorAndAlpha(guideHandColor, leftAlpha);
+
+            if (showDebugLogs && isLeftHandTouchingPatient)
+                Debug.Log($"<color=yellow>[GuideHand] 왼손 접촉 → 알파: {leftAlpha:F2}</color>");
         }
 
-        // 오른손: 머리 접촉 시 가이드 끔
+        // 오른손: 접촉 시 투명하게
         if (rightGuideHand != null)
         {
-            if (isRightHandTouchingPatient)
-            {
-                rightGuideHand.SetVisible(false);
-                if (showDebugLogs)
-                    Debug.Log("<color=yellow>[GuideHand] 오른손 접촉 → 오른손 가이드 끔</color>");
-            }
-            else
-            {
-                rightGuideHand.SetVisible(true);
-                rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-            }
+            float rightAlpha = isRightHandTouchingPatient ? touchAlpha : guideHandColor.a;
+            rightGuideHand.SetColorAndAlpha(guideHandColor, rightAlpha);
+
+            if (showDebugLogs && isRightHandTouchingPatient)
+                Debug.Log($"<color=yellow>[GuideHand] 오른손 접촉 → 알파: {rightAlpha:F2}</color>");
         }
     }
 
@@ -1412,57 +1400,23 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// 사용자 손과 가이드 핸드 간의 거리 계산
+    /// 사용자 손목(wristBone)과 가이드 핸드 Root 간의 거리 계산
     /// </summary>
     private float CalculateHandToGuideDistance(bool isLeftHand)
     {
-        Collider handCollider = null;
-        Transform wristBone = null;
-        Transform handVisualTransform = null;
-        HandTransformMapper guideHand = null;
-
-        if (isLeftHand)
-        {
-            handCollider = leftHandCollider;
-            wristBone = leftWristBone;
-            if (playerLeftHand != null)
-                handVisualTransform = playerLeftHand.transform;
-            guideHand = leftGuideHand;
-        }
-        else
-        {
-            handCollider = rightHandCollider;
-            wristBone = rightWristBone;
-            if (playerRightHand != null)
-                handVisualTransform = playerRightHand.transform;
-            guideHand = rightGuideHand;
-        }
+        Transform wristBone = isLeftHand ? leftWristBone : rightWristBone;
+        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
 
         // 가이드 핸드가 없거나 비활성화면 0 반환
         if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
             return 0f;
 
-        // 사용자 손 위치 결정 (우선순위: 콜라이더 > 손목본 > HandVisual)
-        Vector3 userHandPos;
-        if (handCollider != null)
-        {
-            userHandPos = handCollider.bounds.center;
-        }
-        else if (wristBone != null)
-        {
-            userHandPos = wristBone.position;
-        }
-        else if (handVisualTransform != null)
-        {
-            userHandPos = handVisualTransform.position;
-        }
-        else
-        {
-            return 0f; // 손 위치를 알 수 없음
-        }
+        // 사용자 손목 본이 없으면 0 반환
+        if (wristBone == null)
+            return 0f;
 
-        // 가이드 핸드 루트 위치와 거리 계산
-        return Vector3.Distance(userHandPos, guideHand.Root.position);
+        // 사용자 손목 Root ↔ 가이드 핸드 Root 거리 계산
+        return Vector3.Distance(wristBone.position, guideHand.Root.position);
     }
 
     /// <summary>
