@@ -71,6 +71,10 @@ public class PracticeManager : MonoBehaviour
     [Tooltip("완료 팝업")]
     [SerializeField] private ExitPopupController exitPopupController;
 
+    [Header("=== 하이라이트 설정 ===")]
+    [SerializeField] private float blinkInterval = 0.4f;
+    [SerializeField] private Color highlightColor = new Color(1f, 0.8f, 0.2f, 1f);
+
     [Header("=== 설정 ===")]
     [SerializeField] private float stepTransitionDelay = 1.0f;
     [SerializeField] private bool showDebugLogs = true;
@@ -91,6 +95,9 @@ public class PracticeManager : MonoBehaviour
 
     // 모든 토글 리스트 (interactable 제어용)
     private List<ToggleHighlightPair> allToggles = new List<ToggleHighlightPair>();
+
+    // 점멸 코루틴 관리
+    private Dictionary<GameObject, Coroutine> blinkCoroutines = new Dictionary<GameObject, Coroutine>();
 
     // 홀드 연습
     private bool isWaitingForHold = false;
@@ -210,10 +217,13 @@ public class PracticeManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 모든 하이라이트 테두리 숨김
+    /// 모든 하이라이트 테두리 숨김 및 점멸 중지
     /// </summary>
     private void HideAllHighlights()
     {
+        // 모든 점멸 코루틴 중지
+        StopAllBlinkCoroutines();
+
         foreach (var pair in allToggles)
         {
             if (pair.highlightBorder != null)
@@ -222,25 +232,77 @@ public class PracticeManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 특정 토글의 하이라이트 표시
+    /// 모든 점멸 코루틴 중지
+    /// </summary>
+    private void StopAllBlinkCoroutines()
+    {
+        foreach (var kvp in blinkCoroutines)
+        {
+            if (kvp.Value != null)
+                StopCoroutine(kvp.Value);
+        }
+        blinkCoroutines.Clear();
+    }
+
+    /// <summary>
+    /// 특정 토글의 하이라이트 점멸 시작
     /// </summary>
     private void ShowHighlight(ToggleHighlightPair pair)
     {
-        if (pair != null && pair.highlightBorder != null)
+        if (pair == null || pair.highlightBorder == null) return;
+
+        // 기존 점멸 중지
+        StopHighlightBlink(pair);
+
+        // 색상 적용
+        var image = pair.highlightBorder.GetComponent<Image>();
+        if (image != null)
+            image.color = highlightColor;
+
+        // 점멸 시작
+        var coroutine = StartCoroutine(BlinkHighlight(pair.highlightBorder));
+        blinkCoroutines[pair.highlightBorder] = coroutine;
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 하이라이트 점멸 시작: {pair.toggle.name}");
+    }
+
+    /// <summary>
+    /// 하이라이트 점멸 코루틴
+    /// </summary>
+    private IEnumerator BlinkHighlight(GameObject border)
+    {
+        while (true)
         {
-            pair.highlightBorder.SetActive(true);
-            if (showDebugLogs)
-                Debug.Log($"[Practice] 하이라이트 표시: {pair.toggle.name}");
+            border.SetActive(true);
+            yield return new WaitForSeconds(blinkInterval);
+            border.SetActive(false);
+            yield return new WaitForSeconds(blinkInterval);
         }
     }
 
     /// <summary>
-    /// 특정 토글의 하이라이트 숨김
+    /// 특정 토글의 하이라이트 점멸 중지 및 숨김
     /// </summary>
     private void HideHighlight(ToggleHighlightPair pair)
     {
-        if (pair != null && pair.highlightBorder != null)
-            pair.highlightBorder.SetActive(false);
+        if (pair == null || pair.highlightBorder == null) return;
+
+        StopHighlightBlink(pair);
+        pair.highlightBorder.SetActive(false);
+    }
+
+    /// <summary>
+    /// 특정 하이라이트의 점멸 코루틴 중지
+    /// </summary>
+    private void StopHighlightBlink(ToggleHighlightPair pair)
+    {
+        if (pair.highlightBorder != null && blinkCoroutines.ContainsKey(pair.highlightBorder))
+        {
+            if (blinkCoroutines[pair.highlightBorder] != null)
+                StopCoroutine(blinkCoroutines[pair.highlightBorder]);
+            blinkCoroutines.Remove(pair.highlightBorder);
+        }
     }
 
     /// <summary>
