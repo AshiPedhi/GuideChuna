@@ -232,86 +232,68 @@ public class ChunaPathEvaluator : MonoBehaviour
     private int frameCount = 0;
     private float currentFps = 0f;
 
-    [Header("=== 새로운 평가 흐름 설정 ===")]
+    [Header("=== 홀드 시간 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
     [SerializeField] private float startHoldDuration = 3f;
 
     [Tooltip("중간 홀드 시간 (초)")]
     [SerializeField] private float midHoldDuration = 3f;
 
-    [Tooltip("중간 홀드 시작 구간 (0~1, 전체 프레임 기준)")]
-    [SerializeField] private float midHoldStartRatio = 0.3f;
-
-    [Tooltip("중간 홀드 종료 구간 (0~1, 전체 프레임 기준)")]
-    [SerializeField] private float midHoldEndRatio = 0.5f;
-
-    [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
-    [SerializeField] private float limitBarrierRatio = 0.5f;
-
-    [Header("=== 재평가 확장 제한 ===")]
-    [Tooltip("재평가 시 확장된 제한 장벽 (0~1)")]
-    [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
-
-    [Tooltip("재평가 시 확장된 중간 홀드 시작 구간 (0°기준)")]
-    [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
-
-    [Tooltip("재평가 시 확장된 중간 홀드 종료 구간 (0°기준)")]
-    [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
-
-    [Header("=== ★ 스트레칭 모드 통합 설정 ===")]
-    [Tooltip("스트레칭 가이드/동작 시작 비율 (0~1) - 가이드 핸드 시작 위치")]
+    [Header("=== ★ 스트레칭 모드 설정 ===")]
+    [Tooltip("가이드 핸드 시작 위치 (0~1)")]
     [SerializeField] private float stretchingStart = 0.30f;
 
-    [Tooltip("스트레칭 가이드/동작 끝 비율 (0~1) - 가이드 핸드 끝 = 적정범위 끝")]
+    [Tooltip("가이드 핸드 끝 = 적정범위 끝 (0~1)")]
     [SerializeField] private float stretchingEnd = 0.65f;
 
-    [Tooltip("스트레칭 적정범위 시작 비율 (가이드 시작 ~ 가이드 끝 사이)")]
+    [Tooltip("적정범위 시작 (가이드 범위 내)")]
     [SerializeField] private float stretchingHoldStart = 0.45f;
 
-    // ★ 통합 설정에서 파생되는 값들 (외부에서 참조용)
+    // 통합 설정 외부 참조용
     public float StretchingGuideStart => stretchingStart;
     public float StretchingGuideEnd => stretchingEnd;
     public float StretchingHoldStartRatio => stretchingHoldStart;
-    public float StretchingHoldEndRatio => stretchingEnd;  // 홀드 끝 = 가이드 끝
+    public float StretchingHoldEndRatio => stretchingEnd;
 
-    [Header("=== ★ 가이드 핸드 재생 범위 ===")]
-    [Tooltip("회전(건측/환측) 가이드 시작")]
-    [SerializeField] private float guideRotation_Start = 0f;
-    [Tooltip("회전(건측/환측) 가이드 끝")]
-    [SerializeField] private float guideRotation_End = 0.4f;
+    [Header("=== ★ 재평가 모드 설정 ===")]
+    [Tooltip("재평가 가이드 끝 (0~1)")]
+    [SerializeField] private float guideReEval_End = 0.70f;
 
-    [Tooltip("제한장벽 측굴 가이드 시작")]
-    [SerializeField] private float guideLimitCheck_Start = 0f;
-    [Tooltip("제한장벽 측굴 가이드 끝")]
-    [SerializeField] private float guideLimitCheck_End = 0.4f;
+    [Tooltip("재평가 적정범위 시작")]
+    [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
 
-    // ★ guideStretching_Start/End는 통합 설정(stretchingStart/End)으로 대체됨
-    // 기존 코드 호환성을 위한 프로퍼티
-    private float guideStretching_Start => stretchingStart;
-    private float guideStretching_End => stretchingEnd;
+    [Tooltip("재평가 적정범위 끝")]
+    [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
-    [Tooltip("재평가 가이드 시작")]
-    [SerializeField] private float guideReEval_Start = 0f;
-    [Tooltip("재평가 가이드 끝")]
-    [SerializeField] private float guideReEval_End = 0.65f;
+    [Header("=== ★ 제한장벽 확인 모드 설정 ===")]
+    [Tooltip("제한장벽 최대 지점 (이후 경고)")]
+    [SerializeField] private float limitBarrierRatio = 0.5f;
 
-    [Header("=== ★ 측굴 자동 프리셋 ===")]
+    [Tooltip("제한장벽 가이드 끝")]
+    [SerializeField] private float guideLimitCheck_End = 0.5f;
+
+    [Header("=== 측굴 자동 프리셋 ===")]
     [Tooltip("측굴 운동 자동 감지 및 프리셋 적용")]
     [SerializeField] private bool autoApplyLateralBendingPreset = true;
 
-    [Tooltip("측굴 - 제한장벽 확인 모드 가이드 비율 (0~0.5)")]
-    [SerializeField] private float lateralBending_LimitCheckRatio = 0.5f;
+    [Tooltip("재평가 시 확장 제한 비율")]
+    [SerializeField] private float extendedLimitBarrierRatio = 0.70f;
 
-    [Tooltip("측굴 - 스트레칭 모드 시작 비율 (재평가와 동일)")]
-    [SerializeField] private float lateralBending_StretchStartRatio = 0.5f;
+    // 내부용 (Inspector 숨김)
+    private float midHoldStartRatio = 0.3f;
+    private float midHoldEndRatio = 0.5f;
+    private float guideRotation_Start = 0f;
+    private float guideRotation_End = 0.5f;
+    private float guideLimitCheck_Start = 0f;
+    private float guideReEval_Start = 0f;
+    private float lateralBending_LimitCheckRatio = 0.5f;
+    private float lateralBending_ReEvalRatio = 0.7f;
 
-    [Tooltip("측굴 - 스트레칭 모드 종료 비율")]
-    [SerializeField] private float lateralBending_StretchEndRatio = 0.7f;
+    // 스트레칭 가이드 호환용 프로퍼티
+    private float guideStretching_Start => stretchingStart;
+    private float guideStretching_End => stretchingEnd;
 
-    [Tooltip("측굴 - 재평가 모드 가이드 비율 (0~0.7)")]
-    [SerializeField] private float lateralBending_ReEvalRatio = 0.7f;
-
-    [Header("=== ★ 간소화된 손 유사도 체크 ===")]
+    [Header("=== 손 유사도 체크 ===")]
     [Tooltip("간소화된 손 유사도 체크 사용 (왼손: 손바닥 방향+주먹, 오른손: 경로+손모양)")]
     [SerializeField] private bool useSimplifiedHandComparison = true;
 
