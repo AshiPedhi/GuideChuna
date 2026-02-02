@@ -1268,14 +1268,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         Bounds patientBounds = patientHeadCollider.bounds;
         Vector3 patientCenter = patientBounds.center;
 
-        // 이전 접촉 상태 저장
-        bool wasTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+        // 이전 접촉 상태 저장 (각 손 개별)
+        bool wasLeftTouching = isLeftHandTouchingPatient;
+        bool wasRightTouching = isRightHandTouchingPatient;
 
         // 왼손 충돌 감지 (머리 + 어깨)
         if (playerLeftHand != null)
         {
-            bool wasTouch = isLeftHandTouchingPatient;
-
             // 머리 충돌 체크
             bool touchingHead = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
 
@@ -1290,7 +1289,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 머리 또는 어깨에 닿으면 접촉으로 판정
             isLeftHandTouchingPatient = touchingHead || touchingShoulder;
 
-            if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
+            if (isLeftHandTouchingPatient && !wasLeftTouching && showDebugLogs)
             {
                 string touchTarget = touchingHead ? "머리" : "어깨";
                 Debug.Log($"<color=green>[Collision] 왼손이 환자 {touchTarget}에 닿음!</color>");
@@ -1300,18 +1299,26 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 오른손 충돌 감지
         if (playerRightHand != null)
         {
-            bool wasTouch = isRightHandTouchingPatient;
             isRightHandTouchingPatient = CheckHandCollision(playerRightHand.transform, rightHandCollider, patientBounds, false);
 
-            if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
+            if (isRightHandTouchingPatient && !wasRightTouching && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
 
-        // ★ 접촉 상태가 변경되면 가이드 핸드 투명도 즉시 업데이트
-        bool isTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-        if (fadeOnTouch && wasTouchingPatient != isTouchingPatient)
+        // ★ 각 손의 접촉 상태가 변경되면 해당 손의 가이드 핸드 알파 업데이트
+        if (fadeOnTouch)
         {
-            UpdateGuideHandAlphaOnTouch(isTouchingPatient);
+            // 왼손 상태 변경 시 왼손 가이드 알파 업데이트
+            if (wasLeftTouching != isLeftHandTouchingPatient)
+            {
+                UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
+            }
+
+            // 오른손 상태 변경 시 오른손 가이드 알파 업데이트
+            if (wasRightTouching != isRightHandTouchingPatient)
+            {
+                UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
+            }
         }
 
         // 디버그: 양손 충돌 상태 표시
@@ -1335,29 +1342,33 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드 알파값 조절
-    /// 왼손 접촉 → 왼손 가이드 투명하게, 오른손 접촉 → 오른손 가이드 투명하게
+    /// 특정 손의 가이드 핸드 알파값만 조절
+    /// </summary>
+    private void UpdateGuideHandAlphaForHand(bool isLeftHand, bool isTouching)
+    {
+        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
+        string handName = isLeftHand ? "왼손" : "오른손";
+
+        if (guideHand != null)
+        {
+            float alpha = isTouching ? touchAlpha : guideHandColor.a;
+            guideHand.SetColorAndAlpha(guideHandColor, alpha);
+
+            if (showDebugLogs)
+            {
+                string state = isTouching ? "접촉" : "미접촉";
+                Debug.Log($"<color=yellow>[GuideHand] {handName} {state} → 알파: {alpha:F2}</color>");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 양손 가이드 핸드 알파값 모두 업데이트 (초기화용)
     /// </summary>
     private void UpdateGuideHandAlphaOnTouch(bool isTouching)
     {
-        // 왼손: 접촉 시 투명하게
-        if (leftGuideHand != null)
-        {
-            float leftAlpha = isLeftHandTouchingPatient ? touchAlpha : guideHandColor.a;
-            leftGuideHand.SetColorAndAlpha(guideHandColor, leftAlpha);
-
-            if (showDebugLogs && isLeftHandTouchingPatient)
-                Debug.Log($"<color=yellow>[GuideHand] 왼손 접촉 → 알파: {leftAlpha:F2}</color>");
-        }
-
-        // 오른손: 접촉 시 투명하게
-        if (rightGuideHand != null)
-        {
-            float rightAlpha = isRightHandTouchingPatient ? touchAlpha : guideHandColor.a;
-            rightGuideHand.SetColorAndAlpha(guideHandColor, rightAlpha);
-
-            if (showDebugLogs && isRightHandTouchingPatient)
-                Debug.Log($"<color=yellow>[GuideHand] 오른손 접촉 → 알파: {rightAlpha:F2}</color>");
-        }
+        UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
+        UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
     }
 
     /// <summary>
