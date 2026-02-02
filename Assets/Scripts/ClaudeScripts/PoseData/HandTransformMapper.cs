@@ -26,6 +26,10 @@ public class HandTransformMapper : MonoBehaviour
 
     private bool isInitialized = false;
 
+    // MaterialPropertyBlock으로 개별 렌더러 프로퍼티 관리 (머티리얼 공유 문제 해결)
+    private MaterialPropertyBlock _propertyBlock;
+    private SkinnedMeshRenderer[] _cachedRenderers;
+
     void Awake()
     {
         if (rootTransform == null)
@@ -44,6 +48,10 @@ public class HandTransformMapper : MonoBehaviour
     {
         ValidateJoints();
         isInitialized = true;
+
+        // MaterialPropertyBlock 초기화
+        _propertyBlock = new MaterialPropertyBlock();
+        _cachedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
     }
 
     /// <summary>
@@ -268,72 +276,67 @@ public class HandTransformMapper : MonoBehaviour
     }
 
     /// <summary>
-    /// 재질 투명도 설정
+    /// 재질 투명도 설정 (MaterialPropertyBlock 사용 - 머티리얼 공유 문제 해결)
     /// </summary>
     public void SetAlpha(float alpha)
     {
-        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        foreach (var renderer in renderers)
+        EnsurePropertyBlockInitialized();
+
+        foreach (var renderer in _cachedRenderers)
         {
-            if (renderer.material != null)
-            {
-                Material mat = renderer.material;
+            if (renderer == null) continue;
 
-                if (mat.HasProperty("_Color"))
-                {
-                    Color color = mat.color;
-                    color.a = alpha;
-                    mat.color = color;
-                }
+            renderer.GetPropertyBlock(_propertyBlock);
 
-                // OculusHand 쉐이더 Opacity 프로퍼티 지원
-                if (mat.HasProperty("_Opacity"))
-                {
-                    mat.SetFloat("_Opacity", alpha);
-                }
-            }
+            // 기존 색상 가져오기
+            Color color = _propertyBlock.GetColor("_Color");
+            if (color == Color.clear) color = Color.white;
+            color.a = alpha;
+
+            _propertyBlock.SetColor("_Color", color);
+            _propertyBlock.SetFloat("_Opacity", alpha);
+
+            renderer.SetPropertyBlock(_propertyBlock);
         }
     }
 
     /// <summary>
-    /// 재질 색상 설정
+    /// 재질 색상 설정 (MaterialPropertyBlock 사용)
     /// </summary>
     public void SetColor(Color color)
     {
-        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        foreach (var renderer in renderers)
+        EnsurePropertyBlockInitialized();
+
+        foreach (var renderer in _cachedRenderers)
         {
-            if (renderer.material != null)
-            {
-                if (renderer.material.HasProperty("_Color"))
-                {
-                    renderer.material.color = color;
-                }
-                else if (renderer.material.HasProperty("_BaseColor"))
-                {
-                    renderer.material.SetColor("_BaseColor", color);
-                }
-            }
+            if (renderer == null) continue;
+
+            renderer.GetPropertyBlock(_propertyBlock);
+            _propertyBlock.SetColor("_Color", color);
+            _propertyBlock.SetColor("_BaseColor", color);
+            renderer.SetPropertyBlock(_propertyBlock);
         }
     }
 
     /// <summary>
-    /// 재질 색상과 투명도 동시 설정 (Transparent 모드로 자동 전환)
+    /// 재질 색상과 투명도 동시 설정 (MaterialPropertyBlock 사용 - 머티리얼 공유 문제 해결)
     /// </summary>
     public void SetColorAndAlpha(Color color, float alpha)
     {
+        EnsurePropertyBlockInitialized();
+
         Color finalColor = color;
         finalColor.a = alpha;
 
-        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        foreach (var renderer in renderers)
+        foreach (var renderer in _cachedRenderers)
         {
-            if (renderer.material != null)
-            {
-                Material mat = renderer.material;
+            if (renderer == null) continue;
 
-                // 투명도가 1 미만이면 Transparent 모드로 변경
-                if (alpha < 1f)
+            // 투명도가 1 미만이면 Transparent 모드로 변경 (sharedMaterial 사용 - 한 번만 설정)
+            if (alpha < 1f)
+            {
+                Material mat = renderer.sharedMaterial;
+                if (mat != null)
                 {
                     if (mat.HasProperty("_Mode"))
                         mat.SetFloat("_Mode", 3); // Transparent
@@ -349,40 +352,37 @@ public class HandTransformMapper : MonoBehaviour
                     mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
                     mat.renderQueue = 3000;
                 }
-
-                // 색상 적용 (다양한 쉐이더 지원)
-                if (mat.HasProperty("_Color"))
-                {
-                    mat.color = finalColor;
-                }
-                else if (mat.HasProperty("_BaseColor"))
-                {
-                    mat.SetColor("_BaseColor", finalColor);
-                }
-
-                // OculusHand 쉐이더 지원
-                if (mat.HasProperty("_ColorTop"))
-                {
-                    mat.SetColor("_ColorTop", finalColor);
-                }
-                if (mat.HasProperty("_ColorBottom"))
-                {
-                    mat.SetColor("_ColorBottom", finalColor);
-                }
-                if (mat.HasProperty("_GlowColor"))
-                {
-                    // Glow는 약간 밝게
-                    Color glowColor = finalColor * 1.5f;
-                    glowColor.a = finalColor.a;
-                    mat.SetColor("_GlowColor", glowColor);
-                }
-                // OculusHand 쉐이더 Opacity 프로퍼티 지원
-                if (mat.HasProperty("_Opacity"))
-                {
-                    mat.SetFloat("_Opacity", alpha);
-                }
             }
+
+            // MaterialPropertyBlock으로 색상/알파 설정 (개별 렌더러에만 적용)
+            renderer.GetPropertyBlock(_propertyBlock);
+
+            _propertyBlock.SetColor("_Color", finalColor);
+            _propertyBlock.SetColor("_BaseColor", finalColor);
+            _propertyBlock.SetColor("_ColorTop", finalColor);
+            _propertyBlock.SetColor("_ColorBottom", finalColor);
+
+            // Glow는 약간 밝게
+            Color glowColor = finalColor * 1.5f;
+            glowColor.a = finalColor.a;
+            _propertyBlock.SetColor("_GlowColor", glowColor);
+
+            _propertyBlock.SetFloat("_Opacity", alpha);
+
+            renderer.SetPropertyBlock(_propertyBlock);
         }
+    }
+
+    /// <summary>
+    /// PropertyBlock과 캐시된 렌더러 초기화 확인
+    /// </summary>
+    private void EnsurePropertyBlockInitialized()
+    {
+        if (_propertyBlock == null)
+            _propertyBlock = new MaterialPropertyBlock();
+
+        if (_cachedRenderers == null || _cachedRenderers.Length == 0)
+            _cachedRenderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
     }
 
     /// <summary>
