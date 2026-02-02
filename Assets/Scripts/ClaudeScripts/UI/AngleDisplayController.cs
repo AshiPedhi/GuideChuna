@@ -90,12 +90,12 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("재평가 모드 홀드 끝 비율 (0°부터 시작, 63° 위치)")]
     [SerializeField] private float extendedHoldEnd = 0.7f;
 
-    [Header("=== 스트레칭 모드 홀드 범위 ===")]
-    [Tooltip("스트레칭 모드 홀드 시작 비율 (오프셋 30° 기준, 45°와 동일)")]
-    [SerializeField] private float stretchingHoldStart = 0.25f;
+    [Header("=== 스트레칭 모드 홀드 범위 (Fallback) ===")]
+    [Tooltip("스트레칭 모드 홀드 시작 비율 - ChunaPathEvaluator 통합 설정 우선 사용")]
+    [SerializeField] private float stretchingHoldStart = 0.45f;
 
-    [Tooltip("스트레칭 모드 홀드 끝 비율 (오프셋 30° 기준, 63°와 동일)")]
-    [SerializeField] private float stretchingHoldEnd = 0.55f;
+    [Tooltip("스트레칭 모드 홀드 끝 비율 - ChunaPathEvaluator 통합 설정 우선 사용")]
+    [SerializeField] private float stretchingHoldEnd = 0.65f;
 
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]

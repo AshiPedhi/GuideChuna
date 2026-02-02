@@ -258,15 +258,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("재평가 시 확장된 중간 홀드 종료 구간 (0°기준)")]
     [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
-    [Header("=== 스트레칭 전용 설정 ===")]
-    [Tooltip("스트레칭 시 시작 위치 (0~1)")]
-    [SerializeField] private float extendedStartRatio = 0.4f;
+    [Header("=== ★ 스트레칭 모드 통합 설정 ===")]
+    [Tooltip("스트레칭 가이드/동작 시작 비율 (0~1) - 가이드 핸드 시작 위치")]
+    [SerializeField] private float stretchingStart = 0.30f;
 
-    [Tooltip("스트레칭 시 홀드 시작 구간 (재평가와 동일)")]
-    [SerializeField] private float stretchingMidHoldStartRatio = 0.5f;
+    [Tooltip("스트레칭 가이드/동작 끝 비율 (0~1) - 가이드 핸드 끝 = 적정범위 끝")]
+    [SerializeField] private float stretchingEnd = 0.65f;
 
-    [Tooltip("스트레칭 시 홀드 종료 구간 (재평가와 동일)")]
-    [SerializeField] private float stretchingMidHoldEndRatio = 0.7f;
+    [Tooltip("스트레칭 적정범위 시작 비율 (가이드 시작 ~ 가이드 끝 사이)")]
+    [SerializeField] private float stretchingHoldStart = 0.45f;
+
+    // ★ 통합 설정에서 파생되는 값들 (외부에서 참조용)
+    public float StretchingGuideStart => stretchingStart;
+    public float StretchingGuideEnd => stretchingEnd;
+    public float StretchingHoldStartRatio => stretchingHoldStart;
+    public float StretchingHoldEndRatio => stretchingEnd;  // 홀드 끝 = 가이드 끝
 
     [Header("=== ★ 가이드 핸드 재생 범위 ===")]
     [Tooltip("회전(건측/환측) 가이드 시작")]
@@ -279,10 +285,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("제한장벽 측굴 가이드 끝")]
     [SerializeField] private float guideLimitCheck_End = 0.4f;
 
-    [Tooltip("스트레칭 가이드 시작")]
-    [SerializeField] private float guideStretching_Start = 0.35f;
-    [Tooltip("스트레칭 가이드 끝")]
-    [SerializeField] private float guideStretching_End = 0.65f;
+    // ★ guideStretching_Start/End는 통합 설정(stretchingStart/End)으로 대체됨
+    // 기존 코드 호환성을 위한 프로퍼티
+    private float guideStretching_Start => stretchingStart;
+    private float guideStretching_End => stretchingEnd;
 
     [Tooltip("재평가 가이드 시작")]
     [SerializeField] private float guideReEval_Start = 0f;
@@ -424,10 +430,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private bool isRotationMode = false;        // 회전 모드 (건측/환측 회전)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
-    // ★ 홀드 범위: 스트레칭과 재평가 구분
-    private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
+    // ★ 홀드 범위: 스트레칭 모드는 통합 설정 사용
+    private float currentMidHoldStart => isStretchingMode ? stretchingHoldStart :
                                          (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
-    private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
+    private float currentMidHoldEnd => isStretchingMode ? stretchingEnd :  // 홀드 끝 = 가이드 끝
                                        (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
 
     // ★ 가이드 핸드 재생 범위 (런타임)
@@ -435,7 +441,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float runtimeGuideEndRatio = 0.4f;
     private float currentStartRatio => runtimeGuideStartRatio;
     private float currentEndRatio => runtimeGuideEndRatio;
-    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
+    private float currentAngleDisplayOffset => isStretchingMode ? stretchingStart : 0f;  // ★ 각도 표시 오프셋 (통합 설정)
 
     // 결과
     private EvaluationSession currentSession;
@@ -2571,13 +2577,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                 break;
 
             case LateralBendingMode.Stretching:
-                defaultGuideRatio = lateralBending_StretchEndRatio;
-                // ★ 가이드 재생 범위: 0.35 ~ 0.65
-                runtimeGuideStartRatio = guideStretching_Start;
-                runtimeGuideEndRatio = guideStretching_End;
+                defaultGuideRatio = stretchingEnd;  // 통합 설정 사용
+                // ★ 가이드 재생 범위: 통합 설정에서 가져옴
+                runtimeGuideStartRatio = stretchingStart;
+                runtimeGuideEndRatio = stretchingEnd;
                 isStretchingMode = true;
                 isExtendedLimitMode = true;
-                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {guideStretching_Start:P0} ~ {guideStretching_End:P0}</color>");
+                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {stretchingStart:P0} ~ {stretchingEnd:P0}, 적정범위 {stretchingHoldStart:P0} ~ {stretchingEnd:P0}</color>");
                 break;
 
             case LateralBendingMode.ReEvaluation:
