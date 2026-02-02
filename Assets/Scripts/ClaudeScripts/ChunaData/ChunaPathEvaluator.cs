@@ -2518,10 +2518,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 재평가 시 확장 제한 설정
             extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
 
-            // 스트레칭 모드 범위 설정 (시작 0.4, 종료 0.7)
-            extendedStartRatio = lateralBending_StretchStartRatio;
-            stretchingMidHoldStartRatio = lateralBending_StretchStartRatio;
-            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio;
+            // 스트레칭 모드 범위 설정 - 통합 설정(stretchingStart/End/HoldStart) 사용
+            // ★ Inspector에서 직접 조절하므로 여기서 덮어쓰지 않음
 
             // targetAngle 재계산 (비율 적용)
             if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
@@ -2530,7 +2528,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
-            Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+            Debug.Log($"<color=cyan>  - 스트레칭: 가이드 {stretchingStart:P0}~{stretchingEnd:P0}, 적정범위 {stretchingHoldStart:P0}~{stretchingEnd:P0}</color>");
             Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
         }
         else if (isRotation)
