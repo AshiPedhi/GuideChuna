@@ -906,6 +906,24 @@ public class InfoPanelController : MonoBehaviour
         OnSkeletonToggleChanged(true);
     }
 
+    /// <summary>
+    /// 연습 모드용 골격 페이지 표시 (시나리오 시작 여부 무관)
+    /// </summary>
+    public void ForceShowSkeletonPage()
+    {
+        SetToggleWithoutNotify(skeletonToggle, true);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, false);
+        ShowContentPage(ContentPage.Skeleton);
+        UpdateAllToggleColors();
+
+        if (showDebugLogs)
+            Debug.Log("[InfoPanel] 연습모드: 골격 페이지로 강제 전환");
+    }
+
+    // showDebugLogs 속성 추가 (내부 로깅용)
+    private bool showDebugLogs = true;
+
     public void ShowExpertVideoPage()
     {
         if (!isScenarioStarted) return;

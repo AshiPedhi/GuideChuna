@@ -81,11 +81,17 @@ public class PracticeManager : MonoBehaviour
     [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
     [Tooltip("환자 Transform (위치 변경 감지용)")]
     [SerializeField] private Transform patientTransform;
+    [Tooltip("LateralFlexionDetector (측굴 동작 감지용)")]
+    [SerializeField] private LateralFlexionDetector lateralFlexionDetector;
 
     [Header("=== Step 7: 나가기 ===")]
     [SerializeField] private ToggleHighlightPair mainMenuToggle;      // 메인메뉴
     [Tooltip("완료 팝업")]
     [SerializeField] private ExitPopupController exitPopupController;
+
+    [Header("=== InfoPanel 연결 ===")]
+    [Tooltip("InfoPanelController (콘텐츠 토글 제어용)")]
+    [SerializeField] private InfoPanelController infoPanelController;
 
     [Header("=== 하이라이트 설정 ===")]
     [SerializeField] private float blinkInterval = 0.4f;
@@ -177,6 +183,9 @@ public class PracticeManager : MonoBehaviour
         // 토글 이벤트 리스너 설정
         SetupAllToggleListeners();
 
+        // ★ InfoPanelController 초기화 - 골격 토글 활성화
+        InitializeInfoPanel();
+
         // 연습 시작
         StartStep(0);
 
@@ -239,6 +248,29 @@ public class PracticeManager : MonoBehaviour
         else
         {
             Debug.LogError("[Practice] ⚠ 가이드 패널이 할당되지 않았습니다! Inspector에서 guidePanel을 할당해주세요.");
+        }
+    }
+
+    /// <summary>
+    /// InfoPanelController 초기화 - 골격 토글 활성화
+    /// (연습 모드에서는 ScenarioManager가 비활성화되어 OnScenarioStarted가 호출되지 않음)
+    /// </summary>
+    private void InitializeInfoPanel()
+    {
+        // InfoPanelController 찾기
+        if (infoPanelController == null)
+            infoPanelController = FindFirstObjectByType<InfoPanelController>();
+
+        if (infoPanelController != null)
+        {
+            // ★ 골격 페이지로 강제 전환 (화면과 버튼 상태 일치)
+            infoPanelController.ForceShowSkeletonPage();
+            if (showDebugLogs)
+                Debug.Log("[Practice] InfoPanel 골격 페이지로 초기화");
+        }
+        else
+        {
+            Debug.LogWarning("[Practice] InfoPanelController를 찾을 수 없습니다.");
         }
     }
 
@@ -353,16 +385,25 @@ public class PracticeManager : MonoBehaviour
     private void OnAnyToggleClicked(ToggleHighlightPair clickedPair, bool isOn)
     {
         if (!isStepActive) return;
-        if (!isOn) return; // 토글이 켜질 때만 처리
 
         var clickedToggle = clickedPair.toggle;
 
-        // Step 2: 난이도 토글 (순서 무관)
-        if (currentStep == 1 && difficultyToggles.Contains(clickedPair))
+        // ★ Step 5 (currentStep=4)에서 설정 닫기는 토글 off로 처리
+        if (currentStep == 4 && clickedPair == settingsToggle && !isOn)
         {
-            OnDifficultyToggleClicked(clickedPair);
+            // 설정 토글을 끌 때(닫을 때) 처리
+            for (int i = 0; i < sequentialToggles.Count; i++)
+            {
+                if (sequentialToggles[i].toggle == clickedToggle && i == currentToggleIndex)
+                {
+                    OnCorrectToggleClicked(clickedPair, i);
+                    return;
+                }
+            }
             return;
         }
+
+        if (!isOn) return; // 그 외에는 토글이 켜질 때만 처리
 
         // 순차 토글 처리
         for (int i = 0; i < sequentialToggles.Count; i++)
@@ -446,8 +487,13 @@ public class PracticeManager : MonoBehaviour
 
         if (currentToggleIndex >= sequentialToggles.Count)
         {
-            // Step 4 (위치+시작)는 코루틴에서 처리
-            if (currentStep != 4)
+            // ★ Step 2 (currentStep=1): 난이도 완료 후 실습모드 토글로 이동
+            if (currentStep == 1)
+            {
+                StartPracticeModeToggle();
+            }
+            // Step 5 (currentStep=4, 위치+시작)는 코루틴에서 처리
+            else if (currentStep != 4)
             {
                 CompleteCurrentStep();
             }
@@ -553,11 +599,13 @@ public class PracticeManager : MonoBehaviour
             if (showDebugLogs) Debug.Log("[Practice] QuizPanel disabled");
         }
 
-        var lateralFlexionDetector = FindFirstObjectByType<LateralFlexionDetector>();
+        // LateralFlexionDetector 찾기 및 저장 (Step 6에서 활성화)
+        if (lateralFlexionDetector == null)
+            lateralFlexionDetector = FindFirstObjectByType<LateralFlexionDetector>();
         if (lateralFlexionDetector != null)
         {
             lateralFlexionDetector.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] LateralFlexionDetector disabled");
+            if (showDebugLogs) Debug.Log("[Practice] LateralFlexionDetector disabled (Step 6에서 활성화)");
         }
 
         if (chunaPathEvaluator != null)
@@ -719,22 +767,30 @@ public class PracticeManager : MonoBehaviour
 
     #endregion
 
-    #region Step 2: 난이도 (순서 무관) → 실습모드
+    #region Step 2: 난이도 (중급→상급→초급 순서) → 실습모드
 
     private void StartStep2_DifficultyAndMode()
     {
         clickedDifficultyToggles.Clear();
         sequentialToggles.Clear();
 
-        // 난이도 토글 모두 활성화 (순서 무관)
-        EnableToggles(difficultyToggles);
+        // ★ 난이도 토글을 순서대로 설정: 중급 → 상급 → 초급
+        if (IsValidPair(intermediateToggle)) sequentialToggles.Add(intermediateToggle);
+        if (IsValidPair(advancedToggle)) sequentialToggles.Add(advancedToggle);
+        if (IsValidPair(beginnerToggle)) sequentialToggles.Add(beginnerToggle);
 
-        // 모든 난이도 하이라이트 표시
-        foreach (var pair in difficultyToggles)
-            ShowHighlight(pair);
+        if (sequentialToggles.Count == 0)
+        {
+            if (showDebugLogs) Debug.Log("[Practice] Step 2: 난이도 토글 없음, 건너뜀");
+            StartPracticeModeToggle();
+            return;
+        }
+
+        currentToggleIndex = 0;
+        StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 2: 난이도 토글 {difficultyToggles.Count}개를 모두 눌러보세요 (순서 무관)");
+            Debug.Log($"[Practice] Step 2: 난이도 토글 (중급→상급→초급) (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -882,12 +938,31 @@ public class PracticeManager : MonoBehaviour
         DisableAllTogglesExceptMainMenuAndDifficulty();
         UpdateCountText(0, HOLD_REQUIRED_COUNT);
 
+        // ★ ChunaPathEvaluator 활성화 및 평가 시작
         if (chunaPathEvaluator != null)
         {
             chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
+
+            // ★ 평가 시작 (가이드 핸드 표시 및 측굴 애니메이션)
+            chunaPathEvaluator.StartEvaluation();
+
             if (showDebugLogs)
-                Debug.Log("[Practice] ChunaPathEvaluator 활성화 - 핸드 가이드 시작");
+                Debug.Log("[Practice] ChunaPathEvaluator 활성화 + StartEvaluation() 호출");
+        }
+        else
+        {
+            Debug.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다!");
+        }
+
+        // ★ LateralFlexionDetector 활성화 (측굴 동작 감지)
+        if (lateralFlexionDetector != null)
+        {
+            lateralFlexionDetector.enabled = true;
+            lateralFlexionDetector.SetDetectEnabled(true);
+            lateralFlexionDetector.SetPracticeManager(this);
+            if (showDebugLogs)
+                Debug.Log("[Practice] LateralFlexionDetector 활성화");
         }
 
         if (showDebugLogs)
@@ -1053,5 +1128,9 @@ public class PracticeManager : MonoBehaviour
 
         if (chunaPathEvaluator != null)
             chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
+
+        // ★ LateralFlexionDetector 정리
+        if (lateralFlexionDetector != null)
+            lateralFlexionDetector.SetDetectEnabled(false);
     }
 }
