@@ -760,9 +760,26 @@ public class InfoPanelController : MonoBehaviour
         if (scenarioProgressUI != null)
             scenarioProgressUI.SetActive(true);
 
+        // ★ UI 위치를 헤드셋 기준으로 초기화
+        InitializeUIPositionOnStart();
+
         UpdateAllToggleColors();
 
         Debug.Log("[InfoPanel] 시나리오 시작 - 근골격 페이지로 전환");
+    }
+
+    /// <summary>
+    /// UI 위치를 헤드셋 기준으로 초기화 (시나리오 시작 시)
+    /// </summary>
+    private void InitializeUIPositionOnStart()
+    {
+        var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
+        if (uiPositioner != null)
+        {
+            uiPositioner.RepositionUI();
+            if (showDebugLogs)
+                Debug.Log("[InfoPanel] ScenarioUIPositioner로 UI 위치 초기화");
+        }
     }
 
     private void OnScenarioCompleted(ScenarioData scenario)
