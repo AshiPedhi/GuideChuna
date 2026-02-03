@@ -726,15 +726,27 @@ public class PracticeManager : MonoBehaviour
         clickedDifficultyToggles.Clear();
         sequentialToggles.Clear();
 
-        // 난이도 토글 모두 활성화 (순서 무관)
+        // 난이도 토글을 순서대로 추가 (초급자 → 중급자 → 상급자)
+        if (IsValidPair(beginnerToggle)) sequentialToggles.Add(beginnerToggle);
+        if (IsValidPair(intermediateToggle)) sequentialToggles.Add(intermediateToggle);
+        if (IsValidPair(advancedToggle)) sequentialToggles.Add(advancedToggle);
+
+        if (sequentialToggles.Count == 0)
+        {
+            if (showDebugLogs) Debug.Log("[Practice] Step 2: 난이도 토글 없음, 건너뜀");
+            CompleteCurrentStep();
+            return;
+        }
+
+        // 난이도 토글 모두 활성화
         EnableToggles(difficultyToggles);
 
-        // 모든 난이도 하이라이트 표시
-        foreach (var pair in difficultyToggles)
-            ShowHighlight(pair);
+        // 첫 번째 토글(초급자)부터 순차적 하이라이트 시작
+        currentToggleIndex = 0;
+        StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 2: 난이도 토글 {difficultyToggles.Count}개를 모두 눌러보세요 (순서 무관)");
+            Debug.Log($"[Practice] Step 2: 난이도 토글 (초급자→중급자→상급자) (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -745,10 +757,10 @@ public class PracticeManager : MonoBehaviour
     {
         sequentialToggles.Clear();
 
-        // 순서: 비디오 → 결과 → 골격
+        // 순서: 골격 → 비디오 → 결과 (골격이 기본 활성화 상태이므로 먼저 시작)
+        if (IsValidPair(skeletonToggle)) sequentialToggles.Add(skeletonToggle);
         if (IsValidPair(expertVideoToggle)) sequentialToggles.Add(expertVideoToggle);
         if (IsValidPair(resultToggle)) sequentialToggles.Add(resultToggle);
-        if (IsValidPair(skeletonToggle)) sequentialToggles.Add(skeletonToggle);
 
         if (sequentialToggles.Count == 0)
         {
@@ -761,7 +773,7 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 3: 콘텐츠(비디오→결과→골격) (총 {sequentialToggles.Count}개)");
+            Debug.Log($"[Practice] Step 3: 콘텐츠(골격→비디오→결과) (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -797,6 +809,9 @@ public class PracticeManager : MonoBehaviour
 
     private void StartStep5_PositionAndStart()
     {
+        // Step 5는 3단계: 환자위치조정(1) → 설정닫기(2) → 시작(3)
+        UpdateCountText(0, 3);
+
         if (showDebugLogs)
             Debug.Log("[Practice] Step 5: 환자 위치를 조정하세요...");
 
@@ -805,7 +820,7 @@ public class PracticeManager : MonoBehaviour
 
     private IEnumerator WaitForPatientPositionThenContinue()
     {
-        // 환자 위치 변경 대기 (또는 타임아웃)
+        // 1. 환자 위치 변경 대기 (또는 타임아웃)
         if (patientTransform != null)
         {
             Vector3 startPos = patientTransform.position;
@@ -825,6 +840,8 @@ public class PracticeManager : MonoBehaviour
             }
         }
 
+        // 1단계 완료
+        UpdateCountText(1, 3);
         yield return new WaitForSeconds(0.5f);
 
         // 2. 설정 토글 점멸 (닫기)
@@ -843,6 +860,8 @@ public class PracticeManager : MonoBehaviour
 
         if (!isStepActive) yield break;
 
+        // 2단계 완료
+        UpdateCountText(2, 3);
         yield return new WaitForSeconds(0.5f);
 
         // 3. 시작 토글 점멸
@@ -886,8 +905,16 @@ public class PracticeManager : MonoBehaviour
         {
             chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
+
+            // ★ 평가 시작 - 가이드 핸드와 측굴 애니메이션 활성화
+            chunaPathEvaluator.StartEvaluation();
+
             if (showDebugLogs)
-                Debug.Log("[Practice] ChunaPathEvaluator 활성화 - 핸드 가이드 시작");
+                Debug.Log("[Practice] ChunaPathEvaluator 활성화 및 평가 시작 - 핸드 가이드 시작");
+        }
+        else
+        {
+            Debug.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다!");
         }
 
         if (showDebugLogs)
