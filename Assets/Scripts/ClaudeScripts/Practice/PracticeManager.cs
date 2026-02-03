@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 using System;
+using TMPro;
 
 /// <summary>
 /// 연습 모드 관리자 (튜토리얼)
@@ -29,6 +30,21 @@ public class PracticeManager : MonoBehaviour
         public Toggle toggle;
         [Tooltip("하이라이트 테두리 이미지 (별도 오브젝트)")]
         public GameObject highlightBorder;
+    }
+
+    /// <summary>
+    /// 스텝별 나레이션과 텍스트를 관리하는 구조체
+    /// </summary>
+    [Serializable]
+    public class StepNarration
+    {
+        [Tooltip("스텝 이름 (표시용)")]
+        public string stepName;
+        [Tooltip("나레이션 오디오 클립")]
+        public AudioClip audioClip;
+        [Tooltip("화면에 표시할 나레이션 텍스트")]
+        [TextArea(2, 5)]
+        public string displayText;
     }
 
     [Header("=== Step 1: UI 옮기기 ===")]
@@ -78,6 +94,16 @@ public class PracticeManager : MonoBehaviour
     [Header("=== 설정 ===")]
     [SerializeField] private float stepTransitionDelay = 1.0f;
     [SerializeField] private bool showDebugLogs = true;
+
+    [Header("=== 나레이션 시스템 ===")]
+    [Tooltip("나레이션 재생용 AudioSource")]
+    [SerializeField] private AudioSource narrationAudioSource;
+    [Tooltip("나레이션 텍스트 표시용 TextMeshProUGUI")]
+    [SerializeField] private TextMeshProUGUI narrationText;
+    [Tooltip("반복 횟수 표시용 TextMeshProUGUI (예: 1/3)")]
+    [SerializeField] private TextMeshProUGUI countText;
+    [Tooltip("각 스텝별 나레이션 설정 (총 7개 스텝)")]
+    [SerializeField] private StepNarration[] stepNarrations = new StepNarration[7];
 
     // 상태
     private int currentStep = 0;
@@ -552,6 +578,9 @@ public class PracticeManager : MonoBehaviour
         if (showDebugLogs)
             Debug.Log($"[Practice] ═══ Step {step + 1} 시작 ═══");
 
+        // 스텝 시작 시 나레이션 재생 및 텍스트 표시
+        PlayStepNarration(step);
+
         switch (step)
         {
             case 0: StartStep1_UIGrab(); break;
@@ -562,6 +591,83 @@ public class PracticeManager : MonoBehaviour
             case 5: StartStep6_HoldPractice(); break;
             case 6: StartStep7_Exit(); break;
             default: ShowCompletionPopup(); break;
+        }
+    }
+
+    /// <summary>
+    /// 스텝별 나레이션 재생 및 텍스트 표시
+    /// </summary>
+    private void PlayStepNarration(int step)
+    {
+        // 유효한 스텝 범위 확인
+        if (stepNarrations == null || step < 0 || step >= stepNarrations.Length)
+            return;
+
+        var narration = stepNarrations[step];
+        if (narration == null)
+            return;
+
+        // 나레이션 오디오 재생
+        if (narrationAudioSource != null && narration.audioClip != null)
+        {
+            narrationAudioSource.Stop();
+            narrationAudioSource.clip = narration.audioClip;
+            narrationAudioSource.Play();
+
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 나레이션 재생: {narration.stepName}");
+        }
+
+        // 나레이션 텍스트 표시
+        if (narrationText != null)
+        {
+            narrationText.text = narration.displayText ?? "";
+
+            if (showDebugLogs && !string.IsNullOrEmpty(narration.displayText))
+                Debug.Log($"[Practice] 텍스트 표시: {narration.displayText}");
+        }
+
+        // 기본적으로 카운트 텍스트 초기화 (반복 스텝에서 별도 설정)
+        ClearCountText();
+    }
+
+    /// <summary>
+    /// 나레이션 텍스트 지우기
+    /// </summary>
+    public void ClearNarrationText()
+    {
+        if (narrationText != null)
+            narrationText.text = "";
+    }
+
+    /// <summary>
+    /// 나레이션 오디오 중지
+    /// </summary>
+    public void StopNarration()
+    {
+        if (narrationAudioSource != null)
+            narrationAudioSource.Stop();
+    }
+
+    /// <summary>
+    /// 반복 횟수 텍스트 업데이트
+    /// </summary>
+    private void UpdateCountText(int current, int required)
+    {
+        if (countText != null)
+        {
+            countText.text = $"{current}/{required}";
+        }
+    }
+
+    /// <summary>
+    /// 반복 횟수 텍스트 지우기
+    /// </summary>
+    private void ClearCountText()
+    {
+        if (countText != null)
+        {
+            countText.text = "";
         }
     }
 
@@ -589,6 +695,7 @@ public class PracticeManager : MonoBehaviour
     private void StartStep1_UIGrab()
     {
         DisableAllTogglesExceptMainMenuAndDifficulty();
+        UpdateCountText(0, UI_GRAB_REQUIRED);
 
         if (showDebugLogs)
             Debug.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
@@ -599,6 +706,8 @@ public class PracticeManager : MonoBehaviour
         if (currentStep != 0 || !isStepActive) return;
 
         currentCount++;
+        UpdateCountText(currentCount, UI_GRAB_REQUIRED);
+
         if (showDebugLogs)
             Debug.Log($"[Practice] UI 옮기기: {currentCount}/{UI_GRAB_REQUIRED}");
 
@@ -771,6 +880,7 @@ public class PracticeManager : MonoBehaviour
         isWaitingForHold = true;
 
         DisableAllTogglesExceptMainMenuAndDifficulty();
+        UpdateCountText(0, HOLD_REQUIRED_COUNT);
 
         if (chunaPathEvaluator != null)
         {
@@ -796,6 +906,8 @@ public class PracticeManager : MonoBehaviour
         if (newPhase == ChunaPathEvaluator.EvaluationPhase.Completed)
         {
             currentCount++;
+            UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
+
             if (showDebugLogs)
                 Debug.Log($"[Practice] ★ 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
@@ -815,6 +927,8 @@ public class PracticeManager : MonoBehaviour
         if (currentStep != 5 || !isStepActive) return;
 
         currentCount++;
+        UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
+
         if (showDebugLogs)
             Debug.Log($"[Practice] 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 

@@ -2,6 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 using Oculus.Interaction;
 using Oculus.Interaction.Input;
 using static HandPoseDataLoader;
@@ -23,9 +25,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("데이터 기록 시 환자의 위치 오프셋")]
     [SerializeField] private Vector3 recordedPatientOffset = Vector3.zero;
 
-    [Header("=== 직접 할당 충돌체 (환자 머리) ===")]
+    [Header("=== 직접 할당 충돌체 (환자) ===")]
     [Tooltip("환자 머리에 부착된 충돌체 - 손이 닿으면 트래킹 시작")]
     [SerializeField] private Collider patientHeadCollider;
+
+    [Tooltip("환자 어깨에 부착된 충돌체 - 왼손 추가 감지용")]
+    [SerializeField] private Collider patientShoulderCollider;
 
     [Tooltip("손 충돌체 (왼손)")]
     [SerializeField] private Collider leftHandCollider;
@@ -206,80 +211,89 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
-    [Header("=== 새로운 평가 흐름 설정 ===")]
+    [Header("=== 디버그 UI 표시 ===")]
+    [Tooltip("디버그 정보 표시 활성화")]
+    [SerializeField] private bool showDebugUI = false;
+
+    [Tooltip("FPS 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI fpsText;
+
+    [Tooltip("왼손 거리 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI leftHandDistanceText;
+
+    [Tooltip("오른손 거리 표시용 TextMeshPro")]
+    [SerializeField] private TextMeshProUGUI rightHandDistanceText;
+
+    [Tooltip("FPS 업데이트 간격 (초)")]
+    [SerializeField] private float fpsUpdateInterval = 0.5f;
+
+    // 디버그 UI용 내부 변수
+    private float fpsTimer = 0f;
+    private int frameCount = 0;
+    private float currentFps = 0f;
+
+    [Header("=== 홀드 시간 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
     [SerializeField] private float startHoldDuration = 3f;
 
     [Tooltip("중간 홀드 시간 (초)")]
     [SerializeField] private float midHoldDuration = 3f;
 
-    [Tooltip("중간 홀드 시작 구간 (0~1, 전체 프레임 기준)")]
-    [SerializeField] private float midHoldStartRatio = 0.3f;
+    [Header("=== ★ 스트레칭 모드 설정 ===")]
+    [Tooltip("가이드 핸드 시작 위치 (0~1)")]
+    [SerializeField] private float stretchingStart = 0.30f;
 
-    [Tooltip("중간 홀드 종료 구간 (0~1, 전체 프레임 기준)")]
-    [SerializeField] private float midHoldEndRatio = 0.5f;
+    [Tooltip("가이드 핸드 끝 = 적정범위 끝 (0~1)")]
+    [SerializeField] private float stretchingEnd = 0.65f;
 
-    [Tooltip("제한장벽 최대지점 구간 (0~1, 이 지점 이후 경고)")]
-    [SerializeField] private float limitBarrierRatio = 0.5f;
+    [Tooltip("적정범위 시작 (가이드 범위 내)")]
+    [SerializeField] private float stretchingHoldStart = 0.45f;
 
-    [Header("=== 재평가 확장 제한 ===")]
-    [Tooltip("재평가 시 확장된 제한 장벽 (0~1)")]
-    [SerializeField] private float extendedLimitBarrierRatio = 0.65f;
+    // 통합 설정 외부 참조용
+    public float StretchingGuideStart => stretchingStart;
+    public float StretchingGuideEnd => stretchingEnd;
+    public float StretchingHoldStartRatio => stretchingHoldStart;
+    public float StretchingHoldEndRatio => stretchingEnd;
 
-    [Tooltip("재평가 시 확장된 중간 홀드 시작 구간 (0°기준)")]
+    [Header("=== ★ 재평가 모드 설정 ===")]
+    [Tooltip("재평가 가이드 끝 (0~1)")]
+    [SerializeField] private float guideReEval_End = 0.70f;
+
+    [Tooltip("재평가 적정범위 시작")]
     [SerializeField] private float extendedMidHoldStartRatio = 0.5f;
 
-    [Tooltip("재평가 시 확장된 중간 홀드 종료 구간 (0°기준)")]
+    [Tooltip("재평가 적정범위 끝")]
     [SerializeField] private float extendedMidHoldEndRatio = 0.7f;
 
-    [Header("=== 스트레칭 전용 설정 ===")]
-    [Tooltip("스트레칭 시 시작 위치 (0~1)")]
-    [SerializeField] private float extendedStartRatio = 0.4f;
+    [Header("=== ★ 제한장벽 확인 모드 설정 ===")]
+    [Tooltip("제한장벽 최대 지점 (이후 경고)")]
+    [SerializeField] private float limitBarrierRatio = 0.5f;
 
-    [Tooltip("스트레칭 시 홀드 시작 구간 (재평가와 동일)")]
-    [SerializeField] private float stretchingMidHoldStartRatio = 0.5f;
+    [Tooltip("제한장벽 가이드 끝")]
+    [SerializeField] private float guideLimitCheck_End = 0.5f;
 
-    [Tooltip("스트레칭 시 홀드 종료 구간 (재평가와 동일)")]
-    [SerializeField] private float stretchingMidHoldEndRatio = 0.7f;
-
-    [Header("=== ★ 가이드 핸드 재생 범위 ===")]
-    [Tooltip("회전(건측/환측) 가이드 시작")]
-    [SerializeField] private float guideRotation_Start = 0f;
-    [Tooltip("회전(건측/환측) 가이드 끝")]
-    [SerializeField] private float guideRotation_End = 0.4f;
-
-    [Tooltip("제한장벽 측굴 가이드 시작")]
-    [SerializeField] private float guideLimitCheck_Start = 0f;
-    [Tooltip("제한장벽 측굴 가이드 끝")]
-    [SerializeField] private float guideLimitCheck_End = 0.4f;
-
-    [Tooltip("스트레칭 가이드 시작")]
-    [SerializeField] private float guideStretching_Start = 0.35f;
-    [Tooltip("스트레칭 가이드 끝")]
-    [SerializeField] private float guideStretching_End = 0.65f;
-
-    [Tooltip("재평가 가이드 시작")]
-    [SerializeField] private float guideReEval_Start = 0f;
-    [Tooltip("재평가 가이드 끝")]
-    [SerializeField] private float guideReEval_End = 0.65f;
-
-    [Header("=== ★ 측굴 자동 프리셋 ===")]
+    [Header("=== 측굴 자동 프리셋 ===")]
     [Tooltip("측굴 운동 자동 감지 및 프리셋 적용")]
     [SerializeField] private bool autoApplyLateralBendingPreset = true;
 
-    [Tooltip("측굴 - 제한장벽 확인 모드 가이드 비율 (0~0.5)")]
-    [SerializeField] private float lateralBending_LimitCheckRatio = 0.5f;
+    [Tooltip("재평가 시 확장 제한 비율")]
+    [SerializeField] private float extendedLimitBarrierRatio = 0.70f;
 
-    [Tooltip("측굴 - 스트레칭 모드 시작 비율 (재평가와 동일)")]
-    [SerializeField] private float lateralBending_StretchStartRatio = 0.5f;
+    // 내부용 (Inspector 숨김)
+    private float midHoldStartRatio = 0.3f;
+    private float midHoldEndRatio = 0.5f;
+    private float guideRotation_Start = 0f;
+    private float guideRotation_End = 0.5f;
+    private float guideLimitCheck_Start = 0f;
+    private float guideReEval_Start = 0f;
+    private float lateralBending_LimitCheckRatio = 0.5f;
+    private float lateralBending_ReEvalRatio = 0.7f;
 
-    [Tooltip("측굴 - 스트레칭 모드 종료 비율")]
-    [SerializeField] private float lateralBending_StretchEndRatio = 0.7f;
+    // 스트레칭 가이드 호환용 프로퍼티
+    private float guideStretching_Start => stretchingStart;
+    private float guideStretching_End => stretchingEnd;
 
-    [Tooltip("측굴 - 재평가 모드 가이드 비율 (0~0.7)")]
-    [SerializeField] private float lateralBending_ReEvalRatio = 0.7f;
-
-    [Header("=== ★ 간소화된 손 유사도 체크 ===")]
+    [Header("=== 손 유사도 체크 ===")]
     [Tooltip("간소화된 손 유사도 체크 사용 (왼손: 손바닥 방향+주먹, 오른손: 경로+손모양)")]
     [SerializeField] private bool useSimplifiedHandComparison = true;
 
@@ -398,10 +412,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     private bool isRotationMode = false;        // 회전 모드 (건측/환측 회전)
     private float currentLimitRatio => isExtendedLimitMode ? extendedLimitBarrierRatio : limitBarrierRatio;
-    // ★ 홀드 범위: 스트레칭과 재평가 구분
-    private float currentMidHoldStart => isStretchingMode ? stretchingMidHoldStartRatio :
+    // ★ 홀드 범위: 스트레칭 모드는 통합 설정 사용
+    private float currentMidHoldStart => isStretchingMode ? stretchingHoldStart :
                                          (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
-    private float currentMidHoldEnd => isStretchingMode ? stretchingMidHoldEndRatio :
+    private float currentMidHoldEnd => isStretchingMode ? stretchingEnd :  // 홀드 끝 = 가이드 끝
                                        (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
 
     // ★ 가이드 핸드 재생 범위 (런타임)
@@ -409,7 +423,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float runtimeGuideEndRatio = 0.4f;
     private float currentStartRatio => runtimeGuideStartRatio;
     private float currentEndRatio => runtimeGuideEndRatio;
-    private float currentAngleDisplayOffset => isStretchingMode ? guideStretching_Start : 0f;  // ★ 각도 표시 오프셋
+    private float currentAngleDisplayOffset => isStretchingMode ? stretchingStart : 0f;  // ★ 각도 표시 오프셋 (통합 설정)
 
     // 결과
     private EvaluationSession currentSession;
@@ -531,6 +545,12 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     void Update()
     {
+        // 디버그 UI는 항상 업데이트
+        if (showDebugUI)
+        {
+            UpdateDebugUI();
+        }
+
         if (!isEvaluating) return;
 
         // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생
@@ -1236,34 +1256,57 @@ public class ChunaPathEvaluator : MonoBehaviour
         Bounds patientBounds = patientHeadCollider.bounds;
         Vector3 patientCenter = patientBounds.center;
 
-        // 이전 접촉 상태 저장
-        bool wasTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
+        // 이전 접촉 상태 저장 (각 손 개별)
+        bool wasLeftTouching = isLeftHandTouchingPatient;
+        bool wasRightTouching = isRightHandTouchingPatient;
 
-        // 왼손 충돌 감지
+        // 왼손 충돌 감지 (머리 + 어깨)
         if (playerLeftHand != null)
         {
-            bool wasTouch = isLeftHandTouchingPatient;
-            isLeftHandTouchingPatient = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
+            // 머리 충돌 체크
+            bool touchingHead = CheckHandCollision(playerLeftHand.transform, leftHandCollider, patientBounds, true);
 
-            if (isLeftHandTouchingPatient && !wasTouch && showDebugLogs)
-                Debug.Log("<color=green>[Collision] 왼손이 환자에게 닿음!</color>");
+            // 어깨 충돌 체크 (어깨 콜라이더가 있는 경우)
+            bool touchingShoulder = false;
+            if (patientShoulderCollider != null)
+            {
+                Bounds shoulderBounds = patientShoulderCollider.bounds;
+                touchingShoulder = CheckHandCollision(playerLeftHand.transform, leftHandCollider, shoulderBounds, true);
+            }
+
+            // 머리 또는 어깨에 닿으면 접촉으로 판정
+            isLeftHandTouchingPatient = touchingHead || touchingShoulder;
+
+            if (isLeftHandTouchingPatient && !wasLeftTouching && showDebugLogs)
+            {
+                string touchTarget = touchingHead ? "머리" : "어깨";
+                Debug.Log($"<color=green>[Collision] 왼손이 환자 {touchTarget}에 닿음!</color>");
+            }
         }
 
         // 오른손 충돌 감지
         if (playerRightHand != null)
         {
-            bool wasTouch = isRightHandTouchingPatient;
             isRightHandTouchingPatient = CheckHandCollision(playerRightHand.transform, rightHandCollider, patientBounds, false);
 
-            if (isRightHandTouchingPatient && !wasTouch && showDebugLogs)
+            if (isRightHandTouchingPatient && !wasRightTouching && showDebugLogs)
                 Debug.Log("<color=green>[Collision] 오른손이 환자에게 닿음!</color>");
         }
 
-        // ★ 접촉 상태가 변경되면 가이드 핸드 투명도 즉시 업데이트
-        bool isTouchingPatient = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-        if (fadeOnTouch && wasTouchingPatient != isTouchingPatient)
+        // ★ 각 손의 접촉 상태가 변경되면 해당 손의 가이드 핸드 알파 업데이트
+        if (fadeOnTouch)
         {
-            UpdateGuideHandAlphaOnTouch(isTouchingPatient);
+            // 왼손 상태 변경 시 왼손 가이드 알파 업데이트
+            if (wasLeftTouching != isLeftHandTouchingPatient)
+            {
+                UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
+            }
+
+            // 오른손 상태 변경 시 오른손 가이드 알파 업데이트
+            if (wasRightTouching != isRightHandTouchingPatient)
+            {
+                UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
+            }
         }
 
         // 디버그: 양손 충돌 상태 표시
@@ -1286,27 +1329,93 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
-    /// ★ 접촉 상태 변경 시 가이드 핸드 투명도 즉시 업데이트
+    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드 알파값 조절
+    /// 특정 손의 가이드 핸드 알파값만 조절
+    /// </summary>
+    private void UpdateGuideHandAlphaForHand(bool isLeftHand, bool isTouching)
+    {
+        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
+        string handName = isLeftHand ? "왼손" : "오른손";
+
+        if (guideHand != null)
+        {
+            float alpha = isTouching ? touchAlpha : guideHandColor.a;
+            guideHand.SetColorAndAlpha(guideHandColor, alpha);
+
+            if (showDebugLogs)
+            {
+                string state = isTouching ? "접촉" : "미접촉";
+                Debug.Log($"<color=yellow>[GuideHand] {handName} {state} → 알파: {alpha:F2}</color>");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 양손 가이드 핸드 알파값 모두 업데이트 (초기화용)
     /// </summary>
     private void UpdateGuideHandAlphaOnTouch(bool isTouching)
     {
-        float targetAlpha = isTouching ? touchAlpha : guideHandColor.a;
+        UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
+        UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
+    }
 
-        if (leftGuideHand != null)
+    /// <summary>
+    /// ★ 디버그 UI 업데이트 (FPS, 손 거리)
+    /// </summary>
+    private void UpdateDebugUI()
+    {
+        // FPS 계산
+        frameCount++;
+        fpsTimer += Time.unscaledDeltaTime;
+
+        if (fpsTimer >= fpsUpdateInterval)
         {
-            leftGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
+            currentFps = frameCount / fpsTimer;
+            frameCount = 0;
+            fpsTimer = 0f;
+
+            // FPS 텍스트 업데이트
+            if (fpsText != null)
+            {
+                fpsText.text = $"FPS: {currentFps:F1}";
+            }
         }
 
-        if (rightGuideHand != null)
+        // 왼손 거리 계산 및 표시 (mm 단위)
+        if (leftHandDistanceText != null)
         {
-            rightGuideHand.SetColorAndAlpha(guideHandColor, targetAlpha);
+            float leftDistance = CalculateHandToGuideDistance(true) * 1000f; // m → mm
+            string leftTouchStatus = isLeftHandTouchingPatient ? " [접촉]" : "";
+            leftHandDistanceText.text = $"왼손: {leftDistance:F2}mm{leftTouchStatus}";
         }
 
-        if (showDebugLogs)
+        // 오른손 거리 계산 및 표시 (mm 단위)
+        if (rightHandDistanceText != null)
         {
-            string state = isTouching ? "접촉" : "미접촉";
-            Debug.Log($"<color=yellow>[GuideHand] {state} → 투명도: {targetAlpha:F2}</color>");
+            float rightDistance = CalculateHandToGuideDistance(false) * 1000f; // m → mm
+            string rightTouchStatus = isRightHandTouchingPatient ? " [접촉]" : "";
+            rightHandDistanceText.text = $"오른손: {rightDistance:F2}mm{rightTouchStatus}";
         }
+    }
+
+    /// <summary>
+    /// 사용자 손목(wristBone)과 가이드 핸드 Root 간의 거리 계산
+    /// </summary>
+    private float CalculateHandToGuideDistance(bool isLeftHand)
+    {
+        Transform wristBone = isLeftHand ? leftWristBone : rightWristBone;
+        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
+
+        // 가이드 핸드가 없거나 비활성화면 0 반환
+        if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
+            return 0f;
+
+        // 사용자 손목 본이 없으면 0 반환
+        if (wristBone == null)
+            return 0f;
+
+        // 사용자 손목 Root ↔ 가이드 핸드 Root 거리 계산
+        return Vector3.Distance(wristBone.position, guideHand.Root.position);
     }
 
     /// <summary>
@@ -2391,10 +2500,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             // 재평가 시 확장 제한 설정
             extendedLimitBarrierRatio = lateralBending_ReEvalRatio;
 
-            // 스트레칭 모드 범위 설정 (시작 0.4, 종료 0.7)
-            extendedStartRatio = lateralBending_StretchStartRatio;
-            stretchingMidHoldStartRatio = lateralBending_StretchStartRatio;
-            stretchingMidHoldEndRatio = lateralBending_StretchEndRatio;
+            // 스트레칭 모드 범위 설정 - 통합 설정(stretchingStart/End/HoldStart) 사용
+            // ★ Inspector에서 직접 조절하므로 여기서 덮어쓰지 않음
 
             // targetAngle 재계산 (비율 적용)
             if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
@@ -2403,7 +2510,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             Debug.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
-            Debug.Log($"<color=cyan>  - 스트레칭: {lateralBending_StretchStartRatio:P0} ~ {lateralBending_StretchEndRatio:P0}</color>");
+            Debug.Log($"<color=cyan>  - 스트레칭: 가이드 {stretchingStart:P0}~{stretchingEnd:P0}, 적정범위 {stretchingHoldStart:P0}~{stretchingEnd:P0}</color>");
             Debug.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
         }
         else if (isRotation)
@@ -2450,13 +2557,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                 break;
 
             case LateralBendingMode.Stretching:
-                defaultGuideRatio = lateralBending_StretchEndRatio;
-                // ★ 가이드 재생 범위: 0.35 ~ 0.65
-                runtimeGuideStartRatio = guideStretching_Start;
-                runtimeGuideEndRatio = guideStretching_End;
+                defaultGuideRatio = stretchingEnd;  // 통합 설정 사용
+                // ★ 가이드 재생 범위: 통합 설정에서 가져옴
+                runtimeGuideStartRatio = stretchingStart;
+                runtimeGuideEndRatio = stretchingEnd;
                 isStretchingMode = true;
                 isExtendedLimitMode = true;
-                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {guideStretching_Start:P0} ~ {guideStretching_End:P0}</color>");
+                Debug.Log($"<color=green>[측굴] 스트레칭 모드: 가이드 {stretchingStart:P0} ~ {stretchingEnd:P0}, 적정범위 {stretchingHoldStart:P0} ~ {stretchingEnd:P0}</color>");
                 break;
 
             case LateralBendingMode.ReEvaluation:
@@ -2646,6 +2753,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 스트레칭/재평가 모드에서는 30% 프레임부터 시작
         if (showFirstFrameWhileWaiting)
         {
+            // ★ 가이드 핸드 표시 전에 충돌 검사 먼저 수행 (접촉 시 투명도 반영)
+            if (useCollisionMode)
+            {
+                UpdateCollisionDetection();
+            }
+
             ShowGuideHandFirstFrame();
 
             // 환자 애니메이션도 시작 프레임으로 설정 (스트레칭은 30%, 일반은 0%)
