@@ -924,18 +924,20 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
-    /// 연습 모드용 골격 페이지 표시 (시나리오 시작 여부 무관)
+    /// 연습 모드용 콘텐츠 토글 상태 초기화 (페이지 전환 없음)
+    /// 모드 선택 페이지는 그대로 유지하고, 콘텐츠 토글 상태만 골격으로 설정
     /// </summary>
     public void ForceShowSkeletonPage()
     {
+        // 콘텐츠 토글 상태만 설정 (페이지 전환 안 함 - 모드 선택 페이지 유지)
         SetToggleWithoutNotify(skeletonToggle, true);
         SetToggleWithoutNotify(expertVideoToggle, false);
         SetToggleWithoutNotify(resultToggle, false);
-        ShowContentPage(ContentPage.Skeleton);
+        // ShowContentPage(ContentPage.Skeleton); // ★ 제거: 모드 선택 페이지 유지
         UpdateAllToggleColors();
 
         if (showDebugLogs)
-            Debug.Log("[InfoPanel] 연습모드: 골격 페이지로 강제 전환");
+            Debug.Log("[InfoPanel] 연습모드: 콘텐츠 토글 상태 초기화 (골격 선택, 페이지 유지)");
     }
 
     // showDebugLogs 속성 추가 (내부 로깅용)
