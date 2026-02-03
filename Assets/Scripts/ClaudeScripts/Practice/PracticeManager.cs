@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using System.Collections;
 using System.Collections.Generic;
 using System;
+using TMPro;
 
 /// <summary>
 /// 연습 모드 관리자 (튜토리얼)
@@ -29,6 +30,21 @@ public class PracticeManager : MonoBehaviour
         public Toggle toggle;
         [Tooltip("하이라이트 테두리 이미지 (별도 오브젝트)")]
         public GameObject highlightBorder;
+    }
+
+    /// <summary>
+    /// 스텝별 나레이션과 텍스트를 관리하는 구조체
+    /// </summary>
+    [Serializable]
+    public class StepNarration
+    {
+        [Tooltip("스텝 이름 (표시용)")]
+        public string stepName;
+        [Tooltip("나레이션 오디오 클립")]
+        public AudioClip audioClip;
+        [Tooltip("화면에 표시할 나레이션 텍스트")]
+        [TextArea(2, 5)]
+        public string displayText;
     }
 
     [Header("=== Step 1: UI 옮기기 ===")]
@@ -78,6 +94,14 @@ public class PracticeManager : MonoBehaviour
     [Header("=== 설정 ===")]
     [SerializeField] private float stepTransitionDelay = 1.0f;
     [SerializeField] private bool showDebugLogs = true;
+
+    [Header("=== 나레이션 시스템 ===")]
+    [Tooltip("나레이션 재생용 AudioSource")]
+    [SerializeField] private AudioSource narrationAudioSource;
+    [Tooltip("나레이션 텍스트 표시용 TextMeshProUGUI")]
+    [SerializeField] private TextMeshProUGUI narrationText;
+    [Tooltip("각 스텝별 나레이션 설정 (총 7개 스텝)")]
+    [SerializeField] private StepNarration[] stepNarrations = new StepNarration[7];
 
     // 상태
     private int currentStep = 0;
@@ -552,6 +576,9 @@ public class PracticeManager : MonoBehaviour
         if (showDebugLogs)
             Debug.Log($"[Practice] ═══ Step {step + 1} 시작 ═══");
 
+        // 스텝 시작 시 나레이션 재생 및 텍스트 표시
+        PlayStepNarration(step);
+
         switch (step)
         {
             case 0: StartStep1_UIGrab(); break;
@@ -563,6 +590,58 @@ public class PracticeManager : MonoBehaviour
             case 6: StartStep7_Exit(); break;
             default: ShowCompletionPopup(); break;
         }
+    }
+
+    /// <summary>
+    /// 스텝별 나레이션 재생 및 텍스트 표시
+    /// </summary>
+    private void PlayStepNarration(int step)
+    {
+        // 유효한 스텝 범위 확인
+        if (stepNarrations == null || step < 0 || step >= stepNarrations.Length)
+            return;
+
+        var narration = stepNarrations[step];
+        if (narration == null)
+            return;
+
+        // 나레이션 오디오 재생
+        if (narrationAudioSource != null && narration.audioClip != null)
+        {
+            narrationAudioSource.Stop();
+            narrationAudioSource.clip = narration.audioClip;
+            narrationAudioSource.Play();
+
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 나레이션 재생: {narration.stepName}");
+        }
+
+        // 나레이션 텍스트 표시
+        if (narrationText != null)
+        {
+            narrationText.text = narration.displayText ?? "";
+
+            if (showDebugLogs && !string.IsNullOrEmpty(narration.displayText))
+                Debug.Log($"[Practice] 텍스트 표시: {narration.displayText}");
+        }
+    }
+
+    /// <summary>
+    /// 나레이션 텍스트 지우기
+    /// </summary>
+    public void ClearNarrationText()
+    {
+        if (narrationText != null)
+            narrationText.text = "";
+    }
+
+    /// <summary>
+    /// 나레이션 오디오 중지
+    /// </summary>
+    public void StopNarration()
+    {
+        if (narrationAudioSource != null)
+            narrationAudioSource.Stop();
     }
 
     private void CompleteCurrentStep()
