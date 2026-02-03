@@ -278,24 +278,62 @@ public class PracticeManager : MonoBehaviour
     }
 
     /// <summary>
-    /// UI 위치를 헤드셋 기준으로 초기화
-    /// (ScenarioUIPositioner가 있으면 사용, 없으면 직접 위치 설정)
+    /// UI 및 환자 위치를 헤드셋 기준으로 초기화
     /// </summary>
     private void InitializeUIPosition()
     {
-        // ScenarioUIPositioner 찾기
+        // 헤드셋 Transform 찾기
+        Transform headsetTransform = null;
+        GameObject ovrCameraRig = GameObject.Find("OVRCameraRig");
+        if (ovrCameraRig != null)
+        {
+            headsetTransform = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
+        }
+
+        // ScenarioUIPositioner로 UI 위치 초기화
         var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
         if (uiPositioner != null)
         {
-            // 플래그 리셋 후 재배치
             uiPositioner.RepositionUI();
             if (showDebugLogs)
                 Debug.Log("[Practice] ScenarioUIPositioner로 UI 위치 초기화");
         }
+
+        // ★ 환자 위치도 헤드셋 기준으로 초기화
+        if (patientTransform != null && headsetTransform != null)
+        {
+            Vector3 headsetPos = headsetTransform.position;
+            Vector3 headsetForward = headsetTransform.forward;
+            headsetForward.y = 0;
+            headsetForward.Normalize();
+
+            // 환자를 헤드셋 전방 1m, 헤드셋 높이보다 0.5m 아래에 배치
+            float patientForwardDistance = 1.0f;
+            float patientHeightOffset = -0.5f;
+
+            Vector3 patientNewPos = new Vector3(
+                headsetPos.x + headsetForward.x * patientForwardDistance,
+                headsetPos.y + patientHeightOffset,
+                headsetPos.z + headsetForward.z * patientForwardDistance
+            );
+
+            patientTransform.position = patientNewPos;
+
+            // 환자가 헤드셋을 바라보도록 회전
+            Vector3 lookDir = headsetPos - patientNewPos;
+            lookDir.y = 0;
+            if (lookDir.sqrMagnitude > 0.001f)
+            {
+                patientTransform.rotation = Quaternion.LookRotation(lookDir);
+            }
+
+            if (showDebugLogs)
+                Debug.Log($"[Practice] 환자 위치 초기화: {patientNewPos} (헤드셋 높이: {headsetPos.y:F2}m)");
+        }
         else
         {
-            if (showDebugLogs)
-                Debug.Log("[Practice] ScenarioUIPositioner 없음 - UI 위치 초기화 건너뜀");
+            if (patientTransform == null && showDebugLogs)
+                Debug.LogWarning("[Practice] patientTransform이 없어 환자 위치 초기화 건너뜀");
         }
     }
 
@@ -512,10 +550,19 @@ public class PracticeManager : MonoBehaviour
 
         if (currentToggleIndex >= sequentialToggles.Count)
         {
-            // ★ Step 2 (currentStep=1): 난이도 완료 후 실습모드 토글로 이동
+            // ★ Step 2 (currentStep=1): 처리 분기
             if (currentStep == 1)
             {
-                StartPracticeModeToggle();
+                // 실습모드 토글 클릭 완료 → Step 2 완료 + 골격 페이지 전환
+                if (clickedPair == practiceToggle)
+                {
+                    TransitionToSkeletonPageAndCompleteStep2();
+                }
+                // 난이도 토글 완료 → 실습모드 토글로 이동
+                else
+                {
+                    StartPracticeModeToggle();
+                }
             }
             // Step 5 (currentStep=4, 위치+시작)는 코루틴에서 처리
             else if (currentStep != 4)
@@ -527,6 +574,27 @@ public class PracticeManager : MonoBehaviour
         {
             StartHighlightToggle(currentToggleIndex);
         }
+    }
+
+    /// <summary>
+    /// Step 2 완료 후 골격 페이지로 전환
+    /// </summary>
+    private void TransitionToSkeletonPageAndCompleteStep2()
+    {
+        if (showDebugLogs)
+            Debug.Log("[Practice] Step 2 완료 - 골격 페이지로 전환");
+
+        // InfoPanelController로 골격 페이지 전환
+        if (infoPanelController == null)
+            infoPanelController = FindFirstObjectByType<InfoPanelController>();
+
+        if (infoPanelController != null)
+        {
+            // 골격 토글 On + 골격 페이지로 전환
+            infoPanelController.ShowContentPageForPractice(InfoPanelController.ContentPage.Skeleton);
+        }
+
+        CompleteCurrentStep();
     }
 
     #region 토글 Interactable 제어

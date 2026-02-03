@@ -769,10 +769,11 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
-    /// UI 위치를 헤드셋 기준으로 초기화 (시나리오 시작 시)
+    /// UI 및 환자 위치를 헤드셋 기준으로 초기화 (시나리오 시작 시)
     /// </summary>
     private void InitializeUIPositionOnStart()
     {
+        // UI 위치 초기화
         var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
         if (uiPositioner != null)
         {
@@ -780,6 +781,67 @@ public class InfoPanelController : MonoBehaviour
             if (showDebugLogs)
                 Debug.Log("[InfoPanel] ScenarioUIPositioner로 UI 위치 초기화");
         }
+
+        // ★ 환자 위치도 헤드셋 기준으로 초기화
+        InitializePatientPosition();
+    }
+
+    /// <summary>
+    /// 환자 위치를 헤드셋 기준으로 초기화
+    /// </summary>
+    private void InitializePatientPosition()
+    {
+        // 헤드셋 Transform 찾기
+        Transform headsetTransform = null;
+        GameObject ovrCameraRig = GameObject.Find("OVRCameraRig");
+        if (ovrCameraRig != null)
+        {
+            headsetTransform = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
+        }
+
+        if (headsetTransform == null) return;
+
+        // 환자 오브젝트 찾기 (태그 또는 이름으로)
+        GameObject patient = GameObject.FindWithTag("Patient");
+        if (patient == null)
+        {
+            patient = GameObject.Find("Patient");
+        }
+
+        if (patient == null)
+        {
+            if (showDebugLogs)
+                Debug.Log("[InfoPanel] 환자 오브젝트를 찾을 수 없어 위치 초기화 건너뜀");
+            return;
+        }
+
+        Vector3 headsetPos = headsetTransform.position;
+        Vector3 headsetForward = headsetTransform.forward;
+        headsetForward.y = 0;
+        headsetForward.Normalize();
+
+        // 환자를 헤드셋 전방 1m, 헤드셋 높이보다 0.5m 아래에 배치
+        float patientForwardDistance = 1.0f;
+        float patientHeightOffset = -0.5f;
+
+        Vector3 patientNewPos = new Vector3(
+            headsetPos.x + headsetForward.x * patientForwardDistance,
+            headsetPos.y + patientHeightOffset,
+            headsetPos.z + headsetForward.z * patientForwardDistance
+        );
+
+        patient.transform.position = patientNewPos;
+
+        // 환자가 헤드셋을 바라보도록 회전
+        Vector3 lookDir = headsetPos - patientNewPos;
+        lookDir.y = 0;
+        if (lookDir.sqrMagnitude > 0.001f)
+        {
+            patient.transform.rotation = Quaternion.LookRotation(lookDir);
+        }
+
+        if (showDebugLogs)
+            Debug.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (헤드셋 높이: {headsetPos.y:F2}m)");
     }
 
     private void OnScenarioCompleted(ScenarioData scenario)
@@ -938,6 +1000,25 @@ public class InfoPanelController : MonoBehaviour
 
         if (showDebugLogs)
             Debug.Log("[InfoPanel] 연습모드: 콘텐츠 토글 상태 초기화 (골격 선택, 페이지 유지)");
+    }
+
+    /// <summary>
+    /// 연습 모드용 콘텐츠 페이지 전환 (시나리오 시작 여부 무관)
+    /// Step 2 완료 후 골격 페이지로 전환할 때 사용
+    /// </summary>
+    public void ShowContentPageForPractice(ContentPage page)
+    {
+        // 콘텐츠 토글 상태 설정
+        SetToggleWithoutNotify(skeletonToggle, page == ContentPage.Skeleton);
+        SetToggleWithoutNotify(expertVideoToggle, page == ContentPage.ExpertVideo);
+        SetToggleWithoutNotify(resultToggle, page == ContentPage.Result);
+
+        // 페이지 전환
+        ShowContentPage(page);
+        UpdateAllToggleColors();
+
+        if (showDebugLogs)
+            Debug.Log($"[InfoPanel] 연습모드: {page} 페이지로 전환");
     }
 
     // showDebugLogs 속성 추가 (내부 로깅용)
