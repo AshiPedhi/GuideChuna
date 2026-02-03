@@ -100,6 +100,8 @@ public class PracticeManager : MonoBehaviour
     [SerializeField] private AudioSource narrationAudioSource;
     [Tooltip("나레이션 텍스트 표시용 TextMeshProUGUI")]
     [SerializeField] private TextMeshProUGUI narrationText;
+    [Tooltip("반복 횟수 표시용 TextMeshProUGUI (예: 1/3)")]
+    [SerializeField] private TextMeshProUGUI countText;
     [Tooltip("각 스텝별 나레이션 설정 (총 7개 스텝)")]
     [SerializeField] private StepNarration[] stepNarrations = new StepNarration[7];
 
@@ -624,6 +626,9 @@ public class PracticeManager : MonoBehaviour
             if (showDebugLogs && !string.IsNullOrEmpty(narration.displayText))
                 Debug.Log($"[Practice] 텍스트 표시: {narration.displayText}");
         }
+
+        // 기본적으로 카운트 텍스트 초기화 (반복 스텝에서 별도 설정)
+        ClearCountText();
     }
 
     /// <summary>
@@ -642,6 +647,28 @@ public class PracticeManager : MonoBehaviour
     {
         if (narrationAudioSource != null)
             narrationAudioSource.Stop();
+    }
+
+    /// <summary>
+    /// 반복 횟수 텍스트 업데이트
+    /// </summary>
+    private void UpdateCountText(int current, int required)
+    {
+        if (countText != null)
+        {
+            countText.text = $"{current}/{required}";
+        }
+    }
+
+    /// <summary>
+    /// 반복 횟수 텍스트 지우기
+    /// </summary>
+    private void ClearCountText()
+    {
+        if (countText != null)
+        {
+            countText.text = "";
+        }
     }
 
     private void CompleteCurrentStep()
@@ -668,6 +695,7 @@ public class PracticeManager : MonoBehaviour
     private void StartStep1_UIGrab()
     {
         DisableAllTogglesExceptMainMenuAndDifficulty();
+        UpdateCountText(0, UI_GRAB_REQUIRED);
 
         if (showDebugLogs)
             Debug.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
@@ -678,6 +706,8 @@ public class PracticeManager : MonoBehaviour
         if (currentStep != 0 || !isStepActive) return;
 
         currentCount++;
+        UpdateCountText(currentCount, UI_GRAB_REQUIRED);
+
         if (showDebugLogs)
             Debug.Log($"[Practice] UI 옮기기: {currentCount}/{UI_GRAB_REQUIRED}");
 
@@ -850,6 +880,7 @@ public class PracticeManager : MonoBehaviour
         isWaitingForHold = true;
 
         DisableAllTogglesExceptMainMenuAndDifficulty();
+        UpdateCountText(0, HOLD_REQUIRED_COUNT);
 
         if (chunaPathEvaluator != null)
         {
@@ -875,6 +906,8 @@ public class PracticeManager : MonoBehaviour
         if (newPhase == ChunaPathEvaluator.EvaluationPhase.Completed)
         {
             currentCount++;
+            UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
+
             if (showDebugLogs)
                 Debug.Log($"[Practice] ★ 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
@@ -894,6 +927,8 @@ public class PracticeManager : MonoBehaviour
         if (currentStep != 5 || !isStepActive) return;
 
         currentCount++;
+        UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
+
         if (showDebugLogs)
             Debug.Log($"[Practice] 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
