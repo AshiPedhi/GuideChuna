@@ -20,7 +20,7 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField] private Transform customReferencePoint;      // 커스텀 기준점 (옵션)
     [SerializeField] private Transform headsetTransform;          // 헤드셋 Transform (OVR CenterEyeAnchor)
     [SerializeField] private float defaultForwardDistance = 0.5f; // 기본 전방 거리
-    [SerializeField] private float defaultHeight = 0f;            // 기본 높이
+    [SerializeField] private float defaultHeightOffset = -0.3f;   // 헤드셋 높이 기준 오프셋 (음수 = 아래)
 
     [Header("═══ 환자 위치 조정 ═══")]
     [SerializeField] private GameObject patientPositionController; // 환자 위치 조정 컨트롤러
@@ -270,21 +270,22 @@ public class PracticeSettingsController : MonoBehaviour
         }
         else
         {
-            // 기본: 헤드셋 전방 0.5m, 높이 0
+            // 기본: 헤드셋 전방 0.5m, 헤드셋 높이 기준 오프셋 적용
             Vector3 headsetPosition = headsetTransform.position;
             Vector3 headsetForward = headsetTransform.forward;
 
-            // Y축은 0으로, 전방 방향만 사용
+            // Y축은 수평 방향만 고려
             headsetForward.y = 0;
             headsetForward.Normalize();
 
+            // ★ 헤드셋 높이를 기준으로 오프셋 적용 (월드 Y=0이 아님)
             newPosition = new Vector3(
                 headsetPosition.x + headsetForward.x * defaultForwardDistance,
-                defaultHeight,
+                headsetPosition.y + defaultHeightOffset,
                 headsetPosition.z + headsetForward.z * defaultForwardDistance
             );
 
-            Debug.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 높이 {defaultHeight}");
+            Debug.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
         }
 
         targetObject.position = newPosition;

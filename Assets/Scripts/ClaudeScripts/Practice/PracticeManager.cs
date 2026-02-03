@@ -186,6 +186,9 @@ public class PracticeManager : MonoBehaviour
         // ★ InfoPanelController 초기화 - 골격 토글 활성화
         InitializeInfoPanel();
 
+        // ★ UI 위치를 헤드셋 기준으로 초기화
+        InitializeUIPosition();
+
         // 연습 시작
         StartStep(0);
 
@@ -271,6 +274,28 @@ public class PracticeManager : MonoBehaviour
         else
         {
             Debug.LogWarning("[Practice] InfoPanelController를 찾을 수 없습니다.");
+        }
+    }
+
+    /// <summary>
+    /// UI 위치를 헤드셋 기준으로 초기화
+    /// (ScenarioUIPositioner가 있으면 사용, 없으면 직접 위치 설정)
+    /// </summary>
+    private void InitializeUIPosition()
+    {
+        // ScenarioUIPositioner 찾기
+        var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
+        if (uiPositioner != null)
+        {
+            // 플래그 리셋 후 재배치
+            uiPositioner.RepositionUI();
+            if (showDebugLogs)
+                Debug.Log("[Practice] ScenarioUIPositioner로 UI 위치 초기화");
+        }
+        else
+        {
+            if (showDebugLogs)
+                Debug.Log("[Practice] ScenarioUIPositioner 없음 - UI 위치 초기화 건너뜀");
         }
     }
 
