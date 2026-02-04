@@ -316,10 +316,9 @@ public class PracticeSettingsController : MonoBehaviour
             Debug.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
         }
 
-        // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
-        // 이렇게 하면 환자 + 컨트롤러가 함께 이동됨
+        // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
         Transform actualTarget = targetObject;
-        if (targetObject.parent != null && targetObject.parent.parent != null)
+        if (targetObject.parent != null)
         {
             actualTarget = targetObject.parent;
             Debug.Log($"[PracticeSettings] 부모 오브젝트 사용: {actualTarget.name}");
@@ -371,9 +370,19 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (patient != null)
         {
-            patientPositionController.transform.position = patient.transform.position;
-            patientPositionController.transform.rotation = patient.transform.rotation;
-            Debug.Log($"[PracticeSettings] ✅ 컨트롤러를 환자 위치로 동기화: {patient.transform.position}");
+            // ★ 부모(위치초기화 오브젝트)가 있으면 부모 기준으로 동기화
+            Transform syncTarget = patient.transform;
+            if (patient.transform.parent != null)
+            {
+                syncTarget = patient.transform.parent;
+                Debug.Log($"[PracticeSettings] 부모 오브젝트 기준 동기화: {syncTarget.name}");
+            }
+
+            // ★ 위치만 동기화, 회전은 변경하지 않음 (환자 회전 문제 방지)
+            patientPositionController.transform.position = syncTarget.position;
+            // patientPositionController.transform.rotation = syncTarget.rotation; // 회전 동기화 비활성화
+
+            Debug.Log($"[PracticeSettings] ✅ 컨트롤러를 환자 위치로 동기화 (위치만): {syncTarget.position}");
         }
         else
         {

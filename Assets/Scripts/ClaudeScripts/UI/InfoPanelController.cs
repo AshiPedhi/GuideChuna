@@ -847,9 +847,9 @@ public class InfoPanelController : MonoBehaviour
             headsetPos.z + headsetForward.z * patientForwardDistance
         );
 
-        // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
+        // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
         Transform targetTransform = patient.transform;
-        if (patient.transform.parent != null && patient.transform.parent.parent != null)
+        if (patient.transform.parent != null)
         {
             targetTransform = patient.transform.parent;
             if (showDebugLogs)
@@ -1040,24 +1040,43 @@ public class InfoPanelController : MonoBehaviour
         yield return null;
         yield return null;
 
-        // 골격 토글 상태 재적용
+        // ★ 연습 모드에서는 골격 토글이 항상 ON 상태여야 함
+        // (다른 코드가 중간에 바꿀 수 있으므로 명시적으로 재설정)
         if (skeletonToggle != null)
         {
+            // 토글 상태를 다시 ON으로 강제 설정
+            skeletonToggle.SetIsOnWithoutNotify(true);
+
             var animator = skeletonToggle.GetComponent<Animator>();
             if (animator != null && animator.isActiveAndEnabled)
             {
-                bool shouldBeOn = skeletonToggle.isOn;
-                animator.SetBool("IsOn", shouldBeOn);
+                animator.SetBool("IsOn", true);
                 if (showDebugLogs)
-                    Debug.Log($"[InfoPanel] 골격 토글 Animator 재적용: IsOn={shouldBeOn}");
+                    Debug.Log("[InfoPanel] 골격 토글 Animator 재적용: IsOn=true (강제)");
             }
         }
 
-        // 다른 콘텐츠 토글도 재적용
-        ReapplyToggleAnimatorState(expertVideoToggle);
-        ReapplyToggleAnimatorState(resultToggle);
+        // 다른 콘텐츠 토글은 OFF
+        ForceSetToggleOff(expertVideoToggle);
+        ForceSetToggleOff(resultToggle);
 
         UpdateAllToggleColors();
+    }
+
+    /// <summary>
+    /// 토글을 명시적으로 OFF 상태로 강제 설정
+    /// </summary>
+    private void ForceSetToggleOff(Toggle toggle)
+    {
+        if (toggle == null) return;
+
+        toggle.SetIsOnWithoutNotify(false);
+
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
+        {
+            animator.SetBool("IsOn", false);
+        }
     }
 
     /// <summary>
@@ -1131,6 +1150,26 @@ public class InfoPanelController : MonoBehaviour
     {
         if (scenarioTitleText != null)
             scenarioTitleText.text = title;
+    }
+
+    /// <summary>
+    /// 연습 모드에서 난이도를 외부에서 설정할 때 사용 (리스너 트리거 방지)
+    /// </summary>
+    public void SetDifficultyForPractice(DifficultyLevel difficulty)
+    {
+        selectedDifficulty = difficulty;
+
+        // 토글 상태도 업데이트 (리스너 트리거 안 함)
+        SetToggleWithoutNotify(beginnerToggle, difficulty == DifficultyLevel.Beginner);
+        SetToggleWithoutNotify(intermediateToggle, difficulty == DifficultyLevel.Intermediate);
+        SetToggleWithoutNotify(advancedToggle, difficulty == DifficultyLevel.Advanced);
+
+        // 시각 상태 업데이트
+        UpdateModeSelectionColors();
+        UpdateDifficultyDescriptions();
+
+        if (showDebugLogs)
+            Debug.Log($"[InfoPanel] 연습모드 난이도 설정: {difficulty}");
     }
 
     // Properties

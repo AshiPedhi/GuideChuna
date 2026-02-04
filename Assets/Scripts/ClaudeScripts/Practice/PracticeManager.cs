@@ -83,6 +83,8 @@ public class PracticeManager : MonoBehaviour
     [SerializeField] private Transform patientTransform;
     [Tooltip("LateralFlexionDetector (측굴 동작 감지용)")]
     [SerializeField] private LateralFlexionDetector lateralFlexionDetector;
+    [Tooltip("Step 6에서 사용할 핸드 데이터 CSV 파일명 (Resources/HandPoseData/ 내)")]
+    [SerializeField] private string step6HandDataCsv = "중부측굴_trimmed";
 
     [Header("=== Step 7: 나가기 ===")]
     [SerializeField] private ToggleHighlightPair mainMenuToggle;      // 메인메뉴
@@ -318,13 +320,26 @@ public class PracticeManager : MonoBehaviour
                 headsetPos.z + headsetForward.z * patientForwardDistance
             );
 
-            // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
+            // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
             Transform targetTransform = patientTransform;
-            if (patientTransform.parent != null && patientTransform.parent.parent != null)
+            if (patientTransform.parent != null)
             {
-                targetTransform = patientTransform.parent;
-                if (showDebugLogs)
-                    Debug.Log($"[Practice] 부모 오브젝트 사용: {targetTransform.name}");
+                // 부모 이름에 "위치" 또는 "Position"이 포함되어 있거나, 부모가 환자만의 부모가 아닌 경우
+                string parentName = patientTransform.parent.name.ToLower();
+                if (parentName.Contains("위치") || parentName.Contains("position") || parentName.Contains("초기화"))
+                {
+                    targetTransform = patientTransform.parent;
+                    if (showDebugLogs)
+                        Debug.Log($"[Practice] 부모 오브젝트 사용: {targetTransform.name}");
+                }
+                else
+                {
+                    // 부모가 있지만 위치초기화 오브젝트가 아닌 경우에도 부모를 사용
+                    // (환자가 그룹 안에 있으면 그룹 전체를 이동)
+                    targetTransform = patientTransform.parent;
+                    if (showDebugLogs)
+                        Debug.Log($"[Practice] 부모 오브젝트 사용 (기본): {targetTransform.name}");
+                }
             }
 
             targetTransform.position = patientNewPos;
@@ -648,6 +663,18 @@ public class PracticeManager : MonoBehaviour
         {
             bool isClicked = (pair == clickedPair);
             UpdateSingleToggleVisual(pair, isClicked);
+        }
+
+        // ★ InfoPanelController의 난이도도 업데이트 (토글 그룹 충돌 방지)
+        if (infoPanelController != null)
+        {
+            ChunaTraining.DifficultyLevel difficulty = ChunaTraining.DifficultyLevel.Beginner;
+            if (clickedPair == intermediateToggle)
+                difficulty = ChunaTraining.DifficultyLevel.Intermediate;
+            else if (clickedPair == advancedToggle)
+                difficulty = ChunaTraining.DifficultyLevel.Advanced;
+
+            infoPanelController.SetDifficultyForPractice(difficulty);
         }
 
         if (showDebugLogs)
@@ -1125,6 +1152,18 @@ public class PracticeManager : MonoBehaviour
         {
             chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
+
+            // ★ 핸드 데이터 CSV 로드 (가이드 핸드 표시에 필수!)
+            if (!string.IsNullOrEmpty(step6HandDataCsv))
+            {
+                chunaPathEvaluator.LoadAndGenerateCheckpoints(step6HandDataCsv);
+                if (showDebugLogs)
+                    Debug.Log($"[Practice] 핸드 데이터 로드: {step6HandDataCsv}");
+            }
+            else
+            {
+                Debug.LogWarning("[Practice] ⚠ step6HandDataCsv가 설정되지 않았습니다! 가이드 핸드가 표시되지 않을 수 있습니다.");
+            }
 
             // ★ 평가 시작 (가이드 핸드 표시 및 측굴 애니메이션)
             chunaPathEvaluator.StartEvaluation();
