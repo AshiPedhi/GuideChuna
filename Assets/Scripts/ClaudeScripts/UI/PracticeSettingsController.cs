@@ -93,25 +93,43 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     void CacheRenderers()
     {
-        // 환자 모델 렌더러 캐싱
-        if (patientModel != null)
+        // ★ 환자 모델 렌더러 캐싱 - Patient 태그로 루트 찾기
+        GameObject patientRoot = patientModel;
+
+        // patientModel이 없거나 렌더러가 없으면 Patient 태그로 찾기
+        if (patientRoot == null)
         {
-            // SkinnedMeshRenderer (옷 등)
-            patientRenderers = patientModel.GetComponentsInChildren<SkinnedMeshRenderer>(true);
-            if (patientRenderers.Length > 0)
+            patientRoot = GameObject.FindWithTag("Patient");
+        }
+
+        if (patientRoot != null)
+        {
+            // ★ 환자 루트와 모든 자식에서 렌더러 찾기
+            SkinnedMeshRenderer[] allSkinnedRenderers = patientRoot.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            MeshRenderer[] allMeshRenderers = patientRoot.GetComponentsInChildren<MeshRenderer>(true);
+
+            // SkinnedMeshRenderer 캐싱 (몸체 + 옷)
+            if (allSkinnedRenderers.Length > 0)
             {
+                patientRenderers = allSkinnedRenderers;
                 originalPatientMaterials = new Material[patientRenderers.Length][];
                 for (int i = 0; i < patientRenderers.Length; i++)
                 {
                     originalPatientMaterials[i] = patientRenderers[i].materials;
                 }
-                Debug.Log($"[PracticeSettings] ✅ 환자 모델 SkinnedMeshRenderer {patientRenderers.Length}개 캐싱 완료");
+                Debug.Log($"[PracticeSettings] ✅ 환자 모델 SkinnedMeshRenderer {patientRenderers.Length}개 캐싱 완료 (루트: {patientRoot.name})");
+
+                // 각 렌더러 이름 로그
+                foreach (var renderer in patientRenderers)
+                {
+                    Debug.Log($"[PracticeSettings]   - SkinnedMesh: {renderer.gameObject.name}");
+                }
             }
 
-            // MeshRenderer (몸 등)
-            patientMeshRenderers = patientModel.GetComponentsInChildren<MeshRenderer>(true);
-            if (patientMeshRenderers.Length > 0)
+            // MeshRenderer 캐싱
+            if (allMeshRenderers.Length > 0)
             {
+                patientMeshRenderers = allMeshRenderers;
                 originalPatientMeshMaterials = new Material[patientMeshRenderers.Length][];
                 for (int i = 0; i < patientMeshRenderers.Length; i++)
                 {
@@ -119,6 +137,16 @@ public class PracticeSettingsController : MonoBehaviour
                 }
                 Debug.Log($"[PracticeSettings] ✅ 환자 모델 MeshRenderer {patientMeshRenderers.Length}개 캐싱 완료");
             }
+
+            // patientModel 참조 업데이트
+            if (patientModel == null)
+            {
+                patientModel = patientRoot;
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[PracticeSettings] ⚠ 환자 모델을 찾을 수 없습니다 (patientModel 미할당, Patient 태그 없음)");
         }
 
         // 골격 모델 렌더러 캐싱
