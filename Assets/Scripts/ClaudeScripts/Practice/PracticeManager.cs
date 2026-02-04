@@ -319,8 +319,8 @@ public class PracticeManager : MonoBehaviour
 
             patientTransform.position = patientNewPos;
 
-            // 환자가 헤드셋을 바라보도록 회전
-            Vector3 lookDir = headsetPos - patientNewPos;
+            // ★ 환자가 헤드셋 반대 방향을 바라보도록 (등을 보여주도록)
+            Vector3 lookDir = patientNewPos - headsetPos;  // 헤드셋에서 멀어지는 방향
             lookDir.y = 0;
             if (lookDir.sqrMagnitude > 0.001f)
             {
@@ -542,6 +542,13 @@ public class PracticeManager : MonoBehaviour
     {
         clickedToggles.Add(clickedPair.toggle);
         HideHighlight(clickedPair);
+
+        // ★ 토글 시각적 상태 명시적 업데이트 (Toggle Group 문제 해결)
+        if (clickedPair.toggle != null)
+        {
+            // 클릭된 토글을 명시적으로 On 상태로 설정
+            clickedPair.toggle.SetIsOnWithoutNotify(true);
+        }
 
         if (showDebugLogs)
             Debug.Log($"[Practice] ✓ 토글 클릭 완료: {clickedPair.toggle.name} ({index + 1}/{sequentialToggles.Count})");

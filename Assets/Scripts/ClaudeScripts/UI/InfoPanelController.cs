@@ -773,6 +773,16 @@ public class InfoPanelController : MonoBehaviour
     /// </summary>
     private void InitializeUIPositionOnStart()
     {
+        // ★ 연습 모드(PracticeManager)가 활성화되어 있으면 건너뜀
+        // PracticeManager가 이미 Initialize()에서 위치를 설정했으므로 중복 설정 방지
+        var practiceManager = FindFirstObjectByType<PracticeManager>();
+        if (practiceManager != null && practiceManager.enabled)
+        {
+            if (showDebugLogs)
+                Debug.Log("[InfoPanel] PracticeManager가 활성화되어 있어 UI 위치 초기화 건너뜀");
+            return;
+        }
+
         // UI 위치 초기화
         var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
         if (uiPositioner != null)
@@ -832,8 +842,8 @@ public class InfoPanelController : MonoBehaviour
 
         patient.transform.position = patientNewPos;
 
-        // 환자가 헤드셋을 바라보도록 회전
-        Vector3 lookDir = headsetPos - patientNewPos;
+        // ★ 환자가 헤드셋 반대 방향을 바라보도록 (등을 보여주도록)
+        Vector3 lookDir = patientNewPos - headsetPos;  // 헤드셋에서 멀어지는 방향
         lookDir.y = 0;
         if (lookDir.sqrMagnitude > 0.001f)
         {
