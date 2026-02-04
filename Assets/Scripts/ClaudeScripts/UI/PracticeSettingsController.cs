@@ -318,6 +318,25 @@ public class PracticeSettingsController : MonoBehaviour
 
         targetObject.position = newPosition;
         Debug.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {targetObject.name} -> {newPosition}");
+
+        // ★ 환자 위치 조정 컨트롤러도 같은 위치로 동기화
+        SyncPatientPositionController(newPosition, targetObject.rotation);
+    }
+
+    /// <summary>
+    /// 환자 위치 조정 컨트롤러를 환자 위치와 동기화
+    /// </summary>
+    private void SyncPatientPositionController(Vector3 position, Quaternion rotation)
+    {
+        if (patientPositionController == null)
+        {
+            Debug.LogWarning("[PracticeSettings] patientPositionController가 없어 동기화 건너뜀");
+            return;
+        }
+
+        patientPositionController.transform.position = position;
+        patientPositionController.transform.rotation = rotation;
+        Debug.Log($"[PracticeSettings] ✅ 환자 위치 컨트롤러 동기화 완료: {position}");
     }
     #endregion
 
@@ -331,12 +350,44 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (patientPositionController != null)
         {
+            // ★ 활성화 전에 현재 환자 위치로 컨트롤러 동기화 (위치 점프 방지)
+            if (isOn)
+            {
+                SyncControllerToPatient();
+            }
+
             patientPositionController.SetActive(isOn);
             Debug.Log($"[PracticeSettings] ✅ 환자 위치 조정 컨트롤러: {(isOn ? "활성화" : "비활성화")}");
         }
         else
         {
             Debug.LogWarning("[PracticeSettings] patientPositionController가 할당되지 않았습니다.");
+        }
+    }
+
+    /// <summary>
+    /// 환자 위치 조정 컨트롤러를 현재 환자 위치로 동기화
+    /// </summary>
+    private void SyncControllerToPatient()
+    {
+        if (patientPositionController == null) return;
+
+        // 환자 모델 찾기
+        GameObject patient = patientModel;
+        if (patient == null)
+        {
+            patient = GameObject.FindWithTag("Patient");
+        }
+
+        if (patient != null)
+        {
+            patientPositionController.transform.position = patient.transform.position;
+            patientPositionController.transform.rotation = patient.transform.rotation;
+            Debug.Log($"[PracticeSettings] ✅ 컨트롤러를 환자 위치로 동기화: {patient.transform.position}");
+        }
+        else
+        {
+            Debug.LogWarning("[PracticeSettings] 환자 모델을 찾을 수 없어 동기화 건너뜀");
         }
     }
 
