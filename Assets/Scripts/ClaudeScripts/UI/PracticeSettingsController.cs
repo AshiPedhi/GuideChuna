@@ -316,27 +316,17 @@ public class PracticeSettingsController : MonoBehaviour
             Debug.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
         }
 
-        targetObject.position = newPosition;
-        Debug.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {targetObject.name} -> {newPosition}");
-
-        // ★ 환자 위치 조정 컨트롤러도 같은 위치로 동기화
-        SyncPatientPositionController(newPosition, targetObject.rotation);
-    }
-
-    /// <summary>
-    /// 환자 위치 조정 컨트롤러를 환자 위치와 동기화
-    /// </summary>
-    private void SyncPatientPositionController(Vector3 position, Quaternion rotation)
-    {
-        if (patientPositionController == null)
+        // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
+        // 이렇게 하면 환자 + 컨트롤러가 함께 이동됨
+        Transform actualTarget = targetObject;
+        if (targetObject.parent != null && targetObject.parent.parent != null)
         {
-            Debug.LogWarning("[PracticeSettings] patientPositionController가 없어 동기화 건너뜀");
-            return;
+            actualTarget = targetObject.parent;
+            Debug.Log($"[PracticeSettings] 부모 오브젝트 사용: {actualTarget.name}");
         }
 
-        patientPositionController.transform.position = position;
-        patientPositionController.transform.rotation = rotation;
-        Debug.Log($"[PracticeSettings] ✅ 환자 위치 컨트롤러 동기화 완료: {position}");
+        actualTarget.position = newPosition;
+        Debug.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {actualTarget.name} -> {newPosition}");
     }
     #endregion
 

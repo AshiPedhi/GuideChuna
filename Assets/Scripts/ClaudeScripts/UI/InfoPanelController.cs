@@ -840,18 +840,27 @@ public class InfoPanelController : MonoBehaviour
             headsetPos.z + headsetForward.z * patientForwardDistance
         );
 
-        patient.transform.position = patientNewPos;
+        // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
+        Transform targetTransform = patient.transform;
+        if (patient.transform.parent != null && patient.transform.parent.parent != null)
+        {
+            targetTransform = patient.transform.parent;
+            if (showDebugLogs)
+                Debug.Log($"[InfoPanel] 부모 오브젝트 사용: {targetTransform.name}");
+        }
+
+        targetTransform.position = patientNewPos;
 
         // ★ 환자가 헤드셋 반대 방향을 바라보도록 (등을 보여주도록)
         Vector3 lookDir = patientNewPos - headsetPos;  // 헤드셋에서 멀어지는 방향
         lookDir.y = 0;
         if (lookDir.sqrMagnitude > 0.001f)
         {
-            patient.transform.rotation = Quaternion.LookRotation(lookDir);
+            targetTransform.rotation = Quaternion.LookRotation(lookDir);
         }
 
         if (showDebugLogs)
-            Debug.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (헤드셋 높이: {headsetPos.y:F2}m)");
+            Debug.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
     }
 
     private void OnScenarioCompleted(ScenarioData scenario)

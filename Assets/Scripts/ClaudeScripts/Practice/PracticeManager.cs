@@ -300,6 +300,7 @@ public class PracticeManager : MonoBehaviour
         }
 
         // ★ 환자 위치도 헤드셋 기준으로 초기화
+        // ★ 부모 오브젝트(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
         if (patientTransform != null && headsetTransform != null)
         {
             Vector3 headsetPos = headsetTransform.position;
@@ -317,18 +318,27 @@ public class PracticeManager : MonoBehaviour
                 headsetPos.z + headsetForward.z * patientForwardDistance
             );
 
-            patientTransform.position = patientNewPos;
+            // ★ 부모가 있고, 부모가 루트가 아니면 부모를 이동 (위치초기화 오브젝트)
+            Transform targetTransform = patientTransform;
+            if (patientTransform.parent != null && patientTransform.parent.parent != null)
+            {
+                targetTransform = patientTransform.parent;
+                if (showDebugLogs)
+                    Debug.Log($"[Practice] 부모 오브젝트 사용: {targetTransform.name}");
+            }
+
+            targetTransform.position = patientNewPos;
 
             // ★ 환자가 헤드셋 반대 방향을 바라보도록 (등을 보여주도록)
             Vector3 lookDir = patientNewPos - headsetPos;  // 헤드셋에서 멀어지는 방향
             lookDir.y = 0;
             if (lookDir.sqrMagnitude > 0.001f)
             {
-                patientTransform.rotation = Quaternion.LookRotation(lookDir);
+                targetTransform.rotation = Quaternion.LookRotation(lookDir);
             }
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] 환자 위치 초기화: {patientNewPos} (헤드셋 높이: {headsetPos.y:F2}m)");
+                Debug.Log($"[Practice] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
         }
         else
         {
