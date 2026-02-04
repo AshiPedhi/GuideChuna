@@ -551,8 +551,14 @@ public class InfoPanelController : MonoBehaviour
             // 영상 정지
             StopExpertVideo();
 
-            // ★ 시나리오 시작 여부에 따라 다른 페이지로 전환
-            if (isScenarioStarted)
+            // ★ 연습 모드에서는 자동 페이지 전환 안 함 (다른 토글 클릭으로 인한 OFF일 수 있음)
+            var practiceManager = FindFirstObjectByType<PracticeManager>();
+            if (practiceManager != null && practiceManager.enabled)
+            {
+                // 연습 모드: 페이지 전환 안 함 (다른 토글의 핸들러가 처리)
+                Debug.Log("[InfoPanel] 연습 모드 - 비디오 OFF 시 자동 페이지 전환 안 함");
+            }
+            else if (isScenarioStarted)
             {
                 // 시나리오 진행 중: 근골격 페이지로 전환
                 SetToggleWithoutNotify(skeletonToggle, true);
@@ -1017,8 +1023,54 @@ public class InfoPanelController : MonoBehaviour
         // ShowContentPage(ContentPage.Skeleton); // ★ 제거: 모드 선택 페이지 유지
         UpdateAllToggleColors();
 
+        // ★ 딜레이 후 토글 상태 재확인 (Animator 초기화 순서 문제 해결)
+        StartCoroutine(ReapplySkeletonToggleStateDelayed());
+
         if (showDebugLogs)
             Debug.Log("[InfoPanel] 연습모드: 콘텐츠 토글 상태 초기화 (골격 선택, 페이지 유지)");
+    }
+
+    /// <summary>
+    /// 딜레이 후 골격 토글 상태 재적용 (Animator 초기화 순서 문제 해결)
+    /// </summary>
+    private IEnumerator ReapplySkeletonToggleStateDelayed()
+    {
+        // 2프레임 대기 (Animator 초기화 완료 대기)
+        yield return null;
+        yield return null;
+
+        // 골격 토글 상태 재적용
+        if (skeletonToggle != null)
+        {
+            var animator = skeletonToggle.GetComponent<Animator>();
+            if (animator != null && animator.isActiveAndEnabled)
+            {
+                bool shouldBeOn = skeletonToggle.isOn;
+                animator.SetBool("IsOn", shouldBeOn);
+                if (showDebugLogs)
+                    Debug.Log($"[InfoPanel] 골격 토글 Animator 재적용: IsOn={shouldBeOn}");
+            }
+        }
+
+        // 다른 콘텐츠 토글도 재적용
+        ReapplyToggleAnimatorState(expertVideoToggle);
+        ReapplyToggleAnimatorState(resultToggle);
+
+        UpdateAllToggleColors();
+    }
+
+    /// <summary>
+    /// 토글의 Animator 상태를 isOn 값과 일치시킴
+    /// </summary>
+    private void ReapplyToggleAnimatorState(Toggle toggle)
+    {
+        if (toggle == null) return;
+
+        var animator = toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
+        {
+            animator.SetBool("IsOn", toggle.isOn);
+        }
     }
 
     /// <summary>
@@ -1098,9 +1150,41 @@ public class InfoPanelController : MonoBehaviour
 
         // Animation 기반 토글의 경우 Animator 상태 수동 업데이트
         var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled)
+        if (animator != null)
         {
-            animator.SetBool("IsOn", value);
+            // ★ Animator가 활성화 상태이면 즉시 적용
+            if (animator.isActiveAndEnabled)
+            {
+                animator.SetBool("IsOn", value);
+            }
+            else
+            {
+                // ★ Animator가 비활성화 상태이면 활성화 후 적용 시도
+                // (GameObject가 비활성화 상태면 코루틴으로 지연 적용)
+                StartCoroutine(ApplyAnimatorStateDelayed(animator, value));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Animator가 활성화될 때까지 대기 후 상태 적용
+    /// </summary>
+    private IEnumerator ApplyAnimatorStateDelayed(Animator animator, bool value)
+    {
+        // 최대 5프레임 대기
+        int maxWaitFrames = 5;
+        int waitedFrames = 0;
+
+        while (waitedFrames < maxWaitFrames)
+        {
+            yield return null;
+            waitedFrames++;
+
+            if (animator != null && animator.isActiveAndEnabled)
+            {
+                animator.SetBool("IsOn", value);
+                yield break;
+            }
         }
     }
 

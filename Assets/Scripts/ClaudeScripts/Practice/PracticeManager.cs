@@ -553,25 +553,22 @@ public class PracticeManager : MonoBehaviour
         clickedToggles.Add(clickedPair.toggle);
         HideHighlight(clickedPair);
 
-        // ★ 토글 시각적 상태 명시적 업데이트 (Toggle Group + Animator 문제 해결)
-        if (clickedPair.toggle != null)
+        // ★ Step 2 난이도 토글인 경우: 모든 난이도 토글 시각 상태 업데이트
+        if (currentStep == 1 && difficultyToggles.Contains(clickedPair))
         {
-            // 클릭된 토글을 명시적으로 On 상태로 설정
-            clickedPair.toggle.SetIsOnWithoutNotify(true);
-
-            // ★ Animator 기반 토글의 경우 Animator 상태도 수동 업데이트
-            var animator = clickedPair.toggle.GetComponent<Animator>();
-            if (animator != null && animator.isActiveAndEnabled)
-            {
-                animator.SetBool("IsOn", true);
-            }
-
-            // ★ ColorBlock 기반 토글의 경우 색상도 즉시 업데이트
-            if (clickedPair.toggle.targetGraphic != null)
-            {
-                var colors = clickedPair.toggle.colors;
-                clickedPair.toggle.targetGraphic.color = colors.normalColor;
-            }
+            UpdateDifficultyToggleVisuals(clickedPair);
+        }
+        // ★ 콘텐츠 토글인 경우: 모든 콘텐츠 토글 시각 상태 업데이트
+        else if (currentStep == 2 && (clickedPair == expertVideoToggle || clickedPair == resultToggle || clickedPair == skeletonToggle))
+        {
+            UpdateContentToggleVisuals(expertVideoToggle, clickedPair == expertVideoToggle);
+            UpdateContentToggleVisuals(resultToggle, clickedPair == resultToggle);
+            UpdateContentToggleVisuals(skeletonToggle, clickedPair == skeletonToggle);
+        }
+        // ★ 기타 토글: 클릭된 토글만 업데이트
+        else if (clickedPair.toggle != null)
+        {
+            UpdateSingleToggleVisual(clickedPair, true);
         }
 
         if (showDebugLogs)
@@ -637,6 +634,30 @@ public class PracticeManager : MonoBehaviour
     /// 콘텐츠 토글의 시각적 상태 업데이트
     /// </summary>
     private void UpdateContentToggleVisuals(ToggleHighlightPair pair, bool isOn)
+    {
+        if (pair == null || pair.toggle == null) return;
+        UpdateSingleToggleVisual(pair, isOn);
+    }
+
+    /// <summary>
+    /// 난이도 토글 시각 상태 업데이트 (클릭된 것 ON, 나머지 OFF)
+    /// </summary>
+    private void UpdateDifficultyToggleVisuals(ToggleHighlightPair clickedPair)
+    {
+        foreach (var pair in difficultyToggles)
+        {
+            bool isClicked = (pair == clickedPair);
+            UpdateSingleToggleVisual(pair, isClicked);
+        }
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 난이도 토글 시각 업데이트: {clickedPair.toggle.name} ON, 나머지 OFF");
+    }
+
+    /// <summary>
+    /// 단일 토글의 시각적 상태 업데이트 (Animator + ColorBlock)
+    /// </summary>
+    private void UpdateSingleToggleVisual(ToggleHighlightPair pair, bool isOn)
     {
         if (pair == null || pair.toggle == null) return;
 
@@ -1162,13 +1183,43 @@ public class PracticeManager : MonoBehaviour
 
             if (currentCount >= HOLD_REQUIRED_COUNT)
             {
+                // 모든 사이클 완료 - Step 종료
                 if (chunaPathEvaluator != null)
                     chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
 
                 isWaitingForHold = false;
                 CompleteCurrentStep();
             }
+            else
+            {
+                // ★ 다음 사이클을 위해 평가 리셋 후 재시작
+                StartCoroutine(RestartEvaluationForNextCycle());
+            }
         }
+    }
+
+    /// <summary>
+    /// 다음 사이클을 위해 평가 리셋 후 재시작
+    /// </summary>
+    private IEnumerator RestartEvaluationForNextCycle()
+    {
+        if (chunaPathEvaluator == null) yield break;
+
+        if (showDebugLogs)
+            Debug.Log("[Practice] 다음 사이클 준비 중...");
+
+        // 잠시 대기 (사용자에게 완료 피드백 시간)
+        yield return new WaitForSeconds(0.5f);
+
+        // 평가 리셋 및 재시작
+        chunaPathEvaluator.ResetEvaluation();
+
+        yield return null; // 한 프레임 대기
+
+        chunaPathEvaluator.StartEvaluation();
+
+        if (showDebugLogs)
+            Debug.Log($"[Practice] 다음 사이클 시작 ({currentCount}/{HOLD_REQUIRED_COUNT})");
     }
 
     public void OnCycleCompleted()
@@ -1183,10 +1234,16 @@ public class PracticeManager : MonoBehaviour
 
         if (currentCount >= HOLD_REQUIRED_COUNT)
         {
+            // 모든 사이클 완료 - Step 종료
             if (chunaPathEvaluator != null)
                 chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
             isWaitingForHold = false;
             CompleteCurrentStep();
+        }
+        else
+        {
+            // ★ 다음 사이클을 위해 평가 리셋 후 재시작
+            StartCoroutine(RestartEvaluationForNextCycle());
         }
     }
 
