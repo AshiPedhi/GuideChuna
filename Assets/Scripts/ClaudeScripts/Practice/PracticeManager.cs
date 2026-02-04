@@ -543,11 +543,25 @@ public class PracticeManager : MonoBehaviour
         clickedToggles.Add(clickedPair.toggle);
         HideHighlight(clickedPair);
 
-        // ★ 토글 시각적 상태 명시적 업데이트 (Toggle Group 문제 해결)
+        // ★ 토글 시각적 상태 명시적 업데이트 (Toggle Group + Animator 문제 해결)
         if (clickedPair.toggle != null)
         {
             // 클릭된 토글을 명시적으로 On 상태로 설정
             clickedPair.toggle.SetIsOnWithoutNotify(true);
+
+            // ★ Animator 기반 토글의 경우 Animator 상태도 수동 업데이트
+            var animator = clickedPair.toggle.GetComponent<Animator>();
+            if (animator != null && animator.isActiveAndEnabled)
+            {
+                animator.SetBool("IsOn", true);
+            }
+
+            // ★ ColorBlock 기반 토글의 경우 색상도 즉시 업데이트
+            if (clickedPair.toggle.targetGraphic != null)
+            {
+                var colors = clickedPair.toggle.colors;
+                clickedPair.toggle.targetGraphic.color = colors.normalColor;
+            }
         }
 
         if (showDebugLogs)
@@ -601,7 +615,36 @@ public class PracticeManager : MonoBehaviour
             infoPanelController.ShowContentPageForPractice(InfoPanelController.ContentPage.Skeleton);
         }
 
+        // ★ PracticeManager의 콘텐츠 토글 시각 상태도 명시적 업데이트
+        UpdateContentToggleVisuals(skeletonToggle, true);
+        UpdateContentToggleVisuals(expertVideoToggle, false);
+        UpdateContentToggleVisuals(resultToggle, false);
+
         CompleteCurrentStep();
+    }
+
+    /// <summary>
+    /// 콘텐츠 토글의 시각적 상태 업데이트
+    /// </summary>
+    private void UpdateContentToggleVisuals(ToggleHighlightPair pair, bool isOn)
+    {
+        if (pair == null || pair.toggle == null) return;
+
+        pair.toggle.SetIsOnWithoutNotify(isOn);
+
+        // Animator 업데이트
+        var animator = pair.toggle.GetComponent<Animator>();
+        if (animator != null && animator.isActiveAndEnabled)
+        {
+            animator.SetBool("IsOn", isOn);
+        }
+
+        // ColorBlock 업데이트
+        if (pair.toggle.targetGraphic != null)
+        {
+            var colors = pair.toggle.colors;
+            pair.toggle.targetGraphic.color = isOn ? colors.normalColor : colors.disabledColor;
+        }
     }
 
     #region 토글 Interactable 제어
@@ -913,6 +956,12 @@ public class PracticeManager : MonoBehaviour
             return;
         }
 
+        // ★ Step 3 시작 시 골격 토글이 ON 상태임을 확인/설정
+        // (Step 2에서 골격 페이지로 전환했으므로)
+        UpdateContentToggleVisuals(skeletonToggle, true);
+        UpdateContentToggleVisuals(expertVideoToggle, false);
+        UpdateContentToggleVisuals(resultToggle, false);
+
         currentToggleIndex = 0;
         StartHighlightToggle(0);
 
@@ -1038,8 +1087,10 @@ public class PracticeManager : MonoBehaviour
         DisableAllTogglesExceptMainMenuAndDifficulty();
         UpdateCountText(0, HOLD_REQUIRED_COUNT);
 
-        // ★ ChunaPathEvaluator 활성화 및 평가 시작
-        if (chunaPathEvaluator != null)
+        // ★ ChunaPathEvaluator가 있으면 사용, 없으면 LateralFlexionDetector 사용
+        bool useChunaPathEvaluator = chunaPathEvaluator != null;
+
+        if (useChunaPathEvaluator)
         {
             chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
@@ -1049,20 +1100,33 @@ public class PracticeManager : MonoBehaviour
 
             if (showDebugLogs)
                 Debug.Log("[Practice] ChunaPathEvaluator 활성화 + StartEvaluation() 호출");
+
+            // ★ ChunaPathEvaluator 사용 시 LateralFlexionDetector는 비활성화 (중복 방지)
+            if (lateralFlexionDetector != null)
+            {
+                lateralFlexionDetector.enabled = false;
+                lateralFlexionDetector.SetDetectEnabled(false);
+                if (showDebugLogs)
+                    Debug.Log("[Practice] LateralFlexionDetector 비활성화 (ChunaPathEvaluator 사용)");
+            }
         }
         else
         {
-            Debug.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다!");
-        }
+            Debug.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다! LateralFlexionDetector 사용 시도");
 
-        // ★ LateralFlexionDetector 활성화 (측굴 동작 감지)
-        if (lateralFlexionDetector != null)
-        {
-            lateralFlexionDetector.enabled = true;
-            lateralFlexionDetector.SetDetectEnabled(true);
-            lateralFlexionDetector.SetPracticeManager(this);
-            if (showDebugLogs)
-                Debug.Log("[Practice] LateralFlexionDetector 활성화");
+            // ★ ChunaPathEvaluator 없으면 LateralFlexionDetector 활성화 (백업용)
+            if (lateralFlexionDetector != null)
+            {
+                lateralFlexionDetector.enabled = true;
+                lateralFlexionDetector.SetDetectEnabled(true);
+                lateralFlexionDetector.SetPracticeManager(this);
+                if (showDebugLogs)
+                    Debug.Log("[Practice] LateralFlexionDetector 활성화 (백업 모드)");
+            }
+            else
+            {
+                Debug.LogError("[Practice] ⚠ chunaPathEvaluator와 lateralFlexionDetector 모두 없음! Step 6 진행 불가");
+            }
         }
 
         if (showDebugLogs)

@@ -69,16 +69,14 @@ public class LateralFlexionDetector : MonoBehaviour
 
     private float CalculateSimpleSimilarity()
     {
-        // 간단한 유사도 계산 (손 트래킹 상태 기반)
-        float similarity = 0f;
-
-        if (leftHand != null && leftHand.IsTracked)
-            similarity += 0.5f;
-
-        if (rightHand != null && rightHand.IsTracked)
-            similarity += 0.5f;
-
-        return similarity;
+        // ★ ChunaPathEvaluator 없이는 정확한 유사도 계산 불가
+        // 손 트래킹만으로는 동작 완료를 판단할 수 없으므로 0 반환
+        // (이 경우 Step 6은 ChunaPathEvaluator를 통해서만 진행 가능)
+        if (showDebugLogs && chunaPathEvaluator == null)
+        {
+            Debug.LogWarning("[LateralFlexion] ChunaPathEvaluator 없음 - 유사도 계산 불가");
+        }
+        return 0f;
     }
 
     private void CheckCompletion()
