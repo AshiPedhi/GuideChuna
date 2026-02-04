@@ -85,6 +85,12 @@ public class PracticeManager : MonoBehaviour
     [SerializeField] private LateralFlexionDetector lateralFlexionDetector;
     [Tooltip("Step 6에서 사용할 핸드 데이터 CSV 파일명 (Resources/HandPoseData/ 내)")]
     [SerializeField] private string step6HandDataCsv = "중부측굴_trimmed";
+    [Tooltip("Step 6 환자 애니메이션 상태 이름 (Animator State Name)")]
+    [SerializeField] private string step6PatientAnimation = "중부측굴_trimmed";
+
+    [Header("=== 각도 표시 UI (Step 6) ===")]
+    [Tooltip("측굴 각도 표시 UI (ChunaPathEvaluator와 연동)")]
+    [SerializeField] private AngleDisplayController angleDisplayController;
 
     [Header("=== Step 7: 나가기 ===")]
     [SerializeField] private ToggleHighlightPair mainMenuToggle;      // 메인메뉴
@@ -608,7 +614,8 @@ public class PracticeManager : MonoBehaviour
                 }
             }
             // Step 5 (currentStep=4, 위치+시작)는 코루틴에서 처리
-            else if (currentStep != 4)
+            // Step 7 (currentStep=6, 나가기)는 InfoPanelController 팝업이 처리 → 중복 팝업 방지
+            else if (currentStep != 4 && currentStep != 6)
             {
                 CompleteCurrentStep();
             }
@@ -1153,6 +1160,14 @@ public class PracticeManager : MonoBehaviour
             chunaPathEvaluator.enabled = true;
             chunaPathEvaluator.OnPhaseChanged += OnEvaluationPhaseChanged;
 
+            // ★ 환자 애니메이션 설정 (LoadAndGenerateCheckpoints 전에 설정해야 함)
+            if (!string.IsNullOrEmpty(step6PatientAnimation))
+            {
+                chunaPathEvaluator.SetPatientAnimation(step6PatientAnimation, AnimationPlayMode.SyncWithUser);
+                if (showDebugLogs)
+                    Debug.Log($"[Practice] 환자 애니메이션 설정: {step6PatientAnimation}");
+            }
+
             // ★ 핸드 데이터 CSV 로드 (가이드 핸드 표시에 필수!)
             if (!string.IsNullOrEmpty(step6HandDataCsv))
             {
@@ -1167,6 +1182,14 @@ public class PracticeManager : MonoBehaviour
 
             // ★ 평가 시작 (가이드 핸드 표시 및 측굴 애니메이션)
             chunaPathEvaluator.StartEvaluation();
+
+            // ★ 각도 표시 UI 활성화 (AngleDisplayController가 ChunaPathEvaluator와 연동)
+            if (angleDisplayController != null)
+            {
+                angleDisplayController.Show();
+                if (showDebugLogs)
+                    Debug.Log("[Practice] 각도 표시 UI 활성화");
+            }
 
             if (showDebugLogs)
                 Debug.Log("[Practice] ChunaPathEvaluator 활성화 + StartEvaluation() 호출");
@@ -1226,6 +1249,14 @@ public class PracticeManager : MonoBehaviour
                 if (chunaPathEvaluator != null)
                     chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
 
+                // ★ 각도 표시 UI 숨김
+                if (angleDisplayController != null)
+                {
+                    angleDisplayController.Hide();
+                    if (showDebugLogs)
+                        Debug.Log("[Practice] 각도 표시 UI 숨김");
+                }
+
                 isWaitingForHold = false;
                 CompleteCurrentStep();
             }
@@ -1276,6 +1307,15 @@ public class PracticeManager : MonoBehaviour
             // 모든 사이클 완료 - Step 종료
             if (chunaPathEvaluator != null)
                 chunaPathEvaluator.OnPhaseChanged -= OnEvaluationPhaseChanged;
+
+            // ★ 각도 표시 UI 숨김
+            if (angleDisplayController != null)
+            {
+                angleDisplayController.Hide();
+                if (showDebugLogs)
+                    Debug.Log("[Practice] 각도 표시 UI 숨김");
+            }
+
             isWaitingForHold = false;
             CompleteCurrentStep();
         }
