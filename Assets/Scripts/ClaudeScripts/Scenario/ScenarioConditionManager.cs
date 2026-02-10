@@ -1147,11 +1147,7 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private void DeactivateCondition(IScenarioCondition condition)
     {
-        if (condition is HandPoseCondition handPoseCondition)
-        {
-            handPoseCondition.Deactivate();
-        }
-        else if (condition is CheckpointPoseCondition checkpointCondition)
+        if (condition is CheckpointPoseCondition checkpointCondition)
         {
             checkpointCondition.Deactivate();
         }
@@ -1311,94 +1307,7 @@ public class CustomCondition : IScenarioCondition
 }
 
 /// <summary>
-/// 손 동작 트래킹 조건
-/// HandPoseTrainingControllerBridge와 연동하여 사용자 손 동작 완료 감지
-/// </summary>
-public class HandPoseCondition : IScenarioCondition
-{
-    private HandPoseTrainingControllerBridge eventBridge;
-    private bool isCompleted = false;
-    private string fileName;
-
-    /// <summary>
-    /// HandPoseCondition 생성자
-    /// </summary>
-    public HandPoseCondition(HandPoseTrainingControllerBridge bridge, string trackingFileName, ScenarioConditionManager conditionManager)
-    {
-        eventBridge = bridge;
-        fileName = trackingFileName;
-
-        if (bridge != null)
-        {
-            // OnSequenceCompleted 이벤트 구독
-            bridge.OnSequenceCompleted += OnSequenceCompleted;
-            Debug.Log($"<color=cyan>[HandPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
-
-            // OnProgressThresholdReached 이벤트 구독
-            bridge.OnProgressThresholdReached += OnProgressThresholdReached;
-            Debug.Log($"<color=cyan>[HandPoseCondition] OnProgressThresholdReached 이벤트 구독 성공: {trackingFileName}</color>");
-        }
-        else
-        {
-            Debug.LogError("[HandPoseCondition] HandPoseTrainingControllerBridge가 null입니다!");
-        }
-    }
-
-    private void OnSequenceCompleted()
-    {
-        isCompleted = true;
-        Debug.Log($"<color=green>[HandPoseCondition] 전체 시퀀스 완료: {fileName}</color>");
-        // ★ 완료 시 이벤트 구독 해제 (메모리 누수 방지)
-        Unsubscribe();
-    }
-
-    private void OnProgressThresholdReached()
-    {
-        isCompleted = true;
-        Debug.Log($"<color=green>[HandPoseCondition] 진행률 목표 달성으로 완료: {fileName}</color>");
-        // ★ 완료 시 이벤트 구독 해제 (메모리 누수 방지)
-        Unsubscribe();
-    }
-
-    /// <summary>
-    /// ★ 이벤트 구독 해제 (메모리 누수 방지)
-    /// </summary>
-    private void Unsubscribe()
-    {
-        if (eventBridge != null)
-        {
-            eventBridge.OnSequenceCompleted -= OnSequenceCompleted;
-            eventBridge.OnProgressThresholdReached -= OnProgressThresholdReached;
-        }
-    }
-
-    /// <summary>
-    /// ★ 조건 비활성화 및 이벤트 구독 해제
-    /// </summary>
-    public void Deactivate()
-    {
-        Unsubscribe();
-        Debug.Log($"<color=orange>[HandPoseCondition] 비활성화됨: {fileName}</color>");
-    }
-
-    public bool IsConditionMet()
-    {
-        return isCompleted;
-    }
-
-    public string GetConditionDescription()
-    {
-        return $"손 동작 트래킹: {fileName}";
-    }
-
-    public void Reset()
-    {
-        isCompleted = false;
-    }
-}
-
-/// <summary>
-/// 체크포인트 기반 손 동작 조건
+/// 체크포인트 기반 손 동작 조건 (ChunaPathEvaluator 사용)
 /// ChunaPathEvaluatorBridge와 연동하여 체크포인트 통과 감지
 /// </summary>
 public class CheckpointPoseCondition : IScenarioCondition

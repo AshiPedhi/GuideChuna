@@ -786,13 +786,6 @@ public class PracticeManager : MonoBehaviour
             if (showDebugLogs) Debug.Log("[Practice] ScenarioConditionManager disabled");
         }
 
-        var trainingController = FindFirstObjectByType<HandPoseTrainingController>();
-        if (trainingController != null)
-        {
-            trainingController.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] HandPoseTrainingController disabled");
-        }
-
         var resultTracker = FindFirstObjectByType<TrainingResultTracker>();
         if (resultTracker != null)
         {

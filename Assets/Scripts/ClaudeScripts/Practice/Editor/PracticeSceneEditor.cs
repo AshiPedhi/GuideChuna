@@ -91,15 +91,6 @@ public class PracticeSceneEditor : EditorWindow
             Debug.Log("[PracticeEditor] ScenarioConditionManager disabled");
         }
 
-        // HandPoseTrainingController 비활성화
-        var trainingController = Object.FindFirstObjectByType<HandPoseTrainingController>();
-        if (trainingController != null)
-        {
-            trainingController.enabled = false;
-            disabledCount++;
-            Debug.Log("[PracticeEditor] HandPoseTrainingController disabled");
-        }
-
         // TrainingResultTracker 비활성화
         var resultTracker = Object.FindFirstObjectByType<TrainingResultTracker>();
         if (resultTracker != null)

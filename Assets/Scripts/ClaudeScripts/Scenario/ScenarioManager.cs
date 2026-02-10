@@ -3,46 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 
 /// <summary>
-/// 손 동작 평가 모드
-/// </summary>
-public enum EvaluationMode
-{
-    [Tooltip("기존 프레임 기반 평가 - 프레임 순서대로 따라가기")]
-    FrameBased,
-
-    [Tooltip("체크포인트 기반 평가 - 경로상의 체크포인트 통과")]
-    CheckpointBased
-}
-
-/// <summary>
-/// Inspector에서 직접 편집 가능한 시나리오 매니저
-/// 모드 선택 정보 저장 기능 추가
+/// CSV 기반 시나리오 매니저
+/// 모드 선택 정보 저장 기능 포함
 /// </summary>
 public class ScenarioManager : MonoBehaviour
 {
-    [Header("=== 프로토타입 시나리오 데이터 ===")]
-    [Tooltip("프로토타입용 시나리오 (Inspector에서 직접 편집)")]
-    [SerializeField] private ScenarioData prototypeScenario;
-
     [Header("=== CSV 로드 설정 ===")]
-    [Tooltip("CSV 파일을 사용할지 여부")]
-    [SerializeField] private bool useCSVData = false;
-
     [Tooltip("CSV 파일 이름 (Resources/Scenarios/ 폴더)")]
     [SerializeField] private string csvFileName = "ScenarioData";
 
-    [Header("=== 손 동작 평가 모드 ===")]
-    [Tooltip("평가 모드 선택: FrameBased(기존 방식) / CheckpointBased(체크포인트 기반)")]
-    [SerializeField] private EvaluationMode evaluationMode = EvaluationMode.CheckpointBased;
-
-    [Header("=== HandPose 시스템 (기존 프레임 기반) ===")]
-    [Tooltip("HandPoseTrainingController (자동 찾기)")]
-    [SerializeField] private HandPoseTrainingController trainingController;
-
-    [Tooltip("HandPoseTrainingControllerBridge (자동 찾기/생성)")]
-    [SerializeField] private HandPoseTrainingControllerBridge trainingControllerBridge;
-
-    [Header("=== 체크포인트 기반 평가 시스템 (새로운 방식) ===")]
+    [Header("=== 평가 시스템 ===")]
     [Tooltip("ChunaPathEvaluator (자동 찾기)")]
     [SerializeField] private ChunaPathEvaluator chunaPathEvaluator;
 
@@ -184,69 +154,34 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// HandPose 시스템 초기화 (프레임 기반 + 체크포인트 기반)
+    /// ChunaPathEvaluator 시스템 초기화
     /// </summary>
     private void InitializeHandPoseSystem()
     {
         Debug.Log("<color=cyan>[ScenarioManager] 손 동작 평가 시스템 초기화 중...</color>");
-        Debug.Log($"<color=cyan>[ScenarioManager] 현재 평가 모드: {evaluationMode}</color>");
 
-        // ========== 프레임 기반 시스템 초기화 ==========
-        if (evaluationMode == EvaluationMode.FrameBased)
+        // ChunaPathEvaluator 찾기
+        if (chunaPathEvaluator == null)
         {
-            // HandPoseTrainingController 찾기
-            if (trainingController == null)
-            {
-                trainingController = FindObjectOfType<HandPoseTrainingController>();
-            }
-
-            if (trainingController == null)
-            {
-                Debug.LogError("[ScenarioManager] HandPoseTrainingController를 찾을 수 없습니다! 씬에 추가해주세요.");
-                return;
-            }
-
-            // HandPoseTrainingControllerBridge 찾기 또는 생성
-            trainingControllerBridge = trainingController.GetComponent<HandPoseTrainingControllerBridge>();
-
-            if (trainingControllerBridge == null)
-            {
-                Debug.Log("[ScenarioManager] HandPoseTrainingControllerBridge가 없어서 자동으로 추가합니다.");
-                trainingControllerBridge = trainingController.gameObject.AddComponent<HandPoseTrainingControllerBridge>();
-            }
-
-            Debug.Log("<color=green>[ScenarioManager] ✓ 프레임 기반 평가 시스템 초기화 완료!</color>");
+            chunaPathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
         }
 
-        // ========== 체크포인트 기반 시스템 초기화 ==========
-        if (evaluationMode == EvaluationMode.CheckpointBased)
+        if (chunaPathEvaluator == null)
         {
-            // ChunaPathEvaluator 찾기
-            if (chunaPathEvaluator == null)
-            {
-                chunaPathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
-            }
-
-            if (chunaPathEvaluator == null)
-            {
-                Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator를 찾을 수 없습니다. 체크포인트 기반 평가가 비활성화됩니다.");
-                Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
-                evaluationMode = EvaluationMode.FrameBased;
-                InitializeHandPoseSystem(); // 재귀 호출로 프레임 기반 초기화
-                return;
-            }
-
-            // ChunaPathEvaluatorBridge 찾기 또는 생성
-            chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
-
-            if (chunaPathEvaluatorBridge == null)
-            {
-                Debug.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
-                chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
-            }
-
-            Debug.Log("<color=green>[ScenarioManager] ✓ 체크포인트 기반 평가 시스템 초기화 완료!</color>");
+            Debug.LogWarning("[ScenarioManager] ChunaPathEvaluator를 찾을 수 없습니다.");
+            return;
         }
+
+        // ChunaPathEvaluatorBridge 찾기 또는 생성
+        chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
+
+        if (chunaPathEvaluatorBridge == null)
+        {
+            Debug.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
+            chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
+        }
+
+        Debug.Log("<color=green>[ScenarioManager] ✓ ChunaPathEvaluator 시스템 초기화 완료!</color>");
     }
 
     private void OnEnable()
@@ -285,31 +220,16 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 시나리오 시작 (프로토타입 또는 CSV)
+    /// 시나리오 시작 (CSV 기반)
     /// </summary>
     public void StartScenario()
     {
         Debug.Log("<color=cyan>═══════════════════════════════════</color>");
         Debug.Log("<color=cyan>[ScenarioManager] StartScenario() 호출됨</color>");
-        Debug.Log($"<color=yellow>[ScenarioManager] useCSVData: {useCSVData}</color>");
         Debug.Log($"<color=yellow>[ScenarioManager] csvFileName: {csvFileName}</color>");
 
-        if (useCSVData)
-        {
-            Debug.Log("<color=yellow>[ScenarioManager] CSV 데이터 로드 시도 중...</color>");
-            LoadFromCSV();
-        }
-        else
-        {
-            if (prototypeScenario == null)
-            {
-                LogError("프로토타입 시나리오가 설정되지 않았습니다!");
-                return;
-            }
-
-            Debug.Log("<color=yellow>[ScenarioManager] 프로토타입 시나리오 시작 중...</color>");
-            StartScenario(prototypeScenario);
-        }
+        Debug.Log("<color=yellow>[ScenarioManager] CSV 데이터 로드 시도 중...</color>");
+        LoadFromCSV();
     }
 
     /// <summary>
@@ -802,8 +722,7 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
-    /// HandPose 트래킹 자동 처리 (CSV 기반)
-    /// 평가 모드에 따라 프레임 기반 또는 체크포인트 기반으로 동작
+    /// HandPose 트래킹 자동 처리 (CSV 기반, ChunaPathEvaluator 사용)
     /// </summary>
     private void HandleHandPoseTracking(SubStepData subStep)
     {
@@ -817,20 +736,11 @@ public class ScenarioManager : MonoBehaviour
         string stepName = currentStep.stepName;
         int subStepNo = subStep.subStepNo;
 
-        // ========== 체크포인트 기반 평가 ==========
-        if (evaluationMode == EvaluationMode.CheckpointBased)
-        {
-            HandleCheckpointBasedTracking(subStep, phaseName, stepName, subStepNo);
-        }
-        // ========== 프레임 기반 평가 (기존 방식) ==========
-        else
-        {
-            HandleFrameBasedTracking(subStep, phaseName, stepName, subStepNo);
-        }
+        HandleCheckpointBasedTracking(subStep, phaseName, stepName, subStepNo);
     }
 
     /// <summary>
-    /// 체크포인트 기반 손 동작 평가 처리
+    /// ChunaPathEvaluator 기반 손 동작 평가 처리
     /// 각 SubStep마다 CSV를 로드하고 체크포인트를 생성
     /// </summary>
     private void HandleCheckpointBasedTracking(SubStepData subStep, string phaseName, string stepName, int subStepNo)
@@ -838,8 +748,6 @@ public class ScenarioManager : MonoBehaviour
         if (chunaPathEvaluator == null || chunaPathEvaluatorBridge == null)
         {
             Debug.LogError("[ScenarioManager] ChunaPathEvaluator 또는 Bridge를 찾을 수 없습니다!");
-            Debug.LogWarning("[ScenarioManager] 프레임 기반 모드로 전환합니다.");
-            HandleFrameBasedTracking(subStep, phaseName, stepName, subStepNo);
             return;
         }
 
@@ -875,39 +783,6 @@ public class ScenarioManager : MonoBehaviour
         Debug.Log($"<color=green>  - 체크포인트 수: {chunaPathEvaluator.TotalCheckpoints}</color>");
     }
 
-    /// <summary>
-    /// 프레임 기반 손 동작 평가 처리 (기존 방식)
-    /// </summary>
-    private void HandleFrameBasedTracking(SubStepData subStep, string phaseName, string stepName, int subStepNo)
-    {
-        if (trainingController == null || trainingControllerBridge == null)
-        {
-            Debug.LogError("[ScenarioManager] HandPoseTrainingController 또는 Bridge를 찾을 수 없습니다!");
-            return;
-        }
-
-        Debug.Log($"<color=yellow>[ScenarioManager] 프레임 기반 HandPose 트래킹 시작: {subStep.handTrackingFileName}</color>");
-
-        // 1. CSV 로드 및 훈련 시작
-        trainingControllerBridge.LoadFromCSV(subStep.handTrackingFileName);
-
-        // 2. HandPoseCondition 생성
-        HandPoseCondition condition = new HandPoseCondition(
-            trainingControllerBridge,
-            subStep.handTrackingFileName,
-            conditionManager
-        );
-
-        // 3. ScenarioConditionManager에 조건 등록
-        conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
-
-        Debug.Log($"<color=green>[ScenarioManager] ✓ HandPoseCondition 등록 완료!</color>");
-        Debug.Log($"<color=green>  - Phase: {phaseName}</color>");
-        Debug.Log($"<color=green>  - Step: {stepName}</color>");
-        Debug.Log($"<color=green>  - SubStep: {subStepNo}</color>");
-        Debug.Log($"<color=green>  - CSV: {subStep.handTrackingFileName}</color>");
-    }
-
     private void Log(string message)
     {
         if (showDebugLog)
@@ -924,62 +799,6 @@ public class ScenarioManager : MonoBehaviour
     private void OnDestroy()
     {
         eventSystem?.Clear();
-    }
-
-    // === Inspector 편집 도우미 ===
-
-    [ContextMenu("📝 빈 시나리오 생성")]
-    private void CreateEmptyScenario()
-    {
-        prototypeScenario = new ScenarioData
-        {
-            scenarioNo = 1,
-            scenarioName = "새 시나리오",
-            phases = new List<PhaseData>()
-        };
-
-        Debug.Log("빈 시나리오가 생성되었습니다. Inspector에서 편집하세요.");
-    }
-
-    [ContextMenu("➕ Phase 추가")]
-    private void AddPhase()
-    {
-        if (prototypeScenario == null)
-        {
-            Debug.LogError("먼저 시나리오를 생성하세요!");
-            return;
-        }
-
-        prototypeScenario.phases.Add(new PhaseData
-        {
-            phaseName = "새 Phase",
-            steps = new List<StepData>()
-        });
-
-        Debug.Log("Phase가 추가되었습니다.");
-    }
-
-    [ContextMenu("📊 시나리오 정보 출력")]
-    private void PrintScenarioInfo()
-    {
-        if (prototypeScenario == null)
-        {
-            Debug.LogError("시나리오가 없습니다!");
-            return;
-        }
-
-        Debug.Log($"=== {prototypeScenario.scenarioName} ===");
-        Debug.Log($"Phase 수: {prototypeScenario.phases.Count}");
-
-        foreach (var phase in prototypeScenario.phases)
-        {
-            Debug.Log($"  - {phase.phaseName}: {phase.steps.Count} Steps");
-
-            foreach (var step in phase.steps)
-            {
-                Debug.Log($"    - {step.stepName}: {step.subSteps.Count} SubSteps");
-            }
-        }
     }
 
     // ========== 각도 표시 UI 제어 ==========
