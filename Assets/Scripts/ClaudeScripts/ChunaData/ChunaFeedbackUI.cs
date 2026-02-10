@@ -407,7 +407,7 @@ public class ChunaFeedbackUI : MonoBehaviour
         }
 
         Initialize();
-        Debug.Log("[ChunaFeedbackUI] 평가 시작 - 결과 기록 시작");
+        ChunaLogger.Log("ChunaFeedbackUI", "평가 시작 - 결과 기록 시작");
     }
 
     private void OnEvaluationCompleted(ChunaPathEvaluator.EvaluationSession session)
@@ -438,9 +438,9 @@ public class ChunaFeedbackUI : MonoBehaviour
 
             stepResults.Add(currentStepResult);
 
-            Debug.Log($"[ChunaFeedbackUI] 단계 결과 저장 완료 (총 {stepResults.Count}개 단계)");
-            Debug.Log($"  - 점수: {currentStepResult.finalScore:F0} ({currentStepResult.grade})");
-            Debug.Log($"  - 체크포인트: {currentStepResult.passedCheckpoints}/{currentStepResult.totalCheckpoints}");
+            ChunaLogger.Log("ChunaFeedbackUI", $"단계 결과 저장 완료 (총 {stepResults.Count}개 단계)");
+            ChunaLogger.Log("ChunaFeedbackUI", $"  - 점수: {currentStepResult.finalScore:F0} ({currentStepResult.grade})");
+            ChunaLogger.Log("ChunaFeedbackUI", $"  - 체크포인트: {currentStepResult.passedCheckpoints}/{currentStepResult.totalCheckpoints}");
         }
 
         UpdateScoreDisplay(session?.finalScore ?? 100f);
@@ -505,7 +505,7 @@ public class ChunaFeedbackUI : MonoBehaviour
     {
         stepResults.Clear();
         currentStepResult = null;
-        Debug.Log("[ChunaFeedbackUI] 모든 단계 결과 초기화");
+        ChunaLogger.Log("ChunaFeedbackUI", "모든 단계 결과 초기화");
     }
 
     /// <summary>

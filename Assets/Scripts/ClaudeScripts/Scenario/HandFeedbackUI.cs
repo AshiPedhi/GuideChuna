@@ -67,7 +67,7 @@ public class HandFeedbackUI : MonoBehaviour
             pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
             if (pathEvaluator != null)
             {
-                Debug.Log("[HandFeedbackUI] ChunaPathEvaluator 자동 연결 성공");
+                ChunaLogger.Log("HandFeedbackUI", "ChunaPathEvaluator 자동 연결 성공");
             }
         }
     }
@@ -92,7 +92,7 @@ public class HandFeedbackUI : MonoBehaviour
             pathEvaluator.OnSimilarityUpdated += OnSimilarityUpdated;
             pathEvaluator.OnEvaluationStarted += OnEvaluationStarted;
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompleted;
-            Debug.Log("[HandFeedbackUI] ChunaPathEvaluator 이벤트 구독");
+            ChunaLogger.Log("HandFeedbackUI", "ChunaPathEvaluator 이벤트 구독");
         }
     }
 
@@ -115,7 +115,7 @@ public class HandFeedbackUI : MonoBehaviour
         isActive = true;
         SetUIVisible(true);
         ResetToDefault();
-        Debug.Log("[HandFeedbackUI] 평가 시작 - UI 활성화");
+        ChunaLogger.Log("HandFeedbackUI", "평가 시작 - UI 활성화");
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public class HandFeedbackUI : MonoBehaviour
     {
         isActive = false;
         // 평가 완료 후에도 UI 유지 (마지막 유사도 표시)
-        Debug.Log("[HandFeedbackUI] 평가 완료");
+        ChunaLogger.Log("HandFeedbackUI", "평가 완료");
     }
 
     /// <summary>
