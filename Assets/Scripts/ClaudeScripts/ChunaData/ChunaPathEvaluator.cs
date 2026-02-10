@@ -18,6 +18,8 @@ using static HandPoseDataLoader;
 /// </summary>
 public class ChunaPathEvaluator : MonoBehaviour
 {
+    #region SerializeFields
+
     [Header("=== 기준 위치 (환자) ===")]
     [Tooltip("체크포인트 위치의 기준점 (환자 Transform)")]
     [SerializeField] private Transform referenceTransform;
@@ -312,6 +314,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("왼손 이탈 허용 거리 (미터)")]
     [SerializeField] private float leftHandDriftThreshold = 0.15f;
 
+    #endregion
+
+    #region Enums
+
     /// <summary>
     /// 회전 감지 축 (목 움직임 종류에 따라 선택)
     /// </summary>
@@ -344,6 +350,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         MidHold,           // 중간 홀드 (3초)
         Completed          // 완료
     }
+
+    #endregion
+
+    #region State Variables
 
     // 상태
     private bool isEvaluating = false;
@@ -434,6 +444,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 결과
     private EvaluationSession currentSession;
 
+    #endregion
+
+    #region Events
+
     // 이벤트
     public event Action OnEvaluationStarted;
     public event Action<EvaluationSession> OnEvaluationCompleted;
@@ -454,6 +468,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     public event Action<float> OnLeftHandDrifted;                    // 왼손 이탈 (이탈 거리)
     public event Action<int, int, float> OnUserFrameChanged;         // 사용자 손 프레임 변경 (현재, 총, 비율)
     public event Action<int> OnSubStepStarted;                       // SubStep 시작 (인덱스)
+
+    #endregion
+
+    #region Nested Classes
 
     /// <summary>
     /// 평가 세션 데이터
@@ -520,6 +538,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             public Vector3 rightHandPosition;
         }
     }
+
+    #endregion
+
+    #region Unity Lifecycle
 
     void Awake()
     {
@@ -592,6 +614,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
         }
     }
+
+    #endregion
+
+    #region Phase-Based Evaluation
 
     /// <summary>
     /// 새로운 평가 흐름 업데이트
@@ -1059,6 +1085,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public EvaluationPhase CurrentPhase => currentPhase;
 
+    #endregion
+
+    #region User Hand Frame Tracking
+
     /// <summary>
     /// 사용자 손 움직임 기반으로 진행률 계산
     /// ★ 상대 이동 모드: 시작 홀드 위치 기준으로 이동량/회전량에 따라 진행률 계산
@@ -1243,6 +1273,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (showDebugLogs && Time.frameCount % 30 == 0)
             Debug.Log($"[Animation] 동기화: {currentAnimationStateName} @ {normalizedTime:P0}");
     }
+
+    #endregion
+
+    #region Collision Detection
 
     /// <summary>
     /// 충돌 감지 업데이트 (거리 기반, 스케일 적용)
@@ -1627,6 +1661,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
     }
 
+    #endregion
+
+    #region AutoPlay Mode
+
     /// <summary>
     /// ★ AutoPlay 모드 업데이트 - 핸드데이터 없이 애니메이션만 자동 재생
     /// </summary>
@@ -1999,7 +2037,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public float AutoPlayProgress => autoPlayProgress;
 
-    // ========== 스트레칭/재평가 확장 제한 모드 ==========
+    #endregion
+
+    #region Extended Limit Mode (Stretching/Re-evaluation)
 
     /// <summary>
     /// ★ 확장 제한 모드 활성화 (스트레칭/재평가용)
@@ -2254,6 +2294,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         set => usePivotBasedProgress = value;
     }
 
+    #endregion
+
+    #region References Initialization
+
     void OnDestroy()
     {
         StopGuideHandPlayback();
@@ -2343,7 +2387,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             neckController = FindObjectOfType<NeckVRControllerOptimized>();
     }
 
-    // ========== CSV 데이터 기반 체크포인트 생성 ==========
+    #endregion
+
+    #region CSV Data and Checkpoint Generation
 
     public void LoadAndGenerateCheckpoints(string csvFileName)
     {
@@ -2731,7 +2777,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         rightCheckpoints.Clear();
     }
 
-    // ========== 평가 제어 ==========
+    #endregion
+
+    #region Evaluation Control
 
     /// <summary>
     /// 평가 시작 (체크포인트는 지표용, 진행은 수동)
@@ -3009,7 +3057,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             Debug.Log("[ChunaPathEvaluator] 평가 리셋");
     }
 
-    // ========== 체크포인트 터치 처리 (기록용) ==========
+    #endregion
+
+    #region Checkpoint and Metrics
 
     private void HandleCheckpointTouched(PathCheckpoint checkpoint, bool isLeftHand, float similarity)
     {
@@ -3266,7 +3316,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         return string.Join("\n", feedbacks);
     }
 
-    // ========== 가이드 손 루프 재생 ==========
+    #endregion
+
+    #region Guide Hand Playback
 
     private void StartGuideHandPlayback()
     {
@@ -3477,7 +3529,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             rightGuideHand.SetVisible(false);
     }
 
-    // ========== Public API ==========
+    #endregion
+
+    #region Public API
 
     public bool IsEvaluating => isEvaluating;
     public EvaluationSession GetCurrentSession() => currentSession;
@@ -3587,4 +3641,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (score >= 60f) return "D";
         return "F";
     }
+
+    #endregion
 }
