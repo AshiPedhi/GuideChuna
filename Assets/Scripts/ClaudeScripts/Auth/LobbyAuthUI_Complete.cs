@@ -406,110 +406,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
-        // 로그인 팝업 - 유저 목록으로 연결 토글
-        if (loginRequiredCloseButton != null)
-        {
-            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
-            loginRequiredCloseButton.group = null;
-
-            loginRequiredCloseButton.onValueChanged.RemoveAllListeners();
-            loginRequiredCloseButton.onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    OnLoginRequiredPopupGoToUserList();
-                    StartCoroutine(ResetToggle(loginRequiredCloseButton));
-                }
-            });
-            Debug.Log("[LobbyUI] ✅ 로그인 팝업 - 유저 목록 연결 토글 연결");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] ⚠️ loginRequiredCloseButton이 null입니다.");
-        }
-
-        // 종료 확인 팝업 - 예 토글
-        if (exitYesToggle != null)
-        {
-            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
-            exitYesToggle.group = null;
-
-            exitYesToggle.onValueChanged.RemoveAllListeners();
-            exitYesToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    OnExitConfirmYes();
-                    StartCoroutine(ResetToggle(exitYesToggle));
-                }
-            });
-            Debug.Log("[LobbyUI] ✅ 종료 확인 - 예 토글 연결");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] ⚠️ exitYesToggle이 null입니다.");
-        }
-
-        // 종료 확인 팝업 - 아니오 토글
-        if (exitNoToggle != null)
-        {
-            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
-            exitNoToggle.group = null;
-
-            exitNoToggle.onValueChanged.RemoveAllListeners();
-            exitNoToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    OnExitConfirmNo();
-                    StartCoroutine(ResetToggle(exitNoToggle));
-                }
-            });
-            Debug.Log("[LobbyUI] ✅ 종료 확인 - 아니오 토글 연결");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] ⚠️ exitNoToggle이 null입니다.");
-        }
-
-        // 로그아웃 확인 팝업 - 취소 토글
-        if (logoutCancelToggle != null)
-        {
-            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
-            logoutCancelToggle.group = null;
-
-            logoutCancelToggle.onValueChanged.RemoveAllListeners();
-            logoutCancelToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    OnLogoutCancel();
-                    StartCoroutine(ResetToggle(logoutCancelToggle));
-                }
-            });
-            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 취소 토글 연결");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] ⚠️ logoutCancelToggle이 null입니다.");
-        }
-
-        // 로그아웃 확인 팝업 - 로그아웃하기 토글
-        if (logoutConfirmToggle != null)
-        {
-            // ToggleGroup 제거 (버튼처럼 동작하므로 불필요)
-            logoutConfirmToggle.group = null;
-
-            logoutConfirmToggle.onValueChanged.RemoveAllListeners();
-            logoutConfirmToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn)
-                {
-                    OnLogoutConfirm();
-                    StartCoroutine(ResetToggle(logoutConfirmToggle));
-                }
-            });
-            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 - 로그아웃하기 토글 연결");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] ⚠️ logoutConfirmToggle이 null입니다.");
-        }
+        // 토글들을 버튼처럼 설정
+        SetupToggleAsButton(loginRequiredCloseButton, "로그인 팝업 - 유저 목록", OnLoginRequiredPopupGoToUserList);
+        SetupToggleAsButton(exitYesToggle, "종료 확인 - 예", OnExitConfirmYes);
+        SetupToggleAsButton(exitNoToggle, "종료 확인 - 아니오", OnExitConfirmNo);
+        SetupToggleAsButton(logoutCancelToggle, "로그아웃 확인 - 취소", OnLogoutCancel);
+        SetupToggleAsButton(logoutConfirmToggle, "로그아웃 확인 - 로그아웃하기", OnLogoutConfirm);
     }
 
     private void SetupBackgroundDimClicks()
@@ -1300,11 +1202,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             userNameText.text = "Guest";
         }
 
-        // userInfoContent는 계속 활성화 상태 유지!
-        // if (userInfoContent != null)
-        // {
-        //     userInfoContent.SetActive(false); // 더 이상 숨기지 않음!
-        // }
+        // userInfoContent는 계속 활성화 상태 유지
 
         // 시나리오 카드 시각적으로 비활성화
         SetScenarioCardsVisualState(false);
@@ -1475,6 +1373,30 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         yield return null;
         if (toggle != null)
             toggle.isOn = false;
+    }
+
+    /// <summary>
+    /// 토글을 버튼처럼 설정하는 헬퍼 메서드
+    /// </summary>
+    private void SetupToggleAsButton(Toggle toggle, string debugLabel, Action onClickAction)
+    {
+        if (toggle == null)
+        {
+            Debug.LogWarning($"[LobbyUI] ⚠️ {debugLabel} 토글이 null입니다.");
+            return;
+        }
+
+        toggle.group = null;
+        toggle.onValueChanged.RemoveAllListeners();
+        toggle.onValueChanged.AddListener((isOn) =>
+        {
+            if (isOn)
+            {
+                onClickAction?.Invoke();
+                StartCoroutine(ResetToggle(toggle));
+            }
+        });
+        Debug.Log($"[LobbyUI] ✅ {debugLabel} 토글 연결");
     }
     #endregion
 

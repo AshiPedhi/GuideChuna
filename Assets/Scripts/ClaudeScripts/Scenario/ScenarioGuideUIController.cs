@@ -607,7 +607,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     public void EnableStartToggle()
     {
-        //if (startToggleObject == null) return;
+        if (startToggleObject == null) return;
 
         Debug.Log("<color=yellow>[GuideUI] 시작 토글 강제 활성화 (20초 타임아웃)</color>");
 
