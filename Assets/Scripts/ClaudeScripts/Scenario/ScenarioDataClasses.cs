@@ -50,6 +50,30 @@ public class SubStepData
     [Tooltip("영상 끝 시간 (분:초 형식, 예: 2:45)")]
     public string videoEndTime;
 
+    [Header("접촉 감지 부위")]
+    [Tooltip("환자 접촉 감지 부위: Head, HeadAndShoulder, Chest (비어있으면 HeadAndShoulder)")]
+    public string contactTarget;
+
+    /// <summary>
+    /// 접촉 감지 부위 Enum으로 변환 (기본값: HeadAndShoulder)
+    /// </summary>
+    public ContactTarget GetContactTarget()
+    {
+        if (string.IsNullOrEmpty(contactTarget))
+            return ContactTarget.HeadAndShoulder;
+
+        switch (contactTarget.Trim().ToLower())
+        {
+            case "head":
+                return ContactTarget.Head;
+            case "chest":
+                return ContactTarget.Chest;
+            case "headandshoulder":
+            default:
+                return ContactTarget.HeadAndShoulder;
+        }
+    }
+
     /// <summary>
     /// 가이드 영상 구간이 있는지 확인
     /// </summary>
@@ -148,6 +172,16 @@ public enum AnimationPlayMode
     None,           // 애니메이션 없음
     AutoPlay,       // 자동 재생
     SyncWithUser    // 사용자 진행도에 동기화
+}
+
+/// <summary>
+/// 환자 접촉 감지 부위
+/// </summary>
+public enum ContactTarget
+{
+    Head,           // 머리만 (경추 추나)
+    HeadAndShoulder,// 머리+어깨 (상부승모근 등) - 기본값
+    Chest           // 흉부 (대흉근)
 }
 
 /// <summary>

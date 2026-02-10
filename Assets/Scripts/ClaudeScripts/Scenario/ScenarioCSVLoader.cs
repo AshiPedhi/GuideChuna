@@ -7,7 +7,7 @@ using System.Text;
 /// CSV 파일에서 시나리오 데이터를 로드하는 클래스
 ///
 /// [CSV 구조]
-/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime
+/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget
 ///
 /// [수정 내역]
 /// - RFC 4180 표준 CSV 파싱 (큰따옴표 안의 줄바꿈 처리) ✅
@@ -246,6 +246,13 @@ public class ScenarioCSVLoader : MonoBehaviour
                     videoEndTime = values[15].Trim();
                 }
 
+                // contactTarget (17번째 컬럼, 선택사항) - Head/HeadAndShoulder/Chest
+                string contactTarget = "";
+                if (values.Count >= 17 && !string.IsNullOrEmpty(values[16]))
+                {
+                    contactTarget = values[16].Trim();
+                }
+
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
@@ -322,7 +329,8 @@ public class ScenarioCSVLoader : MonoBehaviour
                     patientAnimationClip = patientAnimationClip,
                     movementType = movementType,
                     videoStartTime = videoStartTime,
-                    videoEndTime = videoEndTime
+                    videoEndTime = videoEndTime,
+                    contactTarget = contactTarget
                 };
 
                 currentStep.subSteps.Add(subStep);

@@ -56,6 +56,13 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
 
+    [Header("=== 환자 모델 ===")]
+    [Tooltip("환자 모델의 Animator (시나리오별로 Controller 자동 전환)")]
+    [SerializeField] private Animator patientAnimator;
+
+    [Tooltip("Animator Controller 경로 (Resources 폴더 기준)")]
+    [SerializeField] private string animatorControllerPath = "Animators";
+
     [Header("=== 각도 표시 UI (동작별) ===")]
     [Tooltip("측굴 각도 표시 (우측굴)")]
     [SerializeField] private AngleDisplayController angleDisplay_LateralFlexion;
@@ -331,6 +338,9 @@ public class ScenarioManager : MonoBehaviour
         currentPhase = currentScenario.phases[0];
         currentStep = currentPhase.steps[0];
         currentSubStep = currentStep.subSteps[0];
+
+        // ★ 시나리오 이름으로 Animator Controller 자동 전환
+        SwitchAnimatorController(scenario.scenarioName);
 
         // ★ 시나리오 전체 구조 디버그 출력
         Debug.Log($"<color=magenta>===== 시나리오 구조 디버그 =====</color>");
@@ -706,6 +716,9 @@ public class ScenarioManager : MonoBehaviour
             resultTracker.StartSubStep(currentPhase.phaseName, currentStep.stepName);
         }
 
+        // ★ 접촉 감지 부위 설정 (시나리오 CSV의 contactTarget 컬럼)
+        ApplyContactTarget(subStep);
+
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
         UpdateAngleDisplayVisibility(subStep);
 
@@ -1040,5 +1053,62 @@ public class ScenarioManager : MonoBehaviour
         angleDisplay_LateralFlexion?.Hide();
         angleDisplay_LeftRotation?.Hide();
         angleDisplay_RightRotation?.Hide();
+    }
+
+    // ========== Animator Controller 자동 전환 ==========
+
+    /// <summary>
+    /// 시나리오 이름으로 Animator Controller 자동 전환
+    /// Resources/{animatorControllerPath}/{scenarioName} 경로에서 로드
+    /// </summary>
+    private void SwitchAnimatorController(string scenarioName)
+    {
+        if (patientAnimator == null)
+        {
+            // Patient 태그로 Animator 찾기
+            var patient = GameObject.FindGameObjectWithTag("Patient");
+            if (patient != null)
+            {
+                patientAnimator = patient.GetComponent<Animator>();
+                Debug.Log($"<color=cyan>[ScenarioManager] Patient 태그로 Animator 찾음: {patient.name}</color>");
+            }
+        }
+
+        if (patientAnimator == null)
+        {
+            Debug.LogWarning("<color=orange>[ScenarioManager] patientAnimator를 찾을 수 없어 Controller 전환 건너뜀</color>");
+            return;
+        }
+
+        // Resources 폴더에서 Animator Controller 로드
+        string controllerPath = $"{animatorControllerPath}/{scenarioName}";
+        RuntimeAnimatorController controller = Resources.Load<RuntimeAnimatorController>(controllerPath);
+
+        if (controller != null)
+        {
+            patientAnimator.runtimeAnimatorController = controller;
+            Debug.Log($"<color=green>[ScenarioManager] ✓ Animator Controller 전환: {controllerPath}</color>");
+        }
+        else
+        {
+            Debug.LogWarning($"<color=orange>[ScenarioManager] Animator Controller를 찾을 수 없음: Resources/{controllerPath}</color>");
+            Debug.LogWarning($"<color=orange>  → Controller 파일을 Resources/{animatorControllerPath}/ 폴더에 복사하세요</color>");
+        }
+    }
+
+    // ========== Contact Target 설정 ==========
+
+    /// <summary>
+    /// SubStep의 contactTarget 설정을 ChunaPathEvaluator에 적용
+    /// </summary>
+    private void ApplyContactTarget(SubStepData subStep)
+    {
+        if (chunaPathEvaluator == null) return;
+
+        ContactTarget target = subStep.GetContactTarget();
+        chunaPathEvaluator.SetContactTarget(target);
+
+        if (showDebugLog)
+            Debug.Log($"<color=cyan>[ScenarioManager] 접촉 감지 부위 설정: {target}</color>");
     }
 }
