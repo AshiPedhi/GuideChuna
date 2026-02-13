@@ -404,8 +404,14 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 userHoldReferencePosition;  // 사용자 시작 홀드 위치 (기준점)
     private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
-    private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
+    private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation/path)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
+
+    // ★ 경로 추종(Path Projection) 진행률 계산용 - 복합관절 동작 (대흉근 등)
+    private bool isPathBasedMovement;           // true=경로 추종 모드 (path)
+    private float[] pathCumulativeDistances;    // 각 프레임까지의 누적 경로 거리
+    private float pathTotalLength;              // 전체 경로 길이
+    private int pathLastMatchedIndex;           // 마지막으로 매칭된 프레임 인덱스 (단조 증가 제약용)
 
     // ★ 피벗 기반 진행률 계산용
     private Vector3 pivotStartDirection;        // 피벗→시작손위치 방향 (정규화)
@@ -671,6 +677,12 @@ public class ChunaPathEvaluator : MonoBehaviour
             int startFrameIdx = Mathf.RoundToInt(currentStartRatio * (loadedFrames.Count - 1));
             userHandFrameIndex = Mathf.Clamp(startFrameIdx, 0, loadedFrames.Count - 1);
             userHandFrameRatio = currentStartRatio;
+
+            // ★ 경로 추종 모드: 탐색 시작점 초기화
+            if (isPathBasedMovement)
+            {
+                pathLastMatchedIndex = startFrameIdx;
+            }
 
             if (showDebugLogs)
                 Debug.Log($"<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작, 시작비율: {currentStartRatio:P0})</color>");
@@ -1126,8 +1138,28 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
         if (useRelativeMovement)
         {
+            // ★★★ 경로 추종 모드: 복합관절 동작 (대흉근 등) - 기록된 3D 경로에 투영하여 진행률 계산 ★★★
+            if (isPathBasedMovement && pathCumulativeDistances != null)
+            {
+                // 사용자 손 위치를 기록 좌표계로 변환 (기록 당시의 환자 위치 기준)
+                // 기록 데이터는 월드 좌표이므로, 현재 환자 위치와 기록 시 환자 위치의 차이만큼 보정
+                Vector3 adjustedHandPos = rightHandPos;
+                if (referenceTransform != null)
+                {
+                    Vector3 positionOffset = referenceTransform.position - recordedPatientOffset;
+                    adjustedHandPos = rightHandPos - positionOffset;
+                }
+
+                newRatio = CalculatePathProjectionProgress(adjustedHandPos);
+
+                if (showDebugLogs && Time.frameCount % 30 == 0)
+                {
+                    string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
+                    Debug.Log($"<color=green>[Path Mode] 진행률:{newRatio:P0}, 매칭프레임:{pathLastMatchedIndex}/{loadedFrames.Count}, 경로길이:{pathTotalLength:F3}m {posSource}</color>");
+                }
+            }
             // ★★★ 피벗 기반 모드: 위치/회전 구분 없이 피벗 각도 사용 (측굴, 회전 동작 모두) ★★★
-            if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
+            else if (usePivotBasedProgress && pivotTransform != null && pivotStartDirection != Vector3.zero)
             {
                 // 피벗에서 현재 손 위치로의 방향
                 Vector3 pivotCurrentDirection = (rightHandPos - pivotTransform.position).normalized;
@@ -2484,14 +2516,26 @@ public class ChunaPathEvaluator : MonoBehaviour
         Quaternion endRot = lastFrame.rightRootRotation;
         handDataTotalRotation = Quaternion.Angle(startRot, endRot);
 
-        // 위치 기반 vs 회전 기반 결정
+        // 위치 기반 vs 회전 기반 vs 경로 추종 결정
         // ★ CSV에서 지정한 타입이 있으면 그것을 사용, 없으면 자동 감지
+        isPathBasedMovement = false;
         if (!string.IsNullOrEmpty(specifiedMovementType))
         {
-            // StartsWith로 비교 (혹시 모를 공백/특수문자 대비)
-            isPositionBasedMovement = specifiedMovementType.StartsWith("position");
-            string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-            Debug.Log($"<color=magenta>[HandData Analysis] ★ {moveType} (CSV 지정: '{specifiedMovementType}')</color>");
+            if (specifiedMovementType.StartsWith("path"))
+            {
+                // ★ 경로 추종 모드 (복합관절 동작 - 대흉근 등)
+                isPathBasedMovement = true;
+                isPositionBasedMovement = true;  // fallback
+                CalculatePathCumulativeDistances();
+                Debug.Log($"<color=magenta>[HandData Analysis] ★ 경로 추종 모드 (CSV 지정: '{specifiedMovementType}')</color>");
+            }
+            else
+            {
+                // StartsWith로 비교 (혹시 모를 공백/특수문자 대비)
+                isPositionBasedMovement = specifiedMovementType.StartsWith("position");
+                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
+                Debug.Log($"<color=magenta>[HandData Analysis] ★ {moveType} (CSV 지정: '{specifiedMovementType}')</color>");
+            }
         }
         else
         {
@@ -2507,7 +2551,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 항상 출력 (디버깅용)
         Debug.Log($"<color=cyan>[HandData] 시작위치: {startPos}, 끝위치: {endPos}</color>");
         Debug.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
-        Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
+        Debug.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPathBasedMovement ? "경로추종" : isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
 
         // ★ 피벗 기반 총 각도 자동 계산
         CalculatePivotBasedAngle();
@@ -2554,6 +2598,103 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         Debug.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
+    }
+
+    /// <summary>
+    /// ★ 경로 추종용: 기록된 프레임의 누적 호 길이(arc-length) 사전 계산
+    /// 복합관절 동작(대흉근 등)에서 3D 경로를 따라 진행률을 매핑하기 위해 사용
+    /// </summary>
+    private void CalculatePathCumulativeDistances()
+    {
+        if (loadedFrames == null || loadedFrames.Count < 2)
+        {
+            pathCumulativeDistances = null;
+            pathTotalLength = 0f;
+            return;
+        }
+
+        int count = loadedFrames.Count;
+        pathCumulativeDistances = new float[count];
+        pathCumulativeDistances[0] = 0f;
+
+        for (int i = 1; i < count; i++)
+        {
+            Vector3 prev = loadedFrames[i - 1].rightRootPosition;
+            Vector3 curr = loadedFrames[i].rightRootPosition;
+            float segmentLength = Vector3.Distance(prev, curr);
+            pathCumulativeDistances[i] = pathCumulativeDistances[i - 1] + segmentLength;
+        }
+
+        pathTotalLength = pathCumulativeDistances[count - 1];
+        pathLastMatchedIndex = 0;
+
+        Debug.Log($"<color=green>[Path Mode] ★ 경로 사전 계산 완료: {count}프레임, 총 길이={pathTotalLength:F3}m</color>");
+    }
+
+    /// <summary>
+    /// ★ 경로 추종 진행률 계산
+    /// 사용자 손 위치를 기록된 3D 경로 위에 투영하여 0~1 비율을 반환
+    /// 단조 증가 제약: 현재 위치 근처(윈도우)에서만 탐색하여 역진행 방지
+    /// </summary>
+    private float CalculatePathProjectionProgress(Vector3 handPos)
+    {
+        if (pathCumulativeDistances == null || loadedFrames.Count < 2 || pathTotalLength < 0.001f)
+            return 0f;
+
+        int count = loadedFrames.Count;
+
+        // ★ 탐색 윈도우: 현재 위치에서 앞뒤로 일정 범위만 탐색 (역진행 방지)
+        // 전체 프레임의 20% 또는 최소 10프레임
+        int windowSize = Mathf.Max(10, count / 5);
+        int searchStart = Mathf.Max(0, pathLastMatchedIndex - windowSize / 4);  // 뒤로는 25%만
+        int searchEnd = Mathf.Min(count - 1, pathLastMatchedIndex + windowSize);  // 앞으로는 75%
+
+        // 가장 가까운 세그먼트 찾기
+        float bestDistSq = float.MaxValue;
+        int bestSegIndex = searchStart;
+        float bestSegT = 0f;
+
+        for (int i = searchStart; i < searchEnd; i++)
+        {
+            Vector3 segStart = loadedFrames[i].rightRootPosition;
+            Vector3 segEnd = loadedFrames[i + 1].rightRootPosition;
+
+            // 선분 위의 최근접점 파라미터 t (0~1)
+            Vector3 segDir = segEnd - segStart;
+            float segLenSq = segDir.sqrMagnitude;
+
+            float t = 0f;
+            if (segLenSq > 0.000001f)
+            {
+                t = Mathf.Clamp01(Vector3.Dot(handPos - segStart, segDir) / segLenSq);
+            }
+
+            Vector3 closestPoint = segStart + segDir * t;
+            float distSq = (handPos - closestPoint).sqrMagnitude;
+
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestSegIndex = i;
+                bestSegT = t;
+            }
+        }
+
+        // 최근접 세그먼트에서의 누적 거리 계산
+        float segmentArcLength = pathCumulativeDistances[bestSegIndex + 1] - pathCumulativeDistances[bestSegIndex];
+        float distanceAlongPath = pathCumulativeDistances[bestSegIndex] + segmentArcLength * bestSegT;
+        float ratio = Mathf.Clamp01(distanceAlongPath / pathTotalLength);
+
+        // 단조 증가 제약: 이전 매칭보다 뒤로 가지 않도록
+        pathLastMatchedIndex = bestSegIndex;
+
+        if (showDebugLogs && Time.frameCount % 30 == 0)
+        {
+            float bestDist = Mathf.Sqrt(bestDistSq);
+            Debug.Log($"<color=green>[Path Projection] 세그먼트:{bestSegIndex}/{count-1}, t:{bestSegT:F2}, 거리:{bestDist:F3}m, 진행률:{ratio:P0}</color>");
+        }
+
+        return ratio;
     }
 
     /// <summary>
