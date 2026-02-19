@@ -36,9 +36,6 @@ public class ChunaLimitChecker : MonoBehaviour
     private LimitCheckResult currentLeftResult = new LimitCheckResult();
     private LimitCheckResult currentRightResult = new LimitCheckResult();
 
-    // 참조 캐싱 완료 플래그
-    private bool referencesSearched = false;
-
     // 이벤트
     public event Action<LimitCheckResult, LimitCheckResult> OnLimitStatusChanged;
 
@@ -58,7 +55,6 @@ public class ChunaLimitChecker : MonoBehaviour
     {
         // 한 번만 검색
         FindHandReferences();
-        referencesSearched = true;
     }
 
     void Update()
@@ -76,7 +72,7 @@ public class ChunaLimitChecker : MonoBehaviour
     {
         if (playerLeftHand == null || playerRightHand == null)
         {
-            var hands = FindObjectsOfType<HandVisual>();
+            var hands = FindObjectsByType<HandVisual>(FindObjectsSortMode.None);
             foreach (var hand in hands)
             {
                 if (hand.Hand != null)
@@ -97,13 +93,13 @@ public class ChunaLimitChecker : MonoBehaviour
     {
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         }
 
         isInitialized = true;
 
         if (showDebugLogs)
-            Debug.Log("<color=green>[ChunaLimitChecker] 초기화 완료 (프레임 비율 기반)</color>");
+            ChunaLogger.Log("<color=green>[ChunaLimitChecker] 초기화 완료 (프레임 비율 기반)</color>");
     }
 
     /// <summary>
@@ -146,7 +142,7 @@ public class ChunaLimitChecker : MonoBehaviour
                 string color = newStatus == LimitStatus.Safe ? "green" :
                               (newStatus == LimitStatus.Warning ? "yellow" :
                               (newStatus == LimitStatus.Danger ? "orange" : "red"));
-                Debug.Log($"<color={color}>[ChunaLimitChecker] 상태: {newStatus}, 프레임: {currentFrame}/{totalFrames} ({ratio:P0})</color>");
+                ChunaLogger.Log($"<color={color}>[ChunaLimitChecker] 상태: {newStatus}, 프레임: {currentFrame}/{totalFrames} ({ratio:P0})</color>");
             }
         }
     }
@@ -205,7 +201,7 @@ public class ChunaLimitChecker : MonoBehaviour
         currentRightResult = new LimitCheckResult();
 
         if (showDebugLogs)
-            Debug.Log("[ChunaLimitChecker] 리셋됨");
+            ChunaLogger.Log("[ChunaLimitChecker] 리셋됨");
     }
 
     /// <summary>

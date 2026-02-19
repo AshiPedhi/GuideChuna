@@ -149,7 +149,7 @@ public class DualCameraRecorder : MonoBehaviour
         if (Time.time - recordStartTime >= maxRecordDuration)
         {
             if (showDebugLogs)
-                Debug.Log($"<color=orange>[DualCameraRecorder] 최대 녹화 시간 도달 ({maxRecordDuration}초)</color>");
+                ChunaLogger.Log($"<color=orange>[DualCameraRecorder] 최대 녹화 시간 도달 ({maxRecordDuration}초)</color>");
             StopRecording();
             return;
         }
@@ -185,7 +185,7 @@ public class DualCameraRecorder : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[DualCameraRecorder] RenderTexture 초기화 완료 ({recordWidth}x{recordHeight})</color>");
+            ChunaLogger.Log($"<color=cyan>[DualCameraRecorder] RenderTexture 초기화 완료 ({recordWidth}x{recordHeight})</color>");
     }
 
     private void CleanupRenderTextures()
@@ -223,7 +223,7 @@ public class DualCameraRecorder : MonoBehaviour
         catch (Exception e)
         {
             if (showDebugLogs)
-                Debug.LogWarning($"[DualCameraRecorder] 시나리오 이벤트 구독 실패: {e.Message}");
+                ChunaLogger.LogWarning($"[DualCameraRecorder] 시나리오 이벤트 구독 실패: {e.Message}");
         }
     }
 
@@ -244,7 +244,7 @@ public class DualCameraRecorder : MonoBehaviour
         if (autoSaveOnSceneChange && isRecording)
         {
             if (showDebugLogs)
-                Debug.Log($"<color=orange>[DualCameraRecorder] 씬 언로드 감지 - 녹화 저장</color>");
+                ChunaLogger.Log($"<color=orange>[DualCameraRecorder] 씬 언로드 감지 - 녹화 저장</color>");
             StopRecording();
         }
     }
@@ -276,13 +276,13 @@ public class DualCameraRecorder : MonoBehaviour
         if (isRecording)
         {
             if (showDebugLogs)
-                Debug.LogWarning("[DualCameraRecorder] 이미 녹화 중입니다.");
+                ChunaLogger.LogWarning("[DualCameraRecorder] 이미 녹화 중입니다.");
             return;
         }
 
         if (recordCamera1 == null && recordCamera2 == null)
         {
-            Debug.LogError("[DualCameraRecorder] 녹화 카메라가 설정되지 않았습니다!");
+            ChunaLogger.LogError("[DualCameraRecorder] 녹화 카메라가 설정되지 않았습니다!");
             return;
         }
 
@@ -306,7 +306,7 @@ public class DualCameraRecorder : MonoBehaviour
         if (recordCamera2 != null) recordCamera2.enabled = true;
 
         if (showDebugLogs)
-            Debug.Log($"<color=green>[DualCameraRecorder] 녹화 시작: {currentSessionPath}</color>");
+            ChunaLogger.Log($"<color=green>[DualCameraRecorder] 녹화 시작: {currentSessionPath}</color>");
 
         OnRecordingStarted?.Invoke();
     }
@@ -323,7 +323,7 @@ public class DualCameraRecorder : MonoBehaviour
         float duration = Time.time - recordStartTime;
 
         if (showDebugLogs)
-            Debug.Log($"<color=green>[DualCameraRecorder] 녹화 중지: {frameCount}프레임, {duration:F1}초</color>");
+            ChunaLogger.Log($"<color=green>[DualCameraRecorder] 녹화 중지: {frameCount}프레임, {duration:F1}초</color>");
 
         // 남은 큐 처리 대기
         StartCoroutine(WaitForSaveComplete());
@@ -344,7 +344,7 @@ public class DualCameraRecorder : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"<color=green>[DualCameraRecorder] 모든 프레임 저장 완료: {currentSessionPath}</color>");
+            ChunaLogger.Log($"<color=green>[DualCameraRecorder] 모든 프레임 저장 완료: {currentSessionPath}</color>");
     }
 
     /// <summary>
@@ -393,7 +393,7 @@ public class DualCameraRecorder : MonoBehaviour
             if (request.hasError)
             {
                 if (showDebugLogs)
-                    Debug.LogWarning($"[DualCameraRecorder] GPU 읽기 오류 (카메라 {cameraIndex})");
+                    ChunaLogger.LogWarning($"[DualCameraRecorder] GPU 읽기 오류 (카메라 {cameraIndex})");
                 // 인코딩 플래그 해제
                 if (cameraIndex == 1) isEncoding1 = false;
                 else isEncoding2 = false;
@@ -522,7 +522,7 @@ public class DualCameraRecorder : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"[DualCameraRecorder] 프레임 저장 오류: {e.Message}");
+            ChunaLogger.LogError($"[DualCameraRecorder] 프레임 저장 오류: {e.Message}");
         }
     }
     #endregion
@@ -602,7 +602,7 @@ public class DualCameraRecorder : MonoBehaviour
     {
         if (isRecording)
         {
-            Debug.LogWarning("[DualCameraRecorder] 녹화 중에는 해상도를 변경할 수 없습니다.");
+            ChunaLogger.LogWarning("[DualCameraRecorder] 녹화 중에는 해상도를 변경할 수 없습니다.");
             return;
         }
 

@@ -12,7 +12,6 @@ public class ScenarioSystemInitializer : MonoBehaviour
     [SerializeField] private ScenarioUIController uiController;    
     
     [Header("Settings")]
-    [SerializeField] private int initialScenarioNo = 1;
     [SerializeField] private bool autoStart = false;
     
     private void Start()
@@ -32,12 +31,12 @@ public class ScenarioSystemInitializer : MonoBehaviour
     {
         // 컴포넌트 자동 찾기
         if (scenarioManager == null)
-            scenarioManager = FindObjectOfType<ScenarioManager>();
-        
+            scenarioManager = FindFirstObjectByType<ScenarioManager>();
+
         if (uiController == null)
-            uiController = FindObjectOfType<ScenarioUIController>();
-        
-        Debug.Log("[ScenarioSystem] 초기화 완료");
+            uiController = FindFirstObjectByType<ScenarioUIController>();
+
+        ChunaLogger.Log("[ScenarioSystem] 초기화 완료");
     }
     
     /// <summary>
@@ -51,7 +50,7 @@ public class ScenarioSystemInitializer : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[ScenarioSystem] ScenarioManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ScenarioSystem] ScenarioManager를 찾을 수 없습니다!");
         }
     }
     

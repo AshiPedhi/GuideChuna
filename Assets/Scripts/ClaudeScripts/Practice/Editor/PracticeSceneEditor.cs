@@ -55,14 +55,14 @@ public class PracticeSceneEditor : EditorWindow
         PracticeManager existing = Object.FindFirstObjectByType<PracticeManager>();
         if (existing != null)
         {
-            Debug.Log("[PracticeEditor] PracticeManager already exists");
+            ChunaLogger.Log("[PracticeEditor] PracticeManager already exists");
             return existing.gameObject;
         }
 
         GameObject managerObj = new GameObject("PracticeManager");
         managerObj.AddComponent<PracticeManager>();
 
-        Debug.Log("[PracticeEditor] PracticeManager created");
+        ChunaLogger.Log("[PracticeEditor] PracticeManager created");
         return managerObj;
     }
 
@@ -79,7 +79,7 @@ public class PracticeSceneEditor : EditorWindow
         {
             scenarioManager.enabled = false;
             disabledCount++;
-            Debug.Log("[PracticeEditor] ScenarioManager disabled");
+            ChunaLogger.Log("[PracticeEditor] ScenarioManager disabled");
         }
 
         // ScenarioConditionManager 비활성화
@@ -88,7 +88,7 @@ public class PracticeSceneEditor : EditorWindow
         {
             conditionManager.enabled = false;
             disabledCount++;
-            Debug.Log("[PracticeEditor] ScenarioConditionManager disabled");
+            ChunaLogger.Log("[PracticeEditor] ScenarioConditionManager disabled");
         }
 
         // TrainingResultTracker 비활성화
@@ -97,7 +97,7 @@ public class PracticeSceneEditor : EditorWindow
         {
             resultTracker.enabled = false;
             disabledCount++;
-            Debug.Log("[PracticeEditor] TrainingResultTracker disabled");
+            ChunaLogger.Log("[PracticeEditor] TrainingResultTracker disabled");
         }
 
         // QuizPanel 게임오브젝트 비활성화
@@ -106,7 +106,7 @@ public class PracticeSceneEditor : EditorWindow
         {
             quizPanel.gameObject.SetActive(false);
             disabledCount++;
-            Debug.Log("[PracticeEditor] QuizPanel disabled");
+            ChunaLogger.Log("[PracticeEditor] QuizPanel disabled");
         }
 
         // 결과 패널 비활성화
@@ -116,10 +116,10 @@ public class PracticeSceneEditor : EditorWindow
         {
             panel.SetActive(false);
             disabledCount++;
-            Debug.Log($"[PracticeEditor] {panel.name} disabled");
+            ChunaLogger.Log($"[PracticeEditor] {panel.name} disabled");
         }
 
-        Debug.Log($"[PracticeEditor] Disabled {disabledCount} conflicting components");
+        ChunaLogger.Log($"[PracticeEditor] Disabled {disabledCount} conflicting components");
     }
 
     private static GameObject CreatePracticeUI()
@@ -128,7 +128,7 @@ public class PracticeSceneEditor : EditorWindow
         PracticeUI existing = Object.FindFirstObjectByType<PracticeUI>();
         if (existing != null)
         {
-            Debug.Log("[PracticeEditor] PracticeUI already exists");
+            ChunaLogger.Log("[PracticeEditor] PracticeUI already exists");
             return existing.gameObject;
         }
 
@@ -164,7 +164,7 @@ public class PracticeSceneEditor : EditorWindow
         // UI 요소들 생성
         CreateUIElements(canvasObj.transform, practiceUI);
 
-        Debug.Log("[PracticeEditor] PracticeUI created");
+        ChunaLogger.Log("[PracticeEditor] PracticeUI created");
         return canvasObj;
     }
 
@@ -355,7 +355,7 @@ public class PracticeSceneEditor : EditorWindow
             }
             lfdSO.ApplyModifiedProperties();
 
-            Debug.Log("[PracticeEditor] LateralFlexionDetector created");
+            ChunaLogger.Log("[PracticeEditor] LateralFlexionDetector created");
         }
     }
 
@@ -372,7 +372,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = infoPanelController;
-                Debug.Log("[PracticeEditor] InfoPanelController connected");
+                ChunaLogger.Log("[PracticeEditor] InfoPanelController connected");
             }
         }
 
@@ -383,7 +383,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = scenarioGuideUIController;
-                Debug.Log("[PracticeEditor] ScenarioGuideUIController connected");
+                ChunaLogger.Log("[PracticeEditor] ScenarioGuideUIController connected");
             }
         }
 
@@ -394,7 +394,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = practiceSettingsController;
-                Debug.Log("[PracticeEditor] PracticeSettingsController connected");
+                ChunaLogger.Log("[PracticeEditor] PracticeSettingsController connected");
             }
         }
 
@@ -406,7 +406,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = chunaEvaluator;
-                Debug.Log("[PracticeEditor] ChunaPathEvaluator connected");
+                ChunaLogger.Log("[PracticeEditor] ChunaPathEvaluator connected");
             }
         }
 
@@ -418,7 +418,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = exitPopup;
-                Debug.Log("[PracticeEditor] ExitPopupController connected");
+                ChunaLogger.Log("[PracticeEditor] ExitPopupController connected");
             }
         }
 
@@ -433,7 +433,7 @@ public class PracticeSceneEditor : EditorWindow
             if (prop != null)
             {
                 prop.objectReferenceValue = scenarioProgressUI;
-                Debug.Log("[PracticeEditor] ScenarioProgressUI connected");
+                ChunaLogger.Log("[PracticeEditor] ScenarioProgressUI connected");
             }
         }
 
@@ -468,7 +468,7 @@ public class PracticeSceneEditor : EditorWindow
             {
                 ppd = patient.AddComponent<PatientPositionDetector>();
                 ppd.SetPracticeManager(pm);
-                Debug.Log("[PracticeEditor] PatientPositionDetector added to Patient");
+                ChunaLogger.Log("[PracticeEditor] PatientPositionDetector added to Patient");
             }
         }
 
@@ -495,7 +495,7 @@ public class PracticeSceneEditor : EditorWindow
                     diffToggleProp.InsertArrayElementAtIndex(i);
                     diffToggleProp.GetArrayElementAtIndex(i).objectReferenceValue = difficultyToggles[i];
                 }
-                Debug.Log($"[PracticeEditor] Found {difficultyToggles.Count} difficulty toggles");
+                ChunaLogger.Log($"[PracticeEditor] Found {difficultyToggles.Count} difficulty toggles");
             }
         }
 
@@ -507,7 +507,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("practiceToggle");
             if (prop != null)
                 prop.objectReferenceValue = practiceToggle;
-            Debug.Log("[PracticeEditor] Practice toggle found");
+            ChunaLogger.Log("[PracticeEditor] Practice toggle found");
         }
 
         // 평가모드 토글 찾기
@@ -518,7 +518,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("evaluationToggle");
             if (prop != null)
                 prop.objectReferenceValue = evaluationToggle;
-            Debug.Log("[PracticeEditor] Evaluation toggle found");
+            ChunaLogger.Log("[PracticeEditor] Evaluation toggle found");
         }
 
         // 콘텐츠 토글들 찾기
@@ -529,7 +529,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("skeletonToggle");
             if (prop != null)
                 prop.objectReferenceValue = skeletonToggle;
-            Debug.Log("[PracticeEditor] Skeleton toggle found");
+            ChunaLogger.Log("[PracticeEditor] Skeleton toggle found");
         }
 
         var expertVideoToggle = allToggles.FirstOrDefault(t =>
@@ -539,7 +539,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("expertVideoToggle");
             if (prop != null)
                 prop.objectReferenceValue = expertVideoToggle;
-            Debug.Log("[PracticeEditor] Expert video toggle found");
+            ChunaLogger.Log("[PracticeEditor] Expert video toggle found");
         }
 
         var resultToggle = allToggles.FirstOrDefault(t =>
@@ -549,7 +549,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("resultToggle");
             if (prop != null)
                 prop.objectReferenceValue = resultToggle;
-            Debug.Log("[PracticeEditor] Result toggle found");
+            ChunaLogger.Log("[PracticeEditor] Result toggle found");
         }
 
         // 메뉴 토글들 찾기
@@ -560,7 +560,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("settingsToggle");
             if (prop != null)
                 prop.objectReferenceValue = settingsToggle;
-            Debug.Log("[PracticeEditor] Settings toggle found");
+            ChunaLogger.Log("[PracticeEditor] Settings toggle found");
         }
 
         var mainMenuToggle = allToggles.FirstOrDefault(t =>
@@ -571,7 +571,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("mainMenuToggle");
             if (prop != null)
                 prop.objectReferenceValue = mainMenuToggle;
-            Debug.Log("[PracticeEditor] Main menu toggle found");
+            ChunaLogger.Log("[PracticeEditor] Main menu toggle found");
         }
 
         // 시작 토글 찾기 (ScenarioGuideUIController)
@@ -582,7 +582,7 @@ public class PracticeSceneEditor : EditorWindow
             var prop = so.FindProperty("startToggle");
             if (prop != null)
                 prop.objectReferenceValue = startToggle;
-            Debug.Log("[PracticeEditor] Start toggle found");
+            ChunaLogger.Log("[PracticeEditor] Start toggle found");
         }
 
         // Grabbable UI 찾기
@@ -604,7 +604,7 @@ public class PracticeSceneEditor : EditorWindow
             {
                 ugd = uiGrabbable.gameObject.AddComponent<UIGrabDetector>();
                 ugd.SetPracticeManager(pm);
-                Debug.Log("[PracticeEditor] UIGrabDetector added to Grabbable UI");
+                ChunaLogger.Log("[PracticeEditor] UIGrabDetector added to Grabbable UI");
             }
         }
 
@@ -645,7 +645,7 @@ public class PracticeSceneEditor : EditorWindow
             {
                 System.IO.File.Copy(fullSourcePath, fullDestPath, true);
                 AssetDatabase.Refresh();
-                Debug.Log("[PracticeEditor] Practice_Scene.unity created");
+                ChunaLogger.Log("[PracticeEditor] Practice_Scene.unity created");
             }
         }
 

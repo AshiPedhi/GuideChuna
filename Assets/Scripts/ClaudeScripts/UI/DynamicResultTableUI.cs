@@ -24,7 +24,7 @@ using TMPro;
 /// │  종합 결과  │ 수행시간 | 전체유사도 | 경고 | 스킵 | ...  │
 /// └─────────────┴────────────────────────────────────────────┘
 /// </summary>
-public class DynamicResultTableUI : MonoBehaviour
+public class DynamicResultTableUI : BaseUIPanel
 {
     #region Inspector 설정
     [Header("═══ 데이터 소스 ═══")]
@@ -76,6 +76,8 @@ public class DynamicResultTableUI : MonoBehaviour
     [SerializeField] private float refreshInterval = 1f;
     #endregion
 
+    protected override GameObject GetPanelObject() => gameObject;
+
     #region Private Fields
     // 생성된 UI 요소들
     private List<GameObject> generatedPhaseHeaders = new List<GameObject>();
@@ -96,9 +98,9 @@ public class DynamicResultTableUI : MonoBehaviour
     void Awake()
     {
         if (resultTracker == null)
-            resultTracker = FindObjectOfType<TrainingResultTracker>();
+            resultTracker = FindFirstObjectByType<TrainingResultTracker>();
 
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+        scenarioManager = FindFirstObjectByType<ScenarioManager>();
     }
 
     void OnEnable()
@@ -141,7 +143,7 @@ public class DynamicResultTableUI : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[DynamicResultTable] 이벤트 구독 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[DynamicResultTable] 이벤트 구독 실패: {e.Message}");
         }
     }
 
@@ -156,7 +158,7 @@ public class DynamicResultTableUI : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[DynamicResultTable] 이벤트 해제 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[DynamicResultTable] 이벤트 해제 실패: {e.Message}");
         }
     }
     #endregion
@@ -201,7 +203,7 @@ public class DynamicResultTableUI : MonoBehaviour
     {
         if (scenario == null)
         {
-            Debug.LogWarning("[DynamicResultTable] 시나리오 데이터가 없습니다.");
+            ChunaLogger.LogWarning("[DynamicResultTable] 시나리오 데이터가 없습니다.");
             return;
         }
 
@@ -217,7 +219,7 @@ public class DynamicResultTableUI : MonoBehaviour
         // 데이터 행 생성 (Step별 행)
         CreateDataRows();
 
-        Debug.Log($"[DynamicResultTable] 테이블 생성 완료 - Phase: {phaseNames.Count}개, Step: {stepNames.Count}개");
+        ChunaLogger.Log($"[DynamicResultTable] 테이블 생성 완료 - Phase: {phaseNames.Count}개, Step: {stepNames.Count}개");
     }
 
     /// <summary>
@@ -275,7 +277,7 @@ public class DynamicResultTableUI : MonoBehaviour
     {
         if (headerRowContainer == null || phaseHeaderCellPrefab == null)
         {
-            Debug.LogWarning("[DynamicResultTable] 헤더 컨테이너 또는 프리팹이 없습니다.");
+            ChunaLogger.LogWarning("[DynamicResultTable] 헤더 컨테이너 또는 프리팹이 없습니다.");
             return;
         }
 
@@ -302,7 +304,7 @@ public class DynamicResultTableUI : MonoBehaviour
     {
         if (dataRowContainer == null)
         {
-            Debug.LogWarning("[DynamicResultTable] 데이터 행 컨테이너가 없습니다.");
+            ChunaLogger.LogWarning("[DynamicResultTable] 데이터 행 컨테이너가 없습니다.");
             return;
         }
 
@@ -478,7 +480,7 @@ public class DynamicResultTableUI : MonoBehaviour
     {
         if (resultTracker == null)
         {
-            resultTracker = FindObjectOfType<TrainingResultTracker>();
+            resultTracker = FindFirstObjectByType<TrainingResultTracker>();
             if (resultTracker == null) return;
         }
 

@@ -47,7 +47,7 @@ public class SystemKeyboardBridge : MonoBehaviour
         );
 
         isKeyboardOpen = true;
-        Debug.Log($"[SystemKeyboard] Opened with: {initialText}");
+        ChunaLogger.Log($"[SystemKeyboard] Opened with: {initialText}");
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public class SystemKeyboardBridge : MonoBehaviour
                 }
             }
 
-            Debug.Log($"[SystemKeyboard] Done: {text}");
+            ChunaLogger.Log($"[SystemKeyboard] Done: {text}");
 
             keyboard = null;
             isKeyboardOpen = false;
@@ -80,7 +80,7 @@ public class SystemKeyboardBridge : MonoBehaviour
         // 취소
         if (keyboard.status == TouchScreenKeyboard.Status.Canceled)
         {
-            Debug.Log("[SystemKeyboard] Canceled");
+            ChunaLogger.Log("[SystemKeyboard] Canceled");
 
             keyboard = null;
             isKeyboardOpen = false;

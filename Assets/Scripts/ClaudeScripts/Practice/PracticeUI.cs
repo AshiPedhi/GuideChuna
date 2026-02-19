@@ -35,9 +35,6 @@ public class PracticeUI : MonoBehaviour
     [SerializeField] private Color completeColor = new Color(0.2f, 1f, 0.4f);
     [SerializeField] private Color warningColor = new Color(1f, 0.8f, 0.2f);
 
-    [Header("=== 애니메이션 ===")]
-    [SerializeField] private float fadeSpeed = 2f;
-
     private Coroutine stepCompleteCoroutine;
 
     void Start()
@@ -71,7 +68,7 @@ public class PracticeUI : MonoBehaviour
         HideStepComplete();
         HideComplete();
 
-        Debug.Log($"[PracticeUI] Step: {title}");
+        ChunaLogger.Log($"[PracticeUI] Step: {title}");
     }
 
     /// <summary>
@@ -169,7 +166,7 @@ public class PracticeUI : MonoBehaviour
                 completeMessageText.text = message;
         }
 
-        Debug.Log($"[PracticeUI] Complete: {title}");
+        ChunaLogger.Log($"[PracticeUI] Complete: {title}");
     }
 
     private void HideComplete()

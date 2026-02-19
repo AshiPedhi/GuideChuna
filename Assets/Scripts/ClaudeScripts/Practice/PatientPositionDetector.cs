@@ -48,7 +48,7 @@ public class PatientPositionDetector : MonoBehaviour
         if (positionDelta > positionThreshold || rotationDelta > rotationThreshold)
         {
             if (showDebugLogs)
-                Debug.Log($"[PatientPosition] Changed! Pos: {positionDelta:F3}m, Rot: {rotationDelta:F1}°");
+                ChunaLogger.Log($"[PatientPosition] Changed! Pos: {positionDelta:F3}m, Rot: {rotationDelta:F1}°");
 
             NotifyPracticeManager();
             hasNotified = true;
@@ -62,11 +62,11 @@ public class PatientPositionDetector : MonoBehaviour
             practiceManager.OnPatientPositionChanged();
 
             if (showDebugLogs)
-                Debug.Log("[PatientPosition] Notified PracticeManager");
+                ChunaLogger.Log("[PatientPosition] Notified PracticeManager");
         }
         else
         {
-            Debug.LogWarning("[PatientPosition] PracticeManager not assigned!");
+            ChunaLogger.LogWarning("[PatientPosition] PracticeManager not assigned!");
         }
     }
 
@@ -80,7 +80,7 @@ public class PatientPositionDetector : MonoBehaviour
         hasNotified = false;
 
         if (showDebugLogs)
-            Debug.Log("[PatientPosition] Detection reset");
+            ChunaLogger.Log("[PatientPosition] Detection reset");
     }
 
     /// <summary>

@@ -78,7 +78,7 @@ public class TrainingResultTracker : MonoBehaviour
     void Awake()
     {
         if (pathEvaluator == null)
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
 
         if (warningAudioSource == null)
             warningAudioSource = GetComponent<AudioSource>();
@@ -94,12 +94,12 @@ public class TrainingResultTracker : MonoBehaviour
         // 초기화 상태 로그
         if (showDebugLogs)
         {
-            Debug.Log($"<color=cyan>[TrainingResultTracker] Awake 초기화</color>");
-            Debug.Log($"  - pathEvaluator: {(pathEvaluator != null ? "✓" : "✗ NULL")}");
-            Debug.Log($"  - warningAudioSource: {(warningAudioSource != null ? "✓" : "✗ NULL")}");
-            Debug.Log($"  - approachBeepClip: {(approachBeepClip != null ? "✓" : "✗ 미할당")}");
-            Debug.Log($"  - holdCompleteClip: {(holdCompleteClip != null ? "✓" : "✗ 미할당")}");
-            Debug.Log($"  - enableWarningAudio: {enableWarningAudio}");
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] Awake 초기화</color>");
+            ChunaLogger.Log($"  - pathEvaluator: {(pathEvaluator != null ? "✓" : "✗ NULL")}");
+            ChunaLogger.Log($"  - warningAudioSource: {(warningAudioSource != null ? "✓" : "✗ NULL")}");
+            ChunaLogger.Log($"  - approachBeepClip: {(approachBeepClip != null ? "✓" : "✗ 미할당")}");
+            ChunaLogger.Log($"  - holdCompleteClip: {(holdCompleteClip != null ? "✓" : "✗ 미할당")}");
+            ChunaLogger.Log($"  - enableWarningAudio: {enableWarningAudio}");
         }
     }
 
@@ -109,7 +109,7 @@ public class TrainingResultTracker : MonoBehaviour
 
         if (showDebugLogs && pathEvaluator == null)
         {
-            Debug.LogWarning("<color=orange>[TrainingResultTracker] pathEvaluator가 없어서 이벤트를 구독할 수 없습니다!</color>");
+            ChunaLogger.LogWarning("<color=orange>[TrainingResultTracker] pathEvaluator가 없어서 이벤트를 구독할 수 없습니다!</color>");
         }
     }
 
@@ -173,7 +173,7 @@ public class TrainingResultTracker : MonoBehaviour
             resultData.RecordWarning(currentPhaseName, currentStepName);
 
             if (showDebugLogs)
-                Debug.Log($"<color=red>[TrainingResultTracker] 경고 기록: {currentPhaseName}/{currentStepName} (비율: {ratio:P0})</color>");
+                ChunaLogger.Log($"<color=red>[TrainingResultTracker] 경고 기록: {currentPhaseName}/{currentStepName} (비율: {ratio:P0})</color>");
 
             OnWarningRecorded?.Invoke(currentPhaseName, currentStepName);
         }
@@ -239,7 +239,7 @@ public class TrainingResultTracker : MonoBehaviour
         PlayHoldCompleteSound();
 
         if (showDebugLogs)
-            Debug.Log("<color=green>[TrainingResultTracker] 홀드 완료 - 딩동!</color>");
+            ChunaLogger.Log("<color=green>[TrainingResultTracker] 홀드 완료 - 딩동!</color>");
     }
 
     // ========== 접근 경고 시스템 ==========
@@ -305,7 +305,7 @@ public class TrainingResultTracker : MonoBehaviour
                 lastBeepTime = Time.time;
 
                 if (showDebugLogs && Time.frameCount % 30 == 0)
-                    Debug.Log($"<color=yellow>[TrainingResultTracker] 접근 경고 비프 (비율: {currentApproachRatio:P0}, 간격: {beepInterval:F2}s)</color>");
+                    ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] 접근 경고 비프 (비율: {currentApproachRatio:P0}, 간격: {beepInterval:F2}s)</color>");
             }
         }
         else
@@ -359,7 +359,7 @@ public class TrainingResultTracker : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log("<color=red>[TrainingResultTracker] 한계 초과 경고음!</color>");
+            ChunaLogger.Log("<color=red>[TrainingResultTracker] 한계 초과 경고음!</color>");
     }
 
     /// <summary>
@@ -416,7 +416,7 @@ public class TrainingResultTracker : MonoBehaviour
         currentApproachRatio = 0f;
 
         if (showDebugLogs)
-            Debug.Log($"<color=green>[TrainingResultTracker] 훈련 추적 시작: {mode} / {difficulty}</color>");
+            ChunaLogger.Log($"<color=green>[TrainingResultTracker] 훈련 추적 시작: {mode} / {difficulty}</color>");
     }
 
     /// <summary>
@@ -430,7 +430,7 @@ public class TrainingResultTracker : MonoBehaviour
         resultData.GetOrCreatePhaseResult(phaseName);
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[TrainingResultTracker] Phase 시작: {phaseName}</color>");
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] Phase 시작: {phaseName}</color>");
     }
 
     /// <summary>
@@ -444,7 +444,7 @@ public class TrainingResultTracker : MonoBehaviour
         resultData.GetOrCreateStepResult(currentPhaseName, stepName);
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[TrainingResultTracker] Step 시작: {stepName}</color>");
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] Step 시작: {stepName}</color>");
     }
 
     /// <summary>
@@ -475,7 +475,7 @@ public class TrainingResultTracker : MonoBehaviour
         isOverLimit = false;
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[TrainingResultTracker] SubStep 시작: {phaseName}/{stepName}</color>");
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] SubStep 시작: {phaseName}/{stepName}</color>");
     }
 
     /// <summary>
@@ -499,7 +499,7 @@ public class TrainingResultTracker : MonoBehaviour
         if (showDebugLogs)
         {
             string status = skipped ? "스킵" : "완료";
-            Debug.Log($"<color=yellow>[TrainingResultTracker] SubStep {status}: {currentStepName} (유사도: {avgSimilarity:P0})</color>");
+            ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] SubStep {status}: {currentStepName} (유사도: {avgSimilarity:P0})</color>");
         }
 
         // 초기화
@@ -531,7 +531,7 @@ public class TrainingResultTracker : MonoBehaviour
         }
 
         // 최종 통계 계산
-        resultData.Finalize();
+        resultData.FinalizeResult();
 
         isTracking = false;
 
@@ -539,7 +539,7 @@ public class TrainingResultTracker : MonoBehaviour
         StopApproachBeep();
 
         if (showDebugLogs)
-            Debug.Log($"<color=green>[TrainingResultTracker] 훈련 추적 종료\n{resultData}</color>");
+            ChunaLogger.Log($"<color=green>[TrainingResultTracker] 훈련 추적 종료\n{resultData}</color>");
 
         OnTrainingCompleted?.Invoke(resultData);
 
@@ -612,7 +612,7 @@ public class TrainingResultTracker : MonoBehaviour
         resultData.RecordWarning(currentPhaseName, currentStepName);
 
         if (showDebugLogs)
-            Debug.Log($"<color=red>[TrainingResultTracker] 경고 수동 기록: {currentPhaseName}/{currentStepName}</color>");
+            ChunaLogger.Log($"<color=red>[TrainingResultTracker] 경고 수동 기록: {currentPhaseName}/{currentStepName}</color>");
 
         OnWarningRecorded?.Invoke(currentPhaseName, currentStepName);
     }

@@ -47,7 +47,7 @@ public class QuizPanel : MonoBehaviour
 
         if (isSkipped)
         {
-            Debug.Log("[QuizPanel] 퀴즈가 스킵 설정되어 있어 표시하지 않습니다.");
+            ChunaLogger.Log("[QuizPanel] 퀴즈가 스킵 설정되어 있어 표시하지 않습니다.");
             OnQuizSkipped?.Invoke();
             return;
         }
@@ -60,7 +60,7 @@ public class QuizPanel : MonoBehaviour
         if (dontShowAgainToggle != null)
             dontShowAgainToggle.isOn = false;
 
-        Debug.Log("[QuizPanel] 퀴즈 패널 표시");
+        ChunaLogger.Log("[QuizPanel] 퀴즈 패널 표시");
     }
 
     /// <summary>
@@ -77,7 +77,7 @@ public class QuizPanel : MonoBehaviour
         // 이벤트 발생
         OnQuizStarted?.Invoke();
 
-        Debug.Log("[QuizPanel] 퀴즈 시작");
+        ChunaLogger.Log("[QuizPanel] 퀴즈 시작");
     }
 
     /// <summary>
@@ -94,7 +94,7 @@ public class QuizPanel : MonoBehaviour
         // 이벤트 발생
         OnQuizSkipped?.Invoke();
 
-        Debug.Log("[QuizPanel] 퀴즈 스킵");
+        ChunaLogger.Log("[QuizPanel] 퀴즈 스킵");
     }
 
     /// <summary>
@@ -106,7 +106,7 @@ public class QuizPanel : MonoBehaviour
         {
             PlayerPrefs.SetInt(playerPrefsKey, 1);
             PlayerPrefs.Save();
-            Debug.Log("[QuizPanel] '다음부터 보지 않기' 설정 저장됨");
+            ChunaLogger.Log("[QuizPanel] '다음부터 보지 않기' 설정 저장됨");
         }
     }
 
@@ -127,7 +127,7 @@ public class QuizPanel : MonoBehaviour
     {
         PlayerPrefs.DeleteKey(playerPrefsKey);
         PlayerPrefs.Save();
-        Debug.Log("[QuizPanel] 스킵 설정 초기화됨");
+        ChunaLogger.Log("[QuizPanel] 스킵 설정 초기화됨");
     }
 
     /// <summary>

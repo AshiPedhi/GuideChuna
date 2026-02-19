@@ -84,13 +84,13 @@ public class PracticeHandRecorder : MonoBehaviour
         // ChunaPathEvaluator 자동 탐색
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         }
 
         // ScenarioManager 자동 탐색
         if (scenarioManager == null)
         {
-            scenarioManager = FindObjectOfType<ScenarioManager>();
+            scenarioManager = FindFirstObjectByType<ScenarioManager>();
         }
     }
 
@@ -102,11 +102,11 @@ public class PracticeHandRecorder : MonoBehaviour
             pathEvaluator.OnUserFrameChanged += OnUserFrameChangedHandler;
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompletedHandler;
             pathEvaluator.OnSubStepStarted += OnSubStepStartedHandler;
-            Debug.Log("<color=cyan>[PracticeHandRecorder] ChunaPathEvaluator 이벤트 연결됨</color>");
+            ChunaLogger.Log("<color=cyan>[PracticeHandRecorder] ChunaPathEvaluator 이벤트 연결됨</color>");
         }
         else
         {
-            Debug.LogWarning("[PracticeHandRecorder] ChunaPathEvaluator를 찾을 수 없습니다.");
+            ChunaLogger.LogWarning("[PracticeHandRecorder] ChunaPathEvaluator를 찾을 수 없습니다.");
         }
     }
 
@@ -161,7 +161,7 @@ public class PracticeHandRecorder : MonoBehaviour
 
         if (hasHandDataInCurrentStep)
         {
-            Debug.Log($"<color=cyan>[PracticeHandRecorder] {currentPhaseName}/{currentStepName}: 핸드 데이터 있음 ({totalHandDataFrames} 프레임) - 녹화 대기</color>");
+            ChunaLogger.Log($"<color=cyan>[PracticeHandRecorder] {currentPhaseName}/{currentStepName}: 핸드 데이터 있음 ({totalHandDataFrames} 프레임) - 녹화 대기</color>");
         }
     }
 
@@ -190,7 +190,7 @@ public class PracticeHandRecorder : MonoBehaviour
         // 마지막 프레임에 도달하면 녹화 종료
         if (currentFrame >= totalFrames - 1)
         {
-            Debug.Log($"<color=yellow>[PracticeHandRecorder] 마지막 프레임 도달 ({currentFrame + 1}/{totalFrames}) - 녹화 종료</color>");
+            ChunaLogger.Log($"<color=yellow>[PracticeHandRecorder] 마지막 프레임 도달 ({currentFrame + 1}/{totalFrames}) - 녹화 종료</color>");
             StopRecordingAndSave();
         }
     }
@@ -213,7 +213,7 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (isRecording)
         {
-            Debug.LogWarning("[PracticeHandRecorder] 이미 녹화 중입니다.");
+            ChunaLogger.LogWarning("[PracticeHandRecorder] 이미 녹화 중입니다.");
             return;
         }
 
@@ -228,7 +228,7 @@ public class PracticeHandRecorder : MonoBehaviour
         isRecording = true;
 
         string fileName = GenerateFileName();
-        Debug.Log($"<color=green>[PracticeHandRecorder] 녹화 시작: {fileName}</color>");
+        ChunaLogger.Log($"<color=green>[PracticeHandRecorder] 녹화 시작: {fileName}</color>");
 
         OnRecordingStarted?.Invoke(fileName);
     }
@@ -240,14 +240,14 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (!isRecording)
         {
-            Debug.LogWarning("[PracticeHandRecorder] 녹화 중이 아닙니다.");
+            ChunaLogger.LogWarning("[PracticeHandRecorder] 녹화 중이 아닙니다.");
             return;
         }
 
         isRecording = false;
 
         float duration = Time.time - recordingStartTime;
-        Debug.Log($"<color=yellow>[PracticeHandRecorder] 녹화 종료: {recordedFrames} 프레임, {duration:F1}초</color>");
+        ChunaLogger.Log($"<color=yellow>[PracticeHandRecorder] 녹화 종료: {recordedFrames} 프레임, {duration:F1}초</color>");
 
         if (recordedFrames > 0)
         {
@@ -256,7 +256,7 @@ public class PracticeHandRecorder : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[PracticeHandRecorder] 녹화된 프레임이 없어 저장하지 않습니다.");
+            ChunaLogger.LogWarning("[PracticeHandRecorder] 녹화된 프레임이 없어 저장하지 않습니다.");
         }
     }
 
@@ -270,7 +270,7 @@ public class PracticeHandRecorder : MonoBehaviour
         isRecording = false;
         recordedData.Clear();
         recordedFrames = 0;
-        Debug.Log("<color=orange>[PracticeHandRecorder] 녹화 취소됨</color>");
+        ChunaLogger.Log("<color=orange>[PracticeHandRecorder] 녹화 취소됨</color>");
     }
 
     private void RecordFrame()
@@ -362,7 +362,7 @@ public class PracticeHandRecorder : MonoBehaviour
     {
         if (recordedData.Count == 0)
         {
-            Debug.LogError("[PracticeHandRecorder] 저장할 데이터가 없습니다.");
+            ChunaLogger.LogError("[PracticeHandRecorder] 저장할 데이터가 없습니다.");
             return;
         }
 
@@ -405,14 +405,14 @@ public class PracticeHandRecorder : MonoBehaviour
             lastSavedFilePath = fullPath;
 
             float fileSize = new FileInfo(fullPath).Length / 1024f;
-            Debug.Log($"<color=green>[PracticeHandRecorder] CSV 저장 완료!</color>\n" +
+            ChunaLogger.Log($"<color=green>[PracticeHandRecorder] CSV 저장 완료!</color>\n" +
                      $"  경로: {fullPath}\n" +
                      $"  프레임: {recordedFrames}\n" +
                      $"  크기: {fileSize:F1} KB");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[PracticeHandRecorder] CSV 저장 실패: {e.Message}");
+            ChunaLogger.LogError($"[PracticeHandRecorder] CSV 저장 실패: {e.Message}");
         }
     }
 
@@ -464,7 +464,7 @@ public class PracticeHandRecorder : MonoBehaviour
         if (!Directory.Exists(folderPath))
         {
             Directory.CreateDirectory(folderPath);
-            Debug.Log($"[PracticeHandRecorder] 저장 폴더 생성: {folderPath}");
+            ChunaLogger.Log($"[PracticeHandRecorder] 저장 폴더 생성: {folderPath}");
         }
     }
 
@@ -510,7 +510,7 @@ public class PracticeHandRecorder : MonoBehaviour
         if (patient != null)
         {
             referencePoint = patient.transform;
-            Debug.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정: {patient.name}</color>");
+            ChunaLogger.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정: {patient.name}</color>");
             return;
         }
 
@@ -522,12 +522,12 @@ public class PracticeHandRecorder : MonoBehaviour
             if (obj != null)
             {
                 referencePoint = obj.transform;
-                Debug.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정 (이름): {obj.name}</color>");
+                ChunaLogger.Log($"<color=green>[PracticeHandRecorder] 환자 기준점 자동 설정 (이름): {obj.name}</color>");
                 return;
             }
         }
 
-        Debug.LogWarning("[PracticeHandRecorder] 환자 기준점을 찾을 수 없습니다. 월드 좌표로 녹화됩니다.");
+        ChunaLogger.LogWarning("[PracticeHandRecorder] 환자 기준점을 찾을 수 없습니다. 월드 좌표로 녹화됩니다.");
     }
 
     // === Public API ===
@@ -540,7 +540,7 @@ public class PracticeHandRecorder : MonoBehaviour
     public void SetAutoRecordEnabled(bool enabled)
     {
         autoRecordEnabled = enabled;
-        Debug.Log($"[PracticeHandRecorder] 자동 녹화: {(enabled ? "활성화" : "비활성화")}");
+        ChunaLogger.Log($"[PracticeHandRecorder] 자동 녹화: {(enabled ? "활성화" : "비활성화")}");
     }
 
     public void SetReferencePoint(Transform reference)

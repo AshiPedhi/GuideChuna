@@ -96,7 +96,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+        scenarioManager = FindFirstObjectByType<ScenarioManager>();
 
         // 시작 토글 이벤트 연결
         if (startToggle != null)
@@ -192,7 +192,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         currentPhaseName = phase.phaseName;
         UpdatePhaseImages();
 
-        Debug.Log($"[GuideUI] Phase 변경: {currentPhaseName}");
+        ChunaLogger.Log($"[GuideUI] Phase 변경: {currentPhaseName}");
     }
 
     /// <summary>
@@ -208,7 +208,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         UpdateStepName(step);
         UpdateStartToggleVisibility(step);
 
-        Debug.Log($"[GuideUI] Step 변경: {step.stepName}");
+        ChunaLogger.Log($"[GuideUI] Step 변경: {step.stepName}");
     }
 
     /// <summary>
@@ -225,7 +225,7 @@ public class ScenarioGuideUIController : MonoBehaviour
             if (!scenarioManager.CurrentStep.IsGuideStep())
             {
                 startToggleObject.SetActive(false);
-                Debug.Log("[GuideUI] SubStep 시작 - 시작 토글 숨김 (가이드 스텝 아님)");
+                ChunaLogger.Log("[GuideUI] SubStep 시작 - 시작 토글 숨김 (가이드 스텝 아님)");
             }
         }
 
@@ -251,7 +251,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (scenarioManager != null && scenarioManager.CurrentStep != null && scenarioManager.CurrentStep.IsGuideStep())
         {
             HideProgressCircle();
-            Debug.Log("[GuideUI] 가이드 스텝 - ProgressCircle 숨김 (duration 무시)");
+            ChunaLogger.Log("[GuideUI] 가이드 스텝 - ProgressCircle 숨김 (duration 무시)");
             return;
         }
 
@@ -260,7 +260,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (subStep.HasNarration())
         {
             HideProgressCircle();
-            Debug.Log("[GuideUI] 나래이션 존재 - ProgressCircle 숨김 (나래이션 완료까지 대기)");
+            ChunaLogger.Log("[GuideUI] 나래이션 존재 - ProgressCircle 숨김 (나래이션 완료까지 대기)");
             return;
         }
 
@@ -269,7 +269,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (subStep.HasHandTracking())
         {
             HideProgressCircle();
-            Debug.Log("[GuideUI] HandTracking 존재 - ProgressCircle 숨김 (HoldProgressIndicator가 홀드 표시)");
+            ChunaLogger.Log("[GuideUI] HandTracking 존재 - ProgressCircle 숨김 (HoldProgressIndicator가 홀드 표시)");
             return;
         }
 
@@ -307,7 +307,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (durationText != null)
             durationText.gameObject.SetActive(true);
 
-        Debug.Log($"[GuideUI] 진행 시작: {duration}초");
+        ChunaLogger.Log($"[GuideUI] 진행 시작: {duration}초");
     }
 
     /// <summary>
@@ -346,7 +346,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (completeIcon != null)
             completeIcon.SetActive(true);
 
-        Debug.Log($"[GuideUI] 진행 완료");
+        ChunaLogger.Log($"[GuideUI] 진행 완료");
     }
 
     /// <summary>
@@ -359,7 +359,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         isProgressActive = false;
         progressCircleObject.SetActive(false);
 
-        Debug.Log($"[GuideUI] ProgressCircle 숨김");
+        ChunaLogger.Log($"[GuideUI] ProgressCircle 숨김");
     }
 
     /// <summary>
@@ -540,7 +540,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         // 토글이 켜졌을 때만 다음 단계로 진행
         if (isOn && scenarioManager != null)
         {
-            Debug.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
+            ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
             scenarioManager.NextSubStep();
 
             // 토글 상태 초기화 (다음 클릭을 위해)
@@ -609,7 +609,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         if (startToggleObject == null) return;
 
-        Debug.Log("<color=yellow>[GuideUI] 시작 토글 강제 활성화 (20초 타임아웃)</color>");
+        ChunaLogger.Log("<color=yellow>[GuideUI] 시작 토글 강제 활성화 (20초 타임아웃)</color>");
 
         // ProgressCircle 숨김
         HideProgressCircle();
@@ -638,7 +638,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (startToggle != null)
         {
             startToggle.isOn = false;
-            Debug.Log("[GuideUI] 시작 토글 초기화 (off)");
+            ChunaLogger.Log("[GuideUI] 시작 토글 초기화 (off)");
         }
     }
 
@@ -654,7 +654,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (guideContentSection != null)
         {
             guideContentSection.SetActive(false);
-            Debug.Log("[GuideUI] 가이드 콘텐츠 숨김");
+            ChunaLogger.Log("[GuideUI] 가이드 콘텐츠 숨김");
         }
     }
 
@@ -666,7 +666,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (guideContentSection != null)
         {
             guideContentSection.SetActive(true);
-            Debug.Log("[GuideUI] 가이드 콘텐츠 복원");
+            ChunaLogger.Log("[GuideUI] 가이드 콘텐츠 복원");
         }
     }
 

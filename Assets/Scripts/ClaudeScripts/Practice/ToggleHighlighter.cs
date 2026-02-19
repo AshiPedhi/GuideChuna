@@ -37,7 +37,7 @@ public class ToggleHighlighter : MonoBehaviour
     {
         if (toggles == null || toggles.Count == 0)
         {
-            Debug.LogWarning("[ToggleHighlighter] No toggles to highlight");
+            ChunaLogger.LogWarning("[ToggleHighlighter] No toggles to highlight");
             return;
         }
 
@@ -67,7 +67,7 @@ public class ToggleHighlighter : MonoBehaviour
         HighlightCurrentToggle();
 
         if (showDebugLogs)
-            Debug.Log($"[ToggleHighlighter] Started highlighting {targetToggles.Count} toggles");
+            ChunaLogger.Log($"[ToggleHighlighter] Started highlighting {targetToggles.Count} toggles");
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public class ToggleHighlighter : MonoBehaviour
         if (currentToggleIndex < targetToggles.Count && targetToggles[currentToggleIndex] == clickedToggle)
         {
             if (showDebugLogs)
-                Debug.Log($"[ToggleHighlighter] Toggle {currentToggleIndex + 1}/{targetToggles.Count} clicked: {clickedToggle.name}");
+                ChunaLogger.Log($"[ToggleHighlighter] Toggle {currentToggleIndex + 1}/{targetToggles.Count} clicked: {clickedToggle.name}");
 
             // 현재 토글 원래 색상으로 복원
             RestoreToggleColor(clickedToggle);
@@ -132,7 +132,7 @@ public class ToggleHighlighter : MonoBehaviour
             {
                 // 모든 토글 클릭 완료
                 if (showDebugLogs)
-                    Debug.Log("[ToggleHighlighter] All toggles clicked!");
+                    ChunaLogger.Log("[ToggleHighlighter] All toggles clicked!");
 
                 StopHighlighting();
                 OnAllTogglesClicked?.Invoke();
@@ -160,7 +160,7 @@ public class ToggleHighlighter : MonoBehaviour
                 blinkCoroutine = StartCoroutine(BlinkToggle(currentToggle));
 
                 if (showDebugLogs)
-                    Debug.Log($"[ToggleHighlighter] Now highlighting: {currentToggle.name} ({currentToggleIndex + 1}/{targetToggles.Count})");
+                    ChunaLogger.Log($"[ToggleHighlighter] Now highlighting: {currentToggle.name} ({currentToggleIndex + 1}/{targetToggles.Count})");
             }
         }
     }

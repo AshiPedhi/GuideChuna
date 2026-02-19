@@ -33,8 +33,8 @@ public class ChunaLimitDataCreator : EditorWindow
         AssetDatabase.SaveAssets();
         AssetDatabase.Refresh();
 
-        Debug.Log("<color=green>[ChunaLimitDataCreator] 4개의 기본 한계 데이터 프리셋이 생성되었습니다.</color>");
-        Debug.Log($"경로: {folderPath}");
+        ChunaLogger.Log("<color=green>[ChunaLimitDataCreator] 4개의 기본 한계 데이터 프리셋이 생성되었습니다.</color>");
+        ChunaLogger.Log($"경로: {folderPath}");
     }
 
     /// <summary>
@@ -45,7 +45,7 @@ public class ChunaLimitDataCreator : EditorWindow
         string path = $"{folderPath}/HealthySideRotation_Limit.asset";
         if (AssetDatabase.LoadAssetAtPath<ChunaLimitData>(path) != null)
         {
-            Debug.Log("건측회전 한계 데이터가 이미 존재합니다.");
+            ChunaLogger.Log("건측회전 한계 데이터가 이미 존재합니다.");
             return;
         }
 
@@ -97,7 +97,7 @@ public class ChunaLimitDataCreator : EditorWindow
         so.ApplyModifiedProperties();
 
         AssetDatabase.CreateAsset(data, path);
-        Debug.Log($"생성됨: {path}");
+        ChunaLogger.Log($"생성됨: {path}");
     }
 
     /// <summary>
@@ -108,7 +108,7 @@ public class ChunaLimitDataCreator : EditorWindow
         string path = $"{folderPath}/AffectedSideRotation_Limit.asset";
         if (AssetDatabase.LoadAssetAtPath<ChunaLimitData>(path) != null)
         {
-            Debug.Log("환측회전 한계 데이터가 이미 존재합니다.");
+            ChunaLogger.Log("환측회전 한계 데이터가 이미 존재합니다.");
             return;
         }
 
@@ -158,7 +158,7 @@ public class ChunaLimitDataCreator : EditorWindow
         so.ApplyModifiedProperties();
 
         AssetDatabase.CreateAsset(data, path);
-        Debug.Log($"생성됨: {path}");
+        ChunaLogger.Log($"생성됨: {path}");
     }
 
     /// <summary>
@@ -169,7 +169,7 @@ public class ChunaLimitDataCreator : EditorWindow
         string path = $"{folderPath}/IsometricExercise_Limit.asset";
         if (AssetDatabase.LoadAssetAtPath<ChunaLimitData>(path) != null)
         {
-            Debug.Log("등척성운동 한계 데이터가 이미 존재합니다.");
+            ChunaLogger.Log("등척성운동 한계 데이터가 이미 존재합니다.");
             return;
         }
 
@@ -228,7 +228,7 @@ public class ChunaLimitDataCreator : EditorWindow
         so.ApplyModifiedProperties();
 
         AssetDatabase.CreateAsset(data, path);
-        Debug.Log($"생성됨: {path}");
+        ChunaLogger.Log($"생성됨: {path}");
     }
 
     /// <summary>
@@ -239,7 +239,7 @@ public class ChunaLimitDataCreator : EditorWindow
         string path = $"{folderPath}/LateralFlexion_Limit.asset";
         if (AssetDatabase.LoadAssetAtPath<ChunaLimitData>(path) != null)
         {
-            Debug.Log("측굴 한계 데이터가 이미 존재합니다.");
+            ChunaLogger.Log("측굴 한계 데이터가 이미 존재합니다.");
             return;
         }
 
@@ -289,7 +289,7 @@ public class ChunaLimitDataCreator : EditorWindow
         so.ApplyModifiedProperties();
 
         AssetDatabase.CreateAsset(data, path);
-        Debug.Log($"생성됨: {path}");
+        ChunaLogger.Log($"생성됨: {path}");
     }
 
     [MenuItem("Tools/Chuna/Open Limit Data Folder")]
@@ -304,7 +304,7 @@ public class ChunaLimitDataCreator : EditorWindow
         }
         else
         {
-            Debug.LogWarning("ChunaLimitData 폴더가 존재하지 않습니다. 먼저 'Create Default Limit Data'를 실행하세요.");
+            ChunaLogger.LogWarning("ChunaLimitData 폴더가 존재하지 않습니다. 먼저 'Create Default Limit Data'를 실행하세요.");
         }
     }
 }

@@ -64,7 +64,7 @@ public class HandFeedbackUI : MonoBehaviour
         // ChunaPathEvaluator 자동 찾기
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
             if (pathEvaluator != null)
             {
                 ChunaLogger.Log("HandFeedbackUI", "ChunaPathEvaluator 자동 연결 성공");

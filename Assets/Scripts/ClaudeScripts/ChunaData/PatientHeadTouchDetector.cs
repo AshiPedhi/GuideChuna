@@ -49,7 +49,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
         var collider = GetComponent<Collider>();
         if (collider != null && !collider.isTrigger)
         {
-            Debug.LogWarning("[PatientHeadTouchDetector] Collider가 Trigger로 설정되어 있지 않습니다. isTrigger를 활성화하세요.");
+            ChunaLogger.LogWarning("[PatientHeadTouchDetector] Collider가 Trigger로 설정되어 있지 않습니다. isTrigger를 활성화하세요.");
         }
 
         // Animator 자동 찾기
@@ -80,7 +80,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
         OnAnimationRatioChanged?.Invoke(currentAnimationRatio);
 
         if (showDebugLogs && Time.frameCount % 30 == 0)
-            Debug.Log($"[PatientHead] 애니메이션: {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
+            ChunaLogger.Log($"[PatientHead] 애니메이션: {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
     }
 
     void OnTriggerEnter(Collider other)
@@ -94,7 +94,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
             OnLeftHandTouchChanged?.Invoke(true);
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[PatientHead] 왼손 접촉!</color>");
+                ChunaLogger.Log("<color=green>[PatientHead] 왼손 접촉!</color>");
         }
         else if (handedness == Handedness.Right && !isRightHandTouching)
         {
@@ -102,7 +102,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
             OnRightHandTouchChanged?.Invoke(true);
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[PatientHead] 오른손 접촉!</color>");
+                ChunaLogger.Log("<color=green>[PatientHead] 오른손 접촉!</color>");
         }
     }
 
@@ -117,7 +117,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
             OnLeftHandTouchChanged?.Invoke(false);
 
             if (showDebugLogs)
-                Debug.Log("<color=orange>[PatientHead] 왼손 떨어짐</color>");
+                ChunaLogger.Log("<color=orange>[PatientHead] 왼손 떨어짐</color>");
         }
         else if (handedness == Handedness.Right && isRightHandTouching)
         {
@@ -125,7 +125,7 @@ public class PatientHeadTouchDetector : MonoBehaviour
             OnRightHandTouchChanged?.Invoke(false);
 
             if (showDebugLogs)
-                Debug.Log("<color=orange>[PatientHead] 오른손 떨어짐</color>");
+                ChunaLogger.Log("<color=orange>[PatientHead] 오른손 떨어짐</color>");
         }
     }
 

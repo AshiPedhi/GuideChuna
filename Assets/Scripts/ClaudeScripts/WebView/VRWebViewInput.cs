@@ -53,7 +53,6 @@ public class VRWebViewInput : MonoBehaviour
     private OVRHand activeHand;
     private OVRSkeleton activeSkeleton;
     private Vector2 lastTouchPoint;
-    private bool isInitialized = false;
 
     void Start()
     {
@@ -66,78 +65,77 @@ public class VRWebViewInput : MonoBehaviour
     /// </summary>
     private System.Collections.IEnumerator InitializeWebView()
     {
-        Debug.Log("[VRWebView] === INIT START ===");
+        ChunaLogger.Log("[VRWebView] === INIT START ===");
 
         // 1프레임 대기
         yield return null;
 
-        Debug.Log("[VRWebView] Frame waited, checking browser...");
+        ChunaLogger.Log("[VRWebView] Frame waited, checking browser...");
 
         if (browser == null)
         {
-            Debug.LogError("[VRWebView] ERROR: Browser is NULL!");
+            ChunaLogger.LogError("[VRWebView] ERROR: Browser is NULL!");
             yield break;
         }
 
-        Debug.Log("[VRWebView] Browser is valid, getting info...");
+        ChunaLogger.Log("[VRWebView] Browser is valid, getting info...");
 
         // WebView 상태 확인
         try
         {
-            Debug.Log($"[VRWebView] Browser Type: {browser.GetType().Name}");
-            Debug.Log($"[VRWebView] URL: {browser.url}");
-            Debug.Log($"[VRWebView] View Size: {browser.viewSize}");
-            Debug.Log($"[VRWebView] Tex Size: {browser.texSize}");
-            Debug.Log($"[VRWebView] Capture Mode: {browser.captureMode}");
-            Debug.Log($"[VRWebView] Current State: {browser.state}");
+            ChunaLogger.Log($"[VRWebView] Browser Type: {browser.GetType().Name}");
+            ChunaLogger.Log($"[VRWebView] URL: {browser.url}");
+            ChunaLogger.Log($"[VRWebView] View Size: {browser.viewSize}");
+            ChunaLogger.Log($"[VRWebView] Tex Size: {browser.texSize}");
+            ChunaLogger.Log($"[VRWebView] Capture Mode: {browser.captureMode}");
+            ChunaLogger.Log($"[VRWebView] Current State: {browser.state}");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[VRWebView] ERROR getting info: {e.Message}");
+            ChunaLogger.LogError($"[VRWebView] ERROR getting info: {e.Message}");
         }
 
         // Init 호출
-        Debug.Log("[VRWebView] Calling browser.Init()...");
+        ChunaLogger.Log("[VRWebView] Calling browser.Init()...");
         try
         {
             browser.Init();
-            Debug.Log("[VRWebView] browser.Init() called successfully");
+            ChunaLogger.Log("[VRWebView] browser.Init() called successfully");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[VRWebView] ERROR in Init(): {e.Message}\n{e.StackTrace}");
+            ChunaLogger.LogError($"[VRWebView] ERROR in Init(): {e.Message}\n{e.StackTrace}");
         }
 
         // 잠시 대기 후 상태 확인
-        Debug.Log("[VRWebView] Waiting 2 seconds...");
+        ChunaLogger.Log("[VRWebView] Waiting 2 seconds...");
         yield return new WaitForSeconds(2f);
 
         try
         {
-            Debug.Log($"[VRWebView] State after init: {browser.state}");
+            ChunaLogger.Log($"[VRWebView] State after init: {browser.state}");
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[VRWebView] ERROR checking state: {e.Message}");
+            ChunaLogger.LogError($"[VRWebView] ERROR checking state: {e.Message}");
         }
 
         // URL 로드 시도
         if (!string.IsNullOrEmpty(browser.url))
         {
-            Debug.Log($"[VRWebView] Loading URL: {browser.url}");
+            ChunaLogger.Log($"[VRWebView] Loading URL: {browser.url}");
             try
             {
                 browser.LoadUrl(browser.url);
-                Debug.Log("[VRWebView] LoadUrl() called");
+                ChunaLogger.Log("[VRWebView] LoadUrl() called");
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[VRWebView] ERROR in LoadUrl(): {e.Message}");
+                ChunaLogger.LogError($"[VRWebView] ERROR in LoadUrl(): {e.Message}");
             }
         }
 
-        isInitialized = true;
-        Debug.Log("[VRWebView] === INIT COMPLETE ===");
+        ChunaLogger.Log("[VRWebView] === INIT COMPLETE ===");
 
         // 텍스처 상태 모니터링 시작
         StartCoroutine(MonitorTextureState());
@@ -154,32 +152,32 @@ public class VRWebViewInput : MonoBehaviour
         {
             yield return new WaitForSeconds(1f);
 
-            Debug.Log($"[VRWebView] --- Texture Check #{i + 1} ---");
+            ChunaLogger.Log($"[VRWebView] --- Texture Check #{i + 1} ---");
 
             if (rawImage == null)
             {
-                Debug.LogError("[VRWebView] rawImage is NULL!");
+                ChunaLogger.LogError("[VRWebView] rawImage is NULL!");
                 continue;
             }
 
-            Debug.Log($"[VRWebView] RawImage enabled: {rawImage.enabled}");
-            Debug.Log($"[VRWebView] RawImage gameObject active: {rawImage.gameObject.activeInHierarchy}");
+            ChunaLogger.Log($"[VRWebView] RawImage enabled: {rawImage.enabled}");
+            ChunaLogger.Log($"[VRWebView] RawImage gameObject active: {rawImage.gameObject.activeInHierarchy}");
 
             if (rawImage.texture != null)
             {
-                Debug.Log($"[VRWebView] Texture exists! Size: {rawImage.texture.width}x{rawImage.texture.height}");
-                Debug.Log($"[VRWebView] Texture name: {rawImage.texture.name}");
+                ChunaLogger.Log($"[VRWebView] Texture exists! Size: {rawImage.texture.width}x{rawImage.texture.height}");
+                ChunaLogger.Log($"[VRWebView] Texture name: {rawImage.texture.name}");
             }
             else
             {
-                Debug.LogWarning("[VRWebView] Texture is NULL!");
+                ChunaLogger.LogWarning("[VRWebView] Texture is NULL!");
             }
 
-            Debug.Log($"[VRWebView] Browser state: {browser.state}");
-            Debug.Log($"[VRWebView] Current URL: {browser.GetUrl()}");
+            ChunaLogger.Log($"[VRWebView] Browser state: {browser.state}");
+            ChunaLogger.Log($"[VRWebView] Current URL: {browser.GetUrl()}");
         }
 
-        Debug.Log("[VRWebView] Texture monitoring ended");
+        ChunaLogger.Log("[VRWebView] Texture monitoring ended");
     }
 
     void Update()
@@ -191,7 +189,7 @@ public class VRWebViewInput : MonoBehaviour
         {
             browser.UpdateFrame();
         }
-        catch (System.Exception e)
+        catch (System.Exception)
         {
             // 에러 무시 (매 프레임 로그 방지)
         }
@@ -247,7 +245,7 @@ public class VRWebViewInput : MonoBehaviour
                 isPinching = false;
 
                 if (showDebugLogs)
-                    Debug.Log($"[VRWebView] Touch UP (out of bounds)");
+                    ChunaLogger.Log($"[VRWebView] Touch UP (out of bounds)");
             }
         }
     }
@@ -258,13 +256,13 @@ public class VRWebViewInput : MonoBehaviour
     private void ValidateReferences()
     {
         if (browser == null)
-            Debug.LogError("[VRWebViewInput] Browser가 연결되지 않았습니다!");
+            ChunaLogger.LogError("[VRWebViewInput] Browser가 연결되지 않았습니다!");
 
         if (webViewRect == null)
-            Debug.LogError("[VRWebViewInput] WebView RectTransform이 연결되지 않았습니다!");
+            ChunaLogger.LogError("[VRWebViewInput] WebView RectTransform이 연결되지 않았습니다!");
 
         if (handRight == null && handLeft == null)
-            Debug.LogWarning("[VRWebViewInput] 손이 연결되지 않았습니다. OVRHand를 연결해주세요.");
+            ChunaLogger.LogWarning("[VRWebViewInput] 손이 연결되지 않았습니다. OVRHand를 연결해주세요.");
     }
 
     /// <summary>
@@ -379,7 +377,7 @@ public class VRWebViewInput : MonoBehaviour
             browser.TouchEvent(x, y, ACTION_DOWN, touchDownTime);
 
             if (showDebugLogs)
-                Debug.Log($"[VRWebView] Touch DOWN at ({x}, {y})");
+                ChunaLogger.Log($"[VRWebView] Touch DOWN at ({x}, {y})");
         }
         else if (!isPinchValid && isPinching)
         {
@@ -387,7 +385,7 @@ public class VRWebViewInput : MonoBehaviour
             browser.TouchEvent(x, y, ACTION_UP, touchDownTime);
 
             if (showDebugLogs)
-                Debug.Log($"[VRWebView] Touch UP at ({x}, {y})");
+                ChunaLogger.Log($"[VRWebView] Touch UP at ({x}, {y})");
         }
         else if (isPinchValid && isPinching)
         {
@@ -395,7 +393,7 @@ public class VRWebViewInput : MonoBehaviour
             browser.TouchEvent(x, y, ACTION_MOVE, touchDownTime);
 
             if (showDebugLogs && Time.frameCount % 30 == 0)
-                Debug.Log($"[VRWebView] Touch MOVE at ({x}, {y})");
+                ChunaLogger.Log($"[VRWebView] Touch MOVE at ({x}, {y})");
         }
 
         isPinching = isPinchValid;
@@ -444,7 +442,7 @@ public class VRWebViewInput : MonoBehaviour
         {
             browser.LoadUrl(url);
             if (showDebugLogs)
-                Debug.Log($"[VRWebView] Loading URL: {url}");
+                ChunaLogger.Log($"[VRWebView] Loading URL: {url}");
         }
     }
 
@@ -457,7 +455,7 @@ public class VRWebViewInput : MonoBehaviour
         {
             browser.GoBack();
             if (showDebugLogs)
-                Debug.Log("[VRWebView] Go Back");
+                ChunaLogger.Log("[VRWebView] Go Back");
         }
     }
 
@@ -470,7 +468,7 @@ public class VRWebViewInput : MonoBehaviour
         {
             browser.GoForward();
             if (showDebugLogs)
-                Debug.Log("[VRWebView] Go Forward");
+                ChunaLogger.Log("[VRWebView] Go Forward");
         }
     }
 
@@ -484,7 +482,7 @@ public class VRWebViewInput : MonoBehaviour
             string currentUrl = browser.GetUrl();
             browser.LoadUrl(currentUrl);
             if (showDebugLogs)
-                Debug.Log("[VRWebView] Reload");
+                ChunaLogger.Log("[VRWebView] Reload");
         }
     }
 

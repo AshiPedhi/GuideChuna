@@ -27,7 +27,7 @@ public class SimulationStartController : MonoBehaviour
 
     void Awake()
     {
-        infoPanelController = FindObjectOfType<InfoPanelController>();
+        infoPanelController = FindFirstObjectByType<InfoPanelController>();
     }
     
     void Start()
@@ -182,11 +182,11 @@ public class SimulationStartController : MonoBehaviour
     {
         if (infoPanelController == null) return;
 
-        Debug.Log("시뮬레이션 시작!");
+        ChunaLogger.Log("시뮬레이션 시작!");
 
         // 선택 정보 로그
-        Debug.Log($"- 모드: {infoPanelController.SelectedMode}");
-        Debug.Log($"- 난이도: {infoPanelController.SelectedDifficulty}");
+        ChunaLogger.Log($"- 모드: {infoPanelController.SelectedMode}");
+        ChunaLogger.Log($"- 난이도: {infoPanelController.SelectedDifficulty}");
 
         // 페이드 아웃 효과
         StartCoroutine(StartSimulationWithFade());

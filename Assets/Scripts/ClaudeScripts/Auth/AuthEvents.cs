@@ -204,11 +204,11 @@ public static class AuthEvents
 #if UNITY_EDITOR
         if (isError)
         {
-            Debug.LogError($"[AuthEvents] {message}");
+            ChunaLogger.LogError($"[AuthEvents] {message}");
         }
         else
         {
-            Debug.Log($"[AuthEvents] {message}");
+            ChunaLogger.Log($"[AuthEvents] {message}");
         }
 #endif
     }
@@ -216,10 +216,10 @@ public static class AuthEvents
     public static void LogSubscriberCount()
     {
 #if UNITY_EDITOR
-        Debug.Log($"[AuthEvents] 이벤트 구독자 수:");
-        Debug.Log($"  - OnAuthenticationSuccess: {OnAuthenticationSuccess?.GetInvocationList().Length ?? 0}");
-        Debug.Log($"  - OnLoginSuccess: {OnLoginSuccess?.GetInvocationList().Length ?? 0}");
-        Debug.Log($"  - OnUserListLoadCompleted: {OnUserListLoadCompleted?.GetInvocationList().Length ?? 0}");
+        ChunaLogger.Log($"[AuthEvents] 이벤트 구독자 수:");
+        ChunaLogger.Log($"  - OnAuthenticationSuccess: {OnAuthenticationSuccess?.GetInvocationList().Length ?? 0}");
+        ChunaLogger.Log($"  - OnLoginSuccess: {OnLoginSuccess?.GetInvocationList().Length ?? 0}");
+        ChunaLogger.Log($"  - OnUserListLoadCompleted: {OnUserListLoadCompleted?.GetInvocationList().Length ?? 0}");
 #endif
     }
     #endregion

@@ -76,11 +76,11 @@ public class HandPoseDataLoader
         if (csvFile == null)
         {
             result.errorMessage = $"Resources/{fileNameWithoutExt} 파일을 찾을 수 없습니다!";
-            Debug.LogError($"<color=red>[HandPoseDataLoader] {result.errorMessage}</color>");
+            ChunaLogger.LogError($"<color=red>[HandPoseDataLoader] {result.errorMessage}</color>");
             return result;
         }
 
-        Debug.Log($"<color=green>[HandPoseDataLoader] ✓ Resources에서 CSV 로드 성공: {fileNameWithoutExt}</color>");
+        ChunaLogger.Log($"<color=green>[HandPoseDataLoader] ✓ Resources에서 CSV 로드 성공: {fileNameWithoutExt}</color>");
 
         // CSV 텍스트 디코딩 (한글 지원)
         string csvText = DecodeCSVText(csvFile.bytes);
@@ -103,7 +103,7 @@ public class HandPoseDataLoader
         if (!File.Exists(path))
         {
             result.errorMessage = $"CSV 파일 없음: {path}";
-            Debug.LogError($"[HandPoseDataLoader] {result.errorMessage}");
+            ChunaLogger.LogError($"[HandPoseDataLoader] {result.errorMessage}");
             return result;
         }
 
@@ -111,7 +111,7 @@ public class HandPoseDataLoader
         if (lines.Length < 2)
         {
             result.errorMessage = "CSV 데이터 부족.";
-            Debug.LogError($"[HandPoseDataLoader] {result.errorMessage}");
+            ChunaLogger.LogError($"[HandPoseDataLoader] {result.errorMessage}");
             return result;
         }
 
@@ -131,7 +131,7 @@ public class HandPoseDataLoader
         if (lines.Length < 2)
         {
             result.errorMessage = "CSV 데이터 부족.";
-            Debug.LogError($"[HandPoseDataLoader] {result.errorMessage}");
+            ChunaLogger.LogError($"[HandPoseDataLoader] {result.errorMessage}");
             return result;
         }
 
@@ -148,7 +148,7 @@ public class HandPoseDataLoader
 
                 if (values.Length < 11)
                 {
-                    Debug.LogWarning($"[HandPoseDataLoader] 라인 {i}: 필드가 부족합니다. ({values.Length}개)");
+                    ChunaLogger.LogWarning($"[HandPoseDataLoader] 라인 {i}: 필드가 부족합니다. ({values.Length}개)");
                     continue;
                 }
 
@@ -234,7 +234,7 @@ public class HandPoseDataLoader
 
                             if (jointId > 0)
                             {
-                                Debug.Log($"<color=yellow>[HandPoseDataLoader] Right WorldPos를 joint {jointId}에서 읽음: {currentFrame.rightRootPosition}</color>");
+                                ChunaLogger.Log($"<color=yellow>[HandPoseDataLoader] Right WorldPos를 joint {jointId}에서 읽음: {currentFrame.rightRootPosition}</color>");
                             }
                         }
                     }
@@ -242,7 +242,7 @@ public class HandPoseDataLoader
             }
             catch (Exception e)
             {
-                Debug.LogError($"[HandPoseDataLoader] 라인 {i} 파싱 실패: {e.Message}\n라인 내용: {lines[i]}");
+                ChunaLogger.LogError($"[HandPoseDataLoader] 라인 {i} 파싱 실패: {e.Message}\n라인 내용: {lines[i]}");
                 continue;
             }
         }
@@ -254,7 +254,7 @@ public class HandPoseDataLoader
         if (result.frames.Count == 0)
         {
             result.errorMessage = "CSV 파싱 실패.";
-            Debug.LogError($"[HandPoseDataLoader] {result.errorMessage}");
+            ChunaLogger.LogError($"[HandPoseDataLoader] {result.errorMessage}");
             return result;
         }
 
@@ -262,7 +262,7 @@ public class HandPoseDataLoader
         result.totalDuration = result.frames[result.frames.Count - 1].timestamp;
         result.success = true;
 
-        Debug.Log($"<color=cyan>[HandPoseDataLoader] ✓ 파싱 완료 - {result.frames.Count} 프레임, 총 {result.totalDuration:F2}초</color>");
+        ChunaLogger.Log($"<color=cyan>[HandPoseDataLoader] ✓ 파싱 완료 - {result.frames.Count} 프레임, 총 {result.totalDuration:F2}초</color>");
 
         return result;
     }
@@ -276,7 +276,7 @@ public class HandPoseDataLoader
         // 1. UTF-8 BOM 체크
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
         {
-            Debug.Log("[HandPoseDataLoader] ✓ UTF-8 BOM 감지 - UTF-8로 디코딩");
+            ChunaLogger.Log("[HandPoseDataLoader] ✓ UTF-8 BOM 감지 - UTF-8로 디코딩");
             return System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
         }
 
@@ -293,14 +293,14 @@ public class HandPoseDataLoader
 
                 if (hasKorean || !ContainsKoreanBytes(bytes))
                 {
-                    Debug.Log("[HandPoseDataLoader] ✓ UTF-8 인코딩 사용");
+                    ChunaLogger.Log("[HandPoseDataLoader] ✓ UTF-8 인코딩 사용");
                     return utf8Text;
                 }
             }
         }
         catch
         {
-            Debug.LogWarning("[HandPoseDataLoader] UTF-8 디코딩 실패");
+            ChunaLogger.LogWarning("[HandPoseDataLoader] UTF-8 디코딩 실패");
         }
 
         // 3. EUC-KR 시도
@@ -309,16 +309,16 @@ public class HandPoseDataLoader
             System.Text.Encoding euckr = System.Text.Encoding.GetEncoding("euc-kr");
             string euckrText = euckr.GetString(bytes);
 
-            Debug.Log("[HandPoseDataLoader] ✓ EUC-KR 인코딩 사용");
+            ChunaLogger.Log("[HandPoseDataLoader] ✓ EUC-KR 인코딩 사용");
             return euckrText;
         }
         catch
         {
-            Debug.LogWarning("[HandPoseDataLoader] EUC-KR 디코딩 실패");
+            ChunaLogger.LogWarning("[HandPoseDataLoader] EUC-KR 디코딩 실패");
         }
 
         // 4. 최후의 수단: 시스템 기본 인코딩
-        Debug.LogWarning("[HandPoseDataLoader] ⚠ 기본 인코딩 사용 (한글이 깨질 수 있음)");
+        ChunaLogger.LogWarning("[HandPoseDataLoader] ⚠ 기본 인코딩 사용 (한글이 깨질 수 있음)");
         return System.Text.Encoding.Default.GetString(bytes);
     }
 

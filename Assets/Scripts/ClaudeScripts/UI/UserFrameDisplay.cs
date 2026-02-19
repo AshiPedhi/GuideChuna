@@ -51,7 +51,7 @@ public class UserFrameDisplay : MonoBehaviour
     {
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         }
 
         if (pathEvaluator != null)

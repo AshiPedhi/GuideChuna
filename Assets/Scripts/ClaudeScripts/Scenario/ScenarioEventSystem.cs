@@ -10,7 +10,6 @@ public class ScenarioEventSystem
     // === 시나리오 진행 이벤트 ===
     public event Action<ScenarioData> OnScenarioStarted;
     public event Action<ScenarioData> OnScenarioCompleted;
-    public event Action<string> OnScenarioFailed;
 
     // === Phase 변경 이벤트 ===
     public event Action<PhaseData> OnPhaseChanged;
@@ -50,49 +49,49 @@ public class ScenarioEventSystem
 
     public void ScenarioStarted(ScenarioData scenario)
     {
-        Debug.Log($"[Event] 시나리오 시작: {scenario.scenarioName}");
+        ChunaLogger.Log($"[Event] 시나리오 시작: {scenario.scenarioName}");
         OnScenarioStarted?.Invoke(scenario);
     }
 
     public void ScenarioCompleted(ScenarioData scenario)
     {
-        Debug.Log($"[Event] 시나리오 완료: {scenario.scenarioName}");
+        ChunaLogger.Log($"[Event] 시나리오 완료: {scenario.scenarioName}");
         OnScenarioCompleted?.Invoke(scenario);
     }
 
     public void PhaseChanged(PhaseData phase)
     {
-        Debug.Log($"[Event] Phase 변경: {phase.phaseName}");
+        ChunaLogger.Log($"[Event] Phase 변경: {phase.phaseName}");
         OnPhaseChanged?.Invoke(phase);
     }
 
     public void PhaseCompleted(PhaseData phase)
     {
-        Debug.Log($"[Event] Phase 완료: {phase.phaseName}");
+        ChunaLogger.Log($"[Event] Phase 완료: {phase.phaseName}");
         OnPhaseCompleted?.Invoke(phase);
     }
 
     public void StepChanged(StepData step)
     {
-        Debug.Log($"[Event] Step 변경: {step.stepName}");
+        ChunaLogger.Log($"[Event] Step 변경: {step.stepName}");
         OnStepChanged?.Invoke(step);
     }
 
     public void StepCompleted(StepData step)
     {
-        Debug.Log($"[Event] Step 완료: {step.stepName}");
+        ChunaLogger.Log($"[Event] Step 완료: {step.stepName}");
         OnStepCompleted?.Invoke(step);
     }
 
     public void SubStepStarted(SubStepData subStep)
     {
-        Debug.Log($"[Event] SubStep 시작: {subStep.subStepNo}");
+        ChunaLogger.Log($"[Event] SubStep 시작: {subStep.subStepNo}");
         OnSubStepStarted?.Invoke(subStep);
     }
 
     public void SubStepCompleted(SubStepData subStep)
     {
-        Debug.Log($"[Event] SubStep 완료: {subStep.subStepNo}");
+        ChunaLogger.Log($"[Event] SubStep 완료: {subStep.subStepNo}");
         OnSubStepCompleted?.Invoke(subStep);
     }
 
@@ -113,7 +112,7 @@ public class ScenarioEventSystem
 
     public void RequestAction(string actionType, SubStepData subStep)
     {
-        Debug.Log($"[Event] 동작 요청: {actionType}");
+        ChunaLogger.Log($"[Event] 동작 요청: {actionType}");
         OnActionRequested?.Invoke(actionType, subStep);
     }
 
@@ -124,7 +123,6 @@ public class ScenarioEventSystem
     {
         OnScenarioStarted = null;
         OnScenarioCompleted = null;
-        OnScenarioFailed = null;
         OnPhaseChanged = null;
         OnPhaseCompleted = null;
         OnStepChanged = null;

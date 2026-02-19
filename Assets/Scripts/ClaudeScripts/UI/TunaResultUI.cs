@@ -6,7 +6,7 @@ using TunaEvaluation;
 /// 추나 시술 평가 결과 화면
 /// 최종 점수, 등급, 상세 내역 표시
 /// </summary>
-public class TunaResultUI : MonoBehaviour
+public class TunaResultUI : BaseUIPanel
 {
     [Header("=== 결과 패널 ===")]
     [SerializeField] private GameObject resultPanel;
@@ -29,6 +29,8 @@ public class TunaResultUI : MonoBehaviour
     [SerializeField] private UnityEngine.UI.Button closeButton;
     [SerializeField] private UnityEngine.UI.Button retryButton;
 
+    protected override GameObject GetPanelObject() => resultPanel;
+
     void Start()
     {
         if (resultPanel != null)
@@ -48,8 +50,7 @@ public class TunaResultUI : MonoBehaviour
     {
         if (result == null) return;
 
-        if (resultPanel != null)
-            resultPanel.SetActive(true);
+        Show();
 
         // 총점
         if (totalScoreText != null)
@@ -161,10 +162,9 @@ public class TunaResultUI : MonoBehaviour
     /// <summary>
     /// 결과 화면 숨기기
     /// </summary>
-    public void Hide()
+    public override void Hide()
     {
-        if (resultPanel != null)
-            resultPanel.SetActive(false);
+        base.Hide();
     }
 
     /// <summary>
@@ -174,6 +174,6 @@ public class TunaResultUI : MonoBehaviour
     {
         Hide();
         // 재시도 로직은 외부에서 구현
-        Debug.Log("[TunaResultUI] 재시도 요청");
+        ChunaLogger.Log("[TunaResultUI] 재시도 요청");
     }
 }

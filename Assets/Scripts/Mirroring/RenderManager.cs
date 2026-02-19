@@ -23,6 +23,17 @@ public class RenderManager : MonoBehaviour
 {
     public static RenderManager instance = null;
 
+    /// <summary>
+    /// 미러링 연결 상태
+    /// </summary>
+    private enum ConnectionState
+    {
+        Idle,           // 초기 상태 / 미설정
+        Connecting,     // 연결 시도 중
+        Connected,      // 연결 완료
+        Failed          // 연결 실패
+    }
+
     [Header("Render Streaming Components")]
     public SignalingManager sm;
     public VideoStreamSender vss;
@@ -31,11 +42,7 @@ public class RenderManager : MonoBehaviour
     [SerializeField] private bool enableDebugLogs = true;
 
     private MirroringData currentMirroringData;
-    private bool hasInitialized = false;
-
-    // 연결 상태 추적
-    private bool isConnecting = false;
-    private bool isConnected = false;
+    private ConnectionState connectionState = ConnectionState.Idle;
     private int connectionAttempts = 0;
     private const int MAX_CONNECTION_ATTEMPTS = 3;
     private const float CONNECTION_RETRY_DELAY = 2f;
@@ -88,7 +95,7 @@ public class RenderManager : MonoBehaviour
     private void OnApplicationPause(bool pauseStatus)
     {
         // 앱이 백그라운드로 가면 미러링 일시 중지
-        if (pauseStatus && isConnected)
+        if (pauseStatus && connectionState == ConnectionState.Connected)
         {
             LogDebug("앱 일시정지 - 미러링 연결 유지 (프레임 전송 중단)");
         }
@@ -149,10 +156,8 @@ public class RenderManager : MonoBehaviour
 
             // 2. 연결 상태 초기화
             _isRunning = false;
-            isConnecting = false;
-            isConnected = false;
+            connectionState = ConnectionState.Idle;
             connectionAttempts = 0;
-            hasInitialized = false;
 
             // 3. SignalingManager 안전 중지
             SafeStopSignalingManager();
@@ -189,32 +194,35 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public bool IsMirroringActive()
     {
-        return isConnected && hasInitialized;
+        return connectionState == ConnectionState.Connected;
     }
 
     /// <summary>
     /// 연결 시도 중인지 확인
     /// </summary>
-    public bool IsConnecting => isConnecting;
+    public bool IsConnecting => connectionState == ConnectionState.Connecting;
 
     /// <summary>
     /// 연결 성공 여부
     /// </summary>
-    public bool IsConnected => isConnected;
+    public bool IsConnected => connectionState == ConnectionState.Connected;
 
     /// <summary>
     /// 연결 상태 문자열 반환 (UI 표시용)
     /// </summary>
     public string GetConnectionStatus()
     {
-        if (isConnected && hasInitialized)
-            return "연결됨";
-        else if (isConnecting)
-            return $"연결 중... ({connectionAttempts}/{MAX_CONNECTION_ATTEMPTS})";
-        else if (currentMirroringData == null)
-            return "미설정";
-        else
-            return "연결 끊김";
+        switch (connectionState)
+        {
+            case ConnectionState.Connected:
+                return "연결됨";
+            case ConnectionState.Connecting:
+                return $"연결 중... ({connectionAttempts}/{MAX_CONNECTION_ATTEMPTS})";
+            case ConnectionState.Failed:
+                return "연결 실패";
+            default:
+                return currentMirroringData == null ? "미설정" : "연결 끊김";
+        }
     }
 
     /// <summary>
@@ -222,7 +230,7 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public void TryReconnect()
     {
-        if (isConnecting)
+        if (connectionState == ConnectionState.Connecting)
         {
             LogWarning("이미 연결 중입니다.");
             return;
@@ -257,7 +265,10 @@ public class RenderManager : MonoBehaviour
                 }
                 _connectionCts.Dispose();
             }
-            catch (ObjectDisposedException) { }
+            catch (ObjectDisposedException)
+            {
+                // CTS가 shutdown 중 dispose될 때 발생 - 정상 동작이므로 무시
+            }
             finally
             {
                 _connectionCts = null;
@@ -292,7 +303,7 @@ public class RenderManager : MonoBehaviour
         try
         {
             // 이미 연결 중이면 무시
-            if (isConnecting || _isRunning)
+            if (connectionState == ConnectionState.Connecting || _isRunning)
             {
                 LogDebug("이미 연결 중입니다. 중복 요청 무시.");
                 return;
@@ -324,15 +335,14 @@ public class RenderManager : MonoBehaviour
             _connectionCts = new CancellationTokenSource();
 
             // 연결 상태 초기화
-            isConnecting = true;
-            isConnected = false;
+            connectionState = ConnectionState.Connecting;
             connectionAttempts = 0;
 
             // Signaling 설정
             if (!SetupSignaling(currentMirroringData.serverIP, currentMirroringData.portNo))
             {
                 LogWarning("Signaling 설정 실패. 미러링 시작 불가.");
-                isConnecting = false;
+                connectionState = ConnectionState.Failed;
                 return;
             }
 
@@ -347,8 +357,7 @@ public class RenderManager : MonoBehaviour
         catch (Exception e)
         {
             LogError($"미러링 시작 실패: {e.Message}");
-            isConnecting = false;
-            isConnected = false;
+            connectionState = ConnectionState.Failed;
         }
     }
 
@@ -377,9 +386,7 @@ public class RenderManager : MonoBehaviour
                     if (connected)
                     {
                         LogDebug($"Track 생성 완료! ID: {vss.Track?.Id}");
-                        hasInitialized = true;
-                        isConnected = true;
-                        isConnecting = false;
+                        connectionState = ConnectionState.Connected;
                         _isRunning = false;
                         return; // 성공 - 루프 종료
                     }
@@ -431,11 +438,10 @@ public class RenderManager : MonoBehaviour
         finally
         {
             _isRunning = false;
-            isConnecting = false;
 
-            if (!isConnected)
+            if (connectionState != ConnectionState.Connected)
             {
-                hasInitialized = false;
+                connectionState = ConnectionState.Failed;
             }
         }
     }
@@ -574,23 +580,18 @@ public class RenderManager : MonoBehaviour
     #region Logging
     private void LogDebug(string message)
     {
-        if (enableDebugLogs)
-        {
-            Debug.Log($"[RenderManager] {message}");
-        }
+        ChunaLogger.LogVerbose(enableDebugLogs, "RenderManager", message);
     }
 
     private void LogWarning(string message)
     {
         if (enableDebugLogs)
-        {
-            Debug.LogWarning($"[RenderManager] {message}");
-        }
+            ChunaLogger.LogWarning($"[RenderManager] {message}");
     }
 
     private void LogError(string message)
     {
-        Debug.LogError($"[RenderManager] {message}");
+        ChunaLogger.LogError("RenderManager", message);
     }
     #endregion
 }

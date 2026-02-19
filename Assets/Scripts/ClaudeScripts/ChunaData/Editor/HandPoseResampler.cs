@@ -832,7 +832,7 @@ public class HandPoseResampler : EditorWindow
         }
         else
         {
-            Debug.LogWarning($"파일을 찾을 수 없습니다: {resourcePath}");
+            ChunaLogger.LogWarning($"파일을 찾을 수 없습니다: {resourcePath}");
         }
     }
 
@@ -844,13 +844,13 @@ public class HandPoseResampler : EditorWindow
             if (compareFrames.Count > 0)
             {
                 isCompareAnalyzed = true;
-                Debug.Log($"<color=green>[비교 모드] 로드 완료: {compareFrames.Count} 프레임</color>");
+                ChunaLogger.Log($"<color=green>[비교 모드] 로드 완료: {compareFrames.Count} 프레임</color>");
             }
         }
         catch (Exception e)
         {
             EditorUtility.DisplayDialog("오류", $"비교 파일 로드 실패: {e.Message}", "확인");
-            Debug.LogError($"[비교 모드] 로드 오류: {e}");
+            ChunaLogger.LogError($"[비교 모드] 로드 오류: {e}");
         }
     }
 
@@ -902,7 +902,7 @@ public class HandPoseResampler : EditorWindow
         if (patient != null)
         {
             patientTransform = patient.transform;
-            Debug.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음: {patient.name}</color>");
+            ChunaLogger.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음: {patient.name}</color>");
             return;
         }
 
@@ -914,12 +914,12 @@ public class HandPoseResampler : EditorWindow
             if (obj != null)
             {
                 patientTransform = obj.transform;
-                Debug.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음 (이름): {obj.name}</color>");
+                ChunaLogger.Log($"<color=green>[HandPoseResampler] 환자 모델 찾음 (이름): {obj.name}</color>");
                 return;
             }
         }
 
-        Debug.LogWarning("<color=yellow>[HandPoseResampler] Scene에서 환자 모델을 찾을 수 없습니다.</color>");
+        ChunaLogger.LogWarning("<color=yellow>[HandPoseResampler] Scene에서 환자 모델을 찾을 수 없습니다.</color>");
         patientTransform = null;
     }
 
@@ -1369,7 +1369,7 @@ public class HandPoseResampler : EditorWindow
         }
         else
         {
-            Debug.LogWarning($"파일을 찾을 수 없습니다: {resourcePath}");
+            ChunaLogger.LogWarning($"파일을 찾을 수 없습니다: {resourcePath}");
         }
     }
 
@@ -1397,12 +1397,12 @@ public class HandPoseResampler : EditorWindow
             targetAngle = pivotBasedAngle;
 
             isAnalyzed = true;
-            Debug.Log($"<color=green>[HandPoseEditor] 분석 완료: {originalFrameCount} 프레임, 피벗 각도: {pivotBasedAngle:F1}°</color>");
+            ChunaLogger.Log($"<color=green>[HandPoseEditor] 분석 완료: {originalFrameCount} 프레임, 피벗 각도: {pivotBasedAngle:F1}°</color>");
         }
         catch (Exception e)
         {
             EditorUtility.DisplayDialog("파싱 오류", e.Message, "확인");
-            Debug.LogError($"[HandPoseEditor] CSV 파싱 오류: {e}");
+            ChunaLogger.LogError($"[HandPoseEditor] CSV 파싱 오류: {e}");
         }
     }
 
@@ -1535,7 +1535,7 @@ public class HandPoseResampler : EditorWindow
         catch (Exception e)
         {
             EditorUtility.ClearProgressBar();
-            Debug.LogError($"리샘플링 오류: {e}");
+            ChunaLogger.LogError($"리샘플링 오류: {e}");
             EditorUtility.DisplayDialog("오류", e.Message, "확인");
         }
     }
@@ -1602,7 +1602,7 @@ public class HandPoseResampler : EditorWindow
         catch (Exception e)
         {
             EditorUtility.ClearProgressBar();
-            Debug.LogError($"트리밍 오류: {e}");
+            ChunaLogger.LogError($"트리밍 오류: {e}");
             EditorUtility.DisplayDialog("오류", e.Message, "확인");
         }
     }
@@ -1647,8 +1647,8 @@ public class HandPoseResampler : EditorWindow
             Vector3 startDir = (startPos - pivot).normalized;
             float startRadius = Vector3.Distance(startPos, pivot);
 
-            Debug.Log($"<color=yellow>[스케일링] 피벗: {pivot}, 축: {axisVector}, 시작반경: {startRadius:F3}m</color>");
-            Debug.Log($"<color=yellow>[스케일링] 원본각도: {pivotBasedAngle:F1}° → 목표: {targetAngle:F1}° (비율: {scaleRatio:F2}x)</color>");
+            ChunaLogger.Log($"<color=yellow>[스케일링] 피벗: {pivot}, 축: {axisVector}, 시작반경: {startRadius:F3}m</color>");
+            ChunaLogger.Log($"<color=yellow>[스케일링] 원본각도: {pivotBasedAngle:F1}° → 목표: {targetAngle:F1}° (비율: {scaleRatio:F2}x)</color>");
 
             for (int i = 0; i < parsedFrames.Count; i++)
             {
@@ -1696,7 +1696,7 @@ public class HandPoseResampler : EditorWindow
             SaveFramesToCSV(result, "_scaled");
             EditorUtility.ClearProgressBar();
 
-            Debug.Log($"<color=green>[스케일링] 완료! 결과 각도: {resultAngle:F1}°</color>");
+            ChunaLogger.Log($"<color=green>[스케일링] 완료! 결과 각도: {resultAngle:F1}°</color>");
 
             EditorUtility.DisplayDialog("완료",
                 $"각도 스케일링 완료!\n\n" +
@@ -1709,7 +1709,7 @@ public class HandPoseResampler : EditorWindow
         catch (Exception e)
         {
             EditorUtility.ClearProgressBar();
-            Debug.LogError($"스케일링 오류: {e}");
+            ChunaLogger.LogError($"스케일링 오류: {e}");
             EditorUtility.DisplayDialog("오류", e.Message, "확인");
         }
     }
@@ -1764,7 +1764,7 @@ public class HandPoseResampler : EditorWindow
         catch (Exception e)
         {
             EditorUtility.ClearProgressBar();
-            Debug.LogError($"변환 오류: {e}");
+            ChunaLogger.LogError($"변환 오류: {e}");
             EditorUtility.DisplayDialog("오류", e.Message, "확인");
         }
     }
@@ -1799,7 +1799,7 @@ public class HandPoseResampler : EditorWindow
                 break;
         }
 
-        Debug.Log($"<color=cyan>[HandPoseEditor] 프리셋 적용: {preset}</color>");
+        ChunaLogger.Log($"<color=cyan>[HandPoseEditor] 프리셋 적용: {preset}</color>");
     }
 
     private void ExecutePresetProcessing()
@@ -1894,7 +1894,7 @@ public class HandPoseResampler : EditorWindow
         catch (Exception e)
         {
             EditorUtility.ClearProgressBar();
-            Debug.LogError($"프리셋 처리 오류: {e}");
+            ChunaLogger.LogError($"프리셋 처리 오류: {e}");
             EditorUtility.DisplayDialog("오류", e.Message, "확인");
         }
     }
@@ -2050,7 +2050,7 @@ public class HandPoseResampler : EditorWindow
         string outputPath = Path.Combine(Path.GetDirectoryName(sourceFilePath), finalName + ".csv");
         File.WriteAllText(outputPath, sb.ToString(), Encoding.UTF8);
 
-        Debug.Log($"<color=cyan>[HandPoseEditor] 저장: {outputPath}</color>");
+        ChunaLogger.Log($"<color=cyan>[HandPoseEditor] 저장: {outputPath}</color>");
 
         if (outputPath.StartsWith(Application.dataPath))
         {

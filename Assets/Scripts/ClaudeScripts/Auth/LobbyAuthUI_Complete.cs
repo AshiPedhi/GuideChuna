@@ -1,19 +1,18 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using Cysharp.Threading.Tasks;
-using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 로비 UI 통합 관리 클래스 (수정 버전)
-/// 
+///
 /// [수정 사항]
 /// 1. 시나리오 카드 버튼 자동 검색 및 연결
 /// 2. 시나리오 카드는 항상 클릭 가능 (로그인 안 되면 팝업)
 /// 3. 버튼 연결 디버그 로그 강화
+/// 4. 내부 로직을 헬퍼 클래스로 분리 (LoginStateStore, AuthFlowManager, LobbyPopupHandler, GradeSelectionHandler, UserSelectionHandler)
 /// </summary>
 public class LobbyAuthUI_Complete : MonoBehaviour
 {
@@ -108,25 +107,29 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private string selectedGrade;
     #endregion
 
-    #region Button Pools
-    private List<GameObject> activeGradeButtons = new List<GameObject>();
-    private List<GameObject> activeUserButtons = new List<GameObject>();
+    #region Helpers
+    private LoginStateStore loginStateStore;
+    private AuthFlowManager authFlowManager;
+    private LobbyPopupHandler popupHandler;
+    private GradeSelectionHandler gradeSelectionHandler;
+    private UserSelectionHandler userSelectionHandler;
     #endregion
 
     #region Unity Lifecycle
     private void Awake()
     {
         InitializeAuthService();
+        InitializeHelpers();
         SetupInitialUI();
         SubscribeToEvents();
 
         // SurveyPanel 자동 찾기
         if (surveyPanel == null)
         {
-            surveyPanel = FindObjectOfType<SurveyPanel>();
+            surveyPanel = FindFirstObjectByType<SurveyPanel>();
             if (surveyPanel != null)
             {
-                Debug.Log("[LobbyUI] ✅ SurveyPanel 자동 찾기 성공");
+                ChunaLogger.Log("[LobbyUI] ✅ SurveyPanel 자동 찾기 성공");
             }
         }
     }
@@ -152,7 +155,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             UpdateUserInfoPanel();
             SetScenarioCardsVisualState(true);
             SetGuideMessage(scenarioGuideMessage);
-            Debug.Log($"[LobbyUI] 저장된 로그인 정보 복원 완료: {currentUsername}");
+            ChunaLogger.Log($"[LobbyUI] 저장된 로그인 정보 복원 완료: {currentUsername}");
         }
 
         LoadSavedDeviceSN();
@@ -189,7 +192,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             }
 
             // PlayerPrefs 로그인 정보 삭제
-            ClearSavedLoginInfo();
+            loginStateStore.ClearLoginInfo();
         }
     }
     #endregion
@@ -200,26 +203,33 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         if (useMockService)
         {
             authService = gameObject.AddComponent<MockAuthenticationService>();
-            Debug.Log("[LobbyUI] Mock 서비스 사용");
+            ChunaLogger.Log("[LobbyUI] Mock 서비스 사용");
         }
         else
         {
             authService = AuthenticationService.Instance;
-            Debug.Log("[LobbyUI] 실제 서비스 사용");
+            ChunaLogger.Log("[LobbyUI] 실제 서비스 사용");
         }
+    }
+
+    private void InitializeHelpers()
+    {
+        loginStateStore = new LoginStateStore();
+        authFlowManager = new AuthFlowManager(authService);
+        popupHandler = new LobbyPopupHandler(loginRequiredPopup, exitConfirmationPopup, logoutConfirmationPopup);
+        gradeSelectionHandler = new GradeSelectionHandler(gradeSelectionPanel, gradeButtonPrefab, gradeContentContainer);
+        userSelectionHandler = new UserSelectionHandler(userSelectionPanel, userButtonPrefab, userContentContainer);
     }
 
     private void SetupInitialUI()
     {
-        Debug.Log("[LobbyUI] ========== UI 초기화 시작 ==========");
+        ChunaLogger.Log("[LobbyUI] ========== UI 초기화 시작 ==========");
 
         // 초기 상태 설정
         gradeSelectionPanel?.SetActive(false);
         userSelectionPanel?.SetActive(false);
         userInfoContent?.SetActive(true); // 항상 활성화! (로그인 전에는 "Guest" 표시)
-        loginRequiredPopup?.SetActive(false);
-        exitConfirmationPopup?.SetActive(false);
-        logoutConfirmationPopup?.SetActive(false);
+        popupHandler.InitializePopups();
 
         // 시나리오 카드 자동 검색
         if (autoFindScenarioCards)
@@ -236,7 +246,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 배경 딤 클릭 이벤트
         SetupBackgroundDimClicks();
 
-        Debug.Log("[LobbyUI] ========== UI 초기화 완료 ==========");
+        ChunaLogger.Log("[LobbyUI] ========== UI 초기화 완료 ==========");
     }
 
     /// <summary>
@@ -246,11 +256,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         if (scenarioCardsContainer == null)
         {
-            Debug.LogWarning("[LobbyUI] scenarioCardsContainer가 null입니다. 자동 검색을 건너뜁니다.");
+            ChunaLogger.LogWarning("[LobbyUI] scenarioCardsContainer가 null입니다. 자동 검색을 건너뜁니다.");
             return;
         }
 
-        Debug.Log("[LobbyUI] 시나리오 카드 자동 검색 시작...");
+        ChunaLogger.Log("[LobbyUI] 시나리오 카드 자동 검색 시작...");
 
         // Card_01 ~ Card_05 찾기
         for (int i = 0; i < 5; i++)
@@ -270,11 +280,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 if (cardButton != null)
                 {
                     scenarioCardButtons[i] = cardButton;
-                    Debug.Log($"[LobbyUI] ✅ {cardName} 버튼 자동 연결 성공");
+                    ChunaLogger.Log($"[LobbyUI] ✅ {cardName} 버튼 자동 연결 성공");
                 }
                 else
                 {
-                    Debug.LogWarning($"[LobbyUI] ⚠️ {cardName}에서 Button 컴포넌트를 찾을 수 없습니다.");
+                    ChunaLogger.LogWarning($"[LobbyUI] ⚠️ {cardName}에서 Button 컴포넌트를 찾을 수 없습니다.");
                 }
 
                 // CanvasGroup 찾기
@@ -282,12 +292,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 if (canvasGroup != null)
                 {
                     scenarioCardCanvasGroups[i] = canvasGroup;
-                    Debug.Log($"[LobbyUI] ✅ {cardName} CanvasGroup 자동 연결 성공");
+                    ChunaLogger.Log($"[LobbyUI] ✅ {cardName} CanvasGroup 자동 연결 성공");
                 }
             }
             else
             {
-                Debug.LogWarning($"[LobbyUI] ⚠️ {cardName}을(를) 찾을 수 없습니다.");
+                ChunaLogger.LogWarning($"[LobbyUI] ⚠️ {cardName}을(를) 찾을 수 없습니다.");
             }
         }
     }
@@ -297,7 +307,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void SetupScenarioCards()
     {
-        Debug.Log("[LobbyUI] --- 시나리오 카드 버튼 연결 시작 ---");
+        ChunaLogger.Log("[LobbyUI] --- 시나리오 카드 버튼 연결 시작 ---");
 
         int connectedCount = 0;
 
@@ -316,12 +326,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 // 버튼은 항상 활성화
                 scenarioCardButtons[i].interactable = true;
 
-                Debug.Log($"[LobbyUI] ✅ 시나리오 카드 {index + 1} 버튼 연결 완료");
+                ChunaLogger.Log($"[LobbyUI] ✅ 시나리오 카드 {index + 1} 버튼 연결 완료");
                 connectedCount++;
             }
             else
             {
-                Debug.LogError($"[LobbyUI] ❌ 시나리오 카드 {i + 1} 버튼이 NULL입니다!");
+                ChunaLogger.LogError($"[LobbyUI] ❌ 시나리오 카드 {i + 1} 버튼이 NULL입니다!");
             }
         }
 
@@ -336,7 +346,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             }
         }
 
-        Debug.Log($"[LobbyUI] 시나리오 카드 버튼 연결 완료: {connectedCount}/5");
+        ChunaLogger.Log($"[LobbyUI] 시나리오 카드 버튼 연결 완료: {connectedCount}/5");
     }
 
     /// <summary>
@@ -344,18 +354,18 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void SetupOtherButtons()
     {
-        Debug.Log("[LobbyUI] --- 기타 버튼 연결 시작 ---");
+        ChunaLogger.Log("[LobbyUI] --- 기타 버튼 연결 시작 ---");
 
         // 유저 아이콘 버튼
         if (userIconButton != null)
         {
             userIconButton.onClick.RemoveAllListeners();
             userIconButton.onClick.AddListener(OnUserIconClicked);
-            Debug.Log("[LobbyUI] ✅ 유저 아이콘 버튼 연결");
+            ChunaLogger.Log("[LobbyUI] ✅ 유저 아이콘 버튼 연결");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ userIconButton이 null입니다.");
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ userIconButton이 null입니다.");
         }
 
         // 조 선택 뒤로가기
@@ -363,11 +373,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             gradeBackButton.onClick.RemoveAllListeners();
             gradeBackButton.onClick.AddListener(OnGradeBackButtonClicked);
-            Debug.Log("[LobbyUI] ✅ 조 선택 뒤로가기 버튼 연결");
+            ChunaLogger.Log("[LobbyUI] ✅ 조 선택 뒤로가기 버튼 연결");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ gradeBackButton이 null입니다.");
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ gradeBackButton이 null입니다.");
         }
 
         // 사용자 선택 뒤로가기
@@ -375,11 +385,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             userBackButton.onClick.RemoveAllListeners();
             userBackButton.onClick.AddListener(OnUserBackButtonClicked);
-            Debug.Log("[LobbyUI] ✅ 사용자 선택 뒤로가기 버튼 연결");
+            ChunaLogger.Log("[LobbyUI] ✅ 사용자 선택 뒤로가기 버튼 연결");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ userBackButton이 null입니다.");
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ userBackButton이 null입니다.");
         }
 
         // 나가기 버튼
@@ -387,11 +397,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             exitButton.onClick.RemoveAllListeners();
             exitButton.onClick.AddListener(OnExitButtonClicked);
-            Debug.Log("[LobbyUI] ✅ 나가기 버튼 연결");
+            ChunaLogger.Log("[LobbyUI] ✅ 나가기 버튼 연결");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ exitButton이 null입니다.");
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ exitButton이 null입니다.");
         }
 
         // 상호작용 가이드 버튼
@@ -399,11 +409,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             interactionGuideButton.onClick.RemoveAllListeners();
             interactionGuideButton.onClick.AddListener(OnInteractionGuideClicked);
-            Debug.Log("[LobbyUI] ✅ 상호작용 가이드 버튼 연결");
+            ChunaLogger.Log("[LobbyUI] ✅ 상호작용 가이드 버튼 연결");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ interactionGuideButton이 null입니다.");
         }
 
         // 토글들을 버튼처럼 설정
@@ -425,8 +435,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 button = gradeSelectionBackground.gameObject.AddComponent<Button>();
             }
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => gradeSelectionPanel.SetActive(false));
-            Debug.Log("[LobbyUI] ✅ 조 선택 배경 클릭 연결");
+            button.onClick.AddListener(() => gradeSelectionHandler.Hide());
+            ChunaLogger.Log("[LobbyUI] ✅ 조 선택 배경 클릭 연결");
         }
 
         // UserSelectionPanel 배경 클릭
@@ -438,8 +448,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 button = userSelectionBackground.gameObject.AddComponent<Button>();
             }
             button.onClick.RemoveAllListeners();
-            button.onClick.AddListener(() => userSelectionPanel.SetActive(false));
-            Debug.Log("[LobbyUI] ✅ 사용자 선택 배경 클릭 연결");
+            button.onClick.AddListener(() => userSelectionHandler.Hide());
+            ChunaLogger.Log("[LobbyUI] ✅ 사용자 선택 배경 클릭 연결");
         }
     }
     #endregion
@@ -473,107 +483,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         try
         {
-            Debug.Log("[LobbyUI] 디바이스 인증 시작...");
-            await AuthenticateDeviceWithRetry(null);
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"[LobbyUI] 인증 최종 실패: {e.Message} | UUID: {SystemInfo.deviceUniqueIdentifier}");
-            ShowAuthenticationError(e.Message);
-        }
-    }
+            ChunaLogger.Log("[LobbyUI] 디바이스 인증 시작...");
 
-    private async UniTask AuthenticateDeviceWithRetry(string deviceSN, int retryCount = 0)
-    {
-        const int maxRetries = 2;
+            var (deviceSN, orgID, licenseValid) = await authFlowManager.AuthenticateDeviceWithRetry(savedDeviceSN);
 
-        try
-        {
-            var deviceData = await authService.AuthenticateDeviceAsync(deviceSN);
+            currentDeviceSN = deviceSN;
+            currentOrgID = orgID;
+            loginStateStore.SaveDeviceSN(currentDeviceSN);
 
-            if (deviceData == null)
-            {
-                throw new Exception("인증 응답 데이터가 null입니다.");
-            }
-
-            currentDeviceSN = deviceSN ?? SystemInfo.deviceUniqueIdentifier;
-            currentOrgID = deviceData.orgID;
-
-            SaveDeviceSN(currentDeviceSN);
-
-            Debug.Log($"[LobbyUI] 인증 성공: DeviceSN={currentDeviceSN}, OrgID={currentOrgID}");
-
-            if (deviceData.licCHUNA <= 0)
+            if (!licenseValid)
             {
                 ShowLicenseError();
                 return;
             }
 
-            await LoadUserList();
+            allUsers = await authFlowManager.LoadUserList(currentOrgID);
+
+            if (allUsers != null && allUsers.Length > 0)
+            {
+                usersByGrade = authFlowManager.OrganizeByGrade(allUsers);
+            }
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 인증 실패 (시도 {retryCount + 1}/{maxRetries + 1}): {e.Message} | DeviceSN: {deviceSN ?? "AUTO"} | UUID: {SystemInfo.deviceUniqueIdentifier}");
-
-            // "등록된 장치입니다" 오류 시 UUID 앞 10글자로 재시도
-            if (e.Message.Contains("등록된 장치입니다"))
-            {
-                string uuidSubstring = SystemInfo.deviceUniqueIdentifier.Substring(0, 10);
-                Debug.Log($"[LobbyUI] 등록된 장치 감지 - UUID 앞 10글자로 재시도: {uuidSubstring}");
-                await AuthenticateDeviceWithRetry(uuidSubstring, 0);
-                return;
-            }
-
-            if (retryCount < maxRetries)
-            {
-                await UniTask.Delay(1000);
-                await AuthenticateDeviceWithRetry(savedDeviceSN, retryCount + 1);
-            }
-            else
-            {
-                throw;
-            }
+            ChunaLogger.LogError($"[LobbyUI] 인증 최종 실패: {e.Message} | UUID: {SystemInfo.deviceUniqueIdentifier}");
+            ShowAuthenticationError(e.Message);
         }
-    }
-
-    private async UniTask LoadUserList()
-    {
-        try
-        {
-            Debug.Log($"[LobbyUI] 사용자 목록 로드 시작: {currentOrgID}");
-
-            allUsers = await authService.GetUserListAsync(currentOrgID);
-
-            if (allUsers == null || allUsers.Length == 0)
-            {
-                Debug.LogWarning("[LobbyUI] 사용자 목록이 비어있습니다.");
-                return;
-            }
-
-            OrganizeUsersByGrade();
-
-            Debug.Log($"[LobbyUI] 사용자 목록 로드 완료: {allUsers.Length}명");
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"[LobbyUI] 사용자 목록 로드 실패: {e.Message}");
-        }
-    }
-
-    private void OrganizeUsersByGrade()
-    {
-        usersByGrade.Clear();
-
-        foreach (var user in allUsers)
-        {
-            if (!usersByGrade.ContainsKey(user.grade))
-            {
-                usersByGrade[user.grade] = new List<UserData>();
-            }
-            usersByGrade[user.grade].Add(user);
-        }
-
-        Debug.Log($"[LobbyUI] 조별 분류 완료: {usersByGrade.Count}개 조");
     }
     #endregion
 
@@ -583,17 +518,17 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     public void OnScenarioCardClicked(int scenarioIndex)
     {
-        Debug.Log($"[LobbyUI] ========== 시나리오 카드 {scenarioIndex + 1} 클릭 ==========");
+        ChunaLogger.Log($"[LobbyUI] ========== 시나리오 카드 {scenarioIndex + 1} 클릭 ==========");
 
         // 로그인 체크
         if (string.IsNullOrEmpty(currentUsername))
         {
-            Debug.LogWarning("[LobbyUI] ⚠️ 로그인이 필요합니다!");
-            ShowLoginRequiredPopup();
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ 로그인이 필요합니다!");
+            popupHandler.ShowLoginRequiredPopup();
             return;
         }
 
-        Debug.Log($"[LobbyUI] ✅ 시나리오 {scenarioIndex + 1} 시작: 사용자={currentUsername}");
+        ChunaLogger.Log($"[LobbyUI] ✅ 시나리오 {scenarioIndex + 1} 시작: 사용자={currentUsername}");
 
         // 시나리오 씬 로드 (로딩씬 사용)
         SceneLoader.LoadScene($"Scenario_{scenarioIndex + 1}");
@@ -601,41 +536,41 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void OnUserIconClicked()
     {
-        Debug.Log($"[LobbyUI] ========== 유저 아이콘 클릭 ==========");
-        Debug.Log($"[LobbyUI] currentUsername: '{currentUsername}' (IsNullOrEmpty: {string.IsNullOrEmpty(currentUsername)})");
+        ChunaLogger.Log($"[LobbyUI] ========== 유저 아이콘 클릭 ==========");
+        ChunaLogger.Log($"[LobbyUI] currentUsername: '{currentUsername}' (IsNullOrEmpty: {string.IsNullOrEmpty(currentUsername)})");
 
         // 로그인 상태 확인
         if (string.IsNullOrEmpty(currentUsername))
         {
             // 로그인 안 되어 있으면 조 선택 패널 표시
-            Debug.Log("[LobbyUI] ➡️ 로그인 안 되어 있음 - 조 선택 패널 표시");
-            ShowGradeSelectionPanel();
+            ChunaLogger.Log("[LobbyUI] ➡️ 로그인 안 되어 있음 - 조 선택 패널 표시");
+            gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
         }
         else
         {
             // 로그인 되어 있으면 로그아웃 확인 팝업 표시
-            Debug.Log($"[LobbyUI] ➡️ 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
-            ShowLogoutConfirmationPopup();
+            ChunaLogger.Log($"[LobbyUI] ➡️ 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
+            popupHandler.ShowLogoutConfirmPopup();
         }
     }
 
     private void OnGradeBackButtonClicked()
     {
-        Debug.Log("[LobbyUI] 조 선택 뒤로가기 클릭");
-        HideGradeSelectionPanel();
+        ChunaLogger.Log("[LobbyUI] 조 선택 뒤로가기 클릭");
+        gradeSelectionHandler.Hide();
     }
 
     private void OnUserBackButtonClicked()
     {
-        Debug.Log("[LobbyUI] 사용자 선택 뒤로가기 클릭");
-        HideUserSelectionPanel();
-        ShowGradeSelectionPanel();
+        ChunaLogger.Log("[LobbyUI] 사용자 선택 뒤로가기 클릭");
+        userSelectionHandler.Hide();
+        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
     }
 
     private void OnExitButtonClicked()
     {
-        Debug.Log("[LobbyUI] 나가기 버튼 클릭");
-        ShowExitConfirmationPopup();
+        ChunaLogger.Log("[LobbyUI] 나가기 버튼 클릭");
+        popupHandler.ShowExitConfirmPopup();
     }
 
     /// <summary>
@@ -643,8 +578,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnExitConfirmYes()
     {
-        Debug.Log("[LobbyUI] 종료 확인 - 예 선택");
-        HideExitConfirmationPopup();
+        ChunaLogger.Log("[LobbyUI] 종료 확인 - 예 선택");
+        popupHandler.HideExitConfirmPopup();
 
         // 설문 패널 표시 후 종료
         if (surveyPanel != null)
@@ -656,7 +591,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         else
         {
             // SurveyPanel 없으면 바로 종료
-            Debug.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 종료합니다.");
+            ChunaLogger.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 종료합니다.");
             ExitApplication().Forget();
         }
     }
@@ -666,8 +601,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnExitConfirmNo()
     {
-        Debug.Log("[LobbyUI] 종료 확인 - 아니오 선택");
-        HideExitConfirmationPopup();
+        ChunaLogger.Log("[LobbyUI] 종료 확인 - 아니오 선택");
+        popupHandler.HideExitConfirmPopup();
     }
 
     /// <summary>
@@ -675,28 +610,19 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private async UniTaskVoid ExitApplication()
     {
-        Debug.Log("[LobbyUI] 애플리케이션 종료 시작");
+        ChunaLogger.Log("[LobbyUI] 애플리케이션 종료 시작");
 
         // 로그인 상태면 로그아웃 먼저 수행
         if (!string.IsNullOrEmpty(currentUsername) && !string.IsNullOrEmpty(currentDeviceSN))
         {
-            Debug.Log($"[LobbyUI] 종료 전 로그아웃 시도: {currentUsername}");
-
-            try
-            {
-                await authService.LogoffAsync(currentDeviceSN, currentUsername, "VR_CHUNA");
-                Debug.Log("[LobbyUI] ✅ 종료 전 로그아웃 성공");
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[LobbyUI] ⚠️ 종료 전 로그아웃 실패 (무시): {e.Message}");
-            }
+            ChunaLogger.Log($"[LobbyUI] 종료 전 로그아웃 시도: {currentUsername}");
+            await authFlowManager.PerformLogout(currentDeviceSN, currentUsername);
 
             // PlayerPrefs 로그인 정보 삭제
-            ClearSavedLoginInfo();
+            loginStateStore.ClearLoginInfo();
         }
 
-        Debug.Log("[LobbyUI] 애플리케이션 종료");
+        ChunaLogger.Log("[LobbyUI] 애플리케이션 종료");
 
         // 애플리케이션 종료
 #if UNITY_EDITOR
@@ -708,260 +634,32 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void OnInteractionGuideClicked()
     {
-        Debug.Log("[LobbyUI] 상호작용 가이드 버튼 클릭");
+        ChunaLogger.Log("[LobbyUI] 상호작용 가이드 버튼 클릭");
         // TODO: 상호작용 가이드 표시
     }
     #endregion
 
-    #region Grade Selection Panel
-    private void ShowGradeSelectionPanel()
-    {
-        if (gradeSelectionPanel == null)
-        {
-            Debug.LogError("[LobbyUI] gradeSelectionPanel이 null입니다!");
-            return;
-        }
-
-        gradeSelectionPanel.SetActive(true);
-        CreateGradeButtons();
-        Debug.Log("[LobbyUI] 조 선택 패널 표시");
-    }
-
-    private void HideGradeSelectionPanel()
-    {
-        if (gradeSelectionPanel != null)
-        {
-            gradeSelectionPanel.SetActive(false);
-        }
-
-        ClearGradeButtons();
-        Debug.Log("[LobbyUI] 조 선택 패널 숨김");
-    }
-
-    private void CreateGradeButtons()
-    {
-        ClearGradeButtons();
-
-        if (gradeButtonPrefab == null || gradeContentContainer == null)
-        {
-            Debug.LogError("[LobbyUI] gradeButtonPrefab 또는 gradeContentContainer가 null입니다!");
-            return;
-        }
-
-        foreach (var kvp in usersByGrade)
-        {
-            string grade = kvp.Key;
-            GameObject buttonObj = Instantiate(gradeButtonPrefab, gradeContentContainer);
-
-            // 강제 활성화
-            buttonObj.SetActive(true);
-
-            // RectTransform 설정
-            var rectTransform = buttonObj.GetComponent<RectTransform>();
-            if (rectTransform != null)
-            {
-                rectTransform.sizeDelta = new Vector2(280, 60);
-            }
-
-            // LayoutElement 추가/설정
-            var layoutElement = buttonObj.GetComponent<LayoutElement>();
-            if (layoutElement == null)
-            {
-                layoutElement = buttonObj.AddComponent<LayoutElement>();
-            }
-            layoutElement.minHeight = 60;
-            layoutElement.preferredHeight = 60;
-
-            var textComponent = buttonObj.GetComponentInChildren<TextMeshProUGUI>();
-            if (textComponent != null)
-            {
-                textComponent.text = grade;
-                textComponent.color = Color.white; // 텍스트 색상 명시
-                Debug.Log($"[LobbyUI] 조 버튼 텍스트 설정: {grade}");
-            }
-            else
-            {
-                Debug.LogWarning($"[LobbyUI] 조 버튼에서 TextMeshProUGUI를 찾을 수 없습니다!");
-            }
-
-            var button = buttonObj.GetComponent<Button>();
-            if (button != null)
-            {
-                button.onClick.AddListener(() => OnGradeSelected(grade));
-            }
-
-            activeGradeButtons.Add(buttonObj);
-        }
-
-        Debug.Log($"[LobbyUI] 조 버튼 생성 완료: {activeGradeButtons.Count}개");
-
-        // Content 크기 조정
-        AdjustContentSize(gradeContentContainer, activeGradeButtons.Count);
-    }
-
-    private void ClearGradeButtons()
-    {
-        foreach (var button in activeGradeButtons)
-        {
-            if (button != null)
-            {
-                Destroy(button);
-            }
-        }
-        activeGradeButtons.Clear();
-    }
-
+    #region Grade/User Selection
     private void OnGradeSelected(string grade)
     {
         selectedGrade = grade;
-        Debug.Log($"[LobbyUI] 조 선택: {grade}");
+        ChunaLogger.Log($"[LobbyUI] 조 선택: {grade}");
 
-        HideGradeSelectionPanel();
-        ShowUserSelectionPanel();
-    }
-    #endregion
+        gradeSelectionHandler.Hide();
 
-    #region User Selection Panel
-    private void ShowUserSelectionPanel()
-    {
-        if (userSelectionPanel == null)
+        if (usersByGrade.ContainsKey(selectedGrade))
         {
-            Debug.LogError("[LobbyUI] userSelectionPanel이 null입니다!");
-            return;
+            userSelectionHandler.ShowPanel(usersByGrade[selectedGrade], OnUserSelected);
         }
-
-        userSelectionPanel.SetActive(true);
-        CreateUserButtons();
-        Debug.Log("[LobbyUI] 사용자 선택 패널 표시");
-    }
-
-    private void HideUserSelectionPanel()
-    {
-        if (userSelectionPanel != null)
+        else
         {
-            userSelectionPanel.SetActive(false);
-        }
-
-        ClearUserButtons();
-        Debug.Log("[LobbyUI] 사용자 선택 패널 숨김");
-    }
-
-    private void CreateUserButtons()
-    {
-        ClearUserButtons();
-
-        if (userButtonPrefab == null || userContentContainer == null)
-        {
-            Debug.LogError("[LobbyUI] userButtonPrefab 또는 userContentContainer가 null입니다!");
-            return;
-        }
-
-        if (!usersByGrade.ContainsKey(selectedGrade))
-        {
-            Debug.LogWarning($"[LobbyUI] 선택된 조에 사용자가 없습니다: {selectedGrade}");
-            return;
-        }
-
-        var users = usersByGrade[selectedGrade];
-
-        foreach (var user in users)
-        {
-            GameObject buttonObj = Instantiate(userButtonPrefab, userContentContainer);
-
-            // 강제 활성화
-            buttonObj.SetActive(true);
-
-            // RectTransform 설정
-            var rectTransform = buttonObj.GetComponent<RectTransform>();
-            if (rectTransform != null)
-            {
-                rectTransform.sizeDelta = new Vector2(280, 60);
-            }
-
-            // LayoutElement 추가/설정
-            var layoutElement = buttonObj.GetComponent<LayoutElement>();
-            if (layoutElement == null)
-            {
-                layoutElement = buttonObj.AddComponent<LayoutElement>();
-            }
-            layoutElement.minHeight = 60;
-            layoutElement.preferredHeight = 60;
-
-            var textComponent = buttonObj.GetComponentInChildren<TextMeshProUGUI>();
-            if (textComponent != null)
-            {
-                textComponent.text = user.username;
-                textComponent.color = Color.white; // 텍스트 색상 명시
-                Debug.Log($"[LobbyUI] 사용자 버튼 텍스트 설정: {user.username}");
-            }
-            else
-            {
-                Debug.LogWarning($"[LobbyUI] 사용자 버튼에서 TextMeshProUGUI를 찾을 수 없습니다!");
-            }
-
-            var button = buttonObj.GetComponent<Button>();
-            if (button != null)
-            {
-                int userId = user.idx;
-                string username = user.username;
-                button.onClick.AddListener(() => OnUserSelected(userId, username));
-            }
-
-            activeUserButtons.Add(buttonObj);
-        }
-
-        Debug.Log($"[LobbyUI] 사용자 버튼 생성 완료: {activeUserButtons.Count}개");
-
-        // Content 크기 조정
-        AdjustContentSize(userContentContainer, activeUserButtons.Count);
-    }
-
-    private void ClearUserButtons()
-    {
-        foreach (var button in activeUserButtons)
-        {
-            if (button != null)
-            {
-                Destroy(button);
-            }
-        }
-        activeUserButtons.Clear();
-    }
-
-    /// <summary>
-    /// Content의 크기를 버튼 개수에 맞게 조정
-    /// </summary>
-    private void AdjustContentSize(Transform content, int buttonCount)
-    {
-        if (content == null) return;
-
-        var rectTransform = content.GetComponent<RectTransform>();
-        if (rectTransform != null)
-        {
-            // 버튼 높이(60) + 간격(10) * 개수
-            float totalHeight = (60 + 10) * buttonCount;
-            rectTransform.sizeDelta = new Vector2(rectTransform.sizeDelta.x, totalHeight);
-
-            Debug.Log($"[LobbyUI] Content 크기 조정: {totalHeight}");
-        }
-
-        // Vertical Layout Group 추가 (없으면)
-        var layout = content.GetComponent<VerticalLayoutGroup>();
-        if (layout == null)
-        {
-            layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.childForceExpandHeight = false;
-            layout.childForceExpandWidth = true;
-            layout.spacing = 10;
-            layout.padding = new RectOffset(10, 10, 10, 10);
-
-            Debug.Log($"[LobbyUI] VerticalLayoutGroup 추가됨");
+            ChunaLogger.LogWarning($"[LobbyUI] 선택된 조에 사용자가 없습니다: {selectedGrade}");
         }
     }
 
     private void OnUserSelected(int userId, string username)
     {
-        Debug.Log($"[LobbyUI] 사용자 선택: {username} (ID: {userId})");
+        ChunaLogger.Log($"[LobbyUI] 사용자 선택: {username} (ID: {userId})");
         PerformLogin(userId, username).Forget();
     }
     #endregion
@@ -971,43 +669,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         try
         {
-            Debug.Log($"[LobbyUI] 로그인 시작: {username}");
-
-            MirroringData mirroringData = null;
-            try
-            {
-                mirroringData = await authService.LogonAsync(
-                    currentDeviceSN,
-                    username,
-                    "VR_CHUNA"
-                );
-
-                Debug.Log($"[LobbyUI] 미러링 데이터 수신 완료: {mirroringData?.serverIP}:{mirroringData?.portNo}");
-            }
-            catch (Exception logonException)
-            {
-                // 404 에러(serverIP not found)는 경고로 처리하고 로그인 진행
-                if (logonException.Message.Contains("404") || logonException.Message.Contains("serverIP not found"))
-                {
-                    Debug.LogWarning($"[LobbyUI] 미러링 정보 없음 (무시하고 진행): {logonException.Message}");
-                }
-                else
-                {
-                    // 다른 에러는 재발생
-                    throw;
-                }
-            }
+            var mirroringData = await authFlowManager.PerformLogin(currentDeviceSN, username);
 
             // 로그인 정보 저장
             currentUserID = userId;
             currentUsername = username;
+            loginStateStore.SaveLoginInfo(username, userId);
 
-            // PlayerPrefs에 로그인 정보 저장 (씬 전환 후에도 유지)
-            SaveLoginInfo(username, userId);
+            ChunaLogger.Log($"[LobbyUI] 로그인 정보 저장 완료 - currentUsername: '{currentUsername}', currentUserID: {currentUserID}");
 
-            Debug.Log($"[LobbyUI] 로그인 정보 저장 완료 - currentUsername: '{currentUsername}', currentUserID: {currentUserID}");
-
-            HideUserSelectionPanel();
+            userSelectionHandler.Hide();
             UpdateUserInfoPanel();
 
             // 시나리오 카드 활성화
@@ -1016,14 +687,14 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             // 안내 메시지 변경
             SetGuideMessage(scenarioGuideMessage);
 
-            // ★★★ 미러링 시작: Camera X 활성화 및 미러링 데이터 전달 ★★★
+            // 미러링 시작: Camera X 활성화 및 미러링 데이터 전달
             ActivateMirroring(mirroringData);
 
-            Debug.Log($"[LobbyUI] ✅ 로그인 완료: {username} (ID: {userId})");
+            ChunaLogger.Log($"[LobbyUI] ✅ 로그인 완료: {username} (ID: {userId})");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] ❌ 로그인 실패: {e.Message}");
+            ChunaLogger.LogError($"[LobbyUI] ❌ 로그인 실패: {e.Message}");
             ShowLoginError(e.Message);
         }
     }
@@ -1036,7 +707,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 미러링 데이터가 없거나 off면 미러링 안함
         if (mirroringData == null || mirroringData.mirroring == "off")
         {
-            Debug.Log("[LobbyUI] 미러링 비활성화 상태 (데이터 없음 또는 off)");
+            ChunaLogger.Log("[LobbyUI] 미러링 비활성화 상태 (데이터 없음 또는 off)");
             return;
         }
 
@@ -1044,14 +715,14 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         if (mirroringCameraObject != null)
         {
             mirroringCameraObject.SetActive(true);
-            Debug.Log($"[LobbyUI] 미러링 카메라 활성화됨: {mirroringCameraObject.name}");
+            ChunaLogger.Log($"[LobbyUI] 미러링 카메라 활성화됨: {mirroringCameraObject.name}");
 
             // RenderManager가 활성화되면 약간의 딜레이 후 데이터 전달
             StartCoroutine(SetMirroringDataDelayed(mirroringData));
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] mirroringCameraObject가 설정되지 않음");
+            ChunaLogger.LogWarning("[LobbyUI] mirroringCameraObject가 설정되지 않음");
 
             // 직접 RenderManager 찾아서 전달 시도
             if (RenderManager.instance != null)
@@ -1069,11 +740,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         if (RenderManager.instance != null)
         {
             RenderManager.instance.SetMirroringData(mirroringData);
-            Debug.Log($"[LobbyUI] RenderManager에 미러링 데이터 전달 완료");
+            ChunaLogger.Log($"[LobbyUI] RenderManager에 미러링 데이터 전달 완료");
         }
         else
         {
-            Debug.LogWarning("[LobbyUI] RenderManager.instance가 null");
+            ChunaLogger.LogWarning("[LobbyUI] RenderManager.instance가 null");
         }
     }
 
@@ -1092,30 +763,14 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             return;
         }
 
-        Debug.Log($"[LobbyUI] 로그아웃 시작: {currentUsername}");
-
-        try
-        {
-            await authService.LogoffAsync(
-                currentDeviceSN,
-                currentUsername,
-                "VR_CHUNA"
-            );
-
-            Debug.Log($"[LobbyUI] ✅ 로그아웃 API 호출 성공");
-        }
-        catch (Exception e)
-        {
-            // 로그아웃 실패는 무시 (이미 로그아웃 상태이거나 네트워크 오류일 수 있음)
-            Debug.LogWarning($"[LobbyUI] ⚠️ 로그아웃 API 실패 (무시하고 진행): {e.Message}");
-        }
+        await authFlowManager.PerformLogout(currentDeviceSN, currentUsername);
 
         // 미러링 비활성화
         DeactivateMirroring();
 
         // API 실패 여부와 관계없이 로컬 상태는 항상 초기화
         ClearUserInfo();
-        Debug.Log($"[LobbyUI] ✅ 로그아웃 완료 (로컬 상태 초기화)");
+        ChunaLogger.Log($"[LobbyUI] ✅ 로그아웃 완료 (로컬 상태 초기화)");
     }
 
     /// <summary>
@@ -1133,204 +788,20 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         if (mirroringCameraObject != null)
         {
             mirroringCameraObject.SetActive(false);
-            Debug.Log($"[LobbyUI] 미러링 카메라 비활성화됨: {mirroringCameraObject.name}");
+            ChunaLogger.Log($"[LobbyUI] 미러링 카메라 비활성화됨: {mirroringCameraObject.name}");
         }
     }
     #endregion
 
-    #region Auth Event Handlers
-    private void OnAuthenticationSuccess(string deviceSN)
-    {
-        Debug.Log($"[LobbyUI] [이벤트] 인증 성공: {deviceSN}");
-    }
-
-    private void OnAuthenticationFailed(string errorMessage)
-    {
-        Debug.LogError($"[LobbyUI] [이벤트] 인증 실패: {errorMessage}");
-    }
-
-    private void OnUserListLoadCompleted(int userCount)
-    {
-        Debug.Log($"[LobbyUI] [이벤트] 사용자 목록 로드 완료: {userCount}명");
-    }
-
-    private void OnUserListLoadFailed(string errorMessage)
-    {
-        Debug.LogError($"[LobbyUI] [이벤트] 사용자 목록 로드 실패: {errorMessage}");
-    }
-
-    private void OnLoginSuccess(string username, int userID)
-    {
-        Debug.Log($"[LobbyUI] [이벤트] 로그인 성공: {username}");
-    }
-
-    private void OnLoginFailed(string username, string errorMessage)
-    {
-        Debug.LogError($"[LobbyUI] [이벤트] 로그인 실패: {username} - {errorMessage}");
-    }
-
-    private void OnLogoutCompleted(string username)
-    {
-        Debug.Log($"[LobbyUI] [이벤트] 로그아웃 완료: {username}");
-    }
-    #endregion
-
-    #region UI Update
-    private void UpdateUserInfoPanel()
-    {
-        // userInfoContent는 항상 활성화되어 있음 (초기화 시 true로 설정됨)
-        // 로그인/로그아웃 시 텍스트만 변경
-        if (userNameText != null)
-        {
-            userNameText.text = currentUsername;
-        }
-
-        Debug.Log("[LobbyUI] 사용자 정보 패널 업데이트");
-    }
-
-    private void ClearUserInfo()
-    {
-        currentUsername = string.Empty;
-        currentUserID = 0;
-
-        // PlayerPrefs에서 로그인 정보 삭제
-        ClearSavedLoginInfo();
-
-        // 텍스트만 "Guest"로 변경 (버튼은 계속 보임)
-        if (userNameText != null)
-        {
-            userNameText.text = "Guest";
-        }
-
-        // userInfoContent는 계속 활성화 상태 유지
-
-        // 시나리오 카드 시각적으로 비활성화
-        SetScenarioCardsVisualState(false);
-
-        // 안내 메시지 복원
-        SetGuideMessage(loginGuideMessage);
-
-        Debug.Log("[LobbyUI] 사용자 정보 초기화 (Guest로 표시)");
-    }
-
-    private void SetScenarioCardsVisualState(bool active)
-    {
-        float targetAlpha = active ? 1f : 0.5f;
-
-        // CanvasGroup으로 알파 조절 (클릭은 항상 가능)
-        foreach (var canvasGroup in scenarioCardCanvasGroups)
-        {
-            if (canvasGroup != null)
-            {
-                canvasGroup.alpha = targetAlpha;
-                // interactable과 blocksRaycasts는 항상 true (항상 클릭 가능)
-                canvasGroup.interactable = true;
-                canvasGroup.blocksRaycasts = true;
-            }
-        }
-
-        Debug.Log($"[LobbyUI] 시나리오 카드 시각 상태: {(active ? "활성" : "비활성")} (Alpha: {targetAlpha})");
-    }
-
-    /// <summary>
-    /// 안내 메시지 설정
-    /// </summary>
-    private void SetGuideMessage(string message)
-    {
-        if (guideMessageText != null)
-        {
-            guideMessageText.text = message;
-            Debug.Log($"[LobbyUI] 안내 메시지 변경: {message}");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] guideMessageText가 연결되지 않았습니다.");
-        }
-    }
-
-    private void ShowLoginRequiredPopup()
-    {
-        if (loginRequiredPopup != null)
-        {
-            loginRequiredPopup.SetActive(true);
-            Debug.Log("[LobbyUI] 로그인 필요 팝업 표시");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] loginRequiredPopup이 연결되지 않았습니다.");
-        }
-    }
-
-    private void OnLoginRequiredPopupClose()
-    {
-        if (loginRequiredPopup != null)
-        {
-            loginRequiredPopup.SetActive(false);
-            Debug.Log("[LobbyUI] 로그인 필요 팝업 닫기");
-        }
-    }
-
+    #region Popup Handlers
     /// <summary>
     /// 로그인 팝업에서 유저 목록으로 이동
     /// </summary>
     private void OnLoginRequiredPopupGoToUserList()
     {
-        Debug.Log("[LobbyUI] 로그인 팝업 - 유저 목록으로 이동");
-
-        // 팝업 닫기
-        if (loginRequiredPopup != null)
-        {
-            loginRequiredPopup.SetActive(false);
-        }
-
-        // 조 선택 패널 표시
-        ShowGradeSelectionPanel();
-    }
-
-    private void ShowExitConfirmationPopup()
-    {
-        if (exitConfirmationPopup != null)
-        {
-            exitConfirmationPopup.SetActive(true);
-            Debug.Log("[LobbyUI] 종료 확인 팝업 표시");
-        }
-        else
-        {
-            Debug.LogWarning("[LobbyUI] exitConfirmationPopup이 연결되지 않았습니다.");
-        }
-    }
-
-    private void HideExitConfirmationPopup()
-    {
-        if (exitConfirmationPopup != null)
-        {
-            exitConfirmationPopup.SetActive(false);
-            Debug.Log("[LobbyUI] 종료 확인 팝업 닫기");
-        }
-    }
-
-    private void ShowLogoutConfirmationPopup()
-    {
-        Debug.Log($"[LobbyUI] ShowLogoutConfirmationPopup 호출 - logoutConfirmationPopup: {(logoutConfirmationPopup != null ? "연결됨" : "NULL")}");
-
-        if (logoutConfirmationPopup != null)
-        {
-            logoutConfirmationPopup.SetActive(true);
-            Debug.Log("[LobbyUI] ✅ 로그아웃 확인 팝업 표시 완료");
-        }
-        else
-        {
-            Debug.LogError("[LobbyUI] ❌ logoutConfirmationPopup이 NULL입니다! Inspector에서 연결되어 있는지 확인하세요.");
-        }
-    }
-
-    private void HideLogoutConfirmationPopup()
-    {
-        if (logoutConfirmationPopup != null)
-        {
-            logoutConfirmationPopup.SetActive(false);
-            Debug.Log("[LobbyUI] 로그아웃 확인 팝업 닫기");
-        }
+        ChunaLogger.Log("[LobbyUI] 로그인 팝업 - 유저 목록으로 이동");
+        popupHandler.HideLoginRequiredPopup();
+        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
     }
 
     /// <summary>
@@ -1338,8 +809,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnLogoutCancel()
     {
-        Debug.Log("[LobbyUI] 로그아웃 취소");
-        HideLogoutConfirmationPopup();
+        ChunaLogger.Log("[LobbyUI] 로그아웃 취소");
+        popupHandler.HideLogoutConfirmPopup();
     }
 
     /// <summary>
@@ -1347,8 +818,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnLogoutConfirm()
     {
-        Debug.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
-        HideLogoutConfirmationPopup();
+        ChunaLogger.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
+        popupHandler.HideLogoutConfirmPopup();
 
         // 설문 패널 표시 후 로그아웃
         if (surveyPanel != null)
@@ -1360,7 +831,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         else
         {
             // SurveyPanel 없으면 바로 로그아웃
-            Debug.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 로그아웃합니다.");
+            ChunaLogger.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 로그아웃합니다.");
             PerformLogout().Forget();
         }
     }
@@ -1382,7 +853,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         if (toggle == null)
         {
-            Debug.LogWarning($"[LobbyUI] ⚠️ {debugLabel} 토글이 null입니다.");
+            ChunaLogger.LogWarning($"[LobbyUI] ⚠️ {debugLabel} 토글이 null입니다.");
             return;
         }
 
@@ -1396,26 +867,155 @@ public class LobbyAuthUI_Complete : MonoBehaviour
                 StartCoroutine(ResetToggle(toggle));
             }
         });
-        Debug.Log($"[LobbyUI] ✅ {debugLabel} 토글 연결");
+        ChunaLogger.Log($"[LobbyUI] ✅ {debugLabel} 토글 연결");
+    }
+    #endregion
+
+    #region Auth Event Handlers
+    private void OnAuthenticationSuccess(string deviceSN)
+    {
+        ChunaLogger.Log($"[LobbyUI] [이벤트] 인증 성공: {deviceSN}");
+    }
+
+    private void OnAuthenticationFailed(string errorMessage)
+    {
+        ChunaLogger.LogError($"[LobbyUI] [이벤트] 인증 실패: {errorMessage}");
+    }
+
+    private void OnUserListLoadCompleted(int userCount)
+    {
+        ChunaLogger.Log($"[LobbyUI] [이벤트] 사용자 목록 로드 완료: {userCount}명");
+    }
+
+    private void OnUserListLoadFailed(string errorMessage)
+    {
+        ChunaLogger.LogError($"[LobbyUI] [이벤트] 사용자 목록 로드 실패: {errorMessage}");
+    }
+
+    private void OnLoginSuccess(string username, int userID)
+    {
+        ChunaLogger.Log($"[LobbyUI] [이벤트] 로그인 성공: {username}");
+    }
+
+    private void OnLoginFailed(string username, string errorMessage)
+    {
+        ChunaLogger.LogError($"[LobbyUI] [이벤트] 로그인 실패: {username} - {errorMessage}");
+    }
+
+    private void OnLogoutCompleted(string username)
+    {
+        ChunaLogger.Log($"[LobbyUI] [이벤트] 로그아웃 완료: {username}");
+    }
+    #endregion
+
+    #region UI Update
+    private void UpdateUserInfoPanel()
+    {
+        if (userNameText != null)
+        {
+            userNameText.text = currentUsername;
+        }
+
+        ChunaLogger.Log("[LobbyUI] 사용자 정보 패널 업데이트");
+    }
+
+    private void ClearUserInfo()
+    {
+        currentUsername = string.Empty;
+        currentUserID = 0;
+
+        // PlayerPrefs에서 로그인 정보 삭제
+        loginStateStore.ClearLoginInfo();
+
+        // 텍스트만 "Guest"로 변경 (버튼은 계속 보임)
+        if (userNameText != null)
+        {
+            userNameText.text = "Guest";
+        }
+
+        // 시나리오 카드 시각적으로 비활성화
+        SetScenarioCardsVisualState(false);
+
+        // 안내 메시지 복원
+        SetGuideMessage(loginGuideMessage);
+
+        ChunaLogger.Log("[LobbyUI] 사용자 정보 초기화 (Guest로 표시)");
+    }
+
+    private void SetScenarioCardsVisualState(bool active)
+    {
+        float targetAlpha = active ? 1f : 0.5f;
+
+        // CanvasGroup으로 알파 조절 (클릭은 항상 가능)
+        foreach (var canvasGroup in scenarioCardCanvasGroups)
+        {
+            if (canvasGroup != null)
+            {
+                canvasGroup.alpha = targetAlpha;
+                // interactable과 blocksRaycasts는 항상 true (항상 클릭 가능)
+                canvasGroup.interactable = true;
+                canvasGroup.blocksRaycasts = true;
+            }
+        }
+
+        ChunaLogger.Log($"[LobbyUI] 시나리오 카드 시각 상태: {(active ? "활성" : "비활성")} (Alpha: {targetAlpha})");
+    }
+
+    /// <summary>
+    /// 안내 메시지 설정
+    /// </summary>
+    private void SetGuideMessage(string message)
+    {
+        if (guideMessageText != null)
+        {
+            guideMessageText.text = message;
+            ChunaLogger.Log($"[LobbyUI] 안내 메시지 변경: {message}");
+        }
+        else
+        {
+            ChunaLogger.LogWarning("[LobbyUI] guideMessageText가 연결되지 않았습니다.");
+        }
+    }
+    #endregion
+
+    #region PlayerPrefs Management (delegated to LoginStateStore)
+    private void LoadSavedDeviceSN()
+    {
+        savedDeviceSN = loginStateStore.LoadDeviceSN();
+    }
+
+    private void LoadSavedLoginInfo()
+    {
+        var info = loginStateStore.LoadLoginInfo();
+        if (info.hasData)
+        {
+            currentUsername = info.username;
+            currentUserID = info.userID;
+        }
+        else
+        {
+            currentUsername = string.Empty;
+            currentUserID = 0;
+        }
     }
     #endregion
 
     #region Error Handling
     private void ShowAuthenticationError(string errorMessage)
     {
-        Debug.LogError($"[LobbyUI] 인증 오류 표시: {errorMessage}");
+        ChunaLogger.LogError($"[LobbyUI] 인증 오류 표시: {errorMessage}");
         // TODO: 에러 팝업 표시
     }
 
     private void ShowLicenseError()
     {
-        Debug.LogError("[LobbyUI] 라이선스 오류");
+        ChunaLogger.LogError("[LobbyUI] 라이선스 오류");
         // TODO: 라이선스 에러 팝업 표시
     }
 
     private void ShowLoginError(string errorMessage)
     {
-        Debug.LogError($"[LobbyUI] 로그인 오류 표시: {errorMessage}");
+        ChunaLogger.LogError($"[LobbyUI] 로그인 오류 표시: {errorMessage}");
         // TODO: 로그인 에러 팝업 표시
     }
     #endregion
@@ -1438,104 +1038,27 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         if (string.IsNullOrEmpty(currentDeviceSN))
         {
-            Debug.LogWarning("[LobbyUI] DeviceSN이 없어 초기화할 수 없습니다.");
+            ChunaLogger.LogWarning("[LobbyUI] DeviceSN이 없어 초기화할 수 없습니다.");
             return;
         }
 
         try
         {
-            Debug.Log($"[LobbyUI] 디바이스 초기화 시작: {currentDeviceSN}");
+            await authFlowManager.ResetDevice(currentDeviceSN);
 
-            await authService.ResetDeviceAsync(currentDeviceSN, "VR_CHUNA");
-
-            ClearSavedDeviceSN();
+            loginStateStore.ClearAllData();
             currentDeviceSN = string.Empty;
             currentOrgID = string.Empty;
             currentUserID = 0;
             currentUsername = string.Empty;
+            savedDeviceSN = string.Empty;
 
-            Debug.Log("[LobbyUI] 디바이스 초기화 완료");
-
-            // TODO: 인증 씬으로 이동
-            // SceneManager.LoadScene("AuthMain");
+            ChunaLogger.Log("[LobbyUI] 디바이스 초기화 완료");
         }
         catch (Exception e)
         {
-            Debug.LogError($"[LobbyUI] 디바이스 초기화 실패: {e.Message}");
+            ChunaLogger.LogError($"[LobbyUI] 디바이스 초기화 실패: {e.Message}");
         }
-    }
-    #endregion
-
-    #region PlayerPrefs Management
-    private void LoadSavedDeviceSN()
-    {
-        if (PlayerPrefs.HasKey("DEVICE_SN"))
-        {
-            savedDeviceSN = PlayerPrefs.GetString("DEVICE_SN");
-            Debug.Log($"[LobbyUI] 저장된 DeviceSN 로드: {savedDeviceSN}");
-        }
-        else
-        {
-            savedDeviceSN = string.Empty;
-            Debug.Log("[LobbyUI] 저장된 DeviceSN 없음");
-        }
-    }
-
-    private void SaveDeviceSN(string deviceSN)
-    {
-        PlayerPrefs.SetString("DEVICE_SN", deviceSN);
-        PlayerPrefs.Save();
-        savedDeviceSN = deviceSN;
-        Debug.Log($"[LobbyUI] DeviceSN 저장: {deviceSN}");
-    }
-
-    private void ClearSavedDeviceSN()
-    {
-        PlayerPrefs.DeleteKey("DEVICE_SN");
-        PlayerPrefs.Save();
-        savedDeviceSN = string.Empty;
-        Debug.Log("[LobbyUI] 저장된 DeviceSN 삭제");
-    }
-
-    /// <summary>
-    /// 로그인 정보 저장 (씬 전환 후에도 유지)
-    /// </summary>
-    private void SaveLoginInfo(string username, int userID)
-    {
-        PlayerPrefs.SetString("LOGIN_USERNAME", username);
-        PlayerPrefs.SetInt("LOGIN_USERID", userID);
-        PlayerPrefs.Save();
-        Debug.Log($"[LobbyUI] 로그인 정보 저장: {username} (ID: {userID})");
-    }
-
-    /// <summary>
-    /// 저장된 로그인 정보 불러오기
-    /// </summary>
-    private void LoadSavedLoginInfo()
-    {
-        if (PlayerPrefs.HasKey("LOGIN_USERNAME"))
-        {
-            currentUsername = PlayerPrefs.GetString("LOGIN_USERNAME");
-            currentUserID = PlayerPrefs.GetInt("LOGIN_USERID", 0);
-            Debug.Log($"[LobbyUI] 저장된 로그인 정보 로드: {currentUsername} (ID: {currentUserID})");
-        }
-        else
-        {
-            currentUsername = string.Empty;
-            currentUserID = 0;
-            Debug.Log("[LobbyUI] 저장된 로그인 정보 없음");
-        }
-    }
-
-    /// <summary>
-    /// 저장된 로그인 정보 삭제
-    /// </summary>
-    private void ClearSavedLoginInfo()
-    {
-        PlayerPrefs.DeleteKey("LOGIN_USERNAME");
-        PlayerPrefs.DeleteKey("LOGIN_USERID");
-        PlayerPrefs.Save();
-        Debug.Log("[LobbyUI] 저장된 로그인 정보 삭제");
     }
     #endregion
 
@@ -1543,17 +1066,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [ContextMenu("Debug - Clear All Saved Data (Reset)")]
     public void Debug_ClearAllSavedData()
     {
-        Debug.Log("[LobbyUI] ========== 저장된 모든 데이터 초기화 ==========");
+        ChunaLogger.Log("[LobbyUI] ========== 저장된 모든 데이터 초기화 ==========");
 
-        // 로그인 정보 삭제
-        PlayerPrefs.DeleteKey("LOGIN_USERNAME");
-        PlayerPrefs.DeleteKey("LOGIN_USERID");
-
-        // 디바이스 정보 삭제
-        PlayerPrefs.DeleteKey("DEVICE_SN");
-
-        // 모든 PlayerPrefs 저장
-        PlayerPrefs.Save();
+        loginStateStore.ClearAllData();
 
         // 현재 상태 초기화
         currentUsername = string.Empty;
@@ -1562,27 +1077,27 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         currentOrgID = string.Empty;
         savedDeviceSN = string.Empty;
 
-        Debug.Log("[LobbyUI] ✅ 모든 저장 데이터 초기화 완료");
-        Debug.Log("[LobbyUI] 앱을 재시작하세요.");
+        ChunaLogger.Log("[LobbyUI] ✅ 모든 저장 데이터 초기화 완료");
+        ChunaLogger.Log("[LobbyUI] 앱을 재시작하세요.");
     }
 
     [ContextMenu("Test - Show Grade Selection")]
     private void Debug_ShowGradeSelection()
     {
-        ShowGradeSelectionPanel();
+        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
     }
 
     [ContextMenu("Test - Hide All Panels")]
     private void Debug_HideAllPanels()
     {
-        HideGradeSelectionPanel();
-        HideUserSelectionPanel();
+        gradeSelectionHandler.Hide();
+        userSelectionHandler.Hide();
     }
 
     [ContextMenu("Test - Show Login Popup")]
     private void Debug_ShowLoginPopup()
     {
-        ShowLoginRequiredPopup();
+        popupHandler.ShowLoginRequiredPopup();
     }
 
     [ContextMenu("Test - Test Scenario Click (Not Logged In)")]
@@ -1608,47 +1123,47 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [ContextMenu("Test - Show Current Info")]
     private void Debug_ShowCurrentInfo()
     {
-        Debug.Log($"[LobbyUI] 현재 정보:");
-        Debug.Log($"  - DeviceSN: {currentDeviceSN}");
-        Debug.Log($"  - OrgID: {currentOrgID}");
-        Debug.Log($"  - Username: {currentUsername}");
-        Debug.Log($"  - UserID: {currentUserID}");
-        Debug.Log($"  - Saved SN: {savedDeviceSN}");
+        ChunaLogger.Log($"[LobbyUI] 현재 정보:");
+        ChunaLogger.Log($"  - DeviceSN: {currentDeviceSN}");
+        ChunaLogger.Log($"  - OrgID: {currentOrgID}");
+        ChunaLogger.Log($"  - Username: {currentUsername}");
+        ChunaLogger.Log($"  - UserID: {currentUserID}");
+        ChunaLogger.Log($"  - Saved SN: {savedDeviceSN}");
     }
 
     [ContextMenu("Test - Check Button Connections")]
     private void Debug_CheckButtonConnections()
     {
-        Debug.Log("[LobbyUI] ========== 버튼 연결 상태 확인 ==========");
+        ChunaLogger.Log("[LobbyUI] ========== 버튼 연결 상태 확인 ==========");
 
-        Debug.Log("시나리오 카드 버튼:");
+        ChunaLogger.Log("시나리오 카드 버튼:");
         for (int i = 0; i < scenarioCardButtons.Length; i++)
         {
             if (scenarioCardButtons[i] != null)
             {
-                Debug.Log($"  ✅ Card {i + 1}: 연결됨");
+                ChunaLogger.Log($"  ✅ Card {i + 1}: 연결됨");
             }
             else
             {
-                Debug.LogError($"  ❌ Card {i + 1}: NULL");
+                ChunaLogger.LogError($"  ❌ Card {i + 1}: NULL");
             }
         }
 
-        Debug.Log("기타 버튼:");
-        Debug.Log($"  - userIconButton: {(userIconButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - gradeBackButton: {(gradeBackButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - userBackButton: {(userBackButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
-        Debug.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log("기타 버튼:");
+        ChunaLogger.Log($"  - userIconButton: {(userIconButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - gradeBackButton: {(gradeBackButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - userBackButton: {(userBackButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - exitButton: {(exitButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - interactionGuideButton: {(interactionGuideButton != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - loginRequiredCloseButton (토글): {(loginRequiredCloseButton != null ? "✅" : "❌")}");
 
-        Debug.Log("종료 확인 팝업:");
-        Debug.Log($"  - exitYesToggle (토글): {(exitYesToggle != null ? "✅" : "❌")}");
-        Debug.Log($"  - exitNoToggle (토글): {(exitNoToggle != null ? "✅" : "❌")}");
+        ChunaLogger.Log("종료 확인 팝업:");
+        ChunaLogger.Log($"  - exitYesToggle (토글): {(exitYesToggle != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - exitNoToggle (토글): {(exitNoToggle != null ? "✅" : "❌")}");
 
-        Debug.Log("로그아웃 확인 팝업:");
-        Debug.Log($"  - logoutCancelToggle (토글): {(logoutCancelToggle != null ? "✅" : "❌")}");
-        Debug.Log($"  - logoutConfirmToggle (토글): {(logoutConfirmToggle != null ? "✅" : "❌")}");
+        ChunaLogger.Log("로그아웃 확인 팝업:");
+        ChunaLogger.Log($"  - logoutCancelToggle (토글): {(logoutCancelToggle != null ? "✅" : "❌")}");
+        ChunaLogger.Log($"  - logoutConfirmToggle (토글): {(logoutConfirmToggle != null ? "✅" : "❌")}");
     }
     #endregion
 }

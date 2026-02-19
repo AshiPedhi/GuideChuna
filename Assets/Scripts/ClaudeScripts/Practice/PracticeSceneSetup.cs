@@ -42,7 +42,7 @@ public class PracticeSceneSetup : MonoBehaviour
     [ContextMenu("Setup Practice Scene")]
     public void SetupPracticeScene()
     {
-        Debug.Log("[PracticeSetup] Starting scene setup...");
+        ChunaLogger.Log("[PracticeSetup] Starting scene setup...");
 
         // 1. PracticeManager 생성
         CreatePracticeManager();
@@ -53,7 +53,7 @@ public class PracticeSceneSetup : MonoBehaviour
         // 3. 감지 스크립트 연결
         SetupDetectors();
 
-        Debug.Log("[PracticeSetup] Scene setup complete!");
+        ChunaLogger.Log("[PracticeSetup] Scene setup complete!");
     }
 
     private void CreatePracticeManager()
@@ -63,7 +63,7 @@ public class PracticeSceneSetup : MonoBehaviour
         GameObject managerObj = new GameObject("PracticeManager");
         practiceManager = managerObj.AddComponent<PracticeManager>();
 
-        Debug.Log("[PracticeSetup] PracticeManager created");
+        ChunaLogger.Log("[PracticeSetup] PracticeManager created");
     }
 
     private void CreatePracticeUI()
@@ -94,7 +94,7 @@ public class PracticeSceneSetup : MonoBehaviour
         // UI 요소들 생성
         CreateUIElements(canvasObj.transform);
 
-        Debug.Log("[PracticeSetup] PracticeUI created");
+        ChunaLogger.Log("[PracticeSetup] PracticeUI created");
     }
 
     private void CreateUIElements(Transform parent)
@@ -125,7 +125,7 @@ public class PracticeSceneSetup : MonoBehaviour
         CreateText(completePanel.transform, "CompleteMessageText", "모든 연습을 완료했습니다!", new Vector2(0, 0), 24);
         completePanel.SetActive(false);
 
-        Debug.Log("[PracticeSetup] UI elements created");
+        ChunaLogger.Log("[PracticeSetup] UI elements created");
     }
 
     private GameObject CreatePanel(Transform parent, string name, Vector2 position, Vector2 size)
@@ -212,7 +212,7 @@ public class PracticeSceneSetup : MonoBehaviour
         {
             patientPositionDetector = patientModel.gameObject.AddComponent<PatientPositionDetector>();
             patientPositionDetector.SetPracticeManager(practiceManager);
-            Debug.Log("[PracticeSetup] PatientPositionDetector added");
+            ChunaLogger.Log("[PracticeSetup] PatientPositionDetector added");
         }
 
         // 측굴 감지
@@ -227,7 +227,7 @@ public class PracticeSceneSetup : MonoBehaviour
                 lateralFlexionDetector.SetChunaPathEvaluator(guideHandDisplay);
             }
 
-            Debug.Log("[PracticeSetup] LateralFlexionDetector added");
+            ChunaLogger.Log("[PracticeSetup] LateralFlexionDetector added");
         }
     }
 
@@ -274,6 +274,6 @@ public class PracticeSceneSetup : MonoBehaviour
    - 기존 시나리오 데이터 재사용 가능
 
 ";
-        Debug.Log(guide);
+        ChunaLogger.Log(guide);
     }
 }

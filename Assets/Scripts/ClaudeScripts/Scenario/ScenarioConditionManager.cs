@@ -85,24 +85,24 @@ public class ScenarioConditionManager : MonoBehaviour
     void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+        scenarioManager = FindFirstObjectByType<ScenarioManager>();
 
         // GuideUIController가 설정되지 않았으면 자동으로 찾기
         if (guideUIController == null)
         {
-            guideUIController = FindObjectOfType<ScenarioGuideUIController>();
+            guideUIController = FindFirstObjectByType<ScenarioGuideUIController>();
         }
 
         // StepFeedbackUI 자동 찾기 (비활성화된 오브젝트도 포함)
         if (stepFeedbackUI == null)
         {
-            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);
+            stepFeedbackUI = FindFirstObjectByType<StepFeedbackUI>(FindObjectsInactive.Include);
         }
 
         // ChunaPathEvaluator 자동 찾기 (비활성화된 오브젝트도 포함)
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>(true);
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>(FindObjectsInactive.Include);
         }
 
         // Quest 최적화: WaitForSeconds 객체 캐싱
@@ -166,12 +166,12 @@ public class ScenarioConditionManager : MonoBehaviour
         StopNarration();
         StopConditionCheck();
 
-        Debug.Log($"<color=cyan>[ConditionManager] ===== OnSubStepStarted 호출 =====</color>");
-        Debug.Log($"[ConditionManager] Phase: {scenarioManager.CurrentPhase.phaseName}, Step: {scenarioManager.CurrentStep.stepName}, SubStep: {subStep.subStepNo}");
-        Debug.Log($"[ConditionManager] Duration: {subStep.duration}초");
-        Debug.Log($"[ConditionManager] ConditionType: {subStep.conditionType}");
-        Debug.Log($"[ConditionManager] HandTracking: {(string.IsNullOrEmpty(subStep.handTrackingFileName) ? "(없음)" : subStep.handTrackingFileName)}");
-        Debug.Log($"[ConditionManager] 가이드 스텝: {scenarioManager.CurrentStep.IsGuideStep()}");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] ===== OnSubStepStarted 호출 =====</color>");
+        ChunaLogger.Log($"[ConditionManager] Phase: {scenarioManager.CurrentPhase.phaseName}, Step: {scenarioManager.CurrentStep.stepName}, SubStep: {subStep.subStepNo}");
+        ChunaLogger.Log($"[ConditionManager] Duration: {subStep.duration}초");
+        ChunaLogger.Log($"[ConditionManager] ConditionType: {subStep.conditionType}");
+        ChunaLogger.Log($"[ConditionManager] HandTracking: {(string.IsNullOrEmpty(subStep.handTrackingFileName) ? "(없음)" : subStep.handTrackingFileName)}");
+        ChunaLogger.Log($"[ConditionManager] 가이드 스텝: {scenarioManager.CurrentStep.IsGuideStep()}");
 
         // 가이드 스텝(Step번호 0)은 항상 토글로 수동 진행
         // ★ 단, 나레이션이 있으면 나레이션 먼저 재생
@@ -179,12 +179,12 @@ public class ScenarioConditionManager : MonoBehaviour
         {
             if (subStep.HasNarration())
             {
-                Debug.Log("[ConditionManager] 가이드 스텝 - 나레이션 먼저 재생 후 토글 대기");
+                ChunaLogger.Log("[ConditionManager] 가이드 스텝 - 나레이션 먼저 재생 후 토글 대기");
                 HandleNarrationThenManual(subStep);
                 return;
             }
 
-            Debug.Log("[ConditionManager] 가이드 스텝 - 토글로 수동 진행");
+            ChunaLogger.Log("[ConditionManager] 가이드 스텝 - 토글로 수동 진행");
             currentCondition = null;
             StopConditionCheck();
             eventSystem.RequestButtonStateUpdate(false);
@@ -208,7 +208,7 @@ public class ScenarioConditionManager : MonoBehaviour
         // 한 프레임 대기 - 다른 이벤트 핸들러들이 먼저 실행되도록
         yield return null;
 
-        Debug.Log($"<color=yellow>[ConditionManager] 한 프레임 대기 후 조건 처리 시작</color>");
+        ChunaLogger.Log($"<color=yellow>[ConditionManager] 한 프레임 대기 후 조건 처리 시작</color>");
         ProcessConditionByType(subStep);
     }
 
@@ -228,21 +228,21 @@ public class ScenarioConditionManager : MonoBehaviour
             conditionType = "HandPose";
         }
 
-        Debug.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>");
+        ChunaLogger.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>");
 
         // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
         if (subStep.HasNarration())
         {
             if (conditionType == "HandPose")
             {
-                Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose 병합 조건 - 나레이션 먼저 재생</color>");
+                ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose 병합 조건 - 나레이션 먼저 재생</color>");
                 HandleNarrationThenHandPose(subStep, conditionKey);
                 return;
             }
             else
             {
                 // 나레이션 + Duration 또는 나레이션만 있는 경우
-                Debug.Log($"<color=cyan>[ConditionManager] 나레이션 존재 - 나레이션 재생 후 Duration/Manual 적용</color>");
+                ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 존재 - 나레이션 재생 후 Duration/Manual 적용</color>");
                 HandleNarrationThenDuration(subStep);
                 return;
             }
@@ -258,17 +258,17 @@ public class ScenarioConditionManager : MonoBehaviour
                     currentCondition = conditionRegistry[conditionKey];
                     StartConditionCheck();
                     eventSystem.RequestButtonStateUpdate(false);
-                    Debug.Log("[ConditionManager] HandPose 조건 - 자동 진행 (조건 대기)");
+                    ChunaLogger.Log("[ConditionManager] HandPose 조건 - 자동 진행 (조건 대기)");
                 }
                 else
                 {
-                    Debug.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다. 시간 기반으로 전환합니다.");
+                    ChunaLogger.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다. 시간 기반으로 전환합니다.");
                     HandleDurationOrManual(subStep);
                 }
                 break;
 
             case "PatientAnimation":
-                Debug.LogWarning("[ConditionManager] PatientAnimation 조건은 아직 구현되지 않았습니다.");
+                ChunaLogger.LogWarning("[ConditionManager] PatientAnimation 조건은 아직 구현되지 않았습니다.");
                 HandleDurationOrManual(subStep);
                 break;
 
@@ -280,7 +280,7 @@ public class ScenarioConditionManager : MonoBehaviour
                 // 명시적으로 Duration 사용
                 if (subStep.duration > 0)
                 {
-                    Debug.Log($"[ConditionManager] Duration 조건 - {subStep.duration}초 후 자동 진행");
+                    ChunaLogger.Log($"[ConditionManager] Duration 조건 - {subStep.duration}초 후 자동 진행");
                     currentCondition = null;
                     StopConditionCheck();
                     eventSystem.RequestButtonStateUpdate(false);
@@ -288,14 +288,14 @@ public class ScenarioConditionManager : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning("[ConditionManager] Duration이 0입니다. 수동 진행으로 전환합니다.");
+                    ChunaLogger.LogWarning("[ConditionManager] Duration이 0입니다. 수동 진행으로 전환합니다.");
                     HandleManualProgress();
                 }
                 break;
 
             case "Manual":
                 // 명시적으로 수동 진행
-                Debug.Log("[ConditionManager] Manual 조건 - 토글로 수동 진행");
+                ChunaLogger.Log("[ConditionManager] Manual 조건 - 토글로 수동 진행");
                 HandleManualProgress();
                 break;
 
@@ -307,7 +307,7 @@ public class ScenarioConditionManager : MonoBehaviour
                     currentCondition = conditionRegistry[conditionKey];
                     StartConditionCheck();
                     eventSystem.RequestButtonStateUpdate(false);
-                    Debug.Log("[ConditionManager] 등록된 조건 발견 - 자동 진행 (조건 대기)");
+                    ChunaLogger.Log("[ConditionManager] 등록된 조건 발견 - 자동 진행 (조건 대기)");
                 }
                 else
                 {
@@ -325,7 +325,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         if (subStep.duration > 0)
         {
-            Debug.Log($"[ConditionManager] Duration={subStep.duration}초 - 자동 진행");
+            ChunaLogger.Log($"[ConditionManager] Duration={subStep.duration}초 - 자동 진행");
             currentCondition = null;
             StopConditionCheck();
             eventSystem.RequestButtonStateUpdate(false);
@@ -333,7 +333,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
         else
         {
-            Debug.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
+            ChunaLogger.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
             HandleManualProgress();
         }
     }
@@ -346,7 +346,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         if (!subStep.HasNarration())
         {
-            Debug.LogWarning("[ConditionManager] voiceInstruction이 비어있습니다. Duration/Manual로 전환.");
+            ChunaLogger.LogWarning("[ConditionManager] voiceInstruction이 비어있습니다. Duration/Manual로 전환.");
             HandleDurationOrManual(subStep);
             return;
         }
@@ -358,7 +358,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip == null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
             HandleDurationOrManual(subStep);
             return;
         }
@@ -369,7 +369,7 @@ public class ScenarioConditionManager : MonoBehaviour
         eventSystem.RequestButtonStateUpdate(false);
 
         narrationCoroutine = StartCoroutine(PlayNarrationAndProgress(clip, clipName));
-        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 재생 시작: {clipName} ({clip.length:F1}초)</color>");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 재생 시작: {clipName} ({clip.length:F1}초)</color>");
     }
 
     /// <summary>
@@ -385,7 +385,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip == null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. HandPose만 진행.");
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. HandPose만 진행.");
             // 나레이션 없이 HandPose 조건만 처리
             StartHandPoseCondition(conditionKey, subStep);
             return;
@@ -398,7 +398,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 나레이션 재생 후 HandPose 조건 시작
         narrationCoroutine = StartCoroutine(PlayNarrationThenStartHandPose(clip, clipName, subStep, conditionKey));
-        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose: 나레이션 먼저 재생 ({clip.length:F1}초)</color>");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose: 나레이션 먼저 재생 ({clip.length:F1}초)</color>");
     }
 
     /// <summary>
@@ -414,7 +414,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip == null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. Duration/Manual로 전환.");
             HandleDurationOrManual(subStep);
             return;
         }
@@ -426,7 +426,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 나레이션 재생 후 Duration 적용
         narrationCoroutine = StartCoroutine(PlayNarrationThenApplyDuration(clip, clipName, subStep));
-        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Duration: 나레이션 먼저 재생 ({clip.length:F1}초) → Duration {subStep.duration}초</color>");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + Duration: 나레이션 먼저 재생 ({clip.length:F1}초) → Duration {subStep.duration}초</color>");
     }
 
     /// <summary>
@@ -442,7 +442,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip == null)
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. 바로 토글 대기.");
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립을 찾을 수 없습니다: {clipName}. 바로 토글 대기.");
             HandleManualProgress();
             return;
         }
@@ -454,7 +454,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 나레이션 재생 후 Manual (토글 대기)
         narrationCoroutine = StartCoroutine(PlayNarrationThenManual(clip, clipName, subStep));
-        Debug.Log($"<color=cyan>[ConditionManager] 나레이션 + Manual: 나레이션 먼저 재생 ({clip.length:F1}초) → 토글 대기</color>");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + Manual: 나레이션 먼저 재생 ({clip.length:F1}초) → 토글 대기</color>");
     }
 
     /// <summary>
@@ -469,7 +469,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (targetSource == null)
         {
-            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
             HandleManualProgress();
             yield break;
         }
@@ -477,20 +477,20 @@ public class ScenarioConditionManager : MonoBehaviour
         // 나레이션 재생
         targetSource.clip = clip;
         targetSource.Play();
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
 
         // 클립 재생 완료까지 대기
         yield return new WaitForSeconds(clip.length);
 
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → 토글 대기</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → 토글 대기</color>");
         currentNarrationClip = null;
 
         // ★ 나레이션 완료 후 Duration 적용 (있으면)
         if (subStep.duration > 0)
         {
-            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
+            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
             yield return new WaitForSeconds(subStep.duration);
-            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료</color>");
+            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료</color>");
         }
 
         // Manual (토글 대기)
@@ -509,7 +509,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (targetSource == null)
         {
-            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
             // 나레이션 없이 HandPose만 시작
             StartHandPoseCondition(conditionKey, subStep);
             yield break;
@@ -518,12 +518,12 @@ public class ScenarioConditionManager : MonoBehaviour
         // 나레이션 재생
         targetSource.clip = clip;
         targetSource.Play();
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
 
         // 클립 재생 완료까지 대기
         yield return new WaitForSeconds(clip.length);
 
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → HandPose 조건 시작</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → HandPose 조건 시작</color>");
         currentNarrationClip = null;
 
         // ★ 나레이션 완료 후 HandPose 조건 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
@@ -542,7 +542,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (targetSource == null)
         {
-            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
             // 나레이션 없이 Duration/Manual만 적용
             HandleDurationOrManual(subStep);
             yield break;
@@ -551,20 +551,20 @@ public class ScenarioConditionManager : MonoBehaviour
         // 나레이션 재생
         targetSource.clip = clip;
         targetSource.Play();
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
 
         // 클립 재생 완료까지 대기
         yield return new WaitForSeconds(clip.length);
 
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
         currentNarrationClip = null;
 
         // ★ 나레이션 완료 후 Duration 적용
         if (subStep.duration > 0)
         {
-            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
+            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
             yield return new WaitForSeconds(subStep.duration);
-            Debug.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
+            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
 
             // ★ 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
             yield return WaitForNarrationComplete();
@@ -578,7 +578,7 @@ public class ScenarioConditionManager : MonoBehaviour
         else
         {
             // Duration 없으면 Manual (토글 대기)
-            Debug.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
+            ChunaLogger.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
             HandleManualProgress();
         }
     }
@@ -593,11 +593,11 @@ public class ScenarioConditionManager : MonoBehaviour
             currentCondition = conditionRegistry[conditionKey];
             StartConditionCheck();  // 20초 타이머 포함
             eventSystem.RequestButtonStateUpdate(false);
-            Debug.Log($"<color=magenta>[ConditionManager] HandPose 조건 시작 - 충돌체/가이드핸드 활성화, 20초 타이머 시작</color>");
+            ChunaLogger.Log($"<color=magenta>[ConditionManager] HandPose 조건 시작 - 충돌체/가이드핸드 활성화, 20초 타이머 시작</color>");
         }
         else
         {
-            Debug.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다: {conditionKey}. Duration/Manual로 전환.");
+            ChunaLogger.LogWarning($"[ConditionManager] HandPose 조건이 등록되지 않았습니다: {conditionKey}. Duration/Manual로 전환.");
             HandleDurationOrManual(subStep);
         }
     }
@@ -629,7 +629,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip != null)
         {
-            Debug.Log($"<color=cyan>[ConditionManager] 난이도별 나래이션 로드 성공: {difficultyPath} ({clip.length:F1}초)</color>");
+            ChunaLogger.Log($"<color=cyan>[ConditionManager] 난이도별 나래이션 로드 성공: {difficultyPath} ({clip.length:F1}초)</color>");
             return clip;
         }
 
@@ -642,11 +642,11 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (clip != null)
         {
-            Debug.Log($"[ConditionManager] 공통 나래이션 로드 성공 (Fallback): {fallbackPath} ({clip.length:F1}초)");
+            ChunaLogger.Log($"[ConditionManager] 공통 나래이션 로드 성공 (Fallback): {fallbackPath} ({clip.length:F1}초)");
         }
         else
         {
-            Debug.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: {difficultyPath} 또는 {fallbackPath}");
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립 로드 실패: {difficultyPath} 또는 {fallbackPath}");
         }
 
         return clip;
@@ -685,7 +685,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (targetSource == null)
         {
-            Debug.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
             yield break;
         }
 
@@ -693,12 +693,12 @@ public class ScenarioConditionManager : MonoBehaviour
         targetSource.clip = clip;
         targetSource.Play();
 
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
 
         // 클립 재생 완료까지 대기
         yield return new WaitForSeconds(clip.length);
 
-        Debug.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
 
         currentNarrationClip = null;
 
@@ -728,7 +728,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         currentNarrationClip = null;
         currentVoiceClipName = null;  // ★ 홀드 후 나래이션용 클립명 초기화
-        Debug.Log("[ConditionManager] 나레이션 중지됨");
+        ChunaLogger.Log("[ConditionManager] 나레이션 중지됨");
     }
 
     /// <summary>
@@ -757,14 +757,14 @@ public class ScenarioConditionManager : MonoBehaviour
             yield break;
         }
 
-        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료 대기 중...</color>");
+        ChunaLogger.Log("<color=yellow>[ConditionManager] 나래이션 완료 대기 중...</color>");
 
         while (targetSource.isPlaying)
         {
             yield return null;
         }
 
-        Debug.Log("<color=yellow>[ConditionManager] 나래이션 완료됨 - 다음 단계 진행</color>");
+        ChunaLogger.Log("<color=yellow>[ConditionManager] 나래이션 완료됨 - 다음 단계 진행</color>");
     }
 
     /// <summary>
@@ -795,7 +795,7 @@ public class ScenarioConditionManager : MonoBehaviour
         // 현재 클립명이 없으면 스킵
         if (string.IsNullOrEmpty(currentVoiceClipName))
         {
-            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 현재 클립명 없음");
+            ChunaLogger.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 현재 클립명 없음");
             return;
         }
 
@@ -803,7 +803,7 @@ public class ScenarioConditionManager : MonoBehaviour
         if (DifficultyManager.Instance == null ||
             DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner)
         {
-            Debug.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아님");
+            ChunaLogger.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아님");
             return;
         }
 
@@ -815,12 +815,12 @@ public class ScenarioConditionManager : MonoBehaviour
 
         if (afterHoldClip == null)
         {
-            Debug.Log($"[ConditionManager] 홀드 후 나래이션 없음: {afterHoldClipName}");
+            ChunaLogger.Log($"[ConditionManager] 홀드 후 나래이션 없음: {afterHoldClipName}");
             return;
         }
 
         // 나래이션 재생
-        Debug.Log($"<color=yellow>[ConditionManager] ★ 홀드 후 나래이션 재생: {afterHoldClipName} ({afterHoldClip.length:F1}초)</color>");
+        ChunaLogger.Log($"<color=yellow>[ConditionManager] ★ 홀드 후 나래이션 재생: {afterHoldClipName} ({afterHoldClip.length:F1}초)</color>");
 
         AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
         if (targetSource != null)
@@ -845,7 +845,7 @@ public class ScenarioConditionManager : MonoBehaviour
             guideUIController.ResetStartToggle();
         }
 
-        Debug.Log("[ConditionManager] '다음' 버튼 활성화 (수동 진행)");
+        ChunaLogger.Log("[ConditionManager] '다음' 버튼 활성화 (수동 진행)");
     }
 
     /// <summary>
@@ -858,7 +858,7 @@ public class ScenarioConditionManager : MonoBehaviour
         isCheckingCondition = true;
         checkCoroutine = StartCoroutine(ConditionCheckRoutine());
 
-        Debug.Log($"[ConditionManager] 조건 체크 시작: {currentCondition?.GetConditionDescription()}");
+        ChunaLogger.Log($"[ConditionManager] 조건 체크 시작: {currentCondition?.GetConditionDescription()}");
     }
 
     /// <summary>
@@ -888,7 +888,7 @@ public class ScenarioConditionManager : MonoBehaviour
             // 조건 확인
             if (currentCondition.IsConditionMet())
             {
-                Debug.Log($"[ConditionManager] 조건 만족: {currentCondition.GetConditionDescription()}");
+                ChunaLogger.Log($"[ConditionManager] 조건 만족: {currentCondition.GetConditionDescription()}");
 
                 // 체크 중단
                 isCheckingCondition = false;
@@ -906,7 +906,7 @@ public class ScenarioConditionManager : MonoBehaviour
             if (!timeoutTriggered && elapsedTime >= progressTimeout)
             {
                 timeoutTriggered = true;
-                Debug.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 진행 안됨 감지, 토글 버튼 활성화</color>");
+                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 진행 안됨 감지, 토글 버튼 활성화</color>");
 
                 // 토글 버튼 활성화
                 if (guideUIController != null)
@@ -937,10 +937,10 @@ public class ScenarioConditionManager : MonoBehaviour
         // ★ StepFeedbackUI가 null이면 다시 찾기 (첫 단계에서 못 찾은 경우 대비)
         if (stepFeedbackUI == null)
         {
-            stepFeedbackUI = FindObjectOfType<StepFeedbackUI>(true);  // includeInactive = true
+            stepFeedbackUI = FindFirstObjectByType<StepFeedbackUI>(FindObjectsInactive.Include);
             if (stepFeedbackUI != null)
             {
-                Debug.Log("<color=yellow>[ConditionManager] StepFeedbackUI 재탐색 성공</color>");
+                ChunaLogger.Log("<color=yellow>[ConditionManager] StepFeedbackUI 재탐색 성공</color>");
             }
         }
 
@@ -957,7 +957,7 @@ public class ScenarioConditionManager : MonoBehaviour
             stepFeedbackUI.gameObject.SetActive(true);
             stepFeedbackUI.ShowFeedback(currentSimilarity);
 
-            Debug.Log($"<color=green>[ConditionManager] 피드백 표시: {currentSimilarity:P0}</color>");
+            ChunaLogger.Log($"<color=green>[ConditionManager] 피드백 표시: {currentSimilarity:P0}</color>");
 
             // 2-3. 피드백 표시 시간만큼 대기 (StepFeedbackUI 내부에서 자동 숨김됨)
             yield return new WaitForSeconds(3.0f);  // 2.5초 표시 + 0.5초 여유
@@ -1028,7 +1028,7 @@ public class ScenarioConditionManager : MonoBehaviour
         // 완료 알림 없이 바로 다음 SubStep으로 진행
         if (scenarioManager != null)
         {
-            Debug.Log($"[ConditionManager] {duration}초 경과 - 다음 단계로 자동 진행");
+            ChunaLogger.Log($"[ConditionManager] {duration}초 경과 - 다음 단계로 자동 진행");
             scenarioManager.NextSubStep();
         }
     }
@@ -1048,7 +1048,7 @@ public class ScenarioConditionManager : MonoBehaviour
             completionAlertText.text = "✓ 완료!";
         }
 
-        Debug.Log("[ConditionManager] 완료 알림 표시");
+        ChunaLogger.Log("[ConditionManager] 완료 알림 표시");
     }
 
     /// <summary>
@@ -1101,7 +1101,7 @@ public class ScenarioConditionManager : MonoBehaviour
         {
             // ★ 이전 조건의 이벤트 구독 해제 (메모리 누수 방지)
             DeactivateCondition(conditionRegistry[key]);
-            Debug.LogWarning($"[ConditionManager] 이전 조건 비활성화 후 새 조건으로 교체: {key}");
+            ChunaLogger.LogWarning($"[ConditionManager] 이전 조건 비활성화 후 새 조건으로 교체: {key}");
             conditionRegistry[key] = condition;
         }
         else
@@ -1109,7 +1109,7 @@ public class ScenarioConditionManager : MonoBehaviour
             conditionRegistry.Add(key, condition);
         }
 
-        Debug.Log($"[ConditionManager] 조건 등록: {key} - {condition.GetConditionDescription()}");
+        ChunaLogger.Log($"[ConditionManager] 조건 등록: {key} - {condition.GetConditionDescription()}");
     }
 
     /// <summary>
@@ -1124,7 +1124,7 @@ public class ScenarioConditionManager : MonoBehaviour
             // ★ 조건의 이벤트 구독 해제 (메모리 누수 방지)
             DeactivateCondition(conditionRegistry[key]);
             conditionRegistry.Remove(key);
-            Debug.Log($"[ConditionManager] 조건 등록 해제: {key}");
+            ChunaLogger.Log($"[ConditionManager] 조건 등록 해제: {key}");
         }
     }
 
@@ -1139,7 +1139,7 @@ public class ScenarioConditionManager : MonoBehaviour
             DeactivateCondition(condition);
         }
         conditionRegistry.Clear();
-        Debug.Log("[ConditionManager] 모든 조건 등록 해제");
+        ChunaLogger.Log("[ConditionManager] 모든 조건 등록 해제");
     }
 
     /// <summary>
@@ -1182,7 +1182,7 @@ public class ScenarioConditionManager : MonoBehaviour
         if (targetSource != null)
         {
             targetSource.PlayOneShot(clip);
-            Debug.Log($"[ConditionManager] 나레이션 재생 (OneShot): {clipName}");
+            ChunaLogger.Log($"[ConditionManager] 나레이션 재생 (OneShot): {clipName}");
         }
     }
 
@@ -1336,15 +1336,15 @@ public class CheckpointPoseCondition : IScenarioCondition
 
             // OnSequenceCompleted 이벤트 구독
             bridge.OnSequenceCompleted += OnSequenceCompleted;
-            Debug.Log($"<color=cyan>[CheckpointPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
+            ChunaLogger.Log($"<color=cyan>[CheckpointPoseCondition] OnSequenceCompleted 이벤트 구독 성공: {trackingFileName}</color>");
 
             // OnProgressThresholdReached 이벤트 구독
             bridge.OnProgressThresholdReached += OnProgressThresholdReached;
-            Debug.Log($"<color=cyan>[CheckpointPoseCondition] OnProgressThresholdReached 이벤트 구독 성공: {trackingFileName}</color>");
+            ChunaLogger.Log($"<color=cyan>[CheckpointPoseCondition] OnProgressThresholdReached 이벤트 구독 성공: {trackingFileName}</color>");
         }
         else
         {
-            Debug.LogError("[CheckpointPoseCondition] ChunaPathEvaluatorBridge가 null입니다!");
+            ChunaLogger.LogError("[CheckpointPoseCondition] ChunaPathEvaluatorBridge가 null입니다!");
         }
     }
 
@@ -1357,12 +1357,12 @@ public class CheckpointPoseCondition : IScenarioCondition
         float elapsed = Time.time - creationTime;
         if (elapsed < MIN_ACTIVE_TIME)
         {
-            Debug.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
+            ChunaLogger.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
             return;
         }
 
         isCompleted = true;
-        Debug.Log($"<color=green>[CheckpointPoseCondition] 모든 체크포인트 통과 (경과: {elapsed:F1}s): {fileName}</color>");
+        ChunaLogger.Log($"<color=green>[CheckpointPoseCondition] 모든 체크포인트 통과 (경과: {elapsed:F1}s): {fileName}</color>");
 
         // ★ 이벤트 구독 해제
         Unsubscribe();
@@ -1377,12 +1377,12 @@ public class CheckpointPoseCondition : IScenarioCondition
         float elapsed = Time.time - creationTime;
         if (elapsed < MIN_ACTIVE_TIME)
         {
-            Debug.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
+            ChunaLogger.Log($"<color=yellow>[CheckpointPoseCondition] 최소 시간 미달로 완료 무시 ({elapsed:F2}s < {MIN_ACTIVE_TIME}s): {fileName}</color>");
             return;
         }
 
         isCompleted = true;
-        Debug.Log($"<color=green>[CheckpointPoseCondition] 진행률 목표 달성으로 완료 (경과: {elapsed:F1}s): {fileName}</color>");
+        ChunaLogger.Log($"<color=green>[CheckpointPoseCondition] 진행률 목표 달성으로 완료 (경과: {elapsed:F1}s): {fileName}</color>");
 
         // ★ 이벤트 구독 해제
         Unsubscribe();
@@ -1423,6 +1423,6 @@ public class CheckpointPoseCondition : IScenarioCondition
     {
         isActive = false;
         Unsubscribe();
-        Debug.Log($"<color=orange>[CheckpointPoseCondition] 비활성화됨: {fileName}</color>");
+        ChunaLogger.Log($"<color=orange>[CheckpointPoseCondition] 비활성화됨: {fileName}</color>");
     }
 }

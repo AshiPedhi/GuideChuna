@@ -155,7 +155,7 @@ public class PathCheckpoint : MonoBehaviour
         isPassed = true;
         isActive = false;
 
-        Debug.Log($"<color=green>[PathCheckpoint] {checkpointName} 통과! (유사도: {similarity:P0})</color>");
+        ChunaLogger.Log($"<color=green>[PathCheckpoint] {checkpointName} 통과! (유사도: {similarity:P0})</color>");
 
         OnCheckpointPassed?.Invoke(this, isLeftHand, similarity);
 
@@ -176,14 +176,14 @@ public class PathCheckpoint : MonoBehaviour
         {
             isLeftHandInside = true;
             OnCheckpointEntered?.Invoke(this, true);
-            Debug.Log($"[PathCheckpoint] {checkpointName}: 왼손 진입");
+            ChunaLogger.Log($"[PathCheckpoint] {checkpointName}: 왼손 진입");
         }
 
         if (isRightHand && detectRightHand)
         {
             isRightHandInside = true;
             OnCheckpointEntered?.Invoke(this, false);
-            Debug.Log($"[PathCheckpoint] {checkpointName}: 오른손 진입");
+            ChunaLogger.Log($"[PathCheckpoint] {checkpointName}: 오른손 진입");
         }
     }
 
@@ -280,7 +280,7 @@ public class PathCheckpoint : MonoBehaviour
 
         UpdateVisual();
 
-        Debug.Log($"[PathCheckpoint] {checkpointName} 활성화");
+        ChunaLogger.Log($"[PathCheckpoint] {checkpointName} 활성화");
     }
 
     /// <summary>

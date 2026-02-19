@@ -74,7 +74,7 @@ public class LateralFlexionDetector : MonoBehaviour
         // (이 경우 Step 6은 ChunaPathEvaluator를 통해서만 진행 가능)
         if (showDebugLogs && chunaPathEvaluator == null)
         {
-            Debug.LogWarning("[LateralFlexion] ChunaPathEvaluator 없음 - 유사도 계산 불가");
+            ChunaLogger.LogWarning("[LateralFlexion] ChunaPathEvaluator 없음 - 유사도 계산 불가");
         }
         return 0f;
     }
@@ -89,7 +89,7 @@ public class LateralFlexionDetector : MonoBehaviour
                 holdTimer = 0f;
 
                 if (showDebugLogs)
-                    Debug.Log($"[LateralFlexion] Started holding (similarity: {currentSimilarity:F2})");
+                    ChunaLogger.Log($"[LateralFlexion] Started holding (similarity: {currentSimilarity:F2})");
             }
 
             holdTimer += Time.deltaTime;
@@ -104,7 +104,7 @@ public class LateralFlexionDetector : MonoBehaviour
         else
         {
             if (isHolding && showDebugLogs)
-                Debug.Log($"[LateralFlexion] Hold broken (similarity: {currentSimilarity:F2})");
+                ChunaLogger.Log($"[LateralFlexion] Hold broken (similarity: {currentSimilarity:F2})");
 
             isHolding = false;
             holdTimer = 0f;
@@ -114,7 +114,7 @@ public class LateralFlexionDetector : MonoBehaviour
     private void OnFlexionCompleted()
     {
         if (showDebugLogs)
-            Debug.Log("[LateralFlexion] Motion completed!");
+            ChunaLogger.Log("[LateralFlexion] Motion completed!");
 
         if (practiceManager != null)
         {
@@ -123,7 +123,7 @@ public class LateralFlexionDetector : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[LateralFlexion] PracticeManager not assigned!");
+            ChunaLogger.LogWarning("[LateralFlexion] PracticeManager not assigned!");
         }
     }
 
@@ -137,7 +137,7 @@ public class LateralFlexionDetector : MonoBehaviour
         isHolding = false;
 
         if (showDebugLogs)
-            Debug.Log($"[LateralFlexion] Detection enabled: {enabled}");
+            ChunaLogger.Log($"[LateralFlexion] Detection enabled: {enabled}");
     }
 
     /// <summary>

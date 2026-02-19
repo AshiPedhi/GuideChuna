@@ -37,7 +37,7 @@ public class ButtonHighlighter : MonoBehaviour
     {
         if (buttons == null || buttons.Count == 0)
         {
-            Debug.LogWarning("[ButtonHighlighter] No buttons to highlight");
+            ChunaLogger.LogWarning("[ButtonHighlighter] No buttons to highlight");
             return;
         }
 
@@ -67,7 +67,7 @@ public class ButtonHighlighter : MonoBehaviour
         HighlightCurrentButton();
 
         if (showDebugLogs)
-            Debug.Log($"[ButtonHighlighter] Started highlighting {targetButtons.Count} buttons");
+            ChunaLogger.Log($"[ButtonHighlighter] Started highlighting {targetButtons.Count} buttons");
     }
 
     /// <summary>
@@ -118,7 +118,7 @@ public class ButtonHighlighter : MonoBehaviour
         if (currentButtonIndex < targetButtons.Count && targetButtons[currentButtonIndex] == clickedButton)
         {
             if (showDebugLogs)
-                Debug.Log($"[ButtonHighlighter] Button {currentButtonIndex + 1}/{targetButtons.Count} clicked: {clickedButton.name}");
+                ChunaLogger.Log($"[ButtonHighlighter] Button {currentButtonIndex + 1}/{targetButtons.Count} clicked: {clickedButton.name}");
 
             // 현재 버튼 원래 색상으로 복원
             RestoreButtonColor(clickedButton);
@@ -132,7 +132,7 @@ public class ButtonHighlighter : MonoBehaviour
             {
                 // 모든 버튼 클릭 완료
                 if (showDebugLogs)
-                    Debug.Log("[ButtonHighlighter] All buttons clicked!");
+                    ChunaLogger.Log("[ButtonHighlighter] All buttons clicked!");
 
                 StopHighlighting();
                 OnAllButtonsClicked?.Invoke();
@@ -160,7 +160,7 @@ public class ButtonHighlighter : MonoBehaviour
                 blinkCoroutine = StartCoroutine(BlinkButton(currentButton));
 
                 if (showDebugLogs)
-                    Debug.Log($"[ButtonHighlighter] Now highlighting: {currentButton.name} ({currentButtonIndex + 1}/{targetButtons.Count})");
+                    ChunaLogger.Log($"[ButtonHighlighter] Now highlighting: {currentButton.name} ({currentButtonIndex + 1}/{targetButtons.Count})");
             }
         }
     }

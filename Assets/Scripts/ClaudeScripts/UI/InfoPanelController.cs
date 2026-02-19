@@ -161,16 +161,16 @@ public class InfoPanelController : MonoBehaviour
     {
         // 컨트롤러 자동 검색
         if (guideVideoController == null)
-            guideVideoController = FindObjectOfType<GuideVideoController>();
+            guideVideoController = FindFirstObjectByType<GuideVideoController>();
 
         if (dynamicResultTableUI == null)
-            dynamicResultTableUI = FindObjectOfType<DynamicResultTableUI>();
+            dynamicResultTableUI = FindFirstObjectByType<DynamicResultTableUI>();
 
         if (scenarioManager == null)
-            scenarioManager = FindObjectOfType<ScenarioManager>();
+            scenarioManager = FindFirstObjectByType<ScenarioManager>();
 
         if (practiceSettingsController == null)
-            practiceSettingsController = FindObjectOfType<PracticeSettingsController>();
+            practiceSettingsController = FindFirstObjectByType<PracticeSettingsController>();
     }
 
     void Start()
@@ -207,7 +207,7 @@ public class InfoPanelController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[InfoPanel] 이벤트 구독 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[InfoPanel] 이벤트 구독 실패: {e.Message}");
         }
     }
 
@@ -220,7 +220,7 @@ public class InfoPanelController : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogWarning($"[InfoPanel] 이벤트 해제 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[InfoPanel] 이벤트 해제 실패: {e.Message}");
         }
     }
     #endregion
@@ -259,7 +259,7 @@ public class InfoPanelController : MonoBehaviour
         isSettingsOpen = false;
         isExitPopupOpen = false;
 
-        Debug.Log("[InfoPanel] 패널 초기화 완료");
+        ChunaLogger.Log("[InfoPanel] 패널 초기화 완료");
     }
 
     private void InitializeModeSelection()
@@ -408,7 +408,7 @@ public class InfoPanelController : MonoBehaviour
     private void OnModeToggleChanged(ModeType mode)
     {
         selectedMode = mode;
-        Debug.Log($"[InfoPanel] 모드 선택: {mode}");
+        ChunaLogger.Log($"[InfoPanel] 모드 선택: {mode}");
 
         UpdateModeSelectionColors();
         OnModeSelected?.Invoke(selectedMode, selectedDifficulty);
@@ -420,7 +420,7 @@ public class InfoPanelController : MonoBehaviour
     private void OnDifficultyToggleChanged(DifficultyLevel difficulty)
     {
         selectedDifficulty = difficulty;
-        Debug.Log($"[InfoPanel] 난이도 선택: {difficulty}");
+        ChunaLogger.Log($"[InfoPanel] 난이도 선택: {difficulty}");
 
         // ★ DifficultyManager에 난이도 전달 (연동)
         if (DifficultyManager.Instance != null)
@@ -470,11 +470,11 @@ public class InfoPanelController : MonoBehaviour
     {
         if (selectedMode == ModeType.None)
         {
-            Debug.LogWarning("[InfoPanel] 모드를 선택해주세요!");
+            ChunaLogger.LogWarning("[InfoPanel] 모드를 선택해주세요!");
             return;
         }
 
-        Debug.Log($"<color=green>[InfoPanel] 시뮬레이션 시작 - 모드: {selectedMode}, 난이도: {selectedDifficulty}</color>");
+        ChunaLogger.Log($"<color=green>[InfoPanel] 시뮬레이션 시작 - 모드: {selectedMode}, 난이도: {selectedDifficulty}</color>");
 
         // ScenarioManager에 모드 정보 전달
         if (scenarioManager != null)
@@ -484,12 +484,12 @@ public class InfoPanelController : MonoBehaviour
         }
         else
         {
-            Debug.LogError("[InfoPanel] ScenarioManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[InfoPanel] ScenarioManager를 찾을 수 없습니다!");
         }
 
         // 설정 저장
-        PlayerPrefs.SetString("SelectedMode", selectedMode.ToString());
-        PlayerPrefs.SetString("SelectedDifficulty", selectedDifficulty.ToString());
+        PlayerPrefs.SetString(PrefsKeys.SelectedMode, selectedMode.ToString());
+        PlayerPrefs.SetString(PrefsKeys.SelectedDifficulty, selectedDifficulty.ToString());
         PlayerPrefs.Save();
 
         OnSimulationStarted?.Invoke();
@@ -520,7 +520,7 @@ public class InfoPanelController : MonoBehaviour
     #region 콘텐츠 토글 핸들러
     private void OnSkeletonToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 근골격 토글: {(isOn ? "ON" : "OFF")}");
+        ChunaLogger.Log($"[InfoPanel] 근골격 토글: {(isOn ? "ON" : "OFF")}");
 
         if (isOn)
         {
@@ -535,7 +535,7 @@ public class InfoPanelController : MonoBehaviour
 
     private void OnExpertVideoToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}, 시나리오시작:{isScenarioStarted}, 현재페이지:{currentContentPage}");
+        ChunaLogger.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}, 시나리오시작:{isScenarioStarted}, 현재페이지:{currentContentPage}");
 
         if (isOn)
         {
@@ -557,7 +557,7 @@ public class InfoPanelController : MonoBehaviour
             if (practiceManager != null && practiceManager.enabled)
             {
                 // 연습 모드: 페이지 전환 안 함 (다른 토글의 핸들러가 처리)
-                Debug.Log("[InfoPanel] 연습 모드 - 비디오 OFF 시 자동 페이지 전환 안 함");
+                ChunaLogger.Log("[InfoPanel] 연습 모드 - 비디오 OFF 시 자동 페이지 전환 안 함");
             }
             else if (isScenarioStarted)
             {
@@ -577,7 +577,7 @@ public class InfoPanelController : MonoBehaviour
 
     private void OnResultToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 수행결과 토글: {(isOn ? "ON" : "OFF")}");
+        ChunaLogger.Log($"[InfoPanel] 수행결과 토글: {(isOn ? "ON" : "OFF")}");
 
         if (isOn)
         {
@@ -595,7 +595,7 @@ public class InfoPanelController : MonoBehaviour
     #region 메뉴 토글 핸들러
     private void OnSettingsToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 설정 토글: {(isOn ? "ON" : "OFF")}");
+        ChunaLogger.Log($"[InfoPanel] 설정 토글: {(isOn ? "ON" : "OFF")}");
 
         if (isOn)
         {
@@ -625,7 +625,7 @@ public class InfoPanelController : MonoBehaviour
 
     private void OnMainMenuToggleChanged(bool isOn)
     {
-        Debug.Log($"[InfoPanel] 메인으로 토글: {(isOn ? "ON" : "OFF")}");
+        ChunaLogger.Log($"[InfoPanel] 메인으로 토글: {(isOn ? "ON" : "OFF")}");
 
         if (isOn)
         {
@@ -698,7 +698,7 @@ public class InfoPanelController : MonoBehaviour
                 break;
         }
 
-        Debug.Log($"[InfoPanel] 페이지 전환: {page}");
+        ChunaLogger.Log($"[InfoPanel] 페이지 전환: {page}");
     }
 
     private void SetContentTogglesInteractable(bool interactable)
@@ -721,7 +721,7 @@ public class InfoPanelController : MonoBehaviour
         if (guideVideoController != null)
         {
             guideVideoController.SetGuideEnabled(true);
-            Debug.Log("[InfoPanel] 전문가 영상 재생 시작");
+            ChunaLogger.Log("[InfoPanel] 전문가 영상 재생 시작");
         }
     }
 
@@ -730,7 +730,7 @@ public class InfoPanelController : MonoBehaviour
         if (guideVideoController != null)
         {
             guideVideoController.SetGuideEnabled(false);
-            Debug.Log("[InfoPanel] 전문가 영상 정지");
+            ChunaLogger.Log("[InfoPanel] 전문가 영상 정지");
         }
     }
     #endregion
@@ -741,7 +741,7 @@ public class InfoPanelController : MonoBehaviour
         if (dynamicResultTableUI != null)
         {
             dynamicResultTableUI.ForceRefresh();
-            Debug.Log("[InfoPanel] 동적 결과 테이블 갱신");
+            ChunaLogger.Log("[InfoPanel] 동적 결과 테이블 갱신");
         }
     }
     #endregion
@@ -772,7 +772,7 @@ public class InfoPanelController : MonoBehaviour
 
         UpdateAllToggleColors();
 
-        Debug.Log("[InfoPanel] 시나리오 시작 - 근골격 페이지로 전환");
+        ChunaLogger.Log("[InfoPanel] 시나리오 시작 - 근골격 페이지로 전환");
     }
 
     /// <summary>
@@ -786,7 +786,7 @@ public class InfoPanelController : MonoBehaviour
         if (practiceManager != null && practiceManager.enabled)
         {
             if (showDebugLogs)
-                Debug.Log("[InfoPanel] PracticeManager가 활성화되어 있어 UI 위치 초기화 건너뜀");
+                ChunaLogger.Log("[InfoPanel] PracticeManager가 활성화되어 있어 UI 위치 초기화 건너뜀");
             return;
         }
 
@@ -796,7 +796,7 @@ public class InfoPanelController : MonoBehaviour
         {
             uiPositioner.RepositionUI();
             if (showDebugLogs)
-                Debug.Log("[InfoPanel] ScenarioUIPositioner로 UI 위치 초기화");
+                ChunaLogger.Log("[InfoPanel] ScenarioUIPositioner로 UI 위치 초기화");
         }
 
         // ★ 환자 위치도 헤드셋 기준으로 초기화
@@ -828,7 +828,7 @@ public class InfoPanelController : MonoBehaviour
         if (patient == null)
         {
             if (showDebugLogs)
-                Debug.Log("[InfoPanel] 환자 오브젝트를 찾을 수 없어 위치 초기화 건너뜀");
+                ChunaLogger.Log("[InfoPanel] 환자 오브젝트를 찾을 수 없어 위치 초기화 건너뜀");
             return;
         }
 
@@ -853,7 +853,7 @@ public class InfoPanelController : MonoBehaviour
         {
             targetTransform = patient.transform.parent;
             if (showDebugLogs)
-                Debug.Log($"[InfoPanel] 부모 오브젝트 사용: {targetTransform.name}");
+                ChunaLogger.Log($"[InfoPanel] 부모 오브젝트 사용: {targetTransform.name}");
         }
 
         targetTransform.position = patientNewPos;
@@ -867,7 +867,7 @@ public class InfoPanelController : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
+            ChunaLogger.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
     }
 
     private void OnScenarioCompleted(ScenarioData scenario)
@@ -887,7 +887,7 @@ public class InfoPanelController : MonoBehaviour
 
         UpdateAllToggleColors();
 
-        Debug.Log("[InfoPanel] 시나리오 완료 - 결과 페이지로 전환");
+        ChunaLogger.Log("[InfoPanel] 시나리오 완료 - 결과 페이지로 전환");
     }
     #endregion
 
@@ -915,7 +915,7 @@ public class InfoPanelController : MonoBehaviour
 
         // Animation 기반 토글인 경우 Animator로 상태 변경
         var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled)
+        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
         {
             animator.SetBool("IsOn", isActive);
         }
@@ -1000,7 +1000,7 @@ public class InfoPanelController : MonoBehaviour
 
     private void ReturnToLobby()
     {
-        Debug.Log("[InfoPanel] 로비로 이동...");
+        ChunaLogger.Log("[InfoPanel] 로비로 이동...");
         SceneLoader.LoadScene("Lobby", useLoadingScene: true);
     }
 
@@ -1028,7 +1028,7 @@ public class InfoPanelController : MonoBehaviour
         StartCoroutine(ReapplySkeletonToggleStateDelayed());
 
         if (showDebugLogs)
-            Debug.Log("[InfoPanel] 연습모드: 콘텐츠 토글 상태 초기화 (골격 선택, 페이지 유지)");
+            ChunaLogger.Log("[InfoPanel] 연습모드: 콘텐츠 토글 상태 초기화 (골격 선택, 페이지 유지)");
     }
 
     /// <summary>
@@ -1048,11 +1048,11 @@ public class InfoPanelController : MonoBehaviour
             skeletonToggle.SetIsOnWithoutNotify(true);
 
             var animator = skeletonToggle.GetComponent<Animator>();
-            if (animator != null && animator.isActiveAndEnabled)
+            if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
             {
                 animator.SetBool("IsOn", true);
                 if (showDebugLogs)
-                    Debug.Log("[InfoPanel] 골격 토글 Animator 재적용: IsOn=true (강제)");
+                    ChunaLogger.Log("[InfoPanel] 골격 토글 Animator 재적용: IsOn=true (강제)");
             }
         }
 
@@ -1073,7 +1073,7 @@ public class InfoPanelController : MonoBehaviour
         toggle.SetIsOnWithoutNotify(false);
 
         var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled)
+        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
         {
             animator.SetBool("IsOn", false);
         }
@@ -1087,7 +1087,7 @@ public class InfoPanelController : MonoBehaviour
         if (toggle == null) return;
 
         var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled)
+        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
         {
             animator.SetBool("IsOn", toggle.isOn);
         }
@@ -1109,7 +1109,7 @@ public class InfoPanelController : MonoBehaviour
         UpdateAllToggleColors();
 
         if (showDebugLogs)
-            Debug.Log($"[InfoPanel] 연습모드: {page} 페이지로 전환");
+            ChunaLogger.Log($"[InfoPanel] 연습모드: {page} 페이지로 전환");
     }
 
     // showDebugLogs 속성 추가 (내부 로깅용)
@@ -1169,7 +1169,7 @@ public class InfoPanelController : MonoBehaviour
         UpdateDifficultyDescriptions();
 
         if (showDebugLogs)
-            Debug.Log($"[InfoPanel] 연습모드 난이도 설정: {difficulty}");
+            ChunaLogger.Log($"[InfoPanel] 연습모드 난이도 설정: {difficulty}");
     }
 
     // Properties
@@ -1190,7 +1190,7 @@ public class InfoPanelController : MonoBehaviour
 
         // Animation 기반 토글의 경우 Animator 상태 수동 업데이트
         var animator = toggle.GetComponent<Animator>();
-        if (animator != null)
+        if (animator != null && HasAnimatorParameter(animator, "IsOn"))
         {
             // ★ Animator가 활성화 상태이면 즉시 적용
             if (animator.isActiveAndEnabled)
@@ -1226,6 +1226,15 @@ public class InfoPanelController : MonoBehaviour
                 yield break;
             }
         }
+    }
+
+    private bool HasAnimatorParameter(Animator animator, string paramName)
+    {
+        foreach (var param in animator.parameters)
+        {
+            if (param.name == paramName) return true;
+        }
+        return false;
     }
 
     private bool IsToggleOn(Toggle toggle)

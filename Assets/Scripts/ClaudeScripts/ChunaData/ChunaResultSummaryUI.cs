@@ -11,7 +11,7 @@ using UnityEngine.UI;
 /// - 단계별 상세 결과
 /// - 체크포인트별 성과
 /// </summary>
-public class ChunaResultSummaryUI : MonoBehaviour
+public class ChunaResultSummaryUI : BaseUIPanel
 {
     [Header("=== 결과 데이터 소스 ===")]
     [SerializeField] private ChunaFeedbackUI feedbackUI;
@@ -60,6 +60,8 @@ public class ChunaResultSummaryUI : MonoBehaviour
     public event Action OnMainMenuRequested;
     public event Action OnResultClosed;
 
+    protected override GameObject GetPanelObject() => resultPanel;
+
     // 현재 표시 중인 결과
     private List<ChunaFeedbackUI.StepResult> displayedResults;
     private ChunaFeedbackUI.TotalResult displayedTotal;
@@ -67,7 +69,7 @@ public class ChunaResultSummaryUI : MonoBehaviour
     void Awake()
     {
         if (feedbackUI == null)
-            feedbackUI = FindObjectOfType<ChunaFeedbackUI>();
+            feedbackUI = FindFirstObjectByType<ChunaFeedbackUI>();
 
         // 버튼 이벤트 연결
         if (closeButton != null)
@@ -90,11 +92,11 @@ public class ChunaResultSummaryUI : MonoBehaviour
     /// <summary>
     /// 결과 요약 패널 표시
     /// </summary>
-    public void Show()
+    public override void Show()
     {
         if (feedbackUI == null)
         {
-            Debug.LogError("[ChunaResultSummaryUI] ChunaFeedbackUI를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ChunaResultSummaryUI] ChunaFeedbackUI를 찾을 수 없습니다!");
             return;
         }
 
@@ -104,7 +106,7 @@ public class ChunaResultSummaryUI : MonoBehaviour
 
         if (displayedResults.Count == 0)
         {
-            Debug.LogWarning("[ChunaResultSummaryUI] 표시할 결과가 없습니다.");
+            ChunaLogger.LogWarning("[ChunaResultSummaryUI] 표시할 결과가 없습니다.");
             return;
         }
 
@@ -113,19 +115,17 @@ public class ChunaResultSummaryUI : MonoBehaviour
         UpdateStepListUI();
 
         // 패널 표시
-        if (resultPanel != null)
-            resultPanel.SetActive(true);
+        base.Show();
 
-        Debug.Log($"[ChunaResultSummaryUI] 결과 표시 - {displayedResults.Count}개 단계, 평균 점수: {displayedTotal.averageScore:F0}");
+        ChunaLogger.Log($"[ChunaResultSummaryUI] 결과 표시 - {displayedResults.Count}개 단계, 평균 점수: {displayedTotal.averageScore:F0}");
     }
 
     /// <summary>
     /// 결과 요약 패널 숨김
     /// </summary>
-    public void Hide()
+    public override void Hide()
     {
-        if (resultPanel != null)
-            resultPanel.SetActive(false);
+        base.Hide();
 
         if (detailPanel != null)
             detailPanel.SetActive(false);

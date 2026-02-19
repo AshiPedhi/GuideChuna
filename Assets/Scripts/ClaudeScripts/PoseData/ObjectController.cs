@@ -2,24 +2,24 @@ using UnityEngine;
 
 public class ObjectController : MonoBehaviour
 {
-    // ÀÎ½ºÆåÅÍ¿¡¼­ ÇÒ´çÇÒ Å¸°Ù ¿ÀºêÁ§Æ® (ÀÌµ¿/È¸Àü¿ë)
+    // ï¿½Î½ï¿½ï¿½ï¿½ï¿½Í¿ï¿½ï¿½ï¿½ ï¿½Ò´ï¿½ï¿½ï¿½ Å¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® (ï¿½Ìµï¿½/È¸ï¿½ï¿½ï¿½ï¿½)
     public GameObject targetObject;
 
-    // Ãß°¡·Î ÁöÁ¤ÇÒ ¿ÀºêÁ§Æ® 3°³ (On/Off Åä±Û¿ë)
+    // ï¿½ß°ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® 3ï¿½ï¿½ (On/Off ï¿½ï¿½Û¿ï¿½)
     public GameObject additionalObject1;
     public GameObject additionalObject2;
     public GameObject additionalObject3;
 
-    // ÀÌµ¿ ¼Óµµ (À¯´Ö/ÃÊ, ÀÎ½ºÆåÅÍ¿¡¼­ Á¶Á¤ °¡´É)
+    // ï¿½Ìµï¿½ ï¿½Óµï¿½ (ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½, ï¿½Î½ï¿½ï¿½ï¿½ï¿½Í¿ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
     public float moveSpeed = 5f;
 
-    // È¸Àü ¼Óµµ (µµ/ÃÊ, ÀÎ½ºÆåÅÍ¿¡¼­ Á¶Á¤ °¡´É)
+    // È¸ï¿½ï¿½ ï¿½Óµï¿½ (ï¿½ï¿½/ï¿½ï¿½, ï¿½Î½ï¿½ï¿½ï¿½ï¿½Í¿ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
     public float rotateSpeed = 90f;
 
-    // ÇöÀç ¼±ÅÃµÈ ¿ÀºêÁ§Æ® ÃßÀû (0: none, 1: Object1, 2: Object2)
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ãµï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ï¿½ (0: none, 1: Object1, 2: Object2)
     private int selectedAdditional = 0;
 
-    // ´©¸£°í ÀÖ´Â µ¿¾È ÀÌµ¿/È¸Àü ÇÃ·¡±× (°¢ ¹æÇâº°)
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ö´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ìµï¿½/È¸ï¿½ï¿½ ï¿½Ã·ï¿½ï¿½ï¿½ (ï¿½ï¿½ ï¿½ï¿½ï¿½âº°)
     private bool isMovingUp = false;
     private bool isMovingDown = false;
     private bool isMovingForward = false;
@@ -27,14 +27,14 @@ public class ObjectController : MonoBehaviour
     private bool isRotatingPositive = false;
     private bool isRotatingNegative = false;
 
-    // Update ¸Þ¼­µå: ´©¸£°í ÀÖ´Â µ¿¾È Áö¼Ó ÀÌµ¿/È¸Àü Ã³¸®
+    // Update ï¿½Þ¼ï¿½ï¿½ï¿½: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ö´ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ìµï¿½/È¸ï¿½ï¿½ Ã³ï¿½ï¿½
     private void Update()
     {
         if (targetObject == null) return;
 
         float delta = Time.deltaTime;
 
-        // ÀÌµ¿ Ã³¸® (±Û·Î¹ú Ãà ±âÁØ)
+        // ï¿½Ìµï¿½ Ã³ï¿½ï¿½ (ï¿½Û·Î¹ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
         if (isMovingUp)
         {
             targetObject.transform.Translate(Vector3.up * moveSpeed * delta, Space.World);
@@ -52,7 +52,7 @@ public class ObjectController : MonoBehaviour
             targetObject.transform.Translate(Vector3.back * moveSpeed * delta, Space.World);
         }
 
-        // È¸Àü Ã³¸® (·ÎÄÃ XÃà ±âÁØ)
+        // È¸ï¿½ï¿½ Ã³ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ Xï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
         if (isRotatingPositive)
         {
             targetObject.transform.Rotate(Vector3.right * rotateSpeed * delta);
@@ -63,7 +63,7 @@ public class ObjectController : MonoBehaviour
         }
     }
 
-    // ¸ðµç ÀÌµ¿/È¸Àü ÁßÁö (Pointer Up ÀÌº¥Æ®¿¡¼­ È£Ãâ)
+    // ï¿½ï¿½ï¿½ ï¿½Ìµï¿½/È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (Pointer Up ï¿½Ìºï¿½Æ®ï¿½ï¿½ï¿½ï¿½ È£ï¿½ï¿½)
     public void StopAllMovement()
     {
         isMovingUp = false;
@@ -74,80 +74,80 @@ public class ObjectController : MonoBehaviour
         isRotatingNegative = false;
     }
 
-    // Up ¹öÆ° ´­¸² ½ÃÀÛ
+    // Up ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartMoveUp()
     {
-        StopAllMovement(); // ´Ù¸¥ µ¿ÀÛ ÁßÁö (¿É¼Ç: µ¿½Ã¿¡ Çã¿ëÇÏ·Á¸é Á¦°Å)
+        StopAllMovement(); // ï¿½Ù¸ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½É¼ï¿½: ï¿½ï¿½ï¿½Ã¿ï¿½ ï¿½ï¿½ï¿½ï¿½Ï·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
         isMovingUp = true;
     }
 
-    // Down ¹öÆ° ´­¸² ½ÃÀÛ
+    // Down ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartMoveDown()
     {
         StopAllMovement();
         isMovingDown = true;
     }
 
-    // Forward ¹öÆ° ´­¸² ½ÃÀÛ
+    // Forward ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartMoveForward()
     {
         StopAllMovement();
         isMovingForward = true;
     }
 
-    // Backward ¹öÆ° ´­¸² ½ÃÀÛ
+    // Backward ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartMoveBackward()
     {
         StopAllMovement();
         isMovingBackward = true;
     }
 
-    // Rotate Positive ¹öÆ° ´­¸² ½ÃÀÛ
+    // Rotate Positive ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartRotatePositive()
     {
         StopAllMovement();
         isRotatingPositive = true;
     }
 
-    // Rotate Negative ¹öÆ° ´­¸² ½ÃÀÛ
+    // Rotate Negative ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     public void StartRotateNegative()
     {
         StopAllMovement();
         isRotatingNegative = true;
     }
 
-    // Ãß°¡ ¿ÀºêÁ§Æ® Åä±Û (ÇÏ³ªÀÇ ¹öÆ°À¸·Î ÀüÈ¯: Object1 ¡ê Object2)
+    // ï¿½ß°ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ (ï¿½Ï³ï¿½ï¿½ï¿½ ï¿½ï¿½Æ°ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯: Object1 ï¿½ï¿½ Object2)
     public void ToggleAdditionalObjects()
     {
         if (additionalObject1 == null || additionalObject2 == null || additionalObject3 == null)
         {
-            Debug.LogWarning("One or both additional objects are not assigned!");
+            ChunaLogger.LogWarning("One or both additional objects are not assigned!");
             return;
         }
 
         if (selectedAdditional == 1)
         {
-            // ÇöÀç Object1 On ¡æ Object2 OnÀ¸·Î ÀüÈ¯
+            // ï¿½ï¿½ï¿½ï¿½ Object1 On ï¿½ï¿½ Object2 Onï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
             additionalObject1.SetActive(false);
             additionalObject2.SetActive(true);
             selectedAdditional = 2;
-            Debug.Log("Switched to Additional Object 2 (On), Object 1 Off");
+            ChunaLogger.Log("Switched to Additional Object 2 (On), Object 1 Off");
         }
         else if (selectedAdditional ==2)
         {
-            // ÇöÀç Object2 On ¶Ç´Â none ¡æ Object1 OnÀ¸·Î ÀüÈ¯
+            // ï¿½ï¿½ï¿½ï¿½ Object2 On ï¿½Ç´ï¿½ none ï¿½ï¿½ Object1 Onï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
             additionalObject2.SetActive(false);
             additionalObject3.SetActive(true);
             selectedAdditional = 3;
-            Debug.Log("Switched to Additional Object 3 (On), Object 2 Off");
+            ChunaLogger.Log("Switched to Additional Object 3 (On), Object 2 Off");
         }
         else
         {
-            // ÇöÀç Object2 On ¶Ç´Â none ¡æ Object1 OnÀ¸·Î ÀüÈ¯
+            // ï¿½ï¿½ï¿½ï¿½ Object2 On ï¿½Ç´ï¿½ none ï¿½ï¿½ Object1 Onï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯
             additionalObject1.SetActive(true);
             additionalObject3.SetActive(false);
             selectedAdditional = 1;
-            Debug.Log("Switched to Additional Object 1 (On), Object 3 Off");
+            ChunaLogger.Log("Switched to Additional Object 1 (On), Object 3 Off");
         }
     }
 }

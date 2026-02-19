@@ -2,19 +2,19 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
-using Oculus.Interaction.Body.Input;  // BoneId ³×ÀÓ½ºÆäÀÌ½º
-using System.Reflection;  // ¸®ÇÃ·º¼Ç
+using Oculus.Interaction.Body.Input;  // BoneId ï¿½ï¿½ï¿½Ó½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½
+using System.Reflection;  // ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½
 using static OVRSkeleton;
 
 public class PosePlayer : MonoBehaviour
 {
     [SerializeField]
-    private OVRCustomSkeleton customSkeleton;  // Inspector¿¡¼­ OVRCustomSkeleton ÇÒ´ç
+    private OVRCustomSkeleton customSkeleton;  // Inspectorï¿½ï¿½ï¿½ï¿½ OVRCustomSkeleton ï¿½Ò´ï¿½
 
     [SerializeField]
-    private float playbackInterval = 0.1f;  // Àç»ý °£°Ý (ÃÊ)
+    private float playbackInterval = 0.1f;  // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½)
 
-    private List<PoseFrame> loadedSequence = new List<PoseFrame>();  // ºÒ·¯¿Â ½ÃÄö½º
+    private List<PoseFrame> loadedSequence = new List<PoseFrame>();  // ï¿½Ò·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     private bool isPlaying = false;
     private int currentPlaybackIndex = 0;
     private float lastPlaybackTime = 0f;
@@ -46,26 +46,26 @@ public class PosePlayer : MonoBehaviour
                 if (currentPlaybackIndex >= loadedSequence.Count)
                 {
                     isPlaying = false;
-                    Debug.Log("Àç»ý ¿Ï·á.");
+                    ChunaLogger.Log("ï¿½ï¿½ï¿½ ï¿½Ï·ï¿½.");
                 }
             }
         }
     }
 
-    // csv ºÒ·¯¿Í Àç»ý ½ÃÀÛ (csvFileName ÀÔ·Â, ¿¹: "MySequence")
+    // csv ï¿½Ò·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (csvFileName ï¿½Ô·ï¿½, ï¿½ï¿½: "MySequence")
     public void StartPlaybackFromCSV(string csvFileName)
     {
         string path = Path.Combine(Application.persistentDataPath, csvFileName + ".csv");
         if (!File.Exists(path))
         {
-            Debug.LogError("CSV ÆÄÀÏ ¾øÀ½.");
+            ChunaLogger.LogError("CSV ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.");
             return;
         }
 
         string[] lines = File.ReadAllLines(path);
         if (lines.Length < 2)
         {
-            Debug.LogError("CSV µ¥ÀÌÅÍ ºÎÁ·.");
+            ChunaLogger.LogError("CSV ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.");
             return;
         }
 
@@ -73,7 +73,7 @@ public class PosePlayer : MonoBehaviour
         PoseFrame currentFrame = null;
         int lastFrameIndex = -1;
 
-        for (int i = 1; i < lines.Length; i++)  // Çì´õ ½ºÅµ
+        for (int i = 1; i < lines.Length; i++)  // ï¿½ï¿½ï¿½ ï¿½ï¿½Åµ
         {
             string[] values = lines[i].Split(',');
             int frameIndex = int.Parse(values[0]);
@@ -99,18 +99,18 @@ public class PosePlayer : MonoBehaviour
 
         if (loadedSequence.Count == 0)
         {
-            Debug.LogError("CSV ÆÄ½Ì ½ÇÆÐ.");
+            ChunaLogger.LogError("CSV ï¿½Ä½ï¿½ ï¿½ï¿½ï¿½ï¿½.");
             return;
         }
 
         isPlaying = true;
         currentPlaybackIndex = 0;
         lastPlaybackTime = Time.time;
-        ApplyFrameToBones();  // Ã¹ ÇÁ·¹ÀÓ Àû¿ë
-        Debug.Log("Àç»ý ½ÃÀÛ.");
+        ApplyFrameToBones();  // Ã¹ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+        ChunaLogger.Log("ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.");
     }
 
-    // ÇÁ·¹ÀÓ µ¥ÀÌÅÍ CustomBones¿¡ Àû¿ë
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CustomBonesï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     private void ApplyFrameToBones()
     {
         PoseFrame frame = loadedSequence[currentPlaybackIndex];
@@ -130,9 +130,9 @@ public class PosePlayer : MonoBehaviour
             }
             else
             {
-                Debug.LogError("GetBoneTransform ¸Þ¼­µå¸¦ Ã£À» ¼ö ¾øÀ½.");
+                ChunaLogger.LogError("GetBoneTransform ï¿½Þ¼ï¿½ï¿½å¸¦ Ã£ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½.");
             }
         }
-        Debug.Log($"ÇÁ·¹ÀÓ {currentPlaybackIndex} Àû¿ë.");
+        ChunaLogger.Log($"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ {currentPlaybackIndex} ï¿½ï¿½ï¿½ï¿½.");
     }
 }

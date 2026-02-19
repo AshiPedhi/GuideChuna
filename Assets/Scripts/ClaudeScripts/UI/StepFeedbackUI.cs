@@ -15,7 +15,7 @@ using ChunaTraining;
 /// └──────────────────┘
 ///      🟢 초과!
 /// </summary>
-public class StepFeedbackUI : MonoBehaviour
+public class StepFeedbackUI : BaseUIPanel
 {
     [Header("=== UI 요소 ===")]
     [Tooltip("현재 유사도 텍스트 (큰 글씨)")]
@@ -68,6 +68,8 @@ public class StepFeedbackUI : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
+    protected override GameObject GetPanelObject() => feedbackPanel;
+
     // 내부 상태
     private Coroutine displayCoroutine;
     private CanvasGroup canvasGroup;
@@ -106,7 +108,7 @@ public class StepFeedbackUI : MonoBehaviour
 
         if (showDebugLogs)
         {
-            Debug.Log($"<color=cyan>[StepFeedbackUI] 피드백 표시: {currentSimilarity:P0} / 목표 {target:P0}</color>");
+            ChunaLogger.Log($"<color=cyan>[StepFeedbackUI] 피드백 표시: {currentSimilarity:P0} / 목표 {target:P0}</color>");
         }
 
         // 이전 코루틴 중지
@@ -249,18 +251,7 @@ public class StepFeedbackUI : MonoBehaviour
     /// </summary>
     private IEnumerator FadeOut()
     {
-        if (canvasGroup == null) yield break;
-
-        float elapsed = 0f;
-
-        while (elapsed < fadeOutDuration)
-        {
-            elapsed += Time.deltaTime;
-            canvasGroup.alpha = 1f - (elapsed / fadeOutDuration);
-            yield return null;
-        }
-
-        canvasGroup.alpha = 0f;
+        yield return FadeCanvasGroup(canvasGroup, 1f, 0f, fadeOutDuration);
     }
 
     /// <summary>
@@ -313,12 +304,9 @@ public class StepFeedbackUI : MonoBehaviour
     /// <summary>
     /// 숨김
     /// </summary>
-    public void Hide()
+    public override void Hide()
     {
-        if (feedbackPanel != null)
-        {
-            feedbackPanel.SetActive(false);
-        }
+        base.Hide();
     }
 
     /// <summary>

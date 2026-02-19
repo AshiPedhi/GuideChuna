@@ -7,7 +7,7 @@ using TMPro;
 /// 각도표시 프리팹 제어기
 /// ChunaPathEvaluator의 프레임 진행률에 맞춰 Axis 각도를 제어
 /// </summary>
-public class AngleDisplayController : MonoBehaviour
+public class AngleDisplayController : BaseUIPanel
 {
     [Header("=== 참조 ===")]
     [Tooltip("ChunaPathEvaluator 참조 (자동 찾기)")]
@@ -69,9 +69,6 @@ public class AngleDisplayController : MonoBehaviour
     [Tooltip("홀드 끝점 표시 이미지 (fillAmount로 제어)")]
     [SerializeField] private Image holdEndImage;
 
-    [Tooltip("fillAmount 배율 (90도=0.25, 180도=0.5, 360도=1.0)")]
-    [SerializeField] private float fillAmountScale = 0.25f;
-
     [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
     [SerializeField] private bool syncHoldRangeWithEvaluator = true;
 
@@ -126,6 +123,8 @@ public class AngleDisplayController : MonoBehaviour
     private bool isStretchingMode = false;  // 스트레칭 모드 추적 (홀드 범위 구분용)
     private float currentHoldStart;
     private float currentHoldEnd;
+
+    protected override GameObject GetPanelObject() => displayTarget != null ? displayTarget : gameObject;
 
     // 이벤트
     public event Action<float> OnAngleChanged;
@@ -226,7 +225,7 @@ public class AngleDisplayController : MonoBehaviour
             if (showDebugLogs)
             {
                 string mode = pathEvaluator.IsStretchingMode ? "스트레칭" : "일반";
-                Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 오프셋 비율: {evaluatorOffsetRatio:P0})</color>");
+                ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋 동기화: {angleDisplayOffset:F1}° ({mode} 모드, 오프셋 비율: {evaluatorOffsetRatio:P0})</color>");
             }
         }
     }
@@ -248,7 +247,7 @@ public class AngleDisplayController : MonoBehaviour
     {
         if (pathEvaluator == null)
         {
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         }
 
         if (axisTransform == null)
@@ -280,9 +279,9 @@ public class AngleDisplayController : MonoBehaviour
         if (!isInitialized)
         {
             if (syncSource == SyncSource.PatientAnimation)
-                Debug.LogWarning("[AngleDisplayController] 초기화 실패 - Axis 또는 Patient Animator를 찾을 수 없습니다.");
+                ChunaLogger.LogWarning("[AngleDisplayController] 초기화 실패 - Axis 또는 Patient Animator를 찾을 수 없습니다.");
             else
-                Debug.LogWarning("[AngleDisplayController] 초기화 실패 - PathEvaluator 또는 Axis를 찾을 수 없습니다.");
+                ChunaLogger.LogWarning("[AngleDisplayController] 초기화 실패 - PathEvaluator 또는 Axis를 찾을 수 없습니다.");
         }
         else
         {
@@ -293,7 +292,7 @@ public class AngleDisplayController : MonoBehaviour
             UpdateHoldRange(false);
 
             if (showDebugLogs)
-                Debug.Log("<color=green>[AngleDisplayController] 초기화 완료</color>");
+                ChunaLogger.Log("<color=green>[AngleDisplayController] 초기화 완료</color>");
         }
     }
 
@@ -352,7 +351,7 @@ public class AngleDisplayController : MonoBehaviour
         if (showDebugLogs)
         {
             string mode = extended ? (pathEvaluator != null && pathEvaluator.IsStretchingMode ? "스트레칭" : "재평가") : "일반";
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°)</color>");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°)</color>");
         }
     }
 
@@ -394,7 +393,7 @@ public class AngleDisplayController : MonoBehaviour
         {
             Show();
             if (showDebugLogs)
-                Debug.Log("<color=green>[AngleDisplayController] 평가 시작 - 표시</color>");
+                ChunaLogger.Log("<color=green>[AngleDisplayController] 평가 시작 - 표시</color>");
         }
     }
 
@@ -407,7 +406,7 @@ public class AngleDisplayController : MonoBehaviour
         {
             Hide();
             if (showDebugLogs)
-                Debug.Log("<color=orange>[AngleDisplayController] 평가 완료 - 숨김</color>");
+                ChunaLogger.Log("<color=orange>[AngleDisplayController] 평가 완료 - 숨김</color>");
         }
     }
 
@@ -543,7 +542,7 @@ public class AngleDisplayController : MonoBehaviour
         OnAngleChanged?.Invoke(currentAngle);
 
         if (showDebugLogs)
-            Debug.Log($"[AngleDisplayController] 각도: {currentAngle:F1}° (진행률: {currentProgress:P0})");
+            ChunaLogger.Log($"[AngleDisplayController] 각도: {currentAngle:F1}° (진행률: {currentProgress:P0})");
     }
 
     /// <summary>
@@ -590,25 +589,18 @@ public class AngleDisplayController : MonoBehaviour
     /// <summary>
     /// 각도 표시 UI 보이기
     /// </summary>
-    public void Show()
+    public override void Show()
     {
-        if (displayTarget != null)
-            displayTarget.SetActive(true);
+        base.Show();
     }
 
     /// <summary>
     /// 각도 표시 UI 숨기기
     /// </summary>
-    public void Hide()
+    public override void Hide()
     {
-        if (displayTarget != null)
-            displayTarget.SetActive(false);
+        base.Hide();
     }
-
-    /// <summary>
-    /// 현재 표시 상태
-    /// </summary>
-    public bool IsVisible => displayTarget != null && displayTarget.activeSelf;
 
     /// <summary>
     /// 각도 범위 설정
@@ -714,7 +706,7 @@ public class AngleDisplayController : MonoBehaviour
             holdEndImage.fillAmount = angleAtHoldEnd / 360f;
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°</color>");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°</color>");
     }
 
     /// <summary>
@@ -756,7 +748,7 @@ public class AngleDisplayController : MonoBehaviour
     {
         angleDisplayOffset = offset;
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋: {offset}°</color>");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋: {offset}°</color>");
     }
 
     /// <summary>
@@ -769,7 +761,7 @@ public class AngleDisplayController : MonoBehaviour
         animationEndOffset = Mathf.Clamp01(endOffset);
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[AngleDisplayController] 애니메이션 구간: {animationStartOffset:P0}~{animationEndOffset:P0}</color>");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 애니메이션 구간: {animationStartOffset:P0}~{animationEndOffset:P0}</color>");
     }
 
     /// <summary>

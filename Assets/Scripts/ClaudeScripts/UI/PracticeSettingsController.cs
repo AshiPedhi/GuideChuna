@@ -61,7 +61,7 @@ public class PracticeSettingsController : MonoBehaviour
     void Awake()
     {
         // InfoPanelController 찾기 (선택적)
-        infoPanelController = FindObjectOfType<InfoPanelController>();
+        infoPanelController = FindFirstObjectByType<InfoPanelController>();
 
         // 헤드셋 Transform 자동 찾기 (할당 안 되어 있으면)
         if (headsetTransform == null)
@@ -72,7 +72,7 @@ public class PracticeSettingsController : MonoBehaviour
                 headsetTransform = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
                 if (headsetTransform != null)
                 {
-                    Debug.Log("[PracticeSettings] ✅ CenterEyeAnchor 자동 찾기 성공");
+                    ChunaLogger.Log("[PracticeSettings] ✅ CenterEyeAnchor 자동 찾기 성공");
                 }
             }
         }
@@ -117,12 +117,12 @@ public class PracticeSettingsController : MonoBehaviour
                 {
                     originalPatientMaterials[i] = patientRenderers[i].materials;
                 }
-                Debug.Log($"[PracticeSettings] ✅ 환자 모델 SkinnedMeshRenderer {patientRenderers.Length}개 캐싱 완료 (루트: {patientRoot.name})");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 환자 모델 SkinnedMeshRenderer {patientRenderers.Length}개 캐싱 완료 (루트: {patientRoot.name})");
 
                 // 각 렌더러 이름 로그
                 foreach (var renderer in patientRenderers)
                 {
-                    Debug.Log($"[PracticeSettings]   - SkinnedMesh: {renderer.gameObject.name}");
+                    ChunaLogger.Log($"[PracticeSettings]   - SkinnedMesh: {renderer.gameObject.name}");
                 }
             }
 
@@ -135,7 +135,7 @@ public class PracticeSettingsController : MonoBehaviour
                 {
                     originalPatientMeshMaterials[i] = patientMeshRenderers[i].materials;
                 }
-                Debug.Log($"[PracticeSettings] ✅ 환자 모델 MeshRenderer {patientMeshRenderers.Length}개 캐싱 완료");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 환자 모델 MeshRenderer {patientMeshRenderers.Length}개 캐싱 완료");
             }
 
             // patientModel 참조 업데이트
@@ -146,7 +146,7 @@ public class PracticeSettingsController : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[PracticeSettings] ⚠ 환자 모델을 찾을 수 없습니다 (patientModel 미할당, Patient 태그 없음)");
+            ChunaLogger.LogWarning("[PracticeSettings] ⚠ 환자 모델을 찾을 수 없습니다 (patientModel 미할당, Patient 태그 없음)");
         }
 
         // 골격 모델 렌더러 캐싱
@@ -161,7 +161,7 @@ public class PracticeSettingsController : MonoBehaviour
                 {
                     originalSkeletonMaterials[i] = skeletonRenderers[i].materials;
                 }
-                Debug.Log($"[PracticeSettings] ✅ 골격 모델 SkinnedMeshRenderer {skeletonRenderers.Length}개 캐싱 완료");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 골격 모델 SkinnedMeshRenderer {skeletonRenderers.Length}개 캐싱 완료");
             }
 
             // MeshRenderer
@@ -173,7 +173,7 @@ public class PracticeSettingsController : MonoBehaviour
                 {
                     originalSkeletonMeshMaterials[i] = skeletonMeshRenderers[i].materials;
                 }
-                Debug.Log($"[PracticeSettings] ✅ 골격 모델 MeshRenderer {skeletonMeshRenderers.Length}개 캐싱 완료");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 골격 모델 MeshRenderer {skeletonMeshRenderers.Length}개 캐싱 완료");
             }
         }
     }
@@ -187,12 +187,12 @@ public class PracticeSettingsController : MonoBehaviour
             if (passthroughLayer == null)
             {
                 passthroughLayer = ovrCameraRig.AddComponent<OVRPassthroughLayer>();
-                Debug.Log("[PracticeSettings] OVRPassthroughLayer 컴포넌트 추가됨");
+                ChunaLogger.Log("[PracticeSettings] OVRPassthroughLayer 컴포넌트 추가됨");
             }
         }
         else
         {
-            Debug.LogError("[PracticeSettings] OVRCameraRig를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[PracticeSettings] OVRCameraRig를 찾을 수 없습니다!");
         }
     }
 
@@ -209,7 +209,7 @@ public class PracticeSettingsController : MonoBehaviour
                     StartCoroutine(ResetToggle(customPositioningToggle));
                 }
             });
-            Debug.Log("[PracticeSettings] ✅ 맞춤 설정 토글 연결");
+            ChunaLogger.Log("[PracticeSettings] ✅ 맞춤 설정 토글 연결");
         }
 
         // 2. 환자 위치 조정 (일반 토글)
@@ -217,7 +217,7 @@ public class PracticeSettingsController : MonoBehaviour
         {
             patientPositionToggle.onValueChanged.RemoveAllListeners();
             patientPositionToggle.onValueChanged.AddListener(OnPatientPositionToggle);
-            Debug.Log("[PracticeSettings] ✅ 환자 위치 조정 토글 연결");
+            ChunaLogger.Log("[PracticeSettings] ✅ 환자 위치 조정 토글 연결");
         }
 
         // 3. 근골격계 표시 (일반 토글)
@@ -225,7 +225,7 @@ public class PracticeSettingsController : MonoBehaviour
         {
             skeletonDisplayToggle.onValueChanged.RemoveAllListeners();
             skeletonDisplayToggle.onValueChanged.AddListener(OnSkeletonDisplayToggle);
-            Debug.Log("[PracticeSettings] ✅ 근골격계 표시 토글 연결");
+            ChunaLogger.Log("[PracticeSettings] ✅ 근골격계 표시 토글 연결");
         }
 
         // 4. 환자 모델 표시 (일반 토글)
@@ -233,7 +233,7 @@ public class PracticeSettingsController : MonoBehaviour
         {
             patientModelDisplayToggle.onValueChanged.RemoveAllListeners();
             patientModelDisplayToggle.onValueChanged.AddListener(OnPatientModelDisplayToggle);
-            Debug.Log("[PracticeSettings] ✅ 환자 모델 표시 토글 연결");
+            ChunaLogger.Log("[PracticeSettings] ✅ 환자 모델 표시 토글 연결");
         }
 
         // 5. 현실 모드 (일반 토글)
@@ -241,7 +241,7 @@ public class PracticeSettingsController : MonoBehaviour
         {
             realityModeToggle.onValueChanged.RemoveAllListeners();
             realityModeToggle.onValueChanged.AddListener(OnRealityModeToggle);
-            Debug.Log("[PracticeSettings] ✅ 현실 모드 토글 연결");
+            ChunaLogger.Log("[PracticeSettings] ✅ 현실 모드 토글 연결");
         }
     }
 
@@ -274,17 +274,17 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     private void OnCustomPositioning()
     {
-        Debug.Log("[PracticeSettings] 맞춤 설정 실행");
+        ChunaLogger.Log("[PracticeSettings] 맞춤 설정 실행");
 
         if (targetObject == null)
         {
-            Debug.LogWarning("[PracticeSettings] targetObject가 할당되지 않았습니다. 위치 초기화를 건너뜁니다.");
+            ChunaLogger.LogWarning("[PracticeSettings] targetObject가 할당되지 않았습니다. 위치 초기화를 건너뜁니다.");
             return;
         }
 
         if (headsetTransform == null)
         {
-            Debug.LogError("[PracticeSettings] headsetTransform이 null입니다! CenterEyeAnchor를 찾을 수 없습니다.");
+            ChunaLogger.LogError("[PracticeSettings] headsetTransform이 null입니다! CenterEyeAnchor를 찾을 수 없습니다.");
             return;
         }
 
@@ -294,7 +294,7 @@ public class PracticeSettingsController : MonoBehaviour
         if (customReferencePoint != null)
         {
             newPosition = customReferencePoint.position;
-            Debug.Log($"[PracticeSettings] 커스텀 기준점 사용: {newPosition}");
+            ChunaLogger.Log($"[PracticeSettings] 커스텀 기준점 사용: {newPosition}");
         }
         else
         {
@@ -313,7 +313,7 @@ public class PracticeSettingsController : MonoBehaviour
                 headsetPosition.z + headsetForward.z * defaultForwardDistance
             );
 
-            Debug.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
+            ChunaLogger.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
         }
 
         // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
@@ -321,11 +321,11 @@ public class PracticeSettingsController : MonoBehaviour
         if (targetObject.parent != null)
         {
             actualTarget = targetObject.parent;
-            Debug.Log($"[PracticeSettings] 부모 오브젝트 사용: {actualTarget.name}");
+            ChunaLogger.Log($"[PracticeSettings] 부모 오브젝트 사용: {actualTarget.name}");
         }
 
         actualTarget.position = newPosition;
-        Debug.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {actualTarget.name} -> {newPosition}");
+        ChunaLogger.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {actualTarget.name} -> {newPosition}");
     }
     #endregion
 
@@ -335,7 +335,7 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     private void OnPatientPositionToggle(bool isOn)
     {
-        Debug.Log($"[PracticeSettings] 환자 위치 조정: {isOn}");
+        ChunaLogger.Log($"[PracticeSettings] 환자 위치 조정: {isOn}");
 
         if (patientPositionController != null)
         {
@@ -346,11 +346,11 @@ public class PracticeSettingsController : MonoBehaviour
             }
 
             patientPositionController.SetActive(isOn);
-            Debug.Log($"[PracticeSettings] ✅ 환자 위치 조정 컨트롤러: {(isOn ? "활성화" : "비활성화")}");
+            ChunaLogger.Log($"[PracticeSettings] ✅ 환자 위치 조정 컨트롤러: {(isOn ? "활성화" : "비활성화")}");
         }
         else
         {
-            Debug.LogWarning("[PracticeSettings] patientPositionController가 할당되지 않았습니다.");
+            ChunaLogger.LogWarning("[PracticeSettings] patientPositionController가 할당되지 않았습니다.");
         }
     }
 
@@ -375,18 +375,18 @@ public class PracticeSettingsController : MonoBehaviour
             if (patient.transform.parent != null)
             {
                 syncTarget = patient.transform.parent;
-                Debug.Log($"[PracticeSettings] 부모 오브젝트 기준 동기화: {syncTarget.name}");
+                ChunaLogger.Log($"[PracticeSettings] 부모 오브젝트 기준 동기화: {syncTarget.name}");
             }
 
             // ★ 위치만 동기화, 회전은 변경하지 않음 (환자 회전 문제 방지)
             patientPositionController.transform.position = syncTarget.position;
             // patientPositionController.transform.rotation = syncTarget.rotation; // 회전 동기화 비활성화
 
-            Debug.Log($"[PracticeSettings] ✅ 컨트롤러를 환자 위치로 동기화 (위치만): {syncTarget.position}");
+            ChunaLogger.Log($"[PracticeSettings] ✅ 컨트롤러를 환자 위치로 동기화 (위치만): {syncTarget.position}");
         }
         else
         {
-            Debug.LogWarning("[PracticeSettings] 환자 모델을 찾을 수 없어 동기화 건너뜀");
+            ChunaLogger.LogWarning("[PracticeSettings] 환자 모델을 찾을 수 없어 동기화 건너뜀");
         }
     }
 
@@ -395,7 +395,7 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     public void ForceDisablePatientPositionController()
     {
-        Debug.Log("[PracticeSettings] 환자 위치 조정 강제 비활성화");
+        ChunaLogger.Log("[PracticeSettings] 환자 위치 조정 강제 비활성화");
 
         if (patientPositionToggle != null)
         {
@@ -415,12 +415,12 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     private void OnSkeletonDisplayToggle(bool isOn)
     {
-        Debug.Log($"[PracticeSettings] 근골격계 표시: {isOn}");
+        ChunaLogger.Log($"[PracticeSettings] 근골격계 표시: {isOn}");
 
         if (skeletonModel != null)
         {
             skeletonModel.SetActive(isOn);
-            Debug.Log($"[PracticeSettings] ✅ 근골격계 모델: {(isOn ? "표시" : "숨김")}");
+            ChunaLogger.Log($"[PracticeSettings] ✅ 근골격계 모델: {(isOn ? "표시" : "숨김")}");
 
             // 환자 모델이 표시되어 있을 때만 투명도 조정
             bool isPatientModelVisible = patientModelDisplayToggle != null && patientModelDisplayToggle.isOn;
@@ -446,7 +446,7 @@ public class PracticeSettingsController : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[PracticeSettings] skeletonModel이 할당되지 않았습니다.");
+            ChunaLogger.LogWarning("[PracticeSettings] skeletonModel이 할당되지 않았습니다.");
         }
     }
     #endregion
@@ -457,7 +457,7 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     private void OnPatientModelDisplayToggle(bool isOn)
     {
-        Debug.Log($"[PracticeSettings] 환자 모델 표시: {isOn}");
+        ChunaLogger.Log($"[PracticeSettings] 환자 모델 표시: {isOn}");
 
         if (patientModel != null)
         {
@@ -479,19 +479,19 @@ public class PracticeSettingsController : MonoBehaviour
 
                 SetModelTransparency(patientRenderers, targetAlpha, "환자 모델");
                 SetMeshTransparency(patientMeshRenderers, targetAlpha, "환자 모델");
-                Debug.Log($"[PracticeSettings] ✅ 환자 모델 표시 (Alpha: {targetAlpha})");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 환자 모델 표시 (Alpha: {targetAlpha})");
             }
             else
             {
                 // 환자 모델 숨김: 알파값 0으로 완전 투명
                 SetModelTransparency(patientRenderers, 0f, "환자 모델");
                 SetMeshTransparency(patientMeshRenderers, 0f, "환자 모델");
-                Debug.Log($"[PracticeSettings] ✅ 환자 모델 숨김 (Alpha: 0)");
+                ChunaLogger.Log($"[PracticeSettings] ✅ 환자 모델 숨김 (Alpha: 0)");
             }
         }
         else
         {
-            Debug.LogWarning("[PracticeSettings] patientModel이 할당되지 않았습니다.");
+            ChunaLogger.LogWarning("[PracticeSettings] patientModel이 할당되지 않았습니다.");
         }
     }
     #endregion
@@ -502,7 +502,7 @@ public class PracticeSettingsController : MonoBehaviour
     /// </summary>
     private void OnRealityModeToggle(bool isOn)
     {
-        Debug.Log($"[PracticeSettings] 현실 모드: {isOn}");
+        ChunaLogger.Log($"[PracticeSettings] 현실 모드: {isOn}");
 
         isRealityModeOn = isOn;
 
@@ -510,18 +510,18 @@ public class PracticeSettingsController : MonoBehaviour
         {
             passthroughLayer.hidden = !isOn;
             passthroughLayer.enabled = isOn;
-            Debug.Log($"[PracticeSettings] ✅ 패스쓰루: {(isOn ? "활성화" : "비활성화")}");
+            ChunaLogger.Log($"[PracticeSettings] ✅ 패스쓰루: {(isOn ? "활성화" : "비활성화")}");
         }
         else
         {
-            Debug.LogError("[PracticeSettings] passthroughLayer가 null입니다!");
+            ChunaLogger.LogError("[PracticeSettings] passthroughLayer가 null입니다!");
         }
 
         // 배경 오브젝트 토글
         if (backgroundObject != null)
         {
             backgroundObject.SetActive(!isOn);
-            Debug.Log($"[PracticeSettings] 배경 오브젝트: {(!isOn ? "표시" : "숨김")}");
+            ChunaLogger.Log($"[PracticeSettings] 배경 오브젝트: {(!isOn ? "표시" : "숨김")}");
         }
 
         // 카메라 설정
@@ -538,7 +538,7 @@ public class PracticeSettingsController : MonoBehaviour
                 mainCamera.backgroundColor = new Color(0, 0, 0, 1);
                 mainCamera.clearFlags = CameraClearFlags.Skybox;
             }
-            Debug.Log($"[PracticeSettings] 카메라 설정 업데이트");
+            ChunaLogger.Log($"[PracticeSettings] 카메라 설정 업데이트");
         }
 
         // 현실 모드 시 모델 투명도 조정
@@ -594,7 +594,7 @@ public class PracticeSettingsController : MonoBehaviour
     {
         if (renderers == null || renderers.Length == 0)
         {
-            Debug.LogWarning($"[PracticeSettings] {modelName} 렌더러가 없어 투명도 조정을 건너뜁니다.");
+            ChunaLogger.LogWarning($"[PracticeSettings] {modelName} 렌더러가 없어 투명도 조정을 건너뜁니다.");
             return;
         }
 
@@ -607,7 +607,7 @@ public class PracticeSettingsController : MonoBehaviour
             for (int i = 0; i < materials.Length; i++)
             {
                 Material mat = materials[i];
-                if (mat == null) continue;
+                if (mat == null || mat.shader.name == "Hidden/InternalErrorShader") continue;
 
                 // 투명도가 1 미만이면 Transparent 모드로 변경
                 if (targetAlpha < 1f)
@@ -718,16 +718,13 @@ public class PracticeSettingsController : MonoBehaviour
                     mat.SetFloat("_AlphaClip", 0f);
                 }
 
-                if (!alphaApplied)
-                {
-                    Debug.LogWarning($"[PracticeSettings] 머티리얼 '{mat.name}'에서 알파 프로퍼티를 찾을 수 없습니다. 셰이더: {mat.shader.name}");
-                }
+                // 알파 미지원 셰이더(눈, 치아, 각막 등)는 무시
             }
 
             renderer.materials = materials;
         }
 
-        Debug.Log($"[PracticeSettings] ✅ {modelName} 투명도 조정 완료: Alpha = {targetAlpha}");
+        ChunaLogger.Log($"[PracticeSettings] ✅ {modelName} 투명도 조정 완료: Alpha = {targetAlpha}");
     }
 
     /// <summary>
@@ -752,7 +749,7 @@ public class PracticeSettingsController : MonoBehaviour
             for (int i = 0; i < materials.Length; i++)
             {
                 Material mat = materials[i];
-                if (mat == null) continue;
+                if (mat == null || mat.shader.name == "Hidden/InternalErrorShader") continue;
 
                 // 투명도가 1 미만이면 Transparent 모드로 변경
                 if (targetAlpha < 1f)
@@ -859,7 +856,7 @@ public class PracticeSettingsController : MonoBehaviour
             renderer.materials = materials;
         }
 
-        Debug.Log($"[PracticeSettings] ✅ {modelName} MeshRenderer 투명도 조정 완료: Alpha = {targetAlpha}");
+        ChunaLogger.Log($"[PracticeSettings] ✅ {modelName} MeshRenderer 투명도 조정 완료: Alpha = {targetAlpha}");
     }
     #endregion
 

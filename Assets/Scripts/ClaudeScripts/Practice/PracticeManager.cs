@@ -201,7 +201,7 @@ public class PracticeManager : MonoBehaviour
         StartStep(0);
 
         if (showDebugLogs)
-            Debug.Log("[Practice] Initialized - 연습 모드 시작");
+            ChunaLogger.Log("[Practice] Initialized - 연습 모드 시작");
     }
 
     /// <summary>
@@ -237,7 +237,7 @@ public class PracticeManager : MonoBehaviour
         if (IsValidPair(mainMenuToggle)) allToggles.Add(mainMenuToggle);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 총 {allToggles.Count}개 토글 등록됨, 난이도 {difficultyToggles.Count}개");
+            ChunaLogger.Log($"[Practice] 총 {allToggles.Count}개 토글 등록됨, 난이도 {difficultyToggles.Count}개");
     }
 
     private bool IsValidPair(ToggleHighlightPair pair)
@@ -254,11 +254,11 @@ public class PracticeManager : MonoBehaviour
         {
             guidePanel.SetActive(true);
             if (showDebugLogs)
-                Debug.Log($"[Practice] 가이드 패널 표시됨: {guidePanel.name}");
+                ChunaLogger.Log($"[Practice] 가이드 패널 표시됨: {guidePanel.name}");
         }
         else
         {
-            Debug.LogError("[Practice] ⚠ 가이드 패널이 할당되지 않았습니다! Inspector에서 guidePanel을 할당해주세요.");
+            ChunaLogger.LogError("[Practice] ⚠ 가이드 패널이 할당되지 않았습니다! Inspector에서 guidePanel을 할당해주세요.");
         }
     }
 
@@ -277,11 +277,11 @@ public class PracticeManager : MonoBehaviour
             // ★ 골격 페이지로 강제 전환 (화면과 버튼 상태 일치)
             infoPanelController.ForceShowSkeletonPage();
             if (showDebugLogs)
-                Debug.Log("[Practice] InfoPanel 골격 페이지로 초기화");
+                ChunaLogger.Log("[Practice] InfoPanel 골격 페이지로 초기화");
         }
         else
         {
-            Debug.LogWarning("[Practice] InfoPanelController를 찾을 수 없습니다.");
+            ChunaLogger.LogWarning("[Practice] InfoPanelController를 찾을 수 없습니다.");
         }
     }
 
@@ -304,7 +304,7 @@ public class PracticeManager : MonoBehaviour
         {
             uiPositioner.RepositionUI();
             if (showDebugLogs)
-                Debug.Log("[Practice] ScenarioUIPositioner로 UI 위치 초기화");
+                ChunaLogger.Log("[Practice] ScenarioUIPositioner로 UI 위치 초기화");
         }
 
         // ★ 환자 위치도 헤드셋 기준으로 초기화
@@ -336,7 +336,7 @@ public class PracticeManager : MonoBehaviour
                 {
                     targetTransform = patientTransform.parent;
                     if (showDebugLogs)
-                        Debug.Log($"[Practice] 부모 오브젝트 사용: {targetTransform.name}");
+                        ChunaLogger.Log($"[Practice] 부모 오브젝트 사용: {targetTransform.name}");
                 }
                 else
                 {
@@ -344,7 +344,7 @@ public class PracticeManager : MonoBehaviour
                     // (환자가 그룹 안에 있으면 그룹 전체를 이동)
                     targetTransform = patientTransform.parent;
                     if (showDebugLogs)
-                        Debug.Log($"[Practice] 부모 오브젝트 사용 (기본): {targetTransform.name}");
+                        ChunaLogger.Log($"[Practice] 부모 오브젝트 사용 (기본): {targetTransform.name}");
                 }
             }
 
@@ -359,12 +359,12 @@ public class PracticeManager : MonoBehaviour
             }
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
+                ChunaLogger.Log($"[Practice] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
         }
         else
         {
             if (patientTransform == null && showDebugLogs)
-                Debug.LogWarning("[Practice] patientTransform이 없어 환자 위치 초기화 건너뜀");
+                ChunaLogger.LogWarning("[Practice] patientTransform이 없어 환자 위치 초기화 건너뜀");
         }
     }
 
@@ -416,7 +416,7 @@ public class PracticeManager : MonoBehaviour
         blinkCoroutines[pair.highlightBorder] = coroutine;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 하이라이트 점멸 시작: {pair.toggle.name}");
+            ChunaLogger.Log($"[Practice] 하이라이트 점멸 시작: {pair.toggle.name}");
     }
 
     /// <summary>
@@ -521,7 +521,7 @@ public class PracticeManager : MonoBehaviour
         if (clickedDifficultyToggles.Contains(clickedPair.toggle))
         {
             if (showDebugLogs)
-                Debug.Log($"[Practice] 이미 클릭한 난이도: {clickedPair.toggle.name}");
+                ChunaLogger.Log($"[Practice] 이미 클릭한 난이도: {clickedPair.toggle.name}");
             return;
         }
 
@@ -529,7 +529,7 @@ public class PracticeManager : MonoBehaviour
         HideHighlight(clickedPair);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] ✓ 난이도 클릭: {clickedPair.toggle.name} ({clickedDifficultyToggles.Count}/{DIFFICULTY_REQUIRED_COUNT})");
+            ChunaLogger.Log($"[Practice] ✓ 난이도 클릭: {clickedPair.toggle.name} ({clickedDifficultyToggles.Count}/{DIFFICULTY_REQUIRED_COUNT})");
 
         // 3개 모두 클릭했으면 실습모드 토글로 이동
         if (clickedDifficultyToggles.Count >= DIFFICULTY_REQUIRED_COUNT)
@@ -548,7 +548,7 @@ public class PracticeManager : MonoBehaviour
     private void StartPracticeModeToggle()
     {
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 2-2: 실습모드 토글을 눌러주세요");
+            ChunaLogger.Log("[Practice] Step 2-2: 실습모드 토글을 눌러주세요");
 
         sequentialToggles.Clear();
         if (IsValidPair(practiceToggle))
@@ -593,7 +593,7 @@ public class PracticeManager : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] ✓ 토글 클릭 완료: {clickedPair.toggle.name} ({index + 1}/{sequentialToggles.Count})");
+            ChunaLogger.Log($"[Practice] ✓ 토글 클릭 완료: {clickedPair.toggle.name} ({index + 1}/{sequentialToggles.Count})");
 
         currentToggleIndex++;
 
@@ -632,7 +632,7 @@ public class PracticeManager : MonoBehaviour
     private void TransitionToSkeletonPageAndCompleteStep2()
     {
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 2 완료 - 골격 페이지로 전환");
+            ChunaLogger.Log("[Practice] Step 2 완료 - 골격 페이지로 전환");
 
         // InfoPanelController로 골격 페이지 전환
         if (infoPanelController == null)
@@ -685,7 +685,7 @@ public class PracticeManager : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 난이도 토글 시각 업데이트: {clickedPair.toggle.name} ON, 나머지 OFF");
+            ChunaLogger.Log($"[Practice] 난이도 토글 시각 업데이트: {clickedPair.toggle.name} ON, 나머지 OFF");
     }
 
     /// <summary>
@@ -776,28 +776,28 @@ public class PracticeManager : MonoBehaviour
         if (scenarioManager != null)
         {
             scenarioManager.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] ScenarioManager disabled");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] ScenarioManager disabled");
         }
 
         var conditionManager = FindFirstObjectByType<ScenarioConditionManager>();
         if (conditionManager != null)
         {
             conditionManager.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] ScenarioConditionManager disabled");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] ScenarioConditionManager disabled");
         }
 
         var resultTracker = FindFirstObjectByType<TrainingResultTracker>();
         if (resultTracker != null)
         {
             resultTracker.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] TrainingResultTracker disabled");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] TrainingResultTracker disabled");
         }
 
         var quizPanel = FindFirstObjectByType<QuizPanel>();
         if (quizPanel != null)
         {
             quizPanel.gameObject.SetActive(false);
-            if (showDebugLogs) Debug.Log("[Practice] QuizPanel disabled");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] QuizPanel disabled");
         }
 
         // LateralFlexionDetector 찾기 및 저장 (Step 6에서 활성화)
@@ -806,13 +806,13 @@ public class PracticeManager : MonoBehaviour
         if (lateralFlexionDetector != null)
         {
             lateralFlexionDetector.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] LateralFlexionDetector disabled (Step 6에서 활성화)");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] LateralFlexionDetector disabled (Step 6에서 활성화)");
         }
 
         if (chunaPathEvaluator != null)
         {
             chunaPathEvaluator.enabled = false;
-            if (showDebugLogs) Debug.Log("[Practice] ChunaPathEvaluator disabled (Step 6에서 활성화)");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] ChunaPathEvaluator disabled (Step 6에서 활성화)");
         }
     }
 
@@ -825,7 +825,7 @@ public class PracticeManager : MonoBehaviour
         isStepActive = true;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] ═══ Step {step + 1} 시작 ═══");
+            ChunaLogger.Log($"[Practice] ═══ Step {step + 1} 시작 ═══");
 
         // 스텝 시작 시 나레이션 재생 및 텍스트 표시
         PlayStepNarration(step);
@@ -864,7 +864,7 @@ public class PracticeManager : MonoBehaviour
             narrationAudioSource.Play();
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] 나레이션 재생: {narration.stepName}");
+                ChunaLogger.Log($"[Practice] 나레이션 재생: {narration.stepName}");
         }
 
         // 나레이션 텍스트 표시
@@ -873,7 +873,7 @@ public class PracticeManager : MonoBehaviour
             narrationText.text = narration.displayText ?? "";
 
             if (showDebugLogs && !string.IsNullOrEmpty(narration.displayText))
-                Debug.Log($"[Practice] 텍스트 표시: {narration.displayText}");
+                ChunaLogger.Log($"[Practice] 텍스트 표시: {narration.displayText}");
         }
 
         // 기본적으로 카운트 텍스트 초기화 (반복 스텝에서 별도 설정)
@@ -926,7 +926,7 @@ public class PracticeManager : MonoBehaviour
         HideAllHighlights();
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step {currentStep + 1} 완료!");
+            ChunaLogger.Log($"[Practice] Step {currentStep + 1} 완료!");
 
         StartCoroutine(TransitionToNextStep());
     }
@@ -947,7 +947,7 @@ public class PracticeManager : MonoBehaviour
         UpdateCountText(0, UI_GRAB_REQUIRED);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
+            ChunaLogger.Log($"[Practice] Step 1: UI를 잡아서 옮겨보세요 (0/{UI_GRAB_REQUIRED})");
     }
 
     public void OnUIGrabReleased()
@@ -958,7 +958,7 @@ public class PracticeManager : MonoBehaviour
         UpdateCountText(currentCount, UI_GRAB_REQUIRED);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] UI 옮기기: {currentCount}/{UI_GRAB_REQUIRED}");
+            ChunaLogger.Log($"[Practice] UI 옮기기: {currentCount}/{UI_GRAB_REQUIRED}");
 
         if (currentCount >= UI_GRAB_REQUIRED)
         {
@@ -982,7 +982,7 @@ public class PracticeManager : MonoBehaviour
 
         if (sequentialToggles.Count == 0)
         {
-            if (showDebugLogs) Debug.Log("[Practice] Step 2: 난이도 토글 없음, 건너뜀");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] Step 2: 난이도 토글 없음, 건너뜀");
             StartPracticeModeToggle();
             return;
         }
@@ -991,7 +991,7 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 2: 난이도 토글 (중급→상급→초급) (총 {sequentialToggles.Count}개)");
+            ChunaLogger.Log($"[Practice] Step 2: 난이도 토글 (중급→상급→초급) (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -1009,7 +1009,7 @@ public class PracticeManager : MonoBehaviour
 
         if (sequentialToggles.Count == 0)
         {
-            if (showDebugLogs) Debug.Log("[Practice] Step 3: 콘텐츠 토글 없음, 건너뜀");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] Step 3: 콘텐츠 토글 없음, 건너뜀");
             CompleteCurrentStep();
             return;
         }
@@ -1024,7 +1024,7 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 3: 콘텐츠(비디오→결과→골격) (총 {sequentialToggles.Count}개)");
+            ChunaLogger.Log($"[Practice] Step 3: 콘텐츠(비디오→결과→골격) (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -1042,7 +1042,7 @@ public class PracticeManager : MonoBehaviour
 
         if (sequentialToggles.Count == 0)
         {
-            if (showDebugLogs) Debug.Log("[Practice] Step 4: 설정 토글 없음, 건너뜀");
+            if (showDebugLogs) ChunaLogger.Log("[Practice] Step 4: 설정 토글 없음, 건너뜀");
             CompleteCurrentStep();
             return;
         }
@@ -1051,7 +1051,7 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] Step 4: 설정→자동조절→환자위치조절 (총 {sequentialToggles.Count}개)");
+            ChunaLogger.Log($"[Practice] Step 4: 설정→자동조절→환자위치조절 (총 {sequentialToggles.Count}개)");
     }
 
     #endregion
@@ -1061,7 +1061,7 @@ public class PracticeManager : MonoBehaviour
     private void StartStep5_PositionAndStart()
     {
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 5: 환자 위치를 조정하세요...");
+            ChunaLogger.Log("[Practice] Step 5: 환자 위치를 조정하세요...");
 
         StartCoroutine(WaitForPatientPositionThenContinue());
     }
@@ -1080,7 +1080,7 @@ public class PracticeManager : MonoBehaviour
                 if (Vector3.Distance(patientTransform.position, startPos) > 0.01f)
                 {
                     if (showDebugLogs)
-                        Debug.Log("[Practice] 환자 위치 변경 감지!");
+                        ChunaLogger.Log("[Practice] 환자 위치 변경 감지!");
                     break;
                 }
                 elapsed += Time.deltaTime;
@@ -1092,7 +1092,7 @@ public class PracticeManager : MonoBehaviour
 
         // 2. 설정 토글 점멸 (닫기)
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 5-2: 설정 패널을 닫아주세요");
+            ChunaLogger.Log("[Practice] Step 5-2: 설정 패널을 닫아주세요");
 
         if (IsValidPair(settingsToggle))
         {
@@ -1110,7 +1110,7 @@ public class PracticeManager : MonoBehaviour
 
         // 3. 시작 토글 점멸
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 5-3: 시작 토글을 눌러주세요");
+            ChunaLogger.Log("[Practice] Step 5-3: 시작 토글을 눌러주세요");
 
         if (IsValidPair(startToggle))
         {
@@ -1120,13 +1120,13 @@ public class PracticeManager : MonoBehaviour
             StartHighlightToggle(0);
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] 시작 토글 상태: interactable={startToggle.toggle.interactable}, isOn={startToggle.toggle.isOn}");
+                ChunaLogger.Log($"[Practice] 시작 토글 상태: interactable={startToggle.toggle.interactable}, isOn={startToggle.toggle.isOn}");
 
             yield return new WaitUntil(() => currentToggleIndex >= sequentialToggles.Count || !isStepActive);
         }
         else
         {
-            Debug.LogWarning("[Practice] ⚠ startToggle이 할당되지 않았습니다!");
+            ChunaLogger.LogWarning("[Practice] ⚠ startToggle이 할당되지 않았습니다!");
         }
 
         if (isStepActive)
@@ -1158,7 +1158,7 @@ public class PracticeManager : MonoBehaviour
             {
                 chunaPathEvaluator.SetPatientAnimation(step6PatientAnimation, AnimationPlayMode.SyncWithUser);
                 if (showDebugLogs)
-                    Debug.Log($"[Practice] 환자 애니메이션 설정: {step6PatientAnimation}");
+                    ChunaLogger.Log($"[Practice] 환자 애니메이션 설정: {step6PatientAnimation}");
             }
 
             // ★ 핸드 데이터 CSV 로드 (가이드 핸드 표시에 필수!)
@@ -1166,11 +1166,11 @@ public class PracticeManager : MonoBehaviour
             {
                 chunaPathEvaluator.LoadAndGenerateCheckpoints(step6HandDataCsv);
                 if (showDebugLogs)
-                    Debug.Log($"[Practice] 핸드 데이터 로드: {step6HandDataCsv}");
+                    ChunaLogger.Log($"[Practice] 핸드 데이터 로드: {step6HandDataCsv}");
             }
             else
             {
-                Debug.LogWarning("[Practice] ⚠ step6HandDataCsv가 설정되지 않았습니다! 가이드 핸드가 표시되지 않을 수 있습니다.");
+                ChunaLogger.LogWarning("[Practice] ⚠ step6HandDataCsv가 설정되지 않았습니다! 가이드 핸드가 표시되지 않을 수 있습니다.");
             }
 
             // ★ 평가 시작 (가이드 핸드 표시 및 측굴 애니메이션)
@@ -1181,11 +1181,11 @@ public class PracticeManager : MonoBehaviour
             {
                 angleDisplayController.Show();
                 if (showDebugLogs)
-                    Debug.Log("[Practice] 각도 표시 UI 활성화");
+                    ChunaLogger.Log("[Practice] 각도 표시 UI 활성화");
             }
 
             if (showDebugLogs)
-                Debug.Log("[Practice] ChunaPathEvaluator 활성화 + StartEvaluation() 호출");
+                ChunaLogger.Log("[Practice] ChunaPathEvaluator 활성화 + StartEvaluation() 호출");
 
             // ★ ChunaPathEvaluator 사용 시 LateralFlexionDetector는 비활성화 (중복 방지)
             if (lateralFlexionDetector != null)
@@ -1193,12 +1193,12 @@ public class PracticeManager : MonoBehaviour
                 lateralFlexionDetector.enabled = false;
                 lateralFlexionDetector.SetDetectEnabled(false);
                 if (showDebugLogs)
-                    Debug.Log("[Practice] LateralFlexionDetector 비활성화 (ChunaPathEvaluator 사용)");
+                    ChunaLogger.Log("[Practice] LateralFlexionDetector 비활성화 (ChunaPathEvaluator 사용)");
             }
         }
         else
         {
-            Debug.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다! LateralFlexionDetector 사용 시도");
+            ChunaLogger.LogWarning("[Practice] ⚠ chunaPathEvaluator가 할당되지 않았습니다! LateralFlexionDetector 사용 시도");
 
             // ★ ChunaPathEvaluator 없으면 LateralFlexionDetector 활성화 (백업용)
             if (lateralFlexionDetector != null)
@@ -1207,17 +1207,17 @@ public class PracticeManager : MonoBehaviour
                 lateralFlexionDetector.SetDetectEnabled(true);
                 lateralFlexionDetector.SetPracticeManager(this);
                 if (showDebugLogs)
-                    Debug.Log("[Practice] LateralFlexionDetector 활성화 (백업 모드)");
+                    ChunaLogger.Log("[Practice] LateralFlexionDetector 활성화 (백업 모드)");
             }
             else
             {
-                Debug.LogError("[Practice] ⚠ chunaPathEvaluator와 lateralFlexionDetector 모두 없음! Step 6 진행 불가");
+                ChunaLogger.LogError("[Practice] ⚠ chunaPathEvaluator와 lateralFlexionDetector 모두 없음! Step 6 진행 불가");
             }
         }
 
         if (showDebugLogs)
         {
-            Debug.Log($"[Practice] Step 6: 측굴 동작 연습 (0/{HOLD_REQUIRED_COUNT} 사이클)");
+            ChunaLogger.Log($"[Practice] Step 6: 측굴 동작 연습 (0/{HOLD_REQUIRED_COUNT} 사이클)");
         }
     }
 
@@ -1226,7 +1226,7 @@ public class PracticeManager : MonoBehaviour
         if (currentStep != 5 || !isStepActive || !isWaitingForHold) return;
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 평가 단계: {newPhase}");
+            ChunaLogger.Log($"[Practice] 평가 단계: {newPhase}");
 
         if (newPhase == ChunaPathEvaluator.EvaluationPhase.Completed)
         {
@@ -1234,7 +1234,7 @@ public class PracticeManager : MonoBehaviour
             UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
 
             if (showDebugLogs)
-                Debug.Log($"[Practice] ★ 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
+                ChunaLogger.Log($"[Practice] ★ 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
             if (currentCount >= HOLD_REQUIRED_COUNT)
             {
@@ -1247,7 +1247,7 @@ public class PracticeManager : MonoBehaviour
                 {
                     angleDisplayController.Hide();
                     if (showDebugLogs)
-                        Debug.Log("[Practice] 각도 표시 UI 숨김");
+                        ChunaLogger.Log("[Practice] 각도 표시 UI 숨김");
                 }
 
                 isWaitingForHold = false;
@@ -1269,7 +1269,7 @@ public class PracticeManager : MonoBehaviour
         if (chunaPathEvaluator == null) yield break;
 
         if (showDebugLogs)
-            Debug.Log("[Practice] 다음 사이클 준비 중...");
+            ChunaLogger.Log("[Practice] 다음 사이클 준비 중...");
 
         // 잠시 대기 (사용자에게 완료 피드백 시간)
         yield return new WaitForSeconds(0.5f);
@@ -1282,7 +1282,7 @@ public class PracticeManager : MonoBehaviour
         chunaPathEvaluator.StartEvaluation();
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 다음 사이클 시작 ({currentCount}/{HOLD_REQUIRED_COUNT})");
+            ChunaLogger.Log($"[Practice] 다음 사이클 시작 ({currentCount}/{HOLD_REQUIRED_COUNT})");
     }
 
     public void OnCycleCompleted()
@@ -1293,7 +1293,7 @@ public class PracticeManager : MonoBehaviour
         UpdateCountText(currentCount, HOLD_REQUIRED_COUNT);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
+            ChunaLogger.Log($"[Practice] 사이클 완료! ({currentCount}/{HOLD_REQUIRED_COUNT})");
 
         if (currentCount >= HOLD_REQUIRED_COUNT)
         {
@@ -1306,7 +1306,7 @@ public class PracticeManager : MonoBehaviour
             {
                 angleDisplayController.Hide();
                 if (showDebugLogs)
-                    Debug.Log("[Practice] 각도 표시 UI 숨김");
+                    ChunaLogger.Log("[Practice] 각도 표시 UI 숨김");
             }
 
             isWaitingForHold = false;
@@ -1340,7 +1340,7 @@ public class PracticeManager : MonoBehaviour
         StartHighlightToggle(0);
 
         if (showDebugLogs)
-            Debug.Log("[Practice] Step 7: 나가기(메인메뉴) 토글을 눌러주세요");
+            ChunaLogger.Log("[Practice] Step 7: 나가기(메인메뉴) 토글을 눌러주세요");
     }
 
     #endregion
@@ -1359,7 +1359,7 @@ public class PracticeManager : MonoBehaviour
         ShowHighlight(currentPair);
 
         if (showDebugLogs)
-            Debug.Log($"[Practice] 하이라이트: {currentPair.toggle.name} ({index + 1}/{sequentialToggles.Count})");
+            ChunaLogger.Log($"[Practice] 하이라이트: {currentPair.toggle.name} ({index + 1}/{sequentialToggles.Count})");
     }
 
     #endregion
@@ -1371,7 +1371,7 @@ public class PracticeManager : MonoBehaviour
         isStepActive = false;
 
         if (showDebugLogs)
-            Debug.Log("[Practice] ★★★ 모든 연습 완료! ★★★");
+            ChunaLogger.Log("[Practice] ★★★ 모든 연습 완료! ★★★");
 
         if (exitPopupController != null)
         {
@@ -1383,7 +1383,7 @@ public class PracticeManager : MonoBehaviour
             if (popup != null)
                 popup.ShowPopup();
             else
-                Debug.LogWarning("[Practice] 완료 팝업을 찾을 수 없습니다!");
+                ChunaLogger.LogWarning("[Practice] 완료 팝업을 찾을 수 없습니다!");
         }
     }
 
@@ -1406,7 +1406,7 @@ public class PracticeManager : MonoBehaviour
         StartStep(0);
 
         if (showDebugLogs)
-            Debug.Log("[Practice] 연습 재시작");
+            ChunaLogger.Log("[Practice] 연습 재시작");
     }
 
     public int GetCurrentStep() => currentStep;
@@ -1420,7 +1420,7 @@ public class PracticeManager : MonoBehaviour
     {
         if (currentStep != 4 || !isStepActive) return;
         if (showDebugLogs)
-            Debug.Log("[Practice] 환자 위치 변경됨!");
+            ChunaLogger.Log("[Practice] 환자 위치 변경됨!");
     }
 
     #endregion

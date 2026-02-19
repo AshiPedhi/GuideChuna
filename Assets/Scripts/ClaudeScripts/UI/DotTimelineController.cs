@@ -47,7 +47,7 @@ public class DotTimelineController : MonoBehaviour
     {
         if (steps <= 0)
         {
-            Debug.LogError("[DotTimeline] 단계 수는 1 이상이어야 합니다!");
+            ChunaLogger.LogError("[DotTimeline] 단계 수는 1 이상이어야 합니다!");
             return;
         }
         
@@ -64,7 +64,7 @@ public class DotTimelineController : MonoBehaviour
     {
         if (step < 0 || step >= totalSteps)
         {
-            Debug.LogWarning($"[DotTimeline] 유효하지 않은 단계: {step} (전체: {totalSteps})");
+            ChunaLogger.LogWarning($"[DotTimeline] 유효하지 않은 단계: {step} (전체: {totalSteps})");
             return;
         }
         
@@ -117,7 +117,7 @@ public class DotTimelineController : MonoBehaviour
     {
         if (dotPrefab == null || dotsContainer == null)
         {
-            Debug.LogError("[DotTimeline] dotPrefab 또는 dotsContainer가 설정되지 않았습니다!");
+            ChunaLogger.LogError("[DotTimeline] dotPrefab 또는 dotsContainer가 설정되지 않았습니다!");
             return;
         }
         

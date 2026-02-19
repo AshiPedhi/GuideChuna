@@ -16,7 +16,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            conditionManager = FindObjectOfType<ScenarioConditionManager>();
+            conditionManager = FindFirstObjectByType<ScenarioConditionManager>();
         }
     }
     
@@ -37,7 +37,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            Debug.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
             return;
         }
         
@@ -57,7 +57,7 @@ public class ScenarioConditionSetup : MonoBehaviour
             condition: new TimeBasedCondition(10f)
         );
         
-        Debug.Log("[ConditionSetup] 조건 등록 완료");
+        ChunaLogger.Log("[ConditionSetup] 조건 등록 완료");
     }
     
     /// <summary>
@@ -67,7 +67,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            Debug.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
             return;
         }
         
@@ -78,7 +78,7 @@ public class ScenarioConditionSetup : MonoBehaviour
             new TimeBasedCondition(duration)
         );
         
-        Debug.Log($"[ConditionSetup] 시간 조건 등록: {phaseName}/{stepName}/{subStepNo} - {duration}초");
+        ChunaLogger.Log($"[ConditionSetup] 시간 조건 등록: {phaseName}/{stepName}/{subStepNo} - {duration}초");
     }
     
     /// <summary>
@@ -88,7 +88,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            Debug.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
             return;
         }
         
@@ -99,7 +99,7 @@ public class ScenarioConditionSetup : MonoBehaviour
             new CustomCondition(conditionFunc, description)
         );
         
-        Debug.Log($"[ConditionSetup] 커스텀 조건 등록: {phaseName}/{stepName}/{subStepNo} - {description}");
+        ChunaLogger.Log($"[ConditionSetup] 커스텀 조건 등록: {phaseName}/{stepName}/{subStepNo} - {description}");
     }
     
     /// <summary>
@@ -109,7 +109,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            Debug.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
             return null;
         }
         
@@ -122,7 +122,7 @@ public class ScenarioConditionSetup : MonoBehaviour
             condition
         );
         
-        Debug.Log($"[ConditionSetup] 버튼 클릭 조건 등록: {phaseName}/{stepName}/{subStepNo}");
+        ChunaLogger.Log($"[ConditionSetup] 버튼 클릭 조건 등록: {phaseName}/{stepName}/{subStepNo}");
         
         return condition;
     }
@@ -134,7 +134,7 @@ public class ScenarioConditionSetup : MonoBehaviour
     {
         if (conditionManager == null)
         {
-            Debug.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ConditionSetup] ScenarioConditionManager를 찾을 수 없습니다!");
             return;
         }
         
@@ -145,6 +145,6 @@ public class ScenarioConditionSetup : MonoBehaviour
             new PositionBasedCondition(target, position, threshold)
         );
         
-        Debug.Log($"[ConditionSetup] 위치 조건 등록: {phaseName}/{stepName}/{subStepNo}");
+        ChunaLogger.Log($"[ConditionSetup] 위치 조건 등록: {phaseName}/{stepName}/{subStepNo}");
     }
 }

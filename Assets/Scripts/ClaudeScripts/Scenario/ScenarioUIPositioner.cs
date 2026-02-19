@@ -41,16 +41,16 @@ public class ScenarioUIPositioner : MonoBehaviour
                 headsetTransform = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
                 if (headsetTransform != null)
                 {
-                    Debug.Log("[ScenarioUIPositioner] ✅ CenterEyeAnchor 자동 찾기 성공");
+                    ChunaLogger.Log("[ScenarioUIPositioner] ✅ CenterEyeAnchor 자동 찾기 성공");
                 }
                 else
                 {
-                    Debug.LogError("[ScenarioUIPositioner] ❌ CenterEyeAnchor를 찾을 수 없습니다!");
+                    ChunaLogger.LogError("[ScenarioUIPositioner] ❌ CenterEyeAnchor를 찾을 수 없습니다!");
                 }
             }
             else
             {
-                Debug.LogError("[ScenarioUIPositioner] ❌ OVRCameraRig를 찾을 수 없습니다!");
+                ChunaLogger.LogError("[ScenarioUIPositioner] ❌ OVRCameraRig를 찾을 수 없습니다!");
             }
         }
     }
@@ -72,19 +72,19 @@ public class ScenarioUIPositioner : MonoBehaviour
         // 이미 배치가 완료된 경우 건너뜀
         if (hasPositionedOnce)
         {
-            Debug.Log("[ScenarioUIPositioner] 이미 UI 배치가 완료되었습니다. 건너뜁니다.");
+            ChunaLogger.Log("[ScenarioUIPositioner] 이미 UI 배치가 완료되었습니다. 건너뜁니다.");
             return;
         }
 
         if (headsetTransform == null)
         {
-            Debug.LogError("[ScenarioUIPositioner] headsetTransform이 null입니다! UI 배치를 건너뜁니다.");
+            ChunaLogger.LogError("[ScenarioUIPositioner] headsetTransform이 null입니다! UI 배치를 건너뜁니다.");
             return;
         }
 
         if (uiTargets == null || uiTargets.Length == 0)
         {
-            Debug.LogWarning("[ScenarioUIPositioner] uiTargets가 비어있습니다! UI 배치를 건너뜁니다.");
+            ChunaLogger.LogWarning("[ScenarioUIPositioner] uiTargets가 비어있습니다! UI 배치를 건너뜁니다.");
             return;
         }
 
@@ -107,7 +107,7 @@ public class ScenarioUIPositioner : MonoBehaviour
         {
             if (uiTarget == null)
             {
-                Debug.LogWarning("[ScenarioUIPositioner] null UI target 발견, 건너뜁니다.");
+                ChunaLogger.LogWarning("[ScenarioUIPositioner] null UI target 발견, 건너뜁니다.");
                 continue;
             }
 
@@ -127,13 +127,13 @@ public class ScenarioUIPositioner : MonoBehaviour
                 }
             }
 
-            Debug.Log($"[ScenarioUIPositioner] ✅ UI 배치 완료: {uiTarget.name} -> {targetPosition}");
+            ChunaLogger.Log($"[ScenarioUIPositioner] ✅ UI 배치 완료: {uiTarget.name} -> {targetPosition}");
         }
 
         // 플래그 설정: 한 번만 실행되도록
         hasPositionedOnce = true;
 
-        Debug.Log($"[ScenarioUIPositioner] 총 {uiTargets.Length}개 UI 배치 완료 (이후 재실행 방지)");
+        ChunaLogger.Log($"[ScenarioUIPositioner] 총 {uiTargets.Length}개 UI 배치 완료 (이후 재실행 방지)");
     }
 
     /// <summary>
@@ -154,7 +154,7 @@ public class ScenarioUIPositioner : MonoBehaviour
     public void ResetPositionFlag()
     {
         hasPositionedOnce = false;
-        Debug.Log("[ScenarioUIPositioner] UI 위치 초기화 플래그 리셋");
+        ChunaLogger.Log("[ScenarioUIPositioner] UI 위치 초기화 플래그 리셋");
     }
 
     /// <summary>
@@ -163,7 +163,7 @@ public class ScenarioUIPositioner : MonoBehaviour
     public void SetForwardDistance(float distance)
     {
         forwardDistance = distance;
-        Debug.Log($"[ScenarioUIPositioner] 전방 거리 변경: {distance}m");
+        ChunaLogger.Log($"[ScenarioUIPositioner] 전방 거리 변경: {distance}m");
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ public class ScenarioUIPositioner : MonoBehaviour
     public void SetHeightOffset(float offset)
     {
         heightOffset = offset;
-        Debug.Log($"[ScenarioUIPositioner] 높이 오프셋 변경: {offset}m");
+        ChunaLogger.Log($"[ScenarioUIPositioner] 높이 오프셋 변경: {offset}m");
     }
 
     /// <summary>
@@ -191,7 +191,7 @@ public class ScenarioUIPositioner : MonoBehaviour
         newTargets[uiTargets.Length] = uiTarget;
         uiTargets = newTargets;
 
-        Debug.Log($"[ScenarioUIPositioner] UI 대상 추가: {uiTarget.name}");
+        ChunaLogger.Log($"[ScenarioUIPositioner] UI 대상 추가: {uiTarget.name}");
     }
 
     /// <summary>
@@ -201,7 +201,7 @@ public class ScenarioUIPositioner : MonoBehaviour
     {
         if (headsetTransform == null)
         {
-            Debug.LogWarning("[ScenarioUIPositioner] headsetTransform이 null입니다!");
+            ChunaLogger.LogWarning("[ScenarioUIPositioner] headsetTransform이 null입니다!");
             return Vector3.zero;
         }
 

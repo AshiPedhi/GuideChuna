@@ -32,7 +32,7 @@ public class ScenarioUIController : MonoBehaviour
     private void Awake()
     {
         eventSystem = ScenarioEventSystem.Instance;
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+        scenarioManager = FindFirstObjectByType<ScenarioManager>();
 
         // 버튼 이벤트 연결
         if (nextButton != null)
@@ -112,7 +112,7 @@ public class ScenarioUIController : MonoBehaviour
                 buttonImage.color = isEnabled ? enabledColor : disabledColor;
             }
 
-            Debug.Log($"[UI] 다음 버튼 상태: {(isEnabled ? "활성화" : "비활성화")}");
+            ChunaLogger.Log($"[UI] 다음 버튼 상태: {(isEnabled ? "활성화" : "비활성화")}");
         }
     }
 
@@ -134,7 +134,7 @@ public class ScenarioUIController : MonoBehaviour
     /// </summary>
     private void OnScenarioCompleted(ScenarioData scenario)
     {
-        Debug.Log("[UI] 시나리오 완료 UI 표시");
+        ChunaLogger.Log("[UI] 시나리오 완료 UI 표시");
         // 완료 UI 표시 또는 숨김
         // gameObject.SetActive(false);
     }

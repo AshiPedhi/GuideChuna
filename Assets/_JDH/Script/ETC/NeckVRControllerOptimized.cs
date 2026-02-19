@@ -93,7 +93,7 @@ public class NeckVRControllerOptimized : MonoBehaviour
         hands = new List<Transform>();
 
         // HandVisual 탐색
-        var handVisuals = FindObjectsOfType<HandVisual>();
+        var handVisuals = FindObjectsByType<HandVisual>(FindObjectsSortMode.None);
         foreach (var hv in handVisuals)
         {
             if (hv != null && hv.transform != null)
@@ -106,7 +106,7 @@ public class NeckVRControllerOptimized : MonoBehaviour
         // 못 찾으면 OVRHand 탐색
         if (hands.Count == 0)
         {
-            var ovrHands = FindObjectsOfType<OVRHand>();
+            var ovrHands = FindObjectsByType<OVRHand>(FindObjectsSortMode.None);
             foreach (var oh in ovrHands)
             {
                 if (oh != null && oh.transform != null)

@@ -98,7 +98,7 @@ public class UIGrabDetector : MonoBehaviour
         grabStartPosition = transform.position;
 
         if (showDebugLogs)
-            Debug.Log($"[UIGrabDetector] Grab 시작 - 위치: {grabStartPosition}");
+            ChunaLogger.Log($"[UIGrabDetector] Grab 시작 - 위치: {grabStartPosition}");
     }
 
     /// <summary>
@@ -112,7 +112,7 @@ public class UIGrabDetector : MonoBehaviour
         float distance = Vector3.Distance(grabStartPosition, transform.position);
 
         if (showDebugLogs)
-            Debug.Log($"[UIGrabDetector] Grab 종료 - 이동거리: {distance:F3}m");
+            ChunaLogger.Log($"[UIGrabDetector] Grab 종료 - 이동거리: {distance:F3}m");
 
         // 충분히 이동했으면 성공
         if (distance >= moveThreshold)
@@ -122,7 +122,7 @@ public class UIGrabDetector : MonoBehaviour
         else
         {
             if (showDebugLogs)
-                Debug.Log($"[UIGrabDetector] 이동 거리 부족 (필요: {moveThreshold}m)");
+                ChunaLogger.Log($"[UIGrabDetector] 이동 거리 부족 (필요: {moveThreshold}m)");
         }
     }
 
@@ -133,7 +133,7 @@ public class UIGrabDetector : MonoBehaviour
             practiceManager.OnUIGrabReleased();
 
             if (showDebugLogs)
-                Debug.Log("[UIGrabDetector] ✓ UI 옮기기 1회 완료!");
+                ChunaLogger.Log("[UIGrabDetector] ✓ UI 옮기기 1회 완료!");
         }
         else
         {
@@ -145,7 +145,7 @@ public class UIGrabDetector : MonoBehaviour
             }
             else
             {
-                Debug.LogWarning("[UIGrabDetector] PracticeManager를 찾을 수 없습니다!");
+                ChunaLogger.LogWarning("[UIGrabDetector] PracticeManager를 찾을 수 없습니다!");
             }
         }
     }

@@ -85,7 +85,7 @@ public class HandTransformMapper : MonoBehaviour
                     joints.Add(joint);
                 }
 
-                Debug.Log($"[HandTransformMapper] HandVisual에서 {joints.Count}개 조인트 복사 완료 ({(isLeftHand ? "왼손" : "오른손")})");
+                ChunaLogger.Log($"[HandTransformMapper] HandVisual에서 {joints.Count}개 조인트 복사 완료 ({(isLeftHand ? "왼손" : "오른손")})");
 
                 // Root도 HandVisual과 동일하게 설정
                 if (sourceHandVisual.Root != null)
@@ -95,17 +95,17 @@ public class HandTransformMapper : MonoBehaviour
 
                 // HandVisual 컴포넌트 비활성화 (실시간 추적 차단)
                 sourceHandVisual.enabled = false;
-                Debug.Log("[HandTransformMapper] HandVisual 컴포넌트 비활성화 - 실시간 추적 차단");
+                ChunaLogger.Log("[HandTransformMapper] HandVisual 컴포넌트 비활성화 - 실시간 추적 차단");
             }
             else
             {
-                Debug.LogWarning("[HandTransformMapper] HandVisual의 Joints가 비어있습니다. OVRSkeleton에서 직접 가져옵니다.");
+                ChunaLogger.LogWarning("[HandTransformMapper] HandVisual의 Joints가 비어있습니다. OVRSkeleton에서 직접 가져옵니다.");
                 FindJointsFromSkeleton();
             }
         }
         else
         {
-            Debug.LogWarning("[HandTransformMapper] HandVisual을 찾을 수 없습니다. OVRSkeleton에서 직접 가져옵니다.");
+            ChunaLogger.LogWarning("[HandTransformMapper] HandVisual을 찾을 수 없습니다. OVRSkeleton에서 직접 가져옵니다.");
             FindJointsFromSkeleton();
         }
     }
@@ -133,11 +133,11 @@ public class HandTransformMapper : MonoBehaviour
                 }
             }
 
-            Debug.Log($"[HandTransformMapper] OVRSkeleton에서 {joints.Count}개 조인트 가져옴 ({(isLeftHand ? "왼손" : "오른손")})");
+            ChunaLogger.Log($"[HandTransformMapper] OVRSkeleton에서 {joints.Count}개 조인트 가져옴 ({(isLeftHand ? "왼손" : "오른손")})");
         }
         else
         {
-            Debug.LogError("[HandTransformMapper] OVRSkeleton을 찾을 수 없습니다!");
+            ChunaLogger.LogError("[HandTransformMapper] OVRSkeleton을 찾을 수 없습니다!");
         }
     }
 
@@ -148,7 +148,7 @@ public class HandTransformMapper : MonoBehaviour
     {
         if (joints.Count == 0)
         {
-            Debug.LogError($"[HandTransformMapper] 조인트가 없습니다! HandVisual 또는 OVRSkeleton을 확인하세요. ({(isLeftHand ? "왼손" : "오른손")})");
+            ChunaLogger.LogError($"[HandTransformMapper] 조인트가 없습니다! HandVisual 또는 OVRSkeleton을 확인하세요. ({(isLeftHand ? "왼손" : "오른손")})");
             return;
         }
 
@@ -159,11 +159,11 @@ public class HandTransformMapper : MonoBehaviour
                 validCount++;
         }
 
-        Debug.Log($"[HandTransformMapper] {validCount}/{joints.Count} 유효한 조인트 ({(isLeftHand ? "왼손" : "오른손")})");
+        ChunaLogger.Log($"[HandTransformMapper] {validCount}/{joints.Count} 유효한 조인트 ({(isLeftHand ? "왼손" : "오른손")})");
 
         if (joints.Count != 26)
         {
-            Debug.LogWarning($"[HandTransformMapper] 조인트 개수가 26개가 아닙니다: {joints.Count}개");
+            ChunaLogger.LogWarning($"[HandTransformMapper] 조인트 개수가 26개가 아닙니다: {joints.Count}개");
         }
     }
 
@@ -390,19 +390,19 @@ public class HandTransformMapper : MonoBehaviour
     /// </summary>
     public void DebugPrintJoints()
     {
-        Debug.Log($"===== HandTransformMapper ({(isLeftHand ? "왼손" : "오른손")}) =====");
-        Debug.Log($"Root: {(rootTransform != null ? rootTransform.name : "NULL")}");
-        Debug.Log($"Joints: {joints.Count}개");
+        ChunaLogger.Log($"===== HandTransformMapper ({(isLeftHand ? "왼손" : "오른손")}) =====");
+        ChunaLogger.Log($"Root: {(rootTransform != null ? rootTransform.name : "NULL")}");
+        ChunaLogger.Log($"Joints: {joints.Count}개");
 
         for (int i = 0; i < joints.Count; i++)
         {
             if (joints[i] != null)
             {
-                Debug.Log($"  [{i}] {joints[i].name}");
+                ChunaLogger.Log($"  [{i}] {joints[i].name}");
             }
             else
             {
-                Debug.Log($"  [{i}] NULL");
+                ChunaLogger.Log($"  [{i}] NULL");
             }
         }
     }

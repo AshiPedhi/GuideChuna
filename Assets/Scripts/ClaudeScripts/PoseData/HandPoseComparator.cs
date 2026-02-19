@@ -238,7 +238,7 @@ public class HandPoseComparator
                 leftConsecutiveSuccessCount = 0; // 손목이 원점 근처 (트래킹 실패)
                 if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
                 {
-                    Debug.LogWarning("[HandPoseComparator] 왼손 손목 위치 이상 (원점 근처)");
+                    ChunaLogger.LogWarning("[HandPoseComparator] 왼손 손목 위치 이상 (원점 근처)");
                 }
                 return result;
             }
@@ -297,7 +297,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 왼손 위치 오차 매우 큼 ({result.leftHandPositionError:F3}m) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
         // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
@@ -307,7 +307,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 유사도: {result.leftHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 왼손 회전 오차 매우 큼 ({result.leftHandRotationError:F1}°) - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
         // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
@@ -318,7 +318,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 왼손 위치/회전 오차 큼 - 유사도: {result.leftHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 왼손 위치/회전 오차 큼 - 유사도: {result.leftHandSimilarity:P0}");
             }
         }
 
@@ -342,7 +342,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 왼손 연속 성공: {leftConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.leftHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
+            ChunaLogger.Log($"[HandPoseComparator] 왼손 연속 성공: {leftConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.leftHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
         }
 
         return result;
@@ -376,7 +376,7 @@ public class HandPoseComparator
                 rightConsecutiveSuccessCount = 0; // 손목이 원점 근처 (트래킹 실패)
                 if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
                 {
-                    Debug.LogWarning("[HandPoseComparator] 오른손 손목 위치 이상 (원점 근처)");
+                    ChunaLogger.LogWarning("[HandPoseComparator] 오른손 손목 위치 이상 (원점 근처)");
                 }
                 return result;
             }
@@ -435,7 +435,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 오른손 위치 오차 매우 큼 ({result.rightHandPositionError:F3}m) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
         // 회전 오차가 임계값의 4배 이상이면 페널티 (매우 관대)
@@ -445,7 +445,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 유사도: {result.rightHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 오른손 회전 오차 매우 큼 ({result.rightHandRotationError:F1}°) - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
         // 위치/회전 오차가 임계값의 3배 이상이면 페널티 (50% 이하, 관대)
@@ -456,7 +456,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.LogWarning($"[HandPoseComparator] 오른손 위치/회전 오차 큼 - 유사도: {result.rightHandSimilarity:P0}");
+                ChunaLogger.LogWarning($"[HandPoseComparator] 오른손 위치/회전 오차 큼 - 유사도: {result.rightHandSimilarity:P0}");
             }
         }
 
@@ -480,7 +480,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 오른손 연속 성공: {rightConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.rightHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
+            ChunaLogger.Log($"[HandPoseComparator] 오른손 연속 성공: {rightConsecutiveSuccessCount}/{settings.consecutiveFramesRequired} (통합 유사도: {result.rightHandSimilarity:P0}, 조인트:{jointSimilarity:P0}, 위치:{positionSimilarity:P0}, 회전:{rotationSimilarity:P0})");
         }
 
         return result;
@@ -566,7 +566,7 @@ public class HandPoseComparator
             // 상세 디버그 로그
             if (settings.showDetailedLogs && frameIndex % 30 == 0 && !jointPassed)
             {
-                Debug.LogWarning($"[HandPoseComparator] {handName} {jointId} 실패: " +
+                ChunaLogger.LogWarning($"[HandPoseComparator] {handName} {jointId} 실패: " +
                     $"위치오차={positionDistance * 100:F1}cm (임계값={posThreshold * 100:F1}cm), " +
                     $"각도오차={rotationAngle:F1}° (임계값={rotThreshold:F1}°)");
             }
@@ -749,7 +749,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (frameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] {handName} 위치 오차: {positionError:F3}m (유사도:{positionSimilarity:P0}), 회전 오차: {rotationError:F1}° (유사도:{rotationSimilarity:P0}) 합격: {passed}");
+            ChunaLogger.Log($"[HandPoseComparator] {handName} 위치 오차: {positionError:F3}m (유사도:{positionSimilarity:P0}), 회전 오차: {rotationError:F1}° (유사도:{rotationSimilarity:P0}) 합격: {passed}");
         }
     }
 
@@ -776,7 +776,7 @@ public class HandPoseComparator
     {
         leftConsecutiveSuccessCount = 0;
         rightConsecutiveSuccessCount = 0;
-        Debug.Log("[HandPoseComparator] 연속 프레임 카운터 리셋");
+        ChunaLogger.Log("[HandPoseComparator] 연속 프레임 카운터 리셋");
     }
 
     /// <summary>
@@ -947,7 +947,7 @@ public class HandPoseComparator
 
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
-                Debug.Log($"[HandPoseComparator] 왼손 손바닥 각도: {palmAngle:F1}° (임계값: {settings.palmDownAngleThreshold}°) → 유사도: {palmSimilarity:P0}");
+                ChunaLogger.Log($"[HandPoseComparator] 왼손 손바닥 각도: {palmAngle:F1}° (임계값: {settings.palmDownAngleThreshold}°) → 유사도: {palmSimilarity:P0}");
             }
         }
 
@@ -961,7 +961,7 @@ public class HandPoseComparator
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 float fistLevel = GetFistLevel(playerLeftHand);
-                Debug.Log($"[HandPoseComparator] 왼손 주먹 정도: {fistLevel:P0} (임계값: {settings.fistThreshold:P0}) → 유사도: {shapeSimilarity:P0}");
+                ChunaLogger.Log($"[HandPoseComparator] 왼손 주먹 정도: {fistLevel:P0} (임계값: {settings.fistThreshold:P0}) → 유사도: {shapeSimilarity:P0}");
             }
         }
 
@@ -983,7 +983,7 @@ public class HandPoseComparator
 
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 왼손 간소화 체크 - 손바닥:{palmSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.leftHandSimilarity:P0}");
+            ChunaLogger.Log($"[HandPoseComparator] 왼손 간소화 체크 - 손바닥:{palmSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.leftHandSimilarity:P0}");
         }
 
         return result;
@@ -1055,7 +1055,7 @@ public class HandPoseComparator
 
                 if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
                 {
-                    Debug.Log($"[HandPoseComparator] 오른손 위치 오차: {positionError:F3}m (임계값: {settings.handPositionThreshold}m) → 유사도: {positionSimilarity:P0}");
+                    ChunaLogger.Log($"[HandPoseComparator] 오른손 위치 오차: {positionError:F3}m (임계값: {settings.handPositionThreshold}m) → 유사도: {positionSimilarity:P0}");
                 }
             }
         }
@@ -1070,7 +1070,7 @@ public class HandPoseComparator
             if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
             {
                 float fistLevel = GetFistLevel(playerRightHand);
-                Debug.Log($"[HandPoseComparator] 오른손 주먹 정도: {fistLevel:P0} (너무 펴짐:{isTooOpen}, 너무 쥐어짐:{isTooFisted}) → 유사도: {shapeSimilarity:P0}");
+                ChunaLogger.Log($"[HandPoseComparator] 오른손 주먹 정도: {fistLevel:P0} (너무 펴짐:{isTooOpen}, 너무 쥐어짐:{isTooFisted}) → 유사도: {shapeSimilarity:P0}");
             }
         }
 
@@ -1092,7 +1092,7 @@ public class HandPoseComparator
 
         if (settings.showDetailedLogs && currentFrameIndex % 10 == 0)
         {
-            Debug.Log($"[HandPoseComparator] 오른손 간소화 체크 - 위치:{positionSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.rightHandSimilarity:P0}");
+            ChunaLogger.Log($"[HandPoseComparator] 오른손 간소화 체크 - 위치:{positionSimilarity:P0}, 손모양:{shapeSimilarity:P0} → 통합:{result.rightHandSimilarity:P0}");
         }
 
         return result;

@@ -55,8 +55,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     [SerializeField][Range(0f, 1f)] private float highThreshold = 0.7f;
 
     [Header("=== 경로 이탈 설정 ===")]
-    [Tooltip("경로 이탈 경고 거리 (미터)")]
-    [SerializeField] private float pathDeviationWarningDistance = 0.15f;
     [SerializeField] private Color onPathColor = new Color(0.2f, 0.8f, 0.2f);
     [SerializeField] private Color offPathColor = new Color(1f, 0.3f, 0.3f);
 
@@ -137,10 +135,10 @@ public class ChunaFeedbackUI : MonoBehaviour
     private void FindReferences()
     {
         if (pathEvaluator == null)
-            pathEvaluator = FindObjectOfType<ChunaPathEvaluator>();
+            pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
 
         if (evaluatorBridge == null)
-            evaluatorBridge = FindObjectOfType<ChunaPathEvaluatorBridge>();
+            evaluatorBridge = FindFirstObjectByType<ChunaPathEvaluatorBridge>();
     }
 
     /// <summary>

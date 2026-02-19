@@ -68,7 +68,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
 
         if (pokeInteractable == null)
         {
-            Debug.LogWarning("[PatientHeadPokeDetector] PokeInteractable이 없습니다. 추가해주세요.");
+            ChunaLogger.LogWarning("[PatientHeadPokeDetector] PokeInteractable이 없습니다. 추가해주세요.");
             return;
         }
 
@@ -108,7 +108,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
     {
         if (showDebugLogs)
         {
-            Debug.Log($"[PokeDetector] State: {args.PreviousState} → {args.NewState}");
+            ChunaLogger.Log($"[PokeDetector] State: {args.PreviousState} → {args.NewState}");
         }
 
         // Select 상태 = Poke가 활성화됨
@@ -123,7 +123,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
             }
 
             if (showDebugLogs)
-                Debug.Log($"<color=green>[PokeDetector] Poke 시작! 손: {currentPokeHand}</color>");
+                ChunaLogger.Log($"<color=green>[PokeDetector] Poke 시작! 손: {currentPokeHand}</color>");
         }
         else if (args.PreviousState == InteractableState.Select && args.NewState != InteractableState.Select)
         {
@@ -136,7 +136,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
             currentPokeHand = null;
 
             if (showDebugLogs)
-                Debug.Log("<color=orange>[PokeDetector] Poke 종료</color>");
+                ChunaLogger.Log("<color=orange>[PokeDetector] Poke 종료</color>");
         }
     }
 
@@ -217,7 +217,7 @@ public class PatientHeadPokeDetector : MonoBehaviour
         OnAnimationRatioChanged?.Invoke(currentAnimationRatio);
 
         if (showDebugLogs && Time.frameCount % 30 == 0)
-            Debug.Log($"[PokeDetector] 애니메이션: {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
+            ChunaLogger.Log($"[PokeDetector] 애니메이션: {currentAnimationRatio:P0} → {targetAnimationRatio:P0}");
     }
 
     /// <summary>

@@ -1,46 +1,46 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Oculus.Interaction.Body.PoseDetection;  // Interaction SDK ³×ÀÓ½ºÆäÀÌ½º
-using Oculus.Interaction.Body.Input;  // BodyJointId ³×ÀÓ½ºÆäÀÌ½º
-using Oculus.Interaction;  // IActiveState ³×ÀÓ½ºÆäÀÌ½º
-using System.IO;  // ÆÄÀÏ ÀúÀå¿ë
+using Oculus.Interaction.Body.PoseDetection;  // Interaction SDK ï¿½ï¿½ï¿½Ó½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½
+using Oculus.Interaction.Body.Input;  // BodyJointId ï¿½ï¿½ï¿½Ó½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½
+using Oculus.Interaction;  // IActiveState ï¿½ï¿½ï¿½Ó½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½
+using System.IO;  // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½
 using System.Linq;  // LINQ for sorting files
 using System.Text;  // StringBuilder for CSV
-using System.Reflection;  // ¸®ÇÃ·º¼ÇÀ¸·Î internal ¸Þ¼­µå Á¢±Ù
+using System.Reflection;  // ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ internal ï¿½Þ¼ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
 public class PoseRecorder : MonoBehaviour, IBodyPose
 {
     [SerializeField]
-    private PoseFromBody realTimeBodyPose;  // ½Ç½Ã°£ ÇöÀç µ¿ÀÛ ¼Ò½º (Inspector ÇÒ´ç)
+    private PoseFromBody realTimeBodyPose;  // ï¿½Ç½Ã°ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ò½ï¿½ (Inspector ï¿½Ò´ï¿½)
 
     [SerializeField]
-    private BodyPoseComparerActiveState comparer;  // ºñ±³ ÄÄÆ÷³ÍÆ® (Inspector ÇÒ´ç, Body Pose¿¡ realTimeBodyPose ÇÒ´ç)
+    private BodyPoseComparerActiveState comparer;  // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® (Inspector ï¿½Ò´ï¿½, Body Poseï¿½ï¿½ realTimeBodyPose ï¿½Ò´ï¿½)
 
-    private List<PoseFrame> poseSequence = new List<PoseFrame>();  // ³ìÈ­¿ë ¸®½ºÆ®
-    private List<PoseFrame> loadedSequence = new List<PoseFrame>();  // ºÒ·¯¿Â ½ÃÄö½º
+    private List<PoseFrame> poseSequence = new List<PoseFrame>();  // ï¿½ï¿½È­ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Æ®
+    private List<PoseFrame> loadedSequence = new List<PoseFrame>();  // ï¿½Ò·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     private bool isRecording = false;
-    private bool isComparing = false;  // ºñ±³ ¸ðµå »óÅÂ
-    private int currentCompareIndex = 0;  // ÇöÀç ºñ±³ ÇÁ·¹ÀÓ ÀÎµ¦½º
-    private bool wasActive = false;  // ÀÌÀü Active »óÅÂ
+    private bool isComparing = false;  // ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+    private int currentCompareIndex = 0;  // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Îµï¿½ï¿½ï¿½
+    private bool wasActive = false;  // ï¿½ï¿½ï¿½ï¿½ Active ï¿½ï¿½ï¿½ï¿½
 
     private Dictionary<BodyJointId, Pose> _jointPosesLocal = new Dictionary<BodyJointId, Pose>();
     private Dictionary<BodyJointId, Pose> _jointPosesFromRoot = new Dictionary<BodyJointId, Pose>();
 
-    public event Action WhenBodyPoseUpdated = delegate { };  // ÀÎÅÍÆäÀÌ½º ¸â¹ö ±¸Çö
+    public event Action WhenBodyPoseUpdated = delegate { };  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ì½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
     public ISkeletonMapping SkeletonMapping => realTimeBodyPose.SkeletonMapping;
 
     public bool GetJointPoseLocal(BodyJointId bodyJointId, out Pose pose) => _jointPosesLocal.TryGetValue(bodyJointId, out pose);
     public bool GetJointPoseFromRoot(BodyJointId bodyJointId, out Pose pose) => _jointPosesFromRoot.TryGetValue(bodyJointId, out pose);
 
-    // °¢ ÇÁ·¹ÀÓÀÇ Æ÷Áî µ¥ÀÌÅÍ ±¸Á¶ (Serializable for JSON)
+    // ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (Serializable for JSON)
     [System.Serializable]
     private class PoseFrame
     {
         public Dictionary<int, PoseData> localPoses = new Dictionary<int, PoseData>();
         public Dictionary<int, PoseData> fromRootPoses = new Dictionary<int, PoseData>();
-        public float timestamp;  // ÇÁ·¹ÀÓ Å¸ÀÓ½ºÅÆÇÁ (ÃÊ ´ÜÀ§)
+        public float timestamp;  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Å¸ï¿½Ó½ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
     }
 
     [System.Serializable]
@@ -60,7 +60,7 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
     {
         if (isRecording && realTimeBodyPose != null)
         {
-            realTimeBodyPose.UpdatePose();  // Æ÷Áî ¾÷µ¥ÀÌÆ®
+            realTimeBodyPose.UpdatePose();  // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ®
 
             PoseFrame frame = new PoseFrame();
             frame.timestamp = Time.time;
@@ -80,44 +80,44 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
             poseSequence.Add(frame);
         }
 
-        // ºñ±³ ¸ðµå: comparer.Active È®ÀÎ, À¯»ç ½Ã ´ÙÀ½ ÇÁ·¹ÀÓÀ¸·Î
+        // ï¿½ï¿½ ï¿½ï¿½ï¿½: comparer.Active È®ï¿½ï¿½, ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         if (isComparing && loadedSequence.Count > 0 && currentCompareIndex < loadedSequence.Count)
         {
             realTimeBodyPose.UpdatePose();
             bool isActiveNow = comparer.Active;
             if (isActiveNow && !wasActive)
             {
-                Debug.Log($"ÇÁ·¹ÀÓ {currentCompareIndex} À¯»ç Åë°ú! ´ÙÀ½ ÇÁ·¹ÀÓÀ¸·Î ÀüÈ¯.");
+                ChunaLogger.Log($"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ {currentCompareIndex} ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½! ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¯.");
                 currentCompareIndex++;
                 if (currentCompareIndex < loadedSequence.Count)
                 {
                     LoadNextFrameToStoredPose();
-                    UpdateComparerWithStoredPose();  // ´Ù½Ã ÇÒ´ç
+                    UpdateComparerWithStoredPose();  // ï¿½Ù½ï¿½ ï¿½Ò´ï¿½
                 }
                 else
                 {
                     isComparing = false;
-                    Debug.Log("ÀüÃ¼ ½ÃÄö½º ºñ±³ ¿Ï·á!");
+                    ChunaLogger.Log("ï¿½ï¿½Ã¼ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½Ï·ï¿½!");
                 }
             }
             wasActive = isActiveNow;
         }
     }
 
-    // ³ìÈ­ ½ÃÀÛ (¹öÆ° È£Ãâ)
+    // ï¿½ï¿½È­ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½Æ° È£ï¿½ï¿½)
     public void StartRecording()
     {
         if (realTimeBodyPose == null)
         {
-            Debug.LogError("realTimeBodyPose°¡ ÇÒ´çµÇÁö ¾Ê¾Ò½À´Ï´Ù.");
+            ChunaLogger.LogError("realTimeBodyPoseï¿½ï¿½ ï¿½Ò´ï¿½ï¿½ï¿½ï¿½ ï¿½Ê¾Ò½ï¿½ï¿½Ï´ï¿½.");
             return;
         }
         isRecording = true;
         poseSequence.Clear();
-        Debug.Log("³ìÈ­ ½ÃÀÛ");
+        ChunaLogger.Log("ï¿½ï¿½È­ ï¿½ï¿½ï¿½ï¿½");
     }
 
-    // ³ìÈ­ Á¾·á ¹× ÀúÀå (¹öÆ° È£Ãâ)
+    // ï¿½ï¿½È­ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½Æ° È£ï¿½ï¿½)
     public void StopRecording()
     {
         isRecording = false;
@@ -126,20 +126,20 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
             SaveSequenceToFile();
             SaveSequenceToCSV();
         }
-        Debug.Log("³ìÈ­ Á¾·á");
+        ChunaLogger.Log("ï¿½ï¿½È­ ï¿½ï¿½ï¿½ï¿½");
     }
 
-    // JSON ÀúÀå
+    // JSON ï¿½ï¿½ï¿½ï¿½
     private void SaveSequenceToFile()
     {
         string json = JsonUtility.ToJson(new PoseSequenceWrapper { sequences = poseSequence });
         string fileName = $"PoseSequence_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.json";
         string path = Path.Combine(Application.persistentDataPath, fileName);
         File.WriteAllText(path, json);
-        Debug.Log($"Æ÷Áî ½ÃÄö½º JSON ÀúÀå: {path}");
+        ChunaLogger.Log($"ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ JSON ï¿½ï¿½ï¿½ï¿½: {path}");
     }
 
-    // CSV ÀúÀå
+    // CSV ï¿½ï¿½ï¿½ï¿½
     private void SaveSequenceToCSV()
     {
         StringBuilder sb = new StringBuilder();
@@ -165,10 +165,10 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
         string fileName = $"PoseSequence_{DateTime.Now.ToString("yyyyMMdd_HHmmss")}.csv";
         string path = Path.Combine(Application.persistentDataPath, fileName);
         File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
-        Debug.Log($"Æ÷Áî ½ÃÄö½º CSV ÀúÀå: {path}");
+        ChunaLogger.Log($"ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ CSV ï¿½ï¿½ï¿½ï¿½: {path}");
     }
 
-    // ÃÖ±Ù JSON ºÒ·¯¿Í ºñ±³ ½ÃÀÛ (¹öÆ° È£Ãâ)
+    // ï¿½Ö±ï¿½ JSON ï¿½Ò·ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½Æ° È£ï¿½ï¿½)
     public void StartSequenceComparison()
     {
         string dirPath = Application.persistentDataPath;
@@ -179,7 +179,7 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
 
         if (files.Count == 0)
         {
-            Debug.LogError("ÀúÀåµÈ JSON ÆÄÀÏÀÌ ¾ø½À´Ï´Ù.");
+            ChunaLogger.LogError("ï¿½ï¿½ï¿½ï¿½ï¿½ JSON ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½.");
             return;
         }
 
@@ -189,7 +189,7 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
 
         if (wrapper == null || wrapper.sequences == null || wrapper.sequences.Count == 0)
         {
-            Debug.LogError("JSON ÆÄ½Ì ½ÇÆÐ ¶Ç´Â ºó ½ÃÄö½º.");
+            ChunaLogger.LogError("JSON ï¿½Ä½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ç´ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½.");
             return;
         }
 
@@ -197,12 +197,12 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
         isComparing = true;
         currentCompareIndex = 0;
         wasActive = false;
-        LoadNextFrameToStoredPose();  // Ã¹ ÇÁ·¹ÀÓ ÀÔ·Â
-        UpdateComparerWithStoredPose();  // comparer¿¡ StoredPose ÇÒ´ç
-        Debug.Log("½ÃÄö½º ºñ±³ ½ÃÀÛ: Ã¹ ÇÁ·¹ÀÓºÎÅÍ °Ë»ç.");
+        LoadNextFrameToStoredPose();  // Ã¹ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ô·ï¿½
+        UpdateComparerWithStoredPose();  // comparerï¿½ï¿½ StoredPose ï¿½Ò´ï¿½
+        ChunaLogger.Log("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½: Ã¹ ï¿½ï¿½ï¿½ï¿½ï¿½Óºï¿½ï¿½ï¿½ ï¿½Ë»ï¿½.");
     }
 
-    // ´ÙÀ½ ÇÁ·¹ÀÓ µ¥ÀÌÅÍ¸¦ StoredPose (this)¿¡ ÀÔ·Â
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ StoredPose (this)ï¿½ï¿½ ï¿½Ô·ï¿½
     private void LoadNextFrameToStoredPose()
     {
         _jointPosesLocal.Clear();
@@ -215,14 +215,14 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
             PoseData fromRoot = frame.fromRootPoses[jointId];
             _jointPosesFromRoot[(BodyJointId)jointId] = new Pose(fromRoot.position, fromRoot.rotation);
         }
-        WhenBodyPoseUpdated.Invoke();  // ÀÌº¥Æ® È£Ãâ (Æ÷Áî ¾÷µ¥ÀÌÆ® ¾Ë¸²)
-        Debug.Log($"ÇÁ·¹ÀÓ {currentCompareIndex} µ¥ÀÌÅÍ ÀÔ·Â ¿Ï·á.");
+        WhenBodyPoseUpdated.Invoke();  // ï¿½Ìºï¿½Æ® È£ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® ï¿½Ë¸ï¿½)
+        ChunaLogger.Log($"ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ {currentCompareIndex} ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ô·ï¿½ ï¿½Ï·ï¿½.");
     }
 
-    // comparer¿¡ StoredPose (this)¸¦ ÂüÁ¶ Æ÷Áî·Î ÇÒ´ç (¸®ÇÃ·º¼Ç »ç¿ë, ÀÌ¸§ º¯°æ Å×½ºÆ®)
+    // comparerï¿½ï¿½ StoredPose (this)ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ò´ï¿½ (ï¿½ï¿½ï¿½Ã·ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½, ï¿½Ì¸ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½×½ï¿½Æ®)
     private void UpdateComparerWithStoredPose()
     {
-        // °¡´ÉÇÑ ÇÊµå ÀÌ¸§ Å×½ºÆ® (SDK ¼Ò½º È®ÀÎ ÈÄ º¯°æ)
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Êµï¿½ ï¿½Ì¸ï¿½ ï¿½×½ï¿½Æ® (SDK ï¿½Ò½ï¿½ È®ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
         string[] possibleFieldNames = { "_bodyPose", "_referenceBodyPose", "_pose", "_iBodyPose" };
         FieldInfo bodyPoseField = null;
 
@@ -231,18 +231,18 @@ public class PoseRecorder : MonoBehaviour, IBodyPose
             bodyPoseField = typeof(BodyPoseComparerActiveState).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
             if (bodyPoseField != null)
             {
-                Debug.Log($"ÇÊµå Ã£À½: {fieldName}");
+                ChunaLogger.Log($"ï¿½Êµï¿½ Ã£ï¿½ï¿½: {fieldName}");
                 break;
             }
         }
 
         if (bodyPoseField != null)
         {
-            bodyPoseField.SetValue(comparer, this);  // this´Â IBodyPose ±¸ÇöÃ¼
+            bodyPoseField.SetValue(comparer, this);  // thisï¿½ï¿½ IBodyPose ï¿½ï¿½ï¿½ï¿½Ã¼
         }
         else
         {
-            Debug.LogError("bodyPose ÇÊµå¸¦ Ã£À» ¼ö ¾øÀ½. SDK ¼Ò½º ÄÚµå È®ÀÎÇÏ¼¼¿ä.");
+            ChunaLogger.LogError("bodyPose ï¿½Êµå¸¦ Ã£ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½. SDK ï¿½Ò½ï¿½ ï¿½Úµï¿½ È®ï¿½ï¿½ï¿½Ï¼ï¿½ï¿½ï¿½.");
         }
     }
 }

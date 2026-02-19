@@ -426,29 +426,18 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
     #region Logging
     private void LogDebug(string message)
     {
-#if UNITY_EDITOR
-        if (enableDebugLogs)
-        {
-            Debug.Log($"[AuthService] {message}");
-        }
-#endif
+        ChunaLogger.LogVerbose(enableDebugLogs, "AuthService", message);
     }
 
     private void LogWarning(string message)
     {
-#if UNITY_EDITOR
         if (enableDebugLogs)
-        {
-            Debug.LogWarning($"[AuthService] {message}");
-        }
-#endif
+            ChunaLogger.LogWarning($"[AuthService] {message}");
     }
 
     private void LogError(string message)
     {
-#if UNITY_EDITOR
-        Debug.LogError($"[AuthService] {message}");
-#endif
+        ChunaLogger.LogError("AuthService", message);
     }
     #endregion
 
@@ -496,13 +485,13 @@ public class MockAuthenticationService : MonoBehaviour, IAuthenticationService
     public async UniTask ResetDeviceAsync(string deviceSN, string cocoModule)
     {
         await UniTask.Delay(100);
-        Debug.Log("[MockService] 디바이스 초기화");
+        ChunaLogger.Log("[MockService] 디바이스 초기화");
     }
 
     public async UniTask<bool> UpdateRunStatusAsync(string deviceSN, string status)
     {
         await UniTask.Delay(50);
-        Debug.Log($"[MockService] 상태 업데이트: {status}");
+        ChunaLogger.Log($"[MockService] 상태 업데이트: {status}");
         return true;
     }
 
@@ -534,7 +523,7 @@ public class MockAuthenticationService : MonoBehaviour, IAuthenticationService
     public async UniTask LogoffAsync(string deviceSN, string runUser, string runContents)
     {
         await UniTask.Delay(100);
-        Debug.Log($"[MockService] 로그오프: {runUser}");
+        ChunaLogger.Log($"[MockService] 로그오프: {runUser}");
     }
 
     public async UniTask<QuizData[]> GetQuizDataAsync(string orgID, string contentType, string version)
@@ -551,16 +540,16 @@ public class MockAuthenticationService : MonoBehaviour, IAuthenticationService
     public async UniTask PostResultAsync(ResultData resultData)
     {
         await UniTask.Delay(100);
-        Debug.Log($"[MockService] 결과 전송: {resultData.username}");
+        ChunaLogger.Log($"[MockService] 결과 전송: {resultData.username}");
     }
 
     public void CancelAllRequests()
     {
-        Debug.Log("[MockService] 모든 요청 취소");
+        ChunaLogger.Log("[MockService] 모든 요청 취소");
     }
 
     public void SetBaseApiUrl(string newUrl)
     {
-        Debug.Log($"[MockService] API URL 변경: {newUrl}");
+        ChunaLogger.Log($"[MockService] API URL 변경: {newUrl}");
     }
 }

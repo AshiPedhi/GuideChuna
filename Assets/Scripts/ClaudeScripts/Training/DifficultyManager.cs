@@ -45,6 +45,7 @@ namespace ChunaTraining
             if (Instance == null)
             {
                 Instance = this;
+                transform.SetParent(null);
                 DontDestroyOnLoad(gameObject);
             }
             else
@@ -102,7 +103,7 @@ namespace ChunaTraining
 
             if (showDebugLogs)
             {
-                Debug.Log($"<color=yellow>[DifficultyManager] 난이도 변경: {previousLevel} → {newLevel}</color>");
+                ChunaLogger.Log($"<color=yellow>[DifficultyManager] 난이도 변경: {previousLevel} → {newLevel}</color>");
             }
         }
 
@@ -126,11 +127,11 @@ namespace ChunaTraining
 
             if (showDebugLogs)
             {
-                Debug.Log($"<color=cyan>[DifficultyManager] 프리셋 적용: {currentPreset.presetName}</color>");
-                Debug.Log($"  - 가이드 핸드: {currentPreset.showGuideHands}");
-                Debug.Log($"  - 나래이션 타입: {currentPreset.narrationType}");
-                Debug.Log($"  - 시도 횟수 추적: {currentPreset.trackAttempts}");
-                Debug.Log($"  - 평가 전 체험: {currentPreset.isPreEvaluationMode}");
+                ChunaLogger.Log($"<color=cyan>[DifficultyManager] 프리셋 적용: {currentPreset.presetName}</color>");
+                ChunaLogger.Log($"  - 가이드 핸드: {currentPreset.showGuideHands}");
+                ChunaLogger.Log($"  - 나래이션 타입: {currentPreset.narrationType}");
+                ChunaLogger.Log($"  - 시도 횟수 추적: {currentPreset.trackAttempts}");
+                ChunaLogger.Log($"  - 평가 전 체험: {currentPreset.isPreEvaluationMode}");
             }
         }
 
@@ -263,7 +264,7 @@ namespace ChunaTraining
             intermediatePreset = DifficultyPreset.CreateDefault(DifficultyLevel.Intermediate);
             advancedPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Advanced);
             ApplyPreset(currentLevel);
-            Debug.Log("[DifficultyManager] 기본 프리셋으로 리셋됨");
+            ChunaLogger.Log("[DifficultyManager] 기본 프리셋으로 리셋됨");
         }
 
         /// <summary>

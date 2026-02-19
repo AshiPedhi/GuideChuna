@@ -39,7 +39,6 @@ public class WebViewBrowserUI : MonoBehaviour
 
     // 시스템 키보드
     private TouchScreenKeyboard keyboard;
-    private string currentInputText = "";
     private float lastUrlUpdateTime;
 
     void Start()
@@ -82,7 +81,7 @@ public class WebViewBrowserUI : MonoBehaviour
             homeButton.onClick.AddListener(GoHome);
 
         if (showDebugLogs)
-            Debug.Log("[BrowserUI] Buttons setup complete");
+            ChunaLogger.Log("[BrowserUI] Buttons setup complete");
     }
 
     /// <summary>
@@ -107,10 +106,8 @@ public class WebViewBrowserUI : MonoBehaviour
             "Enter URL"
         );
 
-        currentInputText = initialText;
-
         if (showDebugLogs)
-            Debug.Log($"[BrowserUI] Keyboard opened with: {initialText}");
+            ChunaLogger.Log($"[BrowserUI] Keyboard opened with: {initialText}");
     }
 
     /// <summary>
@@ -119,12 +116,6 @@ public class WebViewBrowserUI : MonoBehaviour
     private void HandleKeyboardInput()
     {
         if (keyboard == null) return;
-
-        // 키보드가 활성화되어 있는 동안 텍스트 업데이트
-        if (keyboard.status == TouchScreenKeyboard.Status.Visible)
-        {
-            currentInputText = keyboard.text;
-        }
 
         // 입력 완료
         if (keyboard.status == TouchScreenKeyboard.Status.Done)
@@ -145,7 +136,7 @@ public class WebViewBrowserUI : MonoBehaviour
             keyboard = null;
 
             if (showDebugLogs)
-                Debug.Log($"[BrowserUI] Keyboard Done, URL: {url}");
+                ChunaLogger.Log($"[BrowserUI] Keyboard Done, URL: {url}");
         }
 
         // 취소됨
@@ -154,7 +145,7 @@ public class WebViewBrowserUI : MonoBehaviour
             keyboard = null;
 
             if (showDebugLogs)
-                Debug.Log("[BrowserUI] Keyboard Canceled");
+                ChunaLogger.Log("[BrowserUI] Keyboard Canceled");
         }
     }
 
@@ -186,7 +177,7 @@ public class WebViewBrowserUI : MonoBehaviour
             UpdateUrlDisplay();
 
             if (showDebugLogs)
-                Debug.Log($"[BrowserUI] Loading: {url}");
+                ChunaLogger.Log($"[BrowserUI] Loading: {url}");
         }
     }
 
@@ -200,7 +191,7 @@ public class WebViewBrowserUI : MonoBehaviour
             browser.GoBack();
 
             if (showDebugLogs)
-                Debug.Log("[BrowserUI] Go Back");
+                ChunaLogger.Log("[BrowserUI] Go Back");
         }
     }
 
@@ -214,7 +205,7 @@ public class WebViewBrowserUI : MonoBehaviour
             browser.GoForward();
 
             if (showDebugLogs)
-                Debug.Log("[BrowserUI] Go Forward");
+                ChunaLogger.Log("[BrowserUI] Go Forward");
         }
     }
 
@@ -231,7 +222,7 @@ public class WebViewBrowserUI : MonoBehaviour
                 browser.LoadUrl(currentUrl);
 
                 if (showDebugLogs)
-                    Debug.Log($"[BrowserUI] Refresh: {currentUrl}");
+                    ChunaLogger.Log($"[BrowserUI] Refresh: {currentUrl}");
             }
         }
     }
@@ -246,7 +237,7 @@ public class WebViewBrowserUI : MonoBehaviour
             browser.LoadUrl(homeUrl);
 
             if (showDebugLogs)
-                Debug.Log($"[BrowserUI] Go Home: {homeUrl}");
+                ChunaLogger.Log($"[BrowserUI] Go Home: {homeUrl}");
         }
     }
 

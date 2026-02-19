@@ -31,8 +31,8 @@ public class ScenarioCSVLoader : MonoBehaviour
 
         if (csvFile == null)
         {
-            Debug.LogError($"[ScenarioLoader] CSV 파일을 찾을 수 없습니다: Resources/Scenarios/{csvFileName}.csv");
-            Debug.LogError($"[ScenarioLoader] CSV 파일을 Assets/Resources/Scenarios/ 폴더에 넣어주세요!");
+            ChunaLogger.LogError($"[ScenarioLoader] CSV 파일을 찾을 수 없습니다: Resources/Scenarios/{csvFileName}.csv");
+            ChunaLogger.LogError($"[ScenarioLoader] CSV 파일을 Assets/Resources/Scenarios/ 폴더에 넣어주세요!");
             return null;
         }
 
@@ -52,7 +52,7 @@ public class ScenarioCSVLoader : MonoBehaviour
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
         {
             if (showEncodingDebugLog)
-                Debug.Log("[ScenarioLoader] ✓ UTF-8 BOM 감지 - UTF-8로 디코딩");
+                ChunaLogger.Log("[ScenarioLoader] ✓ UTF-8 BOM 감지 - UTF-8로 디코딩");
             return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
         }
 
@@ -70,7 +70,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                 if (hasKorean || !ContainsKoreanBytes(bytes))
                 {
                     if (showEncodingDebugLog)
-                        Debug.Log("[ScenarioLoader] ✓ UTF-8 인코딩 사용");
+                        ChunaLogger.Log("[ScenarioLoader] ✓ UTF-8 인코딩 사용");
                     return utf8Text;
                 }
             }
@@ -79,7 +79,7 @@ public class ScenarioCSVLoader : MonoBehaviour
         {
             // UTF-8 디코딩 실패
             if (showEncodingDebugLog)
-                Debug.LogWarning("[ScenarioLoader] UTF-8 디코딩 실패");
+                ChunaLogger.LogWarning("[ScenarioLoader] UTF-8 디코딩 실패");
         }
 
         // 3. EUC-KR 시도
@@ -89,17 +89,17 @@ public class ScenarioCSVLoader : MonoBehaviour
             string euckrText = euckr.GetString(bytes);
 
             if (showEncodingDebugLog)
-                Debug.Log("[ScenarioLoader] ✓ EUC-KR 인코딩 사용");
+                ChunaLogger.Log("[ScenarioLoader] ✓ EUC-KR 인코딩 사용");
             return euckrText;
         }
         catch
         {
             if (showEncodingDebugLog)
-                Debug.LogWarning("[ScenarioLoader] EUC-KR 디코딩 실패");
+                ChunaLogger.LogWarning("[ScenarioLoader] EUC-KR 디코딩 실패");
         }
 
         // 4. 최후의 수단: 시스템 기본 인코딩
-        Debug.LogWarning("[ScenarioLoader] ⚠ 기본 인코딩 사용 (한글이 깨질 수 있음)");
+        ChunaLogger.LogWarning("[ScenarioLoader] ⚠ 기본 인코딩 사용 (한글이 깨질 수 있음)");
         return Encoding.Default.GetString(bytes);
     }
 
@@ -151,7 +151,7 @@ public class ScenarioCSVLoader : MonoBehaviour
 
         if (rows.Count == 0)
         {
-            Debug.LogError("[ScenarioLoader] CSV 데이터가 비어있습니다!");
+            ChunaLogger.LogError("[ScenarioLoader] CSV 데이터가 비어있습니다!");
             return collection;
         }
 
@@ -177,7 +177,7 @@ public class ScenarioCSVLoader : MonoBehaviour
             if (values.Count < 9) // 최소 9개 컬럼 필요
             {
                 if (showParsingDebugLog)
-                    Debug.LogWarning($"[ScenarioLoader] 라인 {lineNumber}: 컬럼 수 부족 ({values.Count}개)");
+                    ChunaLogger.LogWarning($"[ScenarioLoader] 라인 {lineNumber}: 컬럼 수 부족 ({values.Count}개)");
                 continue;
             }
 
@@ -195,7 +195,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                 string voiceInstruction = values[8].Trim();
 
                 if (showParsingDebugLog)
-                    Debug.Log($"[ScenarioLoader] Row {lineNumber}: {scenarioName} : {phase} : {stepName} : {stepNo}");
+                    ChunaLogger.Log($"[ScenarioLoader] Row {lineNumber}: {scenarioName} : {phase} : {stepName} : {stepNo}");
 
                 // handTrackingFileName (10번째 컬럼, 선택사항)
                 string handTrackingFileName = "";
@@ -277,7 +277,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                     currentStep = null;
 
                     if (showParsingDebugLog)
-                        Debug.Log($"[ScenarioLoader] 새 시나리오: {scenarioNo}. {scenarioName}");
+                        ChunaLogger.Log($"[ScenarioLoader] 새 시나리오: {scenarioNo}. {scenarioName}");
                 }
 
                 // === Phase 생성/찾기 ===
@@ -291,7 +291,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                         currentScenario.phases.Add(currentPhase);
 
                         if (showParsingDebugLog)
-                            Debug.Log($"[ScenarioLoader]   새 페이즈: {phase}");
+                            ChunaLogger.Log($"[ScenarioLoader]   새 페이즈: {phase}");
                     }
 
                     currentStep = null;
@@ -312,7 +312,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                         currentPhase.steps.Add(currentStep);
 
                         if (showParsingDebugLog)
-                            Debug.Log($"[ScenarioLoader]     새 Step: {stepNo}. {stepName}");
+                            ChunaLogger.Log($"[ScenarioLoader]     새 Step: {stepNo}. {stepName}");
                     }
                 }
 
@@ -341,12 +341,12 @@ public class ScenarioCSVLoader : MonoBehaviour
                     string animInfo = !string.IsNullOrEmpty(patientAnimationClip) ? $"애니메이션={patientAnimationClip}" : "";
                     string moveInfo = !string.IsNullOrEmpty(movementType) ? $"이동={movementType}" : "";
                     string videoInfo = !string.IsNullOrEmpty(videoStartTime) ? $"영상={videoStartTime}~{videoEndTime}" : "";
-                    Debug.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo} {moveInfo} {videoInfo}");
+                    ChunaLogger.Log($"[ScenarioLoader]       SubStep {subStepNo}: {conditionType}, {handInfo}, dur={duration}초 {animInfo} {moveInfo} {videoInfo}");
                 }
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[ScenarioLoader] 라인 {lineNumber} 파싱 오류: {e.Message}");
+                ChunaLogger.LogError($"[ScenarioLoader] 라인 {lineNumber} 파싱 오류: {e.Message}");
             }
         }
 
@@ -364,31 +364,31 @@ public class ScenarioCSVLoader : MonoBehaviour
             }
         }
 
-        Debug.Log($"[ScenarioLoader] ✓ 총 {collection.scenarios.Count}개 시나리오 로드 완료");
+        ChunaLogger.Log($"[ScenarioLoader] ✓ 총 {collection.scenarios.Count}개 시나리오 로드 완료");
         foreach (var scenario in collection.scenarios)
         {
-            Debug.Log($"[ScenarioLoader]   시나리오 {scenario.scenarioNo}: {scenario.scenarioName} - {scenario.phases.Count}개 페이즈");
+            ChunaLogger.Log($"[ScenarioLoader]   시나리오 {scenario.scenarioNo}: {scenario.scenarioName} - {scenario.phases.Count}개 페이즈");
         }
 
         // ★ 디버그: Step별 SubStep 수 상세 출력
-        Debug.Log($"<color=magenta>===== CSV 파싱 결과 상세 =====</color>");
+        ChunaLogger.Log($"<color=magenta>===== CSV 파싱 결과 상세 =====</color>");
         foreach (var scenario in collection.scenarios)
         {
             foreach (var phase in scenario.phases)
             {
-                Debug.Log($"<color=cyan>[{phase.phaseName}] Phase - Steps: {phase.steps.Count}</color>");
+                ChunaLogger.Log($"<color=cyan>[{phase.phaseName}] Phase - Steps: {phase.steps.Count}</color>");
                 foreach (var step in phase.steps)
                 {
-                    Debug.Log($"<color=yellow>  Step {step.stepNo} ({step.stepName}): SubSteps = {step.subSteps.Count}</color>");
+                    ChunaLogger.Log($"<color=yellow>  Step {step.stepNo} ({step.stepName}): SubSteps = {step.subSteps.Count}</color>");
                     foreach (var subStep in step.subSteps)
                     {
                         string handInfo = !string.IsNullOrEmpty(subStep.handTrackingFileName) ? subStep.handTrackingFileName : "(없음)";
-                        Debug.Log($"<color=white>    - SubStep {subStep.subStepNo}: {handInfo}</color>");
+                        ChunaLogger.Log($"<color=white>    - SubStep {subStep.subStepNo}: {handInfo}</color>");
                     }
                 }
             }
         }
-        Debug.Log($"<color=magenta>===== 파싱 결과 끝 =====</color>");
+        ChunaLogger.Log($"<color=magenta>===== 파싱 결과 끝 =====</color>");
 
         return collection;
     }

@@ -83,3 +83,23 @@ crashlytics-build.properties
 /Assets/Scenes/물품 준비
 /Assets/Scenes/물품 준비.unity
 /Assets/Scenes/물품 준비.unity.meta
+
+# Auto-generated SRP CommandBuffer wrappers
+/ComputeCommandBuffer.cs
+/RasterCommandBuffer.cs
+/UnsafeCommandBuffer.cs
+/IBaseCommandBuffer.cs
+/IComputeCommandBuffer.cs
+/IRasterCommandBuffer.cs
+/IUnsafeCommandBuffer.cs
+
+# Temporary build artifacts
+TempAssembly.dll
+Recording_BurstDebugInformation_DoNotShip/
+.utmp/
+
+# IDE workspace
+*.code-workspace
+
+# Keystore (sensitive)
+*.keystore

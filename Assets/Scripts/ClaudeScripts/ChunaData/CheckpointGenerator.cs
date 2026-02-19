@@ -95,7 +95,7 @@ public class CheckpointGenerator : MonoBehaviour
 
         if (loadedFrames == null || loadedFrames.Count == 0)
         {
-            Debug.LogError("[CheckpointGenerator] 프레임 데이터가 없습니다!");
+            ChunaLogger.LogError("[CheckpointGenerator] 프레임 데이터가 없습니다!");
             return;
         }
 
@@ -118,7 +118,7 @@ public class CheckpointGenerator : MonoBehaviour
             CreateCheckpointAtFrame(frameIndex, checkpointFrameIndices.IndexOf(frameIndex));
         }
 
-        Debug.Log($"<color=green>[CheckpointGenerator] {generatedCheckpoints.Count}개 체크포인트 생성 완료</color>");
+        ChunaLogger.Log($"<color=green>[CheckpointGenerator] {generatedCheckpoints.Count}개 체크포인트 생성 완료</color>");
     }
 
     /// <summary>
@@ -131,12 +131,12 @@ public class CheckpointGenerator : MonoBehaviour
 
         if (!result.success)
         {
-            Debug.LogError($"[CheckpointGenerator] CSV 로드 실패: {result.errorMessage}");
+            ChunaLogger.LogError($"[CheckpointGenerator] CSV 로드 실패: {result.errorMessage}");
             return;
         }
 
         loadedFrames = result.frames;
-        Debug.Log($"[CheckpointGenerator] {loadedFrames.Count} 프레임 로드됨");
+        ChunaLogger.Log($"[CheckpointGenerator] {loadedFrames.Count} 프레임 로드됨");
     }
 
     /// <summary>
@@ -238,7 +238,7 @@ public class CheckpointGenerator : MonoBehaviour
 
             case GenerationMode.Manual:
                 // 수동 모드는 인스펙터에서 직접 추가
-                Debug.Log("[CheckpointGenerator] 수동 모드: 인스펙터에서 직접 체크포인트를 추가하세요.");
+                ChunaLogger.Log("[CheckpointGenerator] 수동 모드: 인스펙터에서 직접 체크포인트를 추가하세요.");
                 break;
         }
 
@@ -325,23 +325,7 @@ public class CheckpointGenerator : MonoBehaviour
         }
         generatedCheckpoints.Clear();
 
-        Debug.Log("[CheckpointGenerator] 체크포인트 정리 완료");
-    }
-
-    /// <summary>
-    /// ChunaPathEvaluator에 체크포인트 전달
-    /// </summary>
-    public void ApplyToEvaluator(ChunaPathEvaluator evaluator)
-    {
-        if (evaluator == null)
-        {
-            Debug.LogError("[CheckpointGenerator] ChunaPathEvaluator가 null입니다!");
-            return;
-        }
-
-        // Evaluator에 직접 체크포인트 설정하는 메서드 필요
-        // 현재는 Evaluator가 자체적으로 생성하므로 이 메서드는 참고용
-        Debug.Log($"[CheckpointGenerator] {generatedCheckpoints.Count}개 체크포인트 준비됨");
+        ChunaLogger.Log("[CheckpointGenerator] 체크포인트 정리 완료");
     }
 
     /// <summary>

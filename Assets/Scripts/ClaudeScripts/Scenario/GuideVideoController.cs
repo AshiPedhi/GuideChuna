@@ -88,7 +88,7 @@ public class GuideVideoController : MonoBehaviour
             videoPlayer.Stop();
         }
 
-        scenarioManager = FindObjectOfType<ScenarioManager>();
+        scenarioManager = FindFirstObjectByType<ScenarioManager>();
     }
 
     private void OnEnable()
@@ -104,7 +104,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogError($"[GuideVideo] 이벤트 구독 실패: {e.Message}");
+            ChunaLogger.LogError($"[GuideVideo] 이벤트 구독 실패: {e.Message}");
         }
     }
 
@@ -121,7 +121,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] 이벤트 해제 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] 이벤트 해제 실패: {e.Message}");
         }
 
         // 코루틴 정리
@@ -167,7 +167,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] Update 오류: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] Update 오류: {e.Message}");
             isPlayingSegment = false;
         }
     }
@@ -183,7 +183,7 @@ public class GuideVideoController : MonoBehaviour
             videoPlayer.Pause();
 
         if (showDebugLog)
-            Debug.Log($"[GuideVideo] 구간 완료, {loopDelaySeconds}초 후 반복 재생...");
+            ChunaLogger.Log($"[GuideVideo] 구간 완료, {loopDelaySeconds}초 후 반복 재생...");
 
         yield return new WaitForSeconds(loopDelaySeconds);
 
@@ -194,7 +194,7 @@ public class GuideVideoController : MonoBehaviour
             videoPlayer.Play();
 
             if (showDebugLog)
-                Debug.Log($"[GuideVideo] 구간 반복: {FormatTime(currentStartTime)} ~ {FormatTime(currentEndTime)}");
+                ChunaLogger.Log($"[GuideVideo] 구간 반복: {FormatTime(currentStartTime)} ~ {FormatTime(currentEndTime)}");
         }
 
         isWaitingForLoop = false;
@@ -213,7 +213,7 @@ public class GuideVideoController : MonoBehaviour
         isGuideEnabled = enabled;
 
         if (showDebugLog)
-            Debug.Log($"<color=yellow>[GuideVideo] 가이드 {(enabled ? "활성화" : "비활성화")}</color>");
+            ChunaLogger.Log($"<color=yellow>[GuideVideo] 가이드 {(enabled ? "활성화" : "비활성화")}</color>");
 
         if (enabled)
         {
@@ -246,14 +246,14 @@ public class GuideVideoController : MonoBehaviour
         if (!hasScenarioStarted || isInGuideStep)
         {
             if (showDebugLog)
-                Debug.Log("[GuideVideo] 시나리오 시작 전/가이드 단계 - 전체 영상 재생");
+                ChunaLogger.Log("[GuideVideo] 시나리오 시작 전/가이드 단계 - 전체 영상 재생");
             PlayFullVideo();
         }
         // 타임라인이 있는 단계면 구간 재생
         else if (pendingSubStep != null && pendingSubStep.HasVideoSegment())
         {
             if (showDebugLog)
-                Debug.Log("[GuideVideo] 타임라인 있는 단계 - 구간 재생");
+                ChunaLogger.Log("[GuideVideo] 타임라인 있는 단계 - 구간 재생");
             float startTime = pendingSubStep.GetVideoStartSeconds();
             float endTime = pendingSubStep.GetVideoEndSeconds();
             PlaySegmentInternal(startTime, endTime);
@@ -262,7 +262,7 @@ public class GuideVideoController : MonoBehaviour
         else
         {
             if (showDebugLog)
-                Debug.Log("[GuideVideo] 타임라인 없는 단계 - 전체 영상 재생");
+                ChunaLogger.Log("[GuideVideo] 타임라인 없는 단계 - 전체 영상 재생");
             PlayFullVideo();
         }
     }
@@ -278,13 +278,13 @@ public class GuideVideoController : MonoBehaviour
     {
         if (videoPlayer == null)
         {
-            Debug.LogWarning("[GuideVideo] VideoPlayer가 없습니다!");
+            ChunaLogger.LogWarning("[GuideVideo] VideoPlayer가 없습니다!");
             return;
         }
 
         if (videoPlayer.clip == null && string.IsNullOrEmpty(videoPlayer.url))
         {
-            Debug.LogWarning("[GuideVideo] 로드된 영상이 없습니다!");
+            ChunaLogger.LogWarning("[GuideVideo] 로드된 영상이 없습니다!");
             return;
         }
 
@@ -300,7 +300,7 @@ public class GuideVideoController : MonoBehaviour
         videoPlayer.Play();
 
         if (showDebugLog)
-            Debug.Log("<color=green>[GuideVideo] 전체 영상 재생 시작 (루프)</color>");
+            ChunaLogger.Log("<color=green>[GuideVideo] 전체 영상 재생 시작 (루프)</color>");
     }
 
     #endregion
@@ -314,19 +314,19 @@ public class GuideVideoController : MonoBehaviour
     {
         if (videoPlayer == null)
         {
-            Debug.LogError("[GuideVideo] VideoPlayer가 없습니다!");
+            ChunaLogger.LogError("[GuideVideo] VideoPlayer가 없습니다!");
             return;
         }
 
         if (videoPlayer.clip == null && string.IsNullOrEmpty(videoPlayer.url))
         {
-            Debug.LogWarning("[GuideVideo] 로드된 영상이 없습니다!");
+            ChunaLogger.LogWarning("[GuideVideo] 로드된 영상이 없습니다!");
             return;
         }
 
         if (startSeconds >= endSeconds)
         {
-            Debug.LogWarning($"[GuideVideo] 잘못된 구간: {startSeconds} >= {endSeconds}");
+            ChunaLogger.LogWarning($"[GuideVideo] 잘못된 구간: {startSeconds} >= {endSeconds}");
             return;
         }
 
@@ -346,7 +346,7 @@ public class GuideVideoController : MonoBehaviour
         OnSegmentStarted?.Invoke();
 
         if (showDebugLog)
-            Debug.Log($"<color=green>[GuideVideo] 구간 재생: {FormatTime(currentStartTime)} ~ {FormatTime(currentEndTime)}</color>");
+            ChunaLogger.Log($"<color=green>[GuideVideo] 구간 재생: {FormatTime(currentStartTime)} ~ {FormatTime(currentEndTime)}</color>");
     }
 
     /// <summary>
@@ -357,7 +357,7 @@ public class GuideVideoController : MonoBehaviour
         if (!isGuideEnabled)
         {
             if (showDebugLog)
-                Debug.LogWarning("[GuideVideo] 가이드가 비활성화 상태입니다.");
+                ChunaLogger.LogWarning("[GuideVideo] 가이드가 비활성화 상태입니다.");
             return;
         }
 
@@ -396,7 +396,7 @@ public class GuideVideoController : MonoBehaviour
         isPlayingFullVideo = false;
 
         // VideoPlayer 정지
-        if (videoPlayer != null)
+        if (videoPlayer != null && videoPlayer.enabled)
         {
             videoPlayer.Pause();
             videoPlayer.isLooping = false;
@@ -405,7 +405,7 @@ public class GuideVideoController : MonoBehaviour
         OnSegmentEnded?.Invoke();
 
         if (showDebugLog)
-            Debug.Log("[GuideVideo] 재생 중지");
+            ChunaLogger.Log("[GuideVideo] 재생 중지");
     }
 
     /// <summary>
@@ -453,7 +453,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] 시나리오 시작 처리 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] 시나리오 시작 처리 실패: {e.Message}");
         }
     }
 
@@ -470,7 +470,7 @@ public class GuideVideoController : MonoBehaviour
             isInGuideStep = step.IsGuideStep();
 
             if (showDebugLog)
-                Debug.Log($"[GuideVideo] Step 변경: {step.stepName}, 가이드 스텝: {isInGuideStep}");
+                ChunaLogger.Log($"[GuideVideo] Step 변경: {step.stepName}, 가이드 스텝: {isInGuideStep}");
 
             // 가이드 활성화 상태면 재생 방식 변경
             if (isGuideEnabled)
@@ -480,7 +480,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] Step 변경 처리 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] Step 변경 처리 실패: {e.Message}");
         }
     }
 
@@ -503,7 +503,7 @@ public class GuideVideoController : MonoBehaviour
             }
 
             if (showDebugLog)
-                Debug.Log($"[GuideVideo] SubStep 시작: {subStep.textInstruction}, 가이드 스텝: {isInGuideStep}, 영상 구간: {subStep.HasVideoSegment()}");
+                ChunaLogger.Log($"[GuideVideo] SubStep 시작: {subStep.textInstruction}, 가이드 스텝: {isInGuideStep}, 영상 구간: {subStep.HasVideoSegment()}");
 
             // 가이드 활성화 상태면 재생 방식 변경
             if (isGuideEnabled)
@@ -513,7 +513,7 @@ public class GuideVideoController : MonoBehaviour
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] SubStep 처리 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] SubStep 처리 실패: {e.Message}");
         }
     }
 
@@ -549,13 +549,13 @@ public class GuideVideoController : MonoBehaviour
         {
             if (videoPlayer == null)
             {
-                Debug.LogWarning("[GuideVideo] VideoPlayer가 없습니다!");
+                ChunaLogger.LogWarning("[GuideVideo] VideoPlayer가 없습니다!");
                 return false;
             }
 
             if (string.IsNullOrEmpty(scenarioName))
             {
-                Debug.LogWarning("[GuideVideo] 시나리오 이름이 비어있습니다!");
+                ChunaLogger.LogWarning("[GuideVideo] 시나리오 이름이 비어있습니다!");
                 return false;
             }
 
@@ -571,7 +571,7 @@ public class GuideVideoController : MonoBehaviour
                 videoPlayer.Stop();
 
                 if (showDebugLog)
-                    Debug.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath} (재생 대기 중 - 토글로 활성화 필요)</color>");
+                    ChunaLogger.Log($"<color=green>[GuideVideo] 영상 로드 성공: {videoPath} (재생 대기 중 - 토글로 활성화 필요)</color>");
 
                 OnVideoLoaded?.Invoke(scenarioName);
                 return true;
@@ -580,15 +580,15 @@ public class GuideVideoController : MonoBehaviour
             {
                 if (showDebugLog)
                 {
-                    Debug.LogWarning($"[GuideVideo] 영상을 찾을 수 없습니다: Resources/{videoPath}");
-                    Debug.LogWarning($"[GuideVideo] 영상 파일을 Assets/Resources/{videoFolderPath}/ 폴더에 넣어주세요!");
+                    ChunaLogger.LogWarning($"[GuideVideo] 영상을 찾을 수 없습니다: Resources/{videoPath}");
+                    ChunaLogger.LogWarning($"[GuideVideo] 영상 파일을 Assets/Resources/{videoFolderPath}/ 폴더에 넣어주세요!");
                 }
                 return false;
             }
         }
         catch (System.Exception e)
         {
-            Debug.LogWarning($"[GuideVideo] 영상 로드 실패: {e.Message}");
+            ChunaLogger.LogWarning($"[GuideVideo] 영상 로드 실패: {e.Message}");
             return false;
         }
     }
@@ -600,7 +600,7 @@ public class GuideVideoController : MonoBehaviour
     {
         if (videoPlayer == null)
         {
-            Debug.LogError("[GuideVideo] VideoPlayer가 없습니다!");
+            ChunaLogger.LogError("[GuideVideo] VideoPlayer가 없습니다!");
             return;
         }
 
@@ -608,7 +608,7 @@ public class GuideVideoController : MonoBehaviour
         videoPlayer.url = url;
 
         if (showDebugLog)
-            Debug.Log($"[GuideVideo] URL 영상 설정: {url}");
+            ChunaLogger.Log($"[GuideVideo] URL 영상 설정: {url}");
     }
 
     #endregion

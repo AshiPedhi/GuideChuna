@@ -57,12 +57,12 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
 
         if (pathEvaluator == null)
         {
-            Debug.LogError("[ChunaPathEvaluatorBridge] ChunaPathEvaluator를 찾을 수 없습니다!");
+            ChunaLogger.LogError("[ChunaPathEvaluatorBridge] ChunaPathEvaluator를 찾을 수 없습니다!");
         }
         else
         {
             if (showDebugLogs)
-                Debug.Log($"[ChunaPathEvaluatorBridge] ChunaPathEvaluator 연결 완료: {pathEvaluator.name}");
+                ChunaLogger.Log($"[ChunaPathEvaluatorBridge] ChunaPathEvaluator 연결 완료: {pathEvaluator.name}");
 
             // 이벤트 구독
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompletedHandler;
@@ -100,10 +100,10 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
 
         if (showDebugLogs)
         {
-            Debug.Log($"<color=green>[ChunaPathEvaluatorBridge] ===== 평가 완료! =====</color>");
-            Debug.Log($"  - 통과: {session.passedCheckpoints}/{session.totalCheckpoints}");
-            Debug.Log($"  - 평균 유사도: {session.averageSimilarity:P0}");
-            Debug.Log($"  - 최종 점수: {session.finalScore:F0}점 ({session.grade})");
+            ChunaLogger.Log($"<color=green>[ChunaPathEvaluatorBridge] ===== 평가 완료! =====</color>");
+            ChunaLogger.Log($"  - 통과: {session.passedCheckpoints}/{session.totalCheckpoints}");
+            ChunaLogger.Log($"  - 평균 유사도: {session.averageSimilarity:P0}");
+            ChunaLogger.Log($"  - 최종 점수: {session.finalScore:F0}점 ({session.grade})");
         }
 
         OnSequenceCompleted?.Invoke();
@@ -122,7 +122,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
 
         if (showDebugLogs && progress > lastProgress)
         {
-            Debug.Log($"[ChunaPathEvaluatorBridge] 체크포인트 통과율: {progress * 100:F1}% ({current}/{total})");
+            ChunaLogger.Log($"[ChunaPathEvaluatorBridge] 체크포인트 통과율: {progress * 100:F1}% ({current}/{total})");
         }
 
         lastProgress = progress;
@@ -145,9 +145,9 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
 
         float frameProgress = pathEvaluator != null ? pathEvaluator.GetCurrentProgress() : 0f;
 
-        Debug.Log($"<color=green>[ChunaPathEvaluatorBridge] ===== MidHold 완료! =====</color>");
-        Debug.Log($"  - 프레임 진행률: {frameProgress * 100:F1}%");
-        Debug.Log($"  - OnProgressThresholdReached 이벤트 발생");
+        ChunaLogger.Log($"<color=green>[ChunaPathEvaluatorBridge] ===== MidHold 완료! =====</color>");
+        ChunaLogger.Log($"  - 프레임 진행률: {frameProgress * 100:F1}%");
+        ChunaLogger.Log($"  - OnProgressThresholdReached 이벤트 발생");
 
         OnProgressThresholdReached?.Invoke();
     }
@@ -159,7 +159,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
     {
         if (showDebugLogs)
         {
-            Debug.Log($"<color=cyan>[ChunaPathEvaluatorBridge] 체크포인트 통과: {checkpoint.CheckpointName} (유사도: {similarity:P0})</color>");
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluatorBridge] 체크포인트 통과: {checkpoint.CheckpointName} (유사도: {similarity:P0})</color>");
         }
     }
 
@@ -184,12 +184,12 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
     {
         if (pathEvaluator == null)
         {
-            Debug.LogError("[ChunaPathEvaluatorBridge] ChunaPathEvaluator가 없습니다!");
+            ChunaLogger.LogError("[ChunaPathEvaluatorBridge] ChunaPathEvaluator가 없습니다!");
             return;
         }
 
         if (showDebugLogs)
-            Debug.Log($"<color=cyan>[ChunaPathEvaluatorBridge] CSV 로드 및 체크포인트 생성: {csvFileName}</color>");
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluatorBridge] CSV 로드 및 체크포인트 생성: {csvFileName}</color>");
 
         // 체크포인트 생성 및 평가 시작
         pathEvaluator.LoadAndGenerateCheckpoints(csvFileName);
@@ -210,7 +210,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
         lastProgress = 0f;
 
         if (showDebugLogs)
-            Debug.Log($"[ChunaPathEvaluatorBridge] 추적 시작 (목표: {progressThreshold * 100:F0}%)");
+            ChunaLogger.Log($"[ChunaPathEvaluatorBridge] 추적 시작 (목표: {progressThreshold * 100:F0}%)");
     }
 
     /// <summary>
@@ -226,7 +226,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[ChunaPathEvaluatorBridge] 추적 중지");
+            ChunaLogger.Log($"[ChunaPathEvaluatorBridge] 추적 중지");
     }
 
     /// <summary>
@@ -237,7 +237,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
         progressThreshold = Mathf.Clamp01(threshold);
 
         if (showDebugLogs)
-            Debug.Log($"[ChunaPathEvaluatorBridge] 진행률 목표 설정: {progressThreshold * 100:F0}%");
+            ChunaLogger.Log($"[ChunaPathEvaluatorBridge] 진행률 목표 설정: {progressThreshold * 100:F0}%");
     }
 
     /// <summary>
@@ -271,7 +271,7 @@ public class ChunaPathEvaluatorBridge : MonoBehaviour
         }
 
         if (showDebugLogs)
-            Debug.Log($"[ChunaPathEvaluatorBridge] 추적 상태 초기화");
+            ChunaLogger.Log($"[ChunaPathEvaluatorBridge] 추적 상태 초기화");
     }
 
     /// <summary>

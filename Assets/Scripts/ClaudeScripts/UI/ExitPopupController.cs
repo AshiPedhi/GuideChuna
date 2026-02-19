@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 /// 종료 확인 팝업 컨트롤러 (토글 버전)
 /// 실습 종료 시 확인 팝업을 표시
 /// </summary>
-public class ExitPopupController : MonoBehaviour
+public class ExitPopupController : BaseUIPanel
 {
     [Header("=== UI References ===")]
     [SerializeField] private GameObject popupPanel;
@@ -54,10 +54,12 @@ public class ExitPopupController : MonoBehaviour
     // InfoPanelController 참조 (팝업 상태 알림용)
     private InfoPanelController infoPanelController;
 
+    protected override GameObject GetPanelObject() => popupPanel;
+
     private void Awake()
     {
         // InfoPanelController 찾기
-        infoPanelController = FindObjectOfType<InfoPanelController>();
+        infoPanelController = FindFirstObjectByType<InfoPanelController>();
 
         // 토글 이벤트 연결
         if (cancelToggle != null)
@@ -162,6 +164,7 @@ public class ExitPopupController : MonoBehaviour
         if (isShowing) return;
 
         isShowing = true;
+        IsVisible = true;
 
         // 팝업 표시 (InfoPanelController가 내부적으로 팝업 상태 관리)
         if (popupPanel != null)
@@ -197,6 +200,7 @@ public class ExitPopupController : MonoBehaviour
         if (!isShowing) return;
 
         isShowing = false;
+        IsVisible = false;
 
         // 팝업 숨김 (InfoPanelController가 내부적으로 팝업 상태 관리)
         // 애니메이션
@@ -235,7 +239,7 @@ public class ExitPopupController : MonoBehaviour
     {
         if (!isOn) return;
 
-        Debug.Log("[ExitPopup] 취소 토글 선택됨");
+        ChunaLogger.Log("[ExitPopup] 취소 토글 선택됨");
 
         if (autoExecuteOnToggle)
         {
@@ -250,7 +254,7 @@ public class ExitPopupController : MonoBehaviour
     {
         if (!isOn) return;
 
-        Debug.Log("[ExitPopup] 다시하기 토글 선택됨");
+        ChunaLogger.Log("[ExitPopup] 다시하기 토글 선택됨");
 
         if (autoExecuteOnToggle)
         {
@@ -265,7 +269,7 @@ public class ExitPopupController : MonoBehaviour
     {
         if (!isOn) return;
 
-        Debug.Log("[ExitPopup] 메인으로 토글 선택됨");
+        ChunaLogger.Log("[ExitPopup] 메인으로 토글 선택됨");
 
         if (autoExecuteOnToggle)
         {
@@ -280,7 +284,7 @@ public class ExitPopupController : MonoBehaviour
     {
         if (!isOn) return;
 
-        Debug.Log("[ExitPopup] 닫기 토글 선택됨");
+        ChunaLogger.Log("[ExitPopup] 닫기 토글 선택됨");
 
         if (autoExecuteOnToggle)
         {
@@ -293,7 +297,7 @@ public class ExitPopupController : MonoBehaviour
     /// </summary>
     public void ExecuteCancel()
     {
-        Debug.Log("[ExitPopup] 취소 실행");
+        ChunaLogger.Log("[ExitPopup] 취소 실행");
 
         // 이벤트 발생
         OnCancelSelected?.Invoke();
@@ -307,7 +311,7 @@ public class ExitPopupController : MonoBehaviour
     /// </summary>
     public void ExecuteRetry()
     {
-        Debug.Log("[ExitPopup] 다시하기 실행");
+        ChunaLogger.Log("[ExitPopup] 다시하기 실행");
 
         // 이벤트 발생
         OnRetrySelected?.Invoke();
@@ -324,7 +328,7 @@ public class ExitPopupController : MonoBehaviour
     /// </summary>
     public void ExecuteMainMenu()
     {
-        Debug.Log("[ExitPopup] 메인으로 이동 실행");
+        ChunaLogger.Log("[ExitPopup] 메인으로 이동 실행");
 
         // 이벤트 발생
         OnMainMenuSelected?.Invoke();
@@ -384,50 +388,20 @@ public class ExitPopupController : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[ExitPopup] 메인 메뉴 씬 이름이 설정되지 않았습니다!");
+            ChunaLogger.LogWarning("[ExitPopup] 메인 메뉴 씬 이름이 설정되지 않았습니다!");
         }
     }
 
     private IEnumerator AnimateShow()
     {
         if (popupPanel == null) yield break;
-
-        Transform t = popupPanel.transform;
-        float elapsed = 0;
-
-        while (elapsed < animationDuration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            float progress = elapsed / animationDuration;
-            float scale = scaleCurve.Evaluate(progress);
-
-            t.localScale = Vector3.one * scale;
-
-            yield return null;
-        }
-
-        t.localScale = Vector3.one;
+        yield return ScaleAnimation(popupPanel.transform, Vector3.zero, Vector3.one, animationDuration, scaleCurve);
     }
 
     private IEnumerator AnimateHide()
     {
         if (popupPanel == null) yield break;
-
-        Transform t = popupPanel.transform;
-        float elapsed = 0;
-
-        while (elapsed < animationDuration)
-        {
-            elapsed += Time.unscaledDeltaTime;
-            float progress = 1f - (elapsed / animationDuration);
-            float scale = scaleCurve.Evaluate(progress);
-
-            t.localScale = Vector3.one * scale;
-
-            yield return null;
-        }
-
-        t.localScale = Vector3.zero;
+        yield return ScaleAnimation(popupPanel.transform, Vector3.one, Vector3.zero, animationDuration, scaleCurve);
         popupPanel.SetActive(false);
     }
 

@@ -32,11 +32,11 @@ public class ScenarioCardButton : MonoBehaviour
 
         if (lobbyAuthUI == null)
         {
-            lobbyAuthUI = FindObjectOfType<LobbyAuthUI_Complete>();
+            lobbyAuthUI = FindFirstObjectByType<LobbyAuthUI_Complete>();
 
             if (lobbyAuthUI == null)
             {
-                Debug.LogError($"[ScenarioCard] LobbyAuthUI_Complete를 찾을 수 없습니다! Card Index: {scenarioIndex}");
+                ChunaLogger.LogError($"[ScenarioCard] LobbyAuthUI_Complete를 찾을 수 없습니다! Card Index: {scenarioIndex}");
             }
         }
     }
@@ -49,7 +49,7 @@ public class ScenarioCardButton : MonoBehaviour
         }
         else
         {
-            Debug.LogError($"[ScenarioCard] LobbyAuthUI 참조가 없습니다! Card Index: {scenarioIndex}");
+            ChunaLogger.LogError($"[ScenarioCard] LobbyAuthUI 참조가 없습니다! Card Index: {scenarioIndex}");
         }
     }
 

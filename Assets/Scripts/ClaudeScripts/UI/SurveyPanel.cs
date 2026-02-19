@@ -52,7 +52,7 @@ public class SurveyPanel : MonoBehaviour
 
         if (isSkipped)
         {
-            Debug.Log("[SurveyPanel] 설문이 스킵 설정되어 있어 바로 진행합니다.");
+            ChunaLogger.Log("[SurveyPanel] 설문이 스킵 설정되어 있어 바로 진행합니다.");
             onCompleteAction?.Invoke();
             return;
         }
@@ -69,7 +69,7 @@ public class SurveyPanel : MonoBehaviour
         pendingAction = onCompleteAction;
         isWaitingForAction = true;
 
-        Debug.Log("[SurveyPanel] 설문 패널 표시");
+        ChunaLogger.Log("[SurveyPanel] 설문 패널 표시");
     }
 
     /// <summary>
@@ -86,7 +86,7 @@ public class SurveyPanel : MonoBehaviour
         // 이벤트 발생
         OnSurveyCompleted?.Invoke();
 
-        Debug.Log("[SurveyPanel] 설문 시작");
+        ChunaLogger.Log("[SurveyPanel] 설문 시작");
 
         // 원래 액션 실행
         ExecutePendingAction();
@@ -106,7 +106,7 @@ public class SurveyPanel : MonoBehaviour
         // 이벤트 발생
         OnSurveySkipped?.Invoke();
 
-        Debug.Log("[SurveyPanel] 설문 스킵");
+        ChunaLogger.Log("[SurveyPanel] 설문 스킵");
 
         // 원래 액션 실행
         ExecutePendingAction();
@@ -121,7 +121,7 @@ public class SurveyPanel : MonoBehaviour
         {
             PlayerPrefs.SetInt(playerPrefsKey, 1);
             PlayerPrefs.Save();
-            Debug.Log("[SurveyPanel] '다음부터 보지 않기' 설정 저장됨");
+            ChunaLogger.Log("[SurveyPanel] '다음부터 보지 않기' 설정 저장됨");
         }
     }
 
@@ -143,7 +143,7 @@ public class SurveyPanel : MonoBehaviour
     {
         if (pendingAction != null)
         {
-            Debug.Log("[SurveyPanel] 원래 진행 액션 실행");
+            ChunaLogger.Log("[SurveyPanel] 원래 진행 액션 실행");
             pendingAction.Invoke();
             pendingAction = null;
         }
@@ -157,7 +157,7 @@ public class SurveyPanel : MonoBehaviour
     {
         PlayerPrefs.DeleteKey(playerPrefsKey);
         PlayerPrefs.Save();
-        Debug.Log("[SurveyPanel] 스킵 설정 초기화됨");
+        ChunaLogger.Log("[SurveyPanel] 스킵 설정 초기화됨");
     }
 
     /// <summary>

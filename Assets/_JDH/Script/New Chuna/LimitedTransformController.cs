@@ -5,12 +5,10 @@ public class LimitedTransformController : MonoBehaviour
     public float maxRotationDegrees = 30f;
     public float maxYMovement = 0.02f;
     public float restoreSpeed = 2f;
-    public Transform parentToFollow; // ºÎ¸ð°¡ ÀÚ½Ä ¿òÁ÷ÀÓÀ» µû¶ó°¡±â À§ÇÑ ÂüÁ¶
+    public Transform parentToFollow; // ï¿½Î¸ï¿½ ï¿½Ú½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ó°¡±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
     private Quaternion originalRotation;
     private Vector3 originalPosition;
-
-    private bool isControlled = false; // ¿ÜºÎ¿¡¼­ Á¶ÀÛ Áß ¿©ºÎ
 
     void Start()
     {
@@ -20,7 +18,7 @@ public class LimitedTransformController : MonoBehaviour
 
     void Update()
     {
-        if (parentToFollow != null && parentToFollow != transform)  // ÀÚ½Ä ¡æ ºÎ¸ð·Î ¿µÇâ Àü´Þ
+        if (parentToFollow != null && parentToFollow != transform)  // ï¿½Ú½ï¿½ ï¿½ï¿½ ï¿½Î¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
         {
             Vector3 offsetPos = parentToFollow.localPosition - originalPosition;
             Vector3 offsetRot = (parentToFollow.localRotation * Quaternion.Inverse(originalRotation)).eulerAngles;
@@ -29,7 +27,7 @@ public class LimitedTransformController : MonoBehaviour
             offsetRot.y = NormalizeAngle(offsetRot.y);
             offsetRot.z = NormalizeAngle(offsetRot.z);
 
-            // ºÎ¸ðÀÇ À§Ä¡/È¸Àü º¸Á¤ (Á¦ÇÑ Àû¿ë)
+            // ï¿½Î¸ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡/È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
             Vector3 newPos = originalPosition + new Vector3(0, Mathf.Clamp(offsetPos.y, -maxYMovement, maxYMovement), 0);
             Vector3 newEuler = ClampEulerAngles((originalRotation.eulerAngles + offsetRot));
 
@@ -38,19 +36,19 @@ public class LimitedTransformController : MonoBehaviour
         }
         else
         {
-            // È¸Àü Á¦ÇÑ
+            // È¸ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
             Vector3 currentEuler = NormalizeEuler(transform.localRotation.eulerAngles);
             currentEuler.x = Mathf.Clamp(currentEuler.x, -maxRotationDegrees, maxRotationDegrees);
             currentEuler.y = Mathf.Clamp(currentEuler.y, -maxRotationDegrees, maxRotationDegrees);
             currentEuler.z = Mathf.Clamp(currentEuler.z, -maxRotationDegrees, maxRotationDegrees);
             transform.localRotation = Quaternion.Euler(currentEuler);
 
-            // À§Ä¡ Á¦ÇÑ (yÃà¸¸)
+            // ï¿½ï¿½Ä¡ ï¿½ï¿½ï¿½ï¿½ (yï¿½à¸¸)
             Vector3 currentLocalPos = transform.localPosition;
             currentLocalPos.y = Mathf.Clamp(currentLocalPos.y, originalPosition.y - maxYMovement, originalPosition.y + maxYMovement);
             transform.localPosition = new Vector3(originalPosition.x, currentLocalPos.y, originalPosition.z);
 
-            // ¿ø·¡ »óÅÂ·Î º¹±Í
+            // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Â·ï¿½ ï¿½ï¿½ï¿½ï¿½
             transform.localRotation = Quaternion.Slerp(transform.localRotation, originalRotation, Time.deltaTime * restoreSpeed);
             transform.localPosition = Vector3.Lerp(transform.localPosition, originalPosition, Time.deltaTime * restoreSpeed);
         }

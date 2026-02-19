@@ -91,7 +91,7 @@ public class SceneLoader : MonoBehaviour
     /// <param name="sceneName">로드할 씬 이름</param>
     public void LoadSceneWithLoading(string sceneName)
     {
-        Debug.Log($"[SceneLoader] 로딩씬을 통해 '{sceneName}' 씬 로드 시작");
+        ChunaLogger.Log($"[SceneLoader] 로딩씬을 통해 '{sceneName}' 씬 로드 시작");
 
         // Camera X 보존
         PreserveCameraX();
@@ -105,7 +105,7 @@ public class SceneLoader : MonoBehaviour
     /// <param name="sceneName">로드할 씬 이름</param>
     public void LoadSceneDirect(string sceneName)
     {
-        Debug.Log($"[SceneLoader] '{sceneName}' 씬 직접 로드");
+        ChunaLogger.Log($"[SceneLoader] '{sceneName}' 씬 직접 로드");
 
         // Camera X 보존
         PreserveCameraX();
@@ -122,7 +122,7 @@ public class SceneLoader : MonoBehaviour
     /// <param name="sceneName">로드할 씬 이름</param>
     public void LoadSceneAsync(string sceneName)
     {
-        Debug.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드");
+        ChunaLogger.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드");
 
         // Camera X 보존
         PreserveCameraX();
@@ -143,12 +143,12 @@ public class SceneLoader : MonoBehaviour
             // SceneLoader의 자식으로 이동 (DontDestroyOnLoad 영역)
             cameraX.transform.SetParent(transform);
             preservedCameraX = cameraX;
-            Debug.Log($"[SceneLoader] Camera X 보존됨 (씬 전환 중 삭제 방지)");
+            ChunaLogger.Log($"[SceneLoader] Camera X 보존됨 (씬 전환 중 삭제 방지)");
         }
         else
         {
             preservedCameraX = null;
-            Debug.Log($"[SceneLoader] Camera X를 찾지 못함 (보존 스킵)");
+            ChunaLogger.Log($"[SceneLoader] Camera X를 찾지 못함 (보존 스킵)");
         }
     }
 
@@ -162,7 +162,7 @@ public class SceneLoader : MonoBehaviour
         {
             // 부모 해제 (루트로 이동)
             preservedCameraX.transform.SetParent(null);
-            Debug.Log($"[SceneLoader] Camera X 복원됨 (CameraLocateCtrl이 위치 재설정 예정)");
+            ChunaLogger.Log($"[SceneLoader] Camera X 복원됨 (CameraLocateCtrl이 위치 재설정 예정)");
 
             // 미러링 재연결 시도 (SignalingManager 재시작)
             StartCoroutine(TryReconnectMirroringDelayed());
@@ -181,7 +181,7 @@ public class SceneLoader : MonoBehaviour
 
         if (RenderManager.instance != null && RenderManager.instance.IsConnected)
         {
-            Debug.Log("[SceneLoader] 미러링 재연결 시도...");
+            ChunaLogger.Log("[SceneLoader] 미러링 재연결 시도...");
             RenderManager.instance.TryReconnect();
         }
     }
@@ -230,7 +230,7 @@ public class SceneLoader : MonoBehaviour
         // 8. Camera X 복원
         RestoreCameraX();
 
-        Debug.Log($"[SceneLoader] '{targetSceneName}' 씬 로드 완료");
+        ChunaLogger.Log($"[SceneLoader] '{targetSceneName}' 씬 로드 완료");
     }
 
     private IEnumerator LoadSceneAsyncCoroutine(string sceneName)
@@ -262,7 +262,7 @@ public class SceneLoader : MonoBehaviour
         // Camera X 복원
         RestoreCameraX();
 
-        Debug.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드 완료");
+        ChunaLogger.Log($"[SceneLoader] '{sceneName}' 씬 비동기 로드 완료");
     }
     #endregion
 

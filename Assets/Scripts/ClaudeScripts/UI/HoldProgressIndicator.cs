@@ -180,7 +180,7 @@ public class HoldProgressIndicator : MonoBehaviour
 
         if (showDebugLogs)
         {
-            Debug.Log($"[HoldProgressIndicator] Progress: {progress:P0} ({currentTime:F1}s)");
+            ChunaLogger.Log($"[HoldProgressIndicator] Progress: {progress:P0} ({currentTime:F1}s)");
         }
 
         // 홀드 시작 시 오브젝트 활성화
@@ -201,7 +201,7 @@ public class HoldProgressIndicator : MonoBehaviour
     {
         if (showDebugLogs)
         {
-            Debug.Log("[HoldProgressIndicator] Hold Completed!");
+            ChunaLogger.Log("[HoldProgressIndicator] Hold Completed!");
         }
 
         isHoldCompleted = true;

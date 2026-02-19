@@ -5,7 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.Audio;
 using TMPro;
 
-public class SettingsPopupController : MonoBehaviour
+public class SettingsPopupController : BaseUIPanel
 {
     [Header("═══ 팝업 패널 ═══")]
     [SerializeField] private GameObject popupPanel;
@@ -39,6 +39,8 @@ public class SettingsPopupController : MonoBehaviour
     private CanvasGroup canvasGroup;
     private Resolution[] resolutions;
 
+    protected override GameObject GetPanelObject() => popupPanel;
+
     // 설정 값 저장
     private SettingsData currentSettings;
     private SettingsData tempSettings;
@@ -64,7 +66,7 @@ public class SettingsPopupController : MonoBehaviour
     void Awake()
     {
         // InfoPanelController 찾기 (선택적)
-        infoPanelController = FindObjectOfType<InfoPanelController>();
+        infoPanelController = FindFirstObjectByType<InfoPanelController>();
 
         canvasGroup = GetComponent<CanvasGroup>();
         if (canvasGroup == null)
@@ -94,7 +96,7 @@ public class SettingsPopupController : MonoBehaviour
             int currentResolutionIndex = 0;
             for (int i = 0; i < resolutions.Length; i++)
             {
-                string option = resolutions[i].width + " x " + resolutions[i].height + " @ " + resolutions[i].refreshRate + "Hz";
+                string option = resolutions[i].width + " x " + resolutions[i].height + " @ " + Mathf.RoundToInt((float)resolutions[i].refreshRateRatio.value) + "Hz";
                 options.Add(option);
                 
                 if (resolutions[i].width == Screen.currentResolution.width &&
@@ -262,7 +264,7 @@ public class SettingsPopupController : MonoBehaviour
         ApplyCurrentSettings();
         SaveSettings();
         
-        Debug.Log("설정이 적용되었습니다.");
+        ChunaLogger.Log("설정이 적용되었습니다.");
     }
     
     void ApplyCurrentSettings()
@@ -302,7 +304,7 @@ public class SettingsPopupController : MonoBehaviour
         ApplyCurrentSettings();
         SaveSettings();
         
-        Debug.Log("설정이 기본값으로 초기화되었습니다.");
+        ChunaLogger.Log("설정이 기본값으로 초기화되었습니다.");
     }
     
     void UpdateUIWithSettings()
@@ -322,16 +324,16 @@ public class SettingsPopupController : MonoBehaviour
     
     void SaveSettings()
     {
-        PlayerPrefs.SetFloat("MasterVolume", currentSettings.masterVolume);
-        PlayerPrefs.SetFloat("BGMVolume", currentSettings.bgmVolume);
-        PlayerPrefs.SetFloat("SFXVolume", currentSettings.sfxVolume);
-        PlayerPrefs.SetInt("QualityLevel", currentSettings.qualityLevel);
-        PlayerPrefs.SetInt("ResolutionIndex", currentSettings.resolutionIndex);
-        PlayerPrefs.SetInt("Fullscreen", currentSettings.fullscreen ? 1 : 0);
-        PlayerPrefs.SetInt("VSync", currentSettings.vsync ? 1 : 0);
-        PlayerPrefs.SetFloat("MouseSensitivity", currentSettings.mouseSensitivity);
-        PlayerPrefs.SetInt("InvertYAxis", currentSettings.invertYAxis ? 1 : 0);
-        PlayerPrefs.SetInt("ShowHints", currentSettings.showHints ? 1 : 0);
+        PlayerPrefs.SetFloat(PrefsKeys.MasterVolume, currentSettings.masterVolume);
+        PlayerPrefs.SetFloat(PrefsKeys.BGMVolume, currentSettings.bgmVolume);
+        PlayerPrefs.SetFloat(PrefsKeys.SFXVolume, currentSettings.sfxVolume);
+        PlayerPrefs.SetInt(PrefsKeys.QualityLevel, currentSettings.qualityLevel);
+        PlayerPrefs.SetInt(PrefsKeys.ResolutionIndex, currentSettings.resolutionIndex);
+        PlayerPrefs.SetInt(PrefsKeys.Fullscreen, currentSettings.fullscreen ? 1 : 0);
+        PlayerPrefs.SetInt(PrefsKeys.VSync, currentSettings.vsync ? 1 : 0);
+        PlayerPrefs.SetFloat(PrefsKeys.MouseSensitivity, currentSettings.mouseSensitivity);
+        PlayerPrefs.SetInt(PrefsKeys.InvertYAxis, currentSettings.invertYAxis ? 1 : 0);
+        PlayerPrefs.SetInt(PrefsKeys.ShowHints, currentSettings.showHints ? 1 : 0);
         PlayerPrefs.Save();
     }
     
@@ -339,16 +341,16 @@ public class SettingsPopupController : MonoBehaviour
     {
         currentSettings = new SettingsData();
         
-        currentSettings.masterVolume = PlayerPrefs.GetFloat("MasterVolume", 1f);
-        currentSettings.bgmVolume = PlayerPrefs.GetFloat("BGMVolume", 0.8f);
-        currentSettings.sfxVolume = PlayerPrefs.GetFloat("SFXVolume", 0.9f);
-        currentSettings.qualityLevel = PlayerPrefs.GetInt("QualityLevel", 2);
-        currentSettings.resolutionIndex = PlayerPrefs.GetInt("ResolutionIndex", 0);
-        currentSettings.fullscreen = PlayerPrefs.GetInt("Fullscreen", 1) == 1;
-        currentSettings.vsync = PlayerPrefs.GetInt("VSync", 1) == 1;
-        currentSettings.mouseSensitivity = PlayerPrefs.GetFloat("MouseSensitivity", 1f);
-        currentSettings.invertYAxis = PlayerPrefs.GetInt("InvertYAxis", 0) == 1;
-        currentSettings.showHints = PlayerPrefs.GetInt("ShowHints", 1) == 1;
+        currentSettings.masterVolume = PlayerPrefs.GetFloat(PrefsKeys.MasterVolume, 1f);
+        currentSettings.bgmVolume = PlayerPrefs.GetFloat(PrefsKeys.BGMVolume, 0.8f);
+        currentSettings.sfxVolume = PlayerPrefs.GetFloat(PrefsKeys.SFXVolume, 0.9f);
+        currentSettings.qualityLevel = PlayerPrefs.GetInt(PrefsKeys.QualityLevel, 2);
+        currentSettings.resolutionIndex = PlayerPrefs.GetInt(PrefsKeys.ResolutionIndex, 0);
+        currentSettings.fullscreen = PlayerPrefs.GetInt(PrefsKeys.Fullscreen, 1) == 1;
+        currentSettings.vsync = PlayerPrefs.GetInt(PrefsKeys.VSync, 1) == 1;
+        currentSettings.mouseSensitivity = PlayerPrefs.GetFloat(PrefsKeys.MouseSensitivity, 1f);
+        currentSettings.invertYAxis = PlayerPrefs.GetInt(PrefsKeys.InvertYAxis, 0) == 1;
+        currentSettings.showHints = PlayerPrefs.GetInt(PrefsKeys.ShowHints, 1) == 1;
         
         tempSettings = currentSettings;
     }
@@ -359,6 +361,7 @@ public class SettingsPopupController : MonoBehaviour
     {
         // 팝업 표시 (InfoPanelController가 팝업 상태를 직접 관리)
         gameObject.SetActive(true);
+        IsVisible = true;
         StartCoroutine(AnimateOpen());
     }
 
@@ -370,62 +373,37 @@ public class SettingsPopupController : MonoBehaviour
             infoPanelController.CloseSettingsPopup();
         }
 
+        IsVisible = false;
         StartCoroutine(AnimateClose());
     }
     
     IEnumerator AnimateOpen()
     {
-        if (popupPanel != null)
-        {
-            popupPanel.transform.localScale = new Vector3(0.8f, 0.8f, 1f);
-            canvasGroup.alpha = 0f;
-            
-            float duration = 0.2f;
-            float elapsed = 0f;
-            
-            while (elapsed < duration)
-            {
-                elapsed += Time.deltaTime;
-                float progress = elapsed / duration;
-                
-                popupPanel.transform.localScale = Vector3.Lerp(new Vector3(0.8f, 0.8f, 1f), Vector3.one, progress);
-                canvasGroup.alpha = progress;
-                
-                yield return null;
-            }
-            
-            popupPanel.transform.localScale = Vector3.one;
-            canvasGroup.alpha = 1f;
-        }
+        if (popupPanel == null) yield break;
+
+        StartCoroutine(FadeCanvasGroup(canvasGroup, 0f, 1f, 0.2f));
+        yield return ScaleAnimation(popupPanel.transform, new Vector3(0.8f, 0.8f, 1f), Vector3.one, 0.2f);
     }
-    
+
     IEnumerator AnimateClose()
     {
-        float duration = 0.15f;
-        float elapsed = 0f;
-        
-        while (elapsed < duration)
+        StartCoroutine(FadeCanvasGroup(canvasGroup, 1f, 0f, 0.15f));
+        if (popupPanel != null)
         {
-            elapsed += Time.deltaTime;
-            float progress = 1f - (elapsed / duration);
-            
-            if (popupPanel != null)
-            {
-                popupPanel.transform.localScale = Vector3.Lerp(new Vector3(0.9f, 0.9f, 1f), Vector3.one, progress);
-            }
-            
-            canvasGroup.alpha = progress;
-            
-            yield return null;
+            yield return ScaleAnimation(popupPanel.transform, Vector3.one, new Vector3(0.9f, 0.9f, 1f), 0.15f);
         }
-        
+        else
+        {
+            yield return FadeCanvasGroup(canvasGroup, 1f, 0f, 0.15f);
+        }
+
         gameObject.SetActive(false);
     }
     
     // 외부에서 설정값 접근
     public static SettingsData GetCurrentSettings()
     {
-        SettingsPopupController controller = FindObjectOfType<SettingsPopupController>();
+        SettingsPopupController controller = FindFirstObjectByType<SettingsPopupController>();
         if (controller != null)
         {
             return controller.currentSettings;

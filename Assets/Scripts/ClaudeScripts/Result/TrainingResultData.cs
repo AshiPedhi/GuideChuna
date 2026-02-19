@@ -229,7 +229,7 @@ public class TrainingResultData
     /// <summary>
     /// 종료 및 최종 통계 계산
     /// </summary>
-    public void Finalize()
+    public void FinalizeResult()
     {
         endTime = DateTime.Now;
         totalTime = (float)(endTime - startTime).TotalSeconds;

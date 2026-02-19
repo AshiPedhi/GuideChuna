@@ -18,7 +18,6 @@ public class ChunaMotionDataManager : MonoBehaviour
 
     [Header("=== 프리셋 관리 ===")]
     [SerializeField] private List<MotionPreset> motionPresets = new List<MotionPreset>();
-    [SerializeField] private int activePresetIndex = 0;
 
     [Header("=== 데이터 검증 설정 ===")]
     [SerializeField] private bool validateOnLoad = true;
@@ -34,7 +33,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         {
             if (instance == null)
             {
-                instance = FindObjectOfType<ChunaMotionDataManager>();
+                instance = FindFirstObjectByType<ChunaMotionDataManager>();
                 if (instance == null)
                 {
                     GameObject go = new GameObject("ChunaMotionDataManager");
@@ -140,7 +139,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         if (!Directory.Exists(fullPath))
         {
             Directory.CreateDirectory(fullPath);
-            Debug.Log($"<color=cyan>데이터 폴더 생성: {fullPath}</color>");
+            ChunaLogger.Log($"<color=cyan>데이터 폴더 생성: {fullPath}</color>");
         }
 
         // 샘플 데이터 생성
@@ -177,12 +176,12 @@ public class ChunaMotionDataManager : MonoBehaviour
         if (!Directory.Exists(path)) return;
 
         string[] csvFiles = Directory.GetFiles(path, "*.csv");
-        Debug.Log($"<color=yellow>{csvFiles.Length}개의 모션 데이터 파일 발견</color>");
+        ChunaLogger.Log($"<color=yellow>{csvFiles.Length}개의 모션 데이터 파일 발견</color>");
 
         foreach (string file in csvFiles)
         {
             string fileName = Path.GetFileNameWithoutExtension(file);
-            Debug.Log($"  - {fileName}");
+            ChunaLogger.Log($"  - {fileName}");
         }
     }
 
@@ -194,7 +193,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         // 캐시 확인
         if (loadedMotionData.ContainsKey(fileName))
         {
-            Debug.Log($"<color=green>캐시에서 로드: {fileName}</color>");
+            ChunaLogger.Log($"<color=green>캐시에서 로드: {fileName}</color>");
             return loadedMotionData[fileName];
         }
 
@@ -203,7 +202,7 @@ public class ChunaMotionDataManager : MonoBehaviour
 
         if (!File.Exists(fullPath))
         {
-            Debug.LogError($"파일을 찾을 수 없습니다: {fullPath}");
+            ChunaLogger.LogError($"파일을 찾을 수 없습니다: {fullPath}");
             return null;
         }
 
@@ -222,10 +221,10 @@ public class ChunaMotionDataManager : MonoBehaviour
 
                 if (!motionData.validation.isValid && !autoFixErrors)
                 {
-                    Debug.LogError($"데이터 검증 실패: {fileName}");
+                    ChunaLogger.LogError($"데이터 검증 실패: {fileName}");
                     foreach (var error in motionData.validation.errors)
                     {
-                        Debug.LogError($"  - {error}");
+                        ChunaLogger.LogError($"  - {error}");
                     }
                     return null;
                 }
@@ -239,13 +238,13 @@ public class ChunaMotionDataManager : MonoBehaviour
             // 캐시에 저장
             loadedMotionData[fileName] = motionData;
 
-            Debug.Log($"<color=green>로드 완료: {fileName} (프레임: {motionData.totalFrames}, 시간: {motionData.totalDuration:F2}초)</color>");
+            ChunaLogger.Log($"<color=green>로드 완료: {fileName} (프레임: {motionData.totalFrames}, 시간: {motionData.totalDuration:F2}초)</color>");
 
             return motionData;
         }
         catch (Exception e)
         {
-            Debug.LogError($"파일 로드 실패: {fileName}\n{e.Message}");
+            ChunaLogger.LogError($"파일 로드 실패: {fileName}\n{e.Message}");
             return null;
         }
     }
@@ -450,7 +449,7 @@ public class ChunaMotionDataManager : MonoBehaviour
     /// </summary>
     private MotionData FixMotionDataErrors(MotionData data)
     {
-        Debug.Log($"<color=yellow>데이터 자동 수정 시작: {data.fileName}</color>");
+        ChunaLogger.Log($"<color=yellow>데이터 자동 수정 시작: {data.fileName}</color>");
 
         // 타임스탬프 정렬
         data.frames = data.frames.OrderBy(f => f.frameIndex).ToList();
@@ -462,7 +461,7 @@ public class ChunaMotionDataManager : MonoBehaviour
             if (frame.timestamp < lastValidTime)
             {
                 frame.timestamp = lastValidTime + 0.1f;
-                Debug.Log($"  타임스탬프 수정: 프레임 {frame.frameIndex}");
+                ChunaLogger.Log($"  타임스탬프 수정: 프레임 {frame.frameIndex}");
             }
             lastValidTime = frame.timestamp;
         }
@@ -477,7 +476,7 @@ public class ChunaMotionDataManager : MonoBehaviour
                     if (joint.localPosition.magnitude > maxPositionValue)
                     {
                         joint.localPosition = joint.localPosition.normalized * maxPositionValue;
-                        Debug.Log($"  위치값 클램핑: 프레임 {frame.frameIndex}, 조인트 {joint.jointId}");
+                        ChunaLogger.Log($"  위치값 클램핑: 프레임 {frame.frameIndex}, 조인트 {joint.jointId}");
                     }
 
                     // 회전값 정규화
@@ -489,7 +488,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         // 재검증
         ValidateMotionData(data);
 
-        Debug.Log($"<color=yellow>데이터 자동 수정 완료</color>");
+        ChunaLogger.Log($"<color=yellow>데이터 자동 수정 완료</color>");
 
         return data;
     }
@@ -501,14 +500,14 @@ public class ChunaMotionDataManager : MonoBehaviour
     {
         if (presetIndex < 0 || presetIndex >= motionPresets.Count)
         {
-            Debug.LogError($"잘못된 프리셋 인덱스: {presetIndex}");
+            ChunaLogger.LogError($"잘못된 프리셋 인덱스: {presetIndex}");
             return null;
         }
 
         var preset = motionPresets[presetIndex];
         List<MotionData> presetData = new List<MotionData>();
 
-        Debug.Log($"<color=cyan>프리셋 로드 시작: {preset.presetName}</color>");
+        ChunaLogger.Log($"<color=cyan>프리셋 로드 시작: {preset.presetName}</color>");
 
         foreach (var step in preset.steps)
         {
@@ -519,12 +518,12 @@ public class ChunaMotionDataManager : MonoBehaviour
             }
             else if (!step.isOptional)
             {
-                Debug.LogError($"필수 스텝 로드 실패: {step.stepName}");
+                ChunaLogger.LogError($"필수 스텝 로드 실패: {step.stepName}");
                 return null;
             }
         }
 
-        Debug.Log($"<color=green>프리셋 로드 완료: {presetData.Count}개 스텝</color>");
+        ChunaLogger.Log($"<color=green>프리셋 로드 완료: {presetData.Count}개 스텝</color>");
 
         return presetData;
     }
@@ -548,7 +547,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         CreateSampleFile(Path.Combine(path, "Sample_ComplexMotion.csv"),
             GenerateSampleComplexMotion());
 
-        Debug.Log("<color=green>샘플 데이터 파일 생성 완료</color>");
+        ChunaLogger.Log("<color=green>샘플 데이터 파일 생성 완료</color>");
     }
 
     private void CreateSampleFile(string path, string content)
@@ -556,11 +555,11 @@ public class ChunaMotionDataManager : MonoBehaviour
         try
         {
             File.WriteAllText(path, content);
-            Debug.Log($"  생성: {Path.GetFileName(path)}");
+            ChunaLogger.Log($"  생성: {Path.GetFileName(path)}");
         }
         catch (Exception e)
         {
-            Debug.LogError($"파일 생성 실패: {path}\n{e.Message}");
+            ChunaLogger.LogError($"파일 생성 실패: {path}\n{e.Message}");
         }
     }
 
@@ -650,7 +649,7 @@ public class ChunaMotionDataManager : MonoBehaviour
     public void ClearCache()
     {
         loadedMotionData.Clear();
-        Debug.Log("모션 데이터 캐시 클리어됨");
+        ChunaLogger.Log("모션 데이터 캐시 클리어됨");
     }
 
     /// <summary>
@@ -661,7 +660,7 @@ public class ChunaMotionDataManager : MonoBehaviour
         if (loadedMotionData.ContainsKey(fileName))
         {
             loadedMotionData.Remove(fileName);
-            Debug.Log($"캐시에서 제거: {fileName}");
+            ChunaLogger.Log($"캐시에서 제거: {fileName}");
         }
     }
 
