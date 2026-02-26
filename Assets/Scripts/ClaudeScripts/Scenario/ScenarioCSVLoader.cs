@@ -7,7 +7,7 @@ using System.Text;
 /// CSV 파일에서 시나리오 데이터를 로드하는 클래스
 ///
 /// [CSV 구조]
-/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget
+/// scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
 ///
 /// [수정 내역]
 /// - RFC 4180 표준 CSV 파싱 (큰따옴표 안의 줄바꿈 처리) ✅
@@ -253,6 +253,27 @@ public class ScenarioCSVLoader : MonoBehaviour
                     contactTarget = values[16].Trim();
                 }
 
+                // pivotTarget (18번째 컬럼, 선택사항) - Neck/LeftShoulder/RightShoulder
+                string pivotTarget = "";
+                if (values.Count >= 18 && !string.IsNullOrEmpty(values[17]))
+                {
+                    pivotTarget = values[17].Trim();
+                }
+
+                // pivotPlaneAxis (19번째 컬럼, 선택사항) - X/Y/Z
+                string pivotPlaneAxis = "";
+                if (values.Count >= 19 && !string.IsNullOrEmpty(values[18]))
+                {
+                    pivotPlaneAxis = values[18].Trim();
+                }
+
+                // invertAngle (20번째 컬럼, 선택사항) - true/false
+                string invertAngle = "";
+                if (values.Count >= 20 && !string.IsNullOrEmpty(values[19]))
+                {
+                    invertAngle = values[19].Trim();
+                }
+
                 // 조건 타입 자동 결정
                 if (string.IsNullOrEmpty(conditionType))
                 {
@@ -330,7 +351,10 @@ public class ScenarioCSVLoader : MonoBehaviour
                     movementType = movementType,
                     videoStartTime = videoStartTime,
                     videoEndTime = videoEndTime,
-                    contactTarget = contactTarget
+                    contactTarget = contactTarget,
+                    pivotTarget = pivotTarget,
+                    pivotPlaneAxis = pivotPlaneAxis,
+                    invertAngle = invertAngle
                 };
 
                 currentStep.subSteps.Add(subStep);

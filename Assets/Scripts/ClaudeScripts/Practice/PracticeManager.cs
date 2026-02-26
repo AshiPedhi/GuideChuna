@@ -188,6 +188,12 @@ public class PracticeManager : MonoBehaviour
         // ★ 모든 토글 초기 비활성화 (메인메뉴 제외)
         DisableAllTogglesExceptMainMenuAndDifficulty();
 
+        // ★ InfoPanel 토글 리스너 제거 (이중 리스너 간섭 방지)
+        if (infoPanelController == null)
+            infoPanelController = FindFirstObjectByType<InfoPanelController>();
+        if (infoPanelController != null)
+            infoPanelController.DisableToggleListeners();
+
         // 토글 이벤트 리스너 설정
         SetupAllToggleListeners();
 
@@ -689,7 +695,7 @@ public class PracticeManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 단일 토글의 시각적 상태 업데이트 (Animator + ColorBlock)
+    /// 단일 토글의 시각적 상태 업데이트 (Selectable 트리거 + ColorBlock)
     /// </summary>
     private void UpdateSingleToggleVisual(ToggleHighlightPair pair, bool isOn)
     {
@@ -697,25 +703,81 @@ public class PracticeManager : MonoBehaviour
 
         pair.toggle.SetIsOnWithoutNotify(isOn);
 
-        // Animator 업데이트
-        var animator = pair.toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled)
+        // Animation 전환 방식: Selectable 트리거로 제어
+        if (pair.toggle.transition == Selectable.Transition.Animation)
         {
-            animator.SetBool("IsOn", isOn);
+            SyncSelectableAnimationTrigger(pair.toggle, isOn);
+            return;
         }
 
-        // ColorBlock 업데이트
+        // ColorBlock 기반 토글만 직접 색상 설정
         if (pair.toggle.targetGraphic != null)
         {
             var colors = pair.toggle.colors;
-            pair.toggle.targetGraphic.color = isOn ? colors.normalColor : colors.disabledColor;
+            pair.toggle.targetGraphic.color = isOn ? colors.normalColor : colors.normalColor * 0.6f;
         }
+    }
+
+    /// <summary>
+    /// Animation 전환 토글의 Animator 상태 동기화.
+    /// Selected Layer weight를 직접 설정하고, Selected Layer의 상태를 "Normal"로 강제.
+    /// interactable=false 시 "Disabled" 트리거가 양쪽 레이어에 발동되어
+    /// Selected Layer가 "SelectedDisabled" 상태가 되는 문제를 방지.
+    /// </summary>
+    private void SyncSelectableAnimationTrigger(Toggle toggle, bool isOn)
+    {
+        if (toggle == null) return;
+
+        var animator = toggle.GetComponent<Animator>();
+        if (animator == null || !animator.isActiveAndEnabled) return;
+
+        // Selected Layer(index 1) weight 직접 설정
+        if (animator.layerCount > 1)
+        {
+            animator.SetLayerWeight(1, isOn ? 1f : 0f);
+        }
+    }
+
+    // 대기 중인 애니메이션 상태 재적용 코루틴
+    private Coroutine pendingAnimStateReapply;
+
+    /// <summary>
+    /// interactable 변경 후 1프레임 지연하여 Selected Layer 상태를 재적용.
+    /// Animator가 "Disabled" 트리거를 처리한 후 Selected Layer를 "Normal"로 복원.
+    /// </summary>
+    private void ScheduleAnimationStateReapply()
+    {
+        if (pendingAnimStateReapply != null)
+            StopCoroutine(pendingAnimStateReapply);
+        pendingAnimStateReapply = StartCoroutine(ReapplyAnimationStatesNextFrame());
+    }
+
+    private IEnumerator ReapplyAnimationStatesNextFrame()
+    {
+        yield return null; // Animator가 트리거 처리할 때까지 대기
+
+        foreach (var pair in allToggles)
+        {
+            if (pair.toggle == null) continue;
+            if (pair.toggle.transition != Selectable.Transition.Animation) continue;
+
+            var animator = pair.toggle.GetComponent<Animator>();
+            if (animator == null || !animator.isActiveAndEnabled) continue;
+            if (animator.layerCount <= 1) continue;
+
+            // Selected Layer를 "Normal" 상태로 강제 (SelectedNormal 애니메이션)
+            // "Disabled" 트리거로 인한 "SelectedDisabled" 상태를 덮어씀
+            animator.Play("Normal", 1, 0f);
+        }
+
+        pendingAnimStateReapply = null;
     }
 
     #region 토글 Interactable 제어
 
     /// <summary>
     /// 모든 토글 비활성화 (메인메뉴, 난이도 토글 제외)
+    /// interactable=false로 인한 "Disabled" 트리거 후 Selected Layer 상태를 재적용
     /// </summary>
     private void DisableAllTogglesExceptMainMenuAndDifficulty()
     {
@@ -728,6 +790,10 @@ public class PracticeManager : MonoBehaviour
                 pair.toggle.interactable = isMainMenu || isDifficulty;
             }
         }
+
+        // interactable 변경 → Disabled 트리거 → Selected Layer 상태 오염
+        // 1프레임 후 Selected Layer를 "Normal"로 복원
+        ScheduleAnimationStateReapply();
     }
 
     /// <summary>
@@ -777,6 +843,13 @@ public class PracticeManager : MonoBehaviour
         {
             scenarioManager.enabled = false;
             if (showDebugLogs) ChunaLogger.Log("[Practice] ScenarioManager disabled");
+        }
+
+        var guideUIController = FindFirstObjectByType<ScenarioGuideUIController>();
+        if (guideUIController != null)
+        {
+            guideUIController.enabled = false;
+            if (showDebugLogs) ChunaLogger.Log("[Practice] ScenarioGuideUIController disabled");
         }
 
         var conditionManager = FindFirstObjectByType<ScenarioConditionManager>();

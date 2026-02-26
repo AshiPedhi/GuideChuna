@@ -54,6 +54,16 @@ public class SubStepData
     [Tooltip("환자 접촉 감지 부위: Head, HeadAndShoulder, Chest (비어있으면 HeadAndShoulder)")]
     public string contactTarget;
 
+    [Header("피벗 설정 (시나리오별 회전 중심)")]
+    [Tooltip("피벗 부위: Neck, LeftShoulder, RightShoulder (비어있으면 Neck)")]
+    public string pivotTarget;
+
+    [Tooltip("각도 측정 평면 축: Z=측굴, Y=회전, X=굴신 (비어있으면 기본값 유지)")]
+    public string pivotPlaneAxis;
+
+    [Tooltip("각도 반전 여부: true/false (비어있으면 false)")]
+    public string invertAngle;
+
     /// <summary>
     /// 접촉 감지 부위 Enum으로 변환 (기본값: HeadAndShoulder)
     /// </summary>
@@ -72,6 +82,43 @@ public class SubStepData
             default:
                 return ContactTarget.HeadAndShoulder;
         }
+    }
+
+    /// <summary>
+    /// 피벗 설정이 있는지 확인
+    /// </summary>
+    public bool HasPivotTarget() => !string.IsNullOrEmpty(pivotTarget);
+
+    /// <summary>
+    /// 피벗 평면 축을 RotationDetectionAxis로 변환 (기본값: 변경 없음을 의미하는 null 반환)
+    /// </summary>
+    public ChunaPathEvaluator.RotationDetectionAxis? GetPivotPlaneAxis()
+    {
+        if (string.IsNullOrEmpty(pivotPlaneAxis))
+            return null;
+
+        switch (pivotPlaneAxis.Trim().ToUpper())
+        {
+            case "X":
+                return ChunaPathEvaluator.RotationDetectionAxis.X;
+            case "Y":
+                return ChunaPathEvaluator.RotationDetectionAxis.Y;
+            case "Z":
+                return ChunaPathEvaluator.RotationDetectionAxis.Z;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// 각도 반전 여부 (기본값: false)
+    /// </summary>
+    public bool GetInvertAngle()
+    {
+        if (string.IsNullOrEmpty(invertAngle))
+            return false;
+
+        return invertAngle.Trim().ToLower() == "true";
     }
 
     /// <summary>

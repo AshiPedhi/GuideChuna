@@ -104,6 +104,12 @@ public class InfoPanelController : MonoBehaviour
 
     [Tooltip("시나리오 진행 UI (가이드패널)")]
     [SerializeField] private GameObject scenarioProgressUI;
+
+    [Tooltip("환자 위치 프리셋 관리자 (없으면 자동 검색)")]
+    [SerializeField] private PatientPositionManager patientPositionManager;
+
+    [Tooltip("시나리오 시작 시 적용할 기본 프리셋 이름")]
+    [SerializeField] private string defaultPositionPreset = "Seated";
     #endregion
 
     #region 토글 컬러 설정
@@ -171,6 +177,9 @@ public class InfoPanelController : MonoBehaviour
 
         if (practiceSettingsController == null)
             practiceSettingsController = FindFirstObjectByType<PracticeSettingsController>();
+
+        if (patientPositionManager == null)
+            patientPositionManager = FindFirstObjectByType<PatientPositionManager>();
     }
 
     void Start()
@@ -449,13 +458,11 @@ public class InfoPanelController : MonoBehaviour
 
     private void UpdateModeSelectionColors()
     {
-        if (!useCustomColors) return;
-
-        // 모드 토글 색상
+        // 모드 토글 (Animator + Color 모두 처리)
         UpdateToggleColor(practiceToggle, null, selectedMode == ModeType.Practice);
         UpdateToggleColor(evaluationToggle, null, selectedMode == ModeType.Evaluation);
 
-        // 난이도 토글 색상
+        // 난이도 토글
         UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyLevel.Beginner);
         UpdateToggleColor(intermediateToggle, null, selectedDifficulty == DifficultyLevel.Intermediate);
         UpdateToggleColor(advancedToggle, null, selectedDifficulty == DifficultyLevel.Advanced);
@@ -794,7 +801,7 @@ public class InfoPanelController : MonoBehaviour
         var uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
         if (uiPositioner != null)
         {
-            uiPositioner.RepositionUI();
+            uiPositioner.PositionUIElements();
             if (showDebugLogs)
                 ChunaLogger.Log("[InfoPanel] ScenarioUIPositioner로 UI 위치 초기화");
         }
@@ -804,70 +811,28 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
-    /// 환자 위치를 헤드셋 기준으로 초기화
+    /// 환자 위치를 프리셋으로 초기화 (PatientPositionManager에 위임)
     /// </summary>
     private void InitializePatientPosition()
     {
-        // 헤드셋 Transform 찾기
-        Transform headsetTransform = null;
-        GameObject ovrCameraRig = GameObject.Find("OVRCameraRig");
-        if (ovrCameraRig != null)
+        if (patientPositionManager != null)
         {
-            headsetTransform = ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
+            string presetName = defaultPositionPreset;
+            if (patientPositionManager.ApplyPreset(presetName))
+            {
+                if (showDebugLogs)
+                    ChunaLogger.Log($"[InfoPanel] 환자 위치 프리셋 적용: {presetName}");
+            }
+            else
+            {
+                ChunaLogger.LogWarning($"[InfoPanel] 환자 위치 프리셋 적용 실패: {presetName}");
+            }
         }
-
-        if (headsetTransform == null) return;
-
-        // 환자 오브젝트 찾기 (태그 또는 이름으로)
-        GameObject patient = GameObject.FindWithTag("Patient");
-        if (patient == null)
-        {
-            patient = GameObject.Find("Patient");
-        }
-
-        if (patient == null)
+        else
         {
             if (showDebugLogs)
-                ChunaLogger.Log("[InfoPanel] 환자 오브젝트를 찾을 수 없어 위치 초기화 건너뜀");
-            return;
+                ChunaLogger.Log("[InfoPanel] PatientPositionManager가 없어 환자 위치 초기화 건너뜀");
         }
-
-        Vector3 headsetPos = headsetTransform.position;
-        Vector3 headsetForward = headsetTransform.forward;
-        headsetForward.y = 0;
-        headsetForward.Normalize();
-
-        // 환자를 헤드셋 전방 1m, 헤드셋 높이보다 0.5m 아래에 배치
-        float patientForwardDistance = 1.0f;
-        float patientHeightOffset = -0.5f;
-
-        Vector3 patientNewPos = new Vector3(
-            headsetPos.x + headsetForward.x * patientForwardDistance,
-            headsetPos.y + patientHeightOffset,
-            headsetPos.z + headsetForward.z * patientForwardDistance
-        );
-
-        // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
-        Transform targetTransform = patient.transform;
-        if (patient.transform.parent != null)
-        {
-            targetTransform = patient.transform.parent;
-            if (showDebugLogs)
-                ChunaLogger.Log($"[InfoPanel] 부모 오브젝트 사용: {targetTransform.name}");
-        }
-
-        targetTransform.position = patientNewPos;
-
-        // ★ 환자가 헤드셋 반대 방향을 바라보도록 (등을 보여주도록)
-        Vector3 lookDir = patientNewPos - headsetPos;  // 헤드셋에서 멀어지는 방향
-        lookDir.y = 0;
-        if (lookDir.sqrMagnitude > 0.001f)
-        {
-            targetTransform.rotation = Quaternion.LookRotation(lookDir);
-        }
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"[InfoPanel] 환자 위치 초기화: {patientNewPos} (대상: {targetTransform.name})");
     }
 
     private void OnScenarioCompleted(ScenarioData scenario)
@@ -894,8 +859,6 @@ public class InfoPanelController : MonoBehaviour
     #region 토글 컬러
     private void UpdateAllToggleColors()
     {
-        if (!useCustomColors) return;
-
         // 콘텐츠 토글
         UpdateToggleColor(skeletonToggle, skeletonIcon, IsToggleOn(skeletonToggle));
         UpdateToggleColor(expertVideoToggle, expertVideoIcon, IsToggleOn(expertVideoToggle));
@@ -913,15 +876,22 @@ public class InfoPanelController : MonoBehaviour
     {
         if (toggle == null) return;
 
-        // Animation 기반 토글인 경우 Animator로 상태 변경
-        var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
+        // Animation 전환 방식: Selectable 트리거로 제어 (색상 직접 설정 스킵)
+        if (toggle.transition == Selectable.Transition.Animation)
         {
-            animator.SetBool("IsOn", isActive);
+            SyncSelectableAnimationTrigger(toggle, isActive);
+
+            // 아이콘만 별도 업데이트 (아이콘은 Animator 제어 대상 아님)
+            if (useCustomColors && icon != null)
+            {
+                icon.color = isActive ? activeColor : inactiveColor;
+            }
+            return;
         }
-        else
+
+        // ColorBlock 기반 토글은 useCustomColors가 true일 때만
+        if (useCustomColors)
         {
-            // ★ 색상 계산 시 값이 1을 초과하지 않도록 Clamp 적용
             Color baseColor = isActive ? activeColor : inactiveColor;
             Color highlightColor = new Color(
                 Mathf.Min(baseColor.r * 1.1f, 1f),
@@ -936,7 +906,6 @@ public class InfoPanelController : MonoBehaviour
                 baseColor.a
             );
 
-            // Color Tint 기반 토글인 경우
             ColorBlock colors = toggle.colors;
             colors.normalColor = baseColor;
             colors.highlightedColor = highlightColor;
@@ -944,22 +913,41 @@ public class InfoPanelController : MonoBehaviour
             colors.selectedColor = baseColor;
             toggle.colors = colors;
 
-            // ★ targetGraphic 직접 색상 설정 (CrossFadeColor 대신 즉시 적용)
             if (toggle.targetGraphic != null)
             {
                 toggle.targetGraphic.color = baseColor;
             }
-        }
 
-        // 아이콘 색상도 즉시 적용
-        if (icon != null)
-        {
-            icon.color = isActive ? activeColor : inactiveColor;
+            // 아이콘 색상
+            if (icon != null)
+            {
+                icon.color = isActive ? activeColor : inactiveColor;
+            }
         }
     }
     #endregion
 
     #region Public API
+    /// <summary>
+    /// 토글 onValueChanged 리스너 모두 제거 (PracticeManager 간섭 방지용)
+    /// PracticeManager가 활성화될 때 호출
+    /// </summary>
+    public void DisableToggleListeners()
+    {
+        // 콘텐츠 토글 리스너 제거 (애니메이션 간섭 방지)
+        if (skeletonToggle != null) skeletonToggle.onValueChanged.RemoveAllListeners();
+        if (expertVideoToggle != null) expertVideoToggle.onValueChanged.RemoveAllListeners();
+        if (resultToggle != null) resultToggle.onValueChanged.RemoveAllListeners();
+        // ★ settingsToggle, mainMenuToggle: 리스너 유지 (팝업 열기/닫기 기능 필요)
+        // 모드 선택 토글 리스너 제거
+        if (practiceToggle != null) practiceToggle.onValueChanged.RemoveAllListeners();
+        if (evaluationToggle != null) evaluationToggle.onValueChanged.RemoveAllListeners();
+        if (beginnerToggle != null) beginnerToggle.onValueChanged.RemoveAllListeners();
+        if (intermediateToggle != null) intermediateToggle.onValueChanged.RemoveAllListeners();
+        if (advancedToggle != null) advancedToggle.onValueChanged.RemoveAllListeners();
+        ChunaLogger.Log("[InfoPanel] 콘텐츠/모드 토글 리스너 제거됨 (PracticeManager 모드)");
+    }
+
     public void CloseAllPopups()
     {
         CloseSettingsPopupInternal();
@@ -1046,14 +1034,10 @@ public class InfoPanelController : MonoBehaviour
         {
             // 토글 상태를 다시 ON으로 강제 설정
             skeletonToggle.SetIsOnWithoutNotify(true);
+            SyncSelectableAnimationTrigger(skeletonToggle, true);
 
-            var animator = skeletonToggle.GetComponent<Animator>();
-            if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
-            {
-                animator.SetBool("IsOn", true);
-                if (showDebugLogs)
-                    ChunaLogger.Log("[InfoPanel] 골격 토글 Animator 재적용: IsOn=true (강제)");
-            }
+            if (showDebugLogs)
+                ChunaLogger.Log("[InfoPanel] 골격 토글 Animator 재적용: Selected 트리거 (강제)");
         }
 
         // 다른 콘텐츠 토글은 OFF
@@ -1071,12 +1055,7 @@ public class InfoPanelController : MonoBehaviour
         if (toggle == null) return;
 
         toggle.SetIsOnWithoutNotify(false);
-
-        var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
-        {
-            animator.SetBool("IsOn", false);
-        }
+        SyncSelectableAnimationTrigger(toggle, false);
     }
 
     /// <summary>
@@ -1085,12 +1064,7 @@ public class InfoPanelController : MonoBehaviour
     private void ReapplyToggleAnimatorState(Toggle toggle)
     {
         if (toggle == null) return;
-
-        var animator = toggle.GetComponent<Animator>();
-        if (animator != null && animator.isActiveAndEnabled && HasAnimatorParameter(animator, "IsOn"))
-        {
-            animator.SetBool("IsOn", toggle.isOn);
-        }
+        SyncSelectableAnimationTrigger(toggle, toggle.isOn);
     }
 
     /// <summary>
@@ -1188,53 +1162,31 @@ public class InfoPanelController : MonoBehaviour
 
         toggle.SetIsOnWithoutNotify(value);
 
-        // Animation 기반 토글의 경우 Animator 상태 수동 업데이트
-        var animator = toggle.GetComponent<Animator>();
-        if (animator != null && HasAnimatorParameter(animator, "IsOn"))
-        {
-            // ★ Animator가 활성화 상태이면 즉시 적용
-            if (animator.isActiveAndEnabled)
-            {
-                animator.SetBool("IsOn", value);
-            }
-            else
-            {
-                // ★ Animator가 비활성화 상태이면 활성화 후 적용 시도
-                // (GameObject가 비활성화 상태면 코루틴으로 지연 적용)
-                StartCoroutine(ApplyAnimatorStateDelayed(animator, value));
-            }
-        }
+        // ★ Animation 전환 토글: Selectable 트리거 동기화
+        // (SetIsOnWithoutNotify는 DoStateTransition을 호출하지 않으므로 수동 트리거 필요)
+        SyncSelectableAnimationTrigger(toggle, value);
     }
 
     /// <summary>
-    /// Animator가 활성화될 때까지 대기 후 상태 적용
+    /// Animation 전환 토글의 Animator 상태 동기화.
+    /// Meta SDK 토글은 AnimatorOverrideLayerWeigth가 onValueChanged를 통해
+    /// Selected Layer weight를 제어하지만, SetIsOnWithoutNotify()는 onValueChanged를
+    /// 발동하지 않고, DisableToggleListeners()로 리스너가 제거될 수 있으므로
+    /// layer weight를 직접 설정해야 함.
     /// </summary>
-    private IEnumerator ApplyAnimatorStateDelayed(Animator animator, bool value)
+    private void SyncSelectableAnimationTrigger(Toggle toggle, bool isOn)
     {
-        // 최대 5프레임 대기
-        int maxWaitFrames = 5;
-        int waitedFrames = 0;
+        if (toggle == null) return;
 
-        while (waitedFrames < maxWaitFrames)
+        var animator = toggle.GetComponent<Animator>();
+        if (animator == null || !animator.isActiveAndEnabled) return;
+
+        // Selected Layer(index 1) weight 직접 설정
+        // (AnimatorOverrideLayerWeigth.SetOverrideLayerActive 대체)
+        if (animator.layerCount > 1)
         {
-            yield return null;
-            waitedFrames++;
-
-            if (animator != null && animator.isActiveAndEnabled)
-            {
-                animator.SetBool("IsOn", value);
-                yield break;
-            }
+            animator.SetLayerWeight(1, isOn ? 1f : 0f);
         }
-    }
-
-    private bool HasAnimatorParameter(Animator animator, string paramName)
-    {
-        foreach (var param in animator.parameters)
-        {
-            if (param.name == paramName) return true;
-        }
-        return false;
     }
 
     private bool IsToggleOn(Toggle toggle)

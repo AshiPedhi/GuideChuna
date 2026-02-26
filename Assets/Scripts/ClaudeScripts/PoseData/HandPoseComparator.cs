@@ -255,11 +255,38 @@ public class HandPoseComparator
 
         if (settings.compareHandPosition)
         {
+            // Palm Center 계산 (실패 시 wrist/OpenXRRoot 기반으로 fallback)
+            Vector3 playerPalmPos;
+            Quaternion playerPalmRot;
+            Vector3 guidePalmPos;
+            Quaternion guidePalmRot;
+
+            if (!ComputePalmCenter(playerLeftHand, out playerPalmPos))
+            {
+                Transform fb = leftOpenXRRoot;
+                if (fb == null && playerLeftHand.Joints != null && playerLeftHand.Joints.Count > 0)
+                    fb = playerLeftHand.Joints[(int)HandJointId.HandWristRoot];
+                playerPalmPos = fb != null ? fb.position : Vector3.zero;
+            }
+            if (!ComputePalmRotation(playerLeftHand, out playerPalmRot))
+            {
+                Transform fb = leftOpenXRRoot;
+                if (fb == null && playerLeftHand.Joints != null && playerLeftHand.Joints.Count > 0)
+                    fb = playerLeftHand.Joints[(int)HandJointId.HandWristRoot];
+                playerPalmRot = fb != null ? fb.rotation : Quaternion.identity;
+            }
+            if (!ComputePalmCenterFromFrame(guideFrame.leftLocalPoses, guideFrame.leftRootPosition, guideFrame.leftRootRotation, out guidePalmPos))
+            {
+                guidePalmPos = guideFrame.leftRootPosition;
+            }
+            if (!ComputePalmRotationFromFrame(guideFrame.leftLocalPoses, guideFrame.leftRootPosition, guideFrame.leftRootRotation, out guidePalmRot))
+            {
+                guidePalmRot = guideFrame.leftRootRotation;
+            }
+
             CompareHandWorldPosition(
-                playerLeftHand,
-                guideFrame.leftRootPosition,
-                guideFrame.leftRootRotation,
-                leftOpenXRRoot,
+                playerPalmPos, playerPalmRot,
+                guidePalmPos, guidePalmRot,
                 out result.leftHandPositionError,
                 out result.leftHandRotationError,
                 out positionPassed,
@@ -393,11 +420,38 @@ public class HandPoseComparator
 
         if (settings.compareHandPosition)
         {
+            // Palm Center 계산 (실패 시 wrist/OpenXRRoot 기반으로 fallback)
+            Vector3 playerPalmPos;
+            Quaternion playerPalmRot;
+            Vector3 guidePalmPos;
+            Quaternion guidePalmRot;
+
+            if (!ComputePalmCenter(playerRightHand, out playerPalmPos))
+            {
+                Transform fb = rightOpenXRRoot;
+                if (fb == null && playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+                    fb = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+                playerPalmPos = fb != null ? fb.position : Vector3.zero;
+            }
+            if (!ComputePalmRotation(playerRightHand, out playerPalmRot))
+            {
+                Transform fb = rightOpenXRRoot;
+                if (fb == null && playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+                    fb = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+                playerPalmRot = fb != null ? fb.rotation : Quaternion.identity;
+            }
+            if (!ComputePalmCenterFromFrame(guideFrame.rightLocalPoses, guideFrame.rightRootPosition, guideFrame.rightRootRotation, out guidePalmPos))
+            {
+                guidePalmPos = guideFrame.rightRootPosition;
+            }
+            if (!ComputePalmRotationFromFrame(guideFrame.rightLocalPoses, guideFrame.rightRootPosition, guideFrame.rightRootRotation, out guidePalmRot))
+            {
+                guidePalmRot = guideFrame.rightRootRotation;
+            }
+
             CompareHandWorldPosition(
-                playerRightHand,
-                guideFrame.rightRootPosition,
-                guideFrame.rightRootRotation,
-                rightOpenXRRoot,
+                playerPalmPos, playerPalmRot,
+                guidePalmPos, guidePalmRot,
                 out result.rightHandPositionError,
                 out result.rightHandRotationError,
                 out positionPassed,
@@ -631,14 +685,164 @@ public class HandPoseComparator
         return settings.rotationThreshold;
     }
 
+    // ========== Palm Center 계산 헬퍼 ==========
+
     /// <summary>
-    /// 손 전체 위치/회전 비교 (월드 좌표) - 유사도 반환
+    /// 플레이어 손에서 Palm Center 계산 (Index1, Middle1, Ring1 평균)
+    /// 실패 시 false 반환 → 호출부에서 wrist 기반으로 fallback
+    /// </summary>
+    private bool ComputePalmCenter(HandVisual hand, out Vector3 palmCenter)
+    {
+        palmCenter = Vector3.zero;
+
+        if (hand == null || hand.Joints == null || hand.Joints.Count == 0)
+            return false;
+
+        int index1 = (int)HandJointId.HandIndex1;    // 6
+        int middle1 = (int)HandJointId.HandMiddle1;   // 9
+        int ring1 = (int)HandJointId.HandRing1;       // 12
+
+        if (index1 >= hand.Joints.Count || middle1 >= hand.Joints.Count || ring1 >= hand.Joints.Count)
+            return false;
+
+        Transform index1T = hand.Joints[index1];
+        Transform middle1T = hand.Joints[middle1];
+        Transform ring1T = hand.Joints[ring1];
+
+        if (index1T == null || middle1T == null || ring1T == null)
+            return false;
+
+        palmCenter = (index1T.position + middle1T.position + ring1T.position) / 3f;
+        return true;
+    }
+
+    /// <summary>
+    /// 플레이어 손에서 Palm Rotation 계산 (기하학적 평면)
+    /// forward = 손목→중지, right = 검지→약지, up = cross(forward, right)
+    /// 실패 시 false 반환 → 호출부에서 wrist 기반으로 fallback
+    /// </summary>
+    private bool ComputePalmRotation(HandVisual hand, out Quaternion palmRotation)
+    {
+        palmRotation = Quaternion.identity;
+
+        if (hand == null || hand.Joints == null || hand.Joints.Count == 0)
+            return false;
+
+        int wristIdx = (int)HandJointId.HandWristRoot;  // 0
+        int index1 = (int)HandJointId.HandIndex1;        // 6
+        int middle1 = (int)HandJointId.HandMiddle1;       // 9
+        int ring1 = (int)HandJointId.HandRing1;           // 12
+
+        if (wristIdx >= hand.Joints.Count || index1 >= hand.Joints.Count ||
+            middle1 >= hand.Joints.Count || ring1 >= hand.Joints.Count)
+            return false;
+
+        Transform wristT = hand.Joints[wristIdx];
+        Transform index1T = hand.Joints[index1];
+        Transform middle1T = hand.Joints[middle1];
+        Transform ring1T = hand.Joints[ring1];
+
+        if (wristT == null || index1T == null || middle1T == null || ring1T == null)
+            return false;
+
+        Vector3 forwardDir = middle1T.position - wristT.position;
+        Vector3 rightDir = index1T.position - ring1T.position;
+
+        if (forwardDir.sqrMagnitude < 0.0001f || rightDir.sqrMagnitude < 0.0001f)
+            return false;
+
+        Vector3 forward = forwardDir.normalized;
+        Vector3 right = rightDir.normalized;
+        Vector3 upRaw = Vector3.Cross(forward, right);
+
+        if (upRaw.sqrMagnitude < 0.0001f)
+            return false;
+
+        palmRotation = Quaternion.LookRotation(forward, upRaw.normalized);
+        return true;
+    }
+
+    /// <summary>
+    /// 가이드 프레임에서 Palm Center 계산 (로컬 포즈 + 루트 변환으로 월드 좌표 복원)
+    /// WristRoot의 직접 자식(Index1, Middle1, Ring1)이므로 정확한 복원 가능
+    /// 실패 시 false 반환 → 호출부에서 rootPos 기반으로 fallback
+    /// </summary>
+    private bool ComputePalmCenterFromFrame(Dictionary<int, PoseData> localPoses, Vector3 rootPos, Quaternion rootRot, out Vector3 palmCenter)
+    {
+        palmCenter = Vector3.zero;
+
+        int wristIdx = (int)HandJointId.HandWristRoot;  // 0
+        int index1 = (int)HandJointId.HandIndex1;        // 6
+        int middle1 = (int)HandJointId.HandMiddle1;       // 9
+        int ring1 = (int)HandJointId.HandRing1;           // 12
+
+        if (!localPoses.ContainsKey(wristIdx) || !localPoses.ContainsKey(index1) ||
+            !localPoses.ContainsKey(middle1) || !localPoses.ContainsKey(ring1))
+            return false;
+
+        // WristRoot의 월드 변환 계산 (OpenXRRoot → WristRoot)
+        Vector3 wristWorldPos = rootPos + rootRot * localPoses[wristIdx].position;
+        Quaternion wristWorldRot = rootRot * localPoses[wristIdx].rotation;
+
+        // 직접 자식 관절들의 월드 위치 계산
+        Vector3 index1WorldPos = wristWorldPos + wristWorldRot * localPoses[index1].position;
+        Vector3 middle1WorldPos = wristWorldPos + wristWorldRot * localPoses[middle1].position;
+        Vector3 ring1WorldPos = wristWorldPos + wristWorldRot * localPoses[ring1].position;
+
+        palmCenter = (index1WorldPos + middle1WorldPos + ring1WorldPos) / 3f;
+        return true;
+    }
+
+    /// <summary>
+    /// 가이드 프레임에서 Palm Rotation 계산 (기하학적 평면)
+    /// forward = 손목→중지, right = 검지→약지, up = cross(forward, right)
+    /// 실패 시 false 반환 → 호출부에서 rootRot 기반으로 fallback
+    /// </summary>
+    private bool ComputePalmRotationFromFrame(Dictionary<int, PoseData> localPoses, Vector3 rootPos, Quaternion rootRot, out Quaternion palmRotation)
+    {
+        palmRotation = Quaternion.identity;
+
+        int wristIdx = (int)HandJointId.HandWristRoot;  // 0
+        int index1 = (int)HandJointId.HandIndex1;        // 6
+        int middle1 = (int)HandJointId.HandMiddle1;       // 9
+        int ring1 = (int)HandJointId.HandRing1;           // 12
+
+        if (!localPoses.ContainsKey(wristIdx) || !localPoses.ContainsKey(index1) ||
+            !localPoses.ContainsKey(middle1) || !localPoses.ContainsKey(ring1))
+            return false;
+
+        // WristRoot의 월드 변환 계산
+        Vector3 wristWorldPos = rootPos + rootRot * localPoses[wristIdx].position;
+        Quaternion wristWorldRot = rootRot * localPoses[wristIdx].rotation;
+
+        // 직접 자식 관절들의 월드 위치 계산
+        Vector3 index1WorldPos = wristWorldPos + wristWorldRot * localPoses[index1].position;
+        Vector3 middle1WorldPos = wristWorldPos + wristWorldRot * localPoses[middle1].position;
+        Vector3 ring1WorldPos = wristWorldPos + wristWorldRot * localPoses[ring1].position;
+
+        Vector3 forwardDir = middle1WorldPos - wristWorldPos;
+        Vector3 rightDir = index1WorldPos - ring1WorldPos;
+
+        if (forwardDir.sqrMagnitude < 0.0001f || rightDir.sqrMagnitude < 0.0001f)
+            return false;
+
+        Vector3 forward = forwardDir.normalized;
+        Vector3 right = rightDir.normalized;
+        Vector3 upRaw = Vector3.Cross(forward, right);
+
+        if (upRaw.sqrMagnitude < 0.0001f)
+            return false;
+
+        palmRotation = Quaternion.LookRotation(forward, upRaw.normalized);
+        return true;
+    }
+
+    /// <summary>
+    /// 손 전체 위치/회전 비교 (Palm Center 기준, 월드 좌표) - 유사도 반환
     /// </summary>
     private void CompareHandWorldPosition(
-        HandVisual playerHand,
-        Vector3 targetRootPosition,
-        Quaternion targetRootRotation,
-        Transform openXRRoot,
+        Vector3 playerPalmCenter, Quaternion playerPalmRotation,
+        Vector3 guidePalmCenter, Quaternion guidePalmRotation,
         out float positionError,
         out float rotationError,
         out bool passed,
@@ -653,29 +857,16 @@ public class HandPoseComparator
         positionSimilarity = 0f;
         rotationSimilarity = 0f;
 
-        if (playerHand == null || playerHand.Hand == null || !playerHand.Hand.IsTrackedDataValid)
-            return;
-
-        // OpenXRRoot가 없으면 Wrist로 폴백
-        Transform targetTransform = openXRRoot;
-        if (targetTransform == null)
-        {
-            Transform wrist = playerHand.Joints[(int)HandJointId.HandWristRoot];
-            if (wrist == null)
-                return;
-            targetTransform = wrist;
-        }
-
         // 목표 위치 계산 (기준점 적용)
-        Vector3 targetPos = targetRootPosition;
+        Vector3 targetPos = guidePalmCenter;
         if (referencePoint != null)
         {
-            targetPos = referencePoint.position + targetRootPosition;
+            targetPos = referencePoint.position + guidePalmCenter;
         }
 
-        Vector3 playerPos = targetTransform.position;
+        Vector3 playerPos = playerPalmCenter;
 
-        // 디버그용 저장
+        // 디버그용 저장 (palm center 기준)
         if (handName == "왼손")
         {
             leftReplayTargetPosition = targetPos;
@@ -695,50 +886,40 @@ public class HandPoseComparator
 
         if (normalizedPosError <= 0.5f)
         {
-            // 작은 오차 (4cm 이하): 유사도 85~100%
             positionSimilarity = 1f - (normalizedPosError * 0.3f);
         }
         else if (normalizedPosError <= 1f)
         {
-            // 중간 오차 (4~8cm): 유사도 50~85%
             positionSimilarity = 0.85f - ((normalizedPosError - 0.5f) * 0.7f);
         }
         else
         {
-            // 큰 오차 (8cm 초과): 유사도 0~50%
             positionSimilarity = Mathf.Max(0f, 0.5f - ((normalizedPosError - 1f) * 0.5f));
         }
 
-        // 회전 오차 계산 (최적화: 부드러운 곡선 적용)
+        // 회전 오차 계산 (palm rotation 기준)
         if (settings.compareHandRotation)
         {
-            rotationError = Quaternion.Angle(targetTransform.rotation, targetRootRotation);
+            rotationError = Quaternion.Angle(playerPalmRotation, guidePalmRotation);
 
-            // ★ 회전 유사도 계산 (부드러운 곡선 - 작은 오차에 관대)
-            // 임계값의 50% 이하: 유사도 80~100% (관대)
-            // 임계값의 50~100%: 유사도 40~80% (점진적 감소)
-            // 임계값 초과: 유사도 0~40% (엄격)
             float normalizedError = rotationError / settings.handRotationThreshold;
 
             if (normalizedError <= 0.5f)
             {
-                // 작은 오차: 부드럽게 감소 (100% → 80%)
                 rotationSimilarity = 1f - (normalizedError * 0.4f);
             }
             else if (normalizedError <= 1f)
             {
-                // 중간 오차: 선형 감소 (80% → 40%)
                 rotationSimilarity = 0.8f - ((normalizedError - 0.5f) * 0.8f);
             }
             else
             {
-                // 큰 오차: 빠르게 감소 (40% → 0%)
                 rotationSimilarity = Mathf.Max(0f, 0.4f - ((normalizedError - 1f) * 0.4f));
             }
         }
         else
         {
-            rotationSimilarity = 1f;  // 회전 비교 안 함 = 항상 통과
+            rotationSimilarity = 1f;
         }
 
         // 합격 여부
@@ -749,7 +930,7 @@ public class HandPoseComparator
         // 디버그 로그
         if (frameIndex % 10 == 0)
         {
-            ChunaLogger.Log($"[HandPoseComparator] {handName} 위치 오차: {positionError:F3}m (유사도:{positionSimilarity:P0}), 회전 오차: {rotationError:F1}° (유사도:{rotationSimilarity:P0}) 합격: {passed}");
+            ChunaLogger.Log($"[HandPoseComparator] {handName} Palm 위치 오차: {positionError:F3}m (유사도:{positionSimilarity:P0}), 회전 오차: {rotationError:F1}° (유사도:{rotationSimilarity:P0}) 합격: {passed}");
         }
     }
 
@@ -1014,48 +1195,64 @@ public class HandPoseComparator
         bool positionOk = true;
         bool shapeOk = true;
 
-        // 1. 경로 근접도 체크 (위치)
+        // 1. 경로 근접도 체크 (Palm Center 기준)
         if (settings.rightHandCheckPathProximity)
         {
-            // OpenXRRoot 또는 손목 위치 사용
-            Transform targetTransform = rightOpenXRRoot;
-            if (targetTransform == null && playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+            // 플레이어 Palm Center 계산 (실패 시 OpenXRRoot/wrist로 fallback)
+            Vector3 playerPalmPos;
+            bool hasPlayerPos = ComputePalmCenter(playerRightHand, out playerPalmPos);
+            if (!hasPlayerPos)
             {
-                targetTransform = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+                Transform fb = rightOpenXRRoot;
+                if (fb == null && playerRightHand.Joints != null && playerRightHand.Joints.Count > 0)
+                    fb = playerRightHand.Joints[(int)HandJointId.HandWristRoot];
+                if (fb != null)
+                {
+                    playerPalmPos = fb.position;
+                    hasPlayerPos = true;
+                }
             }
 
-            if (targetTransform != null)
+            if (hasPlayerPos)
             {
-                Vector3 targetPos = guideFrame.rightRootPosition;
+                // 가이드 Palm Center 계산 (실패 시 rootPosition으로 fallback)
+                Vector3 guidePalmPos;
+                if (!ComputePalmCenterFromFrame(guideFrame.rightLocalPoses, guideFrame.rightRootPosition, guideFrame.rightRootRotation, out guidePalmPos))
+                    guidePalmPos = guideFrame.rightRootPosition;
+
+                Vector3 targetPos = guidePalmPos;
                 if (referencePoint != null)
                 {
-                    targetPos = referencePoint.position + guideFrame.rightRootPosition;
+                    targetPos = referencePoint.position + guidePalmPos;
                 }
 
-                Vector3 playerPos = targetTransform.position;
-                float positionError = Vector3.Distance(playerPos, targetPos);
+                float positionError = Vector3.Distance(playerPalmPos, targetPos);
                 result.rightHandPositionError = positionError;
+
+                // 디버그용 저장 (palm center 기준)
+                rightReplayTargetPosition = targetPos;
+                rightPlayerCurrentPosition = playerPalmPos;
 
                 // 부드러운 위치 유사도 계산
                 float normalizedError = positionError / settings.handPositionThreshold;
                 if (normalizedError <= 1f)
                 {
-                    positionSimilarity = 1f - (normalizedError * 0.3f); // 0~8cm: 70~100%
+                    positionSimilarity = 1f - (normalizedError * 0.3f);
                 }
                 else if (normalizedError <= 2f)
                 {
-                    positionSimilarity = 0.7f - ((normalizedError - 1f) * 0.4f); // 8~16cm: 30~70%
+                    positionSimilarity = 0.7f - ((normalizedError - 1f) * 0.4f);
                 }
                 else
                 {
-                    positionSimilarity = Mathf.Max(0f, 0.3f - ((normalizedError - 2f) * 0.15f)); // 16cm+: 0~30%
+                    positionSimilarity = Mathf.Max(0f, 0.3f - ((normalizedError - 2f) * 0.15f));
                 }
 
-                positionOk = positionError <= settings.handPositionThreshold * 2f; // 16cm 이내면 OK
+                positionOk = positionError <= settings.handPositionThreshold * 2f;
 
                 if (settings.showDetailedLogs && currentFrameIndex % 30 == 0)
                 {
-                    ChunaLogger.Log($"[HandPoseComparator] 오른손 위치 오차: {positionError:F3}m (임계값: {settings.handPositionThreshold}m) → 유사도: {positionSimilarity:P0}");
+                    ChunaLogger.Log($"[HandPoseComparator] 오른손 Palm 위치 오차: {positionError:F3}m (임계값: {settings.handPositionThreshold}m) → 유사도: {positionSimilarity:P0}");
                 }
             }
         }

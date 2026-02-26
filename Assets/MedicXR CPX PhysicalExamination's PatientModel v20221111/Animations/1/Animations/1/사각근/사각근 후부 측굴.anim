@@ -6,7 +6,7 @@ AnimationClip:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: "\uC0AC\uAC01\uADFC \uAC74\uCE21 \uCE21\uAD74"
+  m_Name: "\uC0AC\uAC01\uADFC \uD6C4\uBD80 \uCE21\uAD74"
   serializedVersion: 7
   m_Legacy: 0
   m_Compressed: 0
@@ -2136,7 +2136,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
+        value: -0.6
         inSlope: 0.000056349054
         outSlope: 0.000056349054
         tangentMode: 0
@@ -2145,7 +2145,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: 0
+        value: -0.6
         inSlope: 0.000056349054
         outSlope: 0.000056349054
         tangentMode: 0
@@ -7551,7 +7551,7 @@ AnimationClip:
       m_Curve:
       - serializedVersion: 3
         time: 0
-        value: 0
+        value: -0.6
         inSlope: 0.000056349054
         outSlope: 0.000056349054
         tangentMode: 0
@@ -7560,7 +7560,7 @@ AnimationClip:
         outWeight: 0.33333334
       - serializedVersion: 3
         time: 1
-        value: 0
+        value: -0.6
         inSlope: 0.000056349054
         outSlope: 0.000056349054
         tangentMode: 0

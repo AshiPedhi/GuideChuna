@@ -26285,8 +26285,8 @@ MonoBehaviour:
   patientTransform: {fileID: 117476316}
   lateralFlexionDetector: {fileID: 0}
   step6HandDataCsv: "\uC911\uBD80\uCE21\uAD74"
-  step6PatientAnimation: "\uC911\uBD80\uCE21\uAD74_trimmed"
-  angleDisplayController: {fileID: 0}
+  step6PatientAnimation: "\uC549\uC544 \uC911\uBD80\uC2B9\uBAA8 \uCE21\uAD74"
+  angleDisplayController: {fileID: 3683581782714295909}
   mainMenuToggle:
     toggle: {fileID: 2084926867}
     highlightBorder: {fileID: 2015158054}
@@ -43634,6 +43634,10 @@ PrefabInstance:
       propertyPath: m_Group
       value: 
       objectReference: {fileID: 476419854}
+    - target: {fileID: 3349346243019873864, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
+      propertyPath: toggleTransition
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3438102879067568234, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
@@ -73174,6 +73178,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1474146498998784439, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
       propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3295309620095862917, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
+      propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3349346243019873864, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
@@ -185310,6 +185318,10 @@ PrefabInstance:
       propertyPath: m_Group
       value: 
       objectReference: {fileID: 476419854}
+    - target: {fileID: 3349346243019873864, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
+      propertyPath: toggleTransition
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 3438102879067568234, guid: c1fa15e93b3d0324ebb8093dc8db35b9, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0

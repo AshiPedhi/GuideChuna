@@ -57,16 +57,11 @@ public class GuideHandPlaybackController
 
             PoseFrame frame = frames[currentGuideFrameIndex];
 
-            float currentAlpha = guideHandColor.a;
-            if (fadeOnTouch && owner.IsAnyHandTouchingPatient())
-            {
-                currentAlpha = touchAlpha;
-            }
-
+            // ★ 알파는 ChunaPathEvaluator의 스무딩 시스템에서 처리
+            // 여기서는 가시성과 포즈만 업데이트
             if (leftGuideHand != null)
             {
                 leftGuideHand.SetVisible(true);
-                leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (leftGuideHand.Root != null)
                 {
@@ -83,7 +78,6 @@ public class GuideHandPlaybackController
             if (rightGuideHand != null)
             {
                 rightGuideHand.SetVisible(true);
-                rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
 
                 if (rightGuideHand.Root != null)
                 {
@@ -154,16 +148,11 @@ public class GuideHandPlaybackController
         startFrameIndex = Mathf.Clamp(startFrameIndex, 0, frames.Count - 1);
         PoseFrame firstFrame = frames[startFrameIndex];
 
-        float currentAlpha = guideHandColor.a;
-        if (fadeOnTouch && isAnyHandTouching)
-        {
-            currentAlpha = touchAlpha;
-        }
-
+        // ★ 알파는 ChunaPathEvaluator의 스무딩 시스템에서 처리
         if (leftGuideHand != null)
         {
             leftGuideHand.SetVisible(true);
-            leftGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
+            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
 
             if (leftGuideHand.Root != null)
             {
@@ -180,7 +169,7 @@ public class GuideHandPlaybackController
         if (rightGuideHand != null)
         {
             rightGuideHand.SetVisible(true);
-            rightGuideHand.SetColorAndAlpha(guideHandColor, currentAlpha);
+            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
 
             if (rightGuideHand.Root != null)
             {

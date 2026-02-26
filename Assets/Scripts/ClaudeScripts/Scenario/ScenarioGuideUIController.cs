@@ -133,6 +133,12 @@ public class ScenarioGuideUIController : MonoBehaviour
             pathEvaluator.OnHoldProgressChanged -= OnHoldProgressChanged;
             pathEvaluator.OnHoldCompleted -= OnHoldCompleted;
         }
+
+        // 시작 토글 리스너 해제 (PracticeManager 간섭 방지)
+        if (startToggle != null)
+        {
+            startToggle.onValueChanged.RemoveListener(OnStartToggleChanged);
+        }
     }
 
     /// <summary>
@@ -537,8 +543,8 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void OnStartToggleChanged(bool isOn)
     {
-        // 토글이 켜졌을 때만 다음 단계로 진행
-        if (isOn && scenarioManager != null)
+        // 토글이 켜졌을 때만 다음 단계로 진행 (ScenarioManager가 활성화 상태일 때만)
+        if (isOn && scenarioManager != null && scenarioManager.enabled && scenarioManager.CurrentStep != null)
         {
             ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
             scenarioManager.NextSubStep();
