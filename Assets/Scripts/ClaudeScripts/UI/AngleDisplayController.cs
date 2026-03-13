@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -112,8 +113,14 @@ public class AngleDisplayController : BaseUIPanel
     [Tooltip("표시/숨김할 대상 게임오브젝트 (비어있으면 자기 자신)")]
     [SerializeField] private GameObject displayTarget;
 
+    [Header("=== 프리셋 ===")]
+    [SerializeField] private List<AngleDisplayPreset> presets = new List<AngleDisplayPreset>();
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
+
+    // 프리셋 상태
+    private string currentPresetName;
 
     // 상태
     private float currentAngle;
@@ -149,6 +156,26 @@ public class AngleDisplayController : BaseUIPanel
 
         [Tooltip("환자 애니메이션 진행률 (0~1)")]
         PatientAnimation
+    }
+
+    [System.Serializable]
+    public class AngleDisplayPreset
+    {
+        public string presetName;           // "LateralFlexion", "LeftRotation", "RightRotation"
+
+        [Header("위치")]
+        public Vector3 position;            // 월드 위치
+        public Vector3 rotation;            // 오일러 각도
+        public Vector3 scale = Vector3.one; // 로컬 스케일 (좌우반전 등)
+
+        [Header("각도 설정")]
+        public RotationAxis rotationAxis;   // X, Y, Z
+        public float startAngle;
+        public float endAngle;
+        public bool invertAngle;
+
+        [Header("동기화")]
+        public SyncSource syncSource;
     }
 
     void Start()
@@ -778,6 +805,88 @@ public class AngleDisplayController : BaseUIPanel
     /// 현재 애니메이션 끝 오프셋
     /// </summary>
     public float AnimationEndOffset => animationEndOffset;
+
+    // ========== 프리셋 API ==========
+
+    /// <summary>
+    /// 프리셋 목록 (Editor 접근용)
+    /// </summary>
+    public List<AngleDisplayPreset> Presets => presets;
+
+    /// <summary>
+    /// 현재 적용된 프리셋 이름
+    /// </summary>
+    public string CurrentPresetName => currentPresetName;
+
+    /// <summary>
+    /// 이름으로 프리셋 찾기
+    /// </summary>
+    public AngleDisplayPreset FindPreset(string name)
+    {
+        return presets.Find(p => p.presetName == name);
+    }
+
+    /// <summary>
+    /// 프리셋 적용 (위치+설정 교체 + Show)
+    /// </summary>
+    public bool ApplyPreset(string presetName)
+    {
+        AngleDisplayPreset preset = FindPreset(presetName);
+        if (preset == null)
+        {
+            ChunaLogger.LogWarning($"[AngleDisplayController] 프리셋을 찾을 수 없습니다: {presetName}");
+            return false;
+        }
+
+        ApplyPreset(preset);
+        return true;
+    }
+
+    /// <summary>
+    /// 프리셋 직접 적용
+    /// </summary>
+    public void ApplyPreset(AngleDisplayPreset preset)
+    {
+        currentPresetName = preset.presetName;
+
+        // 위치/회전/스케일 적용
+        transform.position = preset.position;
+        transform.rotation = Quaternion.Euler(preset.rotation);
+        transform.localScale = preset.scale;
+
+        // 각도 설정 적용
+        rotationAxis = preset.rotationAxis;
+        startAngle = preset.startAngle;
+        endAngle = preset.endAngle;
+        invertAngle = preset.invertAngle;
+
+        // 동기화 소스 적용
+        syncSource = preset.syncSource;
+
+        // 각도 리셋
+        SetAngle(startAngle);
+
+        // 표시
+        Show();
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=green>[AngleDisplayController] 프리셋 적용: {preset.presetName} (pos={preset.position}, axis={preset.rotationAxis}, {preset.startAngle}°~{preset.endAngle}°)</color>");
+    }
+
+    /// <summary>
+    /// 현재 설정을 프리셋에 캡처
+    /// </summary>
+    public void CaptureCurrentSettings(AngleDisplayPreset preset)
+    {
+        preset.position = transform.position;
+        preset.rotation = transform.rotation.eulerAngles;
+        preset.scale = transform.localScale;
+        preset.rotationAxis = rotationAxis;
+        preset.startAngle = startAngle;
+        preset.endAngle = endAngle;
+        preset.invertAngle = invertAngle;
+        preset.syncSource = syncSource;
+    }
 
 #if UNITY_EDITOR
     /// <summary>

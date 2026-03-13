@@ -21,7 +21,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     #region SerializeFields
 
     [Header("=== 기준 위치 (환자) ===")]
-    [Tooltip("체크포인트 위치의 기준점 (환자 Transform)")]
+    [Tooltip("녹화 시 사용한 기준점과 동일한 Transform 할당 (예: 환자 목 피벗). 미할당 시 Patient 태그 루트를 자동 검색")]
     [SerializeField] private Transform referenceTransform;
 
     [Tooltip("데이터 기록 시 환자의 위치 오프셋")]
@@ -1896,6 +1896,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         loadedFrames = result.frames;
 
+        // ★ 기준점 로컬 좌표 → 월드 좌표 변환 (로드 시 일괄 변환)
+        ConvertFramesToWorldSpace();
+
         if (showDebugLogs)
             ChunaLogger.Log($"[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 로드됨");
 
@@ -1950,7 +1953,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         PoseFrame firstFrame = loadedFrames[0];
         PoseFrame lastFrame = loadedFrames[loadedFrames.Count - 1];
 
-        // 오른손 기준 이동 벡터 계산
+        // 오른손 기준 이동 벡터 계산 (로드 시 월드 변환 완료)
         Vector3 startPos = firstFrame.rightRootPosition;
         Vector3 endPos = lastFrame.rightRootPosition;
         handDataMovementVector = endPos - startPos;
@@ -2166,14 +2169,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         if (loadedFrames == null || loadedFrames.Count == 0) return;
 
-        Vector3 positionOffset = Vector3.zero;
-        if (referenceTransform != null)
-        {
-            positionOffset = referenceTransform.position - recordedPatientOffset;
-
-            if (showDebugLogs)
-                ChunaLogger.Log($"[ChunaPathEvaluator] 위치 오프셋: {positionOffset}");
-        }
+        if (showDebugLogs && referenceTransform != null)
+            ChunaLogger.Log($"[ChunaPathEvaluator] 기준점: {referenceTransform.name}, pos={referenceTransform.position}, rot={referenceTransform.rotation.eulerAngles}");
 
         int checkpointCount = 0;
 
@@ -2181,10 +2178,10 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             PoseFrame frame = loadedFrames[i];
 
-            Vector3 leftPos = frame.leftRootPosition + positionOffset;
+            Vector3 leftPos = frame.leftRootPosition;
             CreateCheckpoint(true, checkpointCount, leftPos, frame, leftCheckpoints);
 
-            Vector3 rightPos = frame.rightRootPosition + positionOffset;
+            Vector3 rightPos = frame.rightRootPosition;
             CreateCheckpoint(false, checkpointCount, rightPos, frame, rightCheckpoints);
 
             checkpointCount++;
@@ -2361,12 +2358,21 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 모든 체크포인트 활성화 (관문이 아닌 지표이므로 전부 활성화)
         ActivateAllCheckpoints();
 
-        // 리밋 체커 시작
+        // 리밋 체커 시작 — 모드별 임계값 설정
         if (limitChecker != null)
         {
             limitChecker.SetPathEvaluator(this);
             limitChecker.Initialize();
+
+            // 모드에 따라 제한 비율 동적 설정
+            float warningThreshold = currentLimitRatio * 0.7f;  // 제한 비율의 70% 지점에서 경고
+            float dangerThreshold = currentLimitRatio;           // 제한 비율 도달 시 위험
+            limitChecker.SetRatioThresholds(warningThreshold, dangerThreshold);
+
             limitChecker.SetEnabled(true);
+
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 임계값 설정 — warning:{warningThreshold:P0}, danger:{dangerThreshold:P0} (currentLimitRatio:{currentLimitRatio:P0})</color>");
         }
 
         // 가이드 핸드는 StartHold 완료 후에 재생됨 (UpdateStartHold에서 호출)
@@ -2831,6 +2837,41 @@ public class ChunaPathEvaluator : MonoBehaviour
     public void SetRecordedPatientOffset(Vector3 offset)
     {
         recordedPatientOffset = offset;
+    }
+
+    /// <summary>
+    /// 로드된 프레임의 기준점 로컬 좌표를 월드 좌표로 일괄 변환
+    /// CSV 저장 형식: localPos = Inv(refRot) * (wristPos - refPos), localRot = Inv(refRot) * wristRot
+    /// 복원 공식: worldPos = refPos + refRot * localPos, worldRot = refRot * localRot
+    /// </summary>
+    private void ConvertFramesToWorldSpace()
+    {
+        if (loadedFrames == null || loadedFrames.Count == 0) return;
+        if (referenceTransform == null)
+        {
+            if (showDebugLogs)
+                ChunaLogger.LogWarning("[ChunaPathEvaluator] referenceTransform 없음 - 프레임 좌표를 그대로 사용");
+            return;
+        }
+
+        Vector3 refPos = referenceTransform.position;
+        Quaternion refRot = referenceTransform.rotation;
+
+        for (int i = 0; i < loadedFrames.Count; i++)
+        {
+            var frame = loadedFrames[i];
+
+            // 왼손 루트
+            frame.leftRootPosition = refPos + refRot * frame.leftRootPosition;
+            frame.leftRootRotation = refRot * frame.leftRootRotation;
+
+            // 오른손 루트
+            frame.rightRootPosition = refPos + refRot * frame.rightRootPosition;
+            frame.rightRootRotation = refRot * frame.rightRootRotation;
+        }
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 월드 좌표 변환 완료 (ref: {referenceTransform.name}, pos={refPos}, rot={refRot.eulerAngles})</color>");
     }
 
     /// <summary>

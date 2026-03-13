@@ -22,6 +22,7 @@ public static class PrefsKeys
     public const string ShowHints = "ShowHints";
 
     // Simulation
+    public const string SelectedScenario = "SelectedScenario";
     public const string SelectedMode = "SelectedMode";
     public const string SelectedDifficulty = "SelectedDifficulty";
 }

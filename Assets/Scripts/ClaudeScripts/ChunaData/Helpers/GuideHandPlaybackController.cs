@@ -6,6 +6,9 @@ using static HandPoseDataLoader;
 /// <summary>
 /// Guide hand playback controller for ChunaPathEvaluator.
 /// Returns IEnumerator for coroutines; MonoBehaviour calls StartCoroutine.
+///
+/// 프레임 데이터는 ChunaPathEvaluator.ConvertFramesToWorldSpace()에서
+/// 로드 시 월드 좌표로 일괄 변환됨 → 여기서는 직접 적용만 수행.
 /// </summary>
 public class GuideHandPlaybackController
 {
@@ -33,12 +36,6 @@ public class GuideHandPlaybackController
         Color guideHandColor, bool fadeOnTouch, float touchAlpha,
         bool showDebugLogs)
     {
-        Vector3 positionOffset = Vector3.zero;
-        if (referenceTransform != null)
-        {
-            positionOffset = referenceTransform.position - recordedPatientOffset;
-        }
-
         float frameTime = 1f / 30f;
 
         int startFrameIdx = Mathf.RoundToInt(startRatio * (frames.Count - 1));
@@ -57,15 +54,12 @@ public class GuideHandPlaybackController
 
             PoseFrame frame = frames[currentGuideFrameIndex];
 
-            // ★ 알파는 ChunaPathEvaluator의 스무딩 시스템에서 처리
-            // 여기서는 가시성과 포즈만 업데이트
             if (leftGuideHand != null)
             {
                 leftGuideHand.SetVisible(true);
-
                 if (leftGuideHand.Root != null)
                 {
-                    leftGuideHand.Root.position = frame.leftRootPosition + positionOffset;
+                    leftGuideHand.Root.position = frame.leftRootPosition;
                     leftGuideHand.Root.rotation = frame.leftRootRotation;
                 }
 
@@ -78,10 +72,9 @@ public class GuideHandPlaybackController
             if (rightGuideHand != null)
             {
                 rightGuideHand.SetVisible(true);
-
                 if (rightGuideHand.Root != null)
                 {
-                    rightGuideHand.Root.position = frame.rightRootPosition + positionOffset;
+                    rightGuideHand.Root.position = frame.rightRootPosition;
                     rightGuideHand.Root.rotation = frame.rightRootRotation;
                 }
 
@@ -138,25 +131,17 @@ public class GuideHandPlaybackController
             return;
         }
 
-        Vector3 positionOffset = Vector3.zero;
-        if (referenceTransform != null)
-        {
-            positionOffset = referenceTransform.position - recordedPatientOffset;
-        }
-
         int startFrameIndex = Mathf.RoundToInt(startRatio * (frames.Count - 1));
         startFrameIndex = Mathf.Clamp(startFrameIndex, 0, frames.Count - 1);
         PoseFrame firstFrame = frames[startFrameIndex];
 
-        // ★ 알파는 ChunaPathEvaluator의 스무딩 시스템에서 처리
         if (leftGuideHand != null)
         {
             leftGuideHand.SetVisible(true);
             leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-
             if (leftGuideHand.Root != null)
             {
-                leftGuideHand.Root.position = firstFrame.leftRootPosition + positionOffset;
+                leftGuideHand.Root.position = firstFrame.leftRootPosition;
                 leftGuideHand.Root.rotation = firstFrame.leftRootRotation;
             }
 
@@ -170,10 +155,9 @@ public class GuideHandPlaybackController
         {
             rightGuideHand.SetVisible(true);
             rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-
             if (rightGuideHand.Root != null)
             {
-                rightGuideHand.Root.position = firstFrame.rightRootPosition + positionOffset;
+                rightGuideHand.Root.position = firstFrame.rightRootPosition;
                 rightGuideHand.Root.rotation = firstFrame.rightRootRotation;
             }
 

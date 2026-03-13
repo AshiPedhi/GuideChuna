@@ -231,8 +231,8 @@ public class HandDataRecorder : MonoBehaviour
         {
             if (patientReference != null)
             {
-                // 기준점 상대 좌표로 저장
-                worldPos = wristRoot.position - patientReference.position;
+                // 기준점 로컬 좌표로 저장 (기준점 회전에 독립적)
+                worldPos = Quaternion.Inverse(patientReference.rotation) * (wristRoot.position - patientReference.position);
                 worldRot = Quaternion.Inverse(patientReference.rotation) * wristRoot.rotation;
             }
             else

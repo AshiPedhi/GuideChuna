@@ -134,28 +134,36 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         }
     }
 
+    // 앱 최초 실행 여부 (static으로 앱 생명주기 동안 유지)
+    private static bool isFirstLaunch = true;
+
     private void Start()
     {
-        // 저장된 로그인 정보 복원
-        LoadSavedLoginInfo();
+        // 앱 최초 실행 시에만 로그인 정보 초기화 (강제 종료 대응)
+        // 로비 재진입 시에는 기존 로그인 유지
+        if (isFirstLaunch)
+        {
+            isFirstLaunch = false;
+            loginStateStore.ClearLoginInfo();
+            currentUsername = string.Empty;
+            currentUserID = 0;
+        }
+        else
+        {
+            LoadSavedLoginInfo();
+        }
 
-        // 로그인 정보가 없으면 Guest 텍스트 설정
         if (string.IsNullOrEmpty(currentUsername))
         {
             if (userNameText != null)
-            {
                 userNameText.text = "Guest";
-            }
-            // 초기 안내 메시지 설정
             SetGuideMessage(loginGuideMessage);
         }
         else
         {
-            // 로그인 정보가 있으면 UI 업데이트
             UpdateUserInfoPanel();
             SetScenarioCardsVisualState(true);
             SetGuideMessage(scenarioGuideMessage);
-            ChunaLogger.Log($"[LobbyUI] 저장된 로그인 정보 복원 완료: {currentUsername}");
         }
 
         LoadSavedDeviceSN();
@@ -530,8 +538,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
         ChunaLogger.Log($"[LobbyUI] ✅ 시나리오 {scenarioIndex + 1} 시작: 사용자={currentUsername}");
 
-        // 시나리오 씬 로드 (로딩씬 사용)
-        SceneLoader.LoadScene($"Scenario_{scenarioIndex + 1}");
+        // 선택된 시나리오 인덱스 저장 (ScenarioBootstrapper가 읽음)
+        PlayerPrefs.SetInt(PrefsKeys.SelectedScenario, scenarioIndex);
+        PlayerPrefs.Save();
+
+        // 통합 TrainingScene 로드
+        SceneLoader.LoadScene("TrainingScene");
     }
 
     private void OnUserIconClicked()

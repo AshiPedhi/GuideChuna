@@ -50,6 +50,7 @@ public class ScenarioConditionManager : MonoBehaviour
     [SerializeField] private AudioSource narrationAudioSource;
     [Tooltip("나레이션 클립 폴더 경로 (Resources 기준)")]
     [SerializeField] private string narrationFolderPath = "Narrations";
+    private string narrationScenarioFolder = "";  // 시나리오별 서브폴더 (Bootstrapper에서 주입)
 
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
@@ -619,24 +620,41 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // ★ 난이도별 서브폴더 결정
         string difficultyFolder = GetNarrationSubfolder();
+        string scenarioFolder = string.IsNullOrEmpty(narrationScenarioFolder) ? "" : narrationScenarioFolder;
+        string basePath = string.IsNullOrEmpty(narrationFolderPath) ? "" : narrationFolderPath;
 
-        // 1차 시도: 난이도별 폴더에서 로드
-        string difficultyPath = string.IsNullOrEmpty(narrationFolderPath)
+        // 1차 시도: 시나리오별 + 난이도별 폴더 (Narrations/{난이도}/{시나리오}/{clipName})
+        AudioClip clip = null;
+        if (!string.IsNullOrEmpty(scenarioFolder))
+        {
+            string scenarioPath = string.IsNullOrEmpty(basePath)
+                ? $"{difficultyFolder}/{scenarioFolder}/{clipName}"
+                : $"{basePath}/{difficultyFolder}/{scenarioFolder}/{clipName}";
+
+            clip = Resources.Load<AudioClip>(scenarioPath);
+            if (clip != null)
+            {
+                ChunaLogger.Log($"<color=cyan>[ConditionManager] 시나리오별 나래이션 로드 성공: {scenarioPath} ({clip.length:F1}초)</color>");
+                return clip;
+            }
+        }
+
+        // 2차 시도: 난이도별 폴더 (Narrations/{난이도}/{clipName}) — 기존 호환
+        string difficultyPath = string.IsNullOrEmpty(basePath)
             ? $"{difficultyFolder}/{clipName}"
-            : $"{narrationFolderPath}/{difficultyFolder}/{clipName}";
+            : $"{basePath}/{difficultyFolder}/{clipName}";
 
-        AudioClip clip = Resources.Load<AudioClip>(difficultyPath);
-
+        clip = Resources.Load<AudioClip>(difficultyPath);
         if (clip != null)
         {
             ChunaLogger.Log($"<color=cyan>[ConditionManager] 난이도별 나래이션 로드 성공: {difficultyPath} ({clip.length:F1}초)</color>");
             return clip;
         }
 
-        // 2차 시도: 공통 폴더에서 로드 (Fallback)
-        string fallbackPath = string.IsNullOrEmpty(narrationFolderPath)
+        // 3차 시도: 공통 폴더에서 로드 (Fallback)
+        string fallbackPath = string.IsNullOrEmpty(basePath)
             ? clipName
-            : $"{narrationFolderPath}/{clipName}";
+            : $"{basePath}/{clipName}";
 
         clip = Resources.Load<AudioClip>(fallbackPath);
 
@@ -1169,6 +1187,15 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 조건 체크 활성화 여부
     /// </summary>
     public bool IsCheckingCondition => isCheckingCondition;
+
+    /// <summary>
+    /// 시나리오별 나레이션 서브폴더 설정 (ScenarioBootstrapper에서 호출)
+    /// </summary>
+    public void SetNarrationScenarioFolder(string folder)
+    {
+        narrationScenarioFolder = folder ?? "";
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 시나리오 폴더 설정: '{narrationScenarioFolder}'</color>");
+    }
 
     /// <summary>
     /// 외부에서 나레이션 재생 (완료 후 자동 진행 없음)

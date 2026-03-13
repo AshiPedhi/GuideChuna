@@ -327,7 +327,8 @@ public class HandPoseRecorder : MonoBehaviour
             if (referencePoint != null)
             {
                 // ������ ��� ��ǥ�� ����
-                rootPos = openXRRoot.position - referencePoint.position;
+                // 기준점 로컬 좌표로 저장 (기준점 회전에 독립적)
+                rootPos = Quaternion.Inverse(referencePoint.rotation) * (openXRRoot.position - referencePoint.position);
                 rootRot = Quaternion.Inverse(referencePoint.rotation) * openXRRoot.rotation;
             }
             else

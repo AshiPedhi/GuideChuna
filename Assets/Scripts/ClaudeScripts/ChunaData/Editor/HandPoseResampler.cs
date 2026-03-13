@@ -20,9 +20,9 @@ using System.Globalization;
 public class HandPoseResampler : EditorWindow
 {
     // ===== 탭 관리 =====
-    private enum EditorTab { Preview, Resample, Trim, Scale, Transform, Preset }
+    private enum EditorTab { Preview, Resample, Trim, Scale, Transform, Preset, CoordConvert }
     private EditorTab currentTab = EditorTab.Preview;
-    private string[] tabNames = { "미리보기", "리샘플링", "트리밍", "각도 스케일", "변환", "프리셋" };
+    private string[] tabNames = { "미리보기", "리샘플링", "트리밍", "각도 스케일", "변환", "프리셋", "좌표변환" };
 
     // ===== 미리보기 설정 =====
     private bool isPlaying = false;
@@ -41,6 +41,8 @@ public class HandPoseResampler : EditorWindow
     private Color leftHandColor = new Color(0.2f, 0.6f, 1f, 1f);
     private Color rightHandColor = new Color(1f, 0.4f, 0.3f, 1f);
     private bool loopPlayback = true;
+    private bool showHandLabels = true;  // Scene에 L/R 라벨 표시
+    private bool swapWristPositions = false;  // 손목 위치 좌우 스왑 (녹화 시 wristRoot 반대 할당 대응)
 
     // ===== 변환 미리보기 설정 =====
     private bool previewTransform = false;  // 변환 탭의 설정을 미리보기에 적용
@@ -48,9 +50,10 @@ public class HandPoseResampler : EditorWindow
 
     // ===== 환자 모델 따라가기 =====
     private bool followPatient = false;  // 환자 모델 위치 따라가기
-    private Transform patientTransform = null;  // 환자 모델 Transform
-    private Vector3 recordedPatientOffset = Vector3.zero;  // 녹화 시 환자 위치 오프셋
-    private Vector3 recordedPatientRotation = Vector3.zero;  // 녹화 시 환자 회전 (Euler)
+    private Transform patientTransform = null;  // 환자 모델 Transform (자동 검색용)
+    private Transform referencePoint = null;  // 녹화 시 사용한 실제 기준점 (목 pivot 등)
+    private Vector3 followPositionAdjust = Vector3.zero;  // 미세 위치 조정
+    private bool isReferenceLocalFormat = false;  // true: 신형식(기준점 로컬), false: 구형식(월드 오프셋)
 
     // ===== 비교 모드 설정 =====
     private bool compareMode = false;
@@ -226,9 +229,32 @@ public class HandPoseResampler : EditorWindow
     private void OnSceneGUI(SceneView sceneView)
     {
         if (!isAnalyzed || parsedFrames.Count == 0) return;
-        if (currentTab != EditorTab.Preview) return;
 
         FrameData frame = parsedFrames[Mathf.Clamp(currentFrameIndex, 0, parsedFrames.Count - 1)];
+
+        // 손목 위치 스왑 처리: 녹화 시 wristRoot가 반대로 할당된 경우 대응
+        // (손가락 로컬 포즈는 HandVisual에서 올바르게 가져오므로 영향 없음, 위치만 교환)
+        Vector3 swapSavedLeftPos = Vector3.zero, swapSavedRightPos = Vector3.zero;
+        Quaternion swapSavedLeftRot = Quaternion.identity, swapSavedRightRot = Quaternion.identity;
+        JointData swapLeftWrist = null, swapRightWrist = null;
+        if (swapWristPositions && frame.leftJoints.Count > 0 && frame.rightJoints.Count > 0)
+        {
+            swapLeftWrist = frame.leftJoints.FirstOrDefault(j => j.jointId == 1);
+            swapRightWrist = frame.rightJoints.FirstOrDefault(j => j.jointId == 1);
+            if (swapLeftWrist != null && swapRightWrist != null)
+            {
+                // 원본 저장
+                swapSavedLeftPos = swapLeftWrist.worldPosition;
+                swapSavedLeftRot = swapLeftWrist.worldRotation;
+                swapSavedRightPos = swapRightWrist.worldPosition;
+                swapSavedRightRot = swapRightWrist.worldRotation;
+                // 스왑
+                swapLeftWrist.worldPosition = swapSavedRightPos;
+                swapLeftWrist.worldRotation = swapSavedRightRot;
+                swapRightWrist.worldPosition = swapSavedLeftPos;
+                swapRightWrist.worldRotation = swapSavedLeftRot;
+            }
+        }
 
         // 메인 데이터 - 왼손 그리기
         if (showLeftHand && frame.leftJoints.Count > 0)
@@ -240,6 +266,33 @@ public class HandPoseResampler : EditorWindow
         if (showRightHand && frame.rightJoints.Count > 0)
         {
             DrawHand(frame.rightJoints, rightHandColor, false, Vector3.zero);
+        }
+
+        // L/R 라벨 표시
+        if (showHandLabels)
+        {
+            if (showLeftHand && frame.leftJoints.Count > 0)
+            {
+                var lw = frame.leftJoints.FirstOrDefault(j => j.jointId == 1);
+                if (lw != null && lw.worldPosition != Vector3.zero)
+                {
+                    Vector3 labelPos = GetHandLabelPosition(frame.leftJoints, true);
+                    Handles.color = leftHandColor;
+                    Handles.Label(labelPos, $"L ({lw.worldPosition.x:F3}, {lw.worldPosition.y:F3}, {lw.worldPosition.z:F3})",
+                        EditorStyles.whiteBoldLabel);
+                }
+            }
+            if (showRightHand && frame.rightJoints.Count > 0)
+            {
+                var rw = frame.rightJoints.FirstOrDefault(j => j.jointId == 1);
+                if (rw != null && rw.worldPosition != Vector3.zero)
+                {
+                    Vector3 labelPos = GetHandLabelPosition(frame.rightJoints, false);
+                    Handles.color = rightHandColor;
+                    Handles.Label(labelPos, $"R ({rw.worldPosition.x:F3}, {rw.worldPosition.y:F3}, {rw.worldPosition.z:F3})",
+                        EditorStyles.whiteBoldLabel);
+                }
+            }
         }
 
         // 비교 모드: 두 번째 데이터셋 그리기
@@ -258,6 +311,28 @@ public class HandPoseResampler : EditorWindow
             if (showRightHand && compareFrame.rightJoints.Count > 0)
             {
                 DrawHand(compareFrame.rightJoints, compareRightColor, false, compareOffset);
+            }
+        }
+
+        // 기준점 축 표시 (followPatient 시)
+        if (followPatient)
+        {
+            Transform refTr = referencePoint != null ? referencePoint : patientTransform;
+            if (refTr != null)
+            {
+                float axisLen = 0.15f;
+                // X축 (빨강), Y축 (초록), Z축 (파랑)
+                Handles.color = Color.red;
+                Handles.DrawLine(refTr.position, refTr.position + refTr.right * axisLen, 3f);
+                Handles.color = Color.green;
+                Handles.DrawLine(refTr.position, refTr.position + refTr.up * axisLen, 3f);
+                Handles.color = Color.blue;
+                Handles.DrawLine(refTr.position, refTr.position + refTr.forward * axisLen, 3f);
+                // 라벨
+                Handles.color = Color.white;
+                Handles.Label(refTr.position + Vector3.up * 0.05f,
+                    referencePoint != null ? $"[기준점] {refTr.name}" : $"[모델루트] {refTr.name}",
+                    EditorStyles.whiteBoldLabel);
             }
         }
 
@@ -280,6 +355,15 @@ public class HandPoseResampler : EditorWindow
         GUILayout.EndVertical();
         GUILayout.EndArea();
         Handles.EndGUI();
+
+        // 스왑 복원 (원본 데이터 보호)
+        if (swapLeftWrist != null && swapRightWrist != null)
+        {
+            swapLeftWrist.worldPosition = swapSavedLeftPos;
+            swapLeftWrist.worldRotation = swapSavedLeftRot;
+            swapRightWrist.worldPosition = swapSavedRightPos;
+            swapRightWrist.worldRotation = swapSavedRightRot;
+        }
     }
 
     private int GetCompareFrameIndex()
@@ -305,6 +389,15 @@ public class HandPoseResampler : EditorWindow
             }
             return compareFrames.Count - 1;
         }
+    }
+
+    private Vector3 GetHandLabelPosition(List<JointData> joints, bool isLeft)
+    {
+        // 손목 위치 위에 라벨 표시
+        Vector3[] positions = CalculateWorldPositions(joints, isLeft, Vector3.zero);
+        if (positions.Length > 0)
+            return positions[0] + Vector3.up * 0.03f;
+        return Vector3.zero;
     }
 
     private void DrawHand(List<JointData> joints, Color color, bool isLeft, Vector3 additionalOffset)
@@ -362,18 +455,9 @@ public class HandPoseResampler : EditorWindow
         Vector3 transformOffset = previewTransform ? positionOffset : Vector3.zero;
         float transformScale = previewTransform ? uniformScale : 1f;
 
-        // 환자 모델 위치/회전 따라가기
-        Vector3 patientPosOffset = Vector3.zero;
-        Quaternion patientRotOffset = Quaternion.identity;
-        if (followPatient && patientTransform != null)
-        {
-            // 녹화 시점 대비 환자의 회전 변화량
-            Quaternion recordedRot = Quaternion.Euler(recordedPatientRotation);
-            patientRotOffset = patientTransform.rotation * Quaternion.Inverse(recordedRot);
-
-            // 위치 오프셋 (환자 회전 고려)
-            patientPosOffset = patientTransform.position - recordedPatientOffset;
-        }
+        // 환자 모델 위치 따라가기
+        // CSV는 world-space offset(wristPos - refPos)을 저장하므로 회전 보정 불필요
+        // 환자 위치만 더해주면 실제 위치에 표시됨
 
         // Joint 1에 월드 위치가 있으면 사용, 없으면 previewOffset 사용
         Vector3 totalOffset = previewOffset + additionalOffset;
@@ -399,16 +483,43 @@ public class HandPoseResampler : EditorWindow
                 transformedWorldRot = transformRotation * transformedWorldRot;
             }
 
-            // 환자 모델 따라가기: 회전 및 위치 적용
-            if (followPatient && patientTransform != null)
+            // 환자 모델 따라가기
+            if (followPatient)
             {
-                // 녹화 시 환자 위치 기준으로 상대 위치 계산 후 현재 환자 위치/회전 적용
-                Vector3 relativePos = transformedWorldPos - recordedPatientOffset;
-                transformedWorldPos = patientRotOffset * relativePos + patientTransform.position;
-                transformedWorldRot = patientRotOffset * transformedWorldRot;
-            }
+                // 녹화 기준점(referencePoint)이 있으면 사용, 없으면 환자 모델 루트 사용
+                Transform refTr = referencePoint != null ? referencePoint : patientTransform;
 
-            rootPos = transformedWorldPos * previewScale + totalOffset;
+                if (refTr != null)
+                {
+                    if (isReferenceLocalFormat)
+                    {
+                        // 신형식: pos = Inv(refRot) * (wristPos - refPos)
+                        //   → worldPos = refPos + refRot * localPos
+                        transformedWorldPos = refTr.position + refTr.rotation * transformedWorldPos + followPositionAdjust;
+                    }
+                    else
+                    {
+                        // 구형식: pos = wristPos - refPos (월드 오프셋)
+                        //   → worldPos = refPos + pos
+                        transformedWorldPos = refTr.position + transformedWorldPos + followPositionAdjust;
+                    }
+
+                    // 회전은 둘 다 기준점 로컬: rot = Inv(refRot) * wristRot
+                    //   → worldRot = refRot * localRot
+                    transformedWorldRot = refTr.rotation * transformedWorldRot;
+
+                    // followPatient 시에는 previewOffset 무시 (이미 실제 좌표)
+                    rootPos = transformedWorldPos * previewScale + additionalOffset;
+                }
+                else
+                {
+                    rootPos = transformedWorldPos * previewScale + totalOffset;
+                }
+            }
+            else
+            {
+                rootPos = transformedWorldPos * previewScale + totalOffset;
+            }
             rootRot = transformedWorldRot;
         }
 
@@ -487,14 +598,19 @@ public class HandPoseResampler : EditorWindow
 
         EditorGUILayout.Space(15);
 
-        // 탭 선택 (항상 표시)
-        currentTab = (EditorTab)GUILayout.Toolbar((int)currentTab, tabNames);
+        // 탭 선택 (항상 표시, 4열 그리드로 배치)
+        currentTab = (EditorTab)GUILayout.SelectionGrid((int)currentTab, tabNames, 4);
         EditorGUILayout.Space(10);
 
         // 미리보기 탭은 분석 전에도 접근 가능 (데이터 없으면 안내 메시지)
         if (currentTab == EditorTab.Preview)
         {
             DrawPreviewTab();
+        }
+        else if (currentTab == EditorTab.CoordConvert)
+        {
+            // 좌표변환 탭은 CSV 분석 없이도 접근 가능 (일괄 변환용)
+            DrawCoordConvertTab();
         }
         else if (isAnalyzed)
         {
@@ -639,6 +755,7 @@ public class HandPoseResampler : EditorWindow
 
         showJoints = EditorGUILayout.Toggle("조인트 표시", showJoints);
         showBones = EditorGUILayout.Toggle("본(뼈) 표시", showBones);
+        showHandLabels = EditorGUILayout.Toggle("L/R 라벨 + 좌표 표시", showHandLabels);
 
         if (showJoints)
         {
@@ -647,6 +764,22 @@ public class HandPoseResampler : EditorWindow
         if (showBones)
         {
             boneThickness = EditorGUILayout.Slider("본 두께", boneThickness, 1f, 10f);
+        }
+
+        EditorGUILayout.Space(5);
+        var swapStyle = new GUIStyle(EditorStyles.toggle);
+        var prevBg = GUI.backgroundColor;
+        if (swapWristPositions) GUI.backgroundColor = new Color(1f, 0.5f, 0.5f);
+        swapWristPositions = EditorGUILayout.Toggle("손목 위치 L↔R 스왑", swapWristPositions);
+        GUI.backgroundColor = prevBg;
+        if (swapWristPositions)
+        {
+            EditorGUILayout.HelpBox(
+                "손목 위치만 좌우 교환됩니다.\n" +
+                "녹화 시 HandDataRecorder의 leftWristRoot/rightWristRoot가\n" +
+                "반대로 할당되었을 때 사용하세요.\n" +
+                "※ 손가락 포즈(HandVisual)는 영향 없음",
+                MessageType.Warning);
         }
 
         EditorGUILayout.EndVertical();
@@ -785,22 +918,45 @@ public class HandPoseResampler : EditorWindow
 
         if (followPatient)
         {
-            if (patientTransform != null)
+            // === 기준점 설정 ===
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            EditorGUILayout.LabelField("녹화 기준점 (Recording Reference)", EditorStyles.miniBoldLabel);
+            EditorGUILayout.HelpBox(
+                "HandDataRecorder의 patientReference와 같은 트랜스폼을 할당하세요.\n" +
+                "녹화 시 사용한 기준점(목 pivot 등)을 직접 지정해야 정확합니다.",
+                MessageType.Info);
+            referencePoint = (Transform)EditorGUILayout.ObjectField(
+                "기준점 Transform", referencePoint, typeof(Transform), true);
+
+            if (referencePoint != null)
             {
-                Vector3 rot = patientTransform.rotation.eulerAngles;
-                EditorGUILayout.LabelField($"  → {patientTransform.name}", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField($"     위치: ({patientTransform.position.x:F2}, {patientTransform.position.y:F2}, {patientTransform.position.z:F2})", EditorStyles.miniLabel);
-                EditorGUILayout.LabelField($"     회전: ({rot.x:F1}°, {rot.y:F1}°, {rot.z:F1}°)", EditorStyles.miniLabel);
+                Vector3 refRot = referencePoint.rotation.eulerAngles;
+                EditorGUILayout.LabelField($"  위치: ({referencePoint.position.x:F3}, {referencePoint.position.y:F3}, {referencePoint.position.z:F3})", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"  회전: ({refRot.x:F1}, {refRot.y:F1}, {refRot.z:F1})", EditorStyles.miniLabel);
+            }
+            else if (patientTransform != null)
+            {
+                var origColor = GUI.color;
+                GUI.color = new Color(1f, 0.8f, 0.5f);
+                EditorGUILayout.LabelField($"  ※ 기준점 미지정 → 환자 모델 루트({patientTransform.name}) 사용 (부정확할 수 있음)", EditorStyles.miniLabel);
+                GUI.color = origColor;
+                Vector3 ptRot = patientTransform.rotation.eulerAngles;
+                EditorGUILayout.LabelField($"  위치: ({patientTransform.position.x:F3}, {patientTransform.position.y:F3}, {patientTransform.position.z:F3})", EditorStyles.miniLabel);
+                EditorGUILayout.LabelField($"  회전: ({ptRot.x:F1}, {ptRot.y:F1}, {ptRot.z:F1})", EditorStyles.miniLabel);
             }
             else
             {
-                EditorGUILayout.HelpBox("환자 모델을 찾을 수 없습니다.\n'환자 찾기' 버튼을 클릭하거나\nScene에 'Patient' 태그 오브젝트가 있는지 확인하세요.", MessageType.Warning);
+                EditorGUILayout.HelpBox("기준점이 없습니다.\n위 필드에 기준점을 드래그하거나 '환자 찾기'를 클릭하세요.", MessageType.Warning);
             }
+            EditorGUILayout.EndVertical();
 
             EditorGUILayout.Space(3);
-            EditorGUILayout.LabelField("녹화 당시 환자 상태:", EditorStyles.miniLabel);
-            recordedPatientOffset = EditorGUILayout.Vector3Field("  위치", recordedPatientOffset);
-            recordedPatientRotation = EditorGUILayout.Vector3Field("  회전 (°)", recordedPatientRotation);
+            isReferenceLocalFormat = EditorGUILayout.Toggle("신형식 (기준점 로컬 좌표)", isReferenceLocalFormat);
+            if (!isReferenceLocalFormat)
+            {
+                EditorGUILayout.HelpBox("구형식: pos = wristPos - refPos (월드 오프셋)\n좌표변환 탭에서 변환 후 체크하세요.", MessageType.None);
+            }
+            followPositionAdjust = EditorGUILayout.Vector3Field("  위치 미세 조정", followPositionAdjust);
         }
 
         EditorGUILayout.Space(5);
@@ -1412,12 +1568,31 @@ public class HandPoseResampler : EditorWindow
         totalAngle = 0f;
         List<float> distances = new List<float>();
 
+        // 양손 총 이동량 비교
+        float rightTotal = 0f, leftTotal = 0f;
         for (int i = 1; i < parsedFrames.Count; i++)
         {
-            Vector3 prevPos = parsedFrames[i - 1].rightWristWorldPos;
-            Vector3 currPos = parsedFrames[i].rightWristWorldPos;
+            rightTotal += Vector3.Distance(parsedFrames[i - 1].rightWristWorldPos, parsedFrames[i].rightWristWorldPos);
+            var lw0 = parsedFrames[i - 1].leftJoints.Find(j => j.jointId == 1);
+            var lw1 = parsedFrames[i].leftJoints.Find(j => j.jointId == 1);
+            if (lw0 != null && lw1 != null)
+                leftTotal += Vector3.Distance(lw0.worldPosition, lw1.worldPosition);
+        }
+        bool useLeft = leftTotal > rightTotal;
 
-            float dist = Vector3.Distance(prevPos, currPos);
+        for (int i = 1; i < parsedFrames.Count; i++)
+        {
+            float dist;
+            if (useLeft)
+            {
+                var lw0 = parsedFrames[i - 1].leftJoints.Find(j => j.jointId == 1);
+                var lw1 = parsedFrames[i].leftJoints.Find(j => j.jointId == 1);
+                dist = (lw0 != null && lw1 != null) ? Vector3.Distance(lw0.worldPosition, lw1.worldPosition) : 0f;
+            }
+            else
+            {
+                dist = Vector3.Distance(parsedFrames[i - 1].rightWristWorldPos, parsedFrames[i].rightWristWorldPos);
+            }
             distances.Add(dist);
             totalDistance += dist;
 
@@ -1503,14 +1678,31 @@ public class HandPoseResampler : EditorWindow
         {
             EditorUtility.DisplayProgressBar("리샘플링", "처리 중...", 0.1f);
 
+            // 양손 이동량 비교하여 더 많이 움직인 손 기준으로 거리 계산
+            bool useLeftHand = ShouldUseLeftHandForDistance();
+
             List<float> cumDist = new List<float> { 0f };
             for (int i = 1; i < parsedFrames.Count; i++)
             {
-                float dist = Vector3.Distance(
-                    parsedFrames[i - 1].rightWristWorldPos,
-                    parsedFrames[i].rightWristWorldPos);
+                float dist;
+                if (useLeftHand)
+                {
+                    var lw0 = parsedFrames[i - 1].leftJoints.Find(j => j.jointId == 1);
+                    var lw1 = parsedFrames[i].leftJoints.Find(j => j.jointId == 1);
+                    dist = (lw0 != null && lw1 != null)
+                        ? Vector3.Distance(lw0.worldPosition, lw1.worldPosition)
+                        : 0f;
+                }
+                else
+                {
+                    dist = Vector3.Distance(
+                        parsedFrames[i - 1].rightWristWorldPos,
+                        parsedFrames[i].rightWristWorldPos);
+                }
                 cumDist.Add(cumDist[i - 1] + dist);
             }
+
+            ChunaLogger.Log($"<color=cyan>[리샘플링] 기준 손: {(useLeftHand ? "왼손" : "오른손")}, 총 이동거리: {cumDist[cumDist.Count - 1]:F4}m</color>");
 
             List<FrameData> result = new List<FrameData>();
             float spacing = totalDistance / (targetFrameCount - 1);
@@ -1903,6 +2095,30 @@ public class HandPoseResampler : EditorWindow
 
     #region Helper Methods
 
+    /// <summary>
+    /// 양손 총 이동거리를 비교하여 더 많이 움직인 손을 기준으로 사용
+    /// </summary>
+    private bool ShouldUseLeftHandForDistance()
+    {
+        float leftTotal = 0f;
+        float rightTotal = 0f;
+
+        for (int i = 1; i < parsedFrames.Count; i++)
+        {
+            rightTotal += Vector3.Distance(
+                parsedFrames[i - 1].rightWristWorldPos,
+                parsedFrames[i].rightWristWorldPos);
+
+            var lw0 = parsedFrames[i - 1].leftJoints.Find(j => j.jointId == 1);
+            var lw1 = parsedFrames[i].leftJoints.Find(j => j.jointId == 1);
+            if (lw0 != null && lw1 != null)
+                leftTotal += Vector3.Distance(lw0.worldPosition, lw1.worldPosition);
+        }
+
+        ChunaLogger.Log($"[리샘플링] 왼손 이동량: {leftTotal:F4}m, 오른손 이동량: {rightTotal:F4}m");
+        return leftTotal > rightTotal;
+    }
+
     private int FindLowerIndex(List<float> cumDist, float targetDist)
     {
         for (int j = 0; j < cumDist.Count - 1; j++)
@@ -2179,6 +2395,301 @@ public class HandPoseResampler : EditorWindow
         }
 
         return frames.Values.OrderBy(f => f.frameIndex).ToList();
+    }
+
+    #endregion
+
+    #region Coordinate Conversion (구 형식 → 신 형식)
+
+    private Transform coordConvertReference = null;
+    private bool coordConvertOverwrite = true;
+
+    private void DrawCoordConvertTab()
+    {
+        EditorGUILayout.LabelField("좌표 형식 변환", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "구 형식 CSV (월드 오프셋)를 신 형식 (기준점 로컬 좌표)로 변환합니다.\n\n" +
+            "구 형식: pos = wristPos - refPos (위치만 뺄셈)\n" +
+            "신 형식: pos = Inv(refRot) * (wristPos - refPos) (기준점 로컬)\n\n" +
+            "변환 공식: newPos = Inv(refRot) * oldPos\n" +
+            "회전은 이미 기준점 로컬이므로 변경 없음.",
+            MessageType.Info);
+
+        EditorGUILayout.Space(10);
+
+        coordConvertReference = (Transform)EditorGUILayout.ObjectField(
+            "녹화 시 기준점", coordConvertReference, typeof(Transform), true);
+
+        if (coordConvertReference != null)
+        {
+            Vector3 rot = coordConvertReference.rotation.eulerAngles;
+            EditorGUILayout.LabelField($"  회전: ({rot.x:F1}, {rot.y:F1}, {rot.z:F1})", EditorStyles.miniLabel);
+
+            Quaternion invRot = Quaternion.Inverse(coordConvertReference.rotation);
+            EditorGUILayout.LabelField($"  역회전: {invRot.eulerAngles}", EditorStyles.miniLabel);
+        }
+        else
+        {
+            EditorGUILayout.HelpBox("녹화 당시 사용한 기준점(환자 목 피벗 등)을 할당하세요.", MessageType.Warning);
+        }
+
+        EditorGUILayout.Space(10);
+
+        coordConvertOverwrite = EditorGUILayout.Toggle("원본 파일 덮어쓰기", coordConvertOverwrite);
+
+        if (!coordConvertOverwrite)
+        {
+            outputFileName = EditorGUILayout.TextField("출력 파일명", outputFileName);
+        }
+
+        EditorGUILayout.Space(10);
+
+        // 단일 파일 변환
+        GUI.enabled = isAnalyzed && coordConvertReference != null;
+        GUI.backgroundColor = new Color(0.5f, 1f, 0.5f);
+        if (GUILayout.Button("현재 파일 변환", GUILayout.Height(35)))
+        {
+            ExecuteCoordConvert(new string[] { sourceFilePath });
+        }
+        GUI.backgroundColor = Color.white;
+
+        EditorGUILayout.Space(20);
+
+        // ===== 좌우 손목 위치 스왑 =====
+        EditorGUILayout.LabelField("좌우 손목 위치 스왑", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "녹화 시 leftWristRoot / rightWristRoot가 반대로 할당된 경우 사용.\n" +
+            "Left/Right의 WorldPos, WorldRot만 서로 교환합니다.\n" +
+            "(손 모양 = local joint poses는 그대로 유지)",
+            MessageType.Info);
+
+        GUI.enabled = isAnalyzed;
+        GUI.backgroundColor = new Color(1f, 0.8f, 0.5f);
+        if (GUILayout.Button("현재 파일 좌우 스왑", GUILayout.Height(35)))
+        {
+            bool confirm = EditorUtility.DisplayDialog("좌우 스왑 확인",
+                $"'{Path.GetFileName(sourceFilePath)}'의 Left/Right WorldPos/WorldRot를 서로 교환합니다.\n\n계속하시겠습니까?",
+                "스왑", "취소");
+            if (confirm)
+                ExecuteWristSwap(new string[] { sourceFilePath });
+        }
+        GUI.backgroundColor = Color.white;
+        GUI.enabled = true;
+
+        EditorGUILayout.Space(15);
+
+        // 일괄 변환
+        EditorGUILayout.LabelField("일괄 변환", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "HandPoseData 폴더의 모든 CSV를 일괄 변환합니다.\n" +
+            "동일한 기준점으로 녹화된 파일만 선택하세요.",
+            MessageType.None);
+
+        if (GUILayout.Button("HandPoseData 폴더 전체 변환", GUILayout.Height(35)))
+        {
+            string folder = Path.Combine(Application.dataPath, "Resources", "HandPoseData");
+            if (Directory.Exists(folder))
+            {
+                string[] csvFiles = Directory.GetFiles(folder, "*.csv");
+                if (csvFiles.Length > 0)
+                {
+                    bool confirm = EditorUtility.DisplayDialog("일괄 변환 확인",
+                        $"{csvFiles.Length}개 CSV 파일을 변환합니다.\n\n" +
+                        $"기준점: {(coordConvertReference != null ? coordConvertReference.name : "없음")}\n" +
+                        $"덮어쓰기: {(coordConvertOverwrite ? "예" : "아니오")}\n\n계속하시겠습니까?",
+                        "변환", "취소");
+
+                    if (confirm)
+                    {
+                        ExecuteCoordConvert(csvFiles);
+                    }
+                }
+                else
+                {
+                    EditorUtility.DisplayDialog("알림", "HandPoseData 폴더에 CSV 파일이 없습니다.", "확인");
+                }
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("오류", "HandPoseData 폴더를 찾을 수 없습니다.", "확인");
+            }
+        }
+        GUI.enabled = true;
+    }
+
+    private void ExecuteCoordConvert(string[] filePaths)
+    {
+        if (coordConvertReference == null)
+        {
+            EditorUtility.DisplayDialog("오류", "기준점 Transform을 할당해주세요.", "확인");
+            return;
+        }
+
+        Quaternion invRefRot = Quaternion.Inverse(coordConvertReference.rotation);
+        CultureInfo inv = CultureInfo.InvariantCulture;
+        int convertedCount = 0;
+
+        foreach (string filePath in filePaths)
+        {
+            if (!File.Exists(filePath)) continue;
+
+            string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+            if (lines.Length < 2) continue;
+
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine(lines[0]); // 헤더 유지
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                string[] cols = line.Split(',');
+                if (cols.Length < 11)
+                {
+                    sb.AppendLine(line);
+                    continue;
+                }
+
+                // JointID=1 (HandWristRoot)이고 World 데이터가 있는 행만 변환
+                int jointId;
+                if (!int.TryParse(cols[2], out jointId) || jointId != 1 || cols.Length < 18)
+                {
+                    sb.AppendLine(line);
+                    continue;
+                }
+
+                // World 컬럼이 비어있으면 스킵
+                if (string.IsNullOrEmpty(cols[11]) || string.IsNullOrEmpty(cols[12]) || string.IsNullOrEmpty(cols[13]))
+                {
+                    sb.AppendLine(line);
+                    continue;
+                }
+
+                float wx, wy, wz;
+                if (!float.TryParse(cols[11], NumberStyles.Float, inv, out wx) ||
+                    !float.TryParse(cols[12], NumberStyles.Float, inv, out wy) ||
+                    !float.TryParse(cols[13], NumberStyles.Float, inv, out wz))
+                {
+                    sb.AppendLine(line);
+                    continue;
+                }
+
+                // 구 형식 → 신 형식: newPos = Inv(refRot) * oldPos
+                Vector3 oldPos = new Vector3(wx, wy, wz);
+                Vector3 newPos = invRefRot * oldPos;
+
+                // World position 컬럼 교체 (11,12,13), rotation(14~17)은 유지
+                cols[11] = newPos.x.ToString("F4", inv);
+                cols[12] = newPos.y.ToString("F4", inv);
+                cols[13] = newPos.z.ToString("F4", inv);
+
+                sb.AppendLine(string.Join(",", cols));
+            }
+
+            string savePath;
+            if (coordConvertOverwrite)
+            {
+                savePath = filePath;
+            }
+            else
+            {
+                string dir = Path.GetDirectoryName(filePath);
+                string name = Path.GetFileNameWithoutExtension(filePath) + "_converted.csv";
+                savePath = Path.Combine(dir, name);
+            }
+
+            File.WriteAllText(savePath, sb.ToString(), Encoding.UTF8);
+            convertedCount++;
+            ChunaLogger.Log($"<color=cyan>[좌표변환] 완료: {Path.GetFileName(savePath)}</color>");
+        }
+
+        AssetDatabase.Refresh();
+        EditorUtility.DisplayDialog("변환 완료",
+            $"{convertedCount}개 파일 변환 완료!\n\n" +
+            $"기준점: {coordConvertReference.name}\n" +
+            $"기준점 회전: {coordConvertReference.rotation.eulerAngles}",
+            "확인");
+    }
+
+    /// <summary>
+    /// 좌우 손목 WorldPos/WorldRot 스왑.
+    /// 같은 프레임의 Left JointID=1과 Right JointID=1의 World 컬럼을 교환.
+    /// </summary>
+    private void ExecuteWristSwap(string[] filePaths)
+    {
+        int swappedCount = 0;
+
+        foreach (string filePath in filePaths)
+        {
+            if (!File.Exists(filePath)) continue;
+
+            string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+            if (lines.Length < 2) continue;
+
+            // 프레임별로 Left/Right wrist 행 인덱스를 매핑
+            // Key: frameIndex, Value: int[2] { leftLineIdx, rightLineIdx }
+            var wristLines = new Dictionary<int, int[]>();
+
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                string[] cols = line.Split(',');
+                if (cols.Length < 18) continue;
+
+                int jointId;
+                int frameIdx;
+                if (!int.TryParse(cols[2], out jointId) || jointId != 1) continue;
+                if (!int.TryParse(cols[0], out frameIdx)) continue;
+                if (string.IsNullOrEmpty(cols[11])) continue;
+
+                string handType = cols[1].Trim();
+                if (!wristLines.ContainsKey(frameIdx))
+                    wristLines[frameIdx] = new int[] { -1, -1 };
+
+                if (handType == "Left")
+                    wristLines[frameIdx][0] = i;
+                else if (handType == "Right")
+                    wristLines[frameIdx][1] = i;
+            }
+
+            // 실제 스왑
+            int frameSwapped = 0;
+            foreach (var kvp in wristLines)
+            {
+                int li = kvp.Value[0];
+                int ri = kvp.Value[1];
+                if (li < 0 || ri < 0) continue;
+
+                string[] leftCols = lines[li].Split(',');
+                string[] rightCols = lines[ri].Split(',');
+
+                if (leftCols.Length < 18 || rightCols.Length < 18) continue;
+
+                // World 컬럼 (11~17) 스왑
+                for (int c = 11; c <= 17; c++)
+                {
+                    string temp = leftCols[c];
+                    leftCols[c] = rightCols[c];
+                    rightCols[c] = temp;
+                }
+
+                lines[li] = string.Join(",", leftCols);
+                lines[ri] = string.Join(",", rightCols);
+                frameSwapped++;
+            }
+
+            File.WriteAllText(filePath, string.Join("\n", lines) + "\n", Encoding.UTF8);
+            swappedCount++;
+            ChunaLogger.Log($"<color=yellow>[좌우스왑] {Path.GetFileName(filePath)}: {frameSwapped}개 프레임 스왑 완료</color>");
+        }
+
+        AssetDatabase.Refresh();
+        EditorUtility.DisplayDialog("스왑 완료",
+            $"{swappedCount}개 파일의 Left/Right WorldPos/WorldRot를 교환했습니다.",
+            "확인");
     }
 
     #endregion

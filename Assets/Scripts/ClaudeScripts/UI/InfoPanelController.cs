@@ -1146,6 +1146,19 @@ public class InfoPanelController : MonoBehaviour
             ChunaLogger.Log($"[InfoPanel] 연습모드 난이도 설정: {difficulty}");
     }
 
+    /// <summary>
+    /// ScenarioBootstrapper에서 호출 — 환자 위치 프리셋을 외부에서 설정
+    /// </summary>
+    public void SetDefaultPositionPreset(string presetName)
+    {
+        if (!string.IsNullOrEmpty(presetName))
+        {
+            defaultPositionPreset = presetName;
+            if (showDebugLogs)
+                ChunaLogger.Log($"[InfoPanel] 기본 환자 위치 프리셋 설정: {presetName}");
+        }
+    }
+
     // Properties
     public ContentPage CurrentPage => currentContentPage;
     public bool IsSettingsOpen => isSettingsOpen;

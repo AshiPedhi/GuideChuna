@@ -1,6 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 
 /// <summary>
 /// CSV 기반 시나리오 매니저
@@ -30,18 +29,9 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("환자 모델의 Animator (시나리오별로 Controller 자동 전환)")]
     [SerializeField] private Animator patientAnimator;
 
-    [Tooltip("Animator Controller 경로 (Resources 폴더 기준)")]
-    [SerializeField] private string animatorControllerPath = "Animators";
-
-    [Header("=== 각도 표시 UI (동작별) ===")]
-    [Tooltip("측굴 각도 표시 (우측굴)")]
-    [SerializeField] private AngleDisplayController angleDisplay_LateralFlexion;
-
-    [Tooltip("좌회전 각도 표시 (환측/전부)")]
-    [SerializeField] private AngleDisplayController angleDisplay_LeftRotation;
-
-    [Tooltip("우회전 각도 표시 (건측/후부)")]
-    [SerializeField] private AngleDisplayController angleDisplay_RightRotation;
+    [Header("=== 각도 표시 UI ===")]
+    [Tooltip("각도 표시 컨트롤러 (프리셋으로 전환)")]
+    [SerializeField] private AngleDisplayController angleDisplay;
 
     [Header("=== 퀴즈 패널 ===")]
     [Tooltip("퀴즈 패널 (학습 완료 후 표시)")]
@@ -81,6 +71,9 @@ public class ScenarioManager : MonoBehaviour
     // 시나리오 완료 상태
     private bool isScenarioCompleted = false;
 
+    // 현재 Config 참조
+    private ScenarioConfig currentConfig;
+
     // 프로퍼티
     public ScenarioData CurrentScenario => currentScenario;
     public PhaseData CurrentPhase => currentPhase;
@@ -109,47 +102,19 @@ public class ScenarioManager : MonoBehaviour
             conditionManager = FindFirstObjectByType<ScenarioConditionManager>();
         }
 
-        // ✅ UI Positioner 찾기
         if (uiPositioner == null)
-        {
             uiPositioner = FindFirstObjectByType<ScenarioUIPositioner>();
-            if (uiPositioner != null)
-            {
-                ChunaLogger.Log("[ScenarioManager] ✅ ScenarioUIPositioner 자동 찾기 성공");
-            }
-        }
 
-        // ✅ QuizPanel 찾기
         if (quizPanel == null)
-        {
             quizPanel = FindFirstObjectByType<QuizPanel>();
-            if (quizPanel != null)
-            {
-                ChunaLogger.Log("[ScenarioManager] ✅ QuizPanel 자동 찾기 성공");
-            }
-        }
 
-        // ✅ ExitPopupController 찾기
         if (exitPopupController == null)
-        {
             exitPopupController = FindFirstObjectByType<ExitPopupController>();
-            if (exitPopupController != null)
-            {
-                ChunaLogger.Log("[ScenarioManager] ✅ ExitPopupController 자동 찾기 성공");
-            }
-        }
 
-        // ✅ TrainingResultTracker 찾기
         if (resultTracker == null)
-        {
             resultTracker = FindFirstObjectByType<TrainingResultTracker>();
-            if (resultTracker != null)
-            {
-                ChunaLogger.Log("[ScenarioManager] ✅ TrainingResultTracker 자동 찾기 성공");
-            }
-        }
 
-        // ✅ HandPose 시스템 초기화
+        // HandPose 시스템 초기화
         InitializeHandPoseSystem();
     }
 
@@ -158,13 +123,8 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void InitializeHandPoseSystem()
     {
-        ChunaLogger.Log("<color=cyan>[ScenarioManager] 손 동작 평가 시스템 초기화 중...</color>");
-
-        // ChunaPathEvaluator 찾기
         if (chunaPathEvaluator == null)
-        {
             chunaPathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
-        }
 
         if (chunaPathEvaluator == null)
         {
@@ -172,16 +132,9 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        // ChunaPathEvaluatorBridge 찾기 또는 생성
         chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
-
         if (chunaPathEvaluatorBridge == null)
-        {
-            ChunaLogger.Log("[ScenarioManager] ChunaPathEvaluatorBridge가 없어서 자동으로 추가합니다.");
             chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
-        }
-
-        ChunaLogger.Log("<color=green>[ScenarioManager] ✓ ChunaPathEvaluator 시스템 초기화 완료!</color>");
     }
 
     private void OnEnable()
@@ -209,6 +162,20 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
+    /// ScenarioBootstrapper에서 호출 — ScenarioConfig 데이터를 주입
+    /// scenarioName이 CSV 파일명과 Animator Controller 경로에 공용으로 사용됨
+    /// </summary>
+    public void SetScenarioConfig(ScenarioConfig config)
+    {
+        if (config == null) return;
+
+        csvFileName = config.scenarioName;
+        currentConfig = config;
+
+        ChunaLogger.Log($"[ScenarioManager] ScenarioConfig 적용: scenarioName={config.scenarioName}");
+    }
+
+    /// <summary>
     /// 모드와 난이도 정보 설정
     /// </summary>
     public void SetModeInfo(string mode, string difficulty)
@@ -224,11 +191,9 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void StartScenario()
     {
-        ChunaLogger.Log("<color=cyan>═══════════════════════════════════</color>");
-        ChunaLogger.Log("<color=cyan>[ScenarioManager] StartScenario() 호출됨</color>");
-        ChunaLogger.Log($"<color=yellow>[ScenarioManager] csvFileName: {csvFileName}</color>");
+        if (showDebugLog)
+            ChunaLogger.Log($"[ScenarioManager] StartScenario() csvFileName: {csvFileName}");
 
-        ChunaLogger.Log("<color=yellow>[ScenarioManager] CSV 데이터 로드 시도 중...</color>");
         LoadFromCSV();
     }
 
@@ -237,17 +202,11 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void StartScenario(ScenarioData scenario)
     {
-        ChunaLogger.Log("<color=yellow>[ScenarioManager] StartScenario(ScenarioData) 호출됨</color>");
-
         if (scenario == null || scenario.phases.Count == 0)
         {
             LogError("유효하지 않은 시나리오 데이터입니다!");
             return;
         }
-
-        ChunaLogger.Log($"<color=green>[ScenarioManager] ✓ 시나리오 데이터 유효성 확인 완료</color>");
-        ChunaLogger.Log($"<color=green>  - 시나리오: {scenario.scenarioName}</color>");
-        ChunaLogger.Log($"<color=green>  - Phase 수: {scenario.phases.Count}</color>");
 
         currentScenario = scenario;
         currentPhaseIndex = 0;
@@ -259,69 +218,42 @@ public class ScenarioManager : MonoBehaviour
         currentStep = currentPhase.steps[0];
         currentSubStep = currentStep.subSteps[0];
 
-        // ★ 시나리오 이름으로 Animator Controller 자동 전환
-        SwitchAnimatorController(scenario.scenarioName);
+        // ★ 시나리오별 Animator Controller 전환
+        SwitchAnimatorController();
 
-        // ★ 시나리오 전체 구조 디버그 출력
-        ChunaLogger.Log($"<color=magenta>===== 시나리오 구조 디버그 =====</color>");
-        ChunaLogger.Log($"<color=magenta>총 Phase 수: {currentScenario.phases.Count}</color>");
-        for (int pi = 0; pi < currentScenario.phases.Count; pi++)
+        // 시나리오 구조 디버그 출력
+        if (showDebugLog)
         {
-            var phase = currentScenario.phases[pi];
-            ChunaLogger.Log($"<color=cyan>  [{pi}] Phase: {phase.phaseName} (Steps: {phase.steps.Count})</color>");
-            for (int si = 0; si < phase.steps.Count; si++)
+            ChunaLogger.Log($"[ScenarioManager] 시나리오: {scenario.scenarioName}, Phase: {currentScenario.phases.Count}개");
+            for (int pi = 0; pi < currentScenario.phases.Count; pi++)
             {
-                var step = phase.steps[si];
-                ChunaLogger.Log($"<color=yellow>    [{si}] Step {step.stepNo}: {step.stepName} (SubSteps: {step.subSteps.Count})</color>");
-                for (int ssi = 0; ssi < step.subSteps.Count; ssi++)
-                {
-                    var subStep = step.subSteps[ssi];
-                    ChunaLogger.Log($"<color=white>      [{ssi}] SubStep {subStep.subStepNo}: {subStep.handTrackingFileName ?? "(없음)"}</color>");
-                }
+                var phase = currentScenario.phases[pi];
+                ChunaLogger.Log($"  [{pi}] {phase.phaseName} (Steps: {phase.steps.Count})");
             }
         }
-        ChunaLogger.Log($"<color=magenta>===== 구조 디버그 끝 =====</color>");
-
-        ChunaLogger.Log($"<color=yellow>[ScenarioManager] 초기 상태 설정 완료</color>");
-        ChunaLogger.Log($"<color=yellow>  - Phase: {currentPhase.phaseName}</color>");
-        ChunaLogger.Log($"<color=yellow>  - Step: {currentStep.stepName}</color>");
-        ChunaLogger.Log($"<color=yellow>  - SubStep: {currentSubStep.subStepNo}</color>");
 
         // UI 자동 배치
         if (uiPositioner != null)
-        {
-            ChunaLogger.Log("<color=magenta>[ScenarioManager] UI 자동 배치 시작...</color>");
             uiPositioner.PositionUIElements();
-            ChunaLogger.Log("<color=magenta>[ScenarioManager] ✓ UI 자동 배치 완료</color>");
-        }
-        else
-        {
-            ChunaLogger.LogWarning("<color=orange>[ScenarioManager] ScenarioUIPositioner가 없어 UI 자동 배치를 건너뜁니다.</color>");
-        }
 
-        // ✅ 결과 추적 시작
+        // 결과 추적 시작
         if (resultTracker != null)
         {
             resultTracker.StartTracking(selectedMode, selectedDifficulty);
             resultTracker.StartPhase(currentPhase.phaseName);
             resultTracker.StartStep(currentStep.stepName);
-            ChunaLogger.Log("<color=magenta>[ScenarioManager] ✓ 결과 추적 시작</color>");
         }
 
         // 이벤트 발생
-        ChunaLogger.Log("<color=cyan>[ScenarioManager] 이벤트 시스템 호출 중...</color>");
         eventSystem.ScenarioStarted(currentScenario);
         eventSystem.PhaseChanged(currentPhase);
         eventSystem.StepChanged(currentStep);
         eventSystem.SubStepStarted(currentSubStep);
-        ChunaLogger.Log("<color=cyan>[ScenarioManager] ✓ 이벤트 시스템 호출 완료</color>");
 
         UpdateUI();
         UpdateProgress();
 
         Log($"시나리오 시작: {currentScenario.scenarioName} (모드: {selectedMode}, 난이도: {selectedDifficulty})");
-        ChunaLogger.Log("<color=green>[ScenarioManager] ✓✓✓ 시나리오 시작 완료! ✓✓✓</color>");
-        ChunaLogger.Log("<color=cyan>═══════════════════════════════════</color>");
     }
 
     /// <summary>
@@ -329,27 +261,18 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void LoadFromCSV()
     {
-        ChunaLogger.Log("<color=yellow>[ScenarioManager] CSV 로더 확인 중...</color>");
-
         ScenarioCSVLoader loader = GetComponent<ScenarioCSVLoader>();
         if (loader == null)
-        {
-            ChunaLogger.Log("<color=yellow>[ScenarioManager] CSV 로더가 없어서 추가 중...</color>");
             loader = gameObject.AddComponent<ScenarioCSVLoader>();
-        }
 
-        ChunaLogger.Log($"<color=yellow>[ScenarioManager] CSV 파일 로드 시도: Resources/Scenarios/{csvFileName}.csv</color>");
         ScenarioCollection collection = loader.LoadScenarios(csvFileName);
 
         if (collection == null || collection.scenarios.Count == 0)
         {
-            LogError("CSV 로드 실패!");
-            ChunaLogger.LogError($"<color=red>[ScenarioManager] ❌ CSV 파일 경로 확인: Assets/Resources/Scenarios/{csvFileName}.csv</color>");
-            ChunaLogger.LogError($"<color=red>[ScenarioManager] ❌ 파일이 존재하는지, 파일명이 정확한지 확인하세요!</color>");
+            LogError($"CSV 로드 실패: Resources/Scenarios/{csvFileName}.csv");
             return;
         }
 
-        ChunaLogger.Log($"<color=green>[ScenarioManager] ✓ CSV 로드 성공! {collection.scenarios.Count}개 시나리오 발견</color>");
         StartScenario(collection.scenarios[0]);
     }
 
@@ -358,12 +281,8 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void NextSubStep()
     {
-        // ★ 디버그: 현재 상태 상세 출력
-        ChunaLogger.Log($"<color=cyan>===== [ScenarioManager.NextSubStep] 호출됨 =====</color>");
-        ChunaLogger.Log($"<color=cyan>  Phase: {currentPhase?.phaseName} (index {currentPhaseIndex}/{currentScenario?.phases?.Count})</color>");
-        ChunaLogger.Log($"<color=cyan>  Step: {currentStep?.stepName} (stepNo={currentStep?.stepNo}, index {currentStepIndex}/{currentPhase?.steps?.Count})</color>");
-        ChunaLogger.Log($"<color=cyan>  SubStep: {currentSubStep?.subStepNo} (index {currentSubStepIndex} / count {currentStep?.subSteps?.Count})</color>");
-        ChunaLogger.Log($"<color=cyan>  조건: {currentSubStepIndex} < {currentStep?.subSteps?.Count - 1} = {currentSubStepIndex < currentStep?.subSteps?.Count - 1}</color>");
+        if (showDebugLog)
+            ChunaLogger.Log($"[ScenarioManager] NextSubStep: Phase={currentPhase?.phaseName}, Step={currentStep?.stepName}, SubStep={currentSubStepIndex}/{currentStep?.subSteps?.Count}");
 
         if (currentSubStep != null)
         {
@@ -376,8 +295,6 @@ public class ScenarioManager : MonoBehaviour
             currentSubStepIndex++;
             currentSubStep = currentStep.subSteps[currentSubStepIndex];
 
-            ChunaLogger.Log($"<color=green>[ScenarioManager.NextSubStep] → 다음 SubStep으로 진행: {currentSubStep.subStepNo}</color>");
-
             eventSystem.SubStepStarted(currentSubStep);
             UpdateUI();
             UpdateProgress();
@@ -386,7 +303,6 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        ChunaLogger.Log($"<color=yellow>[ScenarioManager.NextSubStep] SubStep 끝 (마지막 SubStep 도달) → NextStep 호출</color>");
         // SubStep 끝 -> Step 완료
         NextStep();
     }
@@ -471,18 +387,11 @@ public class ScenarioManager : MonoBehaviour
     private void CompleteScenario()
     {
         // ✅ 결과 추적 종료 및 데이터 저장
-        TrainingResultData finalResult = null;
         if (resultTracker != null)
         {
-            finalResult = resultTracker.FinishTracking();
-            if (finalResult != null)
-            {
-                ChunaLogger.Log($"<color=magenta>[ScenarioManager] ✓ 훈련 결과 수집 완료</color>");
-                ChunaLogger.Log($"<color=magenta>  - 총 수행 시간: {TrainingResultData.FormatTime(finalResult.totalTime)}</color>");
-                ChunaLogger.Log($"<color=magenta>  - 전체 유사도: {finalResult.overallSimilarity:P0}</color>");
-                ChunaLogger.Log($"<color=magenta>  - 경고 횟수: {finalResult.totalWarningCount}회</color>");
-                ChunaLogger.Log($"<color=magenta>  - 스킵 횟수: {finalResult.totalSkipCount}회</color>");
-            }
+            var finalResult = resultTracker.FinishTracking();
+            if (showDebugLog && finalResult != null)
+                ChunaLogger.Log($"[ScenarioManager] 훈련 결과: 시간={TrainingResultData.FormatTime(finalResult.totalTime)}, 유사도={finalResult.overallSimilarity:P0}, 경고={finalResult.totalWarningCount}, 스킵={finalResult.totalSkipCount}");
         }
 
         // ★ 시나리오 완료 상태 설정
@@ -611,10 +520,7 @@ public class ScenarioManager : MonoBehaviour
         UpdateProgress();
     }
 
-    // === 디버그 헬퍼 ===
-
-
-    // ========== HandPose 자동 처리 (통합된 ActionHandler 기능) ==========
+    // ========== HandPose 자동 처리 ==========
 
     /// <summary>
     /// SubStep 시작 시 HandPose 자동 처리
@@ -622,15 +528,10 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void OnSubStepStartedForHandPose(SubStepData subStep)
     {
-        // ★ 디버그: SubStep 정보 출력
-        ChunaLogger.Log($"<color=cyan>[ScenarioManager] OnSubStepStartedForHandPose 호출됨</color>");
-        ChunaLogger.Log($"<color=cyan>  - SubStep #{subStep?.subStepNo}</color>");
-        ChunaLogger.Log($"<color=cyan>  - handTrackingFileName: '{subStep?.handTrackingFileName ?? "(null)"}'</color>");
-        ChunaLogger.Log($"<color=cyan>  - patientAnimationClip: '{subStep?.patientAnimationClip ?? "(null)"}'</color>");
-        ChunaLogger.Log($"<color=cyan>  - HasPatientAnimation: {subStep?.HasPatientAnimation()}</color>");
-        ChunaLogger.Log($"<color=cyan>  - GetAnimationPlayMode: {subStep?.GetAnimationPlayMode()}</color>");
+        if (showDebugLog)
+            ChunaLogger.Log($"[ScenarioManager] SubStep #{subStep?.subStepNo}: hand='{subStep?.handTrackingFileName ?? ""}', anim='{subStep?.patientAnimationClip ?? ""}'");
 
-        // ✅ 결과 추적: SubStep 시작 기록
+        // 결과 추적: SubStep 시작 기록
         if (resultTracker != null && currentPhase != null && currentStep != null)
         {
             resultTracker.StartSubStep(currentPhase.phaseName, currentStep.stepName);
@@ -642,22 +543,10 @@ public class ScenarioManager : MonoBehaviour
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
         UpdateAngleDisplayVisibility(subStep);
 
-        // ✅ CSV의 handTrackingFileName 자동 처리
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
-        {
-            ChunaLogger.Log($"<color=green>[ScenarioManager] → HandPoseTracking 모드 선택</color>");
             HandleHandPoseTracking(subStep);
-        }
-        // ★ 핸드데이터 없고 환자 애니메이션만 있는 경우 → AutoPlay 모드
         else if (subStep.HasPatientAnimation())
-        {
-            ChunaLogger.Log($"<color=magenta>[ScenarioManager] → AutoPlay 모드 선택</color>");
             HandleAutoPlayAnimation(subStep);
-        }
-        else
-        {
-            ChunaLogger.Log($"<color=yellow>[ScenarioManager] → 핸드/애니메이션 처리 없음</color>");
-        }
     }
 
     /// <summary>
@@ -672,11 +561,8 @@ public class ScenarioManager : MonoBehaviour
         }
 
         string stepName = currentStep?.stepName ?? "";
-        ChunaLogger.Log($"<color=magenta>[ScenarioManager] ========== AutoPlay 모드 시작 ==========</color>");
-        ChunaLogger.Log($"<color=magenta>[ScenarioManager] 애니메이션: {subStep.patientAnimationClip}</color>");
-        ChunaLogger.Log($"<color=magenta>[ScenarioManager] 시간: {subStep.duration}초</color>");
 
-        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
+        // 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
         // ★ 환측/건측 감지는 핸드데이터 이름 우선
         chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
 
@@ -694,8 +580,6 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void OnAutoPlayCompletedHandler()
     {
-        ChunaLogger.Log("<color=green>[ScenarioManager] AutoPlay 완료</color>");
-
         // 이벤트 구독 해제
         if (chunaPathEvaluator != null)
         {
@@ -704,7 +588,8 @@ public class ScenarioManager : MonoBehaviour
             // 가이드 모드일 경우 자동 진행하지 않고 토글 대기
             if (chunaPathEvaluator.IsGuideMode)
             {
-                ChunaLogger.Log("<color=magenta>[ScenarioManager] 가이드 모드 - 토글 버튼으로 진행하세요</color>");
+                if (showDebugLog)
+                    ChunaLogger.Log("[ScenarioManager] 가이드 모드 - 토글 대기");
                 return;
             }
         }
@@ -751,15 +636,10 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        ChunaLogger.Log($"<color=cyan>[ScenarioManager] ========== 체크포인트 기반 평가 시작 ==========</color>");
-        ChunaLogger.Log($"<color=cyan>[ScenarioManager] CSV 파일: {subStep.handTrackingFileName}</color>");
-
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
         chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
-        ChunaLogger.Log($"<color=magenta>[ScenarioManager] 환자 애니메이션 설정 요청 (클립: {subStep.patientAnimationClip ?? "없음"})</color>");
 
-        // ★ 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
-        // ★ 환측/건측 감지는 핸드데이터 이름 우선
+        // 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
         chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
 
         // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
@@ -775,12 +655,8 @@ public class ScenarioManager : MonoBehaviour
         // 4. ScenarioConditionManager에 조건 등록
         conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
 
-        ChunaLogger.Log($"<color=green>[ScenarioManager] ✓ CheckpointPoseCondition 등록 완료!</color>");
-        ChunaLogger.Log($"<color=green>  - Phase: {phaseName}</color>");
-        ChunaLogger.Log($"<color=green>  - Step: {stepName}</color>");
-        ChunaLogger.Log($"<color=green>  - SubStep: {subStepNo}</color>");
-        ChunaLogger.Log($"<color=green>  - CSV: {subStep.handTrackingFileName}</color>");
-        ChunaLogger.Log($"<color=green>  - 체크포인트 수: {chunaPathEvaluator.TotalCheckpoints}</color>");
+        if (showDebugLog)
+            ChunaLogger.Log($"[ScenarioManager] 체크포인트 평가 등록: {subStep.handTrackingFileName} (CP: {chunaPathEvaluator.TotalCheckpoints})");
     }
 
     private void Log(string message)
@@ -817,51 +693,26 @@ public class ScenarioManager : MonoBehaviour
             ChunaLogger.Log($"  - handTrackingFileName: '{handDataName}'");
         }
 
-        // 모든 각도 표시 UI 숨김
-        HideAllAngleDisplays();
-
         // ★ 핸드 데이터가 없으면 각도 표시 안 함
         if (string.IsNullOrEmpty(handDataName))
         {
+            angleDisplay?.Hide();
             if (showDebugLog)
                 ChunaLogger.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김: 핸드 데이터 없음</color>");
             return;
         }
 
-        // 핸드데이터 이름에 따라 적절한 UI 표시
-        AngleDisplayController targetDisplay = GetAngleDisplayForMovement(handDataName);
-
-        if (targetDisplay != null)
+        // 핸드 데이터 이름과 동일한 프리셋을 찾아 적용
+        if (angleDisplay != null && angleDisplay.ApplyPreset(handDataName))
         {
-            targetDisplay.Show();
-            ChunaLogger.Log($"<color=green>[ScenarioManager] 각도 표시 UI 표시: {handDataName}</color>");
+            ChunaLogger.Log($"<color=green>[ScenarioManager] 각도 표시 UI 프리셋 적용: {handDataName}</color>");
         }
-        else if (showDebugLog)
+        else
         {
-            ChunaLogger.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 없음: 이름에 '측굴/환측/전부/건측/후부' 미포함</color>");
+            angleDisplay?.Hide();
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김: '{handDataName}' 프리셋 없음</color>");
         }
-    }
-
-    /// <summary>
-    /// 핸드데이터/애니메이션 이름에 따라 적절한 AngleDisplayController 반환
-    /// </summary>
-    private AngleDisplayController GetAngleDisplayForMovement(string movementName)
-    {
-        // 측굴 (우측굴)
-        if (movementName.Contains("측굴") || movementName.Contains("LateralFlexion"))
-            return angleDisplay_LateralFlexion;
-
-        // 좌회전 (환측/전부)
-        if (movementName.Contains("환측") || movementName.Contains("전부") ||
-            movementName.Contains("LeftRotation") || movementName.Contains("Left_Rotation"))
-            return angleDisplay_LeftRotation;
-
-        // 우회전 (건측/후부)
-        if (movementName.Contains("건측") || movementName.Contains("후부") ||
-            movementName.Contains("RightRotation") || movementName.Contains("Right_Rotation"))
-            return angleDisplay_RightRotation;
-
-        return null;
     }
 
     /// <summary>
@@ -869,49 +720,43 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void HideAllAngleDisplays()
     {
-        angleDisplay_LateralFlexion?.Hide();
-        angleDisplay_LeftRotation?.Hide();
-        angleDisplay_RightRotation?.Hide();
+        angleDisplay?.Hide();
     }
 
-    // ========== Animator Controller 자동 전환 ==========
+    // ========== Animator Controller 전환 ==========
 
     /// <summary>
-    /// 시나리오 이름으로 Animator Controller 자동 전환
-    /// Resources/{animatorControllerPath}/{scenarioName} 경로에서 로드
+    /// 현재 Config의 Animator Controller를 적용 (Bootstrapper에서도 호출)
     /// </summary>
-    private void SwitchAnimatorController(string scenarioName)
+    public void ApplyAnimatorController()
+    {
+        SwitchAnimatorController();
+    }
+
+    private void SwitchAnimatorController()
     {
         if (patientAnimator == null)
         {
-            // Patient 태그로 Animator 찾기
             var patient = GameObject.FindGameObjectWithTag("Patient");
             if (patient != null)
-            {
-                patientAnimator = patient.GetComponent<Animator>();
-                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Patient 태그로 Animator 찾음: {patient.name}</color>");
-            }
+                patientAnimator = patient.GetComponentInChildren<Animator>();
         }
 
         if (patientAnimator == null)
         {
-            ChunaLogger.LogWarning("<color=orange>[ScenarioManager] patientAnimator를 찾을 수 없어 Controller 전환 건너뜀</color>");
+            ChunaLogger.LogWarning("[ScenarioManager] patientAnimator를 찾을 수 없어 Controller 전환 건너뜀");
             return;
         }
 
-        // Resources 폴더에서 Animator Controller 로드
-        string controllerPath = $"{animatorControllerPath}/{scenarioName}";
-        RuntimeAnimatorController controller = Resources.Load<RuntimeAnimatorController>(controllerPath);
-
-        if (controller != null)
+        if (currentConfig != null && currentConfig.animatorController != null)
         {
-            patientAnimator.runtimeAnimatorController = controller;
-            ChunaLogger.Log($"<color=green>[ScenarioManager] ✓ Animator Controller 전환: {controllerPath}</color>");
+            patientAnimator.runtimeAnimatorController = currentConfig.animatorController;
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=green>[ScenarioManager] Animator Controller 전환: {currentConfig.animatorController.name}</color>");
         }
         else
         {
-            ChunaLogger.LogWarning($"<color=orange>[ScenarioManager] Animator Controller를 찾을 수 없음: Resources/{controllerPath}</color>");
-            ChunaLogger.LogWarning($"<color=orange>  → Controller 파일을 Resources/{animatorControllerPath}/ 폴더에 복사하세요</color>");
+            ChunaLogger.LogWarning("[ScenarioManager] ScenarioConfig에 animatorController가 할당되지 않았습니다.");
         }
     }
 
