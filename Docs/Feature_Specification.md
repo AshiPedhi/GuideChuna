@@ -10,24 +10,34 @@
 ## 목차
 
 1. [프로그램 전체 흐름도](#1-프로그램-전체-흐름도)
-2. [모듈별 기능 명세](#2-모듈별-기능-명세)
-   - 2.1 [인증 시스템 (Auth)](#21-인증-시스템-auth)
-   - 2.2 [시나리오 관리 (Scenario)](#22-시나리오-관리-scenario)
-   - 2.3 [추나 평가 엔진 (ChunaData)](#23-추나-평가-엔진-chunadata)
-   - 2.4 [손 포즈 데이터 (PoseData)](#24-손-포즈-데이터-posedata)
-   - 2.5 [환자 모델 관리 (Patient)](#25-환자-모델-관리-patient)
-   - 2.6 [연습 모드 (Practice)](#26-연습-모드-practice)
-   - 2.7 [훈련 결과 (Result)](#27-훈련-결과-result)
-   - 2.8 [난이도 관리 (Training)](#28-난이도-관리-training)
-   - 2.9 [UI 시스템 (UI)](#29-ui-시스템-ui)
-   - 2.10 [녹화 시스템 (Recording)](#210-녹화-시스템-recording)
-   - 2.11 [웹뷰 (WebView)](#211-웹뷰-webview)
-   - 2.12 [유틸리티 (Utils)](#212-유틸리티-utils)
-3. [API 엔드포인트 명세](#3-api-엔드포인트-명세)
-4. [데이터 구조 명세](#4-데이터-구조-명세)
-5. [현재 기능 현황 요약](#5-현재-기능-현황-요약)
-6. [추가 필요 기능 분석](#6-추가-필요-기능-분석)
-7. [확장 로드맵 제안](#7-확장-로드맵-제안)
+2. [기능별 상세 플로우](#2-기능별-상세-플로우)
+   - 2.1 [인증 구간 — 디바이스 인증 · 로그인 · 로그아웃](#21-인증-구간--디바이스-인증--로그인--로그아웃)
+   - 2.2 [씬 전환 구간 — 로딩 · Camera X 보존](#22-씬-전환-구간--로딩--camera-x-보존)
+   - 2.3 [모드/난이도 선택 구간](#23-모드난이도-선택-구간)
+   - 2.4 [시나리오 로딩 & 진행 구간](#24-시나리오-로딩--진행-구간)
+   - 2.5 [추나 평가 엔진 구간 — 실시간 손 동작 평가](#25-추나-평가-엔진-구간--실시간-손-동작-평가)
+   - 2.6 [결과 집계 & 업로드 구간](#26-결과-집계--업로드-구간)
+   - 2.7 [연습 모드(튜토리얼) 구간](#27-연습-모드튜토리얼-구간)
+   - 2.8 [녹화 시스템 구간](#28-녹화-시스템-구간)
+   - 2.9 [InfoPanel 페이지 전환 구간](#29-infopanel-페이지-전환-구간)
+3. [모듈별 기능 명세](#3-모듈별-기능-명세)
+   - 3.1 [인증 시스템 (Auth)](#31-인증-시스템-auth)
+   - 3.2 [시나리오 관리 (Scenario)](#32-시나리오-관리-scenario)
+   - 3.3 [추나 평가 엔진 (ChunaData)](#33-추나-평가-엔진-chunadata)
+   - 3.4 [손 포즈 데이터 (PoseData)](#34-손-포즈-데이터-posedata)
+   - 3.5 [환자 모델 관리 (Patient)](#35-환자-모델-관리-patient)
+   - 3.6 [연습 모드 (Practice)](#36-연습-모드-practice)
+   - 3.7 [훈련 결과 (Result)](#37-훈련-결과-result)
+   - 3.8 [모드 선택 & 난이도 관리 (Training)](#38-모드-선택--난이도-관리-training)
+   - 3.9 [UI 시스템 (UI)](#39-ui-시스템-ui)
+   - 3.10 [녹화 시스템 (Recording)](#310-녹화-시스템-recording)
+   - 3.11 [웹뷰 (WebView)](#311-웹뷰-webview)
+   - 3.12 [유틸리티 (Utils)](#312-유틸리티-utils)
+4. [API 엔드포인트 명세](#4-api-엔드포인트-명세)
+5. [데이터 구조 명세](#5-데이터-구조-명세)
+6. [현재 기능 현황 요약](#6-현재-기능-현황-요약)
+7. [추가 필요 기능 분석](#7-추가-필요-기능-분석)
+8. [확장 로드맵 제안](#8-확장-로드맵-제안)
 
 ---
 
@@ -206,9 +216,775 @@
 
 ---
 
-## 2. 모듈별 기능 명세
+## 2. 기능별 상세 플로우
 
-### 2.1 인증 시스템 (Auth)
+> 전체 흐름을 **기능 구간별로 분리**하여 각 구간의 내부 동작을 메서드 단위로 상세하게 정리합니다.
+
+### 2.1 인증 구간 — 디바이스 인증 · 로그인 · 로그아웃
+
+#### 2.1.1 디바이스 인증 플로우
+
+> 앱 실행 또는 로비 재진입 시 자동 실행됩니다.
+
+```
+LobbyAuthUI_Complete.Start()
+  │
+  ├─ [최초 실행?] isFirstLaunch == true
+  │    ├─ isFirstLaunch = false (이후 씬 재진입 시 false 유지)
+  │    └─ loginStateStore.ClearLoginInfo() ← PlayerPrefs 클리어
+  │
+  ├─ [재진입?] isFirstLaunch == false
+  │    └─ LoadSavedLoginInfo() ← PlayerPrefs에서 복원
+  │         └─ currentUsername, currentUserID 세팅
+  │
+  ├─ LoadSavedDeviceSN() ← 저장된 디바이스 SN 로드
+  │
+  └─ AuthenticateDevice().Forget() [async 시작]
+       │
+       ▼
+  AuthFlowManager.AuthenticateDeviceWithRetry(savedDeviceSN, maxRetries=2)
+       │
+       └─ AuthenticateDeviceInternal(savedDeviceSN, null, retryCount=0)
+            │
+            ├─ AuthenticationService.AuthenticateDeviceAsync(deviceSN=null)
+            │    ├─ deviceSN이 null → SystemInfo.deviceUniqueIdentifier 사용
+            │    ├─ POST /device/auth/chuna  { deviceSN, deviceUUID }
+            │    ├─ ★ AuthEvents.TriggerAuthenticationStarted()
+            │    └─ 응답: DeviceResponseData { orgID, mgtNo, licCHUNA }
+            │
+            ├─ [성공] ★ AuthEvents.TriggerAuthenticationSuccess()
+            │    ├─ currentDeviceSN = deviceSN
+            │    ├─ currentOrgID = orgID
+            │    ├─ loginStateStore.SaveDeviceSN(deviceSN)
+            │    │
+            │    ├─ [라이선스 확인] licCHUNA <= 0 → ShowLicenseError() → 종료
+            │    │
+            │    └─ [사용자 목록 로드]
+            │         ├─ GET /user/userlist/{orgID}
+            │         ├─ ★ AuthEvents.TriggerUserListLoadCompleted()
+            │         └─ authFlowManager.OrganizeByGrade(users)
+            │              └─ usersByGrade = Dictionary<grade, List<UserData>>
+            │
+            ├─ [실패 — "등록된 장치입니다" 오류]
+            │    └─ UUID 앞 10자리로 재시도 (retryCount 리셋)
+            │
+            └─ [실패 — 기타 오류]
+                 ├─ retryCount < 2 → 1초 대기 후 재시도
+                 └─ retryCount >= 2 → ShowAuthenticationError()
+```
+
+#### 2.1.2 사용자 로그인 플로우
+
+> 사용자 아이콘 클릭 시 (미로그인 상태) 실행됩니다.
+
+```
+OnUserIconClicked() [사용자 아이콘 버튼]
+  │
+  ├─ [미로그인] currentUsername == empty
+  │    │
+  │    ▼
+  │  gradeSelectionHandler.ShowPanel(usersByGrade)
+  │    │
+  │    ▼ 사용자: 학년 선택
+  │  OnGradeSelected(grade)
+  │    ├─ gradeSelectionHandler.Hide()
+  │    └─ userSelectionHandler.ShowPanel(usersByGrade[grade])
+  │         │
+  │         ▼ 사용자: 사용자 선택
+  │       OnUserSelected(userId, username)
+  │         │
+  │         ▼
+  │       PerformLogin(userId, username) [async]
+  │         │
+  │         ├─ authFlowManager.PerformLogin(deviceSN, username)
+  │         │    └─ AuthenticationService.LogonAsync(deviceSN, username, "VR_CHUNA")
+  │         │         ├─ POST /device/logon
+  │         │         │  { deviceSN, status:"LOGON", runUser, runContents,
+  │         │         │    deviceInfo: "localIP/SN끝3자리" }
+  │         │         ├─ ★ AuthEvents.TriggerLoginStarted()
+  │         │         └─ 응답: MirroringData { serverIP, portNo, videoQuality }
+  │         │
+  │         ├─ [상태 저장]
+  │         │    ├─ currentUsername = username
+  │         │    ├─ currentUserID = userId
+  │         │    └─ loginStateStore.SaveLoginInfo(username, userId)
+  │         │
+  │         ├─ [UI 업데이트]
+  │         │    ├─ userNameText.text = username
+  │         │    ├─ SetScenarioCardsVisualState(true) ← alpha 1.0
+  │         │    └─ 안내 메시지: "시나리오를 선택하세요"
+  │         │
+  │         └─ [미러링 활성화]
+  │              ├─ mirroringCameraObject.SetActive(true)
+  │              └─ 0.1초 후 RenderManager.SetMirroringData()
+  │
+  └─ [이미 로그인됨] → 로그아웃 플로우로 분기 (2.1.3)
+```
+
+#### 2.1.3 사용자 로그아웃 플로우
+
+> 사용자 아이콘 클릭 시 (로그인 상태) 실행됩니다.
+
+```
+OnUserIconClicked() [이미 로그인 상태]
+  │
+  ▼
+popupHandler.ShowLogoutConfirmPopup()
+  │
+  ▼ 사용자: 확인 클릭
+OnLogoutConfirm()
+  │
+  ├─ [설문 패널 존재?]
+  │    ├─ Yes → surveyPanel.ShowSurveyPanel(callback: PerformLogout)
+  │    │         └─ 설문 완료 후 콜백 → PerformLogout()
+  │    └─ No → PerformLogout() 바로 실행
+  │
+  ▼
+PerformLogoutAsync()
+  │
+  ├─ authFlowManager.PerformLogout(deviceSN, username)
+  │    └─ AuthenticationService.LogoffAsync()
+  │         ├─ POST /device/logoff
+  │         │  { deviceSN, status:"LOGOFF", runUser, deviceInfo:"" }
+  │         └─ ★ AuthEvents.TriggerLogoutCompleted()
+  │
+  ├─ ※ API 실패해도 무시 (catch → LogWarning)
+  │
+  ├─ DeactivateMirroring()
+  │    ├─ RenderManager.StopMirroring()
+  │    └─ mirroringCameraObject.SetActive(false)
+  │
+  └─ ClearUserInfo()
+       ├─ currentUsername = ""
+       ├─ currentUserID = 0
+       ├─ loginStateStore.ClearLoginInfo() ← PlayerPrefs 삭제
+       ├─ userNameText.text = "Guest"
+       ├─ SetScenarioCardsVisualState(false) ← alpha 0.5
+       └─ 안내 메시지: "로그인을 하세요"
+```
+
+#### 2.1.4 앱 종료 시 자동 로그아웃
+
+```
+OnApplicationQuit()
+  │
+  ├─ [로그인 상태?] currentUsername != empty
+  │    ├─ authService.LogoffAsync() ← 동기 대기 (3초 타임아웃)
+  │    ├─ 실패해도 무시 (catch → LogWarning)
+  │    └─ loginStateStore.ClearLoginInfo()
+  │
+  └─ Application.Quit()
+```
+
+---
+
+### 2.2 씬 전환 구간 — 로딩 · Camera X 보존
+
+> 모든 씬 전환은 `SceneLoader`를 통해 이루어지며, Camera X(미러링 카메라)를 보존합니다.
+
+```
+SceneLoader.LoadScene(sceneName, useLoadingScene=true)
+  │
+  ▼
+LoadSceneWithLoading(sceneName)
+  │
+  ├─ 1) PreserveCameraX()
+  │      ├─ "Camera X" GameObject 검색
+  │      ├─ parent를 SceneLoader로 이동 (DontDestroyOnLoad 영역)
+  │      └─ preservedCameraX에 참조 저장
+  │
+  ├─ 2) LoadingScene 로드 (즉시)
+  │      └─ 로딩 화면 표시
+  │
+  ├─ 3) 타겟 씬 비동기 로드
+  │      ├─ allowSceneActivation = false
+  │      ├─ progress 0.9f 될 때까지 대기
+  │      ├─ Resources.UnloadUnusedAssets()
+  │      ├─ GC.Collect()
+  │      ├─ 1 프레임 대기
+  │      └─ allowSceneActivation = true
+  │
+  ├─ 4) asyncLoad.isDone 대기
+  │
+  └─ 5) RestoreCameraX()
+         ├─ parent = null (루트로 복원)
+         ├─ 0.5초 후 RenderManager.TryReconnect()
+         └─ preservedCameraX 참조 해제
+```
+
+#### 훈련 → 로비 복귀 경로 (2가지)
+
+```
+경로 A: ExitPopupController
+  └─ "메인으로" 토글 → ExecuteMainMenu()
+       └─ SceneLoader.LoadScene("Lobby", useLoadingScene: true)
+
+경로 B: InfoPanelController
+  └─ mainMenuToggle ON → 확인 팝업 → OnExitConfirm()
+       └─ ReturnToLobby() → SceneLoader.LoadScene("Lobby")
+
+경로 C: ExitPopupController — "다시하기"
+  └─ ExecuteRetry() → SceneLoader.ReloadCurrentScene()
+       └─ 현재 씬 재로드 (모드/난이도 재선택부터)
+```
+
+---
+
+### 2.3 모드/난이도 선택 구간
+
+> TrainingScene 로드 직후, 시나리오 시작 전에 실행됩니다.
+
+```
+[TrainingScene 로드]
+  │
+  ▼
+ScenarioBootstrapper.Awake() [ExecutionOrder = -100]
+  ├─ PlayerPrefs.GetInt(SelectedScenario) → selectedIndex
+  ├─ scenarioConfigs[selectedIndex] → ScenarioConfig
+  ├─ ScenarioManager.SetScenarioConfig(config)
+  ├─ AnatomyMuscleController.ApplyScenario(config.scenarioName)
+  ├─ ScenarioConditionManager.SetNarrationScenarioFolder(folder)
+  └─ InfoPanelController.SetDefaultPositionPreset(preset)
+  │
+  ▼
+ScenarioBootstrapper.Start()
+  └─ ScenarioManager.ApplyAnimatorController()
+       └─ patientAnimator.runtimeAnimatorController = config.animatorController
+  │
+  ▼
+InfoPanelController.InitializePanel()
+  └─ ShowContentPage(ContentPage.ModeSelection)
+       └─ modeSelectionPage 활성화
+  │
+  ▼
+InitializeModeSelection()
+  ├─ 기본 난이도: Beginner (초급자)
+  ├─ 기본 모드: None (미선택)
+  └─ DifficultyManager.Instance.SetDifficulty(Beginner)
+  │
+  ▼
+┌──────────────────────────────────────────────────┐
+│  사용자 선택 UI                                   │
+│                                                   │
+│  [난이도 선택] (선택적 — 기본값 초급자)           │
+│   ├─ ○ 초급자  "최초 학습자를 위한 레벨입니다"   │
+│   ├─ ○ 중급자  "실습 경험자를 위한 레벨입니다"   │
+│   └─ ○ 상급자  "숙련자를 위한 레벨입니다"        │
+│        │                                          │
+│        └─ OnDifficultyToggleChanged(level)        │
+│             └─ DifficultyManager.SetDifficulty()  │
+│                  └─ 프리셋 적용 + 이벤트 발생     │
+│                                                   │
+│  [모드 선택] (필수 — 선택 시 즉시 시작)           │
+│   ├─ ○ 실습  "안내에 따라 과정 학습"             │
+│   └─ ○ 평가  "학습 내용 테스트"                  │
+│        │                                          │
+│        └─ OnModeToggleChanged(mode) ★트리거★      │
+│             ├─ selectedMode = mode                 │
+│             ├─ OnModeSelected?.Invoke()            │
+│             └─ StartSimulation() ← 자동 시작!     │
+└──────────────────────────────────────────────────┘
+  │
+  ▼
+StartSimulation()
+  ├─ ScenarioManager.SetModeInfo(모드텍스트, 난이도텍스트)
+  │    └─ selectedMode, selectedDifficulty 저장
+  ├─ PlayerPrefs.SetString(SelectedMode, ...)
+  ├─ PlayerPrefs.SetString(SelectedDifficulty, ...)
+  └─ ScenarioManager.StartScenario()
+       └─ [시나리오 로딩 & 진행 구간으로 이동 (2.4)]
+```
+
+---
+
+### 2.4 시나리오 로딩 & 진행 구간
+
+#### 2.4.1 시나리오 로딩
+
+```
+ScenarioManager.StartScenario()
+  │
+  ├─ LoadFromCSV()
+  │    └─ ScenarioCSVLoader.LoadScenarios(csvFileName)
+  │         ├─ Resources.Load<TextAsset>("Scenarios/{csvFileName}")
+  │         └─ ParseCSV(csvText) → ScenarioCollection
+  │              └─ ScenarioData { phases[ ] }
+  │                   └─ PhaseData { steps[ ] }
+  │                        └─ StepData { subSteps[ ] }
+  │                             └─ SubStepData { 음성, 텍스트, CSV, 조건... }
+  │
+  ├─ 초기 인덱스 설정
+  │    ├─ currentPhaseIndex = 0
+  │    ├─ currentStepIndex = 0
+  │    └─ currentSubStepIndex = 0
+  │
+  ├─ ResultTracker.StartTracking(selectedMode, selectedDifficulty)
+  ├─ ResultTracker.StartPhase(currentPhase.phaseName)
+  ├─ ResultTracker.StartStep(currentStep.stepName)
+  │
+  └─ ★ EventSystem.ScenarioStarted(currentScenario)
+       └─ InfoPanelController → ShowContentPage(Skeleton)
+```
+
+#### 2.4.2 SubStep 실행 루프
+
+```
+★ EventSystem.SubStepStarted(subStep)
+  │
+  ▼
+ScenarioManager.OnSubStepStartedForHandPose(subStep)
+  │
+  ├─ ApplyContactTarget(subStep)
+  │    └─ ChunaPathEvaluator.SetContactTarget(Head/Shoulder/Chest)
+  │
+  ├─ UpdateAngleDisplayVisibility(subStep)
+  │    └─ AngleDisplayController.ApplyPreset(handDataName)
+  │
+  ├─ [handTrackingFileName 존재?]
+  │    │
+  │    ├─ Yes → HandleCheckpointBasedTracking()
+  │    │         ├─ ChunaPathEvaluator.SetPatientAnimationFromSubStep(subStep)
+  │    │         ├─ ChunaPathEvaluator.SetExtendedLimitModeFromNames()
+  │    │         │    └─ EvaluationModeConfigurator.SetFromNames(stepName, handFileName)
+  │    │         │         ├─ "측굴" → 회전축 Z
+  │    │         │         ├─ "회전" → 회전축 Y
+  │    │         │         ├─ "환측" → 회전 방향 반전
+  │    │         │         └─ "스트레칭"/"재평가" → 확장 한계 모드
+  │    │         │
+  │    │         ├─ ChunaPathEvaluatorBridge.LoadFromCSV(handTrackingFileName)
+  │    │         │    └─ ChunaPathEvaluator.LoadAndGenerateCheckpoints()
+  │    │         │         └─ ChunaPathEvaluator.StartEvaluation()
+  │    │         │              └─ [평가 엔진 구간으로 이동 (2.5)]
+  │    │         │
+  │    │         └─ ScenarioConditionManager.RegisterCondition(
+  │    │              phaseName, stepName, subStepNo,
+  │    │              new CheckpointPoseCondition(bridge) )
+  │    │
+  │    └─ No (patientAnimation만 존재)
+  │         └─ HandleAutoPlayAnimation(subStep)
+  │              └─ ChunaPathEvaluator.StartAutoPlayFromSubStep()
+  │                   └─ 완료 시 → EventSystem.OnAutoPlayCompleted
+  │
+  ▼
+ScenarioConditionManager.OnSubStepStarted(subStep)
+  └─ ProcessConditionByType(subStep)
+       │
+       ├─ [HandPose 조건]
+       │    ├─ [나레이션 있음?] → 나레이션 재생 → 완료 후 StartConditionCheck()
+       │    └─ [나레이션 없음] → StartConditionCheck() 바로 시작
+       │         └─ CheckConditionLoop() [0.5초마다 반복]
+       │              ├─ currentCondition.IsConditionMet()? → OnConditionCompleted()
+       │              └─ 20초 타임아웃 → 수동 진행 버튼 활성화
+       │
+       ├─ [Duration 조건]
+       │    └─ AutoProgressWithoutAlert(duration) → 지정 시간 후 자동 진행
+       │
+       ├─ [Manual 조건]
+       │    └─ 수동 진행 버튼 활성화 → 사용자 클릭 대기
+       │
+       └─ [Narration 조건]
+            └─ 나레이션 재생 → 완료 시 자동 진행
+```
+
+#### 2.4.3 단계 진행 체인
+
+```
+조건 충족!
+  │
+  ▼
+OnConditionCompleted()
+  ├─ 2초 대기 (completionDelay)
+  └─ ScenarioManager.NextSubStep()
+       │
+       ├─ [다음 SubStep 있음?]
+       │    ├─ currentSubStepIndex++
+       │    └─ ★ EventSystem.SubStepStarted(newSubStep)
+       │         └─ [2.4.2 루프 반복]
+       │
+       └─ [SubStep 모두 완료]
+            └─ NextStep()
+                 │
+                 ├─ [다음 Step 있음?]
+                 │    ├─ currentStepIndex++
+                 │    ├─ ResultTracker.StartStep(newStep.stepName)
+                 │    ├─ ★ EventSystem.StepChanged(newStep)
+                 │    └─ ★ EventSystem.SubStepStarted(firstSubStep)
+                 │
+                 └─ [Step 모두 완료]
+                      └─ NextPhase()
+                           │
+                           ├─ [다음 Phase 있음?]
+                           │    ├─ currentPhaseIndex++
+                           │    ├─ ResultTracker.StartPhase(newPhase)
+                           │    ├─ ★ EventSystem.PhaseChanged(newPhase)
+                           │    └─ ★ EventSystem.SubStepStarted(firstSubStep)
+                           │
+                           └─ [Phase 모두 완료]
+                                └─ CompleteScenario()
+                                     └─ [결과 집계 구간 (2.6)]
+```
+
+---
+
+### 2.5 추나 평가 엔진 구간 — 실시간 손 동작 평가
+
+> `ChunaPathEvaluator`가 매 프레임 사용자의 손 동작을 기록된 동작과 비교합니다.
+
+#### 2.5.1 평가 시작
+
+```
+ChunaPathEvaluator.StartEvaluation()
+  ├─ isEvaluating = true
+  └─ Update() 루프 시작 [매 프레임]
+```
+
+#### 2.5.2 프레임별 평가 루프
+
+```
+Update() [매 프레임]
+  │
+  ├─ [접촉 감지] 손이 환자에 접촉?
+  │    │
+  │    ├─ No → 대기 (평가 시작 안 됨)
+  │    │
+  │    └─ Yes → trainingStarted = true
+  │         │
+  │         ▼
+  │       GetCurrentUserHandFrame()
+  │         │
+  │         ▼
+  │       HandPoseComparator.Compare(userHand, guideFrame[frameIndex])
+  │         │
+  │         ├─ [손목 비교] (가중치 70%)
+  │         │    ├─ 위치 오차 = Distance(userWrist, guideWrist)
+  │         │    │    └─ 임계값: 0.08m (8cm)
+  │         │    └─ 회전 오차 = Angle(userRot, guideRot)
+  │         │         └─ 임계값: 25°
+  │         │
+  │         ├─ [관절 비교] (가중치 30%)
+  │         │    └─ 각 관절(0~26)의 localPosition, localRotation 비교
+  │         │
+  │         └─ 유사도 = (손목유사도 × 0.7) + (관절유사도 × 0.3)
+  │              └─ 범위: 0.0 ~ 1.0
+  │
+  ├─ [0.1초마다 메트릭 기록]
+  │    ├─ ★ OnUserFrameChanged(currentFrame, totalFrames, ratio)
+  │    │    └─ TrainingResultTracker.UpdateApproachRatio(ratio)
+  │    │
+  │    └─ ★ OnSimilarityUpdated(leftSim, rightSim)
+  │         └─ TrainingResultTracker.HandleSimilarityUpdated()
+  │              ├─ accumulatedSimilarity += (left + right) / 2
+  │              └─ similaritySampleCount++
+  │
+  ├─ [체크포인트 통과?]
+  │    └─ userFrameIndex >= checkpoint.frameIndex
+  │         └─ ★ OnCheckpointPassed(checkpoint, similarity)
+  │
+  ├─ [한계값 검출] ChunaLimitChecker.UpdateLimitStatus()
+  │    │
+  │    ├─ ratio < 0.3  → Safe ✅
+  │    ├─ ratio < 0.5  → Warning ⚠️
+  │    ├─ ratio >= 0.5 → Danger 🔴
+  │    └─ ratio >= 1.0 → Exceeded ⛔
+  │         └─ ★ OnLimitWarning(ratio)
+  │              └─ TrainingResultTracker.HandleLimitWarning()
+  │                   └─ warningCount++
+  │
+  ├─ [홀드 구간 도달?] userFrameIndex >= holdStartFrame
+  │    └─ CheckHoldCompletion()
+  │         ├─ 속도 < holdVelocityThreshold
+  │         ├─ 홀드 타이머 >= requiredHoldTime (1.5~2.0초)
+  │         └─ ★ OnStartHoldComplete()
+  │              └─ TrainingResultTracker.PlayHoldCompleteSound() [딩동]
+  │
+  └─ [모든 체크포인트 통과 또는 타임아웃]
+       └─ ★ OnEvaluationCompleted(EvaluationSession)
+            └─ ChunaPathEvaluatorBridge.OnEvaluationCompletedHandler()
+                 └─ ★ OnSequenceCompleted()
+                      └─ CheckpointPoseCondition.isCompleted = true
+                           └─ [조건 충족 → 2.4.3 단계 진행]
+```
+
+#### 2.5.3 평가 모드 설정 (EvaluationModeConfigurator)
+
+```
+SetFromNames(stepName, handDataName) [SubStep 시작 시]
+  │
+  ├─ stepName 파싱:
+  │    ├─ "재평가" → isReEvaluation
+  │    ├─ "스트레칭" → isStretching
+  │    └─ "가이드" → isGuideMode
+  │
+  ├─ handDataName 파싱:
+  │    ├─ "환측" → 회전 방향 반전 (환측)
+  │    ├─ "건측" → 회전 방향 정방향 (건측)
+  │    ├─ "측굴" → 회전 감지축 = Z
+  │    └─ "회전" → 회전 감지축 = Y
+  │
+  └─ 모드 조합:
+       ├─ 회전 → 기본 모드 (한계 범위 0.3~0.5)
+       ├─ 측굴 + 스트레칭 → 확장 한계 모드 + 스트레칭 범위
+       ├─ 측굴 + 재평가 → 확장 한계 모드 + 재평가 범위
+       └─ 그 외 → 기본 모드
+```
+
+---
+
+### 2.6 결과 집계 & 업로드 구간
+
+#### 2.6.1 실시간 결과 누적
+
+```
+[시나리오 진행 중 — 이벤트 기반 누적]
+
+TrainingResultTracker 이벤트 구독:
+  │
+  ├─ OnSimilarityUpdated → accumulatedSimilarity 누적
+  ├─ OnLimitWarning → warningCount 증가
+  ├─ OnUserFrameChanged → 프레임 진행률 업데이트
+  └─ OnStartHoldComplete → 홀드 완료 사운드
+```
+
+#### 2.6.2 시나리오 완료 & 결과 표시
+
+```
+CompleteScenario()
+  │
+  ├─ TrainingResultTracker.FinishTracking()
+  │    ├─ 마지막 SubStep 완료 처리
+  │    ├─ resultData.FinalizeResult()
+  │    │    ├─ overallSimilarity = 전체 Step 평균 유사도
+  │    │    ├─ totalTime = 전체 Phase/Step 소요 시간 합산
+  │    │    ├─ totalWarningCount = 전체 경고 합산
+  │    │    └─ overallGrade 산출 (A/B/C 등급)
+  │    │
+  │    └─ ★ OnTrainingCompleted(resultData)
+  │
+  ├─ isScenarioCompleted = true
+  │
+  ├─ ★ EventSystem.ScenarioCompleted(scenario)
+  │    └─ InfoPanelController.OnScenarioCompleted()
+  │         ├─ ShowContentPage(ContentPage.Result)
+  │         └─ DynamicResultTableUI.ForceRefresh()
+  │
+  ├─ ShowResultPanel()
+  │    └─ 결과 테이블 표시:
+  │         ├─ 모드 / 난이도
+  │         ├─ 전체 유사도 / 소요 시간
+  │         ├─ 전체 경고 / 스킵 횟수
+  │         └─ Phase별 → Step별 상세 결과
+  │
+  └─ ShowQuizPanel()
+       └─ QuizPanel.ShowQuizPanel()
+            └─ POST /quiz/{contentType} → 퀴즈 데이터 로드
+
+TrainingResultData 최종 구조:
+  ├─ selectedMode: "실습" / "평가"
+  ├─ selectedDifficulty: "초급자" / "중급자" / "상급자"
+  ├─ totalTime (초)
+  ├─ overallSimilarity (0~1)
+  ├─ totalWarningCount
+  ├─ totalSkipCount
+  └─ phaseResults[]
+       └─ stepResults[]
+            ├─ stepName
+            ├─ completed / skipped
+            ├─ avgSimilarity
+            ├─ warningCount
+            └─ totalTime
+```
+
+#### 2.6.3 결과 서버 업로드
+
+```
+[로비 복귀 시 또는 시나리오 완료 시]
+  └─ AuthenticationService.PostResultAsync()
+       └─ POST /result/chuna
+            ├─ ResultData { 사용자, 시나리오, 모드, 결과 메트릭 }
+            └─ 응답: String (성공/실패)
+```
+
+---
+
+### 2.7 연습 모드(튜토리얼) 구간
+
+> Practice_Scene에서 실행되며, 7단계 순차적 튜토리얼을 제공합니다.
+
+```
+PracticeManager.Initialize()
+  ├─ 충돌 컴포넌트 비활성화 (ScenarioManager, ResultTracker 등)
+  ├─ 초기 UI 상태 저장
+  ├─ 모든 토글 비활성화 (주메뉴/난이도 제외)
+  └─ StartStep(0)
+  │
+  ▼
+
+┌─ STEP 1: UI 옮기기 (3회) ────────────────────────────┐
+│  "UI를 손으로 잡아서 3번 옮겨보세요"                    │
+│  ├─ UIGrabDetector.OnUIGrabReleased() 이벤트 감지      │
+│  ├─ currentCount++ → UpdateCountText(count, 3)         │
+│  └─ count >= 3 → CompleteCurrentStep()                 │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 2: 난이도 토글(3개) → 실습모드 선택 ───────────┐
+│  "난이도를 하나씩 눌러보세요 → 실습 모드를 선택하세요"  │
+│  ├─ 초급자/중급자/상급자 토글 하이라이트 → 순서대로 클릭│
+│  ├─ 3개 완료 → 실습 모드 토글 하이라이트               │
+│  └─ 실습 모드 클릭 → Skeleton 페이지로 전환            │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 3: 콘텐츠 토글 (비디오→결과→골격) ─────────────┐
+│  "비디오, 결과, 골격 토글을 순서대로 눌러보세요"        │
+│  ├─ expertVideoToggle 하이라이트 → 클릭               │
+│  ├─ resultToggle 하이라이트 → 클릭                     │
+│  └─ skeletonToggle 하이라이트 → 클릭                   │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 4: 설정 토글 (설정→자동조절→환자위치) ─────────┐
+│  "설정 관련 토글을 순서대로 눌러보세요"                  │
+│  ├─ settingsToggle → 클릭 (설정 패널 열기)             │
+│  ├─ autoAdjustToggle → 클릭                            │
+│  └─ patientPositionToggle → 클릭                       │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 5: 환자 위치 조정 → 설정 닫기 → 시작 ─────────┐
+│  ├─ 환자 위치(Transform) 변경 대기 (30초 타임아웃)     │
+│  ├─ settingsToggle OFF (설정 닫기)                     │
+│  └─ startToggle ON (시작 버튼 클릭)                    │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 6: 핸드 가이드 홀드 연습 (3 사이클) ───────────┐
+│  "가이드 손을 따라 동작하고 홀드하세요"                  │
+│  ├─ ChunaPathEvaluator 활성화                          │
+│  ├─ 평가용 CSV 로드 ("중부측굴_trimmed")               │
+│  ├─ AngleDisplayController 표시                        │
+│  │                                                     │
+│  │  [사이클 루프 × 3회]                                │
+│  │  ├─ StartEvaluation() → 사용자 동작 수행           │
+│  │  ├─ EvaluationPhase.Completed 이벤트 수신           │
+│  │  ├─ currentCount++ → UpdateCountText(count, 3)     │
+│  │  ├─ count < 3 → 0.5초 대기 → ResetEvaluation()    │
+│  │  └─ count >= 3 → CompleteCurrentStep()             │
+│  │                                                     │
+│  └─ AngleDisplayController 숨김                        │
+└───────────────────────────────────────────────────────┘
+  ▼
+┌─ STEP 7: 나가기 ─────────────────────────────────────┐
+│  "메인 메뉴 버튼을 눌러 종료하세요"                     │
+│  ├─ mainMenuToggle 하이라이트                          │
+│  └─ 클릭 → ExitPopupController 종료 팝업              │
+│       ├─ "취소" → 훈련 계속                            │
+│       ├─ "다시하기" → 현재 씬 재로드                   │
+│       └─ "메인으로" → 로비 씬으로 이동                 │
+└───────────────────────────────────────────────────────┘
+```
+
+---
+
+### 2.8 녹화 시스템 구간
+
+> 듀얼 카메라로 훈련 과정을 프레임 단위로 녹화합니다.
+
+```
+[시나리오 시작 이벤트]
+  │
+  ▼
+DualCameraRecorder.OnScenarioStarted(scenarioData)
+  └─ StartRecording()
+       ├─ 세션 폴더 생성: {basePath}/Recordings/{시나리오}_{모드}_{yyyyMMdd_HHmmss}/
+       ├─ RenderTexture 초기화 (recordWidth × recordHeight, ARGB32)
+       ├─ recordCamera1.enabled = true
+       ├─ recordCamera2.enabled = true
+       └─ 녹화 시작 (isRecording = true)
+  │
+  ▼
+[Update 루프 — 녹화 중]
+  │
+  ├─ captureInterval (1/recordFPS) 마다:
+  │    └─ CaptureFrame()
+  │         ├─ Camera1: AsyncGPUReadback.Request(rt1)
+  │         │    └─ 콜백 → EncodeAndSaveFrame()
+  │         │         ├─ Texture2D 생성 → JPG/PNG 인코딩
+  │         │         └─ saveQueue에 Enqueue
+  │         │
+  │         └─ Camera2: 동일 처리
+  │
+  ├─ [백그라운드 스레드] SaveThreadLoop()
+  │    └─ saveQueue.Dequeue() → File.WriteAllBytes()
+  │         └─ Camera{N}/frame_{000000}.jpg
+  │
+  └─ maxRecordDuration 초과 → StopRecording()
+  │
+  ▼
+[시나리오 완료 또는 씬 언로드]
+  └─ StopRecording()
+       ├─ isRecording = false
+       ├─ WaitForSaveComplete() ← 큐 비워질 때까지 대기
+       ├─ Camera1/Camera2 비활성화
+       └─ ★ OnRecordingStopped(sessionPath)
+
+최종 파일 구조:
+  {basePath}/Recordings/
+    └─ {시나리오}_{모드}_{날짜시간}/
+        ├─ Camera1/
+        │   ├─ frame_000000.jpg
+        │   ├─ frame_000001.jpg
+        │   └─ ...
+        └─ Camera2/
+            ├─ frame_000000.jpg
+            └─ ...
+```
+
+---
+
+### 2.9 InfoPanel 페이지 전환 구간
+
+> TrainingScene 내 InfoPanelController가 관리하는 콘텐츠 페이지 전환 흐름입니다.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  InfoPanelController 페이지 상태 머신                     │
+│                                                          │
+│  ┌─────────────┐                                         │
+│  │ ModeSelection│ ← 초기 상태                            │
+│  │ (모드/난이도) │                                        │
+│  └──────┬───────┘                                        │
+│         │ 모드 선택 시                                    │
+│         ▼                                                │
+│  ┌─────────────┐     ┌──────────────┐    ┌───────────┐  │
+│  │  Skeleton    │ ◄─► │ ExpertVideo  │ ◄─►│  Result   │  │
+│  │ (근골격 표시)│     │ (전문가 영상)│    │ (수행결과)│  │
+│  └──────┬───────┘     └──────────────┘    └─────┬─────┘  │
+│         │                                       │        │
+│         │ ← 사용자 토글로 자유 전환 가능 →      │        │
+│         │                                       │        │
+│         └──────────── 시나리오 진행 중 ──────────┘        │
+│                            │                             │
+│                            │ 시나리오 완료 시             │
+│                            ▼                             │
+│                     ┌───────────┐                        │
+│                     │  Result   │ ← 자동 전환 (최종)     │
+│                     │ (최종결과)│                        │
+│                     └───────────┘                        │
+│                                                          │
+│  [메뉴 토글 그룹] (별도)                                 │
+│  ├─ settingsToggle → 설정 팝업 열기/닫기                │
+│  └─ mainMenuToggle → 종료 확인 팝업                     │
+│       ├─ 확인 → ReturnToLobby()                         │
+│       └─ 취소 → 팝업 닫기                               │
+└─────────────────────────────────────────────────────────┘
+
+페이지별 콘텐츠:
+  ├─ Skeleton: 근골격 RenderTexture (해부학 시각화)
+  ├─ ExpertVideo: 전문가 시범 영상 (CSV의 videoStart/EndTime 구간)
+  └─ Result: DynamicResultTableUI (Phase/Step별 점수표)
+```
+
+---
+
+## 3. 모듈별 기능 명세
+
+### 3.1 인증 시스템 (Auth)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Auth/`
 
@@ -247,7 +1023,7 @@ AuthenticationService (MonoBehaviour, Singleton)
 
 ---
 
-### 2.2 시나리오 관리 (Scenario)
+### 3.2 시나리오 관리 (Scenario)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Scenario/`
 
@@ -303,7 +1079,7 @@ ScenarioData
 
 ---
 
-### 2.3 추나 평가 엔진 (ChunaData)
+### 3.3 추나 평가 엔진 (ChunaData)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/ChunaData/`
 
@@ -352,7 +1128,7 @@ ChunaPathEvaluator (핵심 평가 엔진)
 
 ---
 
-### 2.4 손 포즈 데이터 (PoseData)
+### 3.4 손 포즈 데이터 (PoseData)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/PoseData/`
 
@@ -378,7 +1154,7 @@ TunaMotionData → 프레임 데이터 구조
 
 ---
 
-### 2.5 환자 모델 관리 (Patient)
+### 3.5 환자 모델 관리 (Patient)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Patient/`
 
@@ -392,7 +1168,7 @@ TunaMotionData → 프레임 데이터 구조
 
 ---
 
-### 2.6 연습 모드 (Practice)
+### 3.6 연습 모드 (Practice)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Practice/`
 
@@ -409,7 +1185,7 @@ TunaMotionData → 프레임 데이터 구조
 
 ---
 
-### 2.7 훈련 결과 (Result)
+### 3.7 훈련 결과 (Result)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Result/`
 
@@ -442,7 +1218,7 @@ TrainingResultData
 
 ---
 
-### 2.8 모드 선택 & 난이도 관리 (Training)
+### 3.8 모드 선택 & 난이도 관리 (Training)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Training/`
 **UI 담당**: `Assets/Scripts/ClaudeScripts/UI/InfoPanelController.cs`
@@ -539,7 +1315,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-### 2.9 UI 시스템 (UI)
+### 3.9 UI 시스템 (UI)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/UI/`
 
@@ -558,7 +1334,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-### 2.10 녹화 시스템 (Recording)
+### 3.10 녹화 시스템 (Recording)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Recording/`
 
@@ -571,7 +1347,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-### 2.11 웹뷰 (WebView)
+### 3.11 웹뷰 (WebView)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/WebView/`
 
@@ -585,7 +1361,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-### 2.12 유틸리티 (Utils)
+### 3.12 유틸리티 (Utils)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Utils/`
 
@@ -599,7 +1375,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-## 3. API 엔드포인트 명세
+## 4. API 엔드포인트 명세
 
 **Base URL**: `https://qpqjpivcg1.execute-api.ap-northeast-2.amazonaws.com`
 
@@ -616,7 +1392,7 @@ InfoPanelController.InitializePanel()
 
 ---
 
-## 4. 데이터 구조 명세
+## 5. 데이터 구조 명세
 
 ### 4.1 CSV — 시나리오 정의
 
@@ -660,7 +1436,7 @@ RightWristRot_X | RightWristRot_Y | RightWristRot_Z | RightWristRot_W
 
 ---
 
-## 5. 현재 기능 현황 요약
+## 6. 현재 기능 현황 요약
 
 ### 완성도 매트릭스
 
@@ -695,7 +1471,7 @@ RightWristRot_X | RightWristRot_Y | RightWristRot_Z | RightWristRot_W
 
 ---
 
-## 6. 추가 필요 기능 분석
+## 7. 추가 필요 기능 분석
 
 ### 6.1 즉시 필요 (High Priority)
 
@@ -729,7 +1505,7 @@ RightWristRot_X | RightWristRot_Y | RightWristRot_Z | RightWristRot_W
 
 ---
 
-## 7. 확장 로드맵 제안
+## 8. 확장 로드맵 제안
 
 ### Phase 1 — 학습 분석 & 피드백 고도화
 
