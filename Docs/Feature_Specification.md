@@ -84,45 +84,82 @@
                                    │
                     ┌──────────────┴──────────────┐
                     ▼                              ▼
-┌──────────────────────────┐  ┌──────────────────────────┐
-│  시나리오 훈련 모드       │  │  연습 모드 (Practice)    │
-│  (TrainingScene.unity)   │  │  (Practice_Scene.unity)  │
-│                          │  │                          │
-│  ScenarioBootstrapper    │  │  PracticeManager         │
-│  └─ PlayerPrefs에서      │  │  ├─ UI 조작 연습         │
-│     시나리오 인덱스 로드  │  │  ├─ 설정 탐색 안내       │
-│  └─ ScenarioConfig 주입  │  │  ├─ 손 제스처 연습       │
-│                          │  │  └─ 진행도 추적          │
-│  CSV 시나리오 데이터 로드 │  │                          │
-│  CSV 손 포즈 데이터 로드  │  └────────────┬─────────────┘
-│                          │               │
-│  [훈련 실행 루프]        │               │
-│  Phase(단계) 진행        │               │
-│   └─ Step(스텝)          │               │
-│      └─ SubStep(서브스텝)│               │
-│         ├─ 음성/텍스트   │               │
-│         ├─ 가이드 표시   │               │
-│         ├─ 손 동작 추적  │               │
-│         ├─ 유사도 평가   │               │
-│         ├─ 한계값 검출   │               │
-│         └─ 피드백 UI     │               │
-│                          │               │
-│  [시나리오 완료]         │               │
-│  ├─ 결과 집계            │               │
-│  │  (유사도, 경고, 시간) │               │
-│  ├─ 결과 UI 표시         │               │
-│  ├─ POST /result/chuna   │               │
-│  └─ 퀴즈 (선택)         │               │
-│     POST /quiz/...       │               │
-│                          │               │
-│  [종료 경로]             │               │
-│  ├─ "메인으로" 버튼      │               │
-│  │  (ExitPopupController)│               │
-│  └─ 메인 메뉴 토글       │               │
-│     (InfoPanelController)│               │
-└────────────┬─────────────┘               │
-             │                              │
-             ▼                              ▼
+┌──────────────────────────────┐  ┌──────────────────────────┐
+│  시나리오 훈련 모드           │  │  연습 모드 (Practice)    │
+│  (TrainingScene.unity)       │  │  (Practice_Scene.unity)  │
+│                              │  │                          │
+│  ScenarioBootstrapper        │  │  PracticeManager         │
+│  └─ PlayerPrefs에서          │  │  ├─ UI 조작 연습         │
+│     시나리오 인덱스 로드      │  │  ├─ 설정 탐색 안내       │
+│  └─ ScenarioConfig 주입      │  │  ├─ 손 제스처 연습       │
+│                              │  │  └─ 진행도 추적          │
+│  ┌────────────────────────┐  │  │                          │
+│  │ ★ 모드/난이도 선택 ★   │  │  └────────────┬─────────────┘
+│  │ (InfoPanelController)  │  │               │
+│  │                        │  │               │
+│  │ [모드 선택]            │  │               │
+│  │  ○ 실습(Practice)      │  │               │
+│  │    "안내에 따라 학습"   │  │               │
+│  │  ○ 평가(Evaluation)    │  │               │
+│  │    "학습 내용 테스트"   │  │               │
+│  │                        │  │               │
+│  │ [난이도 선택]          │  │               │
+│  │  ○ 초급자(Beginner)    │  │               │
+│  │    가이드 손 ON(0.8)   │  │               │
+│  │    경로 표시 ON        │  │               │
+│  │    상세 나레이션       │  │               │
+│  │    유사도 임계값 0.5   │  │               │
+│  │  ○ 중급자(Intermediate)│  │               │
+│  │    가이드 손 ON(0.5)   │  │               │
+│  │    경로 표시 OFF       │  │               │
+│  │    간단 나레이션       │  │               │
+│  │    유사도 임계값 0.65  │  │               │
+│  │  ○ 상급자(Advanced)    │  │               │
+│  │    가이드 손 OFF       │  │               │
+│  │    모든 보조 OFF       │  │               │
+│  │    사전평가 모드 ON    │  │               │
+│  │    유사도 임계값 0.75  │  │               │
+│  │                        │  │               │
+│  │ → 모드 선택 시 자동    │  │               │
+│  │   StartSimulation()    │  │               │
+│  │   PlayerPrefs 저장     │  │               │
+│  └────────────────────────┘  │               │
+│                              │               │
+│  CSV 시나리오 데이터 로드     │               │
+│  CSV 손 포즈 데이터 로드      │               │
+│                              │               │
+│  [훈련 실행 루프]            │               │
+│  DifficultyManager 프리셋    │               │
+│  적용 상태로 진행             │               │
+│  Phase(단계) 진행            │               │
+│   └─ Step(스텝)              │               │
+│      └─ SubStep(서브스텝)    │               │
+│         ├─ 음성/텍스트       │               │
+│         ├─ 가이드 표시       │               │
+│         │  (난이도별 차등)   │               │
+│         ├─ 손 동작 추적      │               │
+│         ├─ 유사도 평가       │               │
+│         ├─ 한계값 검출       │               │
+│         └─ 피드백 UI         │               │
+│            (난이도별 차등)    │               │
+│                              │               │
+│  [시나리오 완료]             │               │
+│  ├─ 결과 집계                │               │
+│  │  (유사도, 경고, 시간)     │               │
+│  │  + 모드/난이도 정보 포함  │               │
+│  ├─ 결과 UI 표시             │               │
+│  ├─ POST /result/chuna       │               │
+│  └─ 퀴즈 (선택)             │               │
+│     POST /quiz/...           │               │
+│                              │               │
+│  [종료 경로]                 │               │
+│  ├─ "메인으로" 버튼          │               │
+│  │  (ExitPopupController)    │               │
+│  └─ 메인 메뉴 토글           │               │
+│     (InfoPanelController)    │               │
+└────────────┬─────────────────┘               │
+             │                                  │
+             ▼                                  ▼
       SceneLoader("Lobby", useLoadingScene: true)
         ├─ Camera X를 DontDestroyOnLoad으로 보존
         ├─ LoadingScene 경유
@@ -405,16 +442,100 @@ TrainingResultData
 
 ---
 
-### 2.8 난이도 관리 (Training)
+### 2.8 모드 선택 & 난이도 관리 (Training)
 
 **디렉토리**: `Assets/Scripts/ClaudeScripts/Training/`
+**UI 담당**: `Assets/Scripts/ClaudeScripts/UI/InfoPanelController.cs`
 
 #### 기능 목록
 
 | ID | 기능명 | 설명 | 상태 |
 |----|--------|------|------|
-| TRN-01 | 난이도 설정 | DifficultySettings ScriptableObject | ✅ 완료 |
-| TRN-02 | 난이도 매니저 | 난이도 수준 관리 및 적용 | ✅ 완료 |
+| TRN-01 | 모드 선택 UI | 실습(Practice) / 평가(Evaluation) 토글 선택 | ✅ 완료 |
+| TRN-02 | 난이도 선택 UI | 초급자 / 중급자 / 상급자 토글 선택 | ✅ 완료 |
+| TRN-03 | 난이도 프리셋 관리 | DifficultySettings — 난이도별 가이드/UI/임계값 프리셋 | ✅ 완료 |
+| TRN-04 | 난이도 런타임 적용 | DifficultyManager (Singleton) — 프리셋을 런타임에 적용 | ✅ 완료 |
+| TRN-05 | 모드/난이도 PlayerPrefs 저장 | SelectedMode, SelectedDifficulty 저장 | ✅ 완료 |
+| TRN-06 | 모드 선택 시 자동 시작 | OnModeToggleChanged → StartSimulation() 즉시 호출 | ✅ 완료 |
+| TRN-07 | 결과에 모드/난이도 포함 | ScenarioManager.SetModeInfo() → ResultTracker에 전달 | ✅ 완료 |
+
+#### 모드 타입 (ModeType)
+
+| 모드 | 설명 | UI 라벨 |
+|------|------|---------|
+| `Practice` | 실습 모드 — 안내 가이드 제공 | "안내에 따라 과정 학습" |
+| `Evaluation` | 평가 모드 — 학습 성과 테스트 | "학습 내용 테스트" |
+
+#### 난이도 프리셋 비교표
+
+| 항목 | 초급자 (Beginner) | 중급자 (Intermediate) | 상급자 (Advanced) |
+|------|-------------------|----------------------|-------------------|
+| **가이드 손 표시** | ✅ ON (투명도 0.8) | ✅ ON (투명도 0.5) | ❌ OFF |
+| **이동 경로 표시** | ✅ ON | ❌ OFF | ❌ OFF |
+| **목표 위치 표시** | ✅ ON | ✅ ON | ❌ OFF |
+| **색상 피드백** | ✅ ON | ✅ ON | ❌ OFF |
+| **나레이션** | 상세 안내 (BeginnerGuided) | 간단 지시 (IntermediateSimple) | 간단 지시 |
+| **힌트 오디오** | ✅ ON | ❌ OFF | ❌ OFF |
+| **단계 설명** | ✅ ON | ✅ ON | ❌ OFF |
+| **진행 바** | ✅ ON | ✅ ON | ❌ OFF |
+| **위치 정보** | ✅ ON | ❌ OFF | ❌ OFF |
+| **유사도 퍼센트** | ✅ ON | ✅ ON | ❌ OFF |
+| **상세 점수** | ✅ ON | ✅ ON | ❌ OFF |
+| **오류 하이라이트** | ✅ ON | ❌ OFF | ❌ OFF |
+| **자동 단계 전환** | ✅ ON | ✅ ON | ❌ OFF |
+| **재시도 가이드** | ✅ ON | ❌ OFF | ❌ OFF |
+| **유사도 임계값** | 0.50 | 0.65 | 0.75 |
+| **홀드 시간** | 1.5초 | 2.0초 | 2.0초 |
+| **시도 횟수 추적** | ❌ OFF | ❌ OFF | ✅ ON |
+| **사전 평가 모드** | ❌ OFF | ❌ OFF | ✅ ON |
+
+#### 핵심 클래스
+
+```
+InfoPanelController (모드/난이도 선택 UI)
+  ├── ModeType enum (Practice / Evaluation)
+  ├── ContentPage enum (ModeSelection / Skeleton / ExpertVideo / Result)
+  ├── practiceToggle, evaluationToggle (모드 토글)
+  ├── beginnerToggle, intermediateToggle, advancedToggle (난이도 토글)
+  ├── OnModeToggleChanged() → StartSimulation()
+  └── OnDifficultyToggleChanged() → DifficultyManager.SetDifficulty()
+
+DifficultyManager (Singleton — 런타임 난이도 관리)
+  ├── SetDifficulty(DifficultyLevel)
+  ├── GetPreset(DifficultyLevel) → DifficultyPreset
+  ├── ShowGuideHands, GuideHandOpacity (편의 프로퍼티)
+  ├── SimilarityThreshold, RequiredHoldTime (평가 파라미터)
+  ├── IsPreEvaluationMode (상급자 전용)
+  └── OnDifficultyChanged (이벤트)
+
+DifficultySettings (난이도 프리셋 정의)
+  ├── DifficultyLevel enum (Beginner / Intermediate / Advanced)
+  ├── NarrationType enum (BeginnerGuided / IntermediateSimple)
+  └── DifficultyPreset (가이드/UI/평가 파라미터 구조체)
+```
+
+#### 선택 흐름 (TrainingScene 내)
+
+```
+TrainingScene 로드
+  │
+  ▼
+InfoPanelController.InitializePanel()
+  └─ modeSelectionPage 표시
+     └─ 기본값: 난이도=초급자, 모드=None (미선택)
+  │
+  ▼
+사용자: 난이도 토글 선택 (선택적)
+  └─ DifficultyManager.SetDifficulty(level)
+  │
+  ▼
+사용자: 모드 토글 선택 (필수)
+  ├─ "실습" 또는 "평가"
+  └─ → OnModeToggleChanged()
+       ├─ ScenarioManager.SetModeInfo(모드, 난이도)
+       ├─ PlayerPrefs 저장 (SelectedMode, SelectedDifficulty)
+       └─ StartSimulation() ← 시나리오 즉시 시작
+```
 
 ---
 
@@ -552,12 +673,12 @@ RightWristRot_X | RightWristRot_Y | RightWristRot_Z | RightWristRot_W
 | 환자 (Patient) | 3 | 3 | 100% | 프리셋 기반 |
 | 연습 (Practice) | 6 | 6 | 100% | 튜토리얼 완비 |
 | 결과 (Result) | 6 | 6 | 100% | 서버 연동 포함 |
-| 난이도 (Training) | 2 | 2 | 100% | 기본 구조 |
+| 모드/난이도 (Training) | 7 | 7 | 100% | 모드 선택 + 3단계 난이도 프리셋 |
 | UI | 8 | 8 | 100% | VR 최적화 |
 | 녹화 (Recording) | 2 | 2 | 100% | 듀얼 카메라 |
 | 웹뷰 (WebView) | 3 | 3 | 100% | TLabWebView |
 | 유틸리티 (Utils) | 3 | 3 | 100% | 로깅/설정 |
-| **전체** | **64** | **64** | **100%** | — |
+| **전체** | **69** | **69** | **100%** | — |
 
 ### 아키텍처 패턴
 
