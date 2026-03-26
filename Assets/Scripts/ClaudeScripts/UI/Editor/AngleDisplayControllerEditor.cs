@@ -26,9 +26,29 @@ public class AngleDisplayControllerEditor : Editor
             Undo.RecordObject(controller, "Add AngleDisplay Preset");
             controller.Presets.Add(new AngleDisplayController.AngleDisplayPreset
             {
-                presetName = $"NewPreset_{controller.Presets.Count}"
+                presetName = $"NewPreset_{controller.Presets.Count}",
+                displayMode = AngleDisplayController.DisplayMode.Arc
             });
             EditorUtility.SetDirty(controller);
+        }
+
+        // 기존 월드 좌표 프리셋 → referenceTransform 기준 로컬 좌표로 변환
+        var refTransform = serializedObject.FindProperty("presetReferenceTransform").objectReferenceValue as Transform;
+        if (refTransform != null && controller.Presets.Count > 0)
+        {
+            GUI.backgroundColor = new Color(1f, 0.9f, 0.5f);
+            if (GUILayout.Button("Convert All Presets: World → Local (Reference)", GUILayout.Height(25)))
+            {
+                Undo.RecordObject(controller, "Convert Presets to Local");
+                foreach (var p in controller.Presets)
+                {
+                    p.position = refTransform.InverseTransformPoint(p.position);
+                    p.rotation = (Quaternion.Inverse(refTransform.rotation) * Quaternion.Euler(p.rotation)).eulerAngles;
+                }
+                EditorUtility.SetDirty(controller);
+                Debug.Log($"[AngleDisplayControllerEditor] {controller.Presets.Count}개 프리셋을 '{refTransform.name}' 기준 로컬 좌표로 변환 완료");
+            }
+            GUI.backgroundColor = Color.white;
         }
 
         EditorGUILayout.Space(5);
@@ -112,8 +132,11 @@ public class AngleDisplayControllerEditor : Editor
 
         // 프리셋 정보 라벨
         EditorGUI.indentLevel++;
-        EditorGUILayout.LabelField($"pos={preset.position} rot={preset.rotation} scale={preset.scale}", EditorStyles.miniLabel);
-        EditorGUILayout.LabelField($"axis={preset.rotationAxis} angle={preset.startAngle}°~{preset.endAngle}° invert={preset.invertAngle}", EditorStyles.miniLabel);
+        EditorGUILayout.LabelField($"mode={preset.displayMode} pos={preset.position} rot={preset.rotation} scale={preset.scale}", EditorStyles.miniLabel);
+        if (preset.displayMode == AngleDisplayController.DisplayMode.Linear)
+            EditorGUILayout.LabelField($"linearAxis={preset.linearAxis} track={preset.linearTrackStart}~{preset.linearTrackEnd}", EditorStyles.miniLabel);
+        else
+            EditorGUILayout.LabelField($"axis={preset.rotationAxis} angle={preset.startAngle}°~{preset.endAngle}° invert={preset.invertAngle}", EditorStyles.miniLabel);
         EditorGUILayout.LabelField($"syncSource={preset.syncSource}", EditorStyles.miniLabel);
         EditorGUI.indentLevel--;
 

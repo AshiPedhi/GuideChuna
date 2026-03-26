@@ -37,6 +37,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("환자 흉부에 부착된 충돌체 - 대흉근 시술용")]
     [SerializeField] private Collider patientChestCollider;
 
+    [Tooltip("환자 왼팔에 부착된 충돌체 - 견갑거근 자세지시 등")]
+    [SerializeField] private Collider patientLeftArmCollider;
+
+    [Tooltip("환자 오른팔에 부착된 충돌체 - 견갑거근 자세지시 등")]
+    [SerializeField] private Collider patientRightArmCollider;
+
     [Tooltip("현재 활성화된 접촉 감지 부위 (시나리오에서 설정)")]
     [SerializeField] private ContactTarget activeContactTarget = ContactTarget.HeadAndShoulder;
 
@@ -389,6 +395,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
+    private bool guideOnlyMode;                 // true면 StartHold/MidHold 스킵, 유사도 비평가 (시각 데모 전용)
+    private bool skipMidHold;                   // true면 유사도 평가하되 MidHold 스킵, 임계점 통과 시 즉시 완료 (대흉근 등)
 
     // ★ 피벗 기반 진행률 계산용
     private Vector3 pivotStartDirection;        // 피벗→시작손위치 방향 (정규화)
@@ -696,7 +704,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                 currentMidHoldStart, currentMidHoldEnd,
                 leftHandDriftThreshold,
                 currentStartRatio,
-                useRelativeMovement, startHoldOnly, modeConfigurator.IsGuideMode,
+                useRelativeMovement, startHoldOnly, guideOnlyMode, skipMidHold, modeConfigurator.IsGuideMode,
                 showDebugLogs);
 
             currentPhase = phaseManager.CurrentPhase;
@@ -705,8 +713,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 애니메이션 선형보간 업데이트
         UpdateAnimationLerp();
 
-        // 메트릭 기록 (Moving/MidHold 단계에서만)
-        if (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold)
+        // 메트릭 기록 (Moving/MidHold 단계에서만, guideOnly 제외)
+        if (!guideOnlyMode && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
         {
             float currentTime = Time.time;
             if (currentTime - lastMetricsRecordTime >= metricsRecordInterval)
@@ -1134,6 +1142,10 @@ public class ChunaPathEvaluator : MonoBehaviour
                 return patientHeadCollider;
             case ContactTarget.Chest:
                 return patientChestCollider;
+            case ContactTarget.LeftArm:
+                return patientLeftArmCollider;
+            case ContactTarget.RightArm:
+                return patientRightArmCollider;
             case ContactTarget.HeadAndShoulder:
             default:
                 return patientHeadCollider;
@@ -1156,6 +1168,16 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 흉부만 체크
                 if (patientChestCollider == null) return false;
                 return CheckHandCollision(handTransform, handCollider, patientChestCollider.bounds, isLeftHand);
+
+            case ContactTarget.LeftArm:
+                // 왼팔만 체크 (견갑거근 자세지시 등)
+                if (patientLeftArmCollider == null) return false;
+                return CheckHandCollision(handTransform, handCollider, patientLeftArmCollider.bounds, isLeftHand);
+
+            case ContactTarget.RightArm:
+                // 오른팔만 체크
+                if (patientRightArmCollider == null) return false;
+                return CheckHandCollision(handTransform, handCollider, patientRightArmCollider.bounds, isLeftHand);
 
             case ContactTarget.HeadAndShoulder:
             default:
@@ -1511,6 +1533,26 @@ public class ChunaPathEvaluator : MonoBehaviour
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 일반 모드 - startHoldDuration 기본값 복원: {startHoldDuration}초</color>");
         }
 
+        // ★ GuideOnly 모드 (시각 데모 전용 - StartHold/MidHold 스킵, 유사도 비평가)
+        // conditionParams에 "guideOnly" 포함 시 활성화
+        bool hasGuideOnlyParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("guideonly");
+        guideOnlyMode = hasGuideOnlyParam;
+        if (guideOnlyMode)
+        {
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] GuideOnly 모드 활성화 - 시각 데모 전용 (홀드/유사도 스킵)</color>");
+        }
+
+        // ★ SkipMidHold 모드 (유사도 평가 O, MidHold 스킵 - 임계점 통과 시 즉시 완료)
+        // conditionParams에 "skipMidHold" 포함 시 활성화 (대흉근, 흉쇄유돌근 등 직선 가동범위)
+        bool hasSkipMidHoldParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("skipmidhold");
+        skipMidHold = hasSkipMidHoldParam;
+        if (skipMidHold)
+        {
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] SkipMidHold 모드 활성화 - 유사도 평가 + 임계점 통과 완료 (MidHold 스킵)</color>");
+        }
+
         // 시나리오 데이터에 애니메이션 클립이 있을 때만 설정
         if (subStep != null && subStep.HasPatientAnimation())
         {
@@ -1635,6 +1677,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsGuideMode => modeConfigurator != null ? modeConfigurator.IsGuideMode : isGuideMode;
 
     /// <summary>
+    /// 현재 GuideOnly 모드인지 확인 (시각 데모 전용)
+    /// </summary>
+    public bool IsGuideOnlyMode => guideOnlyMode;
+
+    /// <summary>
     /// 현재 시작 비율 반환 (애니메이션 시작 위치, 항상 0)
     /// </summary>
     public float CurrentStartRatio => currentStartRatio;
@@ -1681,6 +1728,67 @@ public class ChunaPathEvaluator : MonoBehaviour
         isExtendedLimitMode = modeConfigurator.IsExtendedLimitMode;
         isStretchingMode = modeConfigurator.IsStretchingMode;
         isGuideMode = modeConfigurator.IsGuideMode;
+    }
+
+    /// <summary>
+    /// ScenarioConfig에서 평가 임계점 오버라이드 적용
+    /// 설정하지 않은 시나리오는 Inspector 기본값 유지
+    /// </summary>
+    public void ApplyEvaluationThresholds(ScenarioConfig config)
+    {
+        if (config == null || !config.overrideEvaluationThresholds) return;
+
+        ApplyThresholdValues(config.midHoldStart, config.midHoldEnd,
+            config.stretchingHoldStart, config.stretchingHoldEnd,
+            config.extendedMidHoldStart, config.extendedMidHoldEnd);
+
+        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] 시나리오 기본 임계점 오버라이드 적용: " +
+            $"일반 {midHoldStartRatio:P0}~{midHoldEndRatio:P0}, " +
+            $"스트레칭 {stretchingHoldStart:P0}~{stretchingEnd:P0}, " +
+            $"재평가 {extendedMidHoldStartRatio:P0}~{extendedMidHoldEndRatio:P0}</color>");
+    }
+
+    /// <summary>
+    /// Phase별 회전 임계점 오버라이드 적용 (사각근 전부/중부/후부 등)
+    /// 일반 모드의 midHoldStart/End만 변경, 스트레칭/재평가는 유지
+    /// </summary>
+    public void ApplyPhaseRotationThresholds(ScenarioConfig.PhaseThresholdOverride phaseOverride)
+    {
+        if (phaseOverride == null) return;
+
+        midHoldStartRatio = phaseOverride.rotationHoldStart;
+        midHoldEndRatio = phaseOverride.rotationHoldEnd;
+
+        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] Phase 회전 임계점 [{phaseOverride.phaseName}]: " +
+            $"{midHoldStartRatio:P0}~{midHoldEndRatio:P0}</color>");
+    }
+
+    /// <summary>
+    /// 일반 모드 임계점을 기본값으로 복원
+    /// </summary>
+    public void RestoreDefaultThresholds(ScenarioConfig config)
+    {
+        if (config != null && config.overrideEvaluationThresholds)
+        {
+            midHoldStartRatio = config.midHoldStart;
+            midHoldEndRatio = config.midHoldEnd;
+        }
+        else
+        {
+            midHoldStartRatio = 0.3f;
+            midHoldEndRatio = 0.5f;
+        }
+    }
+
+    private void ApplyThresholdValues(float mhStart, float mhEnd,
+        float sStart, float sEnd, float emStart, float emEnd)
+    {
+        midHoldStartRatio = mhStart;
+        midHoldEndRatio = mhEnd;
+        stretchingHoldStart = sStart;
+        stretchingEnd = sEnd;
+        extendedMidHoldStartRatio = emStart;
+        extendedMidHoldEndRatio = emEnd;
     }
 
     /// <summary>
@@ -2426,14 +2534,22 @@ public class ChunaPathEvaluator : MonoBehaviour
         currentSession.endTime = DateTime.Now;
         currentSession.duration = Time.time - evaluationStartTime;
 
-        // 평균 유사도 계산
-        CalculateAverageSimilarity();
+        if (guideOnlyMode)
+        {
+            // GuideOnly: 유사도/점수 계산 스킵
+            ChunaLogger.Log("<color=yellow>[ChunaPathEvaluator] GuideOnly 모드 - 점수 계산 스킵</color>");
+        }
+        else
+        {
+            // 평균 유사도 계산
+            CalculateAverageSimilarity();
 
-        // 리밋 관련 통계 계산
-        CalculateLimitStatistics();
+            // 리밋 관련 통계 계산
+            CalculateLimitStatistics();
 
-        // 최종 점수 계산
-        CalculateFinalScore();
+            // 최종 점수 계산
+            CalculateFinalScore();
+        }
 
         // 리밋 체커 중지
         if (limitChecker != null)

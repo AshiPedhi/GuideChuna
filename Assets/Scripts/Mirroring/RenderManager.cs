@@ -247,6 +247,47 @@ public class RenderManager : MonoBehaviour
             LogWarning("미러링 데이터가 없어 재연결할 수 없습니다.");
         }
     }
+
+    /// <summary>
+    /// 씬 전환 후 재연결 — VideoStreamSender를 강제 리셋하여 Track/RenderTexture 재생성
+    /// </summary>
+    public void ReconnectAfterSceneTransition()
+    {
+        if (currentMirroringData == null)
+        {
+            LogWarning("미러링 데이터가 없어 씬 전환 후 재연결 불가.");
+            return;
+        }
+
+        LogDebug("씬 전환 후 재연결 시작 (VideoStreamSender 리셋 포함)...");
+        StopMirroring();
+        StartCoroutine(ReconnectWithVideoResetCoroutine());
+    }
+
+    private IEnumerator ReconnectWithVideoResetCoroutine()
+    {
+        // VideoStreamSender를 비활성화하여 내부 Track/RenderTexture 해제
+        if (vss != null)
+        {
+            vss.enabled = false;
+            LogDebug("VideoStreamSender 비활성화 → 내부 리소스 해제");
+        }
+
+        // 1프레임 대기 — OnDisable 처리 완료
+        yield return null;
+
+        // VideoStreamSender 재활성화 — 새 RenderTexture/Track 생성 준비
+        if (vss != null)
+        {
+            vss.enabled = true;
+            LogDebug("VideoStreamSender 재활성화 → 새 Track 생성 준비");
+        }
+
+        // 1프레임 더 대기 — OnEnable 처리 완료
+        yield return null;
+
+        StartMirroring();
+    }
     #endregion
 
     #region Private Methods

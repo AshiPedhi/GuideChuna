@@ -78,6 +78,12 @@ public class SubStepData
                 return ContactTarget.Head;
             case "chest":
                 return ContactTarget.Chest;
+            case "leftarm":
+            case "leftshoulder":
+                return ContactTarget.LeftArm;
+            case "rightarm":
+            case "rightshoulder":
+                return ContactTarget.RightArm;
             case "headandshoulder":
             default:
                 return ContactTarget.HeadAndShoulder;
@@ -228,7 +234,9 @@ public enum ContactTarget
 {
     Head,           // 머리만 (경추 추나)
     HeadAndShoulder,// 머리+어깨 (상부승모근 등) - 기본값
-    Chest           // 흉부 (대흉근)
+    Chest,          // 흉부 (대흉근)
+    LeftArm,        // 왼팔 (견갑거근 자세지시 등)
+    RightArm        // 오른팔
 }
 
 /// <summary>

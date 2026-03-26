@@ -618,6 +618,37 @@ public class ScenarioConditionManager : MonoBehaviour
             clipName = System.IO.Path.GetFileNameWithoutExtension(clipName);
         }
 
+        // ★ 중급자 이상: {phase}_{clipName} 형태로 먼저 시도
+        bool isNotBeginner = DifficultyManager.Instance != null &&
+            DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner;
+
+        if (isNotBeginner && scenarioManager != null && scenarioManager.CurrentPhase != null)
+        {
+            string phaseName = scenarioManager.CurrentPhase.phaseName;
+            if (!string.IsNullOrEmpty(phaseName))
+            {
+                string phaseClipName = $"{phaseName}_{clipName}";
+                AudioClip phaseClip = LoadNarrationClipInternal(phaseClipName);
+                if (phaseClip != null)
+                {
+                    ChunaLogger.Log($"<color=cyan>[ConditionManager] Phase별 나래이션 로드 성공: {phaseName}_{clipName} ({phaseClip.length:F1}초)</color>");
+                    return phaseClip;
+                }
+
+                ChunaLogger.Log($"[ConditionManager] Phase별 나래이션 없음: {phaseClipName} → 기본 클립명으로 fallback");
+            }
+        }
+
+        // 기본 로드 (초급자 또는 phase별 클립이 없는 경우)
+        return LoadNarrationClipInternal(clipName);
+    }
+
+    /// <summary>
+    /// Resources 폴더에서 나레이션 클립 실제 로드
+    /// 난이도별/시나리오별 폴더 탐색 후 공통 폴더 fallback
+    /// </summary>
+    private AudioClip LoadNarrationClipInternal(string clipName)
+    {
         // ★ 난이도별 서브폴더 결정
         string difficultyFolder = GetNarrationSubfolder();
         string scenarioFolder = string.IsNullOrEmpty(narrationScenarioFolder) ? "" : narrationScenarioFolder;

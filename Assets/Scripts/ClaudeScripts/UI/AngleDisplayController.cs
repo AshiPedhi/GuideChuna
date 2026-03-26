@@ -7,17 +7,23 @@ using TMPro;
 /// <summary>
 /// 각도표시 프리팹 제어기
 /// ChunaPathEvaluator의 프레임 진행률에 맞춰 Axis 각도를 제어
+/// Arc 모드: 원호형 각도 표시 (기존)
+/// Linear 모드: 직선형 가동범위 표시 (대흉근, 흉쇄유돌근 등)
 /// </summary>
 public class AngleDisplayController : BaseUIPanel
 {
+    [Header("=== 표시 모드 ===")]
+    [Tooltip("Arc: 원호형 각도 표시, Linear: 직선형 가동범위 표시")]
+    [SerializeField] private DisplayMode displayMode = DisplayMode.Arc;
+
     [Header("=== 참조 ===")]
     [Tooltip("ChunaPathEvaluator 참조 (자동 찾기)")]
     [SerializeField] private ChunaPathEvaluator pathEvaluator;
 
-    [Tooltip("회전할 Axis Transform")]
+    [Tooltip("회전할 Axis Transform (Arc 모드)")]
     [SerializeField] private Transform axisTransform;
 
-    [Header("=== 각도 설정 ===")]
+    [Header("=== 각도 설정 (Arc 모드) ===")]
     [Tooltip("시작 각도 (프레임 0%)")]
     [SerializeField] private float startAngle = 0f;
 
@@ -70,30 +76,6 @@ public class AngleDisplayController : BaseUIPanel
     [Tooltip("홀드 끝점 표시 이미지 (fillAmount로 제어)")]
     [SerializeField] private Image holdEndImage;
 
-    [Tooltip("ChunaPathEvaluator와 홀드 범위 동기화")]
-    [SerializeField] private bool syncHoldRangeWithEvaluator = true;
-
-    [Tooltip("ChunaPathEvaluator와 각도 표시 오프셋 동기화 (스트레칭 모드 시작 각도 자동 적용)")]
-    [SerializeField] private bool syncAngleOffsetWithEvaluator = true;
-
-    [Tooltip("일반 모드 홀드 시작 비율 (0~1)")]
-    [SerializeField] private float normalHoldStart = 0.3f;
-
-    [Tooltip("일반 모드 홀드 끝 비율 (0~1)")]
-    [SerializeField] private float normalHoldEnd = 0.5f;
-
-    [Tooltip("재평가 모드 홀드 시작 비율 (0°부터 시작, 45° 위치)")]
-    [SerializeField] private float extendedHoldStart = 0.5f;
-
-    [Tooltip("재평가 모드 홀드 끝 비율 (0°부터 시작, 63° 위치)")]
-    [SerializeField] private float extendedHoldEnd = 0.7f;
-
-    [Header("=== 스트레칭 모드 홀드 범위 (Fallback) ===")]
-    [Tooltip("스트레칭 모드 홀드 시작 비율 - ChunaPathEvaluator 통합 설정 우선 사용")]
-    [SerializeField] private float stretchingHoldStart = 0.45f;
-
-    [Tooltip("스트레칭 모드 홀드 끝 비율 - ChunaPathEvaluator 통합 설정 우선 사용")]
-    [SerializeField] private float stretchingHoldEnd = 0.65f;
 
     [Header("=== 동기화 모드 ===")]
     [Tooltip("동기화 소스")]
@@ -113,7 +95,31 @@ public class AngleDisplayController : BaseUIPanel
     [Tooltip("표시/숨김할 대상 게임오브젝트 (비어있으면 자기 자신)")]
     [SerializeField] private GameObject displayTarget;
 
+    [Header("=== Linear 모드 ===")]
+    [Tooltip("Linear 모드: 배경 트랙 이미지")]
+    [SerializeField] private Image linearTrackImage;
+
+    [Tooltip("Linear 모드: 홀드 시작점 표시 이미지 (fillAmount로 제어)")]
+    [SerializeField] private Image linearHoldStartImage;
+
+    [Tooltip("Linear 모드: 홀드 끝점 표시 이미지 (fillAmount로 제어)")]
+    [SerializeField] private Image linearHoldEndImage;
+
+    [Tooltip("Linear 모드: 현재 위치 마커")]
+    [SerializeField] private RectTransform linearMarker;
+
+    [Tooltip("Linear 모드: 트랙 시작 위치 (로컬 좌표)")]
+    [SerializeField] private float linearTrackStart = 0f;
+
+    [Tooltip("Linear 모드: 트랙 끝 위치 (로컬 좌표)")]
+    [SerializeField] private float linearTrackEnd = 200f;
+
+    [Tooltip("Linear 모드: 이동 축 (X=수평, Y=수직)")]
+    [SerializeField] private LinearAxis linearAxis = LinearAxis.Y;
+
     [Header("=== 프리셋 ===")]
+    [Tooltip("프리셋 기준 트랜스폼 (할당 시 상대 좌표로 저장/적용, 미할당 시 월드 좌표)")]
+    [SerializeField] private Transform presetReferenceTransform;
     [SerializeField] private List<AngleDisplayPreset> presets = new List<AngleDisplayPreset>();
 
     [Header("=== 디버그 ===")]
@@ -136,11 +142,29 @@ public class AngleDisplayController : BaseUIPanel
     // 이벤트
     public event Action<float> OnAngleChanged;
 
+    public enum DisplayMode
+    {
+        [Tooltip("원호형 각도 표시 (기존 방식)")]
+        Arc,
+
+        [Tooltip("직선형 가동범위 표시 (대흉근, 흉쇄유돌근 등)")]
+        Linear
+    }
+
     public enum RotationAxis
     {
         X,
         Y,
         Z
+    }
+
+    public enum LinearAxis
+    {
+        [Tooltip("수평 이동")]
+        X,
+
+        [Tooltip("수직 이동")]
+        Y
     }
 
     public enum SyncSource
@@ -163,16 +187,24 @@ public class AngleDisplayController : BaseUIPanel
     {
         public string presetName;           // "LateralFlexion", "LeftRotation", "RightRotation"
 
+        [Header("표시 모드")]
+        public DisplayMode displayMode;     // Arc 또는 Linear
+
         [Header("위치")]
-        public Vector3 position;            // 월드 위치
-        public Vector3 rotation;            // 오일러 각도
+        public Vector3 position;            // referenceTransform 있으면 로컬, 없으면 월드
+        public Vector3 rotation;            // referenceTransform 있으면 로컬, 없으면 월드
         public Vector3 scale = Vector3.one; // 로컬 스케일 (좌우반전 등)
 
-        [Header("각도 설정")]
+        [Header("각도 설정 (Arc 모드)")]
         public RotationAxis rotationAxis;   // X, Y, Z
         public float startAngle;
         public float endAngle;
         public bool invertAngle;
+
+        [Header("Linear 모드")]
+        public LinearAxis linearAxis;       // X 또는 Y
+        public float linearTrackStart;
+        public float linearTrackEnd = 200f;
 
         [Header("동기화")]
         public SyncSource syncSource;
@@ -200,14 +232,9 @@ public class AngleDisplayController : BaseUIPanel
         }
 
         // ChunaPathEvaluator와 홀드 범위 동기화
-        if (syncHoldRangeWithEvaluator && pathEvaluator != null)
+        if (pathEvaluator != null)
         {
             SyncHoldRangeWithEvaluator();
-        }
-
-        // ChunaPathEvaluator와 각도 표시 오프셋 동기화 (스트레칭 모드 시작 각도)
-        if (syncAngleOffsetWithEvaluator && pathEvaluator != null)
-        {
             SyncAngleOffsetWithEvaluator();
         }
     }
@@ -293,8 +320,17 @@ public class AngleDisplayController : BaseUIPanel
             }
         }
 
-        // PatientAnimation 모드는 PathEvaluator 없어도 됨
-        if (syncSource == SyncSource.PatientAnimation)
+        // 모드별 초기화 조건 판단
+        if (displayMode == DisplayMode.Linear)
+        {
+            // Linear 모드: axisTransform 불필요, 녹색 구간 또는 마커 필요
+            bool hasLinearUI = linearHoldStartImage != null || linearMarker != null;
+            if (syncSource == SyncSource.PatientAnimation)
+                isInitialized = hasLinearUI && patientAnimator != null;
+            else
+                isInitialized = hasLinearUI && pathEvaluator != null;
+        }
+        else if (syncSource == SyncSource.PatientAnimation)
         {
             isInitialized = axisTransform != null && patientAnimator != null;
         }
@@ -305,10 +341,8 @@ public class AngleDisplayController : BaseUIPanel
 
         if (!isInitialized)
         {
-            if (syncSource == SyncSource.PatientAnimation)
-                ChunaLogger.LogWarning("[AngleDisplayController] 초기화 실패 - Axis 또는 Patient Animator를 찾을 수 없습니다.");
-            else
-                ChunaLogger.LogWarning("[AngleDisplayController] 초기화 실패 - PathEvaluator 또는 Axis를 찾을 수 없습니다.");
+            string modeStr = displayMode == DisplayMode.Linear ? "Linear" : "Arc";
+            ChunaLogger.LogWarning($"[AngleDisplayController] 초기화 실패 [{modeStr}] - 필요한 참조를 찾을 수 없습니다.");
         }
         else
         {
@@ -331,54 +365,66 @@ public class AngleDisplayController : BaseUIPanel
     {
         isExtendedMode = extended;
 
-        // ★ ChunaPathEvaluator에서 현재 홀드 범위 직접 가져오기
+        // ChunaPathEvaluator에서 현재 홀드 범위 직접 가져오기
         if (pathEvaluator != null)
         {
             currentHoldStart = pathEvaluator.CurrentMidHoldStart;
             currentHoldEnd = pathEvaluator.CurrentMidHoldEnd;
         }
+
+        if (displayMode == DisplayMode.Linear)
+        {
+            UpdateLinearHoldRange();
+        }
         else
         {
-            // pathEvaluator가 없으면 로컬 값 사용
-            if (extended)
+            // ★ Arc 모드: 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산
+            float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
+            float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
+
+            // fillAmount = 각도 / 360 (axis 위치와 동기화)
+            if (holdStartImage != null)
             {
-                if (isStretchingMode)
-                {
-                    currentHoldStart = stretchingHoldStart;
-                    currentHoldEnd = stretchingHoldEnd;
-                }
-                else
-                {
-                    currentHoldStart = extendedHoldStart;
-                    currentHoldEnd = extendedHoldEnd;
-                }
+                holdStartImage.fillAmount = angleAtHoldStart / 360f;
             }
-            else
+
+            if (holdEndImage != null)
             {
-                currentHoldStart = normalHoldStart;
-                currentHoldEnd = normalHoldEnd;
+                holdEndImage.fillAmount = angleAtHoldEnd / 360f;
             }
-        }
-
-        // ★ 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산 (스트레칭/재평가 동일 위치)
-        float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
-        float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
-
-        // fillAmount = 각도 / 360 (axis 위치와 동기화)
-        if (holdStartImage != null)
-        {
-            holdStartImage.fillAmount = angleAtHoldStart / 360f;
-        }
-
-        if (holdEndImage != null)
-        {
-            holdEndImage.fillAmount = angleAtHoldEnd / 360f;
         }
 
         if (showDebugLogs)
         {
             string mode = extended ? (pathEvaluator != null && pathEvaluator.IsStretchingMode ? "스트레칭" : "재평가") : "일반";
-            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°)</color>");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 업데이트: {mode} ({currentHoldStart:P0}~{currentHoldEnd:P0})</color>");
+        }
+    }
+
+    /// <summary>
+    /// Linear 모드: 적정 범위 업데이트 (Arc 모드와 동일 방식)
+    /// - linearHoldStartImage: fillAmount = currentHoldStart (적정 범위 시작)
+    /// - linearHoldEndImage: fillAmount = currentHoldEnd (적정 범위 끝)
+    /// - 모드 변경 시 ChunaPathEvaluator에서 값만 갱신 → 구간 자동 이동
+    /// </summary>
+    private void UpdateLinearHoldRange()
+    {
+        // 적정 범위 시작 (holdStartImage와 동일 역할)
+        if (linearHoldStartImage != null)
+        {
+            linearHoldStartImage.fillAmount = currentHoldStart;
+        }
+
+        // 적정 범위 끝 (holdEndImage와 동일 역할)
+        if (linearHoldEndImage != null)
+        {
+            linearHoldEndImage.fillAmount = currentHoldEnd;
+        }
+
+        if (showDebugLogs)
+        {
+            string mode = isStretchingMode ? "스트레칭" : (isExtendedMode ? "재평가" : "일반");
+            ChunaLogger.Log($"<color=cyan>[AngleDisplayController-Linear] 적정 범위: {currentHoldStart:P0}~{currentHoldEnd:P0} ({mode})</color>");
         }
     }
 
@@ -538,25 +584,32 @@ public class AngleDisplayController : BaseUIPanel
     {
         currentAngle = angle;
 
-        // Axis 회전 적용
-        if (axisTransform != null)
+        if (displayMode == DisplayMode.Linear)
         {
-            Vector3 rotation = axisTransform.localEulerAngles;
-
-            switch (rotationAxis)
+            UpdateLinearDisplay();
+        }
+        else
+        {
+            // Arc 모드: Axis 회전 적용
+            if (axisTransform != null)
             {
-                case RotationAxis.X:
-                    rotation.x = angle;
-                    break;
-                case RotationAxis.Y:
-                    rotation.y = angle;
-                    break;
-                case RotationAxis.Z:
-                    rotation.z = angle;
-                    break;
-            }
+                Vector3 rotation = axisTransform.localEulerAngles;
 
-            axisTransform.localEulerAngles = rotation;
+                switch (rotationAxis)
+                {
+                    case RotationAxis.X:
+                        rotation.x = angle;
+                        break;
+                    case RotationAxis.Y:
+                        rotation.y = angle;
+                        break;
+                    case RotationAxis.Z:
+                        rotation.z = angle;
+                        break;
+                }
+
+                axisTransform.localEulerAngles = rotation;
+            }
         }
 
         // 텍스트 업데이트
@@ -569,7 +622,38 @@ public class AngleDisplayController : BaseUIPanel
         OnAngleChanged?.Invoke(currentAngle);
 
         if (showDebugLogs)
-            ChunaLogger.Log($"[AngleDisplayController] 각도: {currentAngle:F1}° (진행률: {currentProgress:P0})");
+        {
+            string modeStr = displayMode == DisplayMode.Linear ? "Linear" : "Arc";
+            ChunaLogger.Log($"[AngleDisplayController] [{modeStr}] 값: {currentAngle:F1}° (진행률: {currentProgress:P0})");
+        }
+    }
+
+    /// <summary>
+    /// Linear 모드: 마커 위치 업데이트
+    /// </summary>
+    private void UpdateLinearDisplay()
+    {
+        // 마커 위치 이동 (현재 진행률)
+        if (linearMarker != null)
+        {
+            SetLinearPosition(linearMarker, currentProgress);
+        }
+    }
+
+    /// <summary>
+    /// Linear 모드: 비율(0~1)을 트랙 위치로 변환하여 RectTransform에 적용
+    /// </summary>
+    private void SetLinearPosition(RectTransform target, float ratio)
+    {
+        float pos = Mathf.Lerp(linearTrackStart, linearTrackEnd, ratio);
+        Vector3 localPos = target.anchoredPosition3D;
+
+        if (linearAxis == LinearAxis.Y)
+            localPos.y = pos;
+        else
+            localPos.x = pos;
+
+        target.anchoredPosition3D = localPos;
     }
 
     /// <summary>
@@ -664,6 +748,11 @@ public class AngleDisplayController : BaseUIPanel
     }
 
     /// <summary>
+    /// 현재 표시 모드
+    /// </summary>
+    public DisplayMode CurrentDisplayMode => displayMode;
+
+    /// <summary>
     /// 현재 진행률 가져오기
     /// </summary>
     public float GetCurrentProgress()
@@ -706,51 +795,6 @@ public class AngleDisplayController : BaseUIPanel
     // ========== 홀드 범위 API ==========
 
     /// <summary>
-    /// 확장 모드 설정 (스트레칭/재평가)
-    /// </summary>
-    public void SetExtendedMode(bool extended)
-    {
-        UpdateHoldRange(extended);
-    }
-
-    /// <summary>
-    /// 홀드 범위 직접 설정 (axis 위치와 동기화)
-    /// </summary>
-    public void SetHoldRange(float holdStart, float holdEnd)
-    {
-        currentHoldStart = Mathf.Clamp01(holdStart);
-        currentHoldEnd = Mathf.Clamp01(holdEnd);
-
-        // ★ 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산
-        float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
-        float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
-
-        // fillAmount = 각도 / 360 (axis 위치와 동기화)
-        if (holdStartImage != null)
-            holdStartImage.fillAmount = angleAtHoldStart / 360f;
-
-        if (holdEndImage != null)
-            holdEndImage.fillAmount = angleAtHoldEnd / 360f;
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 홀드 범위 수동 설정: {currentHoldStart:P0}~{currentHoldEnd:P0}, 각도: {angleAtHoldStart:F1}°~{angleAtHoldEnd:F1}°</color>");
-    }
-
-    /// <summary>
-    /// 일반/확장 모드 홀드 범위 설정값 변경
-    /// </summary>
-    public void SetHoldRangePresets(float normalStart, float normalEnd, float extStart, float extEnd)
-    {
-        normalHoldStart = Mathf.Clamp01(normalStart);
-        normalHoldEnd = Mathf.Clamp01(normalEnd);
-        extendedHoldStart = Mathf.Clamp01(extStart);
-        extendedHoldEnd = Mathf.Clamp01(extEnd);
-
-        // 현재 모드에 맞게 다시 적용
-        UpdateHoldRange(isExtendedMode);
-    }
-
-    /// <summary>
     /// 현재 홀드 시작 비율 가져오기
     /// </summary>
     public float GetCurrentHoldStart() => currentHoldStart;
@@ -765,46 +809,6 @@ public class AngleDisplayController : BaseUIPanel
     /// </summary>
     public bool IsExtendedMode => isExtendedMode;
 
-    // ========== 오프셋 API ==========
-
-    /// <summary>
-    /// 각도 표시 오프셋 설정
-    /// 실제 시작 각도가 0이 아닐 때 사용 (예: 시작 위치가 15도면 15 입력)
-    /// </summary>
-    public void SetAngleDisplayOffset(float offset)
-    {
-        angleDisplayOffset = offset;
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 각도 표시 오프셋: {offset}°</color>");
-    }
-
-    /// <summary>
-    /// 애니메이션 구간 오프셋 설정
-    /// 애니메이션의 특정 구간만 사용할 때 (예: 20%~80% 구간만 사용)
-    /// </summary>
-    public void SetAnimationOffsets(float startOffset, float endOffset)
-    {
-        animationStartOffset = Mathf.Clamp01(startOffset);
-        animationEndOffset = Mathf.Clamp01(endOffset);
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[AngleDisplayController] 애니메이션 구간: {animationStartOffset:P0}~{animationEndOffset:P0}</color>");
-    }
-
-    /// <summary>
-    /// 현재 각도 표시 오프셋
-    /// </summary>
-    public float AngleDisplayOffset => angleDisplayOffset;
-
-    /// <summary>
-    /// 현재 애니메이션 시작 오프셋
-    /// </summary>
-    public float AnimationStartOffset => animationStartOffset;
-
-    /// <summary>
-    /// 현재 애니메이션 끝 오프셋
-    /// </summary>
-    public float AnimationEndOffset => animationEndOffset;
 
     // ========== 프리셋 API ==========
 
@@ -849,19 +853,42 @@ public class AngleDisplayController : BaseUIPanel
     {
         currentPresetName = preset.presetName;
 
+        // 표시 모드 적용
+        displayMode = preset.displayMode;
+
         // 위치/회전/스케일 적용
-        transform.position = preset.position;
-        transform.rotation = Quaternion.Euler(preset.rotation);
+        if (presetReferenceTransform != null)
+        {
+            transform.position = presetReferenceTransform.TransformPoint(preset.position);
+            transform.rotation = presetReferenceTransform.rotation * Quaternion.Euler(preset.rotation);
+        }
+        else
+        {
+            transform.position = preset.position;
+            transform.rotation = Quaternion.Euler(preset.rotation);
+        }
         transform.localScale = preset.scale;
 
-        // 각도 설정 적용
-        rotationAxis = preset.rotationAxis;
-        startAngle = preset.startAngle;
-        endAngle = preset.endAngle;
-        invertAngle = preset.invertAngle;
+        // 모드별 설정 적용
+        if (displayMode == DisplayMode.Linear)
+        {
+            linearAxis = preset.linearAxis;
+            linearTrackStart = preset.linearTrackStart;
+            linearTrackEnd = preset.linearTrackEnd;
+        }
+        else
+        {
+            rotationAxis = preset.rotationAxis;
+            startAngle = preset.startAngle;
+            endAngle = preset.endAngle;
+            invertAngle = preset.invertAngle;
+        }
 
         // 동기화 소스 적용
         syncSource = preset.syncSource;
+
+        // Arc/Linear UI 토글
+        ToggleDisplayModeUI();
 
         // 각도 리셋
         SetAngle(startAngle);
@@ -870,7 +897,38 @@ public class AngleDisplayController : BaseUIPanel
         Show();
 
         if (showDebugLogs)
-            ChunaLogger.Log($"<color=green>[AngleDisplayController] 프리셋 적용: {preset.presetName} (pos={preset.position}, axis={preset.rotationAxis}, {preset.startAngle}°~{preset.endAngle}°)</color>");
+        {
+            if (displayMode == DisplayMode.Linear)
+                ChunaLogger.Log($"<color=green>[AngleDisplayController] 프리셋 적용 [Linear]: {preset.presetName} (pos={preset.position}, axis={preset.linearAxis}, track={preset.linearTrackStart}~{preset.linearTrackEnd})</color>");
+            else
+                ChunaLogger.Log($"<color=green>[AngleDisplayController] 프리셋 적용 [Arc]: {preset.presetName} (pos={preset.position}, axis={preset.rotationAxis}, {preset.startAngle}°~{preset.endAngle}°)</color>");
+        }
+    }
+
+    /// <summary>
+    /// 표시 모드에 따라 Arc/Linear UI 요소 토글
+    /// </summary>
+    private void ToggleDisplayModeUI()
+    {
+        bool isLinear = displayMode == DisplayMode.Linear;
+
+        // Arc 모드 UI
+        if (axisTransform != null)
+            axisTransform.gameObject.SetActive(!isLinear);
+        if (holdStartImage != null)
+            holdStartImage.gameObject.SetActive(!isLinear);
+        if (holdEndImage != null)
+            holdEndImage.gameObject.SetActive(!isLinear);
+
+        // Linear 모드 UI
+        if (linearTrackImage != null)
+            linearTrackImage.gameObject.SetActive(isLinear);
+        if (linearHoldStartImage != null)
+            linearHoldStartImage.gameObject.SetActive(isLinear);
+        if (linearHoldEndImage != null)
+            linearHoldEndImage.gameObject.SetActive(isLinear);
+        if (linearMarker != null)
+            linearMarker.gameObject.SetActive(isLinear);
     }
 
     /// <summary>
@@ -878,13 +936,26 @@ public class AngleDisplayController : BaseUIPanel
     /// </summary>
     public void CaptureCurrentSettings(AngleDisplayPreset preset)
     {
-        preset.position = transform.position;
-        preset.rotation = transform.rotation.eulerAngles;
+        preset.displayMode = displayMode;
+
+        if (presetReferenceTransform != null)
+        {
+            preset.position = presetReferenceTransform.InverseTransformPoint(transform.position);
+            preset.rotation = (Quaternion.Inverse(presetReferenceTransform.rotation) * transform.rotation).eulerAngles;
+        }
+        else
+        {
+            preset.position = transform.position;
+            preset.rotation = transform.rotation.eulerAngles;
+        }
         preset.scale = transform.localScale;
         preset.rotationAxis = rotationAxis;
         preset.startAngle = startAngle;
         preset.endAngle = endAngle;
         preset.invertAngle = invertAngle;
+        preset.linearAxis = linearAxis;
+        preset.linearTrackStart = linearTrackStart;
+        preset.linearTrackEnd = linearTrackEnd;
         preset.syncSource = syncSource;
     }
 

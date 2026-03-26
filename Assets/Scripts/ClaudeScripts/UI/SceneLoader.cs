@@ -173,16 +173,18 @@ public class SceneLoader : MonoBehaviour
 
     /// <summary>
     /// 씬 전환 후 미러링 재연결 시도
+    /// VideoStreamSender의 Track/RenderTexture가 씬 전환 중 stale 상태가 되므로
+    /// 단순 TryReconnect가 아닌 VideoStreamSender 리셋 포함 재연결 수행
     /// </summary>
     private IEnumerator TryReconnectMirroringDelayed()
     {
         // CameraLocateCtrl이 Camera X 위치를 재설정할 시간을 줌
         yield return new WaitForSeconds(0.5f);
 
-        if (RenderManager.instance != null && RenderManager.instance.IsConnected)
+        if (RenderManager.instance != null)
         {
-            ChunaLogger.Log("[SceneLoader] 미러링 재연결 시도...");
-            RenderManager.instance.TryReconnect();
+            ChunaLogger.Log("[SceneLoader] 씬 전환 후 미러링 재연결 시도 (VideoStreamSender 리셋 포함)...");
+            RenderManager.instance.ReconnectAfterSceneTransition();
         }
     }
 

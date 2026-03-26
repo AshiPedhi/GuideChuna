@@ -47,6 +47,14 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("훈련 결과 추적기 (자동 찾기)")]
     [SerializeField] private TrainingResultTracker resultTracker;
 
+    [Header("=== 피벗 포인트 ===")]
+    [Tooltip("목 피벗 Transform (경추 중심)")]
+    [SerializeField] private Transform neckPivot;
+    [Tooltip("왼쪽 어깨 피벗 Transform")]
+    [SerializeField] private Transform leftShoulderPivot;
+    [Tooltip("오른쪽 어깨 피벗 Transform")]
+    [SerializeField] private Transform rightShoulderPivot;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
@@ -135,6 +143,10 @@ public class ScenarioManager : MonoBehaviour
         chunaPathEvaluatorBridge = chunaPathEvaluator.GetComponent<ChunaPathEvaluatorBridge>();
         if (chunaPathEvaluatorBridge == null)
             chunaPathEvaluatorBridge = chunaPathEvaluator.gameObject.AddComponent<ChunaPathEvaluatorBridge>();
+
+        // 시나리오 컨피그 임계점 오버라이드 (Bootstrapper보다 늦게 초기화되는 경우 대비)
+        if (currentConfig != null)
+            chunaPathEvaluator.ApplyEvaluationThresholds(currentConfig);
     }
 
     private void OnEnable()
@@ -171,6 +183,12 @@ public class ScenarioManager : MonoBehaviour
 
         csvFileName = config.scenarioName;
         currentConfig = config;
+
+        // 평가 임계점 오버라이드 적용
+        if (chunaPathEvaluator != null)
+        {
+            chunaPathEvaluator.ApplyEvaluationThresholds(config);
+        }
 
         ChunaLogger.Log($"[ScenarioManager] ScenarioConfig 적용: scenarioName={config.scenarioName}");
     }
@@ -537,6 +555,9 @@ public class ScenarioManager : MonoBehaviour
             resultTracker.StartSubStep(currentPhase.phaseName, currentStep.stepName);
         }
 
+        // ★ Phase별 임계점 오버라이드 적용 (사각근 전부/중부/후부 등)
+        ApplyPhaseThresholdOverride();
+
         // ★ 접촉 감지 부위 설정 (시나리오 CSV의 contactTarget 컬럼)
         ApplyContactTarget(subStep);
 
@@ -642,6 +663,9 @@ public class ScenarioManager : MonoBehaviour
         // 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
         chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
 
+        // ★ 피벗 설정 적용 (CSV의 pivotTarget 기반)
+        ApplyPivotTarget(subStep);
+
         // 2. CSV 로드 및 체크포인트 생성 + 평가 시작
         chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
 
@@ -657,6 +681,41 @@ public class ScenarioManager : MonoBehaviour
 
         if (showDebugLog)
             ChunaLogger.Log($"[ScenarioManager] 체크포인트 평가 등록: {subStep.handTrackingFileName} (CP: {chunaPathEvaluator.TotalCheckpoints})");
+    }
+
+    /// <summary>
+    /// CSV의 pivotTarget 값을 기반으로 ChunaPathEvaluator에 피벗 설정 적용
+    /// </summary>
+    private void ApplyPivotTarget(SubStepData subStep)
+    {
+        if (subStep == null || !subStep.HasPivotTarget()) return;
+
+        Transform pivot = null;
+        switch (subStep.pivotTarget.Trim().ToLower())
+        {
+            case "neck":
+                pivot = neckPivot;
+                break;
+            case "leftshoulder":
+                pivot = leftShoulderPivot;
+                break;
+            case "rightshoulder":
+                pivot = rightShoulderPivot;
+                break;
+        }
+
+        if (pivot != null)
+        {
+            var axis = subStep.GetPivotPlaneAxis() ?? ChunaPathEvaluator.RotationDetectionAxis.Z;
+            bool invert = subStep.GetInvertAngle();
+            chunaPathEvaluator.SetPivotSettings(pivot, 0f, axis, invert); // 0f = 자동 계산
+            if (showDebugLog)
+                ChunaLogger.Log($"[ScenarioManager] 피벗 설정 적용: {subStep.pivotTarget} → {pivot.name}, 축:{axis}, 반전:{invert}");
+        }
+        else
+        {
+            ChunaLogger.LogWarning($"[ScenarioManager] 피벗 Transform 미할당: {subStep.pivotTarget}. Inspector에서 할당하세요.");
+        }
     }
 
     private void Log(string message)
@@ -765,6 +824,34 @@ public class ScenarioManager : MonoBehaviour
     /// <summary>
     /// SubStep의 contactTarget 설정을 ChunaPathEvaluator에 적용
     /// </summary>
+    /// <summary>
+    /// Phase별 회전 임계점 오버라이드 적용
+    /// movementType이 rotation이고 phaseOverride가 있으면 회전 임계점 교체
+    /// rotation이 아니면 기본값 복원
+    /// </summary>
+    private void ApplyPhaseThresholdOverride()
+    {
+        if (currentConfig == null || chunaPathEvaluator == null || currentPhase == null) return;
+        if (currentConfig.phaseOverrides == null || currentConfig.phaseOverrides.Length == 0) return;
+
+        bool isRotation = currentSubStep != null &&
+            !string.IsNullOrEmpty(currentSubStep.movementType) &&
+            currentSubStep.movementType.ToLower() == "rotation";
+
+        if (isRotation)
+        {
+            var phaseOverride = currentConfig.FindPhaseOverride(currentPhase.phaseName);
+            if (phaseOverride != null)
+            {
+                chunaPathEvaluator.ApplyPhaseRotationThresholds(phaseOverride);
+                return;
+            }
+        }
+
+        // rotation이 아니거나 매칭되는 phase 오버라이드가 없으면 기본값 복원
+        chunaPathEvaluator.RestoreDefaultThresholds(currentConfig);
+    }
+
     private void ApplyContactTarget(SubStepData subStep)
     {
         if (chunaPathEvaluator == null) return;

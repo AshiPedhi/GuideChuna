@@ -1,4 +1,4 @@
-scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime
+﻿scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime
 1,상부승모근,시작,가이드,0,1,0,"필요시 [설정] 버튼을 눌러 환자의 위치를 설정합니다
 [시작] 버튼을 눌러 실습을 시작합니다",시작,,,,,,,
 1,상부승모근,진단,진단,1,1,2,우측 상부승모근의 상태를 평가하세요,평가1,,,,,,,
@@ -14,8 +14,8 @@ scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction
 1,상부승모근,전부,재평가,5,2,0,그상태에서 측굴을 실시한다,,전부측굴,,,앉아 상부승모 환측 측굴,position,1:50,1:56
 1,상부승모근,중부,가이드,0,1,0,"전부 섬유 확인이 끝났습니다
 [시작] 버튼을 눌러 중부 섬유를 진행하세요",중부시작,,,,앉아 상부승모 환측 중립,,,
-1,상부승모근,중부,제한장벽확인,2,2,0,환자의 측굴한다,측굴,중부측굴,,,앉아 상부승모 측굴,position,2:08,2:11
-1,상부승모근,중부,제한장벽확인,2,3,0,자세를 원상태로 돌린다,,,,,앉아 상부승모 중간,,,
+1,상부승모근,중부,제한장벽확인,2,1,0,환자의 측굴한다,측굴,중부측굴,,,앉아 상부승모 측굴,position,2:08,2:11
+1,상부승모근,중부,제한장벽확인,2,2,0,자세를 원상태로 돌린다,,,,,앉아 상부승모 중간,,,
 1,상부승모근,중부,등척성운동,3,1,7,등척성 운동을 실시한다,등척성운동,등척성운동,,,,,2:11,2:32
 1,상부승모근,중부,스트레칭,4,1,0,그상태에서 측굴을 하여 스트레칭을 실시한다,스트레칭,중부측굴,,,앉아 상부승모 스트레칭 중부,position,2:32,2:44
 1,상부승모근,중부,스트레칭,4,2,0,자세를 원상태로 돌린다,중립,,,,앉아 상부승모 중부 징립,,,

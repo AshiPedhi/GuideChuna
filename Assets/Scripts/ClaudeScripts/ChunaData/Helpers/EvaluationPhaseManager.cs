@@ -4,6 +4,8 @@ using UnityEngine;
 /// <summary>
 /// Phase-based evaluation manager for ChunaPathEvaluator.
 /// Manages evaluation flow: WaitingForStart -> StartHold -> Moving -> MidHold -> Completed.
+/// GuideOnly mode: WaitingForStart -> Moving -> Completed (홀드 스킵, 유사도 비평가, 시각 데모 전용).
+/// SkipMidHold mode: WaitingForStart -> StartHold -> Moving -> Completed (유사도 평가 O, 임계점 통과 시 즉시 완료).
 /// Takes ChunaPathEvaluator reference to access internal members.
 /// </summary>
 public class EvaluationPhaseManager
@@ -53,7 +55,7 @@ public class EvaluationPhaseManager
         float currentMidHoldStart, float currentMidHoldEnd,
         float leftHandDriftThreshold,
         float currentStartRatio,
-        bool useRelativeMovement, bool startHoldOnly, bool isGuideMode,
+        bool useRelativeMovement, bool startHoldOnly, bool guideOnlyMode, bool skipMidHold, bool isGuideMode,
         bool showDebugLogs)
     {
         // Calculate velocities
@@ -65,7 +67,8 @@ public class EvaluationPhaseManager
         switch (currentPhase)
         {
             case ChunaPathEvaluator.EvaluationPhase.WaitingForStart:
-                UpdateWaitingForStart(leftPos, rightPos, isLeftTouching, isRightTouching, showDebugLogs);
+                UpdateWaitingForStart(leftPos, rightPos, isLeftTouching, isRightTouching,
+                    guideOnlyMode, useRelativeMovement, currentStartRatio, showDebugLogs);
                 break;
 
             case ChunaPathEvaluator.EvaluationPhase.StartHold:
@@ -78,7 +81,7 @@ public class EvaluationPhaseManager
 
             case ChunaPathEvaluator.EvaluationPhase.Moving:
                 UpdateMoving(leftPos, rightPos, currentMidHoldStart, currentMidHoldEnd,
-                    leftHandDriftThreshold, isGuideMode, showDebugLogs);
+                    leftHandDriftThreshold, guideOnlyMode, skipMidHold, isGuideMode, showDebugLogs);
                 break;
 
             case ChunaPathEvaluator.EvaluationPhase.MidHold:
@@ -140,7 +143,9 @@ public class EvaluationPhaseManager
     // ========== Phase update methods ==========
 
     private void UpdateWaitingForStart(Vector3 leftPos, Vector3 rightPos,
-        bool isLeftTouching, bool isRightTouching, bool showDebugLogs)
+        bool isLeftTouching, bool isRightTouching,
+        bool guideOnlyMode, bool useRelativeMovement,
+        float currentStartRatio, bool showDebugLogs)
     {
         bool shouldProceed = isLeftTouching || isRightTouching;
 
@@ -152,8 +157,25 @@ public class EvaluationPhaseManager
             leftHandStartHoldPosition = leftPos;
             owner.OnWaitingForStartComplete();
 
-            ChunaLogger.Log("<color=green>[WaitingForStart] Hand detected! Transition to StartHold</color>");
-            ChangePhase(ChunaPathEvaluator.EvaluationPhase.StartHold, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+            if (guideOnlyMode)
+            {
+                // ★ GuideOnly: StartHold 스킵 → 바로 Moving으로
+                ChunaLogger.Log("<color=green>[WaitingForStart] GuideOnly - StartHold 스킵, 바로 Moving 전환</color>");
+
+                // 피벗 기반 진행률 계산을 위해 기준점 저장
+                if (useRelativeMovement)
+                {
+                    owner.SaveUserHoldReference();
+                }
+
+                owner.StartGuideHandPlaybackInternal();
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Moving, owner.GetLoadedFrameCount(), currentStartRatio, showDebugLogs);
+            }
+            else
+            {
+                ChunaLogger.Log("<color=green>[WaitingForStart] Hand detected! Transition to StartHold</color>");
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.StartHold, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+            }
         }
     }
 
@@ -217,21 +239,72 @@ public class EvaluationPhaseManager
 
     private void UpdateMoving(Vector3 leftPos, Vector3 rightPos,
         float currentMidHoldStart, float currentMidHoldEnd,
-        float leftHandDriftThreshold, bool isGuideMode, bool showDebugLogs)
+        float leftHandDriftThreshold, bool guideOnlyMode, bool skipMidHold, bool isGuideMode, bool showDebugLogs)
     {
-        // Left hand drift check
-        float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
-        if (leftDrift > leftHandDriftThreshold)
+        // Left hand drift check (guideOnly에서는 스킵)
+        if (!guideOnlyMode)
         {
-            owner.FireOnLeftHandDrifted(leftDrift);
-            owner.IncrementLeftHandDriftCount();
+            float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
+            if (leftDrift > leftHandDriftThreshold)
+            {
+                owner.FireOnLeftHandDrifted(leftDrift);
+                owner.IncrementLeftHandDriftCount();
 
-            if (showDebugLogs)
-                ChunaLogger.Log($"<color=orange>[Moving] Left hand drift! Distance: {leftDrift:F3}m</color>");
+                if (showDebugLogs)
+                    ChunaLogger.Log($"<color=orange>[Moving] Left hand drift! Distance: {leftDrift:F3}m</color>");
+            }
         }
 
         float progress = owner.GetCurrentProgress();
         float limitRatio = currentMidHoldEnd;
+
+        if (guideOnlyMode)
+        {
+            // ★ GuideOnly: 목표 범위 도달 시 MidHold 없이 바로 완료
+            if (progress >= currentMidHoldStart)
+            {
+                ChunaLogger.Log($"<color=green>[Moving] GuideOnly - 목표 도달 ({progress:P0}), 바로 완료</color>");
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+
+                if (isGuideMode)
+                {
+                    ChunaLogger.Log("<color=magenta>[Moving] GuideOnly + Guide mode - 토글 대기</color>");
+                    return;
+                }
+
+                owner.CompleteEvaluation();
+            }
+
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+                ChunaLogger.Log($"[Moving-GuideOnly] Progress: {progress:P0}, target:{currentMidHoldStart:P0}");
+
+            return;
+        }
+
+        // ===== SkipMidHold 모드 (유사도 평가 O, MidHold 스킵 - 대흉근/흉쇄유돌근) =====
+        if (skipMidHold)
+        {
+            if (progress >= currentMidHoldStart)
+            {
+                ChunaLogger.Log($"<color=green>[Moving] SkipMidHold - 임계점 통과 ({progress:P0} >= {currentMidHoldStart:P0}), 완료</color>");
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+
+                if (isGuideMode)
+                {
+                    ChunaLogger.Log("<color=magenta>[Moving] SkipMidHold + Guide mode - 토글 대기</color>");
+                    return;
+                }
+
+                owner.CompleteEvaluation();
+            }
+
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+                ChunaLogger.Log($"[Moving-SkipMidHold] Progress: {progress:P0}, threshold:{currentMidHoldStart:P0}");
+
+            return;
+        }
+
+        // ===== 일반 모드 (기존 로직) =====
 
         // Over-limit warning
         if (progress > limitRatio)
@@ -265,7 +338,7 @@ public class EvaluationPhaseManager
         }
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            ChunaLogger.Log($"[Moving] Progress: {progress:P0}, limit:{limitRatio:P0}, leftDrift: {leftDrift:F3}m, overLimit:{isOverLimitBarrier}");
+            ChunaLogger.Log($"[Moving] Progress: {progress:P0}, limit:{limitRatio:P0}, overLimit:{isOverLimitBarrier}");
     }
 
     private void UpdateMidHold(Vector3 leftPos, Vector3 rightPos, float rightVel,
