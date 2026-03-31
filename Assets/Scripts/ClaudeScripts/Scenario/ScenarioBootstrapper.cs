@@ -91,13 +91,18 @@ public class ScenarioBootstrapper : MonoBehaviour
         if (infoPanelController != null)
         {
             infoPanelController.SetDefaultPositionPreset(config.patientPositionPreset);
+            infoPanelController.SetScenarioTitle(config.scenarioName);
             if (showDebugLog)
-                ChunaLogger.Log("[ScenarioBootstrapper] InfoPanelController에 위치 프리셋 주입 완료");
+                ChunaLogger.Log("[ScenarioBootstrapper] InfoPanelController에 위치 프리셋 + 시나리오 타이틀 주입 완료");
         }
-        else
+
+        // ★ 씬 로드 시 즉시 환자 프리셋 적용 (시나리오 시작 버튼 대기 안 함)
+        PatientPositionManager patientPosManager = FindFirstObjectByType<PatientPositionManager>();
+        if (patientPosManager != null && !string.IsNullOrEmpty(config.patientPositionPreset))
         {
+            patientPosManager.ApplyPreset(config.patientPositionPreset);
             if (showDebugLog)
-                ChunaLogger.Log("[ScenarioBootstrapper] InfoPanelController가 없음 (Practice씬일 수 있음)");
+                ChunaLogger.Log($"[ScenarioBootstrapper] 환자 프리셋 즉시 적용: '{config.patientPositionPreset}'");
         }
     }
 

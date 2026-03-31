@@ -153,38 +153,15 @@ public class SceneLoader : MonoBehaviour
     }
 
     /// <summary>
-    /// Camera X를 씬으로 복원 (부모 해제)
-    /// CameraLocateCtrl이 새 씬에서 위치를 재설정함
+    /// Camera X 복원 — CameraLocateCtrl.Awake()가 CenterEyeAnchor 자식으로 붙여줌
+    /// Camera X와 미러링 연결은 DontDestroyOnLoad로 유지되므로 별도 조치 불필요
     /// </summary>
     private void RestoreCameraX()
     {
         if (preservedCameraX != null)
         {
-            // 부모 해제 (루트로 이동)
-            preservedCameraX.transform.SetParent(null);
-            ChunaLogger.Log($"[SceneLoader] Camera X 복원됨 (CameraLocateCtrl이 위치 재설정 예정)");
-
-            // 미러링 재연결 시도 (SignalingManager 재시작)
-            StartCoroutine(TryReconnectMirroringDelayed());
-
+            ChunaLogger.Log($"[SceneLoader] Camera X 복원 확인 (CameraLocateCtrl이 위치 설정 완료, 미러링 연결 유지)");
             preservedCameraX = null;
-        }
-    }
-
-    /// <summary>
-    /// 씬 전환 후 미러링 재연결 시도
-    /// VideoStreamSender의 Track/RenderTexture가 씬 전환 중 stale 상태가 되므로
-    /// 단순 TryReconnect가 아닌 VideoStreamSender 리셋 포함 재연결 수행
-    /// </summary>
-    private IEnumerator TryReconnectMirroringDelayed()
-    {
-        // CameraLocateCtrl이 Camera X 위치를 재설정할 시간을 줌
-        yield return new WaitForSeconds(0.5f);
-
-        if (RenderManager.instance != null)
-        {
-            ChunaLogger.Log("[SceneLoader] 씬 전환 후 미러링 재연결 시도 (VideoStreamSender 리셋 포함)...");
-            RenderManager.instance.ReconnectAfterSceneTransition();
         }
     }
 

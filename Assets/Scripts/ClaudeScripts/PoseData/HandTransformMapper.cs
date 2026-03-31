@@ -95,6 +95,16 @@ public class HandTransformMapper : MonoBehaviour
 
                 // HandVisual 컴포넌트 비활성화 (실시간 추적 차단)
                 sourceHandVisual.enabled = false;
+
+                // ★ MaterialPropertyBlockEditor 비활성화 (SDK가 매 프레임 색상을 덮어쓰는 것 방지)
+                var matBlockEditors = GetComponentsInChildren<Oculus.Interaction.MaterialPropertyBlockEditor>(true);
+                foreach (var editor in matBlockEditors)
+                {
+                    editor.enabled = false;
+                }
+                if (matBlockEditors.Length > 0)
+                    ChunaLogger.Log($"[HandTransformMapper] MaterialPropertyBlockEditor {matBlockEditors.Length}개 비활성화");
+
                 ChunaLogger.Log("[HandTransformMapper] HandVisual 컴포넌트 비활성화 - 실시간 추적 차단");
             }
             else

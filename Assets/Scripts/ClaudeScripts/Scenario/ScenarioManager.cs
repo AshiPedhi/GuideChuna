@@ -54,6 +54,10 @@ public class ScenarioManager : MonoBehaviour
     [SerializeField] private Transform leftShoulderPivot;
     [Tooltip("오른쪽 어깨 피벗 Transform")]
     [SerializeField] private Transform rightShoulderPivot;
+    [Tooltip("왼팔 상완 피벗 Transform (대흉근 등)")]
+    [SerializeField] private Transform leftUpperArmPivot;
+    [Tooltip("오른팔 상완 피벗 Transform (대흉근 등)")]
+    [SerializeField] private Transform rightUpperArmPivot;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
@@ -680,7 +684,7 @@ public class ScenarioManager : MonoBehaviour
         conditionManager.RegisterCondition(phaseName, stepName, subStepNo, condition);
 
         if (showDebugLog)
-            ChunaLogger.Log($"[ScenarioManager] 체크포인트 평가 등록: {subStep.handTrackingFileName} (CP: {chunaPathEvaluator.TotalCheckpoints})");
+            ChunaLogger.Log($"[ScenarioManager] 핸드데이터 평가 등록: {subStep.handTrackingFileName}");
     }
 
     /// <summary>
@@ -688,7 +692,12 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void ApplyPivotTarget(SubStepData subStep)
     {
-        if (subStep == null || !subStep.HasPivotTarget()) return;
+        if (subStep == null || !subStep.HasPivotTarget())
+        {
+            // pivotTarget 미지정 시 피벗 리셋 → 직선 거리 기반으로 fallback
+            chunaPathEvaluator.SetPivotSettings(null, 0f, ChunaPathEvaluator.RotationDetectionAxis.Z, false);
+            return;
+        }
 
         Transform pivot = null;
         switch (subStep.pivotTarget.Trim().ToLower())
@@ -701,6 +710,12 @@ public class ScenarioManager : MonoBehaviour
                 break;
             case "rightshoulder":
                 pivot = rightShoulderPivot;
+                break;
+            case "leftupperarm":
+                pivot = leftUpperArmPivot;
+                break;
+            case "rightupperarm":
+                pivot = rightUpperArmPivot;
                 break;
         }
 
@@ -856,10 +871,35 @@ public class ScenarioManager : MonoBehaviour
     {
         if (chunaPathEvaluator == null) return;
 
-        ContactTarget target = subStep.GetContactTarget();
-        chunaPathEvaluator.SetContactTarget(target);
+        if (subStep.IsPostureGuideStep())
+        {
+            // 자세지시: ScenarioConfig의 postureGuideContactTarget 사용
+            ContactTarget target = currentConfig != null ? currentConfig.postureGuideContactTarget : ContactTarget.LeftArm;
+            chunaPathEvaluator.SetContactTarget(target);
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=cyan>[ScenarioManager] 접촉 감지 부위 (자세지시): {target}</color>");
+        }
+        else
+        {
+            // 기본: 주동수 + 보조수 동시 체크
+            ContactTarget primary = currentConfig != null ? currentConfig.primaryContactTarget : ContactTarget.Head;
+            ContactTarget assist = currentConfig != null ? currentConfig.assistContactTarget : ContactTarget.Shoulder;
 
-        if (showDebugLog)
-            ChunaLogger.Log($"<color=cyan>[ScenarioManager] 접촉 감지 부위 설정: {target}</color>");
+            // CSV에서 명시적으로 부위를 지정한 경우 그것만 사용
+            ContactTarget? explicitTarget = subStep.GetContactTargetOrNull();
+            if (explicitTarget.HasValue)
+            {
+                chunaPathEvaluator.SetContactTarget(explicitTarget.Value);
+                if (showDebugLog)
+                    ChunaLogger.Log($"<color=cyan>[ScenarioManager] 접촉 감지 부위 (명시): {explicitTarget.Value}</color>");
+            }
+            else
+            {
+                // 주동수 + 보조수 동시 체크
+                chunaPathEvaluator.SetContactTargets(primary, assist);
+                if (showDebugLog)
+                    ChunaLogger.Log($"<color=cyan>[ScenarioManager] 접촉 감지 부위 (주동수+보조수): {primary} + {assist}</color>");
+            }
+        }
     }
 }

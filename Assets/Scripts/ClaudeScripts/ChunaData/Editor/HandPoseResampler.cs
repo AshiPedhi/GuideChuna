@@ -29,7 +29,8 @@ public class HandPoseResampler : EditorWindow
     private float playbackSpeed = 1.0f;
     private int currentFrameIndex = 0;
     private double playbackStartTime = 0;
-    private float playbackStartTimestamp = 0;
+    private int playbackStartFrameIndex = 0;
+    private float playbackFPS = 30f;
     private float previewScale = 1.0f;
     private Vector3 previewOffset = new Vector3(0, 1, 0);
     private bool showLeftHand = true;
@@ -155,23 +156,20 @@ public class HandPoseResampler : EditorWindow
     {
         if (!isPlaying || parsedFrames.Count < 2) return;
 
-        // 경과 시간 계산
+        // 인덱스 기반 재생: 경과 시간으로 프레임 인덱스 계산 (균일 FPS)
         double currentTime = EditorApplication.timeSinceStartup;
-        float elapsedTime = (float)(currentTime - playbackStartTime) * playbackSpeed;
-        float targetTimestamp = playbackStartTimestamp + elapsedTime;
-
-        float firstTimestamp = parsedFrames[0].timestamp;
-        float lastTimestamp = parsedFrames[parsedFrames.Count - 1].timestamp;
-        float totalDuration = lastTimestamp - firstTimestamp;
+        float elapsed = (float)(currentTime - playbackStartTime) * playbackSpeed;
+        float frameTime = 1f / playbackFPS;
+        int framesToAdvance = Mathf.FloorToInt(elapsed / frameTime);
+        int newFrameIndex = playbackStartFrameIndex + framesToAdvance;
 
         // 루프 처리
-        if (targetTimestamp > lastTimestamp)
+        if (newFrameIndex >= parsedFrames.Count)
         {
             if (loopPlayback)
             {
-                // 처음부터 다시 시작
                 playbackStartTime = currentTime;
-                playbackStartTimestamp = firstTimestamp;
+                playbackStartFrameIndex = 0;
                 currentFrameIndex = 0;
             }
             else
@@ -184,9 +182,6 @@ public class HandPoseResampler : EditorWindow
             return;
         }
 
-        // 현재 시간에 맞는 프레임 찾기 (이진 검색으로 최적화)
-        int newFrameIndex = FindFrameAtTimestamp(targetTimestamp);
-
         // 프레임이 변경되었으면 업데이트
         if (newFrameIndex != currentFrameIndex)
         {
@@ -194,36 +189,6 @@ public class HandPoseResampler : EditorWindow
             SceneView.RepaintAll();
             Repaint();
         }
-    }
-
-    /// <summary>
-    /// 주어진 타임스탬프에 해당하는 프레임 인덱스를 찾습니다.
-    /// 이진 검색을 사용하여 효율적으로 검색합니다.
-    /// </summary>
-    private int FindFrameAtTimestamp(float targetTimestamp)
-    {
-        if (parsedFrames.Count == 0) return 0;
-        if (targetTimestamp <= parsedFrames[0].timestamp) return 0;
-        if (targetTimestamp >= parsedFrames[parsedFrames.Count - 1].timestamp)
-            return parsedFrames.Count - 1;
-
-        int left = 0;
-        int right = parsedFrames.Count - 1;
-
-        while (left < right)
-        {
-            int mid = (left + right + 1) / 2;
-            if (parsedFrames[mid].timestamp <= targetTimestamp)
-            {
-                left = mid;
-            }
-            else
-            {
-                right = mid - 1;
-            }
-        }
-
-        return left;
     }
 
     private void OnSceneGUI(SceneView sceneView)
@@ -471,6 +436,16 @@ public class HandPoseResampler : EditorWindow
             Vector3 transformedWorldPos = wristJoint.worldPosition;
             Quaternion transformedWorldRot = wristJoint.worldRotation;
 
+            // 손 위치 오프셋 미리보기
+            if (previewHandOffset && handPositionOffset != Vector3.zero)
+            {
+                bool applyOffset = handOffsetTarget == HandOffsetTarget.Both ||
+                                   (handOffsetTarget == HandOffsetTarget.Left && isLeft) ||
+                                   (handOffsetTarget == HandOffsetTarget.Right && !isLeft);
+                if (applyOffset)
+                    transformedWorldPos += handPositionOffset;
+            }
+
             // 각도 스케일 미리보기 적용
             if (previewAngleScale && isAnalyzed && parsedFrames.Count > 1 && pivotBasedAngle > 0.1f)
             {
@@ -709,17 +684,18 @@ public class HandPoseResampler : EditorWindow
         }
         EditorGUILayout.EndHorizontal();
 
-        // 시간 표시
+        // 프레임/시간 표시
         if (parsedFrames.Count > 0 && currentFrameIndex < parsedFrames.Count)
         {
-            float currentTime = parsedFrames[currentFrameIndex].timestamp;
-            float totalTime = parsedFrames[parsedFrames.Count - 1].timestamp;
-            EditorGUILayout.LabelField($"시간: {currentTime:F2}s / {totalTime:F2}s");
+            int totalFrames = parsedFrames.Count - 1;
+            float totalDuration = totalFrames / playbackFPS;
+            float currentTime = currentFrameIndex / playbackFPS;
+            EditorGUILayout.LabelField($"프레임: {currentFrameIndex}/{totalFrames}  ({currentTime:F2}s / {totalDuration:F2}s)");
 
-            // 프로그레스 바
+            // 프로그레스 바 (인덱스 기반 — 균일 진행)
             Rect progressRect = GUILayoutUtility.GetRect(GUIContent.none, GUIStyle.none, GUILayout.Height(8));
             EditorGUI.DrawRect(progressRect, new Color(0.2f, 0.2f, 0.2f));
-            float progress = totalTime > 0 ? currentTime / totalTime : 0;
+            float progress = totalFrames > 0 ? (float)currentFrameIndex / totalFrames : 0;
             progressRect.width *= progress;
             EditorGUI.DrawRect(progressRect, new Color(0.3f, 0.7f, 1f));
         }
@@ -1020,9 +996,9 @@ public class HandPoseResampler : EditorWindow
             {
                 currentFrameIndex = 0;
             }
-            // 현재 프레임의 타임스탬프부터 재생 시작
+            // 현재 프레임부터 재생 시작
             playbackStartTime = EditorApplication.timeSinceStartup;
-            playbackStartTimestamp = parsedFrames[currentFrameIndex].timestamp;
+            playbackStartFrameIndex = currentFrameIndex;
         }
         SceneView.RepaintAll();
     }
@@ -2404,6 +2380,12 @@ public class HandPoseResampler : EditorWindow
     private Transform coordConvertReference = null;
     private bool coordConvertOverwrite = true;
 
+    // ===== 손 위치 오프셋 =====
+    private enum HandOffsetTarget { Left, Right, Both }
+    private HandOffsetTarget handOffsetTarget = HandOffsetTarget.Left;
+    private Vector3 handPositionOffset = Vector3.zero;
+    private bool previewHandOffset = false;
+
     private void DrawCoordConvertTab()
     {
         EditorGUILayout.LabelField("좌표 형식 변환", EditorStyles.boldLabel);
@@ -2515,6 +2497,112 @@ public class HandPoseResampler : EditorWindow
             }
         }
         GUI.enabled = true;
+
+        EditorGUILayout.Space(20);
+
+        // ===== 손 위치 오프셋 =====
+        EditorGUILayout.LabelField("손 위치 오프셋", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "선택한 손의 WorldPosition을 전체 프레임에서 일괄 이동합니다.\n" +
+            "로컬 좌표 기준 오프셋 (기준점 로컬 공간).",
+            MessageType.Info);
+
+        handOffsetTarget = (HandOffsetTarget)EditorGUILayout.EnumPopup("대상 손", handOffsetTarget);
+        handPositionOffset = EditorGUILayout.Vector3Field("위치 오프셋", handPositionOffset);
+
+        bool newPreviewHandOffset = EditorGUILayout.Toggle("미리보기", previewHandOffset);
+        if (newPreviewHandOffset != previewHandOffset)
+        {
+            previewHandOffset = newPreviewHandOffset;
+            SceneView.RepaintAll();
+        }
+
+        GUI.enabled = isAnalyzed && handPositionOffset != Vector3.zero;
+        GUI.backgroundColor = new Color(0.8f, 0.6f, 1f);
+        if (GUILayout.Button($"{handOffsetTarget} 손 위치 오프셋 적용", GUILayout.Height(35)))
+        {
+            string targetName = handOffsetTarget == HandOffsetTarget.Left ? "왼손" :
+                                handOffsetTarget == HandOffsetTarget.Right ? "오른손" : "양손";
+            bool confirm = EditorUtility.DisplayDialog("손 위치 오프셋 확인",
+                $"'{Path.GetFileName(sourceFilePath)}'의 {targetName} WorldPosition에\n" +
+                $"오프셋 ({handPositionOffset.x:F3}, {handPositionOffset.y:F3}, {handPositionOffset.z:F3})을 적용합니다.\n\n계속하시겠습니까?",
+                "적용", "취소");
+            if (confirm)
+                ExecuteHandPositionOffset(sourceFilePath);
+        }
+        GUI.backgroundColor = Color.white;
+        GUI.enabled = true;
+    }
+
+    private void ExecuteHandPositionOffset(string filePath)
+    {
+        if (!File.Exists(filePath)) return;
+
+        string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+        if (lines.Length < 2) return;
+
+        CultureInfo inv = CultureInfo.InvariantCulture;
+        int modifiedFrames = 0;
+
+        // CSV 구조: FrameIndex(0), HandType(1), JointID(2), LocalPos(3-5), LocalRot(6-9), Timestamp(10), WorldPos(11-13), WorldRot(14-17)
+        // HandType: "Left" / "Right"
+        // JointID 1 = WristRoot (worldPosition이 저장되는 조인트)
+
+        for (int i = 1; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            string[] values = line.Split(',');
+            if (values.Length < 14) continue;
+
+            string handType = values[1].Trim();
+            if (!int.TryParse(values[2].Trim(), out int jointId)) continue;
+
+            // WristRoot (jointId 1)의 worldPosition만 수정
+            if (jointId != 1) continue;
+
+            bool isLeft = handType.Equals("Left", System.StringComparison.OrdinalIgnoreCase);
+            bool isRight = handType.Equals("Right", System.StringComparison.OrdinalIgnoreCase);
+
+            bool shouldModify = handOffsetTarget == HandOffsetTarget.Both ||
+                               (handOffsetTarget == HandOffsetTarget.Left && isLeft) ||
+                               (handOffsetTarget == HandOffsetTarget.Right && isRight);
+
+            if (!shouldModify) continue;
+
+            // worldPos: 인덱스 11, 12, 13
+            if (string.IsNullOrEmpty(values[11].Trim())) continue;
+            if (!float.TryParse(values[11].Trim(), NumberStyles.Float, inv, out float wx)) continue;
+            if (!float.TryParse(values[12].Trim(), NumberStyles.Float, inv, out float wy)) continue;
+            if (!float.TryParse(values[13].Trim(), NumberStyles.Float, inv, out float wz)) continue;
+
+            // 오프셋 적용
+            wx += handPositionOffset.x;
+            wy += handPositionOffset.y;
+            wz += handPositionOffset.z;
+
+            values[11] = wx.ToString("F6", inv);
+            values[12] = wy.ToString("F6", inv);
+            values[13] = wz.ToString("F6", inv);
+
+            lines[i] = string.Join(",", values);
+            modifiedFrames++;
+        }
+
+        File.WriteAllLines(filePath, lines, Encoding.UTF8);
+        AssetDatabase.Refresh();
+
+        string handName = handOffsetTarget == HandOffsetTarget.Left ? "왼손" :
+                          handOffsetTarget == HandOffsetTarget.Right ? "오른손" : "양손";
+        ChunaLogger.Log($"<color=cyan>[손 오프셋] {handName} {modifiedFrames}개 프레임에 오프셋 적용 완료: {handPositionOffset}</color>");
+        EditorUtility.DisplayDialog("완료", $"{handName} {modifiedFrames}개 프레임에 오프셋 적용 완료.", "확인");
+
+        // 다시 분석
+        if (isAnalyzed)
+        {
+            AnalyzeCSV();
+        }
     }
 
     private void ExecuteCoordConvert(string[] filePaths)

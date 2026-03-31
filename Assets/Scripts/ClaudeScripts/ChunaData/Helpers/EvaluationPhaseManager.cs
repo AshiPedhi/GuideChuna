@@ -157,25 +157,9 @@ public class EvaluationPhaseManager
             leftHandStartHoldPosition = leftPos;
             owner.OnWaitingForStartComplete();
 
-            if (guideOnlyMode)
-            {
-                // ★ GuideOnly: StartHold 스킵 → 바로 Moving으로
-                ChunaLogger.Log("<color=green>[WaitingForStart] GuideOnly - StartHold 스킵, 바로 Moving 전환</color>");
-
-                // 피벗 기반 진행률 계산을 위해 기준점 저장
-                if (useRelativeMovement)
-                {
-                    owner.SaveUserHoldReference();
-                }
-
-                owner.StartGuideHandPlaybackInternal();
-                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Moving, owner.GetLoadedFrameCount(), currentStartRatio, showDebugLogs);
-            }
-            else
-            {
-                ChunaLogger.Log("<color=green>[WaitingForStart] Hand detected! Transition to StartHold</color>");
-                ChangePhase(ChunaPathEvaluator.EvaluationPhase.StartHold, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
-            }
+            // guideOnly 포함 모든 모드에서 StartHold 거침
+            ChunaLogger.Log("<color=green>[WaitingForStart] Hand detected! Transition to StartHold</color>");
+            ChangePhase(ChunaPathEvaluator.EvaluationPhase.StartHold, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
         }
     }
 
@@ -260,10 +244,10 @@ public class EvaluationPhaseManager
 
         if (guideOnlyMode)
         {
-            // ★ GuideOnly: 목표 범위 도달 시 MidHold 없이 바로 완료
-            if (progress >= currentMidHoldStart)
+            // ★ GuideOnly: 진행률 95% 이상 도달 시 완료
+            if (progress >= 0.95f)
             {
-                ChunaLogger.Log($"<color=green>[Moving] GuideOnly - 목표 도달 ({progress:P0}), 바로 완료</color>");
+                ChunaLogger.Log($"<color=green>[Moving] GuideOnly - 진행률 달성 ({progress:P0} >= 95%), 완료</color>");
                 ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
 
                 if (isGuideMode)
@@ -276,7 +260,7 @@ public class EvaluationPhaseManager
             }
 
             if (showDebugLogs && Time.frameCount % 60 == 0)
-                ChunaLogger.Log($"[Moving-GuideOnly] Progress: {progress:P0}, target:{currentMidHoldStart:P0}");
+                ChunaLogger.Log($"[Moving-GuideOnly] Progress: {progress:P0}");
 
             return;
         }

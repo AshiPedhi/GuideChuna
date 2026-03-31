@@ -58233,7 +58233,7 @@ MonoBehaviour:
   leftWristRoot: {fileID: 1173530639}
   rightWristRoot: {fileID: 1200290772}
   patientReference: {fileID: 359949757}
-  fileName: "\uC0AC\uAC01\uADFC \uAC74\uCE21\uD68C\uC804"
+  fileName: "\uD749\uACE8\uC9C0 \uC790\uC138"
   recordInterval: 0.033
   recordLeftHand: 1
   recordRightHand: 1
@@ -105400,21 +105400,19 @@ MonoBehaviour:
   patientHeadCollider: {fileID: 2044603182}
   patientShoulderCollider: {fileID: 1225244102}
   patientChestCollider: {fileID: 0}
+  patientLeftArmCollider: {fileID: 0}
+  patientRightArmCollider: {fileID: 0}
   activeContactTarget: 1
   leftHandCollider: {fileID: 2087145412}
   rightHandCollider: {fileID: 2087145413}
   handColliderScale: 0.6
   defaultHandCollisionRadius: 0.08
   handCollisionForwardOffset: 0.07
-  useCollisionMode: 1
   handCollisionShape: 1
   palmWidth: 0.08
   palmThickness: 0.03
   palmHeight: 0.08
   fingerLength: 0.1
-  leftCheckpoints: []
-  rightCheckpoints: []
-  checkpointParent: {fileID: 0}
   playerLeftHand: {fileID: 1004980545}
   playerRightHand: {fileID: 1004980544}
   limitChecker: {fileID: 0}
@@ -105439,9 +105437,6 @@ MonoBehaviour:
   holdVelocityThreshold: 0.02
   requireLimitSafeForHold: 1
   requireNearStartToBegin: 1
-  guideLayerName: Guide
-  checkpointFrameInterval: 15
-  checkpointRadius: 0.15
   useRelativeMovement: 1
   invertRotationDirection: 0
   rotationDetectionAxis: 0
@@ -111889,31 +111884,31 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: -0.096
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.61496913
+      value: 0.615
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.13268384
+      value: 0.005
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.026176963
+      value: 0.00000004369641
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.99965733
+      value: -0.0000000011442309
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0
+      value: -0.026176952
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0
+      value: -0.99965733
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -120575,8 +120570,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1176440147}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: -0.7071068}
-  m_LocalPosition: {x: 0, y: 0.156, z: -0.47}
+  m_LocalRotation: {x: -0.000000030908623, y: -0.7071068, z: -0.7071068, w: 0.000000030908623}
+  m_LocalPosition: {x: -0.09576, y: 0.15603088, z: 0.6076836}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -121483,6 +121478,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7cae97a1eea1474f9aa5c4db9098b85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AngleDisplayController
+  displayMode: 0
   pathEvaluator: {fileID: 1035274494}
   axisTransform: {fileID: 1179838836}
   startAngle: 0
@@ -121492,29 +121488,22 @@ MonoBehaviour:
   angleDisplayOffset: 0
   animationStartOffset: 0
   animationEndOffset: 1
-  angleText: {fileID: 0}
-  angleFormat: "{0:F0}\xB0"
-  warningAngle: 30
-  dangerAngle: 45
-  normalColor: {r: 0, g: 1, b: 0, a: 1}
-  warningColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  dangerColor: {r: 1, g: 0, b: 0, a: 1}
-  statusImage: {fileID: 0}
+  arcTrackImage: {fileID: 0}
   holdStartImage: {fileID: 1179838837}
   holdEndImage: {fileID: 1179838838}
-  syncHoldRangeWithEvaluator: 1
-  syncAngleOffsetWithEvaluator: 1
-  normalHoldStart: 0.3
-  normalHoldEnd: 0.5
-  extendedHoldStart: 0.5
-  extendedHoldEnd: 0.65
-  stretchingHoldStart: 0.25
-  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
   hideOnStart: 1
   displayTarget: {fileID: 0}
+  linearTrackImage: {fileID: 0}
+  linearHoldStartImage: {fileID: 0}
+  linearHoldEndImage: {fileID: 0}
+  linearMarker: {fileID: 0}
+  linearTrackStart: 0
+  linearTrackEnd: 200
+  linearAxis: 1
+  presetReferenceTransform: {fileID: 0}
   presets: []
   showDebugLogs: 0
 --- !u!1 &1183282050
@@ -141090,12 +141079,14 @@ MonoBehaviour:
   conditionManager: {fileID: 1338513806}
   uiPositioner: {fileID: 1406233889}
   patientAnimator: {fileID: 5866666021072361729}
-  animatorControllerPath: Animators
   angleDisplay: {fileID: 0}
   quizPanel: {fileID: 0}
   resultPanel: {fileID: 1695701129}
   exitPopupController: {fileID: 7048284862421284570}
   resultTracker: {fileID: 1338513808}
+  neckPivot: {fileID: 0}
+  leftShoulderPivot: {fileID: 0}
+  rightShoulderPivot: {fileID: 0}
   showDebugLog: 1
 --- !u!114 &1338513806
 MonoBehaviour:
@@ -180515,19 +180506,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -5.329
+      value: 5.332679
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.004
+      value: 0.003999993
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -9.754
+      value: 10.166828
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.w
-      value: -0.00000004371139
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.x
@@ -180535,7 +180526,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 1
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.z
@@ -217799,6 +217790,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7cae97a1eea1474f9aa5c4db9098b85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AngleDisplayController
+  displayMode: 0
   pathEvaluator: {fileID: 1035274494}
   axisTransform: {fileID: 1917125862}
   startAngle: 0
@@ -217808,29 +217800,22 @@ MonoBehaviour:
   angleDisplayOffset: 0
   animationStartOffset: 0
   animationEndOffset: 1
-  angleText: {fileID: 0}
-  angleFormat: "{0:F0}\xB0"
-  warningAngle: 30
-  dangerAngle: 45
-  normalColor: {r: 0, g: 1, b: 0, a: 1}
-  warningColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  dangerColor: {r: 1, g: 0, b: 0, a: 1}
-  statusImage: {fileID: 0}
+  arcTrackImage: {fileID: 0}
   holdStartImage: {fileID: 1917125863}
   holdEndImage: {fileID: 1917125864}
-  syncHoldRangeWithEvaluator: 1
-  syncAngleOffsetWithEvaluator: 1
-  normalHoldStart: 0.3
-  normalHoldEnd: 0.5
-  extendedHoldStart: 0.5
-  extendedHoldEnd: 0.65
-  stretchingHoldStart: 0.25
-  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
   hideOnStart: 1
   displayTarget: {fileID: 0}
+  linearTrackImage: {fileID: 0}
+  linearHoldStartImage: {fileID: 0}
+  linearHoldEndImage: {fileID: 0}
+  linearMarker: {fileID: 0}
+  linearTrackStart: 0
+  linearTrackEnd: 200
+  linearAxis: 1
+  presetReferenceTransform: {fileID: 0}
   presets: []
   showDebugLogs: 0
 --- !u!224 &1917617329 stripped
@@ -241365,8 +241350,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 919132148920932801}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.99965733, y: -0, z: -0, w: -0.026176963}
-  m_LocalPosition: {x: 0, y: 0.61496913, z: 0.13268384}
+  m_LocalRotation: {x: -0.0000000011442309, y: -0.026176952, z: -0.99965733, w: 0.00000004369641}
+  m_LocalPosition: {x: -0.096, y: 0.615, z: 0.0049999803}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -259760,6 +259745,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7cae97a1eea1474f9aa5c4db9098b85, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AngleDisplayController
+  displayMode: 0
   pathEvaluator: {fileID: 1035274494}
   axisTransform: {fileID: 3683581782714295907}
   startAngle: 0
@@ -259769,29 +259755,22 @@ MonoBehaviour:
   angleDisplayOffset: 0
   animationStartOffset: 0
   animationEndOffset: 1
-  angleText: {fileID: 0}
-  angleFormat: "{0:F0}\xB0"
-  warningAngle: 30
-  dangerAngle: 45
-  normalColor: {r: 0, g: 1, b: 0, a: 1}
-  warningColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
-  dangerColor: {r: 1, g: 0, b: 0, a: 1}
-  statusImage: {fileID: 0}
+  arcTrackImage: {fileID: 0}
   holdStartImage: {fileID: 230644179}
   holdEndImage: {fileID: 779107161}
-  syncHoldRangeWithEvaluator: 1
-  syncAngleOffsetWithEvaluator: 1
-  normalHoldStart: 0.3
-  normalHoldEnd: 0.5
-  extendedHoldStart: 0.5
-  extendedHoldEnd: 0.65
-  stretchingHoldStart: 0.25
-  stretchingHoldEnd: 0.55
   syncSource: 3
   patientAnimator: {fileID: 5866666021072361729}
   autoShowHide: 0
   hideOnStart: 1
   displayTarget: {fileID: 0}
+  linearTrackImage: {fileID: 0}
+  linearHoldStartImage: {fileID: 0}
+  linearHoldEndImage: {fileID: 0}
+  linearMarker: {fileID: 0}
+  linearTrackStart: 0
+  linearTrackEnd: 200
+  linearAxis: 1
+  presetReferenceTransform: {fileID: 0}
   presets: []
   showDebugLogs: 0
 --- !u!33 &3683724582391036168

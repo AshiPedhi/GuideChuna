@@ -48,28 +48,10 @@ public class AngleDisplayController : BaseUIPanel
     [Range(0f, 1f)]
     [SerializeField] private float animationEndOffset = 1f;
 
-    [Header("=== 표시 설정 ===")]
-    [Tooltip("현재 각도 텍스트 (선택)")]
-    [SerializeField] private TextMeshProUGUI angleText;
+    [Header("=== Arc 모드 ===")]
+    [Tooltip("Arc 모드: 배경 트랙 이미지")]
+    [SerializeField] private Image arcTrackImage;
 
-    [Tooltip("각도 표시 포맷")]
-    [SerializeField] private string angleFormat = "{0:F0}°";
-
-    [Tooltip("경고 각도 (이 각도 이상이면 경고색)")]
-    [SerializeField] private float warningAngle = 30f;
-
-    [Tooltip("위험 각도 (이 각도 이상이면 위험색)")]
-    [SerializeField] private float dangerAngle = 45f;
-
-    [Header("=== 색상 ===")]
-    [SerializeField] private Color normalColor = Color.green;
-    [SerializeField] private Color warningColor = Color.yellow;
-    [SerializeField] private Color dangerColor = Color.red;
-
-    [Tooltip("색상 적용 대상 이미지")]
-    [SerializeField] private Image statusImage;
-
-    [Header("=== 홀드 범위 표시 (fillAmount) ===")]
     [Tooltip("홀드 시작점 표시 이미지 (fillAmount로 제어)")]
     [SerializeField] private Image holdStartImage;
 
@@ -433,7 +415,6 @@ public class AngleDisplayController : BaseUIPanel
         if (pathEvaluator != null)
         {
             pathEvaluator.OnUserFrameChanged += HandleUserFrameChanged;
-            pathEvaluator.OnProgressChanged += HandleProgressChanged;
 
             // 자동 표시/숨김 이벤트 구독
             if (autoShowHide)
@@ -449,7 +430,6 @@ public class AngleDisplayController : BaseUIPanel
         if (pathEvaluator != null)
         {
             pathEvaluator.OnUserFrameChanged -= HandleUserFrameChanged;
-            pathEvaluator.OnProgressChanged -= HandleProgressChanged;
 
             // 자동 표시/숨김 이벤트 구독 해제
             pathEvaluator.OnEvaluationStarted -= HandleEvaluationStarted;
@@ -612,12 +592,6 @@ public class AngleDisplayController : BaseUIPanel
             }
         }
 
-        // 텍스트 업데이트
-        UpdateAngleText();
-
-        // 상태 색상 업데이트
-        UpdateStatusColor();
-
         // 이벤트 발생
         OnAngleChanged?.Invoke(currentAngle);
 
@@ -659,41 +633,6 @@ public class AngleDisplayController : BaseUIPanel
     /// <summary>
     /// 각도 텍스트 업데이트
     /// </summary>
-    private void UpdateAngleText()
-    {
-        if (angleText != null)
-        {
-            angleText.text = string.Format(angleFormat, currentAngle);
-
-            // 텍스트 색상도 상태에 따라 변경
-            angleText.color = GetStatusColor();
-        }
-    }
-
-    /// <summary>
-    /// 상태 색상 업데이트
-    /// </summary>
-    private void UpdateStatusColor()
-    {
-        if (statusImage != null)
-        {
-            statusImage.color = GetStatusColor();
-        }
-    }
-
-    /// <summary>
-    /// 현재 상태에 따른 색상 반환
-    /// </summary>
-    private Color GetStatusColor()
-    {
-        float absAngle = Mathf.Abs(currentAngle);
-
-        if (absAngle >= dangerAngle)
-            return dangerColor;
-        if (absAngle >= warningAngle)
-            return warningColor;
-        return normalColor;
-    }
 
     // ========== Public API ==========
 
@@ -722,14 +661,6 @@ public class AngleDisplayController : BaseUIPanel
         endAngle = end;
     }
 
-    /// <summary>
-    /// 경고/위험 임계값 설정
-    /// </summary>
-    public void SetThresholds(float warning, float danger)
-    {
-        warningAngle = warning;
-        dangerAngle = danger;
-    }
 
     /// <summary>
     /// 동기화 소스 설정
@@ -915,6 +846,8 @@ public class AngleDisplayController : BaseUIPanel
         // Arc 모드 UI
         if (axisTransform != null)
             axisTransform.gameObject.SetActive(!isLinear);
+        if (arcTrackImage != null)
+            arcTrackImage.gameObject.SetActive(!isLinear);
         if (holdStartImage != null)
             holdStartImage.gameObject.SetActive(!isLinear);
         if (holdEndImage != null)

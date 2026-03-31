@@ -82,24 +82,10 @@ public class ChunaFeedbackUI : MonoBehaviour
         public DateTime startTime;
         public DateTime endTime;
         public float duration;
-        public int totalCheckpoints;
-        public int passedCheckpoints;
         public float averageSimilarity;
         public float finalScore;
         public string grade;
         public int violationCount;
-        public float totalDeduction;
-        public List<CheckpointResult> checkpointResults = new List<CheckpointResult>();
-
-        [System.Serializable]
-        public class CheckpointResult
-        {
-            public int index;
-            public string name;
-            public float similarity;
-            public bool passed;
-            public float timeToPass;
-        }
     }
 
     void Awake()
@@ -150,8 +136,6 @@ public class ChunaFeedbackUI : MonoBehaviour
         {
             pathEvaluator.OnEvaluationStarted += OnEvaluationStarted;
             pathEvaluator.OnEvaluationCompleted += OnEvaluationCompleted;
-            pathEvaluator.OnCheckpointPassed += OnCheckpointPassed;
-            pathEvaluator.OnProgressChanged += OnProgressChanged;
         }
     }
 
@@ -164,8 +148,6 @@ public class ChunaFeedbackUI : MonoBehaviour
         {
             pathEvaluator.OnEvaluationStarted -= OnEvaluationStarted;
             pathEvaluator.OnEvaluationCompleted -= OnEvaluationCompleted;
-            pathEvaluator.OnCheckpointPassed -= OnCheckpointPassed;
-            pathEvaluator.OnProgressChanged -= OnProgressChanged;
         }
     }
 
@@ -390,8 +372,7 @@ public class ChunaFeedbackUI : MonoBehaviour
 
         currentStepResult = new StepResult
         {
-            startTime = DateTime.Now,
-            checkpointResults = new List<StepResult.CheckpointResult>()
+            startTime = DateTime.Now
         };
 
         if (pathEvaluator != null)
@@ -400,7 +381,6 @@ public class ChunaFeedbackUI : MonoBehaviour
             if (session != null)
             {
                 currentStepResult.csvFileName = session.procedureName;
-                currentStepResult.totalCheckpoints = session.totalCheckpoints;
             }
         }
 
@@ -416,43 +396,18 @@ public class ChunaFeedbackUI : MonoBehaviour
         {
             currentStepResult.endTime = DateTime.Now;
             currentStepResult.duration = session.duration;
-            currentStepResult.passedCheckpoints = session.passedCheckpoints;
             currentStepResult.averageSimilarity = session.averageSimilarity;
             currentStepResult.finalScore = session.finalScore;
             currentStepResult.grade = session.grade;
             currentStepResult.violationCount = session.limitViolationCount;
 
-            foreach (var record in session.checkpointRecords)
-            {
-                currentStepResult.checkpointResults.Add(new StepResult.CheckpointResult
-                {
-                    index = record.index,
-                    name = record.name,
-                    similarity = record.similarity,
-                    passed = true,
-                    timeToPass = record.touchTime
-                });
-            }
-
             stepResults.Add(currentStepResult);
 
             ChunaLogger.Log("ChunaFeedbackUI", $"단계 결과 저장 완료 (총 {stepResults.Count}개 단계)");
             ChunaLogger.Log("ChunaFeedbackUI", $"  - 점수: {currentStepResult.finalScore:F0} ({currentStepResult.grade})");
-            ChunaLogger.Log("ChunaFeedbackUI", $"  - 체크포인트: {currentStepResult.passedCheckpoints}/{currentStepResult.totalCheckpoints}");
         }
 
         UpdateScoreDisplay(session?.finalScore ?? 100f);
-    }
-
-    private void OnCheckpointPassed(PathCheckpoint checkpoint, float similarity)
-    {
-        UpdateCurrentCheckpoint($"✓ {checkpoint.CheckpointName}");
-        UpdateBothHandsSimilarity(similarity, similarity);
-    }
-
-    private void OnProgressChanged(int current, int total)
-    {
-        UpdateProgressDisplay(current, total);
     }
 
     // ========== 결과 조회 API ==========
@@ -481,8 +436,6 @@ public class ChunaFeedbackUI : MonoBehaviour
         foreach (var step in stepResults)
         {
             total.totalSteps++;
-            total.totalCheckpoints += step.totalCheckpoints;
-            total.passedCheckpoints += step.passedCheckpoints;
             total.totalDuration += step.duration;
             total.totalScore += step.finalScore;
             total.totalViolations += step.violationCount;
@@ -524,8 +477,6 @@ public class ChunaFeedbackUI : MonoBehaviour
     public class TotalResult
     {
         public int totalSteps;
-        public int totalCheckpoints;
-        public int passedCheckpoints;
         public float totalDuration;
         public float totalScore;
         public float averageScore;

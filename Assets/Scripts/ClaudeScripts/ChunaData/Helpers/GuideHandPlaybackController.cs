@@ -24,6 +24,14 @@ public class GuideHandPlaybackController
     public int CurrentGuideFrameIndex => currentGuideFrameIndex;
 
     /// <summary>
+    /// 프레임 인덱스 리셋 (평가 시작 시 이전 값 잔류 방지)
+    /// </summary>
+    public void ResetFrameIndex()
+    {
+        currentGuideFrameIndex = 0;
+    }
+
+    /// <summary>
     /// Start guide hand playback coroutine.
     /// Returns IEnumerator; caller must wrap with StartCoroutine.
     /// </summary>
@@ -47,6 +55,12 @@ public class GuideHandPlaybackController
 
         if (showDebugLogs)
             ChunaLogger.Log($"<color=cyan>[Guide] Playback range: {startFrameIdx} ~ {endFrameIdx} (ratio: {startRatio:P0} ~ {endRatio:P0})</color>");
+
+        // ★ 재생 시작 시 색상 초기화
+        if (leftGuideHand != null)
+            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+        if (rightGuideHand != null)
+            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
 
         while (true)
         {

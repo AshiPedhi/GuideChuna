@@ -257,10 +257,11 @@ public class InfoPanelController : MonoBehaviour
         SetToggleWithoutNotify(resultToggle, false);
         SetContentTogglesInteractable(false);
 
-        // 메뉴 토글 초기화 (모두 off, 시나리오 시작 전에는 비활성화)
+        // 메뉴 토글 초기화 (모두 off, 메인메뉴는 항상 활성화)
         SetToggleWithoutNotify(settingsToggle, false);
         SetToggleWithoutNotify(mainMenuToggle, false);
-        SetMenuTogglesInteractable(false);
+        if (settingsToggle != null) settingsToggle.interactable = false;
+        if (mainMenuToggle != null) mainMenuToggle.interactable = true;
 
         // 모드 선택 초기화
         InitializeModeSelection();

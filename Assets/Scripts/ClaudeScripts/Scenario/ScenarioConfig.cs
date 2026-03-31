@@ -20,6 +20,16 @@ public class ScenarioConfig : ScriptableObject
     [Tooltip("환자 위치 프리셋 이름 (PatientPositionManager에서 사용)")]
     public string patientPositionPreset = "Seated";
 
+    [Header("=== 접촉 감지 부위 ===")]
+    [Tooltip("주동수 접촉 부위 (기본: Head)")]
+    public ContactTarget primaryContactTarget = ContactTarget.Head;
+
+    [Tooltip("보조수 접촉 부위 (기본: Shoulder)")]
+    public ContactTarget assistContactTarget = ContactTarget.Shoulder;
+
+    [Tooltip("자세지시 접촉 부위 (기본: LeftArm)")]
+    public ContactTarget postureGuideContactTarget = ContactTarget.LeftArm;
+
     [Header("=== 나레이션 ===")]
     [Tooltip("나레이션 서브폴더 (비어있으면 scenarioName 사용) → Narrations/{난이도}/{이 값}/{clipName}")]
     public string narrationSubFolder;

@@ -103,24 +103,24 @@ public class EvaluationModeConfigurator
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] Healthy side detected - normal rotation</color>");
         }
 
-        // Mode setting
-        if (isRotation)
-        {
-            DisableExtendedLimitMode();
-            isStretchingMode = false;
-            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] Rotation mode (data: {handDataName}) - normal hold range (0.3~0.5)</color>");
-        }
-        else if (isLateralFlexion && isStretching)
+        // Mode setting — stepName 기준으로 스트레칭/재평가 활성화 (운동 종류 무관)
+        if (isStretching)
         {
             EnableExtendedLimitMode();
             isStretchingMode = true;
-            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] Lateral flexion stretching mode</color>");
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 스트레칭 모드 (step: {stepName}, data: {handDataName})</color>");
         }
-        else if (isLateralFlexion && isReEvaluation)
+        else if (isReEvaluation)
         {
             EnableExtendedLimitMode();
             isStretchingMode = false;
-            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] Lateral flexion re-evaluation mode</color>");
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 재평가 모드 (step: {stepName}, data: {handDataName})</color>");
+        }
+        else if (isRotation)
+        {
+            DisableExtendedLimitMode();
+            isStretchingMode = false;
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 회전 모드 (data: {handDataName}) - 일반 범위</color>");
         }
         else
         {
@@ -142,19 +142,13 @@ public class EvaluationModeConfigurator
         float calculatedDataAngle,
         // out parameters for owner to apply
         out float newDefaultGuideRatio,
-        out float newLimitBarrierRatio,
-        out float newExtendedLimitBarrierRatio,
         out float newRuntimeGuideStartRatio,
         out float newRuntimeGuideEndRatio)
     {
-        // Defaults
-        newExtendedLimitBarrierRatio = lateralBending_ReEvalRatio;
-
         switch (mode)
         {
             case ChunaPathEvaluator.LateralBendingMode.LimitCheck:
                 newDefaultGuideRatio = lateralBending_LimitCheckRatio;
-                newLimitBarrierRatio = lateralBending_LimitCheckRatio;
                 newRuntimeGuideStartRatio = guideLimitCheck_Start;
                 newRuntimeGuideEndRatio = guideLimitCheck_End;
                 isStretchingMode = false;
@@ -164,7 +158,6 @@ public class EvaluationModeConfigurator
 
             case ChunaPathEvaluator.LateralBendingMode.Stretching:
                 newDefaultGuideRatio = stretchingEnd;
-                newLimitBarrierRatio = lateralBending_LimitCheckRatio;
                 newRuntimeGuideStartRatio = stretchingStart;
                 newRuntimeGuideEndRatio = stretchingEnd;
                 isStretchingMode = true;
@@ -175,8 +168,6 @@ public class EvaluationModeConfigurator
             case ChunaPathEvaluator.LateralBendingMode.ReEvaluation:
             default:
                 newDefaultGuideRatio = lateralBending_ReEvalRatio;
-                newLimitBarrierRatio = lateralBending_LimitCheckRatio;
-                newExtendedLimitBarrierRatio = lateralBending_ReEvalRatio;
                 newRuntimeGuideStartRatio = guideReEval_Start;
                 newRuntimeGuideEndRatio = guideReEval_End;
                 isStretchingMode = false;

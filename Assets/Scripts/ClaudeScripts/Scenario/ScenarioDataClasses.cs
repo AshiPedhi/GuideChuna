@@ -67,27 +67,45 @@ public class SubStepData
     /// <summary>
     /// 접촉 감지 부위 Enum으로 변환 (기본값: HeadAndShoulder)
     /// </summary>
-    public ContactTarget GetContactTarget()
+    /// <summary>
+    /// contactTarget 문자열을 ContactTarget enum으로 변환
+    /// 역할 기반: "PostureGuide" → 자세지시용
+    /// 부위 기반: "Head", "Shoulder", "Chest" 등 직접 지정도 가능
+    /// 비어있으면 null 반환 (ScenarioConfig의 기본값 사용)
+    /// </summary>
+    public ContactTarget? GetContactTargetOrNull()
     {
         if (string.IsNullOrEmpty(contactTarget))
-            return ContactTarget.HeadAndShoulder;
+            return null;
 
         switch (contactTarget.Trim().ToLower())
         {
+            case "postureguide":
+                return null; // 특수 처리: ScenarioConfig.postureGuideContactTarget 사용
             case "head":
                 return ContactTarget.Head;
+            case "shoulder":
+                return ContactTarget.Shoulder;
             case "chest":
                 return ContactTarget.Chest;
+            case "chestandshoulder":
+                return ContactTarget.ChestAndShoulder;
             case "leftarm":
-            case "leftshoulder":
                 return ContactTarget.LeftArm;
             case "rightarm":
-            case "rightshoulder":
                 return ContactTarget.RightArm;
-            case "headandshoulder":
             default:
-                return ContactTarget.HeadAndShoulder;
+                return null;
         }
+    }
+
+    /// <summary>
+    /// 자세지시 스텝인지 확인
+    /// </summary>
+    public bool IsPostureGuideStep()
+    {
+        return !string.IsNullOrEmpty(contactTarget) &&
+               contactTarget.Trim().Equals("PostureGuide", System.StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -232,11 +250,13 @@ public enum AnimationPlayMode
 /// </summary>
 public enum ContactTarget
 {
-    Head,           // 머리만 (경추 추나)
-    HeadAndShoulder,// 머리+어깨 (상부승모근 등) - 기본값
-    Chest,          // 흉부 (대흉근)
-    LeftArm,        // 왼팔 (견갑거근 자세지시 등)
-    RightArm        // 오른팔
+    Head,               // 머리만 (경추 추나)
+    HeadAndShoulder,    // 머리+어깨 - 기본값
+    Shoulder,           // 어깨만 (견갑거근, 상부승모근)
+    Chest,              // 흉부만 (사각근, 흉쇄유돌근, 대흉근)
+    ChestAndShoulder,   // 흉부+어깨 (보조수 등 넓은 범위)
+    LeftArm,            // 왼팔 (견갑거근 자세지시 등)
+    RightArm            // 오른팔
 }
 
 /// <summary>

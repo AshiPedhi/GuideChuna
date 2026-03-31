@@ -25,7 +25,6 @@ public class ChunaResultSummaryUI : BaseUIPanel
     [SerializeField] private Text totalGradeText;
     [SerializeField] private Image gradeImage;
     [SerializeField] private Text totalDurationText;
-    [SerializeField] private Text totalCheckpointsText;
     [SerializeField] private Text averageSimilarityText;
     [SerializeField] private Text totalViolationsText;
 
@@ -37,11 +36,8 @@ public class ChunaResultSummaryUI : BaseUIPanel
     [SerializeField] private GameObject detailPanel;
     [SerializeField] private Text detailStepNameText;
     [SerializeField] private Text detailScoreText;
-    [SerializeField] private Text detailCheckpointsText;
     [SerializeField] private Text detailSimilarityText;
     [SerializeField] private Text detailDurationText;
-    [SerializeField] private Transform checkpointListContainer;
-    [SerializeField] private GameObject checkpointItemPrefab;
 
     [Header("=== 등급 색상 ===")]
     [SerializeField] private Color gradeS = new Color(1f, 0.84f, 0f);      // Gold
@@ -161,10 +157,6 @@ public class ChunaResultSummaryUI : BaseUIPanel
             totalDurationText.text = $"{ts.Minutes:D2}:{ts.Seconds:D2}";
         }
 
-        // 체크포인트
-        if (totalCheckpointsText != null)
-            totalCheckpointsText.text = $"{displayedTotal.passedCheckpoints}/{displayedTotal.totalCheckpoints}";
-
         // 평균 유사도
         if (averageSimilarityText != null)
             averageSimilarityText.text = $"{displayedTotal.averageSimilarity * 100:F0}%";
@@ -255,68 +247,12 @@ public class ChunaResultSummaryUI : BaseUIPanel
         if (detailScoreText != null)
             detailScoreText.text = $"{result.finalScore:F0}점 ({result.grade})";
 
-        if (detailCheckpointsText != null)
-            detailCheckpointsText.text = $"체크포인트: {result.passedCheckpoints}/{result.totalCheckpoints}";
-
         if (detailSimilarityText != null)
             detailSimilarityText.text = $"평균 유사도: {result.averageSimilarity * 100:F0}%";
 
         if (detailDurationText != null)
             detailDurationText.text = $"소요 시간: {result.duration:F1}초";
 
-        // 체크포인트 리스트
-        UpdateCheckpointListUI(result.checkpointResults);
-    }
-
-    /// <summary>
-    /// 체크포인트 리스트 UI 업데이트
-    /// </summary>
-    private void UpdateCheckpointListUI(List<ChunaFeedbackUI.StepResult.CheckpointResult> checkpoints)
-    {
-        if (checkpointListContainer == null) return;
-
-        // 기존 아이템 제거
-        foreach (Transform child in checkpointListContainer)
-        {
-            Destroy(child.gameObject);
-        }
-
-        // 새 아이템 생성
-        foreach (var cp in checkpoints)
-        {
-            CreateCheckpointItem(cp);
-        }
-    }
-
-    /// <summary>
-    /// 체크포인트 아이템 생성
-    /// </summary>
-    private void CreateCheckpointItem(ChunaFeedbackUI.StepResult.CheckpointResult checkpoint)
-    {
-        GameObject item;
-
-        if (checkpointItemPrefab != null)
-        {
-            item = Instantiate(checkpointItemPrefab, checkpointListContainer);
-        }
-        else
-        {
-            item = new GameObject($"Checkpoint_{checkpoint.index}");
-            item.transform.SetParent(checkpointListContainer);
-
-            var text = item.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 14;
-        }
-
-        // 텍스트 설정
-        var textComponent = item.GetComponentInChildren<Text>();
-        if (textComponent != null)
-        {
-            string passedMark = checkpoint.passed ? "✓" : "✗";
-            textComponent.text = $"{passedMark} {checkpoint.name}: {checkpoint.similarity * 100:F0}% ({checkpoint.timeToPass:F1}초)";
-            textComponent.color = checkpoint.passed ? Color.green : Color.red;
-        }
     }
 
     /// <summary>
@@ -400,8 +336,7 @@ public class StepResultItem : MonoBehaviour
         // 상태 아이콘
         if (statusIcon != null)
         {
-            bool allPassed = result.passedCheckpoints >= result.totalCheckpoints;
-            statusIcon.color = allPassed ? Color.green : Color.yellow;
+            statusIcon.color = result.finalScore >= 70f ? Color.green : Color.yellow;
         }
 
         // 버튼 이벤트

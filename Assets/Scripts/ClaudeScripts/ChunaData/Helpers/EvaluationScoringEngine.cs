@@ -42,7 +42,10 @@ public class EvaluationScoringEngine
             if (leftResult.overallStatus == LimitStatus.Danger || rightResult.overallStatus == LimitStatus.Danger)
                 session.totalTimeInDanger += metricsRecordInterval;
             if (leftResult.overallStatus == LimitStatus.Exceeded || rightResult.overallStatus == LimitStatus.Exceeded)
+            {
                 session.totalTimeExceeded += metricsRecordInterval;
+                session.limitViolationCount++;
+            }
         }
 
         session.metricsHistory.Add(snapshot);
@@ -76,24 +79,18 @@ public class EvaluationScoringEngine
     /// </summary>
     public void CalculateFinalScore(ChunaPathEvaluator.EvaluationSession session)
     {
-        // Similarity-based score (40%)
-        float similarityScore = session.averageSimilarity * 40f;
+        // Similarity-based score (60%)
+        float similarityScore = session.averageSimilarity * 60f;
 
-        // Checkpoint pass rate (30%)
-        float checkpointRate = session.totalCheckpoints > 0
-            ? (float)session.touchedCheckpoints / session.totalCheckpoints
-            : 1f;
-        float checkpointScore = checkpointRate * 30f;
-
-        // Limit compliance score (30%)
-        float limitScore = 30f;
+        // Limit compliance score (40%)
+        float limitScore = 40f;
         limitScore -= session.limitViolationCount * 2f;
         limitScore -= session.totalTimeInWarning * 0.5f;
         limitScore -= session.totalTimeInDanger * 1f;
         limitScore -= session.totalTimeExceeded * 3f;
         limitScore = Mathf.Max(0f, limitScore);
 
-        float score = similarityScore + checkpointScore + limitScore;
+        float score = similarityScore + limitScore;
         score = Mathf.Clamp(score, 0f, 100f);
 
         session.finalScore = score;
@@ -126,12 +123,6 @@ public class EvaluationScoringEngine
 
         if (session.totalTimeExceeded > 2f)
             feedbacks.Add("위험 범위에서 너무 오래 머물렀습니다");
-
-        float checkpointRate = session.totalCheckpoints > 0
-            ? (float)session.touchedCheckpoints / session.totalCheckpoints
-            : 1f;
-        if (checkpointRate < 0.7f)
-            feedbacks.Add("경로를 더 정확하게 따라가세요");
 
         if (feedbacks.Count == 0)
             feedbacks.Add("잘 수행하셨습니다!");
