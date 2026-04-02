@@ -220,6 +220,49 @@ public class TrainingResultTracker : MonoBehaviour
             RecordSubStepCompletion(true, false);
         }
 
+        // EvaluationSession 스코어링 결과를 TrainingResultData에 반영
+        if (isTracking && resultData != null && session != null
+            && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
+        {
+            var step = resultData.GetOrCreateStepResult(currentPhaseName, currentStepName);
+            step.finalScore = session.finalScore;
+            step.grade = session.grade;
+            step.limitViolationCount = session.limitViolationCount;
+            step.totalTimeInWarning = session.totalTimeInWarning;
+            step.totalTimeExceeded = session.totalTimeExceeded;
+
+            // 좌/우 개별 유사도
+            step.leftAverageSimilarity = session.leftAverageSimilarity;
+            step.rightAverageSimilarity = session.rightAverageSimilarity;
+
+            // 유사도 안정성
+            step.similarityStdDev = session.similarityStdDev;
+            step.minSimilarity = session.minSimilarity;
+            step.maxSimilarity = session.maxSimilarity;
+
+            // 안전성
+            step.peakExceededRatio = session.peakExceededRatio;
+
+            // 시계열 유사도 데이터 (웹뷰 그래프용)
+            step.similarityTimeline = new System.Collections.Generic.List<TrainingResultData.SimilarityTimePoint>();
+            foreach (var snapshot in session.metricsHistory)
+            {
+                step.similarityTimeline.Add(new TrainingResultData.SimilarityTimePoint
+                {
+                    time = snapshot.timestamp,
+                    leftSimilarity = snapshot.leftSimilarity,
+                    rightSimilarity = snapshot.rightSimilarity
+                });
+            }
+
+            // session의 가중 평균 유사도로 덮어쓰기 (자체 누적값보다 정확)
+            if (session.averageSimilarity > 0f)
+                step.averageSimilarity = session.averageSimilarity;
+
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=green>[TrainingResultTracker] 스코어링 결과 저장: {currentStepName} → {session.finalScore:F0}점 ({session.grade}) | L:{session.leftAverageSimilarity:P0} R:{session.rightAverageSimilarity:P0} σ:{session.similarityStdDev:F3}</color>");
+        }
+
         // 경고음 중지
         StopApproachBeep();
         isOverLimit = false;
@@ -252,7 +295,7 @@ public class TrainingResultTracker : MonoBehaviour
         if (pathEvaluator == null) return;
 
         // ChunaPathEvaluator의 홀드 범위 가져오기
-        float holdEndRatio = pathEvaluator.IsExtendedLimitMode ? 0.65f : 0.5f;
+        float holdEndRatio = pathEvaluator.CurrentMidHoldEnd;
         float beepStartRatio = holdEndRatio - beepStartOffset;
 
         if (frameRatio >= holdEndRatio)
@@ -320,6 +363,7 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void PlayApproachBeep()
     {
+        if (!enableWarningAudio || !IsFeedbackSoundEnabled()) return;
         if (warningAudioSource == null || approachBeepClip == null) return;
 
         // 피치 조절 (가까울수록 높은 음)
@@ -344,7 +388,7 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void PlayLimitExceededSound()
     {
-        if (!enableWarningAudio || warningAudioSource == null) return;
+        if (!enableWarningAudio || !IsFeedbackSoundEnabled() || warningAudioSource == null) return;
 
         if (limitExceededClip != null)
         {
@@ -367,7 +411,7 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void PlayHoldCompleteSound()
     {
-        if (!enableWarningAudio || warningAudioSource == null) return;
+        if (!enableWarningAudio || !IsFeedbackSoundEnabled() || warningAudioSource == null) return;
 
         if (holdCompleteClip != null)
         {
@@ -405,6 +449,14 @@ public class TrainingResultTracker : MonoBehaviour
         resultData = new TrainingResultData();
         resultData.selectedMode = mode;
         resultData.selectedDifficulty = difficulty;
+
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        resultData.isOfficialEvaluation = dm != null && dm.IsOfficialScore;
+        resultData.isPreEvaluation = dm != null && dm.IsPreEvaluationMode;
+
+        // ★ 시간 무제한 모드 시 스킵 판정 비활성화 (매우 큰 값)
+        if (dm != null && dm.UnlimitedTime)
+            skipTimeThreshold = float.MaxValue;
 
         isTracking = true;
         currentPhaseName = "";
@@ -577,6 +629,15 @@ public class TrainingResultTracker : MonoBehaviour
         UnsubscribeEvents();
         pathEvaluator = evaluator;
         SubscribeEvents();
+    }
+
+    /// <summary>
+    /// 난이도 프리셋의 PlayFeedbackSound 설정 확인
+    /// </summary>
+    private bool IsFeedbackSoundEnabled()
+    {
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        return dm == null || dm.PlayFeedbackSound;
     }
 
     /// <summary>

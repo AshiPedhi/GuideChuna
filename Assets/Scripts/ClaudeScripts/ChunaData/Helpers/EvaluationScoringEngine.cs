@@ -7,6 +7,9 @@ using UnityEngine;
 /// </summary>
 public class EvaluationScoringEngine
 {
+    // 이전 스냅샷의 Exceeded 여부 (진입 횟수 카운트용)
+    private bool wasExceeded = false;
+
     /// <summary>
     /// Record a metrics snapshot into the session.
     /// </summary>
@@ -41,14 +44,31 @@ public class EvaluationScoringEngine
                 session.totalTimeInWarning += metricsRecordInterval;
             if (leftResult.overallStatus == LimitStatus.Danger || rightResult.overallStatus == LimitStatus.Danger)
                 session.totalTimeInDanger += metricsRecordInterval;
-            if (leftResult.overallStatus == LimitStatus.Exceeded || rightResult.overallStatus == LimitStatus.Exceeded)
-            {
+
+            bool isExceeded = leftResult.overallStatus == LimitStatus.Exceeded || rightResult.overallStatus == LimitStatus.Exceeded;
+            if (isExceeded)
                 session.totalTimeExceeded += metricsRecordInterval;
+
+            // 초과 "진입" 시에만 카운트 (매 프레임이 아닌 상태 전환 시)
+            if (isExceeded && !wasExceeded)
                 session.limitViolationCount++;
-            }
+            wasExceeded = isExceeded;
+
+            // 최대 초과 비율 갱신
+            float maxRatio = Mathf.Max(leftResult.frameRatio, rightResult.frameRatio);
+            if (maxRatio > session.peakExceededRatio)
+                session.peakExceededRatio = maxRatio;
         }
 
         session.metricsHistory.Add(snapshot);
+    }
+
+    /// <summary>
+    /// 새 평가 시작 시 상태 리셋
+    /// </summary>
+    public void Reset()
+    {
+        wasExceeded = false;
     }
 
     /// <summary>
@@ -58,7 +78,9 @@ public class EvaluationScoringEngine
     {
         if (session.metricsHistory.Count == 0) return;
 
+        int count = session.metricsHistory.Count;
         float totalLeft = 0f, totalRight = 0f;
+
         foreach (var snapshot in session.metricsHistory)
         {
             totalLeft += snapshot.leftSimilarity;
@@ -69,9 +91,23 @@ public class EvaluationScoringEngine
             if (weightedAvg > session.maxSimilarity) session.maxSimilarity = weightedAvg;
         }
 
-        float avgLeft = totalLeft / session.metricsHistory.Count;
-        float avgRight = totalRight / session.metricsHistory.Count;
+        float avgLeft = totalLeft / count;
+        float avgRight = totalRight / count;
         session.averageSimilarity = avgLeft * leftWeight + avgRight * rightWeight;
+
+        // 좌/우 개별 평균 유사도
+        session.leftAverageSimilarity = avgLeft;
+        session.rightAverageSimilarity = avgRight;
+
+        // 유사도 표준편차 (가중 평균 기준)
+        float sumSquaredDiff = 0f;
+        foreach (var snapshot in session.metricsHistory)
+        {
+            float weightedAvg = snapshot.leftSimilarity * leftWeight + snapshot.rightSimilarity * rightWeight;
+            float diff = weightedAvg - session.averageSimilarity;
+            sumSquaredDiff += diff * diff;
+        }
+        session.similarityStdDev = Mathf.Sqrt(sumSquaredDiff / count);
     }
 
     /// <summary>
@@ -98,7 +134,7 @@ public class EvaluationScoringEngine
         session.feedback = GenerateFeedback(session);
     }
 
-    private string GetGradeFromScore(float score)
+    public static string GetGradeFromScore(float score)
     {
         if (score >= 95f) return "S";
         if (score >= 90f) return "A+";

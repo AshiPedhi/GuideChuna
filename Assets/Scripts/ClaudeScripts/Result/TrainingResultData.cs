@@ -9,6 +9,19 @@ using UnityEngine;
 [System.Serializable]
 public class TrainingResultData
 {
+    // ========== 시계열 데이터 ==========
+
+    /// <summary>
+    /// 시간축 유사도 데이터 포인트 (웹뷰 그래프용)
+    /// </summary>
+    [System.Serializable]
+    public class SimilarityTimePoint
+    {
+        public float time;              // 경과 시간 (초)
+        public float leftSimilarity;    // 왼손 유사도
+        public float rightSimilarity;   // 오른손 유사도
+    }
+
     // ========== 단계별 결과 ==========
 
     /// <summary>
@@ -26,6 +39,28 @@ public class TrainingResultData
         public float totalTime;                    // 소요 시간
         public int warningCount;                   // 경고 횟수 (제한 범위 초과)
 
+        // 스코어링 결과 (EvaluationSession에서 전달)
+        public float finalScore;                   // 최종 점수 (0~100)
+        public string grade;                       // 등급 (S/A+/A/B+/B/C+/C/D/F)
+        public int limitViolationCount;            // 리밋 초과 진입 횟수
+        public float totalTimeInWarning;           // 경고 상태 누적 시간
+        public float totalTimeExceeded;            // 초과 상태 누적 시간
+
+        // 좌/우 개별 유사도
+        public float leftAverageSimilarity;        // 왼손 평균 유사도
+        public float rightAverageSimilarity;       // 오른손 평균 유사도
+
+        // 유사도 안정성
+        public float similarityStdDev;             // 유사도 표준편차 (낮을수록 안정적)
+        public float minSimilarity;                // 최저 유사도
+        public float maxSimilarity;                // 최고 유사도
+
+        // 안전성
+        public float peakExceededRatio;            // 최대 초과 비율 (얼마나 크게 넘었는지)
+
+        // 시계열 데이터 (웹뷰 그래프용)
+        public List<SimilarityTimePoint> similarityTimeline;  // 시간축 유사도 변화
+
         public StepResult(string name)
         {
             stepName = name;
@@ -36,6 +71,18 @@ public class TrainingResultData
             skippedSubSteps = 0;
             totalTime = 0f;
             warningCount = 0;
+            finalScore = 0f;
+            grade = "";
+            limitViolationCount = 0;
+            totalTimeInWarning = 0f;
+            totalTimeExceeded = 0f;
+            leftAverageSimilarity = 0f;
+            rightAverageSimilarity = 0f;
+            similarityStdDev = 0f;
+            minSimilarity = 1f;
+            maxSimilarity = 0f;
+            peakExceededRatio = 0f;
+            similarityTimeline = new List<SimilarityTimePoint>();
         }
     }
 
@@ -103,6 +150,9 @@ public class TrainingResultData
     public DateTime endTime;                       // 종료 시간
     public string selectedMode;                    // 선택된 모드 (학습/평가)
     public string selectedDifficulty;              // 선택된 난이도
+    public bool isOfficialEvaluation;              // 공식 평가 여부 (true면 공식 점수로 기록)
+    public bool isPreEvaluation;                   // 모의평가 여부 (상급자 모드)
+    public int attemptNumber;                      // 시도 횟수 (같은 시나리오 몇 회차)
 
     [Header("=== Phase별 결과 ===")]
     public List<PhaseResult> phaseResults;         // 전부/중부/후부 결과
@@ -110,7 +160,10 @@ public class TrainingResultData
     [Header("=== 종합 통계 ===")]
     public float totalTime;                        // 총 수행 시간 (초)
     public float overallSimilarity;                // 전체 평균 유사도
+    public float overallScore;                     // 전체 평균 점수
+    public string overallGrade;                    // 종합 등급
     public int totalWarningCount;                  // 총 경고 횟수 (제한 범위 초과)
+    public int totalLimitViolations;               // 총 리밋 초과 진입 횟수
     public int totalSkipCount;                     // 총 스킵 횟수
     public string lowestSimilarityStep;            // 최저 유사도 구간
     public float lowestSimilarity;                 // 최저 유사도
@@ -210,9 +263,10 @@ public class TrainingResultData
         }
         else if (step.skippedSubSteps == step.totalSubSteps)
         {
-            // 전부 스킵 → X
+            // 전부 스킵 → X (상태 변경 시에만 카운트)
+            if (step.completionStatus != StepCompletionStatus.Skipped)
+                totalSkipCount++;
             step.completionStatus = StepCompletionStatus.Skipped;
-            totalSkipCount++;
         }
         else if (step.completedSubSteps == step.totalSubSteps)
         {
@@ -236,6 +290,8 @@ public class TrainingResultData
 
         // 각 Phase 통계 계산
         float totalSimilarity = 0f;
+        float totalScore = 0f;
+        int scoredStepCount = 0;
         int phaseCount = 0;
 
         foreach (var phase in phaseResults)
@@ -245,11 +301,25 @@ public class TrainingResultData
             {
                 totalSimilarity += phase.phaseAverageSimilarity;
                 phaseCount++;
+
+                foreach (var step in phase.stepResults)
+                {
+                    if (step.finalScore > 0f)
+                    {
+                        totalScore += step.finalScore;
+                        totalLimitViolations += step.limitViolationCount;
+                        scoredStepCount++;
+                    }
+                }
             }
         }
 
         // 전체 평균 유사도
         overallSimilarity = phaseCount > 0 ? totalSimilarity / phaseCount : 0f;
+
+        // 전체 평균 점수 및 등급
+        overallScore = scoredStepCount > 0 ? totalScore / scoredStepCount : 0f;
+        overallGrade = EvaluationScoringEngine.GetGradeFromScore(overallScore);
     }
 
     /// <summary>
@@ -259,8 +329,10 @@ public class TrainingResultData
     {
         string result = $"=== 훈련 결과 ===\n";
         result += $"수행 시간: {FormatTime(totalTime)}\n";
+        result += $"전체 점수: {overallScore:F0}점 ({overallGrade})\n";
         result += $"전체 유사도: {overallSimilarity:P0}\n";
         result += $"경고 횟수: {totalWarningCount}회\n";
+        result += $"리밋 초과: {totalLimitViolations}회\n";
         result += $"스킵 횟수: {totalSkipCount}회\n";
         result += $"최저 유사도 구간: {lowestSimilarityStep} ({lowestSimilarity:P0})\n";
         result += $"최고 유사도 구간: {highestSimilarityStep} ({highestSimilarity:P0})\n";
@@ -271,7 +343,7 @@ public class TrainingResultData
             foreach (var step in phase.stepResults)
             {
                 string status = GetStatusSymbol(step.completionStatus);
-                result += $"  {step.stepName}: {status} / {step.averageSimilarity:P0}\n";
+                result += $"  {step.stepName}: {status} / {step.averageSimilarity:P0} / {step.finalScore:F0}점({step.grade})\n";
             }
         }
 

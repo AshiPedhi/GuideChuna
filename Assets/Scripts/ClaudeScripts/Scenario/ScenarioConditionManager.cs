@@ -20,7 +20,7 @@ public interface IScenarioCondition
 /// - conditionType="HandPose": 손 동작 조건 (자동 등록)
 /// - conditionType="Duration": duration 후 자동 진행
 /// - conditionType="Manual": 토글로 수동 진행
-/// - conditionType="PatientAnimation": 환자 애니메이션 완료 대기 (미구현)
+/// - conditionType="PatientAnimation": 환자 애니메이션(AutoPlay) 완료 대기
 /// - conditionType="Narration": 나레이션 완료 대기 (미구현)
 /// - conditionType="None" 또는 빈칸: duration > 0이면 Duration, 아니면 Manual
 /// </summary>
@@ -156,6 +156,14 @@ public class ScenarioConditionManager : MonoBehaviour
     // ★ 조건 처리 대기용 코루틴
     private Coroutine conditionProcessCoroutine;
 
+    // ★ AutoPlay 대기 중인 코루틴 추적 (이중 진행 방지)
+    private bool isWaitingForAutoPlay = false;
+
+    /// <summary>
+    /// conditionManager가 AutoPlay 완료를 기다리고 있는지 (ScenarioManager 이중 진행 방지용)
+    /// </summary>
+    public bool IsWaitingForAutoPlay => isWaitingForAutoPlay;
+
     /// <summary>
     /// SubStep 시작 시 호출 - CSV 데이터 기반 자동 조건 처리
     /// ✅ conditionType 기반 자동 조건 등록
@@ -269,8 +277,11 @@ public class ScenarioConditionManager : MonoBehaviour
                 break;
 
             case "PatientAnimation":
-                ChunaLogger.LogWarning("[ConditionManager] PatientAnimation 조건은 아직 구현되지 않았습니다.");
-                HandleDurationOrManual(subStep);
+                ChunaLogger.Log("[ConditionManager] PatientAnimation 조건 - AutoPlay 완료 대기 후 진행");
+                currentCondition = null;
+                StopConditionCheck();
+                eventSystem.RequestButtonStateUpdate(false);
+                StartCoroutine(WaitForAutoPlayThenProgress(subStep));
                 break;
 
             case "Narration":
@@ -570,6 +581,9 @@ public class ScenarioConditionManager : MonoBehaviour
             // ★ 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
             yield return WaitForNarrationComplete();
 
+            // ★ AutoPlay(환자 애니메이션)가 아직 재생 중이면 완료까지 대기
+            yield return WaitForAutoPlayComplete();
+
             // 다음 SubStep으로 진행
             if (scenarioManager != null)
             {
@@ -612,6 +626,13 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private AudioClip LoadNarrationClip(string clipName)
     {
+        // ★ 난이도 설정에서 나래이션 비활성화 시 null 반환 (각 핸들러에서 fallback 처리)
+        if (DifficultyManager.Instance != null && !DifficultyManager.Instance.PlayNarration)
+        {
+            ChunaLogger.Log($"[ConditionManager] 나래이션 비활성화 (PlayNarration=false): {clipName} 스킵");
+            return null;
+        }
+
         // 확장자 제거 (있을 경우)
         if (clipName.EndsWith(".wav") || clipName.EndsWith(".mp3") || clipName.EndsWith(".ogg"))
         {
@@ -717,6 +738,8 @@ public class ScenarioConditionManager : MonoBehaviour
                 return "Intermediate";
             case DifficultyLevel.Advanced:
                 return "Advanced";
+            case DifficultyLevel.Evaluation:
+                return "Evaluation";
             default:
                 return "Intermediate";
         }
@@ -750,6 +773,9 @@ public class ScenarioConditionManager : MonoBehaviour
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
 
         currentNarrationClip = null;
+
+        // ★ AutoPlay(환자 애니메이션)가 아직 재생 중이면 완료까지 대기
+        yield return WaitForAutoPlayComplete();
 
         // 다음 SubStep으로 진행
         if (scenarioManager != null)
@@ -817,6 +843,45 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ AutoPlay(환자 애니메이션 자동 재생) 완료까지 대기하는 코루틴
+    /// 나래이션이 짧거나 없는 난이도에서 애니메이션이 잘리는 것을 방지
+    /// </summary>
+    private IEnumerator WaitForAutoPlayComplete()
+    {
+        if (pathEvaluator == null || !pathEvaluator.IsAutoPlayMode)
+        {
+            yield break;
+        }
+
+        isWaitingForAutoPlay = true;
+        ChunaLogger.Log("<color=yellow>[ConditionManager] AutoPlay 완료 대기 중...</color>");
+
+        while (pathEvaluator.IsAutoPlayMode)
+        {
+            yield return null;
+        }
+
+        isWaitingForAutoPlay = false;
+        ChunaLogger.Log("<color=yellow>[ConditionManager] AutoPlay 완료됨</color>");
+    }
+
+    /// <summary>
+    /// ★ AutoPlay 완료 대기 후 다음 단계 진행 (conditionType="PatientAnimation"용)
+    /// AutoPlay 완료 후 나래이션도 대기한 뒤 진행
+    /// </summary>
+    private IEnumerator WaitForAutoPlayThenProgress(SubStepData subStep)
+    {
+        yield return WaitForAutoPlayComplete();
+        yield return WaitForNarrationComplete();
+
+        if (scenarioManager != null)
+        {
+            ChunaLogger.Log("[ConditionManager] PatientAnimation 완료 - 다음 단계로 진행");
+            scenarioManager.NextSubStep();
+        }
+    }
+
+    /// <summary>
     /// ★ 나래이션 완료 후 다음 단계로 진행 (외부 호출용)
     /// ScenarioManager.OnAutoPlayCompletedHandler 등에서 사용
     /// </summary>
@@ -848,11 +913,12 @@ public class ScenarioConditionManager : MonoBehaviour
             return;
         }
 
-        // 초급자 모드인지 확인
+        // 초급자 모드 + PlayHintAudio 활성화 시에만 재생
         if (DifficultyManager.Instance == null ||
-            DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner)
+            DifficultyManager.Instance.CurrentLevel != DifficultyLevel.Beginner ||
+            !DifficultyManager.Instance.PlayHintAudio)
         {
-            ChunaLogger.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아님");
+            ChunaLogger.Log("[ConditionManager] 홀드 후 나래이션 스킵 - 초급자 모드 아니거나 힌트 비활성화");
             return;
         }
 
@@ -1073,6 +1139,9 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // ★ 나래이션이 아직 재생 중이면 완료까지 대기
         yield return WaitForNarrationComplete();
+
+        // ★ AutoPlay(환자 애니메이션)가 아직 재생 중이면 완료까지 대기
+        yield return WaitForAutoPlayComplete();
 
         // 완료 알림 없이 바로 다음 SubStep으로 진행
         if (scenarioManager != null)

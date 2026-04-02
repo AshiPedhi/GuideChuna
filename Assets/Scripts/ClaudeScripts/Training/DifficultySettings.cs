@@ -11,7 +11,8 @@ namespace ChunaTraining
     {
         Beginner,       // 초급자 - 상세 안내 + 초급 나래이션
         Intermediate,   // 중급자 - 기본 안내 + 중급 나래이션 (다른 내용)
-        Advanced        // 상급자 - 가이드 없음, 시도 횟수만 기록 (평가 전 체험)
+        Advanced,       // 상급자 - 가이드 없음, 시도 횟수만 기록 (평가 전 모의)
+        Evaluation      // 평가 - 가이드 없음, 단계 안내 나래이션만, 공식 점수 기록
     }
 
     /// <summary>
@@ -20,7 +21,8 @@ namespace ChunaTraining
     public enum NarrationType
     {
         BeginnerGuided,     // 초급: "안내에 따라 손을 올려보세요", "안내하는 방향에 맞춰..."
-        IntermediateSimple  // 중급/상급: "환자의 머리를 견측 회전 시키세요", "측굴합니다"
+        IntermediateSimple, // 중급/상급: "환자의 머리를 견측 회전 시키세요", "측굴합니다"
+        EvaluationMinimal   // 평가: "시작 자세를 잡으세요", "제한장벽을 확인하세요" (단계 안내만)
     }
 
     /// <summary>
@@ -96,12 +98,6 @@ namespace ChunaTraining
         [Range(0f, 1f)]
         public float guideHandOpacity = 0.7f;
 
-        [Tooltip("이동 경로/화살표 표시")]
-        public bool showMovementPath = true;
-
-        [Tooltip("목표 위치 표시")]
-        public bool showTargetPosition = true;
-
         [Tooltip("실시간 손 색상 피드백 (유사도 기반)")]
         public bool showHandColorFeedback = true;
 
@@ -125,12 +121,6 @@ namespace ChunaTraining
         [Tooltip("진행률 바 표시")]
         public bool showProgressBar = true;
 
-        [Tooltip("현재 각도/위치 정보 표시")]
-        public bool showPositionInfo = false;
-
-        [Tooltip("타이머 표시")]
-        public bool showTimer = false;
-
         [Header("=== 피드백 (Feedback) ===")]
         [Tooltip("실시간 유사도 퍼센트 표시")]
         public bool showSimilarityPercent = true;
@@ -144,12 +134,6 @@ namespace ChunaTraining
         [Header("=== 보조 기능 (Assistance) ===")]
         [Tooltip("자동 단계 진행 (홀드 완료 시)")]
         public bool autoAdvanceStep = true;
-
-        [Tooltip("실패 시 자동 재시도 안내")]
-        public bool showRetryGuidance = true;
-
-        [Tooltip("손 위치 힌트 (너무 벗어났을 때)")]
-        public bool showPositionHint = true;
 
         [Tooltip("제한 시간 없음 모드")]
         public bool unlimitedTime = true;
@@ -191,8 +175,6 @@ namespace ChunaTraining
                     // 모든 안내 활성화
                     preset.showGuideHands = true;
                     preset.guideHandOpacity = 0.8f;
-                    preset.showMovementPath = true;
-                    preset.showTargetPosition = true;
                     preset.showHandColorFeedback = true;
                     // 나래이션: 초급자용 상세 안내
                     preset.narrationType = NarrationType.BeginnerGuided;
@@ -201,13 +183,10 @@ namespace ChunaTraining
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = true;
                     preset.showProgressBar = true;
-                    preset.showPositionInfo = true;
                     preset.showSimilarityPercent = true;
                     preset.showDetailedScore = true;
                     preset.highlightErrors = true;
                     preset.autoAdvanceStep = true;
-                    preset.showRetryGuidance = true;
-                    preset.showPositionHint = true;
                     preset.unlimitedTime = true;
                     preset.similarityThreshold = 0.5f;
                     preset.requiredHoldTime = 1.5f;
@@ -222,8 +201,6 @@ namespace ChunaTraining
                     // 기본 안내 활성화
                     preset.showGuideHands = true;
                     preset.guideHandOpacity = 0.5f;
-                    preset.showMovementPath = false;
-                    preset.showTargetPosition = true;
                     preset.showHandColorFeedback = true;
                     // 나래이션: 중급자용 간단 안내 (다른 내용)
                     preset.narrationType = NarrationType.IntermediateSimple;
@@ -232,13 +209,10 @@ namespace ChunaTraining
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = true;
                     preset.showProgressBar = true;
-                    preset.showPositionInfo = false;
                     preset.showSimilarityPercent = true;
                     preset.showDetailedScore = true;
                     preset.highlightErrors = false;
                     preset.autoAdvanceStep = true;
-                    preset.showRetryGuidance = false;
-                    preset.showPositionHint = false;
                     preset.unlimitedTime = true;
                     preset.similarityThreshold = 0.65f;
                     preset.requiredHoldTime = 2f;
@@ -249,12 +223,10 @@ namespace ChunaTraining
 
                 case DifficultyLevel.Advanced:
                     preset.presetName = "상급자";
-                    preset.description = "평가 모드 직전 체험 - 가이드 없이 시도 횟수만 기록";
+                    preset.description = "평가 모드 직전 모의 - 가이드 없이 시도 횟수만 기록";
                     // 가이드 없음
                     preset.showGuideHands = false;
                     preset.guideHandOpacity = 0f;
-                    preset.showMovementPath = false;
-                    preset.showTargetPosition = false;
                     preset.showHandColorFeedback = false;
                     // 나래이션: 중급과 동일 (간단 안내)
                     preset.narrationType = NarrationType.IntermediateSimple;
@@ -263,13 +235,10 @@ namespace ChunaTraining
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = true;
                     preset.showProgressBar = false;
-                    preset.showPositionInfo = false;
                     preset.showSimilarityPercent = false;
                     preset.showDetailedScore = true;
                     preset.highlightErrors = false;
                     preset.autoAdvanceStep = false;
-                    preset.showRetryGuidance = false;
-                    preset.showPositionHint = false;
                     preset.unlimitedTime = false;  // 시간 제한 있음
                     preset.similarityThreshold = 0.75f;  // 상급자: 75%
                     preset.requiredHoldTime = 2f;
@@ -277,6 +246,32 @@ namespace ChunaTraining
                     // 상급자: 시도 횟수 추적 (기존 타임아웃 시스템 활용)
                     preset.trackAttempts = true;
                     preset.isPreEvaluationMode = true;
+                    break;
+
+                case DifficultyLevel.Evaluation:
+                    preset.presetName = "평가";
+                    preset.description = "공식 평가 - 가이드 없이 단계 안내만, 점수가 공식 기록됨";
+                    // 가이드 없음 (상급과 동일)
+                    preset.showGuideHands = false;
+                    preset.guideHandOpacity = 0f;
+                    preset.showHandColorFeedback = false;
+                    // 나래이션: 평가용 최소 안내 (단계 진행만)
+                    preset.narrationType = NarrationType.EvaluationMinimal;
+                    preset.playNarration = true;
+                    preset.playHintAudio = false;
+                    preset.playFeedbackSound = true;
+                    preset.showStepDescription = false;  // 텍스트 설명 없음
+                    preset.showProgressBar = false;
+                    preset.showSimilarityPercent = false;
+                    preset.showDetailedScore = true;      // 결과만 상세 표시
+                    preset.highlightErrors = false;
+                    preset.autoAdvanceStep = false;
+                    preset.unlimitedTime = false;
+                    preset.similarityThreshold = 0.75f;
+                    preset.requiredHoldTime = 2f;
+                    preset.maxAttempts = 0;
+                    preset.trackAttempts = true;
+                    preset.isPreEvaluationMode = false;   // 실제 평가
                     break;
             }
 

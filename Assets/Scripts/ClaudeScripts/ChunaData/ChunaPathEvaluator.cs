@@ -582,6 +582,16 @@ public class ChunaPathEvaluator : MonoBehaviour
         public float minSimilarity;
         public float maxSimilarity;
 
+        // 좌/우 개별 유사도
+        public float leftAverageSimilarity;
+        public float rightAverageSimilarity;
+
+        // 유사도 안정성
+        public float similarityStdDev;             // 유사도 표준편차
+
+        // 안전성
+        public float peakExceededRatio;            // 최대 초과 비율
+
         // 최종 점수
         public float finalScore;
         public string grade;
@@ -2215,6 +2225,33 @@ public class ChunaPathEvaluator : MonoBehaviour
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 임계값 자동 설정 — warning:{warningThreshold:P0}, danger:{dangerThreshold:P0} (guideEnd:{runtimeGuideEndRatio:P0})</color>");
     }
 
+    /// <summary>
+    /// 난이도 프리셋에서 가이드 핸드 표시/투명도/색상 피드백 동기화
+    /// </summary>
+    private void SyncWithDifficultySettings()
+    {
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm == null) return;
+
+        showGuideHands = dm.ShowGuideHands;
+
+        // 투명도를 guideHandColor.a에 반영
+        if (dm.GuideHandOpacity > 0f)
+        {
+            guideHandColor.a = dm.GuideHandOpacity;
+        }
+
+        // 홀드 시간 동기화
+        if (dm.RequiredHoldTime > 0f)
+        {
+            startHoldDuration = dm.RequiredHoldTime;
+            midHoldDuration = dm.RequiredHoldTime;
+        }
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 난이도 동기화 — 가이드핸드:{showGuideHands}, 투명도:{guideHandColor.a:F2}, 홀드:{dm.RequiredHoldTime:F1}s</color>");
+    }
+
     #endregion
 
     #region Evaluation Control
@@ -2246,9 +2283,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             ChunaLogger.Log($"<color=yellow>[StartEval] 재평가 모드 - 가이드 범위: 0~{extendedMidHoldEndRatio:P0}</color>");
         }
 
+        // ★ 난이도 프리셋에서 가이드 핸드/투명도 동기화
+        SyncWithDifficultySettings();
+
         isEvaluating = true;
         evaluationStartTime = Time.time;
         lastMetricsRecordTime = Time.time;
+        scoringEngine.Reset();
 
         // 새로운 평가 흐름 초기화 (via phaseManager)
         Vector3 initLeftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
@@ -2616,11 +2657,9 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         IEnumerator routine = guidePlaybackController.PlaybackRoutine(
             loadedFrames, leftGuideHand, rightGuideHand,
-            referenceTransform, recordedPatientOffset,
             currentStartRatio, currentEndRatio,
             guidePlaybackSpeed, loopGuideHands, loopDelaySeconds,
-            guideHandColor, fadeOnTouch, touchAlpha,
-            showDebugLogs);
+            guideHandColor, showDebugLogs);
 
         guideHandCoroutine = StartCoroutine(routine);
 
@@ -2639,11 +2678,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         guidePlaybackController.ShowFirstFrame(
             loadedFrames, leftGuideHand, rightGuideHand,
-            referenceTransform, recordedPatientOffset,
             currentStartRatio,
-            guideHandColor, fadeOnTouch, touchAlpha,
-            isLeftHandTouchingPatient || isRightHandTouchingPatient,
-            showDebugLogs);
+            guideHandColor, showDebugLogs);
     }
 
     private void StopGuideHandPlayback()
@@ -2740,8 +2776,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         return CalculateCurrentSimilarity(isLeftHand, -1);
     }
-
-    // GetGradeFromScore is now handled by EvaluationScoringEngine.
 
     #endregion
 }

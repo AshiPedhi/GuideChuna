@@ -97,6 +97,10 @@ public class StepFeedbackUI : BaseUIPanel
     /// <param name="targetSimilarity">목표 유사도 (0~1), null이면 DifficultyManager에서 가져옴</param>
     public void ShowFeedback(float currentSimilarity, float? targetSimilarity = null)
     {
+        // ★ 난이도 설정에서 상세 점수 비활성화 시 표시하지 않음
+        var dm = DifficultyManager.Instance;
+        if (dm != null && !dm.ShowDetailedScore) return;
+
         // ★ 코루틴 시작 전 자신의 GameObject 활성화 필수
         if (!gameObject.activeInHierarchy)
         {
@@ -259,6 +263,7 @@ public class StepFeedbackUI : BaseUIPanel
     /// </summary>
     private FeedbackGrade GetFeedbackGrade(float current, float target)
     {
+        if (target <= 0f) return FeedbackGrade.Poor;
         float ratio = current / target;
 
         if (ratio >= 1.1f)  // 목표 + 10% 이상

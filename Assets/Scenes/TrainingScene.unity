@@ -118646,6 +118646,7 @@ GameObject:
   - component: {fileID: 1035274493}
   - component: {fileID: 1035274494}
   - component: {fileID: 1035274491}
+  - component: {fileID: 1035274495}
   m_Layer: 0
   m_Name: ChunaPathEvaluator
   m_TagString: Untagged
@@ -118768,14 +118769,32 @@ MonoBehaviour:
   guideReEval_End: 0.75
   extendedMidHoldStartRatio: 0.5
   extendedMidHoldEndRatio: 0.7
-  limitBarrierRatio: 0.5
   guideLimitCheck_End: 0.5
   autoApplyLateralBendingPreset: 1
-  extendedLimitBarrierRatio: 0.7
   useSimplifiedHandComparison: 1
   rightHandSimilarityWeight: 0.7
   leftHandSimilarityWeight: 0.3
   leftHandDriftThreshold: 0.15
+--- !u!114 &1035274495
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1035274490}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4fd2823e229d0434fa104e36a37103eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChunaLimitChecker
+  playerLeftHand: {fileID: 1004980545}
+  playerRightHand: {fileID: 1004980544}
+  pathEvaluator: {fileID: 1035274494}
+  warningRatio: 0.3
+  dangerRatio: 0.5
+  enableChecking: 1
+  showDebugLogs: 1
+  drawDebugGizmos: 1
 --- !u!1 &1035673038
 GameObject:
   m_ObjectHideFlags: 0
@@ -264221,26 +264240,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!1 &919574098144557512
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2637899088609313223}
-  - component: {fileID: 8481765212785640542}
-  - component: {fileID: 8570859442555076476}
-  - component: {fileID: 3256853876459571528}
-  - component: {fileID: 8077583445399083620}
-  m_Layer: 0
-  m_Name: 'HandFeedbackUI '
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
 --- !u!4 &925072087773030607
 Transform:
   m_ObjectHideFlags: 0
@@ -273041,21 +273040,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4406457626687459376}
   m_Mesh: {fileID: 935327673796902342, guid: 3a385a3ecace35b49a99a98765b1cf3f, type: 3}
---- !u!4 &2637899088609313223
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919574098144557512}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 6323967749049354880}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &2643177180225839662
 Transform:
   m_ObjectHideFlags: 0
@@ -276079,18 +276063,6 @@ Transform:
   - {fileID: 1374011812826351822}
   m_Father: {fileID: 1488947763605783634}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &3256853876459571528
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919574098144557512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: df8b0b835932b8f40998f9bad8d3a903, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ReferenceHandBridge
 --- !u!23 &3261110362074853673
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -298265,7 +298237,6 @@ Transform:
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
-  - {fileID: 2637899088609313223}
   - {fileID: 1378765597837884894}
   - {fileID: 426063064}
   m_Father: {fileID: 483442387}
@@ -308860,18 +308831,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 5297829247832512459}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8077583445399083620
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919574098144557512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f775eb6a37660064f8bc1e418dec216c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HandPoseDebugUI
 --- !u!1 &8077877502040045308
 GameObject:
   m_ObjectHideFlags: 0
@@ -311316,31 +311275,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 2147483647
   m_IsActive: 1
---- !u!114 &8481765212785640542
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919574098144557512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 17e9ffd702dc59345bd941379e79691b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::HandFeedbackUI
-  leftHandImage: {fileID: 8807050654454291414}
-  rightHandImage: {fileID: 8604452465431899496}
-  leftSimilarityText: {fileID: 455594300}
-  rightSimilarityText: {fileID: 2124077563}
-  pathEvaluator: {fileID: 0}
-  lowSimilarityColor: {r: 1, g: 0.2, b: 0.2, a: 1}
-  mediumSimilarityColor: {r: 1, g: 1, b: 0.2, a: 1}
-  highSimilarityColor: {r: 0.2, g: 1, b: 0.2, a: 1}
-  lowToMediumThreshold: 0.3
-  mediumToHighThreshold: 0.5
-  hideOnStart: 0
-  defaultColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  showSimilarityPercent: 1
 --- !u!1 &8482554732137551886
 GameObject:
   m_ObjectHideFlags: 0
@@ -311656,18 +311590,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1563780550021052856}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8570859442555076476
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 919574098144557512}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 08b26cf7c813c0d4487b853fe089d153, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ReferenceHandDisplay
 --- !u!1 &8573610402216771085
 GameObject:
   m_ObjectHideFlags: 0

@@ -107,6 +107,8 @@ public class ScenarioGuideUIController : MonoBehaviour
 
     void OnEnable()
     {
+        if (eventSystem == null) eventSystem = ScenarioEventSystem.Instance;
+
         // 이벤트 구독
         eventSystem.OnPhaseChanged += OnPhaseChanged;
         eventSystem.OnStepChanged += OnStepChanged;
@@ -206,11 +208,6 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void OnStepChanged(StepData step)
     {
-        /*if(step.stepName == "등척성운동")
-        {
-            startToggleObject.SetActive(true);
-            startToggle.isOn = false;
-        }*/
         UpdateStepName(step);
         UpdateStartToggleVisibility(step);
 
@@ -396,7 +393,10 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         if (descriptionText != null)
         {
-            descriptionText.text = description;
+            // ★ 난이도 설정에서 텍스트 설명 비활성화 시 빈 문자열
+            bool showDesc = ChunaTraining.DifficultyManager.Instance == null
+                || ChunaTraining.DifficultyManager.Instance.ShowStepDescription;
+            descriptionText.text = showDesc ? description : "";
         }
     }
 
@@ -521,7 +521,8 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (shouldShow && startToggleText != null)
         {
             // 첫 번째 가이드인지 확인
-            bool isFirstPhase = scenarioManager.CurrentPhase == scenarioManager.CurrentScenario.phases[0];
+            bool isFirstPhase = scenarioManager.CurrentScenario != null
+                && scenarioManager.CurrentPhase == scenarioManager.CurrentScenario.phases[0];
             startToggleText.text = isFirstPhase ? "시작" : "다음";
         }
 

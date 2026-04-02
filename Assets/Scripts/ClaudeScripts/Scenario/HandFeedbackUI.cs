@@ -112,6 +112,13 @@ public class HandFeedbackUI : MonoBehaviour
     /// </summary>
     private void OnEvaluationStarted()
     {
+        // ★ 난이도 설정 동기화
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm != null)
+        {
+            showSimilarityPercent = dm.ShowSimilarityPercent;
+        }
+
         isActive = true;
         SetUIVisible(true);
         ResetToDefault();
@@ -147,10 +154,12 @@ public class HandFeedbackUI : MonoBehaviour
     /// </summary>
     private void UpdateLeftHandDisplay(float similarity)
     {
-        // 이미지 색상
+        // 이미지 색상 (색상 피드백 활성화 시에만)
         if (leftHandImage != null)
         {
-            leftHandImage.color = GetColorForSimilarity(similarity);
+            var dm = ChunaTraining.DifficultyManager.Instance;
+            bool showColor = dm == null || dm.ShowHandColorFeedback;
+            leftHandImage.color = showColor ? GetColorForSimilarity(similarity) : defaultColor;
         }
 
         // 유사도 텍스트
@@ -165,10 +174,12 @@ public class HandFeedbackUI : MonoBehaviour
     /// </summary>
     private void UpdateRightHandDisplay(float similarity)
     {
-        // 이미지 색상
+        // 이미지 색상 (색상 피드백 활성화 시에만)
         if (rightHandImage != null)
         {
-            rightHandImage.color = GetColorForSimilarity(similarity);
+            var dm = ChunaTraining.DifficultyManager.Instance;
+            bool showColor = dm == null || dm.ShowHandColorFeedback;
+            rightHandImage.color = showColor ? GetColorForSimilarity(similarity) : defaultColor;
         }
 
         // 유사도 텍스트

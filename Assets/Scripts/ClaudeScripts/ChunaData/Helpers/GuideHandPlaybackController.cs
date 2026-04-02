@@ -38,11 +38,9 @@ public class GuideHandPlaybackController
     public IEnumerator PlaybackRoutine(
         List<PoseFrame> frames,
         HandTransformMapper leftGuideHand, HandTransformMapper rightGuideHand,
-        Transform referenceTransform, Vector3 recordedPatientOffset,
         float startRatio, float endRatio,
         float guidePlaybackSpeed, bool loopGuideHands, float loopDelaySeconds,
-        Color guideHandColor, bool fadeOnTouch, float touchAlpha,
-        bool showDebugLogs)
+        Color guideHandColor, bool showDebugLogs)
     {
         float frameTime = 1f / 30f;
 
@@ -127,10 +125,8 @@ public class GuideHandPlaybackController
     public void ShowFirstFrame(
         List<PoseFrame> frames,
         HandTransformMapper leftGuideHand, HandTransformMapper rightGuideHand,
-        Transform referenceTransform, Vector3 recordedPatientOffset,
         float startRatio,
-        Color guideHandColor, bool fadeOnTouch, float touchAlpha,
-        bool isAnyHandTouching, bool showDebugLogs)
+        Color guideHandColor, bool showDebugLogs)
     {
         if (frames == null || frames.Count == 0)
         {

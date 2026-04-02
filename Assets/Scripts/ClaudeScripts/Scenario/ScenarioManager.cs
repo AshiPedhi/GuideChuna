@@ -86,6 +86,7 @@ public class ScenarioManager : MonoBehaviour
     // 현재 Config 참조
     private ScenarioConfig currentConfig;
 
+
     // 프로퍼티
     public ScenarioData CurrentScenario => currentScenario;
     public PhaseData CurrentPhase => currentPhase;
@@ -619,6 +620,23 @@ public class ScenarioManager : MonoBehaviour
             }
         }
 
+        // ★ 자동 진행 비활성화 시 토글 대기 (상급/평가 모드)
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm != null && !dm.AutoAdvanceStep)
+        {
+            if (showDebugLog)
+                ChunaLogger.Log("[ScenarioManager] AutoAdvanceStep=false - 토글 대기");
+            return;
+        }
+
+        // ★ conditionManager가 이미 AutoPlay 완료를 기다리고 있으면 이중 진행 방지
+        if (conditionManager != null && conditionManager.IsWaitingForAutoPlay)
+        {
+            if (showDebugLog)
+                ChunaLogger.Log("[ScenarioManager] conditionManager가 AutoPlay 대기 처리 중 - 이중 진행 방지");
+            return;
+        }
+
         // ★ 나래이션 완료를 기다린 후 다음 SubStep으로 진행
         if (conditionManager != null)
         {
@@ -789,13 +807,6 @@ public class ScenarioManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 모든 각도 표시 UI 숨김
-    /// </summary>
-    private void HideAllAngleDisplays()
-    {
-        angleDisplay?.Hide();
-    }
 
     // ========== Animator Controller 전환 ==========
 

@@ -25,6 +25,7 @@ namespace ChunaTraining
         [SerializeField] private DifficultyPreset beginnerPreset;
         [SerializeField] private DifficultyPreset intermediatePreset;
         [SerializeField] private DifficultyPreset advancedPreset;
+        [SerializeField] private DifficultyPreset evaluationPreset;
 
         [Header("=== 디버그 ===")]
         [SerializeField] private bool showDebugLogs = true;
@@ -80,6 +81,11 @@ namespace ChunaTraining
             {
                 advancedPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Advanced);
             }
+
+            if (evaluationPreset == null || string.IsNullOrEmpty(evaluationPreset.presetName))
+            {
+                evaluationPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Evaluation);
+            }
         }
 
         /// <summary>
@@ -123,6 +129,9 @@ namespace ChunaTraining
                 case DifficultyLevel.Advanced:
                     currentPreset = advancedPreset;
                     break;
+                case DifficultyLevel.Evaluation:
+                    currentPreset = evaluationPreset;
+                    break;
             }
 
             if (showDebugLogs)
@@ -148,6 +157,8 @@ namespace ChunaTraining
                     return intermediatePreset;
                 case DifficultyLevel.Advanced:
                     return advancedPreset;
+                case DifficultyLevel.Evaluation:
+                    return evaluationPreset;
                 default:
                     return beginnerPreset;
             }
@@ -157,8 +168,6 @@ namespace ChunaTraining
 
         public bool ShowGuideHands => currentPreset?.showGuideHands ?? true;
         public float GuideHandOpacity => currentPreset?.guideHandOpacity ?? 0.7f;
-        public bool ShowMovementPath => currentPreset?.showMovementPath ?? true;
-        public bool ShowTargetPosition => currentPreset?.showTargetPosition ?? true;
         public bool ShowHandColorFeedback => currentPreset?.showHandColorFeedback ?? true;
 
         #endregion
@@ -176,8 +185,6 @@ namespace ChunaTraining
 
         public bool ShowStepDescription => currentPreset?.showStepDescription ?? true;
         public bool ShowProgressBar => currentPreset?.showProgressBar ?? true;
-        public bool ShowPositionInfo => currentPreset?.showPositionInfo ?? false;
-        public bool ShowTimer => currentPreset?.showTimer ?? false;
 
         #endregion
 
@@ -192,8 +199,6 @@ namespace ChunaTraining
         #region 편의 메서드 - 보조 기능
 
         public bool AutoAdvanceStep => currentPreset?.autoAdvanceStep ?? true;
-        public bool ShowRetryGuidance => currentPreset?.showRetryGuidance ?? true;
-        public bool ShowPositionHint => currentPreset?.showPositionHint ?? true;
         public bool UnlimitedTime => currentPreset?.unlimitedTime ?? true;
 
         #endregion
@@ -205,6 +210,8 @@ namespace ChunaTraining
         public int MaxAttempts => currentPreset?.maxAttempts ?? 0;
         public bool TrackAttempts => currentPreset?.trackAttempts ?? false;
         public bool IsPreEvaluationMode => currentPreset?.isPreEvaluationMode ?? false;
+        public bool IsEvaluationMode => currentLevel == DifficultyLevel.Evaluation;
+        public bool IsOfficialScore => currentLevel == DifficultyLevel.Evaluation;
 
         #endregion
 
@@ -263,6 +270,7 @@ namespace ChunaTraining
             beginnerPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Beginner);
             intermediatePreset = DifficultyPreset.CreateDefault(DifficultyLevel.Intermediate);
             advancedPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Advanced);
+            evaluationPreset = DifficultyPreset.CreateDefault(DifficultyLevel.Evaluation);
             ApplyPreset(currentLevel);
             ChunaLogger.Log("[DifficultyManager] 기본 프리셋으로 리셋됨");
         }
@@ -273,7 +281,7 @@ namespace ChunaTraining
         [ContextMenu("Cycle Difficulty")]
         public void CycleDifficulty()
         {
-            var nextLevel = (DifficultyLevel)(((int)currentLevel + 1) % 3);
+            var nextLevel = (DifficultyLevel)(((int)currentLevel + 1) % 4);
             SetDifficulty(nextLevel);
         }
 

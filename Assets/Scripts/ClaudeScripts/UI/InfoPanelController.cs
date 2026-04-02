@@ -180,7 +180,11 @@ public class InfoPanelController : MonoBehaviour
 
         if (patientPositionManager == null)
             patientPositionManager = FindFirstObjectByType<PatientPositionManager>();
+
+        cachedPracticeManager = FindFirstObjectByType<PracticeManager>();
     }
+
+    private PracticeManager cachedPracticeManager;
 
     void Start()
     {
@@ -561,7 +565,7 @@ public class InfoPanelController : MonoBehaviour
             StopExpertVideo();
 
             // ★ 연습 모드에서는 자동 페이지 전환 안 함 (다른 토글 클릭으로 인한 OFF일 수 있음)
-            var practiceManager = FindFirstObjectByType<PracticeManager>();
+            var practiceManager = cachedPracticeManager;
             if (practiceManager != null && practiceManager.enabled)
             {
                 // 연습 모드: 페이지 전환 안 함 (다른 토글의 핸들러가 처리)
@@ -771,9 +775,13 @@ public class InfoPanelController : MonoBehaviour
         SetToggleWithoutNotify(resultToggle, false);
         ShowContentPage(ContentPage.Skeleton);
 
-        // 시나리오 진행 UI 표시
+        // 시나리오 진행 UI 표시 (난이도 설정에 따라)
         if (scenarioProgressUI != null)
-            scenarioProgressUI.SetActive(true);
+        {
+            bool showProgress = ChunaTraining.DifficultyManager.Instance == null
+                || ChunaTraining.DifficultyManager.Instance.ShowProgressBar;
+            scenarioProgressUI.SetActive(showProgress);
+        }
 
         // ★ UI 위치를 헤드셋 기준으로 초기화
         InitializeUIPositionOnStart();
@@ -790,7 +798,7 @@ public class InfoPanelController : MonoBehaviour
     {
         // ★ 연습 모드(PracticeManager)가 활성화되어 있으면 건너뜀
         // PracticeManager가 이미 Initialize()에서 위치를 설정했으므로 중복 설정 방지
-        var practiceManager = FindFirstObjectByType<PracticeManager>();
+        var practiceManager = cachedPracticeManager;
         if (practiceManager != null && practiceManager.enabled)
         {
             if (showDebugLogs)
