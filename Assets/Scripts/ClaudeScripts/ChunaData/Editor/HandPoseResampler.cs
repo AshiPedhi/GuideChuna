@@ -446,6 +446,16 @@ public class HandPoseResampler : EditorWindow
                     transformedWorldPos += handPositionOffset;
             }
 
+            // 손 자세 회전 오프셋 미리보기
+            if (previewHandRotation && handRotationOffsetEuler != Vector3.zero)
+            {
+                bool applyRot = handRotationTarget == HandOffsetTarget.Both ||
+                                (handRotationTarget == HandOffsetTarget.Left && isLeft) ||
+                                (handRotationTarget == HandOffsetTarget.Right && !isLeft);
+                if (applyRot)
+                    transformedWorldRot = transformedWorldRot * Quaternion.Euler(handRotationOffsetEuler);
+            }
+
             // 각도 스케일 미리보기 적용
             if (previewAngleScale && isAnalyzed && parsedFrames.Count > 1 && pivotBasedAngle > 0.1f)
             {
@@ -2386,6 +2396,11 @@ public class HandPoseResampler : EditorWindow
     private Vector3 handPositionOffset = Vector3.zero;
     private bool previewHandOffset = false;
 
+    // ===== 손 자세 회전 오프셋 =====
+    private HandOffsetTarget handRotationTarget = HandOffsetTarget.Both;
+    private Vector3 handRotationOffsetEuler = Vector3.zero;
+    private bool previewHandRotation = false;
+
     private void DrawCoordConvertTab()
     {
         EditorGUILayout.LabelField("좌표 형식 변환", EditorStyles.boldLabel);
@@ -2532,6 +2547,125 @@ public class HandPoseResampler : EditorWindow
         }
         GUI.backgroundColor = Color.white;
         GUI.enabled = true;
+
+        EditorGUILayout.Space(20);
+
+        // ===== 손 자세 회전 오프셋 =====
+        EditorGUILayout.LabelField("손 자세 회전 오프셋", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "선택한 손의 WristRoot WorldRotation을 전체 프레임에서 일괄 회전합니다.\n" +
+            "손 모양 자체를 기울이거나 돌릴 때 사용합니다.\n\n" +
+            "예: X +10 → 손을 앞으로 기울임, Y +10 → 손을 옆으로 돌림, Z +10 → 손을 비틀림",
+            MessageType.Info);
+
+        handRotationTarget = (HandOffsetTarget)EditorGUILayout.EnumPopup("대상 손", handRotationTarget);
+        handRotationOffsetEuler = EditorGUILayout.Vector3Field("회전 오프셋 (°)", handRotationOffsetEuler);
+
+        // 빠른 조절 버튼
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("빠른 조절:", GUILayout.Width(70));
+        if (GUILayout.Button("X+5°")) { handRotationOffsetEuler.x += 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("X-5°")) { handRotationOffsetEuler.x -= 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("Y+5°")) { handRotationOffsetEuler.y += 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("Y-5°")) { handRotationOffsetEuler.y -= 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("Z+5°")) { handRotationOffsetEuler.z += 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("Z-5°")) { handRotationOffsetEuler.z -= 5f; SceneView.RepaintAll(); }
+        if (GUILayout.Button("초기화")) { handRotationOffsetEuler = Vector3.zero; SceneView.RepaintAll(); }
+        EditorGUILayout.EndHorizontal();
+
+        bool newPreviewHandRotation = EditorGUILayout.Toggle("미리보기", previewHandRotation);
+        if (newPreviewHandRotation != previewHandRotation)
+        {
+            previewHandRotation = newPreviewHandRotation;
+            SceneView.RepaintAll();
+        }
+
+        GUI.enabled = isAnalyzed && handRotationOffsetEuler != Vector3.zero;
+        GUI.backgroundColor = new Color(1f, 0.7f, 0.5f);
+        if (GUILayout.Button($"{handRotationTarget} 손 자세 회전 적용", GUILayout.Height(35)))
+        {
+            string targetName = handRotationTarget == HandOffsetTarget.Left ? "왼손" :
+                                handRotationTarget == HandOffsetTarget.Right ? "오른손" : "양손";
+            bool confirm = EditorUtility.DisplayDialog("손 자세 회전 확인",
+                $"'{Path.GetFileName(sourceFilePath)}'의 {targetName} WristRoot 회전에\n" +
+                $"오프셋 ({handRotationOffsetEuler.x:F1}°, {handRotationOffsetEuler.y:F1}°, {handRotationOffsetEuler.z:F1}°)을 적용합니다.\n\n" +
+                "손 모양이 기울어집니다. 계속하시겠습니까?",
+                "적용", "취소");
+            if (confirm)
+                ExecuteHandRotationOffset(sourceFilePath);
+        }
+        GUI.backgroundColor = Color.white;
+        GUI.enabled = true;
+    }
+
+    private void ExecuteHandRotationOffset(string filePath)
+    {
+        if (!File.Exists(filePath)) return;
+
+        string[] lines = File.ReadAllLines(filePath, Encoding.UTF8);
+        if (lines.Length < 2) return;
+
+        CultureInfo inv = CultureInfo.InvariantCulture;
+        Quaternion rotOffset = Quaternion.Euler(handRotationOffsetEuler);
+        int modifiedFrames = 0;
+
+        // CSV 구조: ..., WorldRotX(14), WorldRotY(15), WorldRotZ(16), WorldRotW(17)
+        for (int i = 1; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            string[] values = line.Split(',');
+            if (values.Length < 18) continue;
+
+            string handType = values[1].Trim();
+            if (!int.TryParse(values[2].Trim(), out int jointId)) continue;
+
+            // WristRoot (jointId 1)의 worldRotation만 수정
+            if (jointId != 1) continue;
+
+            bool isLeft = handType.Equals("Left", System.StringComparison.OrdinalIgnoreCase);
+            bool isRight = handType.Equals("Right", System.StringComparison.OrdinalIgnoreCase);
+
+            bool shouldModify = handRotationTarget == HandOffsetTarget.Both ||
+                               (handRotationTarget == HandOffsetTarget.Left && isLeft) ||
+                               (handRotationTarget == HandOffsetTarget.Right && isRight);
+
+            if (!shouldModify) continue;
+
+            // worldRot: 인덱스 14, 15, 16, 17
+            if (string.IsNullOrEmpty(values[14].Trim())) continue;
+            if (!float.TryParse(values[14].Trim(), NumberStyles.Float, inv, out float rx)) continue;
+            if (!float.TryParse(values[15].Trim(), NumberStyles.Float, inv, out float ry)) continue;
+            if (!float.TryParse(values[16].Trim(), NumberStyles.Float, inv, out float rz)) continue;
+            if (!float.TryParse(values[17].Trim(), NumberStyles.Float, inv, out float rw)) continue;
+
+            // 회전 오프셋 적용: 기존 회전 * 오프셋 (로컬 공간 기준)
+            Quaternion original = new Quaternion(rx, ry, rz, rw);
+            Quaternion rotated = original * rotOffset;
+
+            values[14] = rotated.x.ToString("F6", inv);
+            values[15] = rotated.y.ToString("F6", inv);
+            values[16] = rotated.z.ToString("F6", inv);
+            values[17] = rotated.w.ToString("F6", inv);
+
+            lines[i] = string.Join(",", values);
+            modifiedFrames++;
+        }
+
+        File.WriteAllLines(filePath, lines, Encoding.UTF8);
+        AssetDatabase.Refresh();
+
+        string handName = handRotationTarget == HandOffsetTarget.Left ? "왼손" :
+                          handRotationTarget == HandOffsetTarget.Right ? "오른손" : "양손";
+        ChunaLogger.Log($"<color=cyan>[손 회전] {handName} {modifiedFrames}개 프레임에 회전 오프셋 적용 완료: {handRotationOffsetEuler}</color>");
+        EditorUtility.DisplayDialog("완료", $"{handName} {modifiedFrames}개 프레임에 회전 오프셋 적용 완료.", "확인");
+
+        // 다시 분석
+        if (isAnalyzed)
+        {
+            AnalyzeCSV();
+        }
     }
 
     private void ExecuteHandPositionOffset(string filePath)

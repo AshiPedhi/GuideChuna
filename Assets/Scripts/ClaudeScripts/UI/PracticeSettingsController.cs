@@ -22,6 +22,17 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField] private float defaultForwardDistance = 0.5f; // 기본 전방 거리
     [SerializeField] private float defaultHeightOffset = -0.3f;   // 헤드셋 높이 기준 오프셋 (음수 = 아래)
 
+    [Header("═══ 맞춤 설정 미리보기 ═══")]
+    [Tooltip("Scene뷰에서 맞춤 설정 목표 위치를 Gizmo로 표시")]
+    [SerializeField] private bool showPositioningGizmo = true;
+
+    // Editor 접근용
+    public Transform TargetObject => targetObject;
+    public Transform CustomReferencePoint => customReferencePoint;
+    public Transform HeadsetTransform => headsetTransform;
+    public float DefaultForwardDistance { get => defaultForwardDistance; set => defaultForwardDistance = value; }
+    public float DefaultHeightOffset { get => defaultHeightOffset; set => defaultHeightOffset = value; }
+
     [Header("═══ 환자 위치 조정 ═══")]
     [SerializeField] private GameObject patientPositionController; // 환자 위치 조정 컨트롤러
 
@@ -269,6 +280,38 @@ public class PracticeSettingsController : MonoBehaviour
     }
 
     #region 1. 맞춤 설정
+
+    /// <summary>
+    /// 맞춤 설정 목표 위치 계산 (Gizmo/Editor 공용)
+    /// </summary>
+    public Vector3? CalculateTargetPosition()
+    {
+        if (customReferencePoint != null)
+            return customReferencePoint.position;
+
+        if (headsetTransform == null) return null;
+
+        Vector3 headsetPosition = headsetTransform.position;
+        Vector3 headsetForward = headsetTransform.forward;
+        headsetForward.y = 0;
+        headsetForward.Normalize();
+
+        return new Vector3(
+            headsetPosition.x + headsetForward.x * defaultForwardDistance,
+            headsetPosition.y + defaultHeightOffset,
+            headsetPosition.z + headsetForward.z * defaultForwardDistance
+        );
+    }
+
+    /// <summary>
+    /// 실제 이동 대상 Transform 반환 (부모가 있으면 부모)
+    /// </summary>
+    public Transform GetActualMoveTarget()
+    {
+        if (targetObject == null) return null;
+        return targetObject.parent != null ? targetObject.parent : targetObject;
+    }
+
     /// <summary>
     /// 맞춤 설정: 헤드셋 위치 기준으로 오브젝트 위치 초기화
     /// </summary>
@@ -282,47 +325,21 @@ public class PracticeSettingsController : MonoBehaviour
             return;
         }
 
-        if (headsetTransform == null)
+        Vector3? pos = CalculateTargetPosition();
+        if (pos == null)
         {
-            ChunaLogger.LogError("[PracticeSettings] headsetTransform이 null입니다! CenterEyeAnchor를 찾을 수 없습니다.");
+            ChunaLogger.LogError("[PracticeSettings] 목표 위치를 계산할 수 없습니다!");
             return;
         }
 
-        Vector3 newPosition;
-
-        // 커스텀 기준점이 있으면 사용
+        Vector3 newPosition = pos.Value;
         if (customReferencePoint != null)
-        {
-            newPosition = customReferencePoint.position;
             ChunaLogger.Log($"[PracticeSettings] 커스텀 기준점 사용: {newPosition}");
-        }
         else
-        {
-            // 기본: 헤드셋 전방 0.5m, 헤드셋 높이 기준 오프셋 적용
-            Vector3 headsetPosition = headsetTransform.position;
-            Vector3 headsetForward = headsetTransform.forward;
+            ChunaLogger.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 높이 오프셋 {defaultHeightOffset}m = Y:{newPosition.y:F2}m");
 
-            // Y축은 수평 방향만 고려
-            headsetForward.y = 0;
-            headsetForward.Normalize();
-
-            // ★ 헤드셋 높이를 기준으로 오프셋 적용 (월드 Y=0이 아님)
-            newPosition = new Vector3(
-                headsetPosition.x + headsetForward.x * defaultForwardDistance,
-                headsetPosition.y + defaultHeightOffset,
-                headsetPosition.z + headsetForward.z * defaultForwardDistance
-            );
-
-            ChunaLogger.Log($"[PracticeSettings] 기본 기준점 사용 - 헤드셋 전방 {defaultForwardDistance}m, 헤드셋 높이({headsetPosition.y:F2}m) + 오프셋({defaultHeightOffset}m) = {newPosition.y:F2}m");
-        }
-
-        // ★ 부모(위치초기화 오브젝트)가 있으면 부모를 이동 (환자+컨트롤러 함께 이동)
-        Transform actualTarget = targetObject;
-        if (targetObject.parent != null)
-        {
-            actualTarget = targetObject.parent;
-            ChunaLogger.Log($"[PracticeSettings] 부모 오브젝트 사용: {actualTarget.name}");
-        }
+        Transform actualTarget = GetActualMoveTarget();
+        if (actualTarget == null) return;
 
         actualTarget.position = newPosition;
         ChunaLogger.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {actualTarget.name} -> {newPosition}");
@@ -881,4 +898,77 @@ public class PracticeSettingsController : MonoBehaviour
         if (patientModelDisplayToggle != null) patientModelDisplayToggle.onValueChanged.RemoveAllListeners();
         if (realityModeToggle != null) realityModeToggle.onValueChanged.RemoveAllListeners();
     }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Scene뷰에서 맞춤 설정 목표 위치를 Gizmo로 시각화
+    /// - 커스텀 기준점이 있으면: 기준점 위치 (마젠타 구체)
+    /// - 없으면: 헤드셋 전방 + 높이 오프셋 위치 (노란 구체 + 초록 선)
+    /// - 실제 이동될 대상 오브젝트도 표시 (빨간 연결선)
+    /// </summary>
+    private void OnDrawGizmosSelected()
+    {
+        if (!showPositioningGizmo) return;
+
+        Vector3? pos = CalculateTargetPosition();
+        if (pos == null) return;
+        Vector3 targetPosition = pos.Value;
+
+        if (customReferencePoint != null)
+        {
+            // 커스텀 기준점 모드
+            Gizmos.color = new Color(1f, 0.3f, 1f, 0.8f);
+            Gizmos.DrawWireSphere(targetPosition, 0.12f);
+            Gizmos.DrawSphere(targetPosition, 0.03f);
+
+            UnityEditor.Handles.Label(targetPosition + Vector3.up * 0.2f,
+                "맞춤 기준점 (커스텀)", new GUIStyle
+                { normal = { textColor = Color.magenta }, fontSize = 11, fontStyle = FontStyle.Bold });
+        }
+        else if (headsetTransform != null)
+        {
+            Vector3 headsetPos = headsetTransform.position;
+
+            // 헤드셋 위치 (하늘색)
+            Gizmos.color = new Color(0.5f, 0.8f, 1f, 0.5f);
+            Gizmos.DrawWireSphere(headsetPos, 0.06f);
+
+            // 헤드셋 → 목표 위치 (초록)
+            Gizmos.color = new Color(0.3f, 1f, 0.3f, 0.6f);
+            Gizmos.DrawLine(headsetPos, targetPosition);
+
+            // 목표 위치 (노란 구체)
+            Gizmos.color = new Color(1f, 0.9f, 0.2f, 0.8f);
+            Gizmos.DrawWireSphere(targetPosition, 0.12f);
+            Gizmos.DrawSphere(targetPosition, 0.03f);
+
+            // 높이 기준선 (수직)
+            Vector3 headsetHeightAtTarget = new Vector3(targetPosition.x, headsetPos.y, targetPosition.z);
+            Gizmos.color = new Color(1f, 1f, 1f, 0.3f);
+            Gizmos.DrawLine(headsetHeightAtTarget, targetPosition);
+
+            // 전방 거리 (수평)
+            Gizmos.color = new Color(0.3f, 1f, 0.3f, 0.3f);
+            Gizmos.DrawLine(headsetPos, headsetHeightAtTarget);
+
+            UnityEditor.Handles.Label(targetPosition + Vector3.up * 0.2f,
+                $"맞춤 목표 위치\n전방 {defaultForwardDistance}m / 높이 오프셋 {defaultHeightOffset}m",
+                new GUIStyle
+                { normal = { textColor = Color.yellow }, fontSize = 11, fontStyle = FontStyle.Bold });
+        }
+
+        // 실제 이동 대상 현재 위치 (빨간)
+        Transform actualTarget = GetActualMoveTarget();
+        if (actualTarget != null)
+        {
+            Gizmos.color = new Color(1f, 0.4f, 0.4f, 0.5f);
+            Gizmos.DrawLine(actualTarget.position, targetPosition);
+            Gizmos.DrawWireSphere(actualTarget.position, 0.08f);
+
+            UnityEditor.Handles.Label(actualTarget.position + Vector3.up * 0.15f,
+                $"현재 위치: {actualTarget.name}", new GUIStyle
+                { normal = { textColor = new Color(1f, 0.6f, 0.6f) }, fontSize = 10 });
+        }
+    }
+#endif
 }

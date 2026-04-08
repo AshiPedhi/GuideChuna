@@ -444,11 +444,21 @@ public class TrainingResultTracker : MonoBehaviour
     /// <summary>
     /// 훈련 시작 (모드 선택 후 호출)
     /// </summary>
-    public void StartTracking(string mode, string difficulty)
+    public void StartTracking(string mode, string difficulty, string scenarioName = "")
     {
         resultData = new TrainingResultData();
         resultData.selectedMode = mode;
         resultData.selectedDifficulty = difficulty;
+        resultData.scenarioName = scenarioName;
+
+        // 사용자 정보 (PlayerPrefs에서 로드)
+        var loginStore = new LoginStateStore();
+        var loginInfo = loginStore.LoadLoginInfo();
+        if (loginInfo.hasData)
+        {
+            resultData.userName = loginInfo.username;
+            resultData.userId = loginInfo.userID;
+        }
 
         var dm = ChunaTraining.DifficultyManager.Instance;
         resultData.isOfficialEvaluation = dm != null && dm.IsOfficialScore;

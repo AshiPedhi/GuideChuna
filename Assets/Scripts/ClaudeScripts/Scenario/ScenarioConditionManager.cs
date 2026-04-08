@@ -78,6 +78,7 @@ public class ScenarioConditionManager : MonoBehaviour
     private AudioClip currentNarrationClip;
     private Coroutine narrationCoroutine;
     private string currentVoiceClipName;  // ★ 현재 재생 중인 나래이션 클립명 (홀드 후 나래이션용)
+    private string lastNarratedStepKey;   // ★ 상급/평가 모드: step 통합 나래이션을 1회만 재생하기 위한 키 (phaseName_stepName)
 
     // Quest 최적화: WaitForSeconds 캐싱
     private WaitForSeconds cachedCheckInterval;
@@ -121,6 +122,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 이벤트 구독
         eventSystem.OnSubStepStarted += OnSubStepStarted;
+        eventSystem.OnScenarioStarted += OnScenarioStartedReset;
 
         // ★ ChunaPathEvaluator 시작홀드 완료 이벤트 구독 (홀드 후 나래이션용)
         if (pathEvaluator != null)
@@ -133,6 +135,7 @@ public class ScenarioConditionManager : MonoBehaviour
     {
         // 이벤트 구독 해제
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
+        eventSystem.OnScenarioStarted -= OnScenarioStartedReset;
 
         // ★ ChunaPathEvaluator 이벤트 구독 해제
         if (pathEvaluator != null)
@@ -163,6 +166,14 @@ public class ScenarioConditionManager : MonoBehaviour
     /// conditionManager가 AutoPlay 완료를 기다리고 있는지 (ScenarioManager 이중 진행 방지용)
     /// </summary>
     public bool IsWaitingForAutoPlay => isWaitingForAutoPlay;
+
+    /// <summary>
+    /// 시나리오 시작 시 step별 나래이션 1회 재생 키 리셋 (재실행 시 다시 재생되도록)
+    /// </summary>
+    private void OnScenarioStartedReset(ScenarioData scenario)
+    {
+        lastNarratedStepKey = null;
+    }
 
     /// <summary>
     /// SubStep 시작 시 호출 - CSV 데이터 기반 자동 조건 처리
@@ -667,6 +678,7 @@ public class ScenarioConditionManager : MonoBehaviour
     /// <summary>
     /// Resources 폴더에서 나레이션 클립 실제 로드
     /// 난이도별/시나리오별 폴더 탐색 후 공통 폴더 fallback
+    /// ★ 상급/평가 모드 + 비가이드 스텝: CSV voice 무시, stepName 통합 나래이션을 step별 1회만 반환
     /// </summary>
     private AudioClip LoadNarrationClipInternal(string clipName)
     {
@@ -674,6 +686,48 @@ public class ScenarioConditionManager : MonoBehaviour
         string difficultyFolder = GetNarrationSubfolder();
         string scenarioFolder = string.IsNullOrEmpty(narrationScenarioFolder) ? "" : narrationScenarioFolder;
         string basePath = string.IsNullOrEmpty(narrationFolderPath) ? "" : narrationFolderPath;
+
+        // ★ 상급/평가 모드 처리: 비가이드 스텝은 CSV voice를 완전히 무시
+        bool isAdvancedOrEval = DifficultyManager.Instance != null &&
+            (DifficultyManager.Instance.CurrentLevel == DifficultyLevel.Advanced ||
+             DifficultyManager.Instance.CurrentLevel == DifficultyLevel.Evaluation);
+
+        if (isAdvancedOrEval && scenarioManager != null && scenarioManager.CurrentStep != null
+            && !scenarioManager.CurrentStep.IsGuideStep())
+        {
+            string stepName = scenarioManager.CurrentStep.stepName;
+            string phaseName = scenarioManager.CurrentPhase != null ? scenarioManager.CurrentPhase.phaseName : "";
+            string stepKey = $"{phaseName}_{stepName}";
+
+            // 같은 step의 두 번째 이후 substep → 무음 (CSV voice 무시)
+            if (lastNarratedStepKey == stepKey)
+            {
+                ChunaLogger.Log($"[ConditionManager] 상급/평가: '{stepKey}' 이미 1회 재생됨 → 나래이션 스킵");
+                return null;
+            }
+
+            // 첫 substep: stepName 기반 통합 나래이션 로드 시도
+            if (!string.IsNullOrEmpty(stepName))
+            {
+                string stepPath = string.IsNullOrEmpty(basePath)
+                    ? $"{difficultyFolder}/{stepName}"
+                    : $"{basePath}/{difficultyFolder}/{stepName}";
+
+                AudioClip stepClip = Resources.Load<AudioClip>(stepPath);
+                if (stepClip != null)
+                {
+                    lastNarratedStepKey = stepKey;
+                    ChunaLogger.Log($"<color=cyan>[ConditionManager] 스텝 통합 나래이션 로드: {stepPath} ({stepClip.length:F1}초)</color>");
+                    return stepClip;
+                }
+
+                ChunaLogger.LogWarning($"[ConditionManager] 상급/평가: 스텝 통합 나래이션 없음: {stepPath} → 무음 진행");
+            }
+
+            // 클립이 없어도 CSV voice로 fallback 안 함 (CSV 무시 원칙)
+            lastNarratedStepKey = stepKey;
+            return null;
+        }
 
         // 1차 시도: 시나리오별 + 난이도별 폴더 (Narrations/{난이도}/{시나리오}/{clipName})
         AudioClip clip = null;

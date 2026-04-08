@@ -208,10 +208,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("FPS 업데이트 간격 (초)")]
     [SerializeField] private float fpsUpdateInterval = 0.5f;
 
-    // 디버그 UI용 내부 변수
-    private float fpsTimer = 0f;
-    private int frameCount = 0;
-    private float currentFps = 0f;
+    // 디버그 UI용 내부 변수 → CollisionDetectionManager로 이동
 
     [Header("=== 홀드 시간 설정 ===")]
     [Tooltip("시작 홀드 시간 (초)")]
@@ -383,11 +380,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private AnimationClip currentAnimationClip;
     private string currentAnimationStateName;
 
-    // ★ AutoPlay 모드 관련
-    private float autoPlayProgress = 0f;        // 자동 재생 진행률 (0~1)
-    private float autoPlayDuration = 3f;        // 자동 재생 시간 (초) - 기본값 3초
-    private float autoPlayStartTime = 0f;       // 자동 재생 시작 시간
-    private bool isAutoPlayMode = false;        // 자동 재생 모드 활성화 여부
+    // ★ AutoPlay 모드: autoPlayHandler가 상태를 관리
 
     // ★ 스트레칭/재평가 확장 모드
     private bool isExtendedLimitMode = false;   // 확장 제한 모드 활성화 여부 (재평가: 65%)
@@ -411,11 +404,13 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // ★ Helper instances
     private HandCollisionDetector collisionDetector;
+    private CollisionDetectionManager collisionDetectionManager;
     private EvaluationScoringEngine scoringEngine;
     private EvaluationModeConfigurator modeConfigurator;
     private AutoPlayHandler autoPlayHandler;
     private GuideHandPlaybackController guidePlaybackController;
     private EvaluationPhaseManager phaseManager;
+    private ChunaDataLoader dataLoader;
 
     #endregion
 
@@ -528,6 +523,72 @@ public class ChunaPathEvaluator : MonoBehaviour
         StartGuideHandPlayback();
     }
 
+    // ChunaDataLoader needs
+    internal bool ShowDebugLogs => showDebugLogs;
+    internal string CurrentProcedureName { get => currentProcedureName; set => currentProcedureName = value; }
+    internal List<PoseFrame> LoadedFrames { get => loadedFrames; set => loadedFrames = value; }
+    internal Transform ReferenceTransform => referenceTransform;
+    internal Transform PivotTransform => pivotTransform;
+    internal HandPoseComparator PoseComparator => poseComparator;
+    internal ChunaLimitChecker LimitChecker => limitChecker;
+    internal RotationDetectionAxis PivotPlaneAxis => pivotPlaneAxis;
+    internal bool AutoCalculateTargetAngle => autoCalculateTargetAngle;
+    internal bool AutoApplyLateralBendingPreset => autoApplyLateralBendingPreset;
+    internal string SpecifiedMovementType => specifiedMovementType;
+
+    internal Vector3 HandDataMovementVector { get => handDataMovementVector; set => handDataMovementVector = value; }
+    internal float HandDataTotalDistance { get => handDataTotalDistance; set => handDataTotalDistance = value; }
+    internal float HandDataTotalRotation { get => handDataTotalRotation; set => handDataTotalRotation = value; }
+    internal bool IsPositionBasedMovement { get => isPositionBasedMovement; set => isPositionBasedMovement = value; }
+    internal bool IsLeftHandDominant { get => isLeftHandDominant; set => isLeftHandDominant = value; }
+    internal Vector3 MovementAxis { get => movementAxis; set => movementAxis = value; }
+    internal float LeftHandSimilarityWeight { get => leftHandSimilarityWeight; set => leftHandSimilarityWeight = value; }
+    internal float RightHandSimilarityWeight { get => rightHandSimilarityWeight; set => rightHandSimilarityWeight = value; }
+    internal float CalculatedDataAngle { get => calculatedDataAngle; set => calculatedDataAngle = value; }
+    internal float DefaultGuideRatio { get => defaultGuideRatio; set => defaultGuideRatio = value; }
+    internal float TargetAngle { get => targetAngle; set => targetAngle = value; }
+    internal float RuntimeGuideStartRatio { get => runtimeGuideStartRatio; set => runtimeGuideStartRatio = value; }
+    internal float RuntimeGuideEndRatio { get => runtimeGuideEndRatio; set => runtimeGuideEndRatio = value; }
+    internal float LateralBending_LimitCheckRatio => lateralBending_LimitCheckRatio;
+    internal float LateralBending_ReEvalRatio => lateralBending_ReEvalRatio;
+    internal float GuideRotation_Start => guideRotation_Start;
+    internal float GuideRotation_End => guideRotation_End;
+    internal bool ShowGuideHandsField { get => showGuideHands; set => showGuideHands = value; }
+    internal Color GuideHandColor { get => guideHandColor; set => guideHandColor = value; }
+    internal float StartHoldDuration { get => startHoldDuration; set => startHoldDuration = value; }
+    internal float MidHoldDuration { get => midHoldDuration; set => midHoldDuration = value; }
+
+    // EvaluationModeConfigurator needs (threshold/axis/pivot)
+    internal float MidHoldStartRatio { get => midHoldStartRatio; set => midHoldStartRatio = value; }
+    internal float MidHoldEndRatio { get => midHoldEndRatio; set => midHoldEndRatio = value; }
+    internal float StretchingHoldStartField { get => stretchingHoldStart; set => stretchingHoldStart = value; }
+    internal float StretchingEndField { get => stretchingEnd; set => stretchingEnd = value; }
+    internal float ExtendedMidHoldStartRatio { get => extendedMidHoldStartRatio; set => extendedMidHoldStartRatio = value; }
+    internal float ExtendedMidHoldEndRatio { get => extendedMidHoldEndRatio; set => extendedMidHoldEndRatio = value; }
+    internal RotationDetectionAxis RotationDetectionAxisField { get => rotationDetectionAxis; set => rotationDetectionAxis = value; }
+    internal RotationDetectionAxis PivotPlaneAxisField { get => pivotPlaneAxis; set => pivotPlaneAxis = value; }
+    internal Transform PivotTransformField { get => pivotTransform; set => pivotTransform = value; }
+    internal bool InvertRotationDirectionField { get => invertRotationDirection; set => invertRotationDirection = value; }
+    internal bool InvertPivotAngleField { get => invertPivotAngle; set => invertPivotAngle = value; }
+    internal bool UsePivotBasedProgressField { get => usePivotBasedProgress; set => usePivotBasedProgress = value; }
+
+    // CollisionDetectionManager needs
+    internal bool IsLeftHandTouchingPatient => isLeftHandTouchingPatient;
+    internal bool IsRightHandTouchingPatient => isRightHandTouchingPatient;
+    internal float CurrentAnimationRatio { get => currentAnimationRatio; set => currentAnimationRatio = value; }
+
+    internal void SetLeftHandTouchState(bool touching, bool onPrimary)
+    {
+        isLeftHandTouchingPatient = touching;
+        isLeftOnPrimary = onPrimary;
+    }
+
+    internal void SetRightHandTouchState(bool touching, bool onPrimary)
+    {
+        isRightHandTouchingPatient = touching;
+        isRightOnPrimary = onPrimary;
+    }
+
     #endregion
 
     #region Events
@@ -633,11 +694,13 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // Initialize helpers
         collisionDetector = new HandCollisionDetector();
+        collisionDetectionManager = new CollisionDetectionManager(this, collisionDetector);
         scoringEngine = new EvaluationScoringEngine();
         modeConfigurator = new EvaluationModeConfigurator(this);
         autoPlayHandler = new AutoPlayHandler(this);
         guidePlaybackController = new GuideHandPlaybackController(this);
         phaseManager = new EvaluationPhaseManager(this);
+        dataLoader = new ChunaDataLoader(this);
     }
 
     void Start()
@@ -1000,283 +1063,73 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     #endregion
 
-    #region Collision Detection
+    #region Collision Detection (delegated to CollisionDetectionManager)
 
     /// <summary>
-    /// 충돌 감지 업데이트 (거리 기반, 스케일 적용)
-    /// 콜라이더가 없으면 손 Transform 위치 사용
-    /// ★ HandCollisionShape에 따라 구형/박스형/손바닥만 감지
+    /// Build the context struct with current frame's SerializeField values.
     /// </summary>
+    private CollisionDetectionManager.CollisionUpdateContext BuildCollisionContext()
+    {
+        return new CollisionDetectionManager.CollisionUpdateContext
+        {
+            leftHandTransform = playerLeftHand != null ? playerLeftHand.transform : null,
+            rightHandTransform = playerRightHand != null ? playerRightHand.transform : null,
+            leftHandCollider = leftHandCollider,
+            rightHandCollider = rightHandCollider,
+            patientHeadCollider = patientHeadCollider,
+            patientShoulderCollider = patientShoulderCollider,
+            patientChestCollider = patientChestCollider,
+            patientLeftArmColliders = patientLeftArmColliders,
+            patientRightArmColliders = patientRightArmColliders,
+            activeContactTargets = activeContactTargets,
+            primaryTarget = primaryTarget,
+            handCollisionShape = handCollisionShape,
+            handColliderScale = handColliderScale,
+            defaultHandCollisionRadius = defaultHandCollisionRadius,
+            handCollisionForwardOffset = handCollisionForwardOffset,
+            palmWidth = palmWidth,
+            palmThickness = palmThickness,
+            palmHeight = palmHeight,
+            fingerLength = fingerLength,
+            fadeOnTouch = fadeOnTouch,
+            touchAlpha = touchAlpha,
+            guideHandColor = guideHandColor,
+            leftGuideHand = leftGuideHand,
+            rightGuideHand = rightGuideHand,
+            showDebugUI = showDebugUI,
+            showDebugLogs = showDebugLogs,
+            fpsText = fpsText,
+            leftHandDistanceText = leftHandDistanceText,
+            rightHandDistanceText = rightHandDistanceText,
+            fpsUpdateInterval = fpsUpdateInterval,
+            leftWristBone = leftWristBone,
+            rightWristBone = rightWristBone,
+            patientAnimator = patientAnimator,
+            secondaryPatientAnimator = secondaryPatientAnimator,
+            currentAnimationStateName = currentAnimationStateName,
+            targetAnimationRatio = targetAnimationRatio,
+            animationLerpSpeed = animationLerpSpeed,
+            currentPhase = currentPhase,
+            userHandFrameRatio = userHandFrameRatio,
+        };
+    }
+
     private void UpdateCollisionDetection()
     {
-        if (activeContactTargets == null || activeContactTargets.Length == 0) return;
-
-        // 이전 접촉 상태 저장
-        bool wasLeftTouching = isLeftHandTouchingPatient;
-        bool wasRightTouching = isRightHandTouchingPatient;
-
-        // 왼손 충돌 감지 (모든 activeContactTargets에 대해 OR)
-        if (playerLeftHand != null)
-        {
-            isLeftHandTouchingPatient = CheckHandTouchForAnyTarget(playerLeftHand.transform, leftHandCollider, true);
-            isLeftOnPrimary = CheckHandTouchForSingleTarget(playerLeftHand.transform, leftHandCollider, true, primaryTarget);
-
-            if (isLeftHandTouchingPatient && !wasLeftTouching && showDebugLogs)
-                ChunaLogger.Log($"<color=green>[Collision] 왼손이 환자에 닿음! (주동수:{isLeftOnPrimary})</color>");
-        }
-
-        // 오른손 충돌 감지
-        if (playerRightHand != null)
-        {
-            isRightHandTouchingPatient = CheckHandTouchForAnyTarget(playerRightHand.transform, rightHandCollider, false);
-            isRightOnPrimary = CheckHandTouchForSingleTarget(playerRightHand.transform, rightHandCollider, false, primaryTarget);
-
-            if (isRightHandTouchingPatient && !wasRightTouching && showDebugLogs)
-                ChunaLogger.Log($"<color=green>[Collision] 오른손이 환자에 닿음! (주동수:{isRightOnPrimary})</color>");
-        }
-
-        // 접촉 상태 변경 시 가이드 핸드 알파 업데이트
-        if (fadeOnTouch)
-        {
-            if (wasLeftTouching != isLeftHandTouchingPatient)
-                UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
-            if (wasRightTouching != isRightHandTouchingPatient)
-                UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
-        }
-
-        // 디버그
-        if (showDebugLogs && Time.frameCount % 60 == 0)
-        {
-            string targets = string.Join("+", activeContactTargets);
-            string lStatus = isLeftHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
-            string rStatus = isRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
-            if (playerLeftHand != null)
-                ChunaLogger.Log($"<color=cyan>[왼손] {lStatus} 대상:{targets}</color>");
-            if (playerRightHand != null)
-                ChunaLogger.Log($"<color=cyan>[오른손] {rStatus} 대상:{targets}</color>");
-        }
+        var ctx = BuildCollisionContext();
+        collisionDetectionManager.UpdateCollisionDetection(in ctx);
     }
 
-    /// <summary>
-    /// 모든 activeContactTargets 중 하나라도 접촉하면 true
-    /// </summary>
-    private bool CheckHandTouchForAnyTarget(Transform handTransform, Collider handCollider, bool isLeftHand)
-    {
-        foreach (var target in activeContactTargets)
-        {
-            if (CheckHandTouchForSingleTarget(handTransform, handCollider, isLeftHand, target))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
-    /// 단일 ContactTarget에 대한 손 접촉 체크
-    /// </summary>
-    private bool CheckHandTouchForSingleTarget(Transform handTransform, Collider handCollider, bool isLeftHand, ContactTarget target)
-    {
-        switch (target)
-        {
-            case ContactTarget.Head:
-                // 머리만 체크
-                if (patientHeadCollider == null) return false;
-                return CheckHandCollision(handTransform, handCollider, patientHeadCollider.bounds, isLeftHand);
-
-            case ContactTarget.Chest:
-                // 흉부만 체크
-                if (patientChestCollider == null) return false;
-                return CheckHandCollision(handTransform, handCollider, patientChestCollider.bounds, isLeftHand);
-
-            case ContactTarget.LeftArm:
-                // 왼팔 체크 (상완+전완 등 복수 콜라이더)
-                if (patientLeftArmColliders == null || patientLeftArmColliders.Length == 0) return false;
-                foreach (var col in patientLeftArmColliders)
-                {
-                    if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand))
-                        return true;
-                }
-                return false;
-
-            case ContactTarget.RightArm:
-                // 오른팔 체크 (상완+전완 등 복수 콜라이더)
-                if (patientRightArmColliders == null || patientRightArmColliders.Length == 0) return false;
-                foreach (var col in patientRightArmColliders)
-                {
-                    if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand))
-                        return true;
-                }
-                return false;
-
-            case ContactTarget.Shoulder:
-                // 어깨만 체크
-                if (patientShoulderCollider == null) return false;
-                return CheckHandCollision(handTransform, handCollider, patientShoulderCollider.bounds, isLeftHand);
-
-            case ContactTarget.ChestAndShoulder:
-            {
-                // 흉부 또는 어깨 체크
-                bool touchChest = patientChestCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, patientChestCollider.bounds, isLeftHand);
-                bool touchShoulder = patientShoulderCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, patientShoulderCollider.bounds, isLeftHand);
-                return touchChest || touchShoulder;
-            }
-
-            case ContactTarget.HeadAndShoulder:
-            default:
-            {
-                // 머리 또는 어깨 체크
-                bool touchingHead = patientHeadCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, patientHeadCollider.bounds, isLeftHand);
-                bool touchingShoulder = patientShoulderCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, patientShoulderCollider.bounds, isLeftHand);
-                return touchingHead || touchingShoulder;
-            }
-        }
-    }
-
-    /// <summary>
-    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드 알파값 조절
-    /// 특정 손의 가이드 핸드 알파값만 조절
-    /// </summary>
-    private void UpdateGuideHandAlphaForHand(bool isLeftHand, bool isTouching)
-    {
-        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
-        string handName = isLeftHand ? "왼손" : "오른손";
-
-        if (guideHand != null)
-        {
-            float alpha = isTouching ? touchAlpha : guideHandColor.a;
-            guideHand.SetColorAndAlpha(guideHandColor, alpha);
-
-            if (showDebugLogs)
-            {
-                string state = isTouching ? "접촉" : "미접촉";
-                ChunaLogger.Log($"<color=yellow>[GuideHand] {handName} {state} → 알파: {alpha:F2}</color>");
-            }
-        }
-    }
-
-    /// <summary>
-    /// 양손 가이드 핸드 알파값 모두 업데이트 (초기화용)
-    /// </summary>
-    private void UpdateGuideHandAlphaOnTouch(bool isTouching)
-    {
-        UpdateGuideHandAlphaForHand(true, isLeftHandTouchingPatient);
-        UpdateGuideHandAlphaForHand(false, isRightHandTouchingPatient);
-    }
-
-    /// <summary>
-    /// ★ 디버그 UI 업데이트 (FPS, 손 거리)
-    /// </summary>
     private void UpdateDebugUI()
     {
-        // FPS 계산
-        frameCount++;
-        fpsTimer += Time.unscaledDeltaTime;
-
-        if (fpsTimer >= fpsUpdateInterval)
-        {
-            currentFps = frameCount / fpsTimer;
-            frameCount = 0;
-            fpsTimer = 0f;
-
-            // FPS 텍스트 업데이트
-            if (fpsText != null)
-            {
-                fpsText.text = $"FPS: {currentFps:F1}";
-            }
-        }
-
-        // 왼손 거리 계산 및 표시 (mm 단위)
-        if (leftHandDistanceText != null)
-        {
-            float leftDistance = CalculateHandToGuideDistance(true) * 1000f; // m → mm
-            string leftTouchStatus = isLeftHandTouchingPatient ? " [접촉]" : "";
-            leftHandDistanceText.text = $"왼손: {leftDistance:F2}mm{leftTouchStatus}";
-        }
-
-        // 오른손 거리 계산 및 표시 (mm 단위)
-        if (rightHandDistanceText != null)
-        {
-            float rightDistance = CalculateHandToGuideDistance(false) * 1000f; // m → mm
-            string rightTouchStatus = isRightHandTouchingPatient ? " [접촉]" : "";
-            rightHandDistanceText.text = $"오른손: {rightDistance:F2}mm{rightTouchStatus}";
-        }
+        var ctx = BuildCollisionContext();
+        collisionDetectionManager.UpdateDebugUI(in ctx);
     }
 
-    /// <summary>
-    /// 사용자 손목(wristBone)과 가이드 핸드 Root 간의 거리 계산
-    /// </summary>
-    private float CalculateHandToGuideDistance(bool isLeftHand)
-    {
-        Transform wristBone = isLeftHand ? leftWristBone : rightWristBone;
-        HandTransformMapper guideHand = isLeftHand ? leftGuideHand : rightGuideHand;
-
-        // 가이드 핸드가 없거나 비활성화면 0 반환
-        if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
-            return 0f;
-
-        // 사용자 손목 본이 없으면 0 반환
-        if (wristBone == null)
-            return 0f;
-
-        // 사용자 손목 Root ↔ 가이드 핸드 Root 거리 계산
-        return Vector3.Distance(wristBone.position, guideHand.Root.position);
-    }
-
-    /// <summary>
-    /// ★ 손 충돌 감지 (via HandCollisionDetector helper)
-    /// </summary>
-    private bool CheckHandCollision(Transform handTransform, Collider handCollider, Bounds patientBounds, bool isLeftHand)
-    {
-        return collisionDetector.CheckHandCollision(
-            handTransform, handCollider, patientBounds, isLeftHand,
-            handCollisionShape, handColliderScale,
-            defaultHandCollisionRadius, handCollisionForwardOffset,
-            palmWidth, palmThickness, palmHeight, fingerLength);
-    }
-
-    /// <summary>
-    /// 애니메이션 선형보간 업데이트
-    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
-    /// </summary>
     private void UpdateAnimationLerp()
     {
-
-        bool isHandTouching = isLeftHandTouchingPatient || isRightHandTouchingPatient;
-
-        // 애니메이션 상태 체크 로그
-        if (showDebugLogs && Time.frameCount % 120 == 0)
-        {
-            ChunaLogger.Log($"<color=yellow>[Animation Check] Animator:{(patientAnimator != null ? patientAnimator.name : "NULL")}, 상태이름:'{currentAnimationStateName}', 단계:{currentPhase}, 접촉:{isHandTouching}</color>");
-        }
-
-        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
-
-        // ★ 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
-        if (isHandTouching && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
-        {
-            currentAnimationRatio = Mathf.Lerp(currentAnimationRatio, targetAnimationRatio, Time.deltaTime * animationLerpSpeed);
-            patientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
-            patientAnimator.speed = 0f;
-
-            // ★ 두 번째 환자 모델도 동기화
-            if (secondaryPatientAnimator != null)
-            {
-                secondaryPatientAnimator.Play(currentAnimationStateName, 0, currentAnimationRatio);
-                secondaryPatientAnimator.speed = 0f;
-            }
-
-            if (showDebugLogs && Time.frameCount % 30 == 0)
-            {
-                ChunaLogger.Log($"<color=green>[Animation Lerp] '{currentAnimationStateName}' @ {currentAnimationRatio:P0} → {targetAnimationRatio:P0} (진행률:{userHandFrameRatio:P0})</color>");
-            }
-        }
-        else if (showDebugLogs && Time.frameCount % 60 == 0)
-        {
-            ChunaLogger.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{currentPhase}, 애니메이션:'{currentAnimationStateName}'</color>");
-        }
+        var ctx = BuildCollisionContext();
+        collisionDetectionManager.UpdateAnimationLerp(in ctx);
     }
 
     #endregion
@@ -1297,10 +1150,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     private void HandleAutoPlayComplete()
     {
         autoPlayHandler.CompleteAutoPlay();
-
-        // Sync local state
-        isAutoPlayMode = false;
-        autoPlayProgress = 1f;
 
         // Phase change
         phaseManager.ChangePhase(EvaluationPhase.Completed, GetLoadedFrameCount(), currentStartRatio, showDebugLogs);
@@ -1537,13 +1386,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         autoPlayHandler.StartAutoPlay(duration);
 
-        // Sync local state
-        isAutoPlayMode = true;
-        autoPlayStartTime = Time.time;
-        autoPlayProgress = 0f;
-        if (duration > 0f) autoPlayDuration = duration;
-        else autoPlayDuration = 0f;
-
         // 평가 시작 처리
         isEvaluating = true;
         evaluationStartTime = Time.time;
@@ -1571,12 +1413,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// 현재 AutoPlay 모드인지 확인
     /// </summary>
-    public bool IsAutoPlayMode => autoPlayHandler != null ? autoPlayHandler.IsAutoPlayMode : isAutoPlayMode;
+    public bool IsAutoPlayMode => autoPlayHandler.IsAutoPlayMode;
 
     /// <summary>
     /// AutoPlay 진행률 (0~1)
     /// </summary>
-    public float AutoPlayProgress => autoPlayHandler != null ? autoPlayHandler.AutoPlayProgress : autoPlayProgress;
+    public float AutoPlayProgress => autoPlayHandler.AutoPlayProgress;
 
     #endregion
 
@@ -1645,74 +1487,23 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// ScenarioConfig에서 평가 임계점 오버라이드 적용
-    /// 설정하지 않은 시나리오는 Inspector 기본값 유지
     /// </summary>
-    public void ApplyEvaluationThresholds(ScenarioConfig config)
-    {
-        if (config == null || !config.overrideEvaluationThresholds) return;
-
-        ApplyThresholdValues(config.midHoldStart, config.midHoldEnd,
-            config.stretchingHoldStart, config.stretchingHoldEnd,
-            config.extendedMidHoldStart, config.extendedMidHoldEnd);
-
-        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] 시나리오 기본 임계점 오버라이드 적용: " +
-            $"일반 {midHoldStartRatio:P0}~{midHoldEndRatio:P0}, " +
-            $"스트레칭 {stretchingHoldStart:P0}~{stretchingEnd:P0}, " +
-            $"재평가 {extendedMidHoldStartRatio:P0}~{extendedMidHoldEndRatio:P0}</color>");
-    }
+    public void ApplyEvaluationThresholds(ScenarioConfig config) => modeConfigurator.ApplyEvaluationThresholds(config);
 
     /// <summary>
-    /// Phase별 회전 임계점 오버라이드 적용 (사각근 전부/중부/후부 등)
-    /// 일반 모드의 midHoldStart/End만 변경, 스트레칭/재평가는 유지
+    /// Phase별 회전 임계점 오버라이드 적용
     /// </summary>
-    public void ApplyPhaseRotationThresholds(ScenarioConfig.PhaseThresholdOverride phaseOverride)
-    {
-        if (phaseOverride == null) return;
-
-        midHoldStartRatio = phaseOverride.rotationHoldStart;
-        midHoldEndRatio = phaseOverride.rotationHoldEnd;
-
-        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] Phase 회전 임계점 [{phaseOverride.phaseName}]: " +
-            $"{midHoldStartRatio:P0}~{midHoldEndRatio:P0}</color>");
-    }
+    public void ApplyPhaseRotationThresholds(ScenarioConfig.PhaseThresholdOverride phaseOverride) => modeConfigurator.ApplyPhaseRotationThresholds(phaseOverride);
 
     /// <summary>
     /// 일반 모드 임계점을 기본값으로 복원
     /// </summary>
-    public void RestoreDefaultThresholds(ScenarioConfig config)
-    {
-        if (config != null && config.overrideEvaluationThresholds)
-        {
-            midHoldStartRatio = config.midHoldStart;
-            midHoldEndRatio = config.midHoldEnd;
-        }
-        else
-        {
-            midHoldStartRatio = 0.3f;
-            midHoldEndRatio = 0.5f;
-        }
-    }
-
-    private void ApplyThresholdValues(float mhStart, float mhEnd,
-        float sStart, float sEnd, float emStart, float emEnd)
-    {
-        midHoldStartRatio = mhStart;
-        midHoldEndRatio = mhEnd;
-        stretchingHoldStart = sStart;
-        stretchingEnd = sEnd;
-        extendedMidHoldStartRatio = emStart;
-        extendedMidHoldEndRatio = emEnd;
-    }
+    public void RestoreDefaultThresholds(ScenarioConfig config) => modeConfigurator.RestoreDefaultThresholds(config);
 
     /// <summary>
     /// 회전 방향 반전 설정 (수동)
     /// </summary>
-    public void SetInvertRotationDirection(bool invert)
-    {
-        invertRotationDirection = invert;
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 회전 방향 반전: {invert}</color>");
-    }
+    public void SetInvertRotationDirection(bool invert) => modeConfigurator.SetInvertRotationDirection(invert);
 
     /// <summary>
     /// 현재 회전 방향 반전 여부
@@ -1722,52 +1513,20 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// 회전 감지 축 Vector3 반환
     /// </summary>
-    private Vector3 GetRotationDetectionAxis()
-    {
-        switch (rotationDetectionAxis)
-        {
-            case RotationDetectionAxis.Y:
-                return Vector3.up;      // 목 회전 (좌우 돌리기)
-            case RotationDetectionAxis.Z:
-                return Vector3.forward; // 측굴 (좌우 기울이기)
-            case RotationDetectionAxis.X:
-                return Vector3.right;   // 굴곡/신전 (앞뒤로 숙이기)
-            default:
-                return Vector3.up;
-        }
-    }
+    private Vector3 GetRotationDetectionAxis() => modeConfigurator.GetRotationDetectionAxis();
 
     /// <summary>
-    /// ★ 피벗 각도 측정 평면의 법선 축 반환
+    /// ★ 피벗 각도 측정 평면의 법선 축 반환 (delegates to ChunaDataLoader static)
     /// </summary>
     private Vector3 GetPivotPlaneNormal()
     {
-        switch (pivotPlaneAxis)
-        {
-            case RotationDetectionAxis.Y:
-                return Vector3.up;      // Y축 기준 평면 (XZ 평면에서 각도 측정)
-            case RotationDetectionAxis.Z:
-                return Vector3.forward; // Z축 기준 평면 (XY 평면에서 각도 측정) - 측굴용
-            case RotationDetectionAxis.X:
-                return Vector3.right;   // X축 기준 평면 (YZ 평면에서 각도 측정)
-            default:
-                return Vector3.forward; // 기본: 측굴용 (Z축)
-        }
+        return ChunaDataLoader.GetPivotPlaneNormal(pivotPlaneAxis);
     }
 
     /// <summary>
     /// 회전 감지 축 설정
     /// </summary>
-    public void SetRotationDetectionAxis(RotationDetectionAxis axis)
-    {
-        rotationDetectionAxis = axis;
-        if (showDebugLogs)
-        {
-            string axisName = axis == RotationDetectionAxis.Y ? "Y(목회전)" :
-                             axis == RotationDetectionAxis.Z ? "Z(측굴)" : "X(굴곡/신전)";
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 축 설정: {axisName}</color>");
-        }
-    }
+    public void SetRotationDetectionAxis(RotationDetectionAxis axis) => modeConfigurator.SetRotationDetectionAxis(axis);
 
     /// <summary>
     /// 현재 회전 감지 축
@@ -1777,21 +1536,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// ★ 피벗 기반 진행률 설정
     /// </summary>
-    public void SetPivotSettings(Transform pivot, float angle, RotationDetectionAxis planeAxis, bool invert = false)
-    {
-        pivotTransform = pivot;
-        targetAngle = angle;
-        pivotPlaneAxis = planeAxis;
-        invertPivotAngle = invert;
-        usePivotBasedProgress = pivot != null;
-
-        if (showDebugLogs)
-        {
-            string axisName = planeAxis == RotationDetectionAxis.Y ? "Y(XZ평면)" :
-                             planeAxis == RotationDetectionAxis.Z ? "Z(XY평면-측굴)" : "X(YZ평면)";
-            ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] 피벗 설정 - 피벗:{(pivot != null ? pivot.name : "없음")}, 목표각도:{angle}°, 평면:{axisName}, 반전:{invert}</color>");
-        }
-    }
+    public void SetPivotSettings(Transform pivot, float angle, RotationDetectionAxis planeAxis, bool invert = false) => modeConfigurator.SetPivotSettings(pivot, angle, planeAxis, invert);
 
     /// <summary>
     /// 피벗 기반 진행률 활성화 여부
@@ -1899,265 +1644,7 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     #region CSV Data and Checkpoint Generation
 
-    public void LoadAndGenerateCheckpoints(string csvFileName)
-    {
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] CSV 로드: {csvFileName}</color>");
-
-        currentProcedureName = csvFileName;
-
-        HandPoseDataLoader loader = new HandPoseDataLoader();
-        var result = loader.LoadFromResources($"HandPoseData/{csvFileName}");
-
-        if (!result.success)
-        {
-            ChunaLogger.LogError($"[ChunaPathEvaluator] CSV 로드 실패: {result.errorMessage}");
-            return;
-        }
-
-        loadedFrames = result.frames;
-
-        // ★ 기준점 로컬 좌표 → 월드 좌표 변환 (로드 시 일괄 변환)
-        ConvertFramesToWorldSpace();
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 로드됨");
-
-        // ★ 핸드데이터 이동량 계산 (시작-끝 프레임 간)
-        CalculateHandDataMovement();
-
-        // ★ 측굴 자동 프리셋 적용
-        ApplyLateralBendingPresetIfNeeded(csvFileName);
-
-        // 리밋 체커에 첫 프레임의 회전을 기준점으로 설정
-        SetLimitCheckerReferenceFromFirstFrame();
-
-        if (showDebugLogs)
-        {
-            ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 데이터 로드 완료</color>");
-            ChunaLogger.Log($"  - 프레임 수: {loadedFrames.Count}개");
-        }
-    }
-
-    /// <summary>
-    /// 핸드데이터 시작-끝 프레임 간 이동량/회전량 계산
-    /// </summary>
-    private void CalculateHandDataMovement()
-    {
-        if (loadedFrames == null || loadedFrames.Count < 2)
-        {
-            ChunaLogger.LogWarning("[ChunaPathEvaluator] 프레임이 2개 미만이라 이동량 계산 불가");
-            return;
-        }
-
-        PoseFrame firstFrame = loadedFrames[0];
-        PoseFrame lastFrame = loadedFrames[loadedFrames.Count - 1];
-
-        // ★ 양손 이동량 비교 → 더 많이 움직인 손 기준
-        Vector3 rightMoveVec = lastFrame.rightRootPosition - firstFrame.rightRootPosition;
-        Vector3 leftMoveVec = lastFrame.leftRootPosition - firstFrame.leftRootPosition;
-        float rightDist = rightMoveVec.magnitude;
-        float leftDist = leftMoveVec.magnitude;
-
-        isLeftHandDominant = leftDist > rightDist;
-
-        if (isLeftHandDominant)
-        {
-            handDataMovementVector = leftMoveVec;
-            handDataTotalDistance = leftDist;
-            ChunaLogger.Log($"<color=cyan>[HandData] 왼손 이동량이 더 큼: L={leftDist:F3}m > R={rightDist:F3}m → 왼손 기준</color>");
-        }
-        else
-        {
-            handDataMovementVector = rightMoveVec;
-            handDataTotalDistance = rightDist;
-            ChunaLogger.Log($"<color=cyan>[HandData] 오른손 기준: R={rightDist:F3}m, L={leftDist:F3}m</color>");
-        }
-
-        // ★ 주동수에 높은 가중치 적용 (주동수 70%, 보조수 30%)
-        if (isLeftHandDominant)
-        {
-            leftHandSimilarityWeight = 0.7f;
-            rightHandSimilarityWeight = 0.3f;
-        }
-        else
-        {
-            leftHandSimilarityWeight = 0.3f;
-            rightHandSimilarityWeight = 0.7f;
-        }
-        // comparator에도 가중치 동기화
-        if (poseComparator != null)
-        {
-            var settings = poseComparator.GetSettings();
-            settings.leftHandWeight = leftHandSimilarityWeight;
-            settings.rightHandWeight = rightHandSimilarityWeight;
-        }
-        ChunaLogger.Log($"<color=cyan>[HandData] 유사도 가중치: L={leftHandSimilarityWeight:P0}, R={rightHandSimilarityWeight:P0}</color>");
-
-        // 이동 축 계산 (정규화)
-        if (handDataTotalDistance > 0.001f)
-        {
-            movementAxis = handDataMovementVector.normalized;
-        }
-        else
-        {
-            movementAxis = Vector3.forward;
-        }
-
-        // ★ 양손 회전량 비교 → 더 많이 회전한 손 기준
-        float rightRot = Quaternion.Angle(firstFrame.rightRootRotation, lastFrame.rightRootRotation);
-        float leftRot = Quaternion.Angle(firstFrame.leftRootRotation, lastFrame.leftRootRotation);
-        handDataTotalRotation = Mathf.Max(rightRot, leftRot);
-
-        // 위치 기반 vs 회전 기반 결정
-        // ★ CSV에서 지정한 타입이 있으면 그것을 사용, 없으면 자동 감지
-        if (!string.IsNullOrEmpty(specifiedMovementType))
-        {
-            // StartsWith로 비교 (혹시 모를 공백/특수문자 대비)
-            isPositionBasedMovement = specifiedMovementType.StartsWith("position");
-            string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-            ChunaLogger.Log($"<color=magenta>[HandData Analysis] ★ {moveType} (CSV 지정: '{specifiedMovementType}')</color>");
-        }
-        else
-        {
-            // 자동 감지: 이동 거리가 5cm 미만이고 회전이 15도 이상이면 회전 기반으로 판단
-            isPositionBasedMovement = handDataTotalDistance >= 0.05f || handDataTotalRotation < 15f;
-            if (showDebugLogs)
-            {
-                string moveType = isPositionBasedMovement ? "위치 기반" : "회전 기반";
-                ChunaLogger.Log($"<color=magenta>[HandData Analysis] {moveType} (자동 감지)</color>");
-            }
-        }
-
-        // 항상 출력 (디버깅용)
-        ChunaLogger.Log($"<color=cyan>[HandData] L: {firstFrame.leftRootPosition}→{lastFrame.leftRootPosition} ({leftDist:F3}m), R: {firstFrame.rightRootPosition}→{lastFrame.rightRootPosition} ({rightDist:F3}m)</color>");
-        ChunaLogger.Log($"<color=cyan>[HandData] 이동 거리: {handDataTotalDistance:F3}m, 회전 각도: {handDataTotalRotation:F1}°</color>");
-        ChunaLogger.Log($"<color=cyan>[HandData] 이동 축: {movementAxis}, 판정: {(isPositionBasedMovement ? "위치기반" : "회전기반")}</color>");
-
-        // ★ 피벗 기반 총 각도 자동 계산
-        CalculatePivotBasedAngle();
-    }
-
-    /// <summary>
-    /// 피벗 기반으로 핸드데이터의 총 각도 계산 (첫 프레임 ~ 마지막 프레임)
-    /// </summary>
-    private void CalculatePivotBasedAngle()
-    {
-        if (loadedFrames == null || loadedFrames.Count < 2) return;
-        if (pivotTransform == null)
-        {
-            ChunaLogger.LogWarning("[ChunaPathEvaluator] 피벗이 설정되지 않아 각도 자동 계산 불가");
-            return;
-        }
-
-        Vector3 pivotPos = pivotTransform.position;
-
-        // ★ 양손 중 더 많이 움직인 손 기준으로 피벗 각도 계산
-        PoseFrame first = loadedFrames[0];
-        PoseFrame last = loadedFrames[loadedFrames.Count - 1];
-        float rightDist = (last.rightRootPosition - first.rightRootPosition).magnitude;
-        float leftDist = (last.leftRootPosition - first.leftRootPosition).magnitude;
-
-        Vector3 startPos, endPos;
-        if (leftDist > rightDist)
-        {
-            startPos = first.leftRootPosition;
-            endPos = last.leftRootPosition;
-            ChunaLogger.Log($"<color=cyan>[Pivot Angle] 왼손 기준 (L={leftDist:F3}m > R={rightDist:F3}m)</color>");
-        }
-        else
-        {
-            startPos = first.rightRootPosition;
-            endPos = last.rightRootPosition;
-            ChunaLogger.Log($"<color=cyan>[Pivot Angle] 오른손 기준 (R={rightDist:F3}m, L={leftDist:F3}m)</color>");
-        }
-
-        // 피벗에서 시작/끝 위치로의 방향
-        Vector3 startDir = (startPos - pivotPos).normalized;
-        Vector3 endDir = (endPos - pivotPos).normalized;
-
-        // 평면 법선 기준 각도 계산
-        Vector3 planeNormal = GetPivotPlaneNormal();
-
-        // 부호 있는 각도 계산
-        float signedAngle = Vector3.SignedAngle(startDir, endDir, planeNormal);
-        calculatedDataAngle = Mathf.Abs(signedAngle);
-
-        // 각도가 너무 작으면 (직선 이동) 손목 회전 각도 사용
-        if (calculatedDataAngle < 5f)
-        {
-            calculatedDataAngle = handDataTotalRotation;
-        }
-
-        // 자동 계산 활성화 시 targetAngle 설정 (비율 적용)
-        if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
-        {
-            targetAngle = calculatedDataAngle * defaultGuideRatio;
-            ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] ★ 목표 각도 자동 설정: {targetAngle:F1}° (데이터 {calculatedDataAngle:F1}° × 비율 {defaultGuideRatio:P0})</color>");
-        }
-
-        ChunaLogger.Log($"<color=magenta>[HandData Angle] 피벗 기준 총 각도: {calculatedDataAngle:F1}° (시작→끝 프레임)</color>");
-    }
-
-    /// <summary>
-    /// 운동 종류 감지 후 자동으로 프리셋 적용 (측굴, 회전)
-    /// </summary>
-    private void ApplyLateralBendingPresetIfNeeded(string csvFileName)
-    {
-        if (!autoApplyLateralBendingPreset) return;
-        if (string.IsNullOrEmpty(csvFileName)) return;
-
-        // 측굴 키워드 감지
-        bool isLateralBending = csvFileName.Contains("측굴") ||
-                                csvFileName.ToLower().Contains("lateral") ||
-                                csvFileName.ToLower().Contains("sidebend");
-
-        // 회전 키워드 감지
-        bool isRotation = csvFileName.Contains("회전") ||
-                          csvFileName.ToLower().Contains("rotation") ||
-                          csvFileName.ToLower().Contains("rotate");
-
-        if (isLateralBending)
-        {
-            // 측굴 감지됨 - 프리셋 적용
-            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] ★ 측굴 운동 감지 - 프리셋 적용</color>");
-
-            // 기본 가이드 비율을 제한장벽 확인 모드로 설정 (0~0.5)
-            defaultGuideRatio = lateralBending_LimitCheckRatio;
-
-            // 스트레칭 모드 범위 설정 - 통합 설정(stretchingStart/End/HoldStart) 사용
-            // ★ Inspector에서 직접 조절하므로 여기서 덮어쓰지 않음
-
-            // targetAngle 재계산 (비율 적용)
-            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
-            {
-                targetAngle = calculatedDataAngle * defaultGuideRatio;
-            }
-
-            ChunaLogger.Log($"<color=cyan>  - 제한장벽 확인: 0 ~ {lateralBending_LimitCheckRatio:P0} ({calculatedDataAngle * lateralBending_LimitCheckRatio:F1}°)</color>");
-            ChunaLogger.Log($"<color=cyan>  - 스트레칭: 가이드 {stretchingStart:P0}~{stretchingEnd:P0}, 적정범위 {stretchingHoldStart:P0}~{stretchingEnd:P0}</color>");
-            ChunaLogger.Log($"<color=cyan>  - 재평가: 0 ~ {lateralBending_ReEvalRatio:P0} ({calculatedDataAngle * lateralBending_ReEvalRatio:F1}°)</color>");
-        }
-        else if (isRotation)
-        {
-            // 회전 감지됨 - 가이드 0 ~ 0.4
-            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] ★ 회전 운동 감지 - 가이드 범위 설정</color>");
-
-            defaultGuideRatio = 0.4f;
-
-            // ★ 가이드 재생 범위: 0 ~ 0.4
-            runtimeGuideStartRatio = guideRotation_Start;
-            runtimeGuideEndRatio = guideRotation_End;
-
-            // targetAngle 재계산 (비율 적용)
-            if (autoCalculateTargetAngle && calculatedDataAngle > 0.1f)
-            {
-                targetAngle = calculatedDataAngle * defaultGuideRatio;
-            }
-
-            ChunaLogger.Log($"<color=cyan>  - 가이드 범위: {guideRotation_Start:P0} ~ {guideRotation_End:P0} ({targetAngle:F1}°)</color>");
-        }
-    }
+    public void LoadAndGenerateCheckpoints(string csvFileName) => dataLoader.LoadAndGenerateCheckpoints(csvFileName);
 
     /// <summary>
     /// 측굴 모드 수동 전환 (제한장벽 확인 / 스트레칭 / 재평가)
@@ -2185,7 +1672,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         isExtendedLimitMode = modeConfigurator.IsExtendedLimitMode;
 
         // 리밋 체커를 새 적정범위 끝에 맞춰 갱신
-        UpdateLimitCheckerFromGuideEnd();
+        dataLoader.UpdateLimitCheckerFromGuideEnd();
 
         // targetAngle 재계산
         if (calculatedDataAngle > 0.1f)
@@ -2193,63 +1680,6 @@ public class ChunaPathEvaluator : MonoBehaviour
             targetAngle = calculatedDataAngle * defaultGuideRatio;
             ChunaLogger.Log($"<color=cyan>  목표 각도: {targetAngle:F1}°</color>");
         }
-    }
-
-    /// <summary>
-    /// 리밋 체커에 PathEvaluator 참조 설정
-    /// </summary>
-    private void SetLimitCheckerReferenceFromFirstFrame()
-    {
-        if (limitChecker == null)
-            return;
-
-        // PathEvaluator 참조 설정 (프레임 비율 기반 체크용)
-        limitChecker.SetPathEvaluator(this);
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커에 PathEvaluator 참조 설정 완료</color>");
-    }
-
-    /// <summary>
-    /// 리밋 체커 임계값을 적정범위 끝(runtimeGuideEndRatio) 기반으로 자동 설정
-    /// </summary>
-    private void UpdateLimitCheckerFromGuideEnd()
-    {
-        if (limitChecker == null) return;
-
-        float dangerThreshold = runtimeGuideEndRatio;
-        float warningThreshold = runtimeGuideEndRatio * 0.7f;
-        limitChecker.SetRatioThresholds(warningThreshold, dangerThreshold);
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 임계값 자동 설정 — warning:{warningThreshold:P0}, danger:{dangerThreshold:P0} (guideEnd:{runtimeGuideEndRatio:P0})</color>");
-    }
-
-    /// <summary>
-    /// 난이도 프리셋에서 가이드 핸드 표시/투명도/색상 피드백 동기화
-    /// </summary>
-    private void SyncWithDifficultySettings()
-    {
-        var dm = ChunaTraining.DifficultyManager.Instance;
-        if (dm == null) return;
-
-        showGuideHands = dm.ShowGuideHands;
-
-        // 투명도를 guideHandColor.a에 반영
-        if (dm.GuideHandOpacity > 0f)
-        {
-            guideHandColor.a = dm.GuideHandOpacity;
-        }
-
-        // 홀드 시간 동기화
-        if (dm.RequiredHoldTime > 0f)
-        {
-            startHoldDuration = dm.RequiredHoldTime;
-            midHoldDuration = dm.RequiredHoldTime;
-        }
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 난이도 동기화 — 가이드핸드:{showGuideHands}, 투명도:{guideHandColor.a:F2}, 홀드:{dm.RequiredHoldTime:F1}s</color>");
     }
 
     #endregion
@@ -2266,8 +1696,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         guidePlaybackController.ResetFrameIndex();
 
         // ★ AutoPlay 모드 리셋 (이전 SubStep에서 남아있을 수 있음)
-        isAutoPlayMode = false;
-        autoPlayProgress = 0f;
+        autoPlayHandler.Reset();
 
         // ★ 스트레칭/재평가 모드에 따라 가이드 범위 설정 (운동 종류 무관)
         if (isStretchingMode)
@@ -2284,7 +1713,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
 
         // ★ 난이도 프리셋에서 가이드 핸드/투명도 동기화
-        SyncWithDifficultySettings();
+        dataLoader.SyncWithDifficultySettings();
 
         isEvaluating = true;
         evaluationStartTime = Time.time;
@@ -2367,7 +1796,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             limitChecker.Initialize();
 
             // 리밋 = 적정범위 끝(runtimeGuideEndRatio) 기반 자동 매핑
-            UpdateLimitCheckerFromGuideEnd();
+            dataLoader.UpdateLimitCheckerFromGuideEnd();
 
             limitChecker.SetEnabled(true);
         }
@@ -2456,10 +1885,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         isEvaluating = false;
 
-        // ★ AutoPlay 모드 리셋 (via helper)
+        // ★ AutoPlay 모드 리셋
         autoPlayHandler.Reset();
-        isAutoPlayMode = false;
-        autoPlayProgress = 0f;
 
         // ★ 충돌 감지 플래그 리셋
         isLeftHandTouchingPatient = false;
@@ -2492,10 +1919,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         isEvaluating = false;
 
-        // ★ AutoPlay 모드 리셋 (via helper)
+        // ★ AutoPlay 모드 리셋
         autoPlayHandler.Reset();
-        isAutoPlayMode = false;
-        autoPlayProgress = 0f;
 
         // ★ 충돌 감지 플래그 리셋
         isLeftHandTouchingPatient = false;
@@ -2704,41 +2129,6 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     public bool IsEvaluating => isEvaluating;
     public EvaluationSession GetCurrentSession() => currentSession;
-
-    /// <summary>
-    /// 로드된 프레임의 기준점 로컬 좌표를 월드 좌표로 일괄 변환
-    /// CSV 저장 형식: localPos = Inv(refRot) * (wristPos - refPos), localRot = Inv(refRot) * wristRot
-    /// 복원 공식: worldPos = refPos + refRot * localPos, worldRot = refRot * localRot
-    /// </summary>
-    private void ConvertFramesToWorldSpace()
-    {
-        if (loadedFrames == null || loadedFrames.Count == 0) return;
-        if (referenceTransform == null)
-        {
-            if (showDebugLogs)
-                ChunaLogger.LogWarning("[ChunaPathEvaluator] referenceTransform 없음 - 프레임 좌표를 그대로 사용");
-            return;
-        }
-
-        Vector3 refPos = referenceTransform.position;
-        Quaternion refRot = referenceTransform.rotation;
-
-        for (int i = 0; i < loadedFrames.Count; i++)
-        {
-            var frame = loadedFrames[i];
-
-            // 왼손 루트
-            frame.leftRootPosition = refPos + refRot * frame.leftRootPosition;
-            frame.leftRootRotation = refRot * frame.leftRootRotation;
-
-            // 오른손 루트
-            frame.rightRootPosition = refPos + refRot * frame.rightRootPosition;
-            frame.rightRootRotation = refRot * frame.rightRootRotation;
-        }
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 월드 좌표 변환 완료 (ref: {referenceTransform.name}, pos={refPos}, rot={refRot.eulerAngles})</color>");
-    }
 
     /// <summary>
     /// 접촉 감지 부위 설정 (시나리오별로 다른 부위 사용)

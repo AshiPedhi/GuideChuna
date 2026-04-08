@@ -41823,30 +41823,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a19998cf66e7bc6448203ff4cb6de441, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ChunaFeedbackUI
-  pathEvaluator: {fileID: 0}
-  evaluatorBridge: {fileID: 0}
-  leftHandImage: {fileID: 8807050654454291414}
-  rightHandImage: {fileID: 8604452465431899496}
-  progressText: {fileID: 0}
-  progressSlider: {fileID: 0}
-  currentCheckpointText: {fileID: 0}
-  leftSimilarityText: {fileID: 0}
-  rightSimilarityText: {fileID: 0}
-  averageSimilarityText: {fileID: 0}
-  scoreText: {fileID: 0}
-  gradeText: {fileID: 0}
-  pathDeviationWarning: {fileID: 0}
-  pathDeviationText: {fileID: 0}
-  pathDeviationIndicator: {fileID: 0}
-  lowSimilarityColor: {r: 1, g: 0.2, b: 0.2, a: 1}
-  mediumSimilarityColor: {r: 1, g: 1, b: 0.2, a: 1}
-  highSimilarityColor: {r: 0.2, g: 1, b: 0.2, a: 1}
-  defaultHandColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
-  lowThreshold: 0.4
-  highThreshold: 0.7
-  onPathColor: {r: 0.2, g: 0.8, b: 0.2, a: 1}
-  offPathColor: {r: 1, g: 0.3, b: 0.3, a: 1}
-  updateInterval: 0.1
 --- !u!114 &426063066
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -58233,7 +58209,7 @@ MonoBehaviour:
   leftWristRoot: {fileID: 1173530639}
   rightWristRoot: {fileID: 1200290772}
   patientReference: {fileID: 359949757}
-  fileName: "\uD749\uACE8\uC9C0 \uC790\uC138"
+  fileName: "\uC790\uC138\uC9C0\uC2DC"
   recordInterval: 0.033
   recordLeftHand: 1
   recordRightHand: 1
@@ -105400,9 +105376,9 @@ MonoBehaviour:
   patientHeadCollider: {fileID: 2044603182}
   patientShoulderCollider: {fileID: 1225244102}
   patientChestCollider: {fileID: 0}
-  patientLeftArmCollider: {fileID: 0}
-  patientRightArmCollider: {fileID: 0}
-  activeContactTarget: 1
+  patientLeftArmColliders: []
+  patientRightArmColliders: []
+  activeContactTargets: 01000000
   leftHandCollider: {fileID: 2087145412}
   rightHandCollider: {fileID: 2087145413}
   handColliderScale: 0.6
@@ -105462,10 +105438,8 @@ MonoBehaviour:
   guideReEval_End: 0.75
   extendedMidHoldStartRatio: 0.5
   extendedMidHoldEndRatio: 0.7
-  limitBarrierRatio: 0.5
   guideLimitCheck_End: 0.5
   autoApplyLateralBendingPreset: 1
-  extendedLimitBarrierRatio: 0.7
   useSimplifiedHandComparison: 1
   rightHandSimilarityWeight: 0.7
   leftHandSimilarityWeight: 0.3
@@ -109036,15 +109010,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 40
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -109052,11 +109026,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 20
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -19
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3477141442781086643, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_text
@@ -111884,31 +111858,31 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.096
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.615
+      value: 0.612
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.005
+      value: 0.13199997
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.00000004369641
+      value: -0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.0000000011442309
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0.026176952
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.99965733
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c9c2f40122045a1408d886015538ca53, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -120570,8 +120544,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1176440147}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.000000030908623, y: -0.7071068, z: -0.7071068, w: 0.000000030908623}
-  m_LocalPosition: {x: -0.09576, y: 0.15603088, z: 0.6076836}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 1.157, z: -0.47}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -141087,6 +141061,8 @@ MonoBehaviour:
   neckPivot: {fileID: 0}
   leftShoulderPivot: {fileID: 0}
   rightShoulderPivot: {fileID: 0}
+  leftUpperArmPivot: {fileID: 0}
+  rightUpperArmPivot: {fileID: 0}
   showDebugLog: 1
 --- !u!114 &1338513806
 MonoBehaviour:
@@ -180506,19 +180482,19 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 5.332679
+      value: -10.4070015
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.003999993
+      value: -0.12375525
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 10.166828
+      value: 5.382
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 1
+      value: -0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.x
@@ -180526,7 +180502,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0
+      value: 0.7071068
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 50873d15cd95acc4fa9985536abb2772, type: 3}
       propertyPath: m_LocalRotation.z
@@ -238006,8 +237982,6 @@ MonoBehaviour:
     description: 
     showGuideHands: 1
     guideHandOpacity: 0.7
-    showMovementPath: 1
-    showTargetPosition: 1
     showHandColorFeedback: 1
     narrationType: 0
     playNarration: 1
@@ -238015,14 +237989,10 @@ MonoBehaviour:
     playFeedbackSound: 1
     showStepDescription: 1
     showProgressBar: 1
-    showPositionInfo: 0
-    showTimer: 0
     showSimilarityPercent: 1
     showDetailedScore: 1
     highlightErrors: 1
     autoAdvanceStep: 1
-    showRetryGuidance: 1
-    showPositionHint: 1
     unlimitedTime: 1
     similarityThreshold: 0.7
     requiredHoldTime: 2
@@ -238036,8 +238006,6 @@ MonoBehaviour:
     description: 
     showGuideHands: 1
     guideHandOpacity: 0.7
-    showMovementPath: 1
-    showTargetPosition: 1
     showHandColorFeedback: 1
     narrationType: 0
     playNarration: 1
@@ -238045,14 +238013,10 @@ MonoBehaviour:
     playFeedbackSound: 1
     showStepDescription: 1
     showProgressBar: 1
-    showPositionInfo: 0
-    showTimer: 0
     showSimilarityPercent: 1
     showDetailedScore: 1
     highlightErrors: 1
     autoAdvanceStep: 1
-    showRetryGuidance: 1
-    showPositionHint: 1
     unlimitedTime: 1
     similarityThreshold: 0.7
     requiredHoldTime: 2
@@ -238066,8 +238030,6 @@ MonoBehaviour:
     description: 
     showGuideHands: 1
     guideHandOpacity: 0.7
-    showMovementPath: 1
-    showTargetPosition: 1
     showHandColorFeedback: 1
     narrationType: 0
     playNarration: 1
@@ -238075,14 +238037,34 @@ MonoBehaviour:
     playFeedbackSound: 1
     showStepDescription: 1
     showProgressBar: 1
-    showPositionInfo: 0
-    showTimer: 0
     showSimilarityPercent: 1
     showDetailedScore: 1
     highlightErrors: 1
     autoAdvanceStep: 1
-    showRetryGuidance: 1
-    showPositionHint: 1
+    unlimitedTime: 1
+    similarityThreshold: 0.7
+    requiredHoldTime: 2
+    maxAttempts: 0
+    trackAttempts: 0
+    isPreEvaluationMode: 0
+    customItems: []
+  evaluationPreset:
+    level: 0
+    presetName: 
+    description: 
+    showGuideHands: 1
+    guideHandOpacity: 0.7
+    showHandColorFeedback: 1
+    narrationType: 0
+    playNarration: 1
+    playHintAudio: 1
+    playFeedbackSound: 1
+    showStepDescription: 1
+    showProgressBar: 1
+    showSimilarityPercent: 1
+    showDetailedScore: 1
+    highlightErrors: 1
+    autoAdvanceStep: 1
     unlimitedTime: 1
     similarityThreshold: 0.7
     requiredHoldTime: 2
@@ -241350,8 +241332,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 919132148920932801}
   serializedVersion: 2
-  m_LocalRotation: {x: -0.0000000011442309, y: -0.026176952, z: -0.99965733, w: 0.00000004369641}
-  m_LocalPosition: {x: -0.096, y: 0.615, z: 0.0049999803}
+  m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: -0.7071068}
+  m_LocalPosition: {x: 0, y: 0.612, z: 0.13199997}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -253665,6 +253647,7 @@ MonoBehaviour:
   headsetTransform: {fileID: 323287901}
   defaultForwardDistance: 0.25
   defaultHeightOffset: -0.3
+  showPositioningGizmo: 1
   patientPositionController: {fileID: 194925682}
   skeletonModel: {fileID: 1764918595}
   patientModel: {fileID: 919132148920932801}
@@ -275124,7 +275107,7 @@ Animator:
   m_GameObject: {fileID: 919132148920932801}
   m_Enabled: 1
   m_Avatar: {fileID: 9000000, guid: c9c2f40122045a1408d886015538ca53, type: 3}
-  m_Controller: {fileID: 9100000, guid: 7614d2f3820da3044b0a799e531a661b, type: 2}
+  m_Controller: {fileID: 9100000, guid: e9acb59dde2b3144bbb87bbcc57b9c22, type: 2}
   m_CullingMode: 1
   m_UpdateMode: 0
   m_ApplyRootMotion: 1

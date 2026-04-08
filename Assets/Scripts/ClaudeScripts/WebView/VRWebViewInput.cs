@@ -42,6 +42,14 @@ public class VRWebViewInput : MonoBehaviour
     [Tooltip("디버그 로그 표시")]
     [SerializeField] private bool showDebugLogs = false;
 
+    [Header("=== 스크롤 잠금 ===")]
+    [Tooltip("페이지가 콘텐츠 끝을 넘어 스크롤되는 것을 막음 (Y축 강제 0 고정)")]
+    [SerializeField] private bool lockScrollPosition = true;
+    [Tooltip("X축도 강제 0 고정")]
+    [SerializeField] private bool lockScrollX = true;
+    [Tooltip("허용 최대 Y 스크롤 (0이면 항상 0,0 고정)")]
+    [SerializeField] private int maxScrollY = 0;
+
     // Android 터치 액션 상수
     private const int ACTION_DOWN = 0;
     private const int ACTION_UP = 1;
@@ -247,6 +255,41 @@ public class VRWebViewInput : MonoBehaviour
                 if (showDebugLogs)
                     ChunaLogger.Log($"[VRWebView] Touch UP (out of bounds)");
             }
+        }
+    }
+
+    void LateUpdate()
+    {
+        if (browser == null || !lockScrollPosition) return;
+
+        try
+        {
+            int sy = browser.GetScrollY();
+            int sx = browser.GetScrollX();
+
+            bool needFix = false;
+            int targetX = sx;
+            int targetY = sy;
+
+            if (sy > maxScrollY || sy < 0)
+            {
+                targetY = Mathf.Clamp(0, 0, maxScrollY);
+                needFix = true;
+            }
+            if (lockScrollX && sx != 0)
+            {
+                targetX = 0;
+                needFix = true;
+            }
+
+            if (needFix)
+            {
+                browser.ScrollTo(targetX, targetY);
+            }
+        }
+        catch (System.Exception)
+        {
+            // 매 프레임 호출이라 로그 무시
         }
     }
 

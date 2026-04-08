@@ -2,7 +2,8 @@ using UnityEngine;
 
 /// <summary>
 /// Mode state management helper for ChunaPathEvaluator.
-/// Handles Stretching, Re-eval, Guide, and Lateral Bending modes.
+/// Handles Stretching, Re-eval, Guide, Lateral Bending modes,
+/// threshold application, and axis/pivot configuration.
 /// </summary>
 public class EvaluationModeConfigurator
 {
@@ -79,27 +80,27 @@ public class EvaluationModeConfigurator
         bool isLateralFlexion = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("측굴");
         bool isRotation = !string.IsNullOrEmpty(handDataName) && handDataName.Contains("회전");
 
-        // Auto-set rotation detection axis
+        // Auto-set rotation detection axis (direct field access, no wrapper loop)
         if (isLateralFlexion)
         {
-            owner.SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis.Z);
+            SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis.Z);
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] Lateral flexion detected (data: {handDataName}) - axis: Z</color>");
         }
         else if (isRotation)
         {
-            owner.SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis.Y);
+            SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis.Y);
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] Rotation detected (data: {handDataName}) - axis: Y</color>");
         }
 
-        // Rotation direction
+        // Rotation direction (direct field access, no wrapper loop)
         if (isAffectedSide)
         {
-            owner.SetInvertRotationDirection(true);
+            SetInvertRotationDirection(true);
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] Affected side detected - invert rotation</color>");
         }
         else if (isHealthySide)
         {
-            owner.SetInvertRotationDirection(false);
+            SetInvertRotationDirection(false);
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] Healthy side detected - normal rotation</color>");
         }
 
@@ -176,4 +177,137 @@ public class EvaluationModeConfigurator
                 break;
         }
     }
+
+    #region Threshold Application
+
+    /// <summary>
+    /// ScenarioConfig에서 평가 임계점 오버라이드 적용.
+    /// 설정하지 않은 시나리오는 Inspector 기본값 유지.
+    /// </summary>
+    public void ApplyEvaluationThresholds(ScenarioConfig config)
+    {
+        if (config == null || !config.overrideEvaluationThresholds) return;
+
+        ApplyThresholdValues(config.midHoldStart, config.midHoldEnd,
+            config.stretchingHoldStart, config.stretchingHoldEnd,
+            config.extendedMidHoldStart, config.extendedMidHoldEnd);
+
+        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] 시나리오 기본 임계점 오버라이드 적용: " +
+            $"일반 {owner.MidHoldStartRatio:P0}~{owner.MidHoldEndRatio:P0}, " +
+            $"스트레칭 {owner.StretchingHoldStartField:P0}~{owner.StretchingEndField:P0}, " +
+            $"재평가 {owner.ExtendedMidHoldStartRatio:P0}~{owner.ExtendedMidHoldEndRatio:P0}</color>");
+    }
+
+    /// <summary>
+    /// Phase별 회전 임계점 오버라이드 적용 (사각근 전부/중부/후부 등).
+    /// 일반 모드의 midHoldStart/End만 변경, 스트레칭/재평가는 유지.
+    /// </summary>
+    public void ApplyPhaseRotationThresholds(ScenarioConfig.PhaseThresholdOverride phaseOverride)
+    {
+        if (phaseOverride == null) return;
+
+        owner.MidHoldStartRatio = phaseOverride.rotationHoldStart;
+        owner.MidHoldEndRatio = phaseOverride.rotationHoldEnd;
+
+        ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] Phase 회전 임계점 [{phaseOverride.phaseName}]: " +
+            $"{owner.MidHoldStartRatio:P0}~{owner.MidHoldEndRatio:P0}</color>");
+    }
+
+    /// <summary>
+    /// 일반 모드 임계점을 기본값으로 복원.
+    /// </summary>
+    public void RestoreDefaultThresholds(ScenarioConfig config)
+    {
+        if (config != null && config.overrideEvaluationThresholds)
+        {
+            owner.MidHoldStartRatio = config.midHoldStart;
+            owner.MidHoldEndRatio = config.midHoldEnd;
+        }
+        else
+        {
+            owner.MidHoldStartRatio = 0.3f;
+            owner.MidHoldEndRatio = 0.5f;
+        }
+    }
+
+    /// <summary>
+    /// 6개 임계값 일괄 설정 (내부용).
+    /// </summary>
+    private void ApplyThresholdValues(float mhStart, float mhEnd,
+        float sStart, float sEnd, float emStart, float emEnd)
+    {
+        owner.MidHoldStartRatio = mhStart;
+        owner.MidHoldEndRatio = mhEnd;
+        owner.StretchingHoldStartField = sStart;
+        owner.StretchingEndField = sEnd;
+        owner.ExtendedMidHoldStartRatio = emStart;
+        owner.ExtendedMidHoldEndRatio = emEnd;
+    }
+
+    #endregion
+
+    #region Axis / Pivot Configuration
+
+    /// <summary>
+    /// 회전 방향 반전 설정.
+    /// </summary>
+    public void SetInvertRotationDirection(bool invert)
+    {
+        owner.InvertRotationDirectionField = invert;
+        if (owner.ShowDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 회전 방향 반전: {invert}</color>");
+    }
+
+    /// <summary>
+    /// 회전 감지 축 Vector3 반환.
+    /// </summary>
+    public Vector3 GetRotationDetectionAxis()
+    {
+        switch (owner.RotationDetectionAxisField)
+        {
+            case ChunaPathEvaluator.RotationDetectionAxis.Y:
+                return Vector3.up;      // 목 회전 (좌우 돌리기)
+            case ChunaPathEvaluator.RotationDetectionAxis.Z:
+                return Vector3.forward; // 측굴 (좌우 기울이기)
+            case ChunaPathEvaluator.RotationDetectionAxis.X:
+                return Vector3.right;   // 굴곡/신전 (앞뒤로 숙이기)
+            default:
+                return Vector3.up;
+        }
+    }
+
+    /// <summary>
+    /// 회전 감지 축 설정.
+    /// </summary>
+    public void SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis axis)
+    {
+        owner.RotationDetectionAxisField = axis;
+        if (owner.ShowDebugLogs)
+        {
+            string axisName = axis == ChunaPathEvaluator.RotationDetectionAxis.Y ? "Y(목회전)" :
+                             axis == ChunaPathEvaluator.RotationDetectionAxis.Z ? "Z(측굴)" : "X(굴곡/신전)";
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 회전 감지 축 설정: {axisName}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 피벗 기반 진행률 설정.
+    /// </summary>
+    public void SetPivotSettings(Transform pivot, float angle, ChunaPathEvaluator.RotationDetectionAxis planeAxis, bool invert = false)
+    {
+        owner.PivotTransformField = pivot;
+        owner.TargetAngle = angle;
+        owner.PivotPlaneAxisField = planeAxis;
+        owner.InvertPivotAngleField = invert;
+        owner.UsePivotBasedProgressField = pivot != null;
+
+        if (owner.ShowDebugLogs)
+        {
+            string axisName = planeAxis == ChunaPathEvaluator.RotationDetectionAxis.Y ? "Y(XZ평면)" :
+                             planeAxis == ChunaPathEvaluator.RotationDetectionAxis.Z ? "Z(XY평면-측굴)" : "X(YZ평면)";
+            ChunaLogger.Log($"<color=magenta>[ChunaPathEvaluator] 피벗 설정 - 피벗:{(pivot != null ? pivot.name : "없음")}, 목표각도:{angle}°, 평면:{axisName}, 반전:{invert}</color>");
+        }
+    }
+
+    #endregion
 }

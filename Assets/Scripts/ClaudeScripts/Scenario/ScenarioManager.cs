@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using TLab.WebView;
 
 /// <summary>
 /// CSV 기반 시나리오 매니저
@@ -40,6 +41,17 @@ public class ScenarioManager : MonoBehaviour
     [Header("=== 실습 완료 UI ===")]
     [Tooltip("실습 결과 패널 (완료 시 표시, 없으면 건너뜀)")]
     [SerializeField] private GameObject resultPanel;
+    [Tooltip("결과 패널의 WebView Browser (퀴즈+결과 페이지 로드용)")]
+    [SerializeField] private Browser resultBrowser;
+    [Tooltip("결과/퀴즈 웹페이지 URL")]
+    [SerializeField] private string resultWebUrl = "https://claude.ai/public/artifacts/5c91cdd3-2017-49bd-b743-7595a5810d72";
+    [Tooltip("페이지 로드 후 CSS zoom 값 (1=원본, 0.7=70%로 축소). 0 이하면 미적용")]
+    [Range(0f, 2f)]
+    [SerializeField] private float resultWebZoom = 0.7f;
+    [Tooltip("zoom 주입 전 페이지 로드 대기 시간(초)")]
+    [SerializeField] private float resultWebZoomDelay = 2f;
+    [Tooltip("페이지 외곽 스크롤(빈 공간으로 끝없이 스크롤되는 현상) 차단")]
+    [SerializeField] private bool resultWebLockBodyScroll = true;
     [Tooltip("종료 확인 팝업 컨트롤러")]
     [SerializeField] private ExitPopupController exitPopupController;
 
@@ -262,7 +274,7 @@ public class ScenarioManager : MonoBehaviour
         // 결과 추적 시작
         if (resultTracker != null)
         {
-            resultTracker.StartTracking(selectedMode, selectedDifficulty);
+            resultTracker.StartTracking(selectedMode, selectedDifficulty, currentConfig != null ? currentConfig.scenarioName : "");
             resultTracker.StartPhase(currentPhase.phaseName);
             resultTracker.StartStep(currentStep.stepName);
         }
@@ -439,10 +451,72 @@ public class ScenarioManager : MonoBehaviour
         {
             resultPanel.SetActive(true);
             ChunaLogger.Log("[ScenarioManager] 실습 결과 패널 표시");
+
+            if (resultBrowser != null && !string.IsNullOrEmpty(resultWebUrl))
+            {
+                resultBrowser.LoadUrl(resultWebUrl);
+                ChunaLogger.Log($"[ScenarioManager] 결과 웹뷰 로드: {resultWebUrl}");
+
+                bool needZoom = resultWebZoom > 0f && Mathf.Abs(resultWebZoom - 1f) > 0.001f;
+                if (needZoom || resultWebLockBodyScroll)
+                {
+                    StartCoroutine(InjectWebZoomCoroutine());
+                }
+            }
         }
         else
         {
             ChunaLogger.Log("[ScenarioManager] 실습 결과 패널이 없어 건너뜁니다.");
+        }
+    }
+
+    /// <summary>
+    /// 결과 웹뷰에 CSS zoom 주입 (페이지를 축소해서 스크롤 없이 끼워 맞춤)
+    /// </summary>
+    private System.Collections.IEnumerator InjectWebZoomCoroutine()
+    {
+        yield return new WaitForSeconds(resultWebZoomDelay);
+        if (resultBrowser == null) yield break;
+
+        var sb = new System.Text.StringBuilder();
+
+        if (resultWebZoom > 0f && Mathf.Abs(resultWebZoom - 1f) > 0.001f)
+        {
+            string zoomStr = resultWebZoom.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            sb.Append($"document.documentElement.style.zoom='{zoomStr}';");
+            sb.Append($"document.body.style.zoom='{zoomStr}';");
+        }
+
+        if (resultWebLockBodyScroll)
+        {
+            // 강력 버전: 모든 스크롤 가능 요소를 찾아 잠그고, 1초마다 반복 (React 재렌더링 대응)
+            sb.Append(@"(function(){
+var css='html,body,#__next,#root,main,[class*=""scroll""],[class*=""overflow""]{overflow:hidden!important;overscroll-behavior:none!important;height:100vh!important;max-height:100vh!important;}html,body{position:fixed!important;width:100%!important;top:0!important;left:0!important;margin:0!important;}*{overscroll-behavior:none!important;}';
+var s=document.createElement('style');s.id='__lockScroll';s.innerHTML=css;document.head.appendChild(s);
+function lockAll(){
+  try{
+    document.querySelectorAll('*').forEach(function(el){
+      var cs=getComputedStyle(el);
+      if(/(auto|scroll)/.test(cs.overflow+cs.overflowY+cs.overflowX)){
+        el.style.overflow='hidden';
+        el.style.overscrollBehavior='none';
+      }
+    });
+    window.scrollTo(0,0);
+    document.documentElement.scrollTop=0;
+    document.body.scrollTop=0;
+  }catch(e){}
+}
+lockAll();
+setInterval(lockAll,1000);
+window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:false});
+})();");
+        }
+
+        if (sb.Length > 0)
+        {
+            resultBrowser.EvaluateJS(sb.ToString());
+            ChunaLogger.Log($"[ScenarioManager] 결과 웹뷰 CSS 주입: zoom={resultWebZoom}, lockScroll={resultWebLockBodyScroll}");
         }
     }
 

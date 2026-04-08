@@ -146,6 +146,9 @@ public class TrainingResultData
 
     [Header("=== 기본 정보 ===")]
     public string sessionId;                       // 세션 ID
+    public string userName;                        // 사용자 이름
+    public int userId;                             // 사용자 ID
+    public string scenarioName;                    // 시나리오 이름 (예: 상부승모근)
     public DateTime startTime;                     // 시작 시간
     public DateTime endTime;                       // 종료 시간
     public string selectedMode;                    // 선택된 모드 (학습/평가)
@@ -328,6 +331,8 @@ public class TrainingResultData
     public override string ToString()
     {
         string result = $"=== 훈련 결과 ===\n";
+        result += $"사용자: {userName} (ID: {userId})\n";
+        result += $"시나리오: {scenarioName}\n";
         result += $"수행 시간: {FormatTime(totalTime)}\n";
         result += $"전체 점수: {overallScore:F0}점 ({overallGrade})\n";
         result += $"전체 유사도: {overallSimilarity:P0}\n";

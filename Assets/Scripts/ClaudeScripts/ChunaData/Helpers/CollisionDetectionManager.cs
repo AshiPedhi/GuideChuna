@@ -1,0 +1,366 @@
+using UnityEngine;
+using TMPro;
+
+/// <summary>
+/// Collision detection and related UI/animation helper for ChunaPathEvaluator.
+/// Extracted from the "Collision Detection" region.
+/// </summary>
+public class CollisionDetectionManager
+{
+    private readonly ChunaPathEvaluator owner;
+    private readonly HandCollisionDetector collisionDetector;
+
+    public CollisionDetectionManager(ChunaPathEvaluator owner, HandCollisionDetector collisionDetector)
+    {
+        this.owner = owner;
+        this.collisionDetector = collisionDetector;
+    }
+
+    /// <summary>
+    /// Input context filled by ChunaPathEvaluator each frame before calling Update methods.
+    /// Avoids exposing many individual internal accessors for SerializeField values.
+    /// </summary>
+    public struct CollisionUpdateContext
+    {
+        // Hand transforms & colliders
+        public Transform leftHandTransform;
+        public Transform rightHandTransform;
+        public Collider leftHandCollider;
+        public Collider rightHandCollider;
+
+        // Patient colliders
+        public Collider patientHeadCollider;
+        public Collider patientShoulderCollider;
+        public Collider patientChestCollider;
+        public Collider[] patientLeftArmColliders;
+        public Collider[] patientRightArmColliders;
+
+        // Contact targets
+        public ContactTarget[] activeContactTargets;
+        public ContactTarget primaryTarget;
+
+        // Hand collision shape settings
+        public ChunaPathEvaluator.HandCollisionShape handCollisionShape;
+        public float handColliderScale;
+        public float defaultHandCollisionRadius;
+        public float handCollisionForwardOffset;
+        public float palmWidth;
+        public float palmThickness;
+        public float palmHeight;
+        public float fingerLength;
+
+        // Guide hand fade settings
+        public bool fadeOnTouch;
+        public float touchAlpha;
+        public Color guideHandColor;
+        public HandTransformMapper leftGuideHand;
+        public HandTransformMapper rightGuideHand;
+
+        // Debug UI references
+        public bool showDebugUI;
+        public bool showDebugLogs;
+        public TextMeshProUGUI fpsText;
+        public TextMeshProUGUI leftHandDistanceText;
+        public TextMeshProUGUI rightHandDistanceText;
+        public float fpsUpdateInterval;
+
+        // Wrist bones (for distance calculation)
+        public Transform leftWristBone;
+        public Transform rightWristBone;
+
+        // Animation
+        public Animator patientAnimator;
+        public Animator secondaryPatientAnimator;
+        public string currentAnimationStateName;
+        public float targetAnimationRatio;
+        public float animationLerpSpeed;
+        public ChunaPathEvaluator.EvaluationPhase currentPhase;
+        public float userHandFrameRatio;
+    }
+
+    // Debug UI internal state
+    private float fpsTimer = 0f;
+    private int frameCount = 0;
+    private float currentFps = 0f;
+
+    /// <summary>
+    /// 충돌 감지 업데이트 (거리 기반, 스케일 적용)
+    /// 콜라이더가 없으면 손 Transform 위치 사용
+    /// ★ HandCollisionShape에 따라 구형/박스형/손바닥만 감지
+    /// </summary>
+    public void UpdateCollisionDetection(in CollisionUpdateContext ctx)
+    {
+        if (ctx.activeContactTargets == null || ctx.activeContactTargets.Length == 0) return;
+
+        // 이전 접촉 상태 저장
+        bool wasLeftTouching = owner.IsLeftHandTouchingPatient;
+        bool wasRightTouching = owner.IsRightHandTouchingPatient;
+
+        // 왼손 충돌 감지 (모든 activeContactTargets에 대해 OR)
+        if (ctx.leftHandTransform != null)
+        {
+            bool leftTouching = CheckHandTouchForAnyTarget(ctx.leftHandTransform, ctx.leftHandCollider, true, ctx);
+            bool leftOnPrimary = CheckHandTouchForSingleTarget(ctx.leftHandTransform, ctx.leftHandCollider, true, ctx.primaryTarget, ctx);
+            owner.SetLeftHandTouchState(leftTouching, leftOnPrimary);
+
+            if (leftTouching && !wasLeftTouching && ctx.showDebugLogs)
+                ChunaLogger.Log($"<color=green>[Collision] 왼손이 환자에 닿음! (주동수:{leftOnPrimary})</color>");
+        }
+
+        // 오른손 충돌 감지
+        if (ctx.rightHandTransform != null)
+        {
+            bool rightTouching = CheckHandTouchForAnyTarget(ctx.rightHandTransform, ctx.rightHandCollider, false, ctx);
+            bool rightOnPrimary = CheckHandTouchForSingleTarget(ctx.rightHandTransform, ctx.rightHandCollider, false, ctx.primaryTarget, ctx);
+            owner.SetRightHandTouchState(rightTouching, rightOnPrimary);
+
+            if (rightTouching && !wasRightTouching && ctx.showDebugLogs)
+                ChunaLogger.Log($"<color=green>[Collision] 오른손이 환자에 닿음! (주동수:{rightOnPrimary})</color>");
+        }
+
+        // 접촉 상태 변경 시 가이드 핸드 알파 업데이트
+        if (ctx.fadeOnTouch)
+        {
+            if (wasLeftTouching != owner.IsLeftHandTouchingPatient)
+                UpdateGuideHandAlphaForHand(true, owner.IsLeftHandTouchingPatient, ctx);
+            if (wasRightTouching != owner.IsRightHandTouchingPatient)
+                UpdateGuideHandAlphaForHand(false, owner.IsRightHandTouchingPatient, ctx);
+        }
+
+        // 디버그
+        if (ctx.showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            string targets = string.Join("+", ctx.activeContactTargets);
+            string lStatus = owner.IsLeftHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+            string rStatus = owner.IsRightHandTouchingPatient ? "<color=green>접촉</color>" : "<color=red>미접촉</color>";
+            if (ctx.leftHandTransform != null)
+                ChunaLogger.Log($"<color=cyan>[왼손] {lStatus} 대상:{targets}</color>");
+            if (ctx.rightHandTransform != null)
+                ChunaLogger.Log($"<color=cyan>[오른손] {rStatus} 대상:{targets}</color>");
+        }
+    }
+
+    /// <summary>
+    /// 모든 activeContactTargets 중 하나라도 접촉하면 true
+    /// </summary>
+    private bool CheckHandTouchForAnyTarget(Transform handTransform, Collider handCollider, bool isLeftHand, in CollisionUpdateContext ctx)
+    {
+        foreach (var target in ctx.activeContactTargets)
+        {
+            if (CheckHandTouchForSingleTarget(handTransform, handCollider, isLeftHand, target, ctx))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 단일 ContactTarget에 대한 손 접촉 체크
+    /// </summary>
+    private bool CheckHandTouchForSingleTarget(Transform handTransform, Collider handCollider, bool isLeftHand, ContactTarget target, in CollisionUpdateContext ctx)
+    {
+        switch (target)
+        {
+            case ContactTarget.Head:
+                // 머리만 체크
+                if (ctx.patientHeadCollider == null) return false;
+                return CheckHandCollision(handTransform, handCollider, ctx.patientHeadCollider.bounds, isLeftHand, ctx);
+
+            case ContactTarget.Chest:
+                // 흉부만 체크
+                if (ctx.patientChestCollider == null) return false;
+                return CheckHandCollision(handTransform, handCollider, ctx.patientChestCollider.bounds, isLeftHand, ctx);
+
+            case ContactTarget.LeftArm:
+                // 왼팔 체크 (상완+전완 등 복수 콜라이더)
+                if (ctx.patientLeftArmColliders == null || ctx.patientLeftArmColliders.Length == 0) return false;
+                foreach (var col in ctx.patientLeftArmColliders)
+                {
+                    if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand, ctx))
+                        return true;
+                }
+                return false;
+
+            case ContactTarget.RightArm:
+                // 오른팔 체크 (상완+전완 등 복수 콜라이더)
+                if (ctx.patientRightArmColliders == null || ctx.patientRightArmColliders.Length == 0) return false;
+                foreach (var col in ctx.patientRightArmColliders)
+                {
+                    if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand, ctx))
+                        return true;
+                }
+                return false;
+
+            case ContactTarget.Shoulder:
+                // 어깨만 체크
+                if (ctx.patientShoulderCollider == null) return false;
+                return CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
+
+            case ContactTarget.ChestAndShoulder:
+            {
+                // 흉부 또는 어깨 체크
+                bool touchChest = ctx.patientChestCollider != null &&
+                    CheckHandCollision(handTransform, handCollider, ctx.patientChestCollider.bounds, isLeftHand, ctx);
+                bool touchShoulder = ctx.patientShoulderCollider != null &&
+                    CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
+                return touchChest || touchShoulder;
+            }
+
+            case ContactTarget.HeadAndShoulder:
+            default:
+            {
+                // 머리 또는 어깨 체크
+                bool touchingHead = ctx.patientHeadCollider != null &&
+                    CheckHandCollision(handTransform, handCollider, ctx.patientHeadCollider.bounds, isLeftHand, ctx);
+                bool touchingShoulder = ctx.patientShoulderCollider != null &&
+                    CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
+                return touchingHead || touchingShoulder;
+            }
+        }
+    }
+
+    /// <summary>
+    /// ★ 접촉 상태 변경 시 해당 손의 가이드 핸드 알파값 조절
+    /// 특정 손의 가이드 핸드 알파값만 조절
+    /// </summary>
+    public void UpdateGuideHandAlphaForHand(bool isLeftHand, bool isTouching, in CollisionUpdateContext ctx)
+    {
+        HandTransformMapper guideHand = isLeftHand ? ctx.leftGuideHand : ctx.rightGuideHand;
+        string handName = isLeftHand ? "왼손" : "오른손";
+
+        if (guideHand != null)
+        {
+            float alpha = isTouching ? ctx.touchAlpha : ctx.guideHandColor.a;
+            guideHand.SetColorAndAlpha(ctx.guideHandColor, alpha);
+
+            if (ctx.showDebugLogs)
+            {
+                string state = isTouching ? "접촉" : "미접촉";
+                ChunaLogger.Log($"<color=yellow>[GuideHand] {handName} {state} → 알파: {alpha:F2}</color>");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 양손 가이드 핸드 알파값 모두 업데이트 (초기화용)
+    /// </summary>
+    public void UpdateGuideHandAlphaOnTouch(in CollisionUpdateContext ctx)
+    {
+        UpdateGuideHandAlphaForHand(true, owner.IsLeftHandTouchingPatient, ctx);
+        UpdateGuideHandAlphaForHand(false, owner.IsRightHandTouchingPatient, ctx);
+    }
+
+    /// <summary>
+    /// ★ 디버그 UI 업데이트 (FPS, 손 거리)
+    /// </summary>
+    public void UpdateDebugUI(in CollisionUpdateContext ctx)
+    {
+        // FPS 계산
+        frameCount++;
+        fpsTimer += Time.unscaledDeltaTime;
+
+        if (fpsTimer >= ctx.fpsUpdateInterval)
+        {
+            currentFps = frameCount / fpsTimer;
+            frameCount = 0;
+            fpsTimer = 0f;
+
+            // FPS 텍스트 업데이트
+            if (ctx.fpsText != null)
+            {
+                ctx.fpsText.text = $"FPS: {currentFps:F1}";
+            }
+        }
+
+        // 왼손 거리 계산 및 표시 (mm 단위)
+        if (ctx.leftHandDistanceText != null)
+        {
+            float leftDistance = CalculateHandToGuideDistance(true, ctx) * 1000f; // m → mm
+            string leftTouchStatus = owner.IsLeftHandTouchingPatient ? " [접촉]" : "";
+            ctx.leftHandDistanceText.text = $"왼손: {leftDistance:F2}mm{leftTouchStatus}";
+        }
+
+        // 오른손 거리 계산 및 표시 (mm 단위)
+        if (ctx.rightHandDistanceText != null)
+        {
+            float rightDistance = CalculateHandToGuideDistance(false, ctx) * 1000f; // m → mm
+            string rightTouchStatus = owner.IsRightHandTouchingPatient ? " [접촉]" : "";
+            ctx.rightHandDistanceText.text = $"오른손: {rightDistance:F2}mm{rightTouchStatus}";
+        }
+    }
+
+    /// <summary>
+    /// 사용자 손목(wristBone)과 가이드 핸드 Root 간의 거리 계산
+    /// </summary>
+    public float CalculateHandToGuideDistance(bool isLeftHand, in CollisionUpdateContext ctx)
+    {
+        Transform wristBone = isLeftHand ? ctx.leftWristBone : ctx.rightWristBone;
+        HandTransformMapper guideHand = isLeftHand ? ctx.leftGuideHand : ctx.rightGuideHand;
+
+        // 가이드 핸드가 없거나 비활성화면 0 반환
+        if (guideHand == null || guideHand.Root == null || !guideHand.Root.gameObject.activeInHierarchy)
+            return 0f;
+
+        // 사용자 손목 본이 없으면 0 반환
+        if (wristBone == null)
+            return 0f;
+
+        // 사용자 손목 Root ↔ 가이드 핸드 Root 거리 계산
+        return Vector3.Distance(wristBone.position, guideHand.Root.position);
+    }
+
+    /// <summary>
+    /// ★ 손 충돌 감지 (via HandCollisionDetector helper)
+    /// </summary>
+    private bool CheckHandCollision(Transform handTransform, Collider handCollider, Bounds patientBounds, bool isLeftHand, in CollisionUpdateContext ctx)
+    {
+        return collisionDetector.CheckHandCollision(
+            handTransform, handCollider, patientBounds, isLeftHand,
+            ctx.handCollisionShape, ctx.handColliderScale,
+            ctx.defaultHandCollisionRadius, ctx.handCollisionForwardOffset,
+            ctx.palmWidth, ctx.palmThickness, ctx.palmHeight, ctx.fingerLength);
+    }
+
+    /// <summary>
+    /// 애니메이션 선형보간 업데이트
+    /// ★ 손이 환자에게 닿은 상태에서만 애니메이션 업데이트
+    /// </summary>
+    public void UpdateAnimationLerp(in CollisionUpdateContext ctx)
+    {
+        bool isHandTouching = owner.IsLeftHandTouchingPatient || owner.IsRightHandTouchingPatient;
+
+        // 애니메이션 상태 체크 로그
+        if (ctx.showDebugLogs && Time.frameCount % 120 == 0)
+        {
+            ChunaLogger.Log($"<color=yellow>[Animation Check] Animator:{(ctx.patientAnimator != null ? ctx.patientAnimator.name : "NULL")}, 상태이름:'{ctx.currentAnimationStateName}', 단계:{ctx.currentPhase}, 접촉:{isHandTouching}</color>");
+        }
+
+        if (ctx.patientAnimator == null || string.IsNullOrEmpty(ctx.currentAnimationStateName)) return;
+
+        // ★ 손이 닿은 상태 + Moving/MidHold 단계에서만 애니메이션 업데이트
+        if (isHandTouching && (ctx.currentPhase == ChunaPathEvaluator.EvaluationPhase.Moving || ctx.currentPhase == ChunaPathEvaluator.EvaluationPhase.MidHold))
+        {
+            float currentRatio = owner.CurrentAnimationRatio;
+            currentRatio = Mathf.Lerp(currentRatio, ctx.targetAnimationRatio, Time.deltaTime * ctx.animationLerpSpeed);
+            owner.CurrentAnimationRatio = currentRatio;
+
+            ctx.patientAnimator.Play(ctx.currentAnimationStateName, 0, currentRatio);
+            ctx.patientAnimator.speed = 0f;
+
+            // ★ 두 번째 환자 모델도 동기화
+            if (ctx.secondaryPatientAnimator != null)
+            {
+                ctx.secondaryPatientAnimator.Play(ctx.currentAnimationStateName, 0, currentRatio);
+                ctx.secondaryPatientAnimator.speed = 0f;
+            }
+
+            if (ctx.showDebugLogs && Time.frameCount % 30 == 0)
+            {
+                ChunaLogger.Log($"<color=green>[Animation Lerp] '{ctx.currentAnimationStateName}' @ {currentRatio:P0} → {ctx.targetAnimationRatio:P0} (진행률:{ctx.userHandFrameRatio:P0})</color>");
+            }
+        }
+        else if (ctx.showDebugLogs && Time.frameCount % 60 == 0)
+        {
+            ChunaLogger.Log($"<color=orange>[Animation Skip] 접촉:{isHandTouching}, 단계:{ctx.currentPhase}, 애니메이션:'{ctx.currentAnimationStateName}'</color>");
+        }
+    }
+}

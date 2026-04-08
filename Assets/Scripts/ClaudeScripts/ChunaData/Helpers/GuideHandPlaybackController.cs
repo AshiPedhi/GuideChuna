@@ -51,13 +51,23 @@ public class GuideHandPlaybackController
 
         currentGuideFrameIndex = startFrameIdx;
 
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[Guide] Playback range: {startFrameIdx} ~ {endFrameIdx} (ratio: {startRatio:P0} ~ {endRatio:P0})</color>");
+        // ★ 한 손만 녹화된 경우 감지 (해당 손의 조인트 데이터가 비어있는지 확인)
+        bool hasLeftData = HasHandData(frames, true);
+        bool hasRightData = HasHandData(frames, false);
 
-        // ★ 재생 시작 시 색상 초기화
-        if (leftGuideHand != null)
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[Guide] Playback range: {startFrameIdx} ~ {endFrameIdx} (ratio: {startRatio:P0} ~ {endRatio:P0}), 데이터: L={hasLeftData}, R={hasRightData}</color>");
+
+        // ★ 데이터 없는 손은 숨김
+        if (leftGuideHand != null && !hasLeftData)
+            leftGuideHand.SetVisible(false);
+        if (rightGuideHand != null && !hasRightData)
+            rightGuideHand.SetVisible(false);
+
+        // ★ 재생 시작 시 색상 초기화 (데이터 있는 손만)
+        if (leftGuideHand != null && hasLeftData)
             leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-        if (rightGuideHand != null)
+        if (rightGuideHand != null && hasRightData)
             rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
 
         while (true)
@@ -66,7 +76,7 @@ public class GuideHandPlaybackController
 
             PoseFrame frame = frames[currentGuideFrameIndex];
 
-            if (leftGuideHand != null)
+            if (leftGuideHand != null && hasLeftData)
             {
                 leftGuideHand.SetVisible(true);
                 if (leftGuideHand.Root != null)
@@ -81,7 +91,7 @@ public class GuideHandPlaybackController
                 }
             }
 
-            if (rightGuideHand != null)
+            if (rightGuideHand != null && hasRightData)
             {
                 rightGuideHand.SetVisible(true);
                 if (rightGuideHand.Root != null)
@@ -145,35 +155,53 @@ public class GuideHandPlaybackController
         startFrameIndex = Mathf.Clamp(startFrameIndex, 0, frames.Count - 1);
         PoseFrame firstFrame = frames[startFrameIndex];
 
+        // ★ 한 손만 녹화된 경우 감지
+        bool hasLeftData = HasHandData(frames, true);
+        bool hasRightData = HasHandData(frames, false);
+
         if (leftGuideHand != null)
         {
-            leftGuideHand.SetVisible(true);
-            leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-            if (leftGuideHand.Root != null)
+            if (!hasLeftData)
             {
-                leftGuideHand.Root.position = firstFrame.leftRootPosition;
-                leftGuideHand.Root.rotation = firstFrame.leftRootRotation;
+                leftGuideHand.SetVisible(false);
             }
-
-            foreach (var kvp in firstFrame.leftLocalPoses)
+            else
             {
-                leftGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+                leftGuideHand.SetVisible(true);
+                leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                if (leftGuideHand.Root != null)
+                {
+                    leftGuideHand.Root.position = firstFrame.leftRootPosition;
+                    leftGuideHand.Root.rotation = firstFrame.leftRootRotation;
+                }
+
+                foreach (var kvp in firstFrame.leftLocalPoses)
+                {
+                    leftGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+                }
             }
         }
 
         if (rightGuideHand != null)
         {
-            rightGuideHand.SetVisible(true);
-            rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
-            if (rightGuideHand.Root != null)
+            if (!hasRightData)
             {
-                rightGuideHand.Root.position = firstFrame.rightRootPosition;
-                rightGuideHand.Root.rotation = firstFrame.rightRootRotation;
+                rightGuideHand.SetVisible(false);
             }
-
-            foreach (var kvp in firstFrame.rightLocalPoses)
+            else
             {
-                rightGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+                rightGuideHand.SetVisible(true);
+                rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
+                if (rightGuideHand.Root != null)
+                {
+                    rightGuideHand.Root.position = firstFrame.rightRootPosition;
+                    rightGuideHand.Root.rotation = firstFrame.rightRootRotation;
+                }
+
+                foreach (var kvp in firstFrame.rightLocalPoses)
+                {
+                    rightGuideHand.SetJointLocalPose(kvp.Key, kvp.Value.position, kvp.Value.rotation);
+                }
             }
         }
 
@@ -191,5 +219,29 @@ public class GuideHandPlaybackController
 
         if (rightGuideHand != null)
             rightGuideHand.SetVisible(false);
+    }
+
+    /// <summary>
+    /// 해당 손이 실제로 녹화되었는지 확인.
+    /// 첫 번째와 중간 프레임을 검사하여 조인트 데이터가 있는지 확인.
+    /// 한 손만 녹화한 경우 다른 손은 localPoses가 비어있음.
+    /// </summary>
+    private static bool HasHandData(List<PoseFrame> frames, bool isLeft)
+    {
+        if (frames == null || frames.Count == 0) return false;
+
+        // 첫 프레임과 중간 프레임 둘 다 검사 (안정성)
+        int[] checkIndices = frames.Count > 1
+            ? new[] { 0, frames.Count / 2 }
+            : new[] { 0 };
+
+        foreach (int idx in checkIndices)
+        {
+            var frame = frames[idx];
+            var poses = isLeft ? frame.leftLocalPoses : frame.rightLocalPoses;
+            if (poses != null && poses.Count > 0)
+                return true;
+        }
+        return false;
     }
 }
