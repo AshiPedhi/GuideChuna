@@ -321,11 +321,14 @@ public class ChunaDataLoader
         if (owner.LimitChecker == null) return;
 
         float dangerThreshold = owner.RuntimeGuideEndRatio;
-        float warningThreshold = owner.RuntimeGuideEndRatio * 0.7f;
+        // ★ 스트레칭 모드: 진행도가 StartHold(stretchingStart) 기준 상대값이므로 임계점도 오프셋 차감
+        if (owner.IsStretchingMode)
+            dangerThreshold -= owner.StretchingGuideStart;
+        float warningThreshold = dangerThreshold * 0.7f;
         owner.LimitChecker.SetRatioThresholds(warningThreshold, dangerThreshold);
 
         if (owner.ShowDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 임계값 자동 설정 — warning:{warningThreshold:P0}, danger:{dangerThreshold:P0} (guideEnd:{owner.RuntimeGuideEndRatio:P0})</color>");
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 리밋 체커 임계값 자동 설정 — warning:{warningThreshold:P0}, danger:{dangerThreshold:P0} (guideEnd:{owner.RuntimeGuideEndRatio:P0}, stretching:{owner.IsStretchingMode})</color>");
     }
 
     /// <summary>
@@ -346,10 +349,11 @@ public class ChunaDataLoader
             owner.GuideHandColor = color;
         }
 
-        // 홀드 시간 동기화
+        // 홀드 시간 동기화 (등척성운동은 CSV duration 우선 — 덮어쓰지 않음)
         if (dm.RequiredHoldTime > 0f)
         {
-            owner.StartHoldDuration = dm.RequiredHoldTime;
+            if (!owner.IsStartHoldOnly)
+                owner.StartHoldDuration = dm.RequiredHoldTime;
             owner.MidHoldDuration = dm.RequiredHoldTime;
         }
 

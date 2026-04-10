@@ -56,6 +56,13 @@ public class ScenarioConfig : ScriptableObject
     [Tooltip("재평가 적정범위 끝 (기본 0.65)")]
     public float extendedMidHoldEnd = 0.65f;
 
+    [Header("=== 회전 감지 축 오버라이드 (누운 환자용) ===")]
+    [Tooltip("true면 '회전' 감지 시 아래 축을 사용 (기본 Y축 대신). 누운 환자의 머리 회전 등")]
+    public bool overrideRotationAxis = false;
+
+    [Tooltip("누운 환자의 머리 회전 감지 축 (Lying: Z축 권장)")]
+    public ChunaPathEvaluator.RotationDetectionAxis lyingRotationAxis = ChunaPathEvaluator.RotationDetectionAxis.Z;
+
     [Header("=== Phase별 임계점 오버라이드 (선택) ===")]
     [Tooltip("Phase 이름으로 매칭하여 해당 phase 진입 시 임계점 교체 (사각근 전부/중부/후부 등)")]
     public PhaseThresholdOverride[] phaseOverrides;

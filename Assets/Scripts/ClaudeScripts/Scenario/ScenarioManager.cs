@@ -256,6 +256,12 @@ public class ScenarioManager : MonoBehaviour
         // ★ 시나리오별 Animator Controller 전환
         SwitchAnimatorController();
 
+        // ★ 시나리오별 근육 표시 갱신
+        string muscleScenarioName = currentConfig != null ? currentConfig.scenarioName : scenario.scenarioName;
+        AnatomyMuscleController muscleController = FindFirstObjectByType<AnatomyMuscleController>();
+        if (muscleController != null)
+            muscleController.ApplyScenario(muscleScenarioName);
+
         // 시나리오 구조 디버그 출력
         if (showDebugLog)
         {
@@ -647,6 +653,9 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             HandleHandPoseTracking(subStep);
         else if (subStep.HasPatientAnimation())
             HandleAutoPlayAnimation(subStep);
+
+        // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
+        angleDisplay?.ForceRefreshHoldRange();
     }
 
     /// <summary>
@@ -753,11 +762,20 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
+        // ★ 스트레칭/재평가 단계 모드를 먼저 설정 (SetPatientAnimation에서 시작 위치 결정에 사용됨)
+        chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
+
+        // ★ 회전 감지 축 오버라이드 (누운 환자용 — SetExtendedLimitModeFromNames가 Y축으로 설정한 뒤 덮어씀)
+        if (currentConfig != null && currentConfig.overrideRotationAxis &&
+            !string.IsNullOrEmpty(subStep.movementType) && subStep.movementType == "rotation")
+        {
+            chunaPathEvaluator.SetRotationDetectionAxis(currentConfig.lyingRotationAxis);
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=magenta>[ScenarioManager] 회전 감지 축 오버라이드: {currentConfig.lyingRotationAxis}</color>");
+        }
+
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
         chunaPathEvaluator.SetPatientAnimationFromSubStep(subStep);
-
-        // 스트레칭/재평가 단계인 경우 확장 제한 모드 활성화
-        chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
 
         // ★ 피벗 설정 적용 (CSV의 pivotTarget 기반)
         ApplyPivotTarget(subStep);
@@ -868,10 +886,11 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
-        // 핸드 데이터 이름과 동일한 프리셋을 찾아 적용
-        if (angleDisplay != null && angleDisplay.ApplyPreset(handDataName))
+        // 핸드 데이터 이름과 동일한 프리셋을 찾아 적용 (시나리오 접두사 우선 매칭)
+        string scenarioName = currentConfig != null ? currentConfig.scenarioName : "";
+        if (angleDisplay != null && angleDisplay.ApplyPreset(scenarioName, handDataName))
         {
-            ChunaLogger.Log($"<color=green>[ScenarioManager] 각도 표시 UI 프리셋 적용: {handDataName}</color>");
+            ChunaLogger.Log($"<color=green>[ScenarioManager] 각도 표시 UI 프리셋 적용: {handDataName} (시나리오: {scenarioName})</color>");
         }
         else
         {

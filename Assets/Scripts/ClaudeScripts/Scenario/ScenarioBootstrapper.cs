@@ -116,5 +116,28 @@ public class ScenarioBootstrapper : MonoBehaviour
         {
             scenarioManager.ApplyAnimatorController();
         }
+
+        // ★ 1프레임 대기 후 근육 표시 재적용 (Awake 시점에 준비 안 된 오브젝트 대응)
+        ScenarioConfig config = GetCurrentConfig();
+        if (config != null)
+        {
+            AnatomyMuscleController muscleController = FindFirstObjectByType<AnatomyMuscleController>();
+            if (muscleController != null)
+            {
+                muscleController.ApplyScenario(config.scenarioName);
+                if (showDebugLog)
+                    ChunaLogger.Log($"[ScenarioBootstrapper] Start()에서 근육 재적용: '{config.scenarioName}'");
+            }
+        }
+    }
+
+    private ScenarioConfig GetCurrentConfig()
+    {
+        if (scenarioConfigs == null || scenarioConfigs.Length == 0) return null;
+        int idx = forceDefaultIndex
+            ? defaultScenarioIndex
+            : PlayerPrefs.GetInt(PrefsKeys.SelectedScenario, defaultScenarioIndex);
+        if (idx < 0 || idx >= scenarioConfigs.Length) idx = defaultScenarioIndex;
+        return scenarioConfigs[idx];
     }
 }

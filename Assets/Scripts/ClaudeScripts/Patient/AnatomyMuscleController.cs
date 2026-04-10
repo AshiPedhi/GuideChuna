@@ -21,6 +21,7 @@ public class AnatomyMuscleController : MonoBehaviour
     [SerializeField] private bool showDebugLogs = true;
 
     private string currentScenario = "";
+    private bool mirrorCacheBuilt = false;
 
     [Serializable]
     public class MuscleGroup
@@ -42,16 +43,28 @@ public class AnatomyMuscleController : MonoBehaviour
     {
         if (string.IsNullOrEmpty(scenarioName)) return;
 
+        // ★ 미러 캐시가 아직 안 만들어졌으면 먼저 구축 (ScenarioBootstrapper가 Awake보다 먼저 호출할 수 있음)
+        if (!mirrorCacheBuilt)
+            BuildMirrorCache();
+
         currentScenario = scenarioName;
 
         foreach (var group in muscleGroups)
         {
             bool isActive = string.Equals(group.scenarioName, scenarioName, StringComparison.OrdinalIgnoreCase);
             SetGroupActive(group, isActive);
+
+            if (showDebugLogs)
+            {
+                int srcCount = 0, mirCount = 0;
+                foreach (var o in group.muscleObjects) if (o != null) srcCount++;
+                foreach (var o in group.mirroredObjects) if (o != null) mirCount++;
+                ChunaLogger.Log($"<color={(isActive ? "green" : "gray")}>[AnatomyMuscle] '{group.scenarioName}' → {(isActive ? "ON" : "OFF")} (src:{srcCount}, mirror:{mirCount})</color>");
+            }
         }
 
         if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[AnatomyMuscleController] 시나리오 '{scenarioName}' 근육 그룹 적용</color>");
+            ChunaLogger.Log($"<color=cyan>[AnatomyMuscleController] 시나리오 '{scenarioName}' 근육 그룹 적용 완료</color>");
     }
 
     /// <summary>
@@ -65,10 +78,6 @@ public class AnatomyMuscleController : MonoBehaviour
             return;
         }
 
-        // 할당된 오브젝트가 어느 모델 하위인지 판별
-        Transform sourceRoot = null;
-        Transform targetRoot = null;
-
         foreach (var group in muscleGroups)
         {
             group.mirroredObjects.Clear();
@@ -81,19 +90,25 @@ public class AnatomyMuscleController : MonoBehaviour
                     continue;
                 }
 
-                // 소스/타겟 루트 결정
-                if (sourceRoot == null)
+                // 오브젝트별로 소스/타겟 루트 판별
+                Transform sourceRoot;
+                Transform targetRoot;
+                if (IsChildOf(obj.transform, fluoroscopyModelRoot))
                 {
-                    if (IsChildOf(obj.transform, fluoroscopyModelRoot))
-                    {
-                        sourceRoot = fluoroscopyModelRoot;
-                        targetRoot = observationModelRoot;
-                    }
-                    else if (IsChildOf(obj.transform, observationModelRoot))
-                    {
-                        sourceRoot = observationModelRoot;
-                        targetRoot = fluoroscopyModelRoot;
-                    }
+                    sourceRoot = fluoroscopyModelRoot;
+                    targetRoot = observationModelRoot;
+                }
+                else if (IsChildOf(obj.transform, observationModelRoot))
+                {
+                    sourceRoot = observationModelRoot;
+                    targetRoot = fluoroscopyModelRoot;
+                }
+                else
+                {
+                    if (showDebugLogs)
+                        ChunaLogger.LogWarning($"[AnatomyMuscleController] '{obj.name}'이(가) 어떤 모델 루트에도 속하지 않음");
+                    group.mirroredObjects.Add(null);
+                    continue;
                 }
 
                 // 상대 경로로 반대쪽 모델에서 동일 오브젝트 탐색
@@ -107,6 +122,8 @@ public class AnatomyMuscleController : MonoBehaviour
                 }
             }
         }
+
+        mirrorCacheBuilt = true;
 
         if (showDebugLogs)
         {

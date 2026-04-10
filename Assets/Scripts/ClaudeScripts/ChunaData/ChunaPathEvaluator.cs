@@ -387,17 +387,22 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool isStretchingMode = false;      // 스트레칭 모드 (각도 오프셋 적용)
     private bool isGuideMode = false;           // 가이드 모드 (토글로만 진행)
     // ★ 홀드 범위: 스트레칭 모드는 통합 설정 사용
-    private float currentMidHoldStart => isStretchingMode ? stretchingHoldStart :
-                                         (isExtendedLimitMode ? extendedMidHoldStartRatio : midHoldStartRatio);
-    private float currentMidHoldEnd => isStretchingMode ? stretchingEnd :  // 홀드 끝 = 가이드 끝
-                                       (isExtendedLimitMode ? extendedMidHoldEndRatio : midHoldEndRatio);
+    // ★ 회전(rotation) 단계는 재평가 모드에서도 적정범위 확장 안 함 (가동범위 고정)
+    private bool isRotationStep => specifiedMovementType == "rotation";
+    // ★ 스트레칭 모드: 진행도가 StartHold(stretchingStart) 기준 상대값이므로 임계점도 오프셋 차감
+    private float currentMidHoldStart => isStretchingMode ? (stretchingHoldStart - stretchingStart) :
+                                         (isExtendedLimitMode && !isRotationStep ? extendedMidHoldStartRatio : midHoldStartRatio);
+    private float currentMidHoldEnd => isStretchingMode ? (stretchingEnd - stretchingStart) :
+                                       (isExtendedLimitMode && !isRotationStep ? extendedMidHoldEndRatio : midHoldEndRatio);
 
     // ★ 가이드 핸드 재생 범위 (런타임)
     private float runtimeGuideStartRatio = 0f;
     private float runtimeGuideEndRatio = 0.4f;
     private float currentStartRatio => runtimeGuideStartRatio;
     private float currentEndRatio => runtimeGuideEndRatio;
-    private float currentAngleDisplayOffset => isStretchingMode ? stretchingStart : 0f;  // ★ 각도 표시 오프셋 (통합 설정)
+    // ★ 각도 표시 오프셋: 항상 0 (axis는 사용자 진행도이므로 오프셋 적용 안 함)
+    // 가이드핸드/환자 애니메이션은 runtimeGuideStartRatio로 별도 처리됨
+    private float currentAngleDisplayOffset => 0f;
 
     // 결과
     private EvaluationSession currentSession;
@@ -557,6 +562,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     internal Color GuideHandColor { get => guideHandColor; set => guideHandColor = value; }
     internal float StartHoldDuration { get => startHoldDuration; set => startHoldDuration = value; }
     internal float MidHoldDuration { get => midHoldDuration; set => midHoldDuration = value; }
+    internal bool IsStartHoldOnly => startHoldOnly;
 
     // EvaluationModeConfigurator needs (threshold/axis/pivot)
     internal float MidHoldStartRatio { get => midHoldStartRatio; set => midHoldStartRatio = value; }
@@ -1051,14 +1057,27 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>
     /// 애니메이션을 프레임 비율에 맞춰 동기화
+    /// ★ 스트레칭 모드: 사용자 progress 0~1을 currentStartRatio~1 범위로 remap
+    /// → StartHold 직후 progress=0이어도 애니메이션은 offset 위치(stretchingStart) 유지
     /// </summary>
     private void SyncAnimationToFrame(float ratio)
     {
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName))
             return;
 
-        // 선형보간 사용 (UpdateAnimationLerp에서 처리)
-        targetAnimationRatio = Mathf.Clamp01(ratio);
+        float clamped = Mathf.Clamp01(ratio);
+
+        if (isStretchingMode)
+        {
+            // 스트레칭 모드에서는 사용자 손 progress 0%일 때 애니메이션이 offset 위치에 머물러야 함
+            // (사용자 손이 이미 limit/offset 위치에서 StartHold 했으므로)
+            float startOffset = currentStartRatio;
+            targetAnimationRatio = Mathf.Lerp(startOffset, 1f, clamped);
+        }
+        else
+        {
+            targetAnimationRatio = clamped;
+        }
     }
 
     #endregion
@@ -1260,17 +1279,18 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
         else if (playMode == AnimationPlayMode.SyncWithUser)
         {
-            // 사용자 동기화 모드 - 시작 위치로 설정
-            patientAnimator.Play(trimmedName, 0, 0f);
+            // 사용자 동기화 모드 - 시작 위치로 설정 (스트레칭이면 stretchingStart, 아니면 0)
+            float startRatio = currentStartRatio;
+            patientAnimator.Play(trimmedName, 0, startRatio);
             patientAnimator.speed = 0f;
 
             // ★ 두 번째 환자 모델도 동기화
             if (secondaryPatientAnimator != null)
             {
-                secondaryPatientAnimator.Play(trimmedName, 0, 0f);
+                secondaryPatientAnimator.Play(trimmedName, 0, startRatio);
                 secondaryPatientAnimator.speed = 0f;
             }
-            ChunaLogger.Log($"<color=green>[Animation] 동기화 모드 시작: '{trimmedName}' (첫 프레임, speed=0)</color>");
+            ChunaLogger.Log($"<color=green>[Animation] 동기화 모드 시작: '{trimmedName}' (시작 프레임 {startRatio:P0}, speed=0)</color>");
         }
     }
 
@@ -1483,12 +1503,27 @@ public class ChunaPathEvaluator : MonoBehaviour
         isExtendedLimitMode = modeConfigurator.IsExtendedLimitMode;
         isStretchingMode = modeConfigurator.IsStretchingMode;
         isGuideMode = modeConfigurator.IsGuideMode;
+
+        // ★ 가이드 시작 위치 미리 설정 (SetPatientAnimation 호출 시점에 currentStartRatio가 올바른 값이 되도록)
+        // StartEvaluation에서도 동일하게 재설정되지만, 미리 세팅해야 SetPatientAnimation의 첫 Play가 올바른 프레임에서 시작
+        if (isStretchingMode)
+        {
+            runtimeGuideStartRatio = stretchingStart;
+        }
+        else
+        {
+            runtimeGuideStartRatio = 0f;
+        }
     }
 
     /// <summary>
     /// ScenarioConfig에서 평가 임계점 오버라이드 적용
     /// </summary>
-    public void ApplyEvaluationThresholds(ScenarioConfig config) => modeConfigurator.ApplyEvaluationThresholds(config);
+    public void ApplyEvaluationThresholds(ScenarioConfig config)
+    {
+        if (modeConfigurator == null) return; // Bootstrapper가 Awake보다 먼저 호출 시 안전 스킵
+        modeConfigurator.ApplyEvaluationThresholds(config);
+    }
 
     /// <summary>
     /// Phase별 회전 임계점 오버라이드 적용
@@ -1699,6 +1734,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         autoPlayHandler.Reset();
 
         // ★ 스트레칭/재평가 모드에 따라 가이드 범위 설정 (운동 종류 무관)
+        // ★ 재평가: 회전 단계는 일반 모드 그대로(가동범위 고정), 위치 단계만 확장
         if (isStretchingMode)
         {
             runtimeGuideStartRatio = stretchingStart;
@@ -1708,8 +1744,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         else if (isExtendedLimitMode)
         {
             runtimeGuideStartRatio = 0f;
-            runtimeGuideEndRatio = extendedMidHoldEndRatio;
-            ChunaLogger.Log($"<color=yellow>[StartEval] 재평가 모드 - 가이드 범위: 0~{extendedMidHoldEndRatio:P0}</color>");
+            // 회전 단계는 적정범위 고정 → 가이드도 일반 종료점 사용
+            runtimeGuideEndRatio = isRotationStep ? midHoldEndRatio : extendedMidHoldEndRatio;
+            ChunaLogger.Log($"<color=yellow>[StartEval] 재평가 모드 - 가이드 범위: 0~{runtimeGuideEndRatio:P0} ({(isRotationStep ? "회전(고정)" : "위치(확장)")})</color>");
         }
 
         // ★ 난이도 프리셋에서 가이드 핸드/투명도 동기화

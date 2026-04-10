@@ -223,14 +223,21 @@ public class AngleDisplayController : BaseUIPanel
 
     /// <summary>
     /// ChunaPathEvaluator의 확장 모드와 홀드 범위 동기화
+    /// ★ 같은 모드 내에서도 substep 전환으로 회전↔위치 단계가 바뀌면 hold 범위 값이 달라짐 → 값 자체도 비교
     /// </summary>
     private void SyncHoldRangeWithEvaluator()
     {
         bool evaluatorExtendedMode = pathEvaluator.IsExtendedLimitMode;
         bool evaluatorStretchingMode = pathEvaluator.IsStretchingMode;
+        float evaluatorHoldStart = pathEvaluator.CurrentMidHoldStart;
+        float evaluatorHoldEnd = pathEvaluator.CurrentMidHoldEnd;
 
-        // 확장 모드 또는 스트레칭 모드가 변경되었을 때 업데이트
-        if (isExtendedMode != evaluatorExtendedMode || isStretchingMode != evaluatorStretchingMode)
+        // 확장 모드/스트레칭 모드 또는 hold 범위 값 자체가 변경되었을 때 업데이트
+        bool modeChanged = isExtendedMode != evaluatorExtendedMode || isStretchingMode != evaluatorStretchingMode;
+        bool valueChanged = Mathf.Abs(currentHoldStart - evaluatorHoldStart) > 0.001f
+                         || Mathf.Abs(currentHoldEnd - evaluatorHoldEnd) > 0.001f;
+
+        if (modeChanged || valueChanged)
         {
             isStretchingMode = evaluatorStretchingMode;
             UpdateHoldRange(evaluatorExtendedMode);
@@ -653,6 +660,23 @@ public class AngleDisplayController : BaseUIPanel
     }
 
     /// <summary>
+    /// 외부에서 홀드 범위 강제 갱신 (substep 전환 후 evaluator 값이 바뀐 뒤 호출)
+    /// </summary>
+    public void ForceRefreshHoldRange()
+    {
+        if (pathEvaluator == null)
+        {
+            ChunaLogger.LogWarning("[AngleDisplayController] ForceRefreshHoldRange: pathEvaluator null");
+            return;
+        }
+
+        float before = currentHoldStart;
+        isStretchingMode = pathEvaluator.IsStretchingMode;
+        UpdateHoldRange(pathEvaluator.IsExtendedLimitMode);
+        ChunaLogger.Log($"<color=yellow>[AngleDisplayController] ForceRefreshHoldRange: {before:P0} → {currentHoldStart:P0}~{currentHoldEnd:P0} (mode:{displayMode}, stretched:{isStretchingMode}, extended:{isExtendedMode})</color>");
+    }
+
+    /// <summary>
     /// 각도 범위 설정
     /// </summary>
     public void SetAngleRange(float start, float end)
@@ -775,6 +799,29 @@ public class AngleDisplayController : BaseUIPanel
 
         ApplyPreset(preset);
         return true;
+    }
+
+    /// <summary>
+    /// 시나리오 접두사 우선 매칭: "{scenarioName}_{presetName}" 먼저 찾고, 없으면 "{presetName}" fallback
+    /// 같은 핸드데이터를 공유하는 시나리오별로 다른 위치의 프리셋을 사용할 수 있게 해줌
+    /// </summary>
+    public bool ApplyPreset(string scenarioName, string presetName)
+    {
+        // 1차: 시나리오 접두사 매칭 (예: "견갑거근_건측회전")
+        if (!string.IsNullOrEmpty(scenarioName))
+        {
+            string prefixedName = $"{scenarioName}_{presetName}";
+            AngleDisplayPreset prefixed = FindPreset(prefixedName);
+            if (prefixed != null)
+            {
+                ChunaLogger.Log($"<color=green>[AngleDisplayController] 시나리오별 프리셋 적용: {prefixedName}</color>");
+                ApplyPreset(prefixed);
+                return true;
+            }
+        }
+
+        // 2차: 기존 이름 매칭 (예: "건측회전")
+        return ApplyPreset(presetName);
     }
 
     /// <summary>
