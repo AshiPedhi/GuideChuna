@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 using TLab.WebView;
 
 /// <summary>
@@ -273,9 +274,12 @@ public class ScenarioManager : MonoBehaviour
             }
         }
 
-        // UI 자동 배치
+        // UI 자동 배치 — 메뉴 단계에서 이미 배치가 끝났으면(HasPositioned) 그대로 두어 시나리오 시작 시 UI가 또
+        // 재조정되어 움직이는 것을 방지. 트래킹이 끝내 안 잡혀 미배치 상태로 시작한 예외 케이스만 이때 배치.
         if (uiPositioner != null)
-            uiPositioner.PositionUIElements();
+        {
+            uiPositioner.EnsurePositionedWhenReady();
+        }
 
         // 결과 추적 시작
         if (resultTracker != null)
@@ -314,7 +318,60 @@ public class ScenarioManager : MonoBehaviour
             return;
         }
 
-        StartScenario(collection.scenarios[0]);
+        ScenarioData scenario = collection.scenarios[0];
+        ApplyEvaluationPhaseFilter(scenario);
+        StartScenario(scenario);
+    }
+
+    /// <summary>
+    /// 평가모드에서 ScenarioConfig.evaluationPhases 화이트리스트에 없는 phase 제거.
+    /// 비어있거나 평가모드가 아니면 무동작.
+    /// </summary>
+    private void ApplyEvaluationPhaseFilter(ScenarioData scenario)
+    {
+        if (scenario == null || currentConfig == null) return;
+        if (!currentConfig.HasEvaluationPhaseFilter) return;
+
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm == null || !dm.IsEvaluationMode) return;
+
+        int before = scenario.phases.Count;
+        scenario.phases = scenario.phases
+            .Where(p => currentConfig.IsEvaluationPhaseAllowed(p.phaseName))
+            .ToList();
+
+        ChunaLogger.Log($"<color=cyan>[ScenarioManager] 평가모드 phase 필터: {before} → {scenario.phases.Count}개 ({string.Join(", ", currentConfig.evaluationPhases)})</color>");
+
+        RemoveRedundantLeadingGuide(scenario);
+    }
+
+    /// <summary>
+    /// 평가모드 phase 필터로 앞 phase(예: 전부)가 빠지면, 다음 작업 phase(예: 중부)의
+    /// 선두 '가이드' step(원래는 전환용 "버튼을 눌러 진행" 안내)이 시작 버튼 바로 뒤에 붙어
+    /// 사용자가 버튼을 두 번 눌러야 하는 문제가 생김.
+    /// 첫 phase가 '시작 버튼 전용'(작업 step 없는 가이드 전용)일 때에 한해,
+    /// 두 번째 phase의 선두 가이드 step만 제거해 시작 직후 곧장 진입하도록 함.
+    /// 시작 버튼/종료 화면/실제 phase 간 전환 가이드는 보존.
+    /// </summary>
+    private void RemoveRedundantLeadingGuide(ScenarioData scenario)
+    {
+        if (scenario.phases.Count < 2) return;
+
+        var first = scenario.phases[0];
+        bool firstIsGuideOnly = first.steps != null && first.steps.Count > 0
+                                && first.steps.All(s => s.IsGuideStep());
+        if (!firstIsGuideOnly) return;
+
+        var second = scenario.phases[1];
+        if (second.steps == null || second.steps.Count == 0) return;
+
+        bool secondHasWork = second.steps.Any(s => !s.IsGuideStep());
+        if (secondHasWork && second.steps[0].IsGuideStep())
+        {
+            var removed = second.steps[0];
+            second.steps.RemoveAt(0);
+            ChunaLogger.Log($"<color=cyan>[ScenarioManager] 평가모드 시작 직후 중복 가이드 제거: {second.phaseName} - '{removed.stepName}'</color>");
+        }
     }
 
     /// <summary>
@@ -649,13 +706,55 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
         UpdateAngleDisplayVisibility(subStep);
 
-        if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
+        bool isPassiveStretch = !string.IsNullOrEmpty(subStep.conditionType) &&
+                                subStep.conditionType.Trim().Equals("PassiveStretch", System.StringComparison.OrdinalIgnoreCase);
+
+        if (isPassiveStretch)
+            HandlePassiveStretch(subStep);
+        else if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
             HandleHandPoseTracking(subStep);
         else if (subStep.HasPatientAnimation())
             HandleAutoPlayAnimation(subStep);
 
         // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
         angleDisplay?.ForceRefreshHoldRange();
+    }
+
+    /// <summary>
+    /// ★ PassiveStretch 처리: 보조수 접촉 게이팅 + 환자 애니메이션 자동 재생 + 가이드 손 표시
+    /// 주동수 없는 스트레칭 단계 (흉쇄유돌근 등). 유사도 평가 없음, 애니메이션 완료 = 단계 완료
+    /// </summary>
+    private void HandlePassiveStretch(SubStepData subStep)
+    {
+        if (chunaPathEvaluator == null)
+        {
+            ChunaLogger.LogWarning("[ScenarioManager] ChunaPathEvaluator가 없어서 PassiveStretch를 사용할 수 없습니다!");
+            return;
+        }
+
+        string stepName = currentStep?.stepName ?? "";
+
+        // 스트레칭 모드 (가이드 시작 위치 결정에 사용)
+        chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
+
+        // 가이드 손 데이터 로드 (보조수 가이드 표시용, 유사도 평가 미등록)
+        if (!string.IsNullOrEmpty(subStep.handTrackingFileName) && chunaPathEvaluatorBridge != null)
+        {
+            chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
+        }
+
+        // Gated AutoPlay 시작 (ChunaPathEvaluator가 conditionType으로 gated 자동 판단)
+        chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
+
+        // StartHold 없이 즉시 가이드 손 재생 (주동수 없음)
+        chunaPathEvaluator.StartGuideHandPlaybackInternal();
+
+        // AutoPlay 완료 시 SubStep 완료 처리
+        chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
+        chunaPathEvaluator.OnAutoPlayCompleted += OnAutoPlayCompletedHandler;
+
+        if (showDebugLog)
+            ChunaLogger.Log($"<color=cyan>[ScenarioManager] PassiveStretch 시작: {subStep.handTrackingFileName} / {subStep.patientAnimationClip}</color>");
     }
 
     /// <summary>
@@ -765,13 +864,20 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★ 스트레칭/재평가 단계 모드를 먼저 설정 (SetPatientAnimation에서 시작 위치 결정에 사용됨)
         chunaPathEvaluator.SetExtendedLimitModeFromNames(stepName, subStep.handTrackingFileName);
 
-        // ★ 회전 감지 축 오버라이드 (누운 환자용 — SetExtendedLimitModeFromNames가 Y축으로 설정한 뒤 덮어씀)
-        if (currentConfig != null && currentConfig.overrideRotationAxis &&
-            !string.IsNullOrEmpty(subStep.movementType) && subStep.movementType == "rotation")
+        // ★ 누운 환자 회전 감지 오버라이드 (축 + 측정 벡터 + 방향 반전)
+        //   SetExtendedLimitModeFromNames가 회전→Y축 + 건측/환측 방향을 먼저 설정
+        //   축이 Y→Z로 바뀌면 SignedAngle 부호 체계도 바뀌므로 방향도 토글 필요
+        bool isLyingRotationOverride = currentConfig != null && currentConfig.overrideRotationAxis &&
+            !string.IsNullOrEmpty(subStep.movementType) && subStep.movementType == "rotation";
+        chunaPathEvaluator.SetUseAlternateMeasurementVector(isLyingRotationOverride);
+        if (isLyingRotationOverride)
         {
             chunaPathEvaluator.SetRotationDetectionAxis(currentConfig.lyingRotationAxis);
+            // ★ Y→Z 축 전환으로 부호가 뒤집히므로 기존 방향 반전 토글
+            bool currentInvert = chunaPathEvaluator.InvertRotationDirection;
+            chunaPathEvaluator.SetInvertRotationDirection(!currentInvert);
             if (showDebugLog)
-                ChunaLogger.Log($"<color=magenta>[ScenarioManager] 회전 감지 축 오버라이드: {currentConfig.lyingRotationAxis}</color>");
+                ChunaLogger.Log($"<color=magenta>[ScenarioManager] 누운 환자 회전 오버라이드: 축={currentConfig.lyingRotationAxis}, 측정벡터=up, 방향반전={!currentInvert}(토글전:{currentInvert})</color>");
         }
 
         // 1. 환자 애니메이션 설정 (StartEvaluation 전에 설정해야 첫 프레임 표시됨)
