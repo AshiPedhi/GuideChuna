@@ -84,13 +84,61 @@ public class PracticeManager : MonoBehaviour
     [Tooltip("LateralFlexionDetector (측굴 동작 감지용)")]
     [SerializeField] private LateralFlexionDetector lateralFlexionDetector;
     [Tooltip("Step 6에서 사용할 핸드 데이터 CSV 파일명 (Resources/HandPoseData/ 내)")]
-    [SerializeField] private string step6HandDataCsv = "중부측굴_trimmed";
+    [SerializeField] private string step6HandDataCsv = "중부측굴";
     [Tooltip("Step 6 환자 애니메이션 상태 이름 (Animator State Name)")]
-    [SerializeField] private string step6PatientAnimation = "중부측굴_trimmed";
+    [SerializeField] private string step6PatientAnimation = "중부측굴";
 
     [Header("=== 각도 표시 UI (Step 6) ===")]
     [Tooltip("측굴 각도 표시 UI (ChunaPathEvaluator와 연동)")]
     [SerializeField] private AngleDisplayController angleDisplayController;
+
+    [Header("=== 환자 위치 초기화 (헤드셋 기준) ===")]
+    [Tooltip("환자를 헤드셋 전방으로 배치할 거리 (m)")]
+    [SerializeField] private float patientForwardDistance = 1.0f;
+    [Tooltip("환자를 헤드셋 높이에서 얼마만큼 아래/위에 배치할지 (m, 음수=아래)")]
+    [SerializeField] private float patientHeightOffset = -0.5f;
+
+    public float PatientForwardDistance { get => patientForwardDistance; set => patientForwardDistance = value; }
+    public float PatientHeightOffset { get => patientHeightOffset; set => patientHeightOffset = value; }
+    public Transform PatientTransform => patientTransform;
+
+    /// <summary>
+    /// 헤드셋 Transform 탐색 (런타임/에디트 모드 공용)
+    /// </summary>
+    public Transform FindHeadsetTransform()
+    {
+        GameObject ovrCameraRig = GameObject.Find("OVRCameraRig");
+        if (ovrCameraRig == null) return null;
+        return ovrCameraRig.transform.Find("TrackingSpace/CenterEyeAnchor");
+    }
+
+    /// <summary>
+    /// 현재 헤드셋 기준 환자 목표 위치 계산 (에디터 미리보기용)
+    /// </summary>
+    public Vector3? CalculatePatientTargetPosition()
+    {
+        Transform headsetTransform = FindHeadsetTransform();
+        if (headsetTransform == null || patientTransform == null) return null;
+
+        Vector3 headsetPos = headsetTransform.position;
+        Vector3 headsetForward = headsetTransform.forward;
+        headsetForward.y = 0;
+        headsetForward.Normalize();
+
+        return new Vector3(
+            headsetPos.x + headsetForward.x * patientForwardDistance,
+            headsetPos.y + patientHeightOffset,
+            headsetPos.z + headsetForward.z * patientForwardDistance);
+    }
+
+    /// <summary>
+    /// 실제 이동 대상 Transform (부모가 있으면 부모 반환, 런타임 로직과 동일)
+    /// </summary>
+    public Transform GetPatientMoveTarget()
+    {
+        if (patientTransform == null) return null;
+        return patientTransform.parent != null ? patientTransform.parent : patientTransform;
+    }
 
     [Header("=== Step 7: 나가기 ===")]
     [SerializeField] private ToggleHighlightPair mainMenuToggle;      // 메인메뉴
@@ -322,10 +370,7 @@ public class PracticeManager : MonoBehaviour
             headsetForward.y = 0;
             headsetForward.Normalize();
 
-            // 환자를 헤드셋 전방 1m, 헤드셋 높이보다 0.5m 아래에 배치
-            float patientForwardDistance = 1.0f;
-            float patientHeightOffset = -0.5f;
-
+            // 환자를 헤드셋 전방/높이 오프셋만큼 이동 (인스펙터 조정 가능)
             Vector3 patientNewPos = new Vector3(
                 headsetPos.x + headsetForward.x * patientForwardDistance,
                 headsetPos.y + patientHeightOffset,
@@ -1252,9 +1297,10 @@ public class PracticeManager : MonoBehaviour
             // ★ 각도 표시 UI 활성화 (AngleDisplayController가 ChunaPathEvaluator와 연동)
             if (angleDisplayController != null)
             {
+                angleDisplayController.ApplyPreset(step6HandDataCsv);
                 angleDisplayController.Show();
                 if (showDebugLogs)
-                    ChunaLogger.Log("[Practice] 각도 표시 UI 활성화");
+                    ChunaLogger.Log($"[Practice] 각도 표시 UI 활성화 (프리셋: {step6HandDataCsv})");
             }
 
             if (showDebugLogs)

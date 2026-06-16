@@ -47,6 +47,8 @@ public class PracticeSettingsController : MonoBehaviour
 
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
+    [Tooltip("씬 시작 시 패스쓰루 ON 상태로 진입 (HandRecord 등 패스스루 전용 씬용)")]
+    [SerializeField] private bool startWithRealityMode = false;
 
     // 패스쓰루 레이어 (런타임에 찾음)
     private OVRPassthroughLayer passthroughLayer;
@@ -68,6 +70,15 @@ public class PracticeSettingsController : MonoBehaviour
 
     // InfoPanelController 참조 (설정 상태 관리용 - 선택적)
     private InfoPanelController infoPanelController;
+
+    // ── 환자 그룹 드리프트 보정용 ──
+    // 위치설정(ReplacePos)은 환자 그룹(all)의 "월드" 위치/회전을 매 프레임 직접 덮어쓴다.
+    // 그 결과 부모(targetObject) 기준 로컬 오프셋이 누적 변형되어, 다시 맞춤 설정을 누르면
+    // 옮긴 만큼 밀린다. 시작 시 authored(깨끗한) 로컬 포즈를 캐싱해 두고, 맞춤 설정 때 복원한다.
+    private Transform patientGroupTransform;
+    private Vector3 patientGroupAuthoredLocalPos;
+    private Quaternion patientGroupAuthoredLocalRot;
+    private bool patientGroupCaptured = false;
 
     void Awake()
     {
@@ -97,6 +108,30 @@ public class PracticeSettingsController : MonoBehaviour
         CacheRenderers();
         SetupToggleListeners();
         InitializeToggles();
+        CachePatientGroupAuthoredPose();
+    }
+
+    /// <summary>
+    /// 위치설정(ReplacePos)이 매 프레임 덮어쓰는 환자 그룹(all)의 깨끗한 로컬 포즈를 캐싱.
+    /// Start 시점에는 아직 위치설정을 사용하지 않아 드리프트가 없으므로 authored 값이 잡힌다.
+    /// </summary>
+    private void CachePatientGroupAuthoredPose()
+    {
+        if (patientPositionController == null) return;
+
+        ReplacePos replacePos = patientPositionController.GetComponent<ReplacePos>();
+        if (replacePos != null && replacePos.all != null)
+        {
+            patientGroupTransform = replacePos.all.transform;
+            patientGroupAuthoredLocalPos = patientGroupTransform.localPosition;
+            patientGroupAuthoredLocalRot = patientGroupTransform.localRotation;
+            patientGroupCaptured = true;
+            ChunaLogger.Log($"[PracticeSettings] 환자 그룹 기준 포즈 캐싱: {patientGroupTransform.name} localPos={patientGroupAuthoredLocalPos}");
+        }
+        else
+        {
+            ChunaLogger.LogWarning("[PracticeSettings] ReplacePos/all을 찾지 못해 환자 그룹 드리프트 보정을 건너뜁니다.");
+        }
     }
 
     /// <summary>
@@ -275,8 +310,14 @@ public class PracticeSettingsController : MonoBehaviour
         if (patientModelDisplayToggle != null)
             patientModelDisplayToggle.isOn = true;
 
+        // 시작 시 현실 모드 적용 (인스펙터 옵션)
+        isRealityModeOn = startWithRealityMode;
         if (realityModeToggle != null)
-            realityModeToggle.isOn = isRealityModeOn;
+        {
+            realityModeToggle.SetIsOnWithoutNotify(isRealityModeOn);
+        }
+        // 카메라/배경/패스스루/모델 알파를 일관되게 적용 (true든 false든)
+        OnRealityModeToggle(isRealityModeOn);
     }
 
     #region 1. 맞춤 설정
@@ -325,6 +366,17 @@ public class PracticeSettingsController : MonoBehaviour
             return;
         }
 
+        // ★ 누적 밀림 버그 수정:
+        // 1) 위치설정이 켜져 있으면 끈다 — ReplacePos가 매 프레임 환자 그룹 위치를 덮어써서
+        //    아래 복원/이동을 바로 무효화하는 것을 방지 (재배치는 곧 수동 조정 종료이기도 함)
+        // 2) 위치설정이 변형해 둔 환자 그룹의 로컬 오프셋을 authored 값으로 되돌린다 →
+        //    targetObject(루트)만 옮기면 첫 맞춤 설정과 동일하게 환자가 의도한 위치로 옴
+        if (patientPositionController != null && patientPositionController.activeSelf)
+        {
+            ForceDisablePatientPositionController();
+        }
+        RestorePatientGroupLocalPose();
+
         Vector3? pos = CalculateTargetPosition();
         if (pos == null)
         {
@@ -341,8 +393,27 @@ public class PracticeSettingsController : MonoBehaviour
         Transform actualTarget = GetActualMoveTarget();
         if (actualTarget == null) return;
 
-        actualTarget.position = newPosition;
-        ChunaLogger.Log($"[PracticeSettings] ✅ 오브젝트 위치 초기화 완료: {actualTarget.name} -> {newPosition}");
+        // 부모 pivot이 자식(targetObject)의 시각적 중심과 다르면 그대로 두 위치가 어긋남
+        // → 자식이 newPosition에 오도록 부모를 보정 (부모 == 자식이면 offset=0이라 자동 안전)
+        Vector3 pivotOffset = actualTarget.position - targetObject.position;
+        actualTarget.position = newPosition + pivotOffset;
+        ChunaLogger.Log($"[PracticeSettings] ✅ 위치 초기화 완료: {targetObject.name} → {newPosition} (부모 pivot 보정 {pivotOffset.magnitude:F3}m)");
+    }
+
+    /// <summary>
+    /// 위치설정(ReplacePos)이 환자 그룹의 월드 위치를 직접 덮어써서 생긴 로컬 오프셋 드리프트를
+    /// authored(시작 시 캐싱한) 값으로 되돌린다. 캐싱 실패 시 아무 것도 하지 않는다(기존 동작 유지).
+    /// </summary>
+    private void RestorePatientGroupLocalPose()
+    {
+        if (!patientGroupCaptured || patientGroupTransform == null) return;
+
+        Vector3 drift = patientGroupTransform.localPosition - patientGroupAuthoredLocalPos;
+        patientGroupTransform.localPosition = patientGroupAuthoredLocalPos;
+        patientGroupTransform.localRotation = patientGroupAuthoredLocalRot;
+
+        if (drift.sqrMagnitude > 0.0000001f)
+            ChunaLogger.Log($"[PracticeSettings] 환자 그룹 드리프트 복원: {drift.magnitude:F3}m → authored 로컬 포즈");
     }
     #endregion
 
@@ -957,18 +1028,79 @@ public class PracticeSettingsController : MonoBehaviour
                 { normal = { textColor = Color.yellow }, fontSize = 11, fontStyle = FontStyle.Bold });
         }
 
-        // 실제 이동 대상 현재 위치 (빨간)
-        Transform actualTarget = GetActualMoveTarget();
-        if (actualTarget != null)
+        // 실제 보이는 위치(자식 targetObject) 표시 — 헤드셋 목표 포인트와 어긋나면 pivot 보정이 작동해서 일치하게 됨
+        if (targetObject != null)
         {
             Gizmos.color = new Color(1f, 0.4f, 0.4f, 0.5f);
-            Gizmos.DrawLine(actualTarget.position, targetPosition);
-            Gizmos.DrawWireSphere(actualTarget.position, 0.08f);
+            Gizmos.DrawLine(targetObject.position, targetPosition);
+            Gizmos.DrawWireSphere(targetObject.position, 0.08f);
 
-            UnityEditor.Handles.Label(actualTarget.position + Vector3.up * 0.15f,
-                $"현재 위치: {actualTarget.name}", new GUIStyle
+            UnityEditor.Handles.Label(targetObject.position + Vector3.up * 0.15f,
+                $"현재 위치(자식): {targetObject.name}", new GUIStyle
                 { normal = { textColor = new Color(1f, 0.6f, 0.6f) }, fontSize = 10 });
+
+            // 부모 pivot이 다르면 시각적으로 보이게 작은 보라색 점으로 표시 (디버깅 보조)
+            Transform actualTarget = GetActualMoveTarget();
+            if (actualTarget != null && actualTarget != targetObject)
+            {
+                Gizmos.color = new Color(0.7f, 0.3f, 1f, 0.4f);
+                Gizmos.DrawWireSphere(actualTarget.position, 0.04f);
+                Gizmos.DrawLine(actualTarget.position, targetObject.position);
+            }
+
+            // 자식 메시(환자/침대 등) Bounds — 현재 위치(회색) + 이동 후 예상 위치(초록) 와이어큐브
+            if (TryGetTargetVisualBounds(out Bounds currentBounds))
+            {
+                // 현재 자식들이 실제로 그려지는 영역
+                Gizmos.color = new Color(0.7f, 0.7f, 0.7f, 0.6f);
+                Gizmos.DrawWireCube(currentBounds.center, currentBounds.size);
+
+                UnityEditor.Handles.Label(currentBounds.center + Vector3.down * (currentBounds.extents.y + 0.05f),
+                    "환자/침대 현재 위치", new GUIStyle
+                    { normal = { textColor = new Color(0.85f, 0.85f, 0.85f) }, fontSize = 11, fontStyle = FontStyle.Bold });
+
+                // 이동 후 예상 위치 — pivot 보정 후 부모가 가는 곳을 기준으로 자식 Bounds를 평행이동
+                if (actualTarget != null)
+                {
+                    Vector3 pivotOffset = actualTarget.position - targetObject.position;
+                    Vector3 newParentPos = targetPosition + pivotOffset;
+                    Vector3 deltaMove = newParentPos - actualTarget.position;
+
+                    if (deltaMove.sqrMagnitude > 0.0001f)
+                    {
+                        Vector3 predictedCenter = currentBounds.center + deltaMove;
+                        Gizmos.color = new Color(0.3f, 1f, 0.3f, 0.8f);
+                        Gizmos.DrawWireCube(predictedCenter, currentBounds.size);
+
+                        UnityEditor.Handles.Label(predictedCenter + Vector3.up * (currentBounds.extents.y + 0.05f),
+                            "이동 후 예상 위치", new GUIStyle
+                            { normal = { textColor = new Color(0.5f, 1f, 0.5f) }, fontSize = 11, fontStyle = FontStyle.Bold });
+                    }
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// targetObject 하위 모든 활성 Renderer의 결합 Bounds (Gizmo용)
+    /// — 환자 모델, 침대 등 실제로 화면에 보이는 자식들이 차지하는 영역
+    /// </summary>
+    private bool TryGetTargetVisualBounds(out Bounds bounds)
+    {
+        bounds = new Bounds();
+        if (targetObject == null) return false;
+
+        Renderer[] renderers = targetObject.GetComponentsInChildren<Renderer>(false);
+        if (renderers == null || renderers.Length == 0) return false;
+
+        bool initialized = false;
+        foreach (var r in renderers)
+        {
+            if (r == null || !r.enabled) continue;
+            if (!initialized) { bounds = r.bounds; initialized = true; }
+            else bounds.Encapsulate(r.bounds);
+        }
+        return initialized;
     }
 #endif
 }

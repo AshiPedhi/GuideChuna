@@ -84,9 +84,13 @@ public class PracticeSettingsControllerEditor : Editor
             return;
         }
 
+        // 런타임 OnCustomPositioning과 동일한 pivot 보정 — 자식(targetObject)이 목표 위치에 오도록 부모 배치
+        Transform child = controller.TargetObject;
+        Vector3 pivotOffset = (child != null) ? (actualTarget.position - child.position) : Vector3.zero;
+
         Undo.RecordObject(actualTarget, "Preview Custom Positioning");
-        actualTarget.position = targetPos.Value;
-        Debug.Log($"[PracticeSettings] Preview: {actualTarget.name} → {targetPos.Value}");
+        actualTarget.position = targetPos.Value + pivotOffset;
+        Debug.Log($"[PracticeSettings] Preview: {(child != null ? child.name : actualTarget.name)} → {targetPos.Value} (부모 pivot 보정 {pivotOffset.magnitude:F3}m)");
     }
 
     /// <summary>
