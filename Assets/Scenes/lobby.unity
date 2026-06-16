@@ -8733,7 +8733,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 80
+      value: 380
       objectReference: {fileID: 0}
     - target: {fileID: 100001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_SizeDelta.y
@@ -8787,6 +8787,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 200001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 200001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 200003, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_TargetGraphic
       value: 
@@ -8827,6 +8835,38 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 0.5
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_SizeDelta.x
+      value: 80
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_SizeDelta.y
+      value: 80
+      objectReference: {fileID: 0}
+    - target: {fileID: 300001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 300003, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_Type
       value: 1
@@ -8856,12 +8896,16 @@ PrefabInstance:
       value: 0.01
       objectReference: {fileID: 0}
     - target: {fileID: 400001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
+      propertyPath: m_Pivot.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 400001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_AnchorMax.x
-      value: 0.5
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 400001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_AnchorMin.x
-      value: 0.5
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 400001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_SizeDelta.x
@@ -8873,7 +8917,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 400001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -0.000061035156
+      value: -0.00012207031
       objectReference: {fileID: 0}
     - target: {fileID: 400003, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_Sprite
@@ -8901,7 +8945,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 500001, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 200
+      value: 40
       objectReference: {fileID: 0}
     - target: {fileID: 500003, guid: f1ac0bccc14941f4dad7eee55b99b2b6, type: 3}
       propertyPath: m_text
@@ -14658,7 +14702,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 20000010189485334, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       propertyPath: m_CullingMask.m_Bits
-      value: 31
+      value: 23
       objectReference: {fileID: 0}
     - target: {fileID: 20000012175207052, guid: 126d619cf4daa52469682f85c1378b4a, type: 3}
       propertyPath: m_CullingMask.m_Bits
@@ -32639,8 +32683,8 @@ MonoBehaviour:
   userNameText: {fileID: 393745993}
   userInfoContent: {fileID: 1039185958}
   guideMessageText: {fileID: 229705448}
-  loginGuideMessage: "\uB85C\uADF8\uC778\uC744 \uD558\uC138\uC694"
-  scenarioGuideMessage: "\uC2E4\uC2B5\uD560 \uBD80\uC704\uB97C \uC120\uD0DD\uD558\uC138\uC694"
+  loginGuideMessage: "Guest \uBC84\uD2BC\uC744 \uB20C\uB7EC \uB85C\uADF8\uC778\uD558\uC138\uC694"
+  scenarioGuideMessage: "\uC2E4\uC2B5 \uBD80\uC704\uB97C \uC120\uD0DD\uD558\uC138\uC694"
   scenarioCardButtons:
   - {fileID: 1873718585}
   - {fileID: 420321247}

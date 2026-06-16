@@ -114,7 +114,7 @@ MonoBehaviour:
     min: 0
     max: 1000
   m_ScaleFactor: 1
-  m_AutoRequestUserAuthorization: 1
+  m_AutoRequestUserAuthorization: 0
 --- !u!114 &2818305129464490907
 MonoBehaviour:
   m_ObjectHideFlags: 0

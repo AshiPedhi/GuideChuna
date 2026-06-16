@@ -498,6 +498,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             currentDeviceSN = deviceSN;
             currentOrgID = orgID;
             loginStateStore.SaveDeviceSN(currentDeviceSN);
+            loginStateStore.SaveOrgID(currentOrgID);
 
             if (!licenseValid)
             {
@@ -646,8 +647,8 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void OnInteractionGuideClicked()
     {
-        ChunaLogger.Log("[LobbyUI] 상호작용 가이드 버튼 클릭");
-        // TODO: 상호작용 가이드 표시
+        ChunaLogger.Log("[LobbyUI] 상호작용 가이드(연습) 버튼 클릭");
+        SceneLoader.LoadScene("Practice_Scene");
     }
     #endregion
 
@@ -739,6 +740,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             // 직접 RenderManager 찾아서 전달 시도
             if (RenderManager.instance != null)
             {
+                RenderManager.instance.mirroringDataRefresher = RefreshMirroringDataAsync;
                 RenderManager.instance.SetMirroringData(mirroringData);
             }
         }
@@ -751,12 +753,40 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
         if (RenderManager.instance != null)
         {
+            // [재조회] 미러링 실패 시 RenderManager가 최신 IP를 다시 받아올 수 있도록 콜백 주입
+            RenderManager.instance.mirroringDataRefresher = RefreshMirroringDataAsync;
             RenderManager.instance.SetMirroringData(mirroringData);
             ChunaLogger.Log($"[LobbyUI] RenderManager에 미러링 데이터 전달 완료");
         }
         else
         {
             ChunaLogger.LogWarning("[LobbyUI] RenderManager.instance가 null");
+        }
+    }
+
+    /// <summary>
+    /// [재조회] 미러링 실패 시 RenderManager가 호출 — 백엔드(/device/logon)에서 최신 MirroringData를 다시 받아온다.
+    /// PC 미러링 클라가 IP를 재등록했다면 새 주소가 온다. 로그인 실패 이벤트는 로그만 남기므로 UI 방해 없음.
+    /// 모든 예외/미로그인은 null로 흡수(= RenderManager가 재시도 중단 신호로 사용).
+    /// </summary>
+    private async UniTask<MirroringData> RefreshMirroringDataAsync()
+    {
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            ChunaLogger.LogWarning("[LobbyUI] 미러링 재조회: 로그인 상태 아님 → 생략");
+            return null;
+        }
+
+        try
+        {
+            var fresh = await authFlowManager.PerformLogin(currentDeviceSN, currentUsername);
+            ChunaLogger.Log($"[LobbyUI] 미러링 재조회 완료: {fresh?.serverIP}:{fresh?.portNo}");
+            return fresh;
+        }
+        catch (Exception e)
+        {
+            ChunaLogger.LogWarning($"[LobbyUI] 미러링 재조회 실패 (무시): {e.Message}");
+            return null;
         }
     }
 

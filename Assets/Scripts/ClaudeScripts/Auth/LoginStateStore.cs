@@ -74,11 +74,39 @@ public class LoginStateStore
         ChunaLogger.Log("[LoginState] 저장된 DeviceSN 삭제");
     }
 
+    public void SaveOrgID(string orgID)
+    {
+        PlayerPrefs.SetString(PrefsKeys.OrgID, orgID ?? string.Empty);
+        PlayerPrefs.Save();
+        ChunaLogger.Log($"[LoginState] OrgID 저장: {orgID}");
+    }
+
+    public string LoadOrgID()
+    {
+        if (PlayerPrefs.HasKey(PrefsKeys.OrgID))
+        {
+            string id = PlayerPrefs.GetString(PrefsKeys.OrgID);
+            ChunaLogger.Log($"[LoginState] 저장된 OrgID 로드: {id}");
+            return id;
+        }
+
+        ChunaLogger.Log("[LoginState] 저장된 OrgID 없음");
+        return string.Empty;
+    }
+
+    public void ClearOrgID()
+    {
+        PlayerPrefs.DeleteKey(PrefsKeys.OrgID);
+        PlayerPrefs.Save();
+        ChunaLogger.Log("[LoginState] 저장된 OrgID 삭제");
+    }
+
     public void ClearAllData()
     {
         PlayerPrefs.DeleteKey(PrefsKeys.LoginUsername);
         PlayerPrefs.DeleteKey(PrefsKeys.LoginUserID);
         PlayerPrefs.DeleteKey(PrefsKeys.DeviceSN);
+        PlayerPrefs.DeleteKey(PrefsKeys.OrgID);
         PlayerPrefs.Save();
         ChunaLogger.Log("[LoginState] 모든 저장 데이터 초기화 완료");
     }
