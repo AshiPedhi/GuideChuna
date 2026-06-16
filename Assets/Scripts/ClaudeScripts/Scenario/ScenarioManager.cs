@@ -140,6 +140,13 @@ public class ScenarioManager : MonoBehaviour
         if (resultTracker == null)
             resultTracker = FindFirstObjectByType<TrainingResultTracker>();
 
+        // 평가 도중 "메인으로/다시하기"로 나가면 미완료(중도 종료)로 기록
+        if (exitPopupController != null)
+        {
+            exitPopupController.OnMainMenuSelected.AddListener(SaveIncompleteResultIfTracking);
+            exitPopupController.OnRetrySelected.AddListener(SaveIncompleteResultIfTracking);
+        }
+
         // HandPose 시스템 초기화
         InitializeHandPoseSystem();
     }
@@ -503,6 +510,32 @@ public class ScenarioManager : MonoBehaviour
 
         // 퀴즈 패널 표시
         ShowQuizPanel();
+    }
+
+    /// <summary>
+    /// 평가 도중 종료 시 미완료(중도 종료) 결과를 기록.
+    /// - 공식 평가일 때만 저장 (연습모드는 경고만 하고 기록 안 함 — 무결성/감사 대상 아님)
+    /// - 이미 완료(정상 저장)했거나 추적 중이 아니면 무시 (중복 저장 방지)
+    /// - FinishTracking(false) → isCompleted=false로 저장, OnTrainingCompleted 발화(로컬 CSV/서버 동일 경로)
+    /// 호출처: ExitPopup '메인으로'/'다시하기', 앱 종료 안전망
+    /// </summary>
+    public void SaveIncompleteResultIfTracking()
+    {
+        if (isScenarioCompleted) return;                       // 정상 완주는 CompleteScenario에서 이미 저장
+        if (resultTracker == null || !resultTracker.IsTracking) return;
+        if (!resultTracker.IsOfficialEvaluation) return;       // 연습모드는 경고만, 기록 안 함
+
+        var partial = resultTracker.FinishTracking(false);
+        if (showDebugLog && partial != null)
+            ChunaLogger.Log($"[ScenarioManager] ⚠ 평가 중도 종료 — 미완료로 기록: 시간={TrainingResultData.FormatTime(partial.totalTime)}, 유사도={partial.overallSimilarity:P0}");
+    }
+
+    /// <summary>
+    /// 앱 종료 시 안전망 — 평가 진행 중이면 미완료로 기록 (best-effort, 크래시는 못 잡음)
+    /// </summary>
+    private void OnApplicationQuit()
+    {
+        SaveIncompleteResultIfTracking();
     }
 
     /// <summary>
@@ -965,6 +998,12 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     private void OnDestroy()
     {
         eventSystem?.Clear();
+
+        if (exitPopupController != null)
+        {
+            exitPopupController.OnMainMenuSelected.RemoveListener(SaveIncompleteResultIfTracking);
+            exitPopupController.OnRetrySelected.RemoveListener(SaveIncompleteResultIfTracking);
+        }
     }
 
     // ========== 각도 표시 UI 제어 ==========

@@ -128,6 +128,12 @@ public class InfoPanelController : MonoBehaviour
     [SerializeField] private Image mainMenuIcon;
     #endregion
 
+    #region 녹화/설정 전용 모드
+    [Header("═══ 녹화/설정 전용 모드 ═══")]
+    [Tooltip("시작 시 설정 팝업(녹화 UI)을 메인으로 표시. 시나리오 없는 HandRecord 빌드용")]
+    [SerializeField] private bool startInSettingsMode = false;
+    #endregion
+
     // 상태 추적
     private bool isScenarioStarted = false;
     private ContentPage currentContentPage = ContentPage.ModeSelection;
@@ -241,6 +247,13 @@ public class InfoPanelController : MonoBehaviour
     #region 초기화
     private void InitializePanel()
     {
+        // 녹화/설정 전용 모드 분기 — HandRecord 빌드 등
+        if (startInSettingsMode)
+        {
+            InitializeAsSettingsMain();
+            return;
+        }
+
         // 초기 상태: 모드 선택 페이지
         ShowContentPage(ContentPage.ModeSelection);
 
@@ -274,6 +287,48 @@ public class InfoPanelController : MonoBehaviour
         isExitPopupOpen = false;
 
         ChunaLogger.Log("[InfoPanel] 패널 초기화 완료");
+    }
+
+    /// <summary>
+    /// HandRecord 등 시나리오 없는 빌드용 — 설정 팝업(녹화 UI)을 메인으로 띄움.
+    /// 모드 선택/시나리오 페이지는 모두 꺼지고, 설정 토글이 켜진 상태로 시작.
+    /// </summary>
+    private void InitializeAsSettingsMain()
+    {
+        // 콘텐츠 페이지 모두 끔
+        if (modeSelectionPage != null) modeSelectionPage.SetActive(false);
+        if (skeletonPage != null) skeletonPage.SetActive(false);
+        if (expertVideoPage != null) expertVideoPage.SetActive(false);
+        if (resultPage != null) resultPage.SetActive(false);
+
+        // 시나리오 진행 UI 숨김
+        if (scenarioProgressUI != null)
+            scenarioProgressUI.SetActive(false);
+
+        // 설정 팝업 켜기 (= 녹화 UI)
+        if (settingsPopup != null)
+            settingsPopup.SetActive(true);
+
+        if (exitConfirmPopup != null)
+            exitConfirmPopup.SetActive(false);
+
+        // 콘텐츠 토글은 비활성 (사용 안 함)
+        SetToggleWithoutNotify(skeletonToggle, false);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, false);
+        SetContentTogglesInteractable(false);
+
+        // 설정 토글은 켜진 상태로 시작 + 클릭 가능하게
+        SetToggleWithoutNotify(settingsToggle, true);
+        SetToggleWithoutNotify(mainMenuToggle, false);
+        if (settingsToggle != null) settingsToggle.interactable = true;
+        if (mainMenuToggle != null) mainMenuToggle.interactable = true;
+
+        currentContentPage = ContentPage.None;
+        isSettingsOpen = true;
+        isExitPopupOpen = false;
+
+        ChunaLogger.Log("[InfoPanel] ✅ 녹화/설정 메인 모드로 초기화 (settingsPopup 활성)");
     }
 
     private void InitializeModeSelection()
@@ -424,6 +479,16 @@ public class InfoPanelController : MonoBehaviour
         selectedMode = mode;
         ChunaLogger.Log($"[InfoPanel] 모드 선택: {mode}");
 
+        // ★ DifficultyManager 동기화: 평가 모드는 난이도 토글 무시하고 Evaluation 강제,
+        //    실습 모드는 현재 선택된 난이도 반영 (이전엔 난이도 토글 변경 시에만 set돼서 평가모드가 동작 안 했음)
+        if (DifficultyManager.Instance != null)
+        {
+            DifficultyLevel target = (mode == ModeType.Evaluation)
+                ? DifficultyLevel.Evaluation
+                : selectedDifficulty;
+            DifficultyManager.Instance.SetDifficulty(target);
+        }
+
         UpdateModeSelectionColors();
         OnModeSelected?.Invoke(selectedMode, selectedDifficulty);
 
@@ -519,6 +584,9 @@ public class InfoPanelController : MonoBehaviour
 
     private string GetDifficultyText()
     {
+        // 평가 모드는 난이도 무관 → 빈값 (Mode 컬럼에서 "평가"로 구분됨)
+        if (selectedMode == ModeType.Evaluation) return "";
+
         switch (selectedDifficulty)
         {
             case DifficultyLevel.Beginner: return "초급자";

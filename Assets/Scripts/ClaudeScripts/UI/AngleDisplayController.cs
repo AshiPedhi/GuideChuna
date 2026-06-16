@@ -229,13 +229,13 @@ public class AngleDisplayController : BaseUIPanel
     {
         bool evaluatorExtendedMode = pathEvaluator.IsExtendedLimitMode;
         bool evaluatorStretchingMode = pathEvaluator.IsStretchingMode;
-        float evaluatorHoldStart = pathEvaluator.CurrentMidHoldStart;
-        float evaluatorHoldEnd = pathEvaluator.CurrentMidHoldEnd;
+        // ★ 디스플레이용 절대값 사용 (스트레칭도 재평가와 동일 좌표계)
+        float displayHoldStart = pathEvaluator.DisplayMidHoldStart;
+        float displayHoldEnd = pathEvaluator.DisplayMidHoldEnd;
 
-        // 확장 모드/스트레칭 모드 또는 hold 범위 값 자체가 변경되었을 때 업데이트
         bool modeChanged = isExtendedMode != evaluatorExtendedMode || isStretchingMode != evaluatorStretchingMode;
-        bool valueChanged = Mathf.Abs(currentHoldStart - evaluatorHoldStart) > 0.001f
-                         || Mathf.Abs(currentHoldEnd - evaluatorHoldEnd) > 0.001f;
+        bool valueChanged = Mathf.Abs(currentHoldStart - displayHoldStart) > 0.001f
+                         || Mathf.Abs(currentHoldEnd - displayHoldEnd) > 0.001f;
 
         if (modeChanged || valueChanged)
         {
@@ -354,34 +354,26 @@ public class AngleDisplayController : BaseUIPanel
     {
         isExtendedMode = extended;
 
-        // ChunaPathEvaluator에서 현재 홀드 범위 직접 가져오기
+        // ★ 디스플레이용 절대값 사용 (스트레칭도 재평가와 동일 좌표계)
         if (pathEvaluator != null)
         {
-            currentHoldStart = pathEvaluator.CurrentMidHoldStart;
-            currentHoldEnd = pathEvaluator.CurrentMidHoldEnd;
+            currentHoldStart = pathEvaluator.DisplayMidHoldStart;
+            currentHoldEnd = pathEvaluator.DisplayMidHoldEnd;
         }
 
-        if (displayMode == DisplayMode.Linear)
+        // ★ Arc + Linear 양쪽 모두 갱신 (모드 전환 시 stale 값 방지)
+        // Arc 모드
         {
-            UpdateLinearHoldRange();
-        }
-        else
-        {
-            // ★ Arc 모드: 홀드 범위는 오프셋과 무관하게 순수 비율 기반으로 계산
             float angleAtHoldStart = Mathf.Lerp(startAngle, endAngle, currentHoldStart);
             float angleAtHoldEnd = Mathf.Lerp(startAngle, endAngle, currentHoldEnd);
 
-            // fillAmount = 각도 / 360 (axis 위치와 동기화)
             if (holdStartImage != null)
-            {
                 holdStartImage.fillAmount = angleAtHoldStart / 360f;
-            }
-
             if (holdEndImage != null)
-            {
                 holdEndImage.fillAmount = angleAtHoldEnd / 360f;
-            }
         }
+        // Linear 모드
+        UpdateLinearHoldRange();
 
         if (showDebugLogs)
         {
@@ -547,14 +539,31 @@ public class AngleDisplayController : BaseUIPanel
 
     /// <summary>
     /// 비율에서 각도 업데이트
-    /// ★ 오프셋 적용 시: 오프셋 ~ endAngle 범위로 표시 (90° 초과 안 함)
+    /// ★ 스트레칭 + UserHandFrame: 상대 진행도에 stretchingGuideStart 가산 (절대값 변환)
+    /// ★ PatientAnimation: normalizedTime이 이미 절대값이므로 가산 안 함
     /// </summary>
     private void UpdateAngleFromRatio(float ratio)
     {
         currentProgress = Mathf.Clamp01(ratio);
 
-        // ★ 오프셋이 있으면 시작점을 오프셋으로, 끝점은 endAngle로 유지
-        // 예: 오프셋 27° → 27° ~ 90° 범위로 표시
+        // ★ 스트레칭: 싱크 소스별 절대값 변환 (마커와 동일 좌표계)
+        if (isStretchingMode && pathEvaluator != null)
+        {
+            float start = pathEvaluator.StretchingGuideStart;
+            if (syncSource == SyncSource.PatientAnimation)
+            {
+                // 애니메이션 remap (start + p × (1-start)) 역변환 → 선형 절대값
+                float range = 1f - start;
+                float relProgress = range > 0.001f ? (currentProgress - start) / range : 0f;
+                currentProgress = Mathf.Clamp01(relProgress + start);
+            }
+            else
+            {
+                // UserHandFrame 등: 상대값 + 오프셋
+                currentProgress = Mathf.Clamp01(currentProgress + start);
+            }
+        }
+
         float effectiveStartAngle = startAngle + angleDisplayOffset;
         float targetAngle = Mathf.Lerp(effectiveStartAngle, endAngle, currentProgress);
 
@@ -673,7 +682,15 @@ public class AngleDisplayController : BaseUIPanel
         float before = currentHoldStart;
         isStretchingMode = pathEvaluator.IsStretchingMode;
         UpdateHoldRange(pathEvaluator.IsExtendedLimitMode);
-        ChunaLogger.Log($"<color=yellow>[AngleDisplayController] ForceRefreshHoldRange: {before:P0} → {currentHoldStart:P0}~{currentHoldEnd:P0} (mode:{displayMode}, stretched:{isStretchingMode}, extended:{isExtendedMode})</color>");
+
+        float arcStartFill = holdStartImage != null ? holdStartImage.fillAmount : -1f;
+        float arcEndFill = holdEndImage != null ? holdEndImage.fillAmount : -1f;
+        float linStartFill = linearHoldStartImage != null ? linearHoldStartImage.fillAmount : -1f;
+        float linEndFill = linearHoldEndImage != null ? linearHoldEndImage.fillAmount : -1f;
+        ChunaLogger.Log($"<color=yellow>[AngleDisplayController] ForceRefreshHoldRange: holdRange={currentHoldStart:P0}~{currentHoldEnd:P0} " +
+            $"(mode:{displayMode}, stretch:{isStretchingMode}, extended:{isExtendedMode})" +
+            $"\n  Arc fillAmount: start={arcStartFill:F4}, end={arcEndFill:F4}" +
+            $"\n  Linear fillAmount: start={linStartFill:F4}, end={linEndFill:F4}</color>");
     }
 
     /// <summary>

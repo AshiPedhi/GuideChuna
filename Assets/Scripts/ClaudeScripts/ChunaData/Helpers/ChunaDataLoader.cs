@@ -36,8 +36,8 @@ public class ChunaDataLoader
 
         owner.LoadedFrames = result.frames;
 
-        // ★ 기준점 로컬 좌표 → 월드 좌표 변환 (로드 시 일괄 변환)
-        ConvertFramesToWorldSpace();
+        // frame 좌표는 referenceTransform 기준 로컬로 유지. 재생/평가 시점에 매 프레임 변환되어
+        // 환자 위치 변경 후에도 가이드 핸드가 환자를 자동 추종한다.
 
         if (owner.ShowDebugLogs)
             ChunaLogger.Log($"[ChunaPathEvaluator] {owner.LoadedFrames.Count}개 프레임 로드됨");
@@ -73,9 +73,13 @@ public class ChunaDataLoader
         PoseFrame firstFrame = loadedFrames[0];
         PoseFrame lastFrame = loadedFrames[loadedFrames.Count - 1];
 
+        // frame root는 referenceTransform 기준 로컬이므로, 월드 방향으로 회전 변환해야
+        // 진행도 계산 시 사용하는 displacement(월드)와 Dot product가 일관됨.
+        Quaternion refRot = owner.ReferenceTransform != null ? owner.ReferenceTransform.rotation : Quaternion.identity;
+
         // ★ 양손 이동량 비교 → 더 많이 움직인 손 기준
-        Vector3 rightMoveVec = lastFrame.rightRootPosition - firstFrame.rightRootPosition;
-        Vector3 leftMoveVec = lastFrame.leftRootPosition - firstFrame.leftRootPosition;
+        Vector3 rightMoveVec = refRot * (lastFrame.rightRootPosition - firstFrame.rightRootPosition);
+        Vector3 leftMoveVec = refRot * (lastFrame.leftRootPosition - firstFrame.leftRootPosition);
         float rightDist = rightMoveVec.magnitude;
         float leftDist = leftMoveVec.magnitude;
 
@@ -173,6 +177,10 @@ public class ChunaDataLoader
 
         Vector3 pivotPos = owner.PivotTransform.position;
 
+        // frame root는 referenceTransform 기준 로컬이므로, pivotPos(월드)와 비교하려면 월드로 변환.
+        Vector3 refPos = owner.ReferenceTransform != null ? owner.ReferenceTransform.position : Vector3.zero;
+        Quaternion refRot = owner.ReferenceTransform != null ? owner.ReferenceTransform.rotation : Quaternion.identity;
+
         // ★ 양손 중 더 많이 움직인 손 기준으로 피벗 각도 계산
         PoseFrame first = loadedFrames[0];
         PoseFrame last = loadedFrames[loadedFrames.Count - 1];
@@ -182,14 +190,14 @@ public class ChunaDataLoader
         Vector3 startPos, endPos;
         if (leftDist > rightDist)
         {
-            startPos = first.leftRootPosition;
-            endPos = last.leftRootPosition;
+            startPos = refPos + refRot * first.leftRootPosition;
+            endPos = refPos + refRot * last.leftRootPosition;
             ChunaLogger.Log($"<color=cyan>[Pivot Angle] 왼손 기준 (L={leftDist:F3}m > R={rightDist:F3}m)</color>");
         }
         else
         {
-            startPos = first.rightRootPosition;
-            endPos = last.rightRootPosition;
+            startPos = refPos + refRot * first.rightRootPosition;
+            endPos = refPos + refRot * last.rightRootPosition;
             ChunaLogger.Log($"<color=cyan>[Pivot Angle] 오른손 기준 (R={rightDist:F3}m, L={leftDist:F3}m)</color>");
         }
 
@@ -359,39 +367,5 @@ public class ChunaDataLoader
 
         if (owner.ShowDebugLogs)
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 난이도 동기화 — 가이드핸드:{owner.ShowGuideHandsField}, 투명도:{owner.GuideHandColor.a:F2}, 홀드:{dm.RequiredHoldTime:F1}s</color>");
-    }
-
-    /// <summary>
-    /// 로드된 프레임의 기준점 로컬 좌표를 월드 좌표로 일괄 변환
-    /// </summary>
-    private void ConvertFramesToWorldSpace()
-    {
-        var loadedFrames = owner.LoadedFrames;
-        if (loadedFrames == null || loadedFrames.Count == 0) return;
-        if (owner.ReferenceTransform == null)
-        {
-            if (owner.ShowDebugLogs)
-                ChunaLogger.LogWarning("[ChunaPathEvaluator] referenceTransform 없음 - 프레임 좌표를 그대로 사용");
-            return;
-        }
-
-        Vector3 refPos = owner.ReferenceTransform.position;
-        Quaternion refRot = owner.ReferenceTransform.rotation;
-
-        for (int i = 0; i < loadedFrames.Count; i++)
-        {
-            var frame = loadedFrames[i];
-
-            // 왼손 루트
-            frame.leftRootPosition = refPos + refRot * frame.leftRootPosition;
-            frame.leftRootRotation = refRot * frame.leftRootRotation;
-
-            // 오른손 루트
-            frame.rightRootPosition = refPos + refRot * frame.rightRootPosition;
-            frame.rightRootRotation = refRot * frame.rightRootRotation;
-        }
-
-        if (owner.ShowDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] {loadedFrames.Count}개 프레임 월드 좌표 변환 완료 (ref: {owner.ReferenceTransform.name}, pos={refPos}, rot={refRot.eulerAngles})</color>");
     }
 }

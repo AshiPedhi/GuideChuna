@@ -67,6 +67,22 @@ public class ScenarioConfig : ScriptableObject
     [Tooltip("Phase 이름으로 매칭하여 해당 phase 진입 시 임계점 교체 (사각근 전부/중부/후부 등)")]
     public PhaseThresholdOverride[] phaseOverrides;
 
+    [Header("=== 평가모드 Phase 필터 (선택) ===")]
+    [Tooltip("평가모드에서만 진행할 phase 이름들 (비어있으면 전체 phase 진행). 예: 상부승모근 중부만 평가하려면 [시작, 중부, 종료]")]
+    public string[] evaluationPhases;
+
+    public bool HasEvaluationPhaseFilter => evaluationPhases != null && evaluationPhases.Length > 0;
+
+    public bool IsEvaluationPhaseAllowed(string phaseName)
+    {
+        if (!HasEvaluationPhaseFilter) return true;
+        foreach (var p in evaluationPhases)
+        {
+            if (p == phaseName) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Phase별 회전 적정범위 오버라이드
     /// movementType이 rotation인 스텝에서만 적용, 측굴 등은 기본값 유지

@@ -27,6 +27,10 @@ public class EvaluationPhaseManager
     private Vector3 lastLeftHandPosition;
     private Vector3 lastRightHandPosition;
 
+    // MidHold 진행도 속도 추적 (훑고 지나가기 방지)
+    private float lastProgressForVelocity = 0f;
+    private bool progressVelocityInitialized = false;
+
     // Properties
     public ChunaPathEvaluator.EvaluationPhase CurrentPhase => currentPhase;
     public Vector3 LeftHandStartHoldPosition => leftHandStartHoldPosition;
@@ -51,11 +55,13 @@ public class EvaluationPhaseManager
         Vector3 leftPos, Vector3 rightPos,
         bool isLeftTouching, bool isRightTouching,
         float holdVelocityThreshold,
+        float pauseProgressVelocity,
         float startHoldDuration, float midHoldDuration,
         float currentMidHoldStart, float currentMidHoldEnd,
         float leftHandDriftThreshold,
         float currentStartRatio,
         bool useRelativeMovement, bool startHoldOnly, bool guideOnlyMode, bool skipMidHold, bool isGuideMode,
+        bool isBothHandsMode,
         bool showDebugLogs)
     {
         // Calculate velocities
@@ -81,14 +87,14 @@ public class EvaluationPhaseManager
 
             case ChunaPathEvaluator.EvaluationPhase.Moving:
                 UpdateMoving(leftPos, rightPos, currentMidHoldStart, currentMidHoldEnd,
-                    leftHandDriftThreshold, guideOnlyMode, skipMidHold, isGuideMode, showDebugLogs);
+                    leftHandDriftThreshold, guideOnlyMode, skipMidHold, isGuideMode, isBothHandsMode, showDebugLogs);
                 break;
 
             case ChunaPathEvaluator.EvaluationPhase.MidHold:
-                UpdateMidHold(leftPos, rightPos, rightVelocity,
-                    holdVelocityThreshold, midHoldDuration,
+                UpdateMidHold(leftPos, rightPos,
+                    pauseProgressVelocity, midHoldDuration,
                     currentMidHoldStart, currentMidHoldEnd,
-                    leftHandDriftThreshold, isGuideMode, showDebugLogs);
+                    leftHandDriftThreshold, isGuideMode, isBothHandsMode, showDebugLogs);
                 break;
         }
     }
@@ -108,6 +114,17 @@ public class EvaluationPhaseManager
         if (newPhase == ChunaPathEvaluator.EvaluationPhase.Moving)
         {
             owner.InitializeMovingPhaseFrame(currentStartRatio, loadedFrameCount);
+        }
+
+        // MidHold 진입 시 진행도 속도 기준점 초기화 (첫 프레임 delta=0 보장)
+        if (newPhase == ChunaPathEvaluator.EvaluationPhase.MidHold)
+        {
+            lastProgressForVelocity = owner.GetCurrentProgress();
+            progressVelocityInitialized = true;
+        }
+        else
+        {
+            progressVelocityInitialized = false;
         }
 
         if (showDebugLogs)
@@ -223,10 +240,10 @@ public class EvaluationPhaseManager
 
     private void UpdateMoving(Vector3 leftPos, Vector3 rightPos,
         float currentMidHoldStart, float currentMidHoldEnd,
-        float leftHandDriftThreshold, bool guideOnlyMode, bool skipMidHold, bool isGuideMode, bool showDebugLogs)
+        float leftHandDriftThreshold, bool guideOnlyMode, bool skipMidHold, bool isGuideMode, bool isBothHandsMode, bool showDebugLogs)
     {
-        // Left hand drift check (guideOnly에서는 스킵)
-        if (!guideOnlyMode)
+        // Left hand drift check (guideOnly / 양손 회전에서는 스킵)
+        if (!guideOnlyMode && !isBothHandsMode)
         {
             float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
             if (leftDrift > leftHandDriftThreshold)
@@ -317,61 +334,98 @@ public class EvaluationPhaseManager
         // Mid hold zone check
         if (progress >= currentMidHoldStart && progress <= limitRatio)
         {
+            ChunaLogger.Log($"<color=green>[Moving→MidHold] 적정범위 진입! progress={progress:P2}, holdStart={currentMidHoldStart:P2}, holdEnd={limitRatio:P2}</color>");
             owner.FireOnMidHoldBegin();
             ChangePhase(ChunaPathEvaluator.EvaluationPhase.MidHold, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
         }
 
         if (showDebugLogs && Time.frameCount % 60 == 0)
-            ChunaLogger.Log($"[Moving] Progress: {progress:P0}, limit:{limitRatio:P0}, overLimit:{isOverLimitBarrier}");
+            ChunaLogger.Log($"[Moving] progress={progress:P2}, holdRange={currentMidHoldStart:P2}~{limitRatio:P2}, overLimit:{isOverLimitBarrier}");
     }
 
-    private void UpdateMidHold(Vector3 leftPos, Vector3 rightPos, float rightVel,
-        float holdVelocityThreshold, float midHoldDuration,
+    private void UpdateMidHold(Vector3 leftPos, Vector3 rightPos,
+        float pauseProgressVelocity, float midHoldDuration,
         float currentMidHoldStart, float currentMidHoldEnd,
-        float leftHandDriftThreshold, bool isGuideMode, bool showDebugLogs)
+        float leftHandDriftThreshold, bool isGuideMode, bool isBothHandsMode, bool showDebugLogs)
     {
-        bool rightStopped = rightVel < holdVelocityThreshold;
-        float leftDrift = Vector3.Distance(leftPos, leftHandStartHoldPosition);
-        bool leftOk = leftDrift <= leftHandDriftThreshold;
+        // 양손 회전 모드에서는 보조수 드리프트 체크 생략
+        float leftDrift = isBothHandsMode ? 0f : Vector3.Distance(leftPos, leftHandStartHoldPosition);
+        bool leftOk = isBothHandsMode || leftDrift <= leftHandDriftThreshold;
         float progress = owner.GetCurrentProgress();
         bool rightInRange = progress >= currentMidHoldStart && progress <= currentMidHoldEnd;
 
-        if (rightStopped && leftOk && rightInRange)
+        // ★ 초과 경고: MidHold 진입 후 적정범위 초과 시 — UpdateMoving과 동일 처리
+        //   (이 누락이 "초과 후 복귀 시 경고음 미변경" 버그의 원인이었음)
+        if (progress > currentMidHoldEnd)
         {
-            phaseHoldTime += Time.deltaTime;
-            owner.FireOnHoldProgressChanged(phaseHoldTime, midHoldDuration);
-
-            if (showDebugLogs && Time.frameCount % 30 == 0)
-                ChunaLogger.Log($"[MidHold] Hold progress: {phaseHoldTime:F0}s");
-
-            if (phaseHoldTime >= midHoldDuration)
+            if (!isOverLimitBarrier)
             {
-                owner.FireOnMidHoldComplete();
-                owner.FireOnHoldCompleted();
-
-                if (isGuideMode)
-                {
-                    ChunaLogger.Log("<color=magenta>[MidHold] Guide mode - proceed with toggle</color>");
-                    ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
-                    return;
-                }
-
-                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
-                owner.CompleteEvaluation();
+                isOverLimitBarrier = true;
+                owner.IncrementLimitWarningCount();
+                ChunaLogger.Log($"<color=red>[MidHold] Over limit! (warning #{owner.GetLimitWarningCount()})</color>");
             }
+            owner.FireOnLimitWarning(progress);
         }
-        else
+        else if (isOverLimitBarrier)
         {
-            if (phaseHoldTime > 0.1f)
-            {
-                string reason = !rightStopped ? "right hand moving" :
-                               (!leftOk ? "left hand drifted" : "out of range");
-                if (showDebugLogs)
-                    ChunaLogger.Log($"<color=orange>[MidHold] Hold interrupted: {reason}</color>");
-            }
+            isOverLimitBarrier = false;
+            ChunaLogger.Log($"<color=green>[MidHold] Returned to safe range. Warning cleared.</color>");
+        }
 
+        // 진행도 속도 계산 (ratio/s)
+        if (!progressVelocityInitialized)
+        {
+            lastProgressForVelocity = progress;
+            progressVelocityInitialized = true;
+        }
+        float progressVel = Time.deltaTime > 0f ? Mathf.Abs(progress - lastProgressForVelocity) / Time.deltaTime : 0f;
+        lastProgressForVelocity = progress;
+
+        bool progressSlow = progressVel < pauseProgressVelocity;
+
+        // 범위 이탈 / 왼손 드리프트 → 리셋 (홀드 무효)
+        if (!rightInRange || !leftOk)
+        {
+            if (phaseHoldTime > 0.1f && showDebugLogs)
+            {
+                string reason = !leftOk ? "left hand drifted" : "out of range";
+                ChunaLogger.Log($"<color=orange>[MidHold] Hold reset: {reason}</color>");
+            }
             phaseHoldTime = 0f;
             owner.FireOnHoldProgressChanged(0f, midHoldDuration);
+            return;
+        }
+
+        // 범위 안 + 진행도 속도 과다 → 일시정지 (phaseHoldTime 보존)
+        if (!progressSlow)
+        {
+            if (showDebugLogs && Time.frameCount % 30 == 0)
+                ChunaLogger.Log($"<color=yellow>[MidHold] Paused (progressVel={progressVel:F3}/s >= {pauseProgressVelocity:F3}/s), held={phaseHoldTime:F1}s</color>");
+            owner.FireOnHoldProgressChanged(phaseHoldTime, midHoldDuration);
+            return;
+        }
+
+        // 타이머 진행
+        phaseHoldTime += Time.deltaTime;
+        owner.FireOnHoldProgressChanged(phaseHoldTime, midHoldDuration);
+
+        if (showDebugLogs && Time.frameCount % 30 == 0)
+            ChunaLogger.Log($"[MidHold] Hold progress: {phaseHoldTime:F1}s (progressVel={progressVel:F3}/s)");
+
+        if (phaseHoldTime >= midHoldDuration)
+        {
+            owner.FireOnMidHoldComplete();
+            owner.FireOnHoldCompleted();
+
+            if (isGuideMode)
+            {
+                ChunaLogger.Log("<color=magenta>[MidHold] Guide mode - proceed with toggle</color>");
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+                return;
+            }
+
+            ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+            owner.CompleteEvaluation();
         }
     }
 

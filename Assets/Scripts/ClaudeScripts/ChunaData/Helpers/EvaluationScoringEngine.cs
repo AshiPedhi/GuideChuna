@@ -19,7 +19,8 @@ public class EvaluationScoringEngine
         float metricsRecordInterval,
         float leftSimilarity, float rightSimilarity,
         ChunaLimitChecker limitChecker,
-        Vector3 leftHandPos, Vector3 rightHandPos)
+        Vector3 leftHandPos, Vector3 rightHandPos,
+        bool leftTouching = false)
     {
         var snapshot = new ChunaPathEvaluator.EvaluationSession.MetricsSnapshot
         {
@@ -27,7 +28,8 @@ public class EvaluationScoringEngine
             leftSimilarity = leftSimilarity,
             rightSimilarity = rightSimilarity,
             leftHandPosition = leftHandPos,
-            rightHandPosition = rightHandPos
+            rightHandPosition = rightHandPos,
+            leftTouching = leftTouching
         };
 
         if (limitChecker != null)
@@ -74,17 +76,19 @@ public class EvaluationScoringEngine
     /// <summary>
     /// Calculate average similarity from session metrics history.
     /// </summary>
-    public void CalculateAverageSimilarity(ChunaPathEvaluator.EvaluationSession session, float leftWeight, float rightWeight)
+    public void CalculateAverageSimilarity(ChunaPathEvaluator.EvaluationSession session, float leftWeight, float rightWeight, bool isBothHandsMode = false)
     {
         if (session.metricsHistory.Count == 0) return;
 
         int count = session.metricsHistory.Count;
         float totalLeft = 0f, totalRight = 0f;
+        int leftTouchCount = 0;
 
         foreach (var snapshot in session.metricsHistory)
         {
             totalLeft += snapshot.leftSimilarity;
             totalRight += snapshot.rightSimilarity;
+            if (snapshot.leftTouching) leftTouchCount++;
 
             float weightedAvg = snapshot.leftSimilarity * leftWeight + snapshot.rightSimilarity * rightWeight;
             if (weightedAvg < session.minSimilarity) session.minSimilarity = weightedAvg;
@@ -93,18 +97,36 @@ public class EvaluationScoringEngine
 
         float avgLeft = totalLeft / count;
         float avgRight = totalRight / count;
-        session.averageSimilarity = avgLeft * leftWeight + avgRight * rightWeight;
 
         // 좌/우 개별 평균 유사도
         session.leftAverageSimilarity = avgLeft;
         session.rightAverageSimilarity = avgRight;
 
-        // 유사도 표준편차 (가중 평균 기준)
+        // 보조수(왼손) 품질 = 접촉 유지 비율 × 방향(orientation 프록시: avgLeft)
+        session.leftContactRatio = (float)leftTouchCount / count;
+        session.supportQuality = session.leftContactRatio * avgLeft;
+
+        if (isBothHandsMode)
+        {
+            // 양손 회전 step: 두 손 모두 주동 → 기존 가중 평균 유지
+            session.averageSimilarity = avgLeft * leftWeight + avgRight * rightWeight;
+        }
+        else
+        {
+            // 단손 step: 점수 비중 주45/보주15 → 유사도(60점)에서 주동수 45 + 보조수 15 환산
+            // averageSimilarity는 0~1로 정규화 (CalculateFinalScore에서 ×60). (avgRight×45 + supportQuality×15)/60
+            session.averageSimilarity = (avgRight * 45f + session.supportQuality * 15f) / 60f;
+        }
+
+        // 유사도 표준편차 — 단손은 주동수(오른손) 안정성, 양손은 가중 평균 안정성
+        float stdMean = isBothHandsMode ? session.averageSimilarity : avgRight;
         float sumSquaredDiff = 0f;
         foreach (var snapshot in session.metricsHistory)
         {
-            float weightedAvg = snapshot.leftSimilarity * leftWeight + snapshot.rightSimilarity * rightWeight;
-            float diff = weightedAvg - session.averageSimilarity;
+            float sampleVal = isBothHandsMode
+                ? snapshot.leftSimilarity * leftWeight + snapshot.rightSimilarity * rightWeight
+                : snapshot.rightSimilarity;
+            float diff = sampleVal - stdMean;
             sumSquaredDiff += diff * diff;
         }
         session.similarityStdDev = Mathf.Sqrt(sumSquaredDiff / count);
@@ -115,16 +137,25 @@ public class EvaluationScoringEngine
     /// </summary>
     public void CalculateFinalScore(ChunaPathEvaluator.EvaluationSession session)
     {
-        // Similarity-based score (60%)
+        // Similarity-based score (60%) — 단손 step은 averageSimilarity 안에 주45/보주15 환산이 이미 포함됨
         float similarityScore = session.averageSimilarity * 60f;
 
-        // Limit compliance score (40%)
-        float limitScore = 40f;
-        limitScore -= session.limitViolationCount * 2f;
-        limitScore -= session.totalTimeInWarning * 0.5f;
-        limitScore -= session.totalTimeInDanger * 1f;
-        limitScore -= session.totalTimeExceeded * 3f;
-        limitScore = Mathf.Max(0f, limitScore);
+        // 40% 블록: 등척성운동은 가동범위 개념이 없으므로 '홀드 완수도'로, 그 외는 리밋 준수로 계산
+        float limitScore;
+        if (session.isIsometric)
+        {
+            limitScore = 40f * Mathf.Clamp01(session.holdQuality);
+        }
+        else
+        {
+            // Limit compliance score (40%)
+            limitScore = 40f;
+            limitScore -= session.limitViolationCount * 2f;
+            limitScore -= session.totalTimeInWarning * 0.5f;
+            limitScore -= session.totalTimeInDanger * 1f;
+            limitScore -= session.totalTimeExceeded * 3f;
+            limitScore = Mathf.Max(0f, limitScore);
+        }
 
         float score = similarityScore + limitScore;
         score = Mathf.Clamp(score, 0f, 100f);

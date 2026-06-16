@@ -25,6 +25,10 @@ public class ExitPopupController : BaseUIPanel
     [Header("=== Text Settings ===")]
     [SerializeField] private string popupTitle = "실습 종료";
     [SerializeField] private string popupMessage = "실습을 마치고 메인으로 이동하시겠습니까?";
+    [Tooltip("평가 진행 중 종료 시도 시 표시할 경고 제목")]
+    [SerializeField] private string evaluationWarningTitle = "평가 종료 경고";
+    [Tooltip("평가 진행 중 종료 시도 시 표시할 경고 메시지")]
+    [SerializeField] private string evaluationWarningMessage = "지금 나가면 평가가 미완료로 저장됩니다.\n정말 나가시겠습니까?";
     [SerializeField] private string cancelToggleText = "취소";
     [SerializeField] private string retryToggleText = "다시하기";
     [SerializeField] private string mainMenuToggleText = "메인으로";
@@ -53,6 +57,9 @@ public class ExitPopupController : BaseUIPanel
 
     // InfoPanelController 참조 (팝업 상태 알림용)
     private InfoPanelController infoPanelController;
+
+    // 평가 진행 중 판단용 (경고 메시지 분기). 지연 탐색.
+    private TrainingResultTracker resultTracker;
 
     protected override GameObject GetPanelObject() => popupPanel;
 
@@ -116,6 +123,25 @@ public class ExitPopupController : BaseUIPanel
         UpdateTexts();
     }
 
+    /// <summary>
+    /// 팝업 표시 직전 컨텍스트에 맞는 제목/메시지 적용.
+    /// 평가 진행 중(공식 평가 + 추적 중) → 미완료 저장 경고. 그 외 → 기본 메시지.
+    /// </summary>
+    private void ApplyContextualMessage()
+    {
+        if (resultTracker == null)
+            resultTracker = FindFirstObjectByType<TrainingResultTracker>();
+
+        bool evaluationInProgress = resultTracker != null
+                                    && resultTracker.IsTracking
+                                    && resultTracker.IsOfficialEvaluation;
+
+        if (titleText != null)
+            titleText.text = evaluationInProgress ? evaluationWarningTitle : popupTitle;
+        if (messageText != null)
+            messageText.text = evaluationInProgress ? evaluationWarningMessage : popupMessage;
+    }
+
     private void UpdateTexts()
     {
         if (titleText != null)
@@ -165,6 +191,9 @@ public class ExitPopupController : BaseUIPanel
 
         isShowing = true;
         IsVisible = true;
+
+        // 평가 진행 중이면 "미완료로 저장됨" 경고 메시지로 교체 (그 외엔 기본 메시지)
+        ApplyContextualMessage();
 
         // 팝업 표시 (InfoPanelController가 내부적으로 팝업 상태 관리)
         if (popupPanel != null)

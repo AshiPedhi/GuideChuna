@@ -234,11 +234,11 @@ namespace ChunaTraining
                     preset.playHintAudio = false;
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = true;
-                    preset.showProgressBar = false;
+                    preset.showProgressBar = true;
                     preset.showSimilarityPercent = false;
                     preset.showDetailedScore = true;
                     preset.highlightErrors = false;
-                    preset.autoAdvanceStep = false;
+                    preset.autoAdvanceStep = true;
                     preset.unlimitedTime = false;  // 시간 제한 있음
                     preset.similarityThreshold = 0.75f;  // 상급자: 75%
                     preset.requiredHoldTime = 2f;
@@ -261,11 +261,11 @@ namespace ChunaTraining
                     preset.playHintAudio = false;
                     preset.playFeedbackSound = true;
                     preset.showStepDescription = false;  // 텍스트 설명 없음
-                    preset.showProgressBar = false;
+                    preset.showProgressBar = true;
                     preset.showSimilarityPercent = false;
                     preset.showDetailedScore = true;      // 결과만 상세 표시
                     preset.highlightErrors = false;
-                    preset.autoAdvanceStep = false;
+                    preset.autoAdvanceStep = true;
                     preset.unlimitedTime = false;
                     preset.similarityThreshold = 0.75f;
                     preset.requiredHoldTime = 2f;

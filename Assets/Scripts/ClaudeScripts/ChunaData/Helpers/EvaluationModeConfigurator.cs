@@ -277,6 +277,42 @@ public class EvaluationModeConfigurator
     }
 
     /// <summary>
+    /// 회전 측정에 사용할 추출 벡터 반환.
+    /// 기본: Vector3.forward (기존 동작 유지, 측굴 등 기존 시나리오 호환)
+    /// 누운 환자 오버라이드 활성 시: 감지 축에 수직인 대체 벡터 사용
+    /// </summary>
+    public Vector3 GetRotationMeasurementVector()
+    {
+        if (!useAlternateMeasurementVector)
+            return Vector3.forward;
+
+        // 누운 환자 오버라이드: 감지 축에 수직인 벡터
+        switch (owner.RotationDetectionAxisField)
+        {
+            case ChunaPathEvaluator.RotationDetectionAxis.Z:
+                return Vector3.up;      // Z축 감지 시 up 벡터 (forward 평행 방지)
+            case ChunaPathEvaluator.RotationDetectionAxis.Y:
+                return Vector3.forward;
+            case ChunaPathEvaluator.RotationDetectionAxis.X:
+                return Vector3.forward;
+            default:
+                return Vector3.forward;
+        }
+    }
+
+    private bool useAlternateMeasurementVector = false;
+
+    /// <summary>
+    /// 대체 측정 벡터 사용 여부 설정 (누운 환자 오버라이드 시 활성화)
+    /// </summary>
+    public void SetUseAlternateMeasurementVector(bool use)
+    {
+        useAlternateMeasurementVector = use;
+        if (owner.ShowDebugLogs)
+            ChunaLogger.Log($"<color=magenta>[EvaluationModeConfigurator] 대체 측정 벡터: {(use ? "ON" : "OFF")}</color>");
+    }
+
+    /// <summary>
     /// 회전 감지 축 설정.
     /// </summary>
     public void SetRotationDetectionAxis(ChunaPathEvaluator.RotationDetectionAxis axis)

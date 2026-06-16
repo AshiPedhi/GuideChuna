@@ -162,7 +162,6 @@ public class ScenarioCSVLoader : MonoBehaviour
         // 이전 값들을 기억 (빈칸 채우기용)
         int lastScenarioNo = 0;
         string lastScenarioName = "";
-        string lastPhase = "";
 
         ScenarioData currentScenario = null;
         PhaseData currentPhase = null;
@@ -186,7 +185,7 @@ public class ScenarioCSVLoader : MonoBehaviour
                 // CSV 컬럼 순서에 맞게 파싱
                 int scenarioNo = string.IsNullOrEmpty(values[0]) ? lastScenarioNo : int.Parse(values[0].Trim());
                 string scenarioName = string.IsNullOrEmpty(values[1]) ? lastScenarioName : values[1].Trim();
-                string phase = string.IsNullOrEmpty(values[2]) ? lastPhase : values[2].Trim();
+                string phase = values[2].Trim();
                 string stepName = values[3].Trim();
                 int stepNo = int.Parse(values[4].Trim());
                 int subStepNo = int.Parse(values[5].Trim());
@@ -283,7 +282,6 @@ public class ScenarioCSVLoader : MonoBehaviour
                 // 현재 값 기억
                 lastScenarioNo = scenarioNo;
                 lastScenarioName = scenarioName;
-                lastPhase = phase;
 
                 // === 시나리오 생성/찾기 ===
                 if (currentScenario == null || currentScenario.scenarioNo != scenarioNo)

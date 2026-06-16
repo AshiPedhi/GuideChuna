@@ -146,7 +146,10 @@ public class ScenarioUIController : MonoBehaviour
     {
         if (phaseText != null)
         {
-            phaseText.text = phase.phaseName;
+            bool hasPhase = !string.IsNullOrEmpty(phase.phaseName);
+            phaseText.gameObject.SetActive(hasPhase);
+            if (hasPhase)
+                phaseText.text = phase.phaseName;
         }
     }
 

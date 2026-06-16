@@ -147,6 +147,9 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
     [SerializeField] private float holdVelocityThreshold = 0.05f;
 
+    [Tooltip("MidHold 중 적정범위 안에서 이 속도 이상으로 진행도가 변하면 홀드 타이머 일시정지 (ratio/s) - 훑고 지나가기 방지")]
+    [SerializeField] private float pauseProgressVelocity = 0.1f;
+
     [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
     [SerializeField] private bool requireLimitSafeForHold = true;
 
@@ -372,6 +375,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
     private bool guideOnlyMode;                 // true면 StartHold/MidHold 스킵, 유사도 비평가 (시각 데모 전용)
     private bool skipMidHold;                   // true면 유사도 평가하되 MidHold 스킵, 임계점 통과 시 즉시 완료 (대흉근 등)
+    private float isometricHoldEntryTime = -1f; // 등척성 StartHold 진입 시각 (홀드 완수도 계산용, -1=미진입)
 
     // ★ 피벗 기반 진행률 계산용
     private Vector3 pivotStartDirection;        // 피벗→시작손위치 방향 (정규화)
@@ -653,11 +657,19 @@ public class ChunaPathEvaluator : MonoBehaviour
         public float leftAverageSimilarity;
         public float rightAverageSimilarity;
 
+        // 보조수(왼손) 품질 — 단손 step에서 접촉 유지 비율 × 방향(orientation) 프록시 (0~1)
+        public float leftContactRatio;
+        public float supportQuality;
+
         // 유사도 안정성
         public float similarityStdDev;             // 유사도 표준편차
 
         // 안전성
         public float peakExceededRatio;            // 최대 초과 비율
+
+        // 등척성운동(홀드 전용) 채점 — 가동범위 대신 홀드 완수도로 40점 블록 계산
+        public bool isIsometric;                   // true면 40점 블록을 holdQuality로 환산
+        public float holdQuality = 1f;             // 0~1, 요구 홀드시간 / 실제 StartHold 소요시간
 
         // 최종 점수
         public float finalScore;
@@ -676,6 +688,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             public float rightLimitRatio;
             public Vector3 leftHandPosition;
             public Vector3 rightHandPosition;
+            public bool leftTouching;   // 이 시점 보조수(왼손) 환자 접촉 여부
         }
     }
 
@@ -728,7 +741,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생 (via helper)
         if (autoPlayHandler.IsAutoPlayMode)
         {
-            bool completed = autoPlayHandler.UpdateAutoPlay(patientAnimator, showDebugLogs);
+            // PassiveStretch: 보조수(왼손) 접촉 중일 때만 애니메이션 재생
+            // 게이팅 없는 경우 항상 true로 무시
+            UpdateCollisionDetection();
+            bool gateOpen = !autoPlayHandler.IsGated || isLeftHandTouchingPatient;
+
+            bool completed = autoPlayHandler.UpdateAutoPlay(patientAnimator, gateOpen, showDebugLogs);
             if (completed)
             {
                 HandleAutoPlayComplete();
@@ -751,11 +769,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                 leftPos, rightPos,
                 isLeftHandTouchingPatient, isRightHandTouchingPatient,
                 holdVelocityThreshold,
+                pauseProgressVelocity,
                 startHoldDuration, midHoldDuration,
                 currentMidHoldStart, currentMidHoldEnd,
                 leftHandDriftThreshold,
                 currentStartRatio,
                 useRelativeMovement, startHoldOnly, guideOnlyMode, skipMidHold, modeConfigurator.IsGuideMode,
+                isRotationStep,
                 showDebugLogs);
 
             currentPhase = phaseManager.CurrentPhase;
@@ -764,8 +784,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 애니메이션 선형보간 업데이트
         UpdateAnimationLerp();
 
-        // 메트릭 기록 (Moving/MidHold 단계에서만, guideOnly 제외)
-        if (!guideOnlyMode && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold))
+        // 등척성: StartHold 진입 시각 기록 (홀드 완수도 계산용)
+        if (startHoldOnly && currentPhase == EvaluationPhase.StartHold && isometricHoldEntryTime < 0f)
+            isometricHoldEntryTime = Time.time;
+
+        // 메트릭 기록 (Moving/MidHold, 그리고 등척성 홀드 중. guideOnly 제외)
+        // 등척성운동은 startHoldOnly로 Moving/MidHold를 안 거치므로 StartHold에서 유사도를 샘플링해야
+        // 주동수 포즈 + 보조수(접촉×포즈)가 채점된다.
+        bool isIsometricHold = startHoldOnly && currentPhase == EvaluationPhase.StartHold;
+        if (!guideOnlyMode && (currentPhase == EvaluationPhase.Moving || currentPhase == EvaluationPhase.MidHold || isIsometricHold))
         {
             float currentTime = Time.time;
             if (currentTime - lastMetricsRecordTime >= metricsRecordInterval)
@@ -1002,10 +1029,13 @@ public class ChunaPathEvaluator : MonoBehaviour
             {
                 // 회전 기반: 기준 회전에서 얼마나 회전했는지 계산
                 // ★ 선택된 축에 따라 회전 감지 방향 결정
+                // ★ 추출 벡터는 감지 축에 수직이어야 투영이 안정적
+                //   (Z축 감지 시 forward 추출하면 축과 평행 → 수치 불안정)
                 Vector3 detectionAxis = GetRotationDetectionAxis();
-                Vector3 refForward = userHoldReferenceRotation * Vector3.forward;
-                Vector3 curForward = rightHandRot * Vector3.forward;
-                float signedAngle = Vector3.SignedAngle(refForward, curForward, detectionAxis);
+                Vector3 measureVec = GetRotationMeasurementVector();
+                Vector3 refDir = userHoldReferenceRotation * measureVec;
+                Vector3 curDir = rightHandRot * measureVec;
+                float signedAngle = Vector3.SignedAngle(refDir, curDir, detectionAxis);
 
                 // ★ 회전 방향 반전 옵션
                 if (invertRotationDirection)
@@ -1028,7 +1058,7 @@ public class ChunaPathEvaluator : MonoBehaviour
                     Vector3 curEuler = rightHandRot.eulerAngles;
                     string dirInfo = signedAngle < 0 ? "(반대방향-무시)" : "";
                     ChunaLogger.Log($"<color=yellow>[Relative Rotate] 회전:{effectiveAngle:F1}° / {handDataTotalRotation:F1}° = {newRatio:P0} {dirInfo}</color>");
-                    ChunaLogger.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0}), signed:{signedAngle:F1}°</color>");
+                    ChunaLogger.Log($"<color=cyan>  기준:({refEuler.x:F0},{refEuler.y:F0},{refEuler.z:F0}) → 현재:({curEuler.x:F0},{curEuler.y:F0},{curEuler.z:F0}), signed:{signedAngle:F1}°, 축:{detectionAxis}, 측정벡터:{measureVec}</color>");
                 }
             }
         }
@@ -1402,9 +1432,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// ★ AutoPlay 모드 시작 - 핸드데이터 없이 애니메이션만 자동 재생
     /// </summary>
     /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 완료 시 자동 진행</param>
-    public void StartAutoPlay(float duration = 0f)
+    /// <param name="gated">true면 보조수 접촉으로 재생 게이팅 (PassiveStretch)</param>
+    public void StartAutoPlay(float duration = 0f, bool gated = false)
     {
-        autoPlayHandler.StartAutoPlay(duration);
+        autoPlayHandler.StartAutoPlay(duration, gated);
 
         // 평가 시작 처리
         isEvaluating = true;
@@ -1426,8 +1457,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // duration 파싱 시도
         float duration = subStep.duration > 0 ? subStep.duration : 0f;
 
+        // PassiveStretch: 보조수 접촉 게이팅
+        bool gated = !string.IsNullOrEmpty(subStep.conditionType) &&
+                     subStep.conditionType.Trim().Equals("PassiveStretch", System.StringComparison.OrdinalIgnoreCase);
+
         // AutoPlay 시작
-        StartAutoPlay(duration);
+        StartAutoPlay(duration, gated);
     }
 
     /// <summary>
@@ -1465,6 +1500,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     public bool IsGuideOnlyMode => guideOnlyMode;
 
     /// <summary>
+    /// 현재 SkipMidHold 모드인지 확인 (대흉근/흉쇄유돌근 등 홀드 판정 없는 직선 가동범위)
+    /// </summary>
+    public bool IsSkipMidHold => skipMidHold;
+
+    /// <summary>
     /// 현재 시작 비율 반환 (애니메이션 시작 위치, 항상 0)
     /// </summary>
     public float CurrentStartRatio => currentStartRatio;
@@ -1476,14 +1516,26 @@ public class ChunaPathEvaluator : MonoBehaviour
     public float CurrentAngleDisplayOffset => currentAngleDisplayOffset;
 
     /// <summary>
-    /// 현재 홀드 시작 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// 현재 홀드 시작 비율 반환 (evaluator 판정용 — 스트레칭은 상대값)
     /// </summary>
     public float CurrentMidHoldStart => currentMidHoldStart;
 
     /// <summary>
-    /// 현재 홀드 종료 비율 반환 (스트레칭/재평가/일반 모드에 따라)
+    /// 현재 홀드 종료 비율 반환 (evaluator 판정용 — 스트레칭은 상대값)
     /// </summary>
     public float CurrentMidHoldEnd => currentMidHoldEnd;
+
+    /// <summary>
+    /// 디스플레이용 홀드 시작 비율 (스트레칭도 절대값 — 재평가와 동일 좌표계)
+    /// </summary>
+    public float DisplayMidHoldStart => isStretchingMode ? stretchingHoldStart :
+                                        (isExtendedLimitMode && !isRotationStep ? extendedMidHoldStartRatio : midHoldStartRatio);
+
+    /// <summary>
+    /// 디스플레이용 홀드 종료 비율 (스트레칭도 절대값 — 재평가와 동일 좌표계)
+    /// </summary>
+    public float DisplayMidHoldEnd => isStretchingMode ? stretchingEnd :
+                                      (isExtendedLimitMode && !isRotationStep ? extendedMidHoldEndRatio : midHoldEndRatio);
 
     /// <summary>
     /// 현재 제한 비율 반환 (확장 모드 여부에 따라)
@@ -1551,6 +1603,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 GetRotationDetectionAxis() => modeConfigurator.GetRotationDetectionAxis();
 
     /// <summary>
+    /// 회전 측정용 추출 벡터 반환 (감지 축에 수직인 벡터)
+    /// </summary>
+    private Vector3 GetRotationMeasurementVector() => modeConfigurator.GetRotationMeasurementVector();
+
+    /// <summary>
+    /// 대체 측정 벡터 사용 설정 (누운 환자 오버라이드 시 활성화)
+    /// </summary>
+    public void SetUseAlternateMeasurementVector(bool use) => modeConfigurator.SetUseAlternateMeasurementVector(use);
+
+    /// <summary>
     /// ★ 피벗 각도 측정 평면의 법선 축 반환 (delegates to ChunaDataLoader static)
     /// </summary>
     private Vector3 GetPivotPlaneNormal()
@@ -1606,6 +1668,10 @@ public class ChunaPathEvaluator : MonoBehaviour
                     ChunaLogger.Log($"[ChunaPathEvaluator] 환자 Transform 자동 연결: {patient.name}");
             }
         }
+
+        // 가이드 frame 좌표 변환 기준을 PoseComparator에 주입
+        if (poseComparator != null && referenceTransform != null)
+            poseComparator.SetReferencePoint(referenceTransform);
 
         // 손목 본 자동 검색
         FindWristBones();
@@ -1752,6 +1818,37 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★ 난이도 프리셋에서 가이드 핸드/투명도 동기화
         dataLoader.SyncWithDifficultySettings();
 
+        // ★ 회전 기반이면 감지 축 기준으로 handDataTotalRotation 재계산
+        //   (CSV 로드 시에는 Quaternion.Angle(3D 총 회전)로 계산했지만,
+        //    실제 측정은 단일 축 SignedAngle이므로 목표값도 같은 방식이어야 함)
+        if (!isPositionBasedMovement && loadedFrames.Count >= 2)
+        {
+            var firstFrame = loadedFrames[0];
+            var lastFrame = loadedFrames[loadedFrames.Count - 1];
+            Vector3 axis = GetRotationDetectionAxis();
+            Vector3 mVec = GetRotationMeasurementVector();
+
+            // frame rotation은 referenceTransform 기준 로컬이므로 refRot로 월드 방향 복원 (axis는 월드 기준).
+            Quaternion refRot = referenceTransform != null ? referenceTransform.rotation : Quaternion.identity;
+
+            // 양손 중 더 큰 회전 사용
+            Vector3 rightRefDir = refRot * (firstFrame.rightRootRotation * mVec);
+            Vector3 rightCurDir = refRot * (lastFrame.rightRootRotation * mVec);
+            float rightAxisRot = Mathf.Abs(Vector3.SignedAngle(rightRefDir, rightCurDir, axis));
+
+            Vector3 leftRefDir = refRot * (firstFrame.leftRootRotation * mVec);
+            Vector3 leftCurDir = refRot * (lastFrame.leftRootRotation * mVec);
+            float leftAxisRot = Mathf.Abs(Vector3.SignedAngle(leftRefDir, leftCurDir, axis));
+
+            float axisBasedTotal = Mathf.Max(rightAxisRot, leftAxisRot);
+            if (axisBasedTotal > 1f)
+            {
+                handDataTotalRotation = axisBasedTotal;
+                if (showDebugLogs)
+                    ChunaLogger.Log($"<color=magenta>[StartEval] 축 기반 목표 회전 재계산: {axisBasedTotal:F1}° (축:{axis}, 측정벡터:{mVec})</color>");
+            }
+        }
+
         isEvaluating = true;
         evaluationStartTime = Time.time;
         lastMetricsRecordTime = Time.time;
@@ -1765,6 +1862,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         phaseHoldTime = 0f;
         leftHandStartHoldPosition = Vector3.zero;
         isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
+        isometricHoldEntryTime = -1f; // 등척성 홀드 완수도 계산용 리셋
 
         // ★ 충돌 감지 플래그 리셋 (이전 SubStep에서 남아있을 수 있음)
         isLeftHandTouchingPatient = false;
@@ -1875,6 +1973,15 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
         else
         {
+            // 등척성운동: 40점 블록을 홀드 완수도로 계산 (요구 홀드시간 / 실제 StartHold 소요시간)
+            // 흔들림·접촉 끊김 없이 한 번에 잘 버틸수록 소요시간이 짧아져 만점에 가까워진다.
+            currentSession.isIsometric = startHoldOnly;
+            if (startHoldOnly)
+            {
+                float spent = (isometricHoldEntryTime >= 0f) ? (Time.time - isometricHoldEntryTime) : startHoldDuration;
+                currentSession.holdQuality = (spent > 0.01f) ? Mathf.Clamp01(startHoldDuration / spent) : 1f;
+            }
+
             // 평균 유사도 계산
             CalculateAverageSimilarity();
 
@@ -2010,7 +2117,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         scoringEngine.RecordMetricsSnapshot(
             currentSession, evaluationStartTime, metricsRecordInterval,
-            leftSim, rightSim, limitChecker, leftHandPos, rightHandPos);
+            leftSim, rightSim, limitChecker, leftHandPos, rightHandPos,
+            isLeftHandTouchingPatient);
 
         // 유사도 이벤트 발생
         OnSimilarityUpdated?.Invoke(leftSim, rightSim);
@@ -2090,7 +2198,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     private void CalculateAverageSimilarity()
     {
-        scoringEngine.CalculateAverageSimilarity(currentSession, leftHandSimilarityWeight, rightHandSimilarityWeight);
+        // isRotationStep(양손 모드)이면 기존 양손 가중 평균 유지, 단손이면 주동수+보조수 분리 채점
+        scoringEngine.CalculateAverageSimilarity(currentSession, leftHandSimilarityWeight, rightHandSimilarityWeight, isRotationStep);
     }
 
     private void CalculateLimitStatistics()

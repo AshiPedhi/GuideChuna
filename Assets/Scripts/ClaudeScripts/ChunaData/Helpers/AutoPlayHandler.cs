@@ -19,19 +19,22 @@ public class AutoPlayHandler
     private float autoPlayDuration = 3f;
     private float autoPlayStartTime = 0f;
     private bool isAutoPlayMode = false;
+    private bool isGated = false;              // PassiveStretch: 보조수 접촉으로 재생 게이팅
 
     // Properties
     public bool IsAutoPlayMode => isAutoPlayMode;
     public float AutoPlayProgress => autoPlayProgress;
+    public bool IsGated => isGated;
 
     /// <summary>
     /// Start auto play mode.
     /// </summary>
-    public void StartAutoPlay(float duration)
+    public void StartAutoPlay(float duration, bool gated = false)
     {
         isAutoPlayMode = true;
         autoPlayStartTime = Time.time;
         autoPlayProgress = 0f;
+        isGated = gated;
 
         if (duration > 0f)
         {
@@ -43,14 +46,31 @@ public class AutoPlayHandler
         }
 
         string durationStr = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}s" : "on animation complete";
-        ChunaLogger.Log($"<color=green>[AutoPlay] Started! Duration:{durationStr}, Animation:{owner.InternalAnimationStateName ?? "none"}</color>");
+        string gateStr = gated ? " [gated by assistant contact]" : "";
+        ChunaLogger.Log($"<color=green>[AutoPlay] Started! Duration:{durationStr}, Animation:{owner.InternalAnimationStateName ?? "none"}{gateStr}</color>");
     }
 
     /// <summary>
     /// Update auto play mode. Returns true if completed this frame.
+    /// gateOpen: gated 모드에서 true=재생, false=일시정지 (접촉 게이팅용). gated 아니면 무시.
     /// </summary>
-    public bool UpdateAutoPlay(Animator patientAnimator, bool showDebugLogs)
+    public bool UpdateAutoPlay(Animator patientAnimator, bool gateOpen, bool showDebugLogs)
     {
+        // Gated + 게이트 닫힘 → 일시정지 (elapsed 시간이 증가하지 않도록 startTime을 전진)
+        if (isGated && !gateOpen)
+        {
+            autoPlayStartTime += Time.deltaTime;
+            if (patientAnimator != null && patientAnimator.speed != 0f)
+            {
+                patientAnimator.speed = 0f;
+            }
+            if (showDebugLogs && Time.frameCount % 60 == 0)
+            {
+                ChunaLogger.Log($"<color=yellow>[AutoPlay] Paused (gate closed - 보조수 접촉 대기)</color>");
+            }
+            return false;
+        }
+
         float elapsed = Time.time - autoPlayStartTime;
 
         bool hasAnimation = patientAnimator != null && !string.IsNullOrEmpty(owner.InternalAnimationStateName);
@@ -78,7 +98,10 @@ public class AutoPlayHandler
 
         if (patientAnimator.speed != 1f)
         {
-            ChunaLogger.LogWarning($"<color=orange>[AutoPlay] Animator speed is {patientAnimator.speed}. Restoring to 1.</color>");
+            if (!isGated)
+            {
+                ChunaLogger.LogWarning($"<color=orange>[AutoPlay] Animator speed is {patientAnimator.speed}. Restoring to 1.</color>");
+            }
             patientAnimator.speed = 1f;
         }
 
@@ -133,6 +156,7 @@ public class AutoPlayHandler
     {
         isAutoPlayMode = false;
         autoPlayProgress = 1f;
+        isGated = false;
     }
 
     /// <summary>
@@ -142,5 +166,6 @@ public class AutoPlayHandler
     {
         isAutoPlayMode = false;
         autoPlayProgress = 0f;
+        isGated = false;
     }
 }

@@ -21,6 +21,7 @@ public interface IScenarioCondition
 /// - conditionType="Duration": duration 후 자동 진행
 /// - conditionType="Manual": 토글로 수동 진행
 /// - conditionType="PatientAnimation": 환자 애니메이션(AutoPlay) 완료 대기
+/// - conditionType="PassiveStretch": 보조수 접촉 게이팅 AutoPlay + 가이드 손 표시 (주동수 없는 스트레칭)
 /// - conditionType="Narration": 나레이션 완료 대기 (미구현)
 /// - conditionType="None" 또는 빈칸: duration > 0이면 Duration, 아니면 Manual
 /// </summary>
@@ -289,6 +290,14 @@ public class ScenarioConditionManager : MonoBehaviour
 
             case "PatientAnimation":
                 ChunaLogger.Log("[ConditionManager] PatientAnimation 조건 - AutoPlay 완료 대기 후 진행");
+                currentCondition = null;
+                StopConditionCheck();
+                eventSystem.RequestButtonStateUpdate(false);
+                StartCoroutine(WaitForAutoPlayThenProgress(subStep));
+                break;
+
+            case "PassiveStretch":
+                ChunaLogger.Log("[ConditionManager] PassiveStretch 조건 - 보조수 접촉 게이팅 AutoPlay 완료 대기 후 진행");
                 currentCondition = null;
                 StopConditionCheck();
                 eventSystem.RequestButtonStateUpdate(false);

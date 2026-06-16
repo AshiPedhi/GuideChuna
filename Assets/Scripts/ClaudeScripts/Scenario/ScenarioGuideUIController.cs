@@ -32,14 +32,14 @@ public class ScenarioGuideUIController : MonoBehaviour
     [SerializeField] private Color inactivePhaseColor = new Color(0.5f, 0.5f, 0.5f, 1f); // 비활성 Phase (회색)
 
     [Header("=== Phase 이름 매핑 (세부 부위) ===")]
-    [Tooltip("첫 번째 세부 부위 Phase 이름들 (예: 전부, 쇄골)")]
-    [SerializeField] private string[] firstPhaseNames = new string[] { "전부", "쇄골" };
+    [Tooltip("첫 번째 세부 부위 Phase 이름들 (예: 전부, 쇄골/쇄골지)")]
+    [SerializeField] private string[] firstPhaseNames = new string[] { "전부", "쇄골", "쇄골지" };
 
-    [Tooltip("두 번째 세부 부위 Phase 이름들 (예: 중부, 늑골)")]
-    [SerializeField] private string[] secondPhaseNames = new string[] { "중부", "늑골" };
+    [Tooltip("두 번째 세부 부위 Phase 이름들 (예: 중부, 늑골/늑골지)")]
+    [SerializeField] private string[] secondPhaseNames = new string[] { "중부", "늑골", "늑골지" };
 
-    [Tooltip("세 번째 세부 부위 Phase 이름들 (예: 후부, 흉골)")]
-    [SerializeField] private string[] thirdPhaseNames = new string[] { "후부", "흉골" };
+    [Tooltip("세 번째 세부 부위 Phase 이름들 (예: 후부, 흉골/흉골지)")]
+    [SerializeField] private string[] thirdPhaseNames = new string[] { "후부", "흉골", "흉골지" };
 
     [Tooltip("Phase 이미지를 숨길 Phase 이름들 (예: 시작하기, 진단, 종료)")]
     [SerializeField] private string[] hidePhaseNames = new string[] { "시작하기", "진단", "가이드", "종료" };
@@ -388,15 +388,50 @@ public class ScenarioGuideUIController : MonoBehaviour
 
     /// <summary>
     /// 설명 텍스트 업데이트
+    /// 평가모드 가이드 step (시작/종료): CSV textInstruction 그대로 (ShowStepDescription=false여도 강제 표시)
+    /// 평가모드 비가이드 step: stepName 기반 고정 멘트 (5종)
+    /// 그 외: ShowStepDescription 따라 표시 또는 빈 문자열
     /// </summary>
     private void UpdateDescription(string description)
     {
-        if (descriptionText != null)
+        if (descriptionText == null) return;
+
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        bool isEvaluation = dm != null && dm.CurrentLevel == ChunaTraining.DifficultyLevel.Evaluation;
+
+        if (isEvaluation && scenarioManager != null && scenarioManager.CurrentStep != null)
         {
-            // ★ 난이도 설정에서 텍스트 설명 비활성화 시 빈 문자열
-            bool showDesc = ChunaTraining.DifficultyManager.Instance == null
-                || ChunaTraining.DifficultyManager.Instance.ShowStepDescription;
-            descriptionText.text = showDesc ? description : "";
+            if (scenarioManager.CurrentStep.IsGuideStep())
+            {
+                // 시작/종료 가이드 step — CSV 안내 그대로 표시
+                descriptionText.text = description;
+            }
+            else
+            {
+                // 비가이드 step (진단/제한장벽확인/등척성운동/스트레칭/재평가)
+                descriptionText.text = GetEvaluationStepText(scenarioManager.CurrentStep.stepName);
+            }
+            return;
+        }
+
+        bool showDesc = dm == null || dm.ShowStepDescription;
+        descriptionText.text = showDesc ? description : "";
+    }
+
+    /// <summary>
+    /// 평가모드 stepName별 고정 멘트.
+    /// 가이드 step은 이 함수 호출 안 함 (CSV textInstruction 사용).
+    /// </summary>
+    private static string GetEvaluationStepText(string stepName)
+    {
+        switch (stepName)
+        {
+            case "진단": return "진단하세요.";
+            case "제한장벽확인": return "제한장벽을 확인하세요.";
+            case "등척성운동": return "등척성 운동을 실시하세요.";
+            case "스트레칭": return "스트레칭을 실시하세요.";
+            case "재평가": return "재평가를 실시하세요.";
+            default: return "";
         }
     }
 
@@ -410,6 +445,13 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (ShouldHidePhaseImages())
         {
             HideAllPhaseImages();
+            return;
+        }
+
+        // 평가모드: 현재 진행 중인 Phase 이미지 하나만 표시 (전/중/후 회색 형제를 버튼으로 오인하는 문제 방지)
+        if (IsEvaluationMode())
+        {
+            ShowOnlyActivePhaseImage();
             return;
         }
 
@@ -436,10 +478,50 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// 평가모드 여부
+    /// </summary>
+    private bool IsEvaluationMode()
+    {
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        return dm != null && dm.IsEvaluationMode;
+    }
+
+    /// <summary>
+    /// 평가모드 전용: 현재 진행 중인 Phase 이미지 하나만 표시하고 나머지는 숨김.
+    /// 평가모드는 phase가 필터링되므로(예: 사각근 중부만) 회색 형제 이미지(전/후)가
+    /// 클릭 가능한 버튼처럼 보이는 것을 막는다. 매칭되는 게 없으면 모두 숨김(안전).
+    /// </summary>
+    private void ShowOnlyActivePhaseImage()
+    {
+        bool isFront = IsPhaseNameMatch(firstPhaseNames);
+        bool isMiddle = IsPhaseNameMatch(secondPhaseNames);
+        bool isBack = IsPhaseNameMatch(thirdPhaseNames);
+
+        if (frontPhaseImage != null)
+        {
+            frontPhaseImage.gameObject.SetActive(isFront);
+            if (isFront) UpdateImageColor(frontPhaseImage, true);
+        }
+        if (middlePhaseImage != null)
+        {
+            middlePhaseImage.gameObject.SetActive(isMiddle);
+            if (isMiddle) UpdateImageColor(middlePhaseImage, true);
+        }
+        if (backPhaseImage != null)
+        {
+            backPhaseImage.gameObject.SetActive(isBack);
+            if (isBack) UpdateImageColor(backPhaseImage, true);
+        }
+    }
+
+    /// <summary>
     /// Phase 이미지를 숨겨야 하는지 확인
     /// </summary>
     private bool ShouldHidePhaseImages()
     {
+        if (string.IsNullOrEmpty(currentPhaseName))
+            return true;
+
         foreach (string hideName in hidePhaseNames)
         {
             if (currentPhaseName == hideName)

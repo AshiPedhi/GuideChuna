@@ -7,8 +7,9 @@ using static HandPoseDataLoader;
 /// Guide hand playback controller for ChunaPathEvaluator.
 /// Returns IEnumerator for coroutines; MonoBehaviour calls StartCoroutine.
 ///
-/// 프레임 데이터는 ChunaPathEvaluator.ConvertFramesToWorldSpace()에서
-/// 로드 시 월드 좌표로 일괄 변환됨 → 여기서는 직접 적용만 수행.
+/// 프레임 좌표는 referenceTransform 기준 로컬로 저장되어 있으므로,
+/// 매 프레임 (refPos + refRot * localPos, refRot * localRot)로 월드 변환 후 적용한다.
+/// 이렇게 하면 환자(referenceTransform)가 이동/회전해도 가이드 핸드가 자동 추종.
 /// </summary>
 public class GuideHandPlaybackController
 {
@@ -76,13 +77,18 @@ public class GuideHandPlaybackController
 
             PoseFrame frame = frames[currentGuideFrameIndex];
 
+            // referenceTransform이 매 프레임 현재 환자 위치/회전을 들고 있다고 가정.
+            Transform refT = owner.ReferenceTransform;
+            Vector3 refPos = refT != null ? refT.position : Vector3.zero;
+            Quaternion refRot = refT != null ? refT.rotation : Quaternion.identity;
+
             if (leftGuideHand != null && hasLeftData)
             {
                 leftGuideHand.SetVisible(true);
                 if (leftGuideHand.Root != null)
                 {
-                    leftGuideHand.Root.position = frame.leftRootPosition;
-                    leftGuideHand.Root.rotation = frame.leftRootRotation;
+                    leftGuideHand.Root.position = refPos + refRot * frame.leftRootPosition;
+                    leftGuideHand.Root.rotation = refRot * frame.leftRootRotation;
                 }
 
                 foreach (var kvp in frame.leftLocalPoses)
@@ -96,8 +102,8 @@ public class GuideHandPlaybackController
                 rightGuideHand.SetVisible(true);
                 if (rightGuideHand.Root != null)
                 {
-                    rightGuideHand.Root.position = frame.rightRootPosition;
-                    rightGuideHand.Root.rotation = frame.rightRootRotation;
+                    rightGuideHand.Root.position = refPos + refRot * frame.rightRootPosition;
+                    rightGuideHand.Root.rotation = refRot * frame.rightRootRotation;
                 }
 
                 foreach (var kvp in frame.rightLocalPoses)
@@ -159,6 +165,11 @@ public class GuideHandPlaybackController
         bool hasLeftData = HasHandData(frames, true);
         bool hasRightData = HasHandData(frames, false);
 
+        // referenceTransform 기준 로컬→월드 변환 (환자 이동/회전 추종)
+        Transform refT = owner.ReferenceTransform;
+        Vector3 refPos = refT != null ? refT.position : Vector3.zero;
+        Quaternion refRot = refT != null ? refT.rotation : Quaternion.identity;
+
         if (leftGuideHand != null)
         {
             if (!hasLeftData)
@@ -171,8 +182,8 @@ public class GuideHandPlaybackController
                 leftGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
                 if (leftGuideHand.Root != null)
                 {
-                    leftGuideHand.Root.position = firstFrame.leftRootPosition;
-                    leftGuideHand.Root.rotation = firstFrame.leftRootRotation;
+                    leftGuideHand.Root.position = refPos + refRot * firstFrame.leftRootPosition;
+                    leftGuideHand.Root.rotation = refRot * firstFrame.leftRootRotation;
                 }
 
                 foreach (var kvp in firstFrame.leftLocalPoses)
@@ -194,8 +205,8 @@ public class GuideHandPlaybackController
                 rightGuideHand.SetColorAndAlpha(guideHandColor, guideHandColor.a);
                 if (rightGuideHand.Root != null)
                 {
-                    rightGuideHand.Root.position = firstFrame.rightRootPosition;
-                    rightGuideHand.Root.rotation = firstFrame.rightRootRotation;
+                    rightGuideHand.Root.position = refPos + refRot * firstFrame.rightRootPosition;
+                    rightGuideHand.Root.rotation = refRot * firstFrame.rightRootRotation;
                 }
 
                 foreach (var kvp in firstFrame.rightLocalPoses)
