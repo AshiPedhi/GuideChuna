@@ -129,7 +129,8 @@ public class TrainingResultExporter : MonoBehaviour
             "StepTime",
             "SubSteps",
             "Completed",
-            "Skipped"
+            "Skipped",
+            "IsCompleted"
         ));
     }
 
@@ -152,6 +153,7 @@ public class TrainingResultExporter : MonoBehaviour
         string totalWarnings = data.totalWarningCount.ToString(inv);
         string totalViolations = data.totalLimitViolations.ToString(inv);
         string totalSkips = data.totalSkipCount.ToString(inv);
+        string isCompleted = data.isCompleted ? "1" : "0";
 
         foreach (var phase in data.phaseResults)
         {
@@ -159,8 +161,9 @@ public class TrainingResultExporter : MonoBehaviour
 
             foreach (var step in phase.stepResults)
             {
+                // 컬럼 순서는 WriteSummaryHeader와 1:1로 일치 (SubSteps/Completed/Skipped는 각각 별도 컬럼)
                 sb.AppendFormat(inv,
-                    "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33}\n",
+                    "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14},{15},{16},{17},{18},{19},{20},{21},{22},{23},{24},{25},{26},{27},{28},{29},{30},{31},{32},{33},{34},{35},{36}\n",
                     sessionId,
                     userName,
                     odUserId,
@@ -193,8 +196,11 @@ public class TrainingResultExporter : MonoBehaviour
                     step.totalTimeInWarning.ToString("F2", inv),
                     step.totalTimeExceeded.ToString("F2", inv),
                     step.peakExceededRatio.ToString("F4", inv),
-                    step.totalTime.ToString("F1", inv),
-                    $"{step.completedSubSteps}/{step.totalSubSteps}/{step.skippedSubSteps}"
+                    step.totalTime.ToString("F1", inv),     // StepTime
+                    step.totalSubSteps.ToString(inv),        // SubSteps (전체)
+                    step.completedSubSteps.ToString(inv),    // Completed
+                    step.skippedSubSteps.ToString(inv),      // Skipped
+                    isCompleted                              // IsCompleted (0=중도종료/미완료, 1=정상완주)
                 );
             }
         }

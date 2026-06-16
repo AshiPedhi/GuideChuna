@@ -261,6 +261,8 @@ public class DynamicResultTableUI : BaseUIPanel
     /// </summary>
     private bool IsExcludedPhase(string phaseName)
     {
+        if (phaseName == null) return false;
+
         string[] excludedPhases = { "시작하기", "가이드", "종료", "진단" };
         foreach (var excluded in excludedPhases)
         {
@@ -283,6 +285,10 @@ public class DynamicResultTableUI : BaseUIPanel
 
         foreach (var phaseName in phaseNames)
         {
+            // phase가 부위로 나뉘지 않은 시나리오는 헤더 cell을 만들지 않음
+            if (string.IsNullOrEmpty(phaseName))
+                continue;
+
             GameObject headerCell = Instantiate(phaseHeaderCellPrefab, headerRowContainer);
             headerCell.name = $"Header_{phaseName}";
 

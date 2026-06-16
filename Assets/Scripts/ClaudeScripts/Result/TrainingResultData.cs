@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using UnityEngine;
 
 /// <summary>
@@ -156,6 +157,7 @@ public class TrainingResultData
     public bool isOfficialEvaluation;              // 공식 평가 여부 (true면 공식 점수로 기록)
     public bool isPreEvaluation;                   // 모의평가 여부 (상급자 모드)
     public int attemptNumber;                      // 시도 횟수 (같은 시나리오 몇 회차)
+    public bool isCompleted = true;                // 정상 완주 여부 (false = 중도 종료/미완료, 정식 점수와 분리)
 
     [Header("=== Phase별 결과 ===")]
     public List<PhaseResult> phaseResults;         // 전부/중부/후부 결과
@@ -377,5 +379,109 @@ public class TrainingResultData
             case StepCompletionStatus.Skipped: return "X";
             default: return "-";
         }
+    }
+
+    /// <summary>
+    /// 평가모드(공식) 결과를 step당 2줄 컴팩트 포맷으로 직렬화.
+    /// 서버 전송(learnLevel2)과 임시 캔버스 결과 표시가 동일한 문자열을 공유 → 이중 관리 없음.
+    /// 5 step + 종합이 한 화면에 들어가도록 압축 (스크롤 불요).
+    /// </summary>
+    public static string BuildSummaryText(TrainingResultData data)
+    {
+        if (data == null) return "";
+
+        var sb = new StringBuilder();
+
+        // 중도 종료(미완료)는 정식 점수가 아님을 맨 위에 명시
+        if (!data.isCompleted)
+            sb.AppendLine("※ 미완료(중도 종료) — 정식 점수 아님");
+
+        if (data.phaseResults != null)
+        {
+            bool firstStep = true;
+            foreach (var phase in data.phaseResults)
+            {
+                if (phase?.stepResults == null) continue;
+
+                foreach (var step in phase.stepResults)
+                {
+                    // 가이드 step은 평가 데이터 없음 → 스킵
+                    if (step == null || step.totalSubSteps == 0) continue;
+
+                    if (!firstStep) sb.AppendLine();
+                    firstStep = false;
+
+                    string grade = string.IsNullOrEmpty(step.grade) ? "-" : step.grade;
+
+                    // step별 상태 심볼(O/△/X)은 제거 — 점수로 충분, 스킵 개수는 종합에 집계
+                    sb.AppendLine($"■ {phase.phaseName} {step.stepName}  {step.finalScore:F0}점 ({grade}) · 유사도 {step.averageSimilarity:P0} · 위험 범위 초과 {step.limitViolationCount}");
+                    sb.AppendLine($"   좌 {step.leftAverageSimilarity:P0} / 우 {step.rightAverageSimilarity:P0} · 최저 {step.minSimilarity:P0} / 최고 {step.maxSimilarity:P0}");
+                }
+            }
+        }
+
+        sb.AppendLine();
+        sb.Append($"[ 종합 ] {data.overallScore:F0}점 ({(string.IsNullOrEmpty(data.overallGrade) ? "-" : data.overallGrade)}) · 유사도 {data.overallSimilarity:P0} · 위험 범위 초과 {data.totalLimitViolations}회 · 스킵 {data.totalSkipCount}개 · {FormatTime(data.totalTime)}");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 실습모드용 종합 요약. phase별 한 줄 분석 + 종합 통계 + 잘한·더 연습할 단계.
+    /// 평가모드는 BuildSummaryText(step별 상세)를 쓰고, 실습모드는 이걸 사용.
+    /// </summary>
+    public static string BuildPracticeSummaryText(TrainingResultData data)
+    {
+        if (data == null) return "";
+
+        var sb = new StringBuilder();
+
+        string scenario = string.IsNullOrEmpty(data.scenarioName) ? "연습" : $"{data.scenarioName} 연습";
+        sb.AppendLine(data.isCompleted ? $"{scenario} 완료!" : $"{scenario} 중도 종료 (미완료)");
+
+        // Phase별 한 줄 요약 — 이름 있는 phase 중 작업 step이 있는 것만
+        if (data.phaseResults != null)
+        {
+            bool firstPhase = true;
+            foreach (var phase in data.phaseResults)
+            {
+                if (phase?.stepResults == null || phase.stepResults.Count == 0) continue;
+                if (string.IsNullOrEmpty(phase.phaseName)) continue;
+
+                float totalScore = 0f;
+                int scoredCount = 0;
+                int phaseLimit = 0;
+                foreach (var s in phase.stepResults)
+                {
+                    if (s == null || s.totalSubSteps == 0) continue;
+                    totalScore += s.finalScore;
+                    scoredCount++;
+                    phaseLimit += s.limitViolationCount;
+                }
+                if (scoredCount == 0) continue;
+
+                float phaseScore = totalScore / scoredCount;
+                string phaseGrade = EvaluationScoringEngine.GetGradeFromScore(phaseScore);
+
+                if (firstPhase) { sb.AppendLine(); firstPhase = false; }
+                sb.AppendLine($"[{phase.phaseName}] {phaseScore:F0}점 ({phaseGrade}) · 유사도 {phase.phaseAverageSimilarity:P0} · 위험 범위 초과 {phaseLimit}회");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine($"종합 점수 {data.overallScore:F0}점 ({(string.IsNullOrEmpty(data.overallGrade) ? "-" : data.overallGrade)})");
+        sb.AppendLine($"평균 유사도 {data.overallSimilarity:P0}");
+        sb.AppendLine($"위험 범위 초과 {data.totalLimitViolations}회 · 스킵 {data.totalSkipCount}개");
+        sb.AppendLine($"수행 시간 {FormatTime(data.totalTime)}");
+
+        if (!string.IsNullOrEmpty(data.highestSimilarityStep) || !string.IsNullOrEmpty(data.lowestSimilarityStep))
+            sb.AppendLine();
+
+        if (!string.IsNullOrEmpty(data.highestSimilarityStep))
+            sb.AppendLine($"잘한 단계: {data.highestSimilarityStep} ({data.highestSimilarity:P0})");
+        if (!string.IsNullOrEmpty(data.lowestSimilarityStep))
+            sb.Append($"더 연습할 단계: {data.lowestSimilarityStep} ({data.lowestSimilarity:P0})");
+
+        return sb.ToString().TrimEnd();
     }
 }

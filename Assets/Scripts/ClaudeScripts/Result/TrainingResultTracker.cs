@@ -23,8 +23,11 @@ public class TrainingResultTracker : MonoBehaviour
     [SerializeField] private float skipTimeThreshold = 20f;
 
     [Header("=== 효과음 설정 ===")]
-    [Tooltip("효과음 AudioSource")]
+    [Tooltip("접근 비프 전용 AudioSource")]
     [SerializeField] private AudioSource warningAudioSource;
+
+    [Tooltip("한계 초과/홀드 완료 전용 AudioSource (접근 비프와 분리 — 소리 겹침/pitch 영향 방지)")]
+    [SerializeField] private AudioSource exceededAudioSource;
 
     [Tooltip("접근 경고 비프음 클립")]
     [SerializeField] private AudioClip approachBeepClip;
@@ -38,15 +41,15 @@ public class TrainingResultTracker : MonoBehaviour
     [Tooltip("효과음 활성화")]
     [SerializeField] private bool enableWarningAudio = true;
 
-    [Tooltip("비프음 시작 구간 (홀드 끝 범위의 몇 % 전부터)")]
-    [Range(0f, 0.3f)]
-    [SerializeField] private float beepStartOffset = 0.1f;
+    [Tooltip("최소 비프 간격 (초) — 적정범위 끝(midHoldEnd)에 가까워졌을 때. 클립 길이보다 크게 유지 권장")]
+    [SerializeField] private float minBeepInterval = 0.15f;
 
-    [Tooltip("최소 비프 간격 (초)")]
-    [SerializeField] private float minBeepInterval = 0.1f;
-
-    [Tooltip("최대 비프 간격 (초)")]
+    [Tooltip("최대 비프 간격 (초) — 적정범위 진입 시(midHoldStart)")]
     [SerializeField] private float maxBeepInterval = 0.8f;
+
+    [Tooltip("끝 접근 시 pitch 상승 최댓값 (1.0 고정이면 1.0)")]
+    [Range(1f, 2f)]
+    [SerializeField] private float maxApproachPitch = 1.5f;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -91,6 +94,13 @@ public class TrainingResultTracker : MonoBehaviour
             warningAudioSource.spatialBlend = 0f;  // 2D 사운드
         }
 
+        if (exceededAudioSource == null)
+        {
+            exceededAudioSource = gameObject.AddComponent<AudioSource>();
+            exceededAudioSource.playOnAwake = false;
+            exceededAudioSource.spatialBlend = 0f;
+        }
+
         // 초기화 상태 로그
         if (showDebugLogs)
         {
@@ -121,11 +131,7 @@ public class TrainingResultTracker : MonoBehaviour
 
     void Update()
     {
-        // 경고음은 충돌체 감지(isTracking) 상태일 때만 체크
-        if (pathEvaluator == null) return;
-        if (!isTracking) return;
-
-        // 현재 프레임 진행률 체크 (경고음용)
+        if (!ShouldPlayWarning()) return;
         CheckApproachWarning();
     }
 
@@ -167,8 +173,8 @@ public class TrainingResultTracker : MonoBehaviour
         // 충돌체 감지(isTracking) 상태일 때만 경고 처리
         if (!isTracking) return;
 
-        // 경고 횟수 증가
-        if (resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
+        // 경고 횟수 증가 (통계 기록은 ShouldPlayWarning 무관하게 진행). 가이드 step은 제외
+        if (resultData != null && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName) && !IsGuideStepName(currentStepName))
         {
             resultData.RecordWarning(currentPhaseName, currentStepName);
 
@@ -178,8 +184,8 @@ public class TrainingResultTracker : MonoBehaviour
             OnWarningRecorded?.Invoke(currentPhaseName, currentStepName);
         }
 
-        // 한계 초과 경고음
-        if (!isOverLimit)
+        // 한계 초과 경고음 — guideOnly/skipMidHold 단계에선 차단
+        if (!isOverLimit && ShouldPlayWarning())
         {
             isOverLimit = true;
             PlayLimitExceededSound();
@@ -191,8 +197,8 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void HandleUserFrameChanged(int currentFrame, int totalFrames, float ratio)
     {
-        // 충돌체 감지(isTracking) 상태일 때만 경고음용 비율 업데이트
-        if (!isTracking) return;
+        // guideOnly/skipMidHold 단계에선 접근 경고 자체를 발생시키지 않음
+        if (!ShouldPlayWarning()) return;
         UpdateApproachRatio(ratio);
     }
 
@@ -220,9 +226,9 @@ public class TrainingResultTracker : MonoBehaviour
             RecordSubStepCompletion(true, false);
         }
 
-        // EvaluationSession 스코어링 결과를 TrainingResultData에 반영
+        // EvaluationSession 스코어링 결과를 TrainingResultData에 반영. 가이드 step은 제외
         if (isTracking && resultData != null && session != null
-            && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName))
+            && !string.IsNullOrEmpty(currentPhaseName) && !string.IsNullOrEmpty(currentStepName) && !IsGuideStepName(currentStepName))
         {
             var step = resultData.GetOrCreateStepResult(currentPhaseName, currentStepName);
             step.finalScore = session.finalScore;
@@ -294,30 +300,31 @@ public class TrainingResultTracker : MonoBehaviour
     {
         if (pathEvaluator == null) return;
 
-        // ChunaPathEvaluator의 홀드 범위 가져오기
-        float holdEndRatio = pathEvaluator.CurrentMidHoldEnd;
-        float beepStartRatio = holdEndRatio - beepStartOffset;
+        // 적정범위 (midHoldStart ~ midHoldEnd) 기준:
+        //   - 구간 진입 시 비프 시작, 끝(midHoldEnd)에 가까울수록 interval↓ pitch↑
+        //   - midHoldEnd 초과는 OnLimitWarning이 처리
+        float holdStart = pathEvaluator.CurrentMidHoldStart;
+        float holdEnd = pathEvaluator.CurrentMidHoldEnd;
 
-        if (frameRatio >= holdEndRatio)
+        if (frameRatio >= holdStart && frameRatio < holdEnd)
         {
-            // 한계 초과
-            isOverLimit = true;
+            // 적정범위 안 — 지속 비프, 끝에 가까울수록 긴박감 상승
+            isInApproachZone = true;
+            isOverLimit = false;
+            float span = Mathf.Max(0.001f, holdEnd - holdStart);
+            currentApproachRatio = Mathf.Clamp01((frameRatio - holdStart) / span);
+        }
+        else if (frameRatio >= holdEnd)
+        {
+            // 적정범위 초과 — 비프 중지 (초과 경고는 HandleLimitWarning에서)
             isInApproachZone = false;
             currentApproachRatio = 1f;
         }
-        else if (frameRatio >= beepStartRatio)
-        {
-            // 접근 구간
-            isOverLimit = false;
-            isInApproachZone = true;
-            // beepStartRatio~holdEndRatio를 0~1로 정규화
-            currentApproachRatio = (frameRatio - beepStartRatio) / beepStartOffset;
-        }
         else
         {
-            // 안전 구간
-            isOverLimit = false;
+            // 적정범위 진입 전 — 무음, 초과 플래그도 해제
             isInApproachZone = false;
+            isOverLimit = false;
             currentApproachRatio = 0f;
         }
     }
@@ -366,8 +373,8 @@ public class TrainingResultTracker : MonoBehaviour
         if (!enableWarningAudio || !IsFeedbackSoundEnabled()) return;
         if (warningAudioSource == null || approachBeepClip == null) return;
 
-        // 피치 조절 (가까울수록 높은 음)
-        warningAudioSource.pitch = Mathf.Lerp(0.8f, 1.5f, currentApproachRatio);
+        // 끝에 가까울수록 pitch 상승 (날카로운 느낌). minBeepInterval을 클립 길이보다 크게 유지하여 겹침 방지
+        warningAudioSource.pitch = Mathf.Lerp(1f, maxApproachPitch, currentApproachRatio);
         warningAudioSource.PlayOneShot(approachBeepClip, 0.5f + currentApproachRatio * 0.5f);
     }
 
@@ -388,18 +395,22 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void PlayLimitExceededSound()
     {
-        if (!enableWarningAudio || !IsFeedbackSoundEnabled() || warningAudioSource == null) return;
+        if (!enableWarningAudio || !IsFeedbackSoundEnabled()) return;
+
+        // 접근 비프와 분리된 AudioSource 사용 (pitch/겹침 영향 차단)
+        var src = exceededAudioSource != null ? exceededAudioSource : warningAudioSource;
+        if (src == null) return;
 
         if (limitExceededClip != null)
         {
-            warningAudioSource.pitch = 1f;
-            warningAudioSource.PlayOneShot(limitExceededClip, 1f);
+            src.pitch = 1f;
+            src.PlayOneShot(limitExceededClip, 1f);
         }
         else if (approachBeepClip != null)
         {
             // limitExceededClip이 없으면 approachBeepClip을 큰 소리로 재생
-            warningAudioSource.pitch = 1.2f;
-            warningAudioSource.PlayOneShot(approachBeepClip, 1f);
+            src.pitch = 1.2f;
+            src.PlayOneShot(approachBeepClip, 1f);
         }
 
         if (showDebugLogs)
@@ -411,12 +422,16 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private void PlayHoldCompleteSound()
     {
-        if (!enableWarningAudio || !IsFeedbackSoundEnabled() || warningAudioSource == null) return;
+        if (!enableWarningAudio || !IsFeedbackSoundEnabled()) return;
+
+        // 접근 비프와 분리된 AudioSource 사용
+        var src = exceededAudioSource != null ? exceededAudioSource : warningAudioSource;
+        if (src == null) return;
 
         if (holdCompleteClip != null)
         {
-            warningAudioSource.pitch = 1f;
-            warningAudioSource.PlayOneShot(holdCompleteClip, 1f);
+            src.pitch = 1f;
+            src.PlayOneShot(holdCompleteClip, 1f);
         }
         else if (approachBeepClip != null)
         {
@@ -430,13 +445,14 @@ public class TrainingResultTracker : MonoBehaviour
     /// </summary>
     private IEnumerator PlayDoubleBeep()
     {
-        if (warningAudioSource == null || approachBeepClip == null) yield break;
+        var src = exceededAudioSource != null ? exceededAudioSource : warningAudioSource;
+        if (src == null || approachBeepClip == null) yield break;
 
-        warningAudioSource.pitch = 1.5f;
-        warningAudioSource.PlayOneShot(approachBeepClip, 0.8f);
+        src.pitch = 1.5f;
+        src.PlayOneShot(approachBeepClip, 0.8f);
         yield return new WaitForSeconds(0.15f);
-        warningAudioSource.pitch = 1.8f;
-        warningAudioSource.PlayOneShot(approachBeepClip, 0.8f);
+        src.pitch = 1.8f;
+        src.PlayOneShot(approachBeepClip, 0.8f);
     }
 
     // ========== Public API ==========
@@ -463,6 +479,9 @@ public class TrainingResultTracker : MonoBehaviour
         var dm = ChunaTraining.DifficultyManager.Instance;
         resultData.isOfficialEvaluation = dm != null && dm.IsOfficialScore;
         resultData.isPreEvaluation = dm != null && dm.IsPreEvaluationMode;
+
+        // 시도 횟수: 시나리오+모드(평가/연습)별 회차를 PlayerPrefs에서 증가시켜 기록
+        resultData.attemptNumber = TrainingAttemptStore.IncrementAndGet(scenarioName, resultData.isOfficialEvaluation);
 
         // ★ 시간 무제한 모드 시 스킵 판정 비활성화 (매우 큰 값)
         if (dm != null && dm.UnlimitedTime)
@@ -495,6 +514,11 @@ public class TrainingResultTracker : MonoBehaviour
             ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] Phase 시작: {phaseName}</color>");
     }
 
+    // 가이드 step(stepNo=0, stepName="가이드")은 시작/종료 버튼 안내일 뿐 평가 대상이 아니므로
+    // 결과(유사도/점수/경고)에서 제외 — StepResult 자체를 만들지 않아 종합 유사도/learnLevel2/CSV/결과표에서 자동 제외됨
+    private const string GuideStepName = "가이드";
+    private static bool IsGuideStepName(string stepName) => stepName == GuideStepName;
+
     /// <summary>
     /// Step 시작
     /// </summary>
@@ -503,6 +527,15 @@ public class TrainingResultTracker : MonoBehaviour
         if (!isTracking || resultData == null) return;
 
         currentStepName = stepName;
+
+        // 가이드 step은 결과 기록 제외 (StepResult 미생성)
+        if (IsGuideStepName(stepName))
+        {
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=grey>[TrainingResultTracker] 가이드 step 결과 제외: {stepName}</color>");
+            return;
+        }
+
         resultData.GetOrCreateStepResult(currentPhaseName, stepName);
 
         if (showDebugLogs)
@@ -548,6 +581,14 @@ public class TrainingResultTracker : MonoBehaviour
         if (!isTracking || resultData == null) return;
         if (string.IsNullOrEmpty(currentPhaseName) || string.IsNullOrEmpty(currentStepName)) return;
 
+        // 가이드 step은 결과 기록 제외 (유사도 누적만 비우고 반환)
+        if (IsGuideStepName(currentStepName))
+        {
+            accumulatedSimilarity = 0f;
+            similaritySampleCount = 0;
+            return;
+        }
+
         // 평균 유사도 계산
         float avgSimilarity = similaritySampleCount > 0 ? accumulatedSimilarity / similaritySampleCount : 0f;
 
@@ -580,9 +621,12 @@ public class TrainingResultTracker : MonoBehaviour
     /// <summary>
     /// 훈련 종료
     /// </summary>
-    public TrainingResultData FinishTracking()
+    /// <param name="completed">정상 완주 여부. false면 중도 종료(미완료)로 기록 — 정식 점수와 분리됨.</param>
+    public TrainingResultData FinishTracking(bool completed = true)
     {
         if (!isTracking || resultData == null) return null;
+
+        resultData.isCompleted = completed;
 
         // 현재 진행 중인 SubStep 완료 처리
         if (!string.IsNullOrEmpty(currentStepName))
@@ -622,6 +666,11 @@ public class TrainingResultTracker : MonoBehaviour
     public bool IsTracking => isTracking;
 
     /// <summary>
+    /// 현재 추적 세션이 공식 평가인지 여부 (중도 종료 시 미완료 기록 대상 판단용)
+    /// </summary>
+    public bool IsOfficialEvaluation => resultData != null && resultData.isOfficialEvaluation;
+
+    /// <summary>
     /// 현재 Phase 이름
     /// </summary>
     public string CurrentPhaseName => currentPhaseName;
@@ -648,6 +697,21 @@ public class TrainingResultTracker : MonoBehaviour
     {
         var dm = ChunaTraining.DifficultyManager.Instance;
         return dm == null || dm.PlayFeedbackSound;
+    }
+
+    /// <summary>
+    /// 현재 단계에서 경고음(접근 비프/초과 경고)을 재생해야 하는지 판정
+    /// - guideOnly: 시각 데모 전용 (손 포즈/애니메이션만 재생, 판정 없음) → 경고음 차단
+    /// - skipMidHold: 직선 가동범위 모드 (홀드 판정 없음, 대흉근/흉쇄유돌근 등) → 경고음 차단
+    /// 추적(isTracking) 중이고 위 두 모드가 아닌 경우에만 경고음 활성화
+    /// </summary>
+    private bool ShouldPlayWarning()
+    {
+        if (!isTracking) return false;
+        if (pathEvaluator == null) return false;
+        if (pathEvaluator.IsGuideOnlyMode) return false;
+        if (pathEvaluator.IsSkipMidHold) return false;
+        return true;
     }
 
     /// <summary>
@@ -679,6 +743,7 @@ public class TrainingResultTracker : MonoBehaviour
     {
         if (!isTracking || resultData == null) return;
         if (string.IsNullOrEmpty(currentPhaseName) || string.IsNullOrEmpty(currentStepName)) return;
+        if (IsGuideStepName(currentStepName)) return; // 가이드 step 제외
 
         resultData.RecordWarning(currentPhaseName, currentStepName);
 
