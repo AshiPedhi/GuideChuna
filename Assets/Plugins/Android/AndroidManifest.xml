@@ -20,6 +20,14 @@
   </application>
   <uses-feature android:name="android.hardware.vr.headtracking" android:version="1" android:required="true" />
   <uses-permission android:name="android.permission.VIBRATE" />
+  <uses-permission android:name="android.permission.CAMERA" tools:node="remove" />
+  <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" tools:node="remove" />
+  <uses-permission android:name="android.permission.BLUETOOTH" tools:node="remove" />
+  <uses-feature android:name="android.hardware.camera" tools:node="remove" />
+  <uses-feature android:name="android.hardware.camera.autofocus" tools:node="remove" />
+  <uses-feature android:name="android.hardware.camera.front" tools:node="remove" />
+  <uses-feature android:name="android.hardware.microphone" tools:node="remove" />
   <uses-feature android:name="oculus.software.handtracking" android:required="false" />
   <uses-permission android:name="com.oculus.permission.HAND_TRACKING" />
   <uses-permission android:name="com.oculus.permission.USE_ANCHOR_API" />
