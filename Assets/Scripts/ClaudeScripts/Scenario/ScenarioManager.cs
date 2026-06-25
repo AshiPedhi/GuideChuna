@@ -23,6 +23,9 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("ScenarioConditionManager (자동 찾기)")]
     [SerializeField] private ScenarioConditionManager conditionManager;
 
+    [Tooltip("CranialAdjustmentController (두개골 교정 술기, 없으면 자동 찾기)")]
+    [SerializeField] private CranialAdjustmentController cranialController;
+
     [Header("=== UI 자동 배치 ===")]
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
@@ -269,6 +272,10 @@ public class ScenarioManager : MonoBehaviour
         AnatomyMuscleController muscleController = FindFirstObjectByType<AnatomyMuscleController>();
         if (muscleController != null)
             muscleController.ApplyScenario(muscleScenarioName);
+
+        // ★ 두경부 추나(두개골 교정) 리그 토글: 이 시나리오에 cranial substep이 있을 때만 활성화
+        //   (같은 TrainingScene 공유 — 비두경부 시나리오에서 머리 트리거 cross-talk 방지)
+        ApplyCranialRigForScenario(currentScenario);
 
         // 시나리오 구조 디버그 출력
         if (showDebugLog)
@@ -742,7 +749,13 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         bool isPassiveStretch = !string.IsNullOrEmpty(subStep.conditionType) &&
                                 subStep.conditionType.Trim().Equals("PassiveStretch", System.StringComparison.OrdinalIgnoreCase);
 
-        if (isPassiveStretch)
+        // ★ 두개골 교정 술기 분기 (신규 conditionType — 기존 시나리오에는 없는 값)
+        string cranialType = subStep.conditionType?.Trim() ?? "";
+        bool isCranial = IsCranialConditionType(cranialType);
+
+        if (isCranial)
+            HandleCranial(subStep, cranialType);
+        else if (isPassiveStretch)
             HandlePassiveStretch(subStep);
         else if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
             HandleHandPoseTracking(subStep);
@@ -788,6 +801,99 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
 
         if (showDebugLog)
             ChunaLogger.Log($"<color=cyan>[ScenarioManager] PassiveStretch 시작: {subStep.handTrackingFileName} / {subStep.patientAnimationClip}</color>");
+    }
+
+    /// <summary>
+    /// ★ 시나리오에 cranial 조건 substep이 있으면 CranialRig(CranialAdjustmentController 루트)를 활성화,
+    /// 없으면 비활성화. CranialAdjustmentController는 두경부 전용 오브젝트들의 루트에 배치할 것.
+    /// </summary>
+    private void ApplyCranialRigForScenario(ScenarioData scenario)
+    {
+        if (cranialController == null)
+            cranialController = FindFirstObjectByType<CranialAdjustmentController>(FindObjectsInactive.Include);
+        if (cranialController == null) return;  // 씬에 두경부 리그가 없으면 무시 (비두경부 빌드에서 정상)
+
+        bool hasCranial = ScenarioHasCranialCondition(scenario);
+        if (cranialController.gameObject.activeSelf != hasCranial)
+            cranialController.gameObject.SetActive(hasCranial);
+
+        // 시나리오(재)시작 시 래칭 상태 초기화 — 동일 시나리오 재시작 시 리그 토글이 없어도
+        // 이전 run의 BreathingComplete/리듬 대칭 상태가 진단 단계로 누수되지 않게 함.
+        if (hasCranial)
+            cranialController.ResetAll();
+
+        if (showDebugLog)
+            ChunaLogger.Log($"[ScenarioManager] CranialRig {(hasCranial ? "활성화" : "비활성화")}: {scenario.scenarioName}");
+    }
+
+    /// <summary>
+    /// cranial 조건 타입(cranialGrip/cranialPressure/cranialDepthBreath) 여부
+    /// </summary>
+    private static bool IsCranialConditionType(string conditionType)
+    {
+        if (string.IsNullOrEmpty(conditionType)) return false;
+        return conditionType.Equals("cranialGrip", System.StringComparison.OrdinalIgnoreCase) ||
+               conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase) ||
+               conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// 시나리오 전체 substep을 스캔해 cranial 조건 포함 여부 반환
+    /// </summary>
+    private static bool ScenarioHasCranialCondition(ScenarioData scenario)
+    {
+        if (scenario == null) return false;
+        foreach (var phase in scenario.phases)
+            foreach (var step in phase.steps)
+                foreach (var sub in step.subSteps)
+                    if (IsCranialConditionType(sub.conditionType?.Trim()))
+                        return true;
+        return false;
+    }
+
+    /// <summary>
+    /// ★ 두개골 교정 술기 조건 등록 (conditionType="cranialGrip"/"cranialPressure"/"cranialDepthBreath")
+    /// IScenarioCondition을 ConditionManager에 등록만 하면 폴링/완료피드백/NextSubStep 레일을 그대로 탄다.
+    /// </summary>
+    private void HandleCranial(SubStepData subStep, string conditionType)
+    {
+        if (conditionManager == null)
+        {
+            ChunaLogger.LogError("[ScenarioManager] ScenarioConditionManager를 찾을 수 없습니다! (Cranial)");
+            return;
+        }
+
+        if (cranialController == null)
+            cranialController = FindFirstObjectByType<CranialAdjustmentController>(FindObjectsInactive.Include);
+
+        if (cranialController == null)
+        {
+            ChunaLogger.LogError("[ScenarioManager] CranialAdjustmentController를 씬에서 찾을 수 없습니다!");
+            return;
+        }
+
+        IScenarioCondition condition;
+        string label;
+        if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
+        {
+            condition = new BreathingCondition(cranialController);
+            label = "Breath(②b 호흡)";
+        }
+        else if (conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase))
+        {
+            condition = new PressureCondition(cranialController);
+            label = "Pressure(②a 압력·방향)";
+        }
+        else
+        {
+            condition = new GripPointCondition(cranialController);
+            label = "Grip(① 파지)";
+        }
+
+        conditionManager.RegisterCondition(currentPhase.phaseName, currentStep.stepName, subStep.subStepNo, condition);
+
+        if (showDebugLog)
+            ChunaLogger.Log($"<color=magenta>[ScenarioManager] Cranial 조건 등록: {label}</color>");
     }
 
     /// <summary>

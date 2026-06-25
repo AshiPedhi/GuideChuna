@@ -254,9 +254,10 @@ public class ScenarioConditionManager : MonoBehaviour
         // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
         if (subStep.HasNarration())
         {
-            if (conditionType == "HandPose")
+            // ★ HandPose 및 cranial 조건(등록형)은 나레이션 후 등록된 조건 폴링을 시작 (제네릭하게 동작)
+            if (conditionType == "HandPose" || conditionType == "cranialGrip" || conditionType == "cranialPressure" || conditionType == "cranialDepthBreath")
             {
-                ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + HandPose 병합 조건 - 나레이션 먼저 재생</color>");
+                ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + 조건({conditionType}) 병합 - 나레이션 먼저 재생</color>");
                 HandleNarrationThenHandPose(subStep, conditionKey);
                 return;
             }
