@@ -26,6 +26,11 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("CranialAdjustmentController (두개골 교정 술기, 없으면 자동 찾기)")]
     [SerializeField] private CranialAdjustmentController cranialController;
 
+    [Tooltip("두경부(cranial) 시나리오일 때 비활성화할 기존 머리 판정 콜라이더들 " +
+             "(비두경부 손접촉 감지용, 머리 본체에 부착됨). 두경부 시술 중 cross-talk 방지. " +
+             "비두경부 시나리오에선 자동 재활성. PatientHeadTouchDetector/PokeDetector의 콜라이더를 연결.")]
+    [SerializeField] private Collider[] nonCranialHeadColliders;
+
     [Header("=== UI 자동 배치 ===")]
     [Tooltip("ScenarioUIPositioner (자동 찾기)")]
     [SerializeField] private ScenarioUIPositioner uiPositioner;
@@ -83,6 +88,9 @@ public class ScenarioManager : MonoBehaviour
     private PhaseData currentPhase;
     private StepData currentStep;
     private SubStepData currentSubStep;
+
+    // NextSubStep 이중 호출 방지용 — 마지막으로 진행시킨 substep (NextSubStep 주석 참조)
+    private SubStepData advancedFromSubStep;
 
     // 인덱스
     private int currentPhaseIndex = 0;
@@ -259,6 +267,7 @@ public class ScenarioManager : MonoBehaviour
         currentStepIndex = 0;
         currentSubStepIndex = 0;
         isScenarioCompleted = false;  // 시나리오 시작 시 완료 상태 초기화
+        advancedFromSubStep = null;   // 재시작 시 이중진행 가드 해제
 
         currentPhase = currentScenario.phases[0];
         currentStep = currentPhase.steps[0];
@@ -393,6 +402,18 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     public void NextSubStep()
     {
+        // ★ 이중 진행 방지: 나레이션+환자애니(게이트 없음) substep은 완료를 두 경로가 각각 감지한다 —
+        //   ⓐ ConditionManager.PlayNarrationThenApplyDuration (나레이션·AutoPlay 완료 후 진행)
+        //   ⓑ ScenarioManager.OnAutoPlayCompletedHandler → WaitForNarrationThenNextStep
+        //   둘 다 호출하면 substep이 한 칸 건너뛴다. substep당 1회만 진행시킨다.
+        if (currentSubStep != null && ReferenceEquals(advancedFromSubStep, currentSubStep))
+        {
+            if (showDebugLog)
+                ChunaLogger.Log("[ScenarioManager] NextSubStep 중복 호출 무시 (이 substep은 이미 진행됨)");
+            return;
+        }
+        advancedFromSubStep = currentSubStep;
+
         if (showDebugLog)
             ChunaLogger.Log($"[ScenarioManager] NextSubStep: Phase={currentPhase?.phaseName}, Step={currentStep?.stepName}, SubStep={currentSubStepIndex}/{currentStep?.subSteps?.Count}");
 
@@ -762,6 +783,14 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         else if (subStep.HasPatientAnimation())
             HandleAutoPlayAnimation(subStep);
 
+        // ★ 호흡 HUD(링)는 견착·호흡(③ cranialDepthBreath) substep에서만 활성.
+        //   그 외 모든 substep 진입 시 끈다(활성화는 BreathingCondition→StartBreathingWindow가 담당).
+        if (cranialController != null &&
+            !cranialType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
+        {
+            cranialController.HideBreathingHud();
+        }
+
         // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
         angleDisplay?.ForceRefreshHoldRange();
     }
@@ -809,21 +838,58 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     /// </summary>
     private void ApplyCranialRigForScenario(ScenarioData scenario)
     {
-        if (cranialController == null)
-            cranialController = FindFirstObjectByType<CranialAdjustmentController>(FindObjectsInactive.Include);
-        if (cranialController == null) return;  // 씬에 두경부 리그가 없으면 무시 (비두경부 빌드에서 정상)
+        // A안(술기별 리그 분리): 씬의 두개골 리그를 전부 모아, 현재 시나리오 이름과 일치하는 리그만 활성화하고
+        // 나머지(OM/PM 등)는 비활성화한다. 이렇게 해야 서로 다른 술기의 파지 구체가 씬에서 겹치지 않는다.
+        var allRigs = FindObjectsByType<CranialAdjustmentController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (allRigs == null || allRigs.Length == 0) { cranialController = null; return; }  // 두경부 리그 없음 (비두경부 빌드에서 정상)
 
         bool hasCranial = ScenarioHasCranialCondition(scenario);
-        if (cranialController.gameObject.activeSelf != hasCranial)
-            cranialController.gameObject.SetActive(hasCranial);
+        string scenName = currentConfig != null ? currentConfig.scenarioName
+                        : (scenario != null ? scenario.scenarioName : "");
+        CranialAdjustmentController target = hasCranial ? ResolveCranialController(scenName, allRigs) : null;
 
-        // 시나리오(재)시작 시 래칭 상태 초기화 — 동일 시나리오 재시작 시 리그 토글이 없어도
-        // 이전 run의 BreathingComplete/리듬 대칭 상태가 진단 단계로 누수되지 않게 함.
-        if (hasCranial)
-            cranialController.ResetAll();
+        foreach (var rig in allRigs)
+        {
+            if (rig == null) continue;
+            bool active = hasCranial && rig == target;
+            if (rig.gameObject.activeSelf != active) rig.gameObject.SetActive(active);
+        }
+        cranialController = target;   // HandleCranial이 이 시나리오 동안 재사용
+
+        // 반대방향 cross-talk 차단: 두경부일 때 기존 머리 판정 콜라이더(비두경부 손접촉 감지용)를
+        // 비활성화. 비두경부 시나리오에선 !hasCranial=true로 다시 켜짐(원래 용도 복원).
+        if (nonCranialHeadColliders != null)
+        {
+            foreach (var col in nonCranialHeadColliders)
+                if (col != null) col.enabled = !hasCranial;
+        }
+
+        // 시나리오(재)시작 시 래칭 상태 초기화 — 이전 run의 BreathingComplete/리듬 대칭 상태 누수 방지.
+        if (hasCranial && target != null)
+            target.ResetAll();
 
         if (showDebugLog)
-            ChunaLogger.Log($"[ScenarioManager] CranialRig {(hasCranial ? "활성화" : "비활성화")}: {scenario.scenarioName}");
+            ChunaLogger.Log($"[ScenarioManager] CranialRig {(hasCranial ? $"활성화({(target != null ? target.ScenarioName : "?")})" : "비활성화")}: {scenario.scenarioName}");
+    }
+
+    /// <summary>
+    /// 씬의 여러 두개골 리그 중 시나리오 이름이 일치하는 컨트롤러를 선택한다(A안: 술기별 리그 분리).
+    /// 우선순위: ① ScenarioName 정확 일치 → ② ScenarioName이 빈 '레거시 기본'(기존 OM 리그) → ③ 첫 번째.
+    /// (기존 OM 리그는 ScenarioName을 비워두면 씬 수정 없이 그대로 폴백으로 선택된다.)
+    /// </summary>
+    private CranialAdjustmentController ResolveCranialController(string scenarioName, CranialAdjustmentController[] allRigs = null)
+    {
+        if (allRigs == null)
+            allRigs = FindObjectsByType<CranialAdjustmentController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        if (allRigs == null || allRigs.Length == 0) return null;
+
+        foreach (var rig in allRigs)
+            if (rig != null && !string.IsNullOrEmpty(rig.ScenarioName) && rig.ScenarioName == scenarioName)
+                return rig;   // ① 정확 일치
+        foreach (var rig in allRigs)
+            if (rig != null && string.IsNullOrEmpty(rig.ScenarioName))
+                return rig;   // ② 레거시 기본(이름 미설정 = 기존 OM)
+        return allRigs[0];    // ③ 폴백
     }
 
     /// <summary>
@@ -832,7 +898,8 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     private static bool IsCranialConditionType(string conditionType)
     {
         if (string.IsNullOrEmpty(conditionType)) return false;
-        return conditionType.Equals("cranialGrip", System.StringComparison.OrdinalIgnoreCase) ||
+        return conditionType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase) ||
+               conditionType.Equals("cranialGrip", System.StringComparison.OrdinalIgnoreCase) ||
                conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase) ||
                conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase);
     }
@@ -863,8 +930,8 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
-        if (cranialController == null)
-            cranialController = FindFirstObjectByType<CranialAdjustmentController>(FindObjectsInactive.Include);
+        if (cranialController == null)   // 보통 ApplyCranialRigForScenario가 이미 선택해 둠(폴백 경로)
+            cranialController = ResolveCranialController(currentConfig != null ? currentConfig.scenarioName : "");
 
         if (cranialController == null)
         {
@@ -872,9 +939,25 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
+        // ★ 가이드 손(녹화) 표시: cranial 스텝에 handTrackingFileName이 있으면 기존 가이드핸드 재생을 그대로 띄운다.
+        //   판정은 cranial 구체 게이트가 담당하고, 가이드 손은 순수 시각 안내(손가락별 파지점 없이 '구체 1개 + 가이드손' 방식).
+        //   녹화 데이터가 양손이면 양손 그림자 손이 모두 재생된다.
+        if (subStep.HasHandTracking() && chunaPathEvaluatorBridge != null)
+        {
+            chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
+            if (chunaPathEvaluator != null) chunaPathEvaluator.StartGuideHandPlaybackInternal();
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 가이드손 재생: {subStep.handTrackingFileName}</color>");
+        }
+
         IScenarioCondition condition;
         string label;
-        if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
+        if (conditionType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase))
+        {
+            condition = new DiagnosisTouchCondition(cranialController);
+            label = "Touch(⓪ 진단 촉진)";
+        }
+        else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {
             condition = new BreathingCondition(cranialController);
             label = "Breath(②b 호흡)";

@@ -24,6 +24,12 @@ public interface IScenarioCondition
 /// - conditionType="PassiveStretch": 보조수 접촉 게이팅 AutoPlay + 가이드 손 표시 (주동수 없는 스트레칭)
 /// - conditionType="Narration": 나레이션 완료 대기 (미구현)
 /// - conditionType="None" 또는 빈칸: duration > 0이면 Duration, 아니면 Manual
+///
+/// ★ 나레이션(voiceInstruction) 우선 규칙:
+///   voiceInstruction이 있으면 나레이션을 먼저 재생하고, 동작 완료 게이트(HandPose/cranial 등)가
+///   없는 구간은 **나레이션이 끝나는 즉시 자동 진행**한다(duration 추가 대기 없음).
+///   duration 컬럼은 나레이션이 꺼진(PlayNarration=false) 경우의 폴백 타이머로만 쓰인다.
+///   단, 가이드 스텝(시작/종료, IsGuideStep)은 나레이션 후에도 버튼(토글) 입력을 기다린다.
 /// </summary>
 public class ScenarioConditionManager : MonoBehaviour
 {
@@ -255,7 +261,7 @@ public class ScenarioConditionManager : MonoBehaviour
         if (subStep.HasNarration())
         {
             // ★ HandPose 및 cranial 조건(등록형)은 나레이션 후 등록된 조건 폴링을 시작 (제네릭하게 동작)
-            if (conditionType == "HandPose" || conditionType == "cranialGrip" || conditionType == "cranialPressure" || conditionType == "cranialDepthBreath")
+            if (conditionType == "HandPose" || conditionType == "cranialTouch" || conditionType == "cranialGrip" || conditionType == "cranialPressure" || conditionType == "cranialDepthBreath")
             {
                 ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + 조건({conditionType}) 병합 - 나레이션 먼저 재생</color>");
                 HandleNarrationThenHandPose(subStep, conditionKey);
@@ -435,8 +441,10 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 나레이션 + Duration 병합 조건 처리
-    /// 나레이션 재생 완료 후 Duration 대기 → 다음 단계로 진행
+    /// 나레이션 + (동작 게이트 없는) 자동 진행 처리.
+    /// 나레이션이 재생되면 재생 완료 시점에 자동 진행한다(duration 추가 대기 없음).
+    /// 나레이션이 비활성(PlayNarration=false)이면 LoadNarrationClip이 null → HandleDurationOrManual
+    /// 로 빠져 CSV duration을 폴백 타이머로 사용한다.
     /// </summary>
     private void HandleNarrationThenDuration(SubStepData subStep)
     {
@@ -457,9 +465,9 @@ public class ScenarioConditionManager : MonoBehaviour
         StopConditionCheck();
         eventSystem.RequestButtonStateUpdate(false);
 
-        // 나레이션 재생 후 Duration 적용
+        // 나레이션 재생 후 자동 진행 (동작 게이트 없는 구간 = 나레이션 끝나면 진행)
         narrationCoroutine = StartCoroutine(PlayNarrationThenApplyDuration(clip, clipName, subStep));
-        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + Duration: 나레이션 먼저 재생 ({clip.length:F1}초) → Duration {subStep.duration}초</color>");
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 재생 ({clip.length:F1}초) → 완료 시 자동 진행 (duration={subStep.duration}초는 나레이션 OFF 폴백)</color>");
     }
 
     /// <summary>
@@ -564,7 +572,7 @@ public class ScenarioConditionManager : MonoBehaviour
     }
 
     /// <summary>
-    /// 나레이션 재생 후 Duration 적용 코루틴
+    /// 나레이션 재생 후 자동 진행 코루틴 (나레이션 완료 = 진행 트리거, duration 추가 대기 없음)
     /// </summary>
     private IEnumerator PlayNarrationThenApplyDuration(AudioClip clip, string clipName, SubStepData subStep)
     {
@@ -592,30 +600,23 @@ public class ScenarioConditionManager : MonoBehaviour
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName}</color>");
         currentNarrationClip = null;
 
-        // ★ 나레이션 완료 후 Duration 적용
-        if (subStep.duration > 0)
+        // ★ 나레이션 완료 = 진행 트리거.
+        //   동작 완료 게이트(HandPose/cranial 등)가 없는 구간은 나레이션이 끝나면 자동 진행한다.
+        //   CSV의 duration은 "나레이션 OFF(PlayNarration=false)일 때의 폴백 타이머"로만 쓰인다
+        //   — 그 경우 LoadNarrationClip이 null을 반환해 HandleDurationOrManual로 빠지므로 여기까진 오지 않는다.
+        //   따라서 나레이션이 실제로 재생된 이 경로에선 duration만큼 추가로 기다리지 않는다.
+
+        // 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
+        yield return WaitForNarrationComplete();
+
+        // AutoPlay(환자 애니메이션)가 아직 재생 중이면 완료까지 대기
+        yield return WaitForAutoPlayComplete();
+
+        // 다음 SubStep으로 자동 진행
+        ChunaLogger.Log("[ConditionManager] 나레이션 완료 → 다음 단계로 자동 진행");
+        if (scenarioManager != null)
         {
-            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 대기 시작</color>");
-            yield return new WaitForSeconds(subStep.duration);
-            ChunaLogger.Log($"<color=cyan>[ConditionManager] Duration {subStep.duration}초 완료 → 다음 단계로 진행</color>");
-
-            // ★ 혹시 다른 나래이션(홀드 후 등)이 재생 중이면 대기
-            yield return WaitForNarrationComplete();
-
-            // ★ AutoPlay(환자 애니메이션)가 아직 재생 중이면 완료까지 대기
-            yield return WaitForAutoPlayComplete();
-
-            // 다음 SubStep으로 진행
-            if (scenarioManager != null)
-            {
-                scenarioManager.NextSubStep();
-            }
-        }
-        else
-        {
-            // Duration 없으면 Manual (토글 대기)
-            ChunaLogger.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
-            HandleManualProgress();
+            scenarioManager.NextSubStep();
         }
     }
 

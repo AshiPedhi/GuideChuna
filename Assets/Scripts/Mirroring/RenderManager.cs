@@ -642,32 +642,43 @@ public class RenderManager : MonoBehaviour
 
         try
         {
-            // 전부 스레드풀에서 처리(메인스레드 무간섭). 타임아웃은 타이머 기반 CTS +
-            // AttachExternalCancellation으로 스레드 무관하게 적용(플레이어 루프 의존 없음).
-            return await UniTask.RunOnThreadPool(async () =>
+            // 전부 스레드풀에서 처리(메인스레드 무간섭).
+            // 동기 BeginConnect + AsyncWaitHandle.WaitOne 패턴 사용:
+            // IL2CPP/Android에서 async TcpClient.ConnectAsync가 연결 완료 전에 반환되어
+            // tcp.Connected=false(거짓 도달불가)를 주던 버그를 피한다. nc로는 닿는 서버를
+            // 프로브가 막아 정상 미러링을 차단하던 회귀의 원인.
+            return await UniTask.RunOnThreadPool(() =>
             {
-                var tcp = new TcpClient();
-                using (var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(CONNECTION_PROBE_TIMEOUT)))
+                var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                try
                 {
-                    try
+                    var ar = socket.BeginConnect(host, port, null, null);
+                    bool signaled = ar.AsyncWaitHandle.WaitOne(
+                        TimeSpan.FromSeconds(CONNECTION_PROBE_TIMEOUT), false);
+                    if (signaled && socket.Connected)
                     {
-                        await tcp.ConnectAsync(host, port).AsUniTask()
-                                 .AttachExternalCancellation(timeoutCts.Token);
-                        return tcp.Connected;
+                        socket.EndConnect(ar); // 연결 확정
+                        return true;
                     }
-                    finally
-                    {
-                        // 소켓 정리 → 타임아웃으로 버린 연결 시도도 함께 폐기
-                        try { tcp.Close(); } catch { }
-                        tcp.Dispose();
-                    }
+                    return false; // 타임아웃 또는 미연결
+                }
+                catch (Exception e)
+                {
+                    // 연결 거부/네트워크 불가/형식 오류 등 모두 도달 불가로 흡수
+                    LogDebug($"도달성 프로브: {host}:{port} 미연결 처리 ({e.GetType().Name})");
+                    return false;
+                }
+                finally
+                {
+                    // 소켓 정리 → 타임아웃으로 버린 연결 시도도 함께 폐기
+                    try { socket.Close(); } catch { }
+                    try { socket.Dispose(); } catch { }
                 }
             });
         }
         catch (Exception e)
         {
-            // 타임아웃(OperationCanceledException)/연결 거부/형식 오류 등 모두 도달 불가로 흡수
-            LogDebug($"도달성 프로브: {host}:{port} 미연결 처리 ({e.GetType().Name})");
+            LogDebug($"도달성 프로브: {host}:{port} 예외 ({e.GetType().Name})");
             return false;
         }
     }

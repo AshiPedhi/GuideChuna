@@ -18,11 +18,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 {
     #region UI References - Main Lobby
     [Header("=== Main Lobby UI ===")]
-    [SerializeField] private GameObject headerPanel;
-    [SerializeField] private GameObject highlightBar;
     [SerializeField] private GameObject scenarioCardsContainer;
-    [SerializeField] private GameObject userInfoPanel;
-    [SerializeField] private GameObject bottomButtonsPanel;
 
     [Header("User Info Panel Components")]
     [SerializeField] private Button userIconButton;
@@ -35,9 +31,13 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [SerializeField] private string scenarioGuideMessage = "시나리오를 선택하세요";
 
     [Header("Scenario Cards")]
+    [Tooltip("★신형 로비(카드가 Toggle이고 ScenarioLaunchButton 어댑터로 동작)면 체크. " +
+             "체크 시 아래 Button 기반 카드 자동검색/배선을 건너뜀(어댑터가 OnScenarioCardClicked를 직접 호출). " +
+             "구형 로비(카드가 Button)면 해제 상태로 둠.")]
+    [SerializeField] private bool useAdapterCards = false;
     [SerializeField] private Button[] scenarioCardButtons = new Button[5];
     [SerializeField] private CanvasGroup[] scenarioCardCanvasGroups = new CanvasGroup[5];
-    [Tooltip("시나리오 카드를 자동으로 찾아서 연결할지 여부")]
+    [Tooltip("시나리오 카드를 자동으로 찾아서 연결할지 여부 (구형 로비 전용)")]
     [SerializeField] private bool autoFindScenarioCards = true;
 
     [Header("Bottom Buttons")]
@@ -48,10 +48,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [SerializeField] private GameObject loginRequiredPopup;
     [SerializeField] private Toggle loginRequiredCloseButton;
 
-    [Header("Exit Confirmation Popup")]
+    [Header("Exit Confirmation Popup (종료/로그아웃 병합)")]
     [SerializeField] private GameObject exitConfirmationPopup;
+    [Tooltip("종료 실행 버튼 (로그인 시 '로그아웃하고 종료', 미로그인 시 '종료')")]
     [SerializeField] private Toggle exitYesToggle;
+    [Tooltip("취소 버튼")]
     [SerializeField] private Toggle exitNoToggle;
+    [Tooltip("★병합: '로그아웃만' 버튼. 로그인 상태에서만 표시(미로그인 시 자동 숨김 → 2버튼)")]
+    [SerializeField] private Toggle exitLogoutOnlyToggle;
+    [Tooltip("(선택) 팝업 멘트 TMP. 연결 시 로그인=‘로그아웃 또는 종료하시겠습니까?’ / 미로그인=‘종료하시겠습니까?’ 자동")]
+    [SerializeField] private TextMeshProUGUI exitMessageLabel;
 
     [Header("Logout Confirmation Popup")]
     [SerializeField] private GameObject logoutConfirmationPopup;
@@ -71,9 +77,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("=== Grade Selection Panel ===")]
     [SerializeField] private GameObject gradeSelectionPanel;
     [SerializeField] private Image gradeSelectionBackground;
-    [SerializeField] private TextMeshProUGUI gradeSelectionTitle;
     [SerializeField] private Button gradeBackButton;
-    [SerializeField] private ScrollRect gradeScrollView;
     [SerializeField] private Transform gradeContentContainer;
     [SerializeField] private GameObject gradeButtonPrefab;
     #endregion
@@ -82,9 +86,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [Header("=== User Selection Panel ===")]
     [SerializeField] private GameObject userSelectionPanel;
     [SerializeField] private Image userSelectionBackground;
-    [SerializeField] private TextMeshProUGUI userSelectionTitle;
     [SerializeField] private Button userBackButton;
-    [SerializeField] private ScrollRect userScrollView;
     [SerializeField] private Transform userContentContainer;
     [SerializeField] private GameObject userButtonPrefab;
     #endregion
@@ -239,14 +241,22 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         userInfoContent?.SetActive(true); // 항상 활성화! (로그인 전에는 "Guest" 표시)
         popupHandler.InitializePopups();
 
-        // 시나리오 카드 자동 검색
-        if (autoFindScenarioCards)
+        // 시나리오 카드 배선 — 신형(어댑터)/구형(Button) 구분
+        if (useAdapterCards)
         {
-            AutoFindScenarioCards();
+            // 신형 로비: 카드가 Toggle + ScenarioLaunchButton 어댑터라 브레인이 카드를 직접 몰라도 됨.
+            // (어댑터가 OnScenarioCardClicked를 호출) → Button 자동검색/배선 생략, NULL 에러 로그 방지.
+            ChunaLogger.Log("[LobbyUI] 신형 로비(어댑터 카드) 모드 — Button 카드 자동배선 건너뜀");
         }
-
-        // 시나리오 카드 버튼 연결 (항상 클릭 가능하게)
-        SetupScenarioCards();
+        else
+        {
+            // 구형 로비: 카드가 Button. 자동 검색 후 onClick 배선.
+            if (autoFindScenarioCards)
+            {
+                AutoFindScenarioCards();
+            }
+            SetupScenarioCards(); // 항상 클릭 가능하게
+        }
 
         // 다른 버튼들 연결
         SetupOtherButtons();
@@ -426,8 +436,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
         // 토글들을 버튼처럼 설정
         SetupToggleAsButton(loginRequiredCloseButton, "로그인 팝업 - 유저 목록", OnLoginRequiredPopupGoToUserList);
-        SetupToggleAsButton(exitYesToggle, "종료 확인 - 예", OnExitConfirmYes);
-        SetupToggleAsButton(exitNoToggle, "종료 확인 - 아니오", OnExitConfirmNo);
+        SetupToggleAsButton(exitYesToggle, "종료", OnExitConfirmYes);
+        SetupToggleAsButton(exitNoToggle, "종료 확인 - 취소", OnExitConfirmNo);
+        SetupToggleAsButton(exitLogoutOnlyToggle, "병합 - 로그아웃만", OnExitPopupLogoutOnly);
         SetupToggleAsButton(logoutCancelToggle, "로그아웃 확인 - 취소", OnLogoutCancel);
         SetupToggleAsButton(logoutConfirmToggle, "로그아웃 확인 - 로그아웃하기", OnLogoutConfirm);
     }
@@ -582,8 +593,46 @@ public class LobbyAuthUI_Complete : MonoBehaviour
 
     private void OnExitButtonClicked()
     {
-        ChunaLogger.Log("[LobbyUI] 나가기 버튼 클릭");
+        // ★종료/로그아웃 병합 팝업. 로그인 상태에 따라 버튼 구성이 바뀐다.
+        //   로그인 O: [로그아웃만] [종료] [취소]   (종료 = 로그아웃 후 앱 종료)
+        //   로그인 X: [종료] [취소]              ('로그아웃만' 버튼 숨김)
+        bool loggedIn = !string.IsNullOrEmpty(currentUsername);
+        ChunaLogger.Log($"[LobbyUI] 나가기 버튼 클릭 (로그인={loggedIn})");
+
+        if (exitLogoutOnlyToggle != null)
+            exitLogoutOnlyToggle.gameObject.SetActive(loggedIn);   // 로그아웃만 = 로그인 시에만
+
+        // 종료 버튼 라벨은 항상 "종료" 고정(라벨 길이 문제로 '로그아웃하고 종료' 폐기) — 종료 시 로그아웃은 자동 수행
+        if (exitMessageLabel != null)
+            exitMessageLabel.text = loggedIn ? "로그아웃 또는 종료하시겠습니까?" : "종료하시겠습니까?";
+
         popupHandler.ShowExitConfirmPopup();
+    }
+
+    /// <summary>
+    /// 새 로비 메뉴의 종료 버튼(Toggle 어댑터)이 기존 종료확인+설문 흐름을 그대로 태우기 위한
+    /// 공개 진입점. 동작은 exitButton(onClick) 경로와 동일 — 리스킨 시 팝업/설문 손실 방지.
+    /// </summary>
+    public void RequestExit() => OnExitButtonClicked();
+
+    /// <summary>
+    /// 새 로비 메뉴의 유저 아이콘/로그인 버튼(Toggle 어댑터)용 공개 진입점.
+    /// 동작은 userIconButton(onClick) 경로와 동일 — 미로그인 시 조 선택 패널, 로그인 시 로그아웃 확인 팝업.
+    /// </summary>
+    public void RequestUserIcon() => OnUserIconClicked();
+
+    /// <summary>
+    /// 새 로비 메뉴의 전용 '로그아웃' 버튼(Toggle 어댑터)용 공개 진입점 — 로그아웃 확인 팝업을 직접 띄운다.
+    /// (유저아이콘 분기와 달리 로그아웃만 담당) 로그인 상태에서만 동작.
+    /// </summary>
+    public void RequestLogout()
+    {
+        if (string.IsNullOrEmpty(currentUsername))
+        {
+            ChunaLogger.Log("[LobbyUI] 로그아웃 요청 무시 — 로그인 상태 아님");
+            return;
+        }
+        popupHandler.ShowLogoutConfirmPopup();
     }
 
     /// <summary>
@@ -591,31 +640,30 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnExitConfirmYes()
     {
-        ChunaLogger.Log("[LobbyUI] 종료 확인 - 예 선택");
+        ChunaLogger.Log("[LobbyUI] 종료 확인 - 예 선택 → 바로 종료");
         popupHandler.HideExitConfirmPopup();
-
-        // 설문 패널 표시 후 종료
-        if (surveyPanel != null)
-        {
-            surveyPanel.ShowSurveyPanel(() => {
-                ExitApplication().Forget();
-            });
-        }
-        else
-        {
-            // SurveyPanel 없으면 바로 종료
-            ChunaLogger.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 종료합니다.");
-            ExitApplication().Forget();
-        }
+        // 설문은 QR로 스마트폰에서 진행 → 앱 내 설문 없이 바로 종료 (ExitApplication이 로그인 시 로그아웃도 수행)
+        ExitApplication().Forget();
     }
 
     /// <summary>
-    /// 종료 확인 팝업 - 아니오 선택
+    /// 종료 확인 팝업 - 아니오(취소) 선택
     /// </summary>
     private void OnExitConfirmNo()
     {
         ChunaLogger.Log("[LobbyUI] 종료 확인 - 아니오 선택");
         popupHandler.HideExitConfirmPopup();
+    }
+
+    /// <summary>
+    /// ★종료/로그아웃 병합 팝업 - '로그아웃만' 선택 (로그인 상태에서만 노출).
+    /// 종료하지 않고 로그아웃만 수행하여 로비에 잔류한다.
+    /// </summary>
+    private void OnExitPopupLogoutOnly()
+    {
+        ChunaLogger.Log("[LobbyUI] 병합 팝업 - 로그아웃만 선택");
+        popupHandler.HideExitConfirmPopup();
+        PerformLogout().Forget();   // 설문 없이 바로 로그아웃 (로비 잔류)
     }
 
     /// <summary>
@@ -860,22 +908,10 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void OnLogoutConfirm()
     {
-        ChunaLogger.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행");
+        ChunaLogger.Log("[LobbyUI] 로그아웃 확인 - 로그아웃 진행 → 바로 로그아웃");
         popupHandler.HideLogoutConfirmPopup();
-
-        // 설문 패널 표시 후 로그아웃
-        if (surveyPanel != null)
-        {
-            surveyPanel.ShowSurveyPanel(() => {
-                PerformLogout().Forget();
-            });
-        }
-        else
-        {
-            // SurveyPanel 없으면 바로 로그아웃
-            ChunaLogger.LogWarning("[LobbyUI] SurveyPanel이 없어 바로 로그아웃합니다.");
-            PerformLogout().Forget();
-        }
+        // 설문은 QR로 스마트폰에서 진행 → 앱 내 설문 없이 바로 로그아웃
+        PerformLogout().Forget();
     }
 
     /// <summary>

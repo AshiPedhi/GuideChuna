@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Quest 부팅 시 추나 앱 자동실행 — 문제해결 전 과정 정리</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Malgun Gothic", "맑은 고딕", -apple-system, sans-serif;
+    font-size: 10.5pt; line-height: 1.65; color: #1a1a1a;
+    margin: 0; padding: 0;
+  }
+  h1 { font-size: 20pt; color: #0b3d91; border-bottom: 3px solid #0b3d91;
+       padding-bottom: 8px; margin: 0 0 4px; }
+  h2 { font-size: 14pt; color: #0b3d91; margin: 26px 0 8px;
+       border-left: 5px solid #0b3d91; padding-left: 10px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #1d4ed8; margin: 16px 0 6px; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  blockquote { border-left: 4px solid #f59e0b; background: #fff8ec;
+    margin: 10px 0; padding: 8px 14px; color: #5b4300; border-radius: 3px; }
+  code { font-family: "Consolas", "D2Coding", monospace; font-size: 9.2pt;
+    background: #eef1f6; padding: 1px 5px; border-radius: 3px; color: #b1003e; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 12px 16px; border-radius: 6px;
+    font-family: "Consolas", monospace; font-size: 9pt; line-height: 1.5;
+    overflow-x: auto; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 9.8pt;
+    page-break-inside: avoid; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 9px; text-align: left; vertical-align: top; }
+  th { background: #0b3d91; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f5f7fa; }
+  ul, ol { margin: 6px 0; padding-left: 22px; }
+  li { margin: 3px 0; }
+  hr { border: none; border-top: 1px solid #d1d5db; margin: 22px 0; }
+  .meta { color: #555; font-size: 9.5pt; margin-bottom: 18px; }
+  .ok { color: #15803d; font-weight: 600; }
+  strong { color: #111; }
+  h2 { page-break-before: auto; }
+</style>
+</head>
+<body>
+
+<h1>Quest 부팅 시 추나 앱 자동실행<br>— 문제해결 전 과정 정리</h1>
+<div class="meta">
+  GuideChuna (VR 추나요법 교육 앱) · Quest 3 / 3S (Horizon OS)<br>
+  작성: 2026-06-16 · 상태: <span class="ok">실기기 검증 완료</span>
+</div>
+
+<hr>
+
+<h2>1. 배경과 목표</h2>
+<p><strong>목표:</strong> Quest 전원을 켜면 별도 조작 없이 추나 앱이 자동으로 실행·진입되게 한다.</p>
+<p><strong>왜 필요한가:</strong> 교육 현장에서 학습자(주로 비숙련 사용자)가 헤드셋을 켠 뒤 <strong>메타(Meta) 셸 메뉴에서 앱을 직접 찾아 실행하는 단계에서 막히는</strong> 문제가 반복됐다. 부팅 직후 앱이 바로 떠 있으면 이 진입 장벽이 사라진다.</p>
+
+<h2>2. 정식 해법이 막힌 이유</h2>
+<p>부팅 자동실행의 <strong>정식 경로는 키오스크 모드(MDM)</strong>이다 — Meta for Work의 HMS(Headset Management Service) 또는 ArborXR 같은 MDM 솔루션으로 디바이스를 등록하면 OS 차원에서 자동실행·셸 억제가 보장된다.</p>
+<p>그러나:</p>
+<ul>
+  <li><strong>한국이 Meta for Work 지원 국가에서 빠져 있어</strong> 셀프서비스 가입이 막힌다.</li>
+  <li>우회로(미국 조직 생성 / ArborXR 무료 50대 지원 문의)는 운영·계정 비용이 크다.</li>
+</ul>
+<p>→ 계정·디바이스 등록이 <strong>불필요한 DIY(자체) 부트 리시버</strong> 방식을 채택했다. 단, 이 방식은 본질적으로 OS 보증이 없어 타이밍·리소스·시스템 다이얼로그에 취약하다는 점을 전제로 시작했다.</p>
+
+<h2>3. 핵심 구조</h2>
+<pre><code>[전원 ON]
+   │
+   ▼
+BootReceiver.java  ──(BOOT_COMPLETED / QUICKBOOT_POWERON 수신)
+   │
+   ├─ onReceive: 즉시 리턴 (브로드캐스트 ANR 방지)
+   │
+   ▼
+AlarmManager  ──(+15초 후 1회 발화)
+   │
+   ▼
+getLaunchIntentForPackage(self) → startActivity
+   │   ※ SYSTEM_ALERT_WINDOW(SAW) 권한으로 BAL 면제
+   ▼
+[추나 앱 최상위 진입]</code></pre>
+<ul>
+  <li><strong><code>Assets/Plugins/Android/BootReceiver.java</code></strong> (신규): <code>BOOT_COMPLETED</code> / <code>QUICKBOOT_POWERON</code> 수신 → <code>getLaunchIntentForPackage(getPackageName())</code>로 본 앱 실행. 패키지명을 하드코딩하지 않아 메인 빌드와 <code>.handrecord</code> 빌드가 공용으로 쓴다. Unity 6 Gradle 빌드가 <code>Plugins/Android/*.java</code>를 자동 컴파일한다.</li>
+  <li><strong>AlarmManager로 부팅 +15초 후 단일 실행</strong> (<code>LAUNCH_DELAY_MS = 15000</code>). <code>onReceive</code>는 알람만 예약하고 즉시 리턴하므로 브로드캐스트 ANR이 없다. 늦게 띄워 부팅 직후 리소스 폭주를 피한다.</li>
+  <li><strong><code>SYSTEM_ALERT_WINDOW</code>(SAW) 권한으로 BAL(Background Activity Launch) 면제</strong> → 면제창 밖(+15초) 실행이 차단되지 않게 한다.</li>
+</ul>
+
+<h2>4. 시행착오 — 이 순서로 좁혀졌다</h2>
+<p>문제의 본질은 세 가지 제약이 서로 충돌하는 <strong>3중 딜레마</strong>였다.</p>
+<table>
+  <tr><th>#</th><th>시도</th><th>결과</th><th>원인</th></tr>
+  <tr><td>1</td><td><strong>즉시 실행</strong></td><td>앱은 뜨나 메타 셸이 직후 올라와 <strong>덮음</strong></td><td>포커스 레이스</td></tr>
+  <tr><td>2</td><td><strong>goAsync 8.5초 + 5회 재시도</strong></td><td>앱은 최상위로 가나 <strong>브로드캐스트 ANR + 팅김</strong></td><td>장시간 점유 + 반복 실행이 Unity 초기화와 충돌</td></tr>
+  <tr><td>3</td><td><strong>AlarmManager +12초 단일 실행</strong></td><td><strong>BAL_BLOCK으로 안 뜸</strong></td><td>부트 면제창 밖</td></tr>
+  <tr><td>4</td><td><strong>goAsync 4초 단일 실행</strong></td><td>한 번은 성공했으나 반복 재부팅 시 <strong>ANR → 강제종료</strong></td><td>4초는 너무 일러 리소스 폭주(lowmemorykiller·vrruntime 크래시) 중 무거운 Unity가 못 버팀</td></tr>
+  <tr><td>5</td><td><strong>(최종 A안) SAW 면제 + AlarmManager 15초</strong></td><td class="ok"><strong>성공</strong></td><td>ANR·BAL 동시 회피</td></tr>
+</table>
+
+<h3>3중 딜레마의 정체</h3>
+<ul>
+  <li><strong>일찍 실행(4초):</strong> 부팅 리소스 폭주 구간에 무거운 Unity가 들어가 <code>ANR(Input dispatch timeout, FocusEvent 5000ms)</code> → 강제종료.</li>
+  <li><strong>goAsync 오래 점유(8.5초):</strong> 브로드캐스트 자체가 ANR.</li>
+  <li><strong>AlarmManager 늦게(+12초):</strong> 부트 면제창 밖이라 <code>BAL_BLOCK</code>.</li>
+</ul>
+<p>→ "<strong>리소스가 안정된 뒤(15초)</strong> + <strong>BAL을 면제(SAW)</strong>" 두 조건을 동시에 만족시켜야 빠져나올 수 있었다.</p>
+
+<h2>5. BAL 진단 — 가장 중요한 기술적 발견</h2>
+<p>실기기 <code>logcat</code>으로 규명한, 통념과 반대되는 사실:</p>
+<ul>
+  <li><strong>부팅이라고 백그라운드 액티비티 실행 권한이 자동으로 붙지 않는다.</strong> 부트 면제창 안(4초)이어도 리시버의 직접 <code>startActivity</code>는 <code>BackgroundStartPrivileges[allowsBackgroundActivityStarts=false]</code>로 <strong><code>BAL_BLOCK</code></strong>된다 (<code>callingUidProcState: RECEIVER</code>).</li>
+  <li><strong>그런데</strong> Quest VR 셸(<code>ShellControlBroadcastReceiver</code>)이 우리 launch를 감지해 <code>com.oculus.vrshell.intent.action.LAUNCH</code>로 <strong>PendingIntent 재실행 → <code>BAL_ALLOW_PENDING_INTENT</code></strong>로 성공시키는 경우가 있었다. 단 이 셸 구제는 <strong>부팅 직후 "앱 실행" 단계의 launch만 가로채 재발행</strong>하는 듯했고, 들쭉날쭉했다.</li>
+  <li><strong>AlarmManager(+12초)가 안 뜬 이유:</strong> 면제창 밖 + 이 셸 구제도 못 받음 → <code>BAL_BLOCK</code>.</li>
+</ul>
+<p><strong>해결책:</strong> 셸의 불안정한 구제에 의존하지 않고, <strong><code>SYSTEM_ALERT_WINDOW</code> 권한으로 BAL을 직접 면제</strong>받는다. 이러면 +15초(면제창 밖) 실행도 <code>BAL_ALLOW_SAW_PERMISSION</code>으로 통과한다.</p>
+<blockquote><strong>SAW의 함정:</strong> manifest에 권한을 <strong>선언만</strong> 해서는 appop이 <code>"default"</code>라 실제로 안 먹는다. <strong>기기마다 <code>adb shell appops set com.CoCo.CHUNA SYSTEM_ALERT_WINDOW allow</code>를 1회 부여</strong>해야 한다(재부팅 후에도 유지). 이것이 A안의 운영 비용이다.</blockquote>
+
+<h2>6. 숨은 실패 경로 수정 — SCHEDULE_EXACT_ALARM (2026-06-15)</h2>
+<p>실기기 검증 <strong>직전 코드 점검</strong>에서 발견한 silent-failure:</p>
+<ul>
+  <li><code>AndroidTargetSdkVersion: 32</code>(API 31+)이라 <code>setExactAndAllowWhileIdle()</code> 호출이 <code>SCHEDULE_EXACT_ALARM</code> 권한을 요구하는데, manifest 주입 목록에 그 권한이 빠져 있었다.</li>
+  <li>권한 없이 호출 시 <code>SecurityException</code> → <code>scheduleDelayedLaunch</code>의 try/catch에 삼켜져 <strong>알람이 조용히 안 걸리고 자동실행이 통째로 실패</strong>한다. SAW(BAL 면제)가 멀쩡해도 그 앞단 알람 예약에서 죽는 구조라, 검증해도 "안 뜸"만 나오고 원인 추적이 어려웠을 함정이었다.</li>
+</ul>
+<p><strong>수정:</strong></p>
+<ul>
+  <li><strong><code>BootReceiver.java</code>:</strong> 알람 예약 분기 재작성. API 31+(<code>VERSION_CODES.S</code>)에서 <code>alarmManager.canScheduleExactAlarms()</code>로 가능 여부 확인 → 가능하면 <code>setExactAndAllowWhileIdle</code>(exact), 불가하면 <strong><code>setAndAllowWhileIdle</code>(inexact, 권한 불필요)</strong>로 폴백. 부팅 +15초는 밀리초 정밀도가 불필요하므로 inexact로 충분하다. pre-M 경로는 기존 <code>setExact</code> 유지.</li>
+  <li><strong><code>KioskAutoLaunchBuild.cs</code>:</strong> <code>android.permission.SCHEDULE_EXACT_ALARM</code>을 키오스크 manifest 주입 목록에 추가(BOOT/SAW 다음). 멱등 처리.</li>
+</ul>
+<p>이 inexact 폴백이 <strong>검증 성공의 전제</strong>였음이 뒤에 실증된다(아래 §8).</p>
+
+<h2>7. 스토어 리젝 방어 — 자동 게이팅</h2>
+<p>이 앱은 권한 문제로 v1.25~28 스토어 리젝 이력이 있어, 부팅 자동실행을 메인 빌드에 그대로 넣으면 정책 리젝 위험이 있다.</p>
+<ul>
+  <li><strong>정적 <code>AndroidManifest.xml</code>은 클린</strong>(부트 항목 0)으로 유지한다.</li>
+  <li><strong><code>Assets/Editor/KioskAutoLaunchBuild.cs</code></strong> (<code>IPostGenerateGradleAndroidProject</code>)가 <strong>Scripting Define <code>CHUNA_KIOSK_AUTOLAUNCH</code>가 ON인 빌드에서만</strong> 생성된 manifest에 <code>RECEIVE_BOOT_COMPLETED</code> + <code>SYSTEM_ALERT_WINDOW</code> + <code>SCHEDULE_EXACT_ALARM</code> 권한과 리시버 XML을 주입한다. 멱등(이미 있으면 skip).</li>
+  <li>메뉴: <strong><code>Build &gt; 키오스크 자동실행 ON/OFF/상태 확인</code></strong>.</li>
+  <li><code>BootReceiver.java</code>는 항상 컴파일되지만 manifest 미등록 시 호출 안 되는 죽은 코드다(정책 스캔은 manifest 기준이라 무해).</li>
+</ul>
+<blockquote><strong>주의:</strong> define 토글 후에는 <strong>재컴파일이 끝난 다음 빌드</strong>해야 주입된다. 토글 직후 바로 빌드하면 stale 어셈블리로 누락된다.</blockquote>
+
+<h2>8. 실기기 검증 결과 (2026-06-15)</h2>
+<p><strong>환경:</strong> Quest 3S / Horizon OS / <strong>Android 14 (API 34)</strong></p>
+
+<h3>8-1. 단일 부팅 성공</h3>
+<p>성공 로그 시퀀스 (adb logcat / dumpsys):</p>
+<pre><code>Start proc CHUNA for broadcast BootReceiver            (+0s)
+START CHUNA/AppUIGameActivity (BAL_ALLOW_SAW_PERMISSION) result code=0   (+15s)
+WindowManager Transition OPEN CHUNA
+topResumedActivity = com.CoCo.CHUNA/AppUIGameActivity   (최상위 안착)</code></pre>
+<ul>
+  <li><strong>BAL이 SAW 권한으로 허용됨</strong>(<code>BAL_ALLOW_SAW_PERMISSION</code>) = 설계한 면제 메커니즘이 정확히 작동. <code>BAL_BLOCK</code> 0건.</li>
+  <li><strong>기기가 API 34였음</strong> → <code>SCHEDULE_EXACT_ALARM</code> granted = <strong>false</strong>(API 33+는 선언만으론 자동허용 안 됨). 즉 §6에서 넣은 <strong>inexact 폴백이 없었으면 이 기기에서 알람 자체가 안 걸렸을 것</strong> — 수정이 검증의 전제였음이 실증됐다.</li>
+</ul>
+
+<h3>8-2. 반복 안정성 (연속 5회 재부팅)</h3>
+<ul>
+  <li><strong>실행 메커니즘은 5/5 (100%) 재현.</strong> 예전 4초 goAsync판의 "들쭉날쭉"이 SAW+15초 AlarmManager로 완전히 해소됐다.</li>
+  <li><strong>그러나 콜드부팅 직후 화면 최상위가 추나가 아니었다</strong> — <code>topResumedActivity</code>가 부팅 +18~48초 구간 내내 <code>com.oculus.guardian/GuardianDialogActivity</code>(경계선 확인 다이얼로그)였다. 추나는 그 뒤에서 정상 실행·생존하지만 Guardian이 앞을 막았다.</li>
+</ul>
+
+<h3>8-3. Guardian이 유일한 잔여 차단 요인임을 격리</h3>
+<ul>
+  <li><strong>인과 격리 증명:</strong> <code>setprop debug.oculus.guardian_pause 1</code> + <code>am force-stop com.oculus.guardian</code> + 추나 재실행 → 즉시 <code>topResumedActivity = com.CoCo.CHUNA</code>. <strong>Guardian만 제거하면 추나가 최상위</strong>가 됨. → 부팅 후 "추나 안 보임"의 단일 원인 = Guardian 다이얼로그로 확정.</li>
+  <li><strong>한계:</strong> <code>guardian_pause</code>는 setprop 런타임값이라 재부팅 시 초기화(persist 아님)된다. Guardian 영속 비활성은 adb로 불가하고, <strong>헤드셋 내 개발자 설정의 경계선(Guardian) 토글 OFF</strong>(영속, 기기별 1회) 또는 HMS/MDM 키오스크에서만 가능하다.</li>
+</ul>
+
+<h3>8-4. 최종 확정 — 경계선 OFF 상태 재부팅</h3>
+<ul>
+  <li>경계선(Guardian)을 OFF한 상태로 재부팅 후 <code>topResumedActivity</code>를 8초 간격 12회(부팅 +0s ~ +88s) 연속 추적 → <strong>전 구간 <code>com.CoCo.CHUNA/AppUIGameActivity</code> 유지, 셸에 한 번도 안 뺏김.</strong> 프로세스 생존.</li>
+  <li class="ok"><strong>결론: 경계선 OFF가 적용되면 추나가 부팅 직후부터 계속 최상위로 안착 = 부팅 자동실행 기능 전체(실행 + 가시성) 검증 완료.</strong></li>
+</ul>
+
+<h2>9. 운영 체크리스트 (기기별 배포 절차)</h2>
+<p>부팅 직후 사용자가 추나를 바로 보려면 <strong>기기마다 다음 선행 세팅이 필요</strong>하다.</p>
+<ol>
+  <li><strong>키오스크 define ON 빌드</strong> — <code>Build &gt; 키오스크 자동실행 ON</code> → 재컴파일 후 빌드.</li>
+  <li><strong>설치 후 앱 1회 수동 실행</strong> — APK 재설치 직후 앱은 <code>stopped=true</code>라 <code>BOOT_COMPLETED</code>가 미전달된다. 1회 실행해야 <code>stopped=false</code>로 풀려 부팅 브로드캐스트를 받는다. <em>(재부팅만으론 안 풀림. 플래시 직후 첫 부팅은 자동실행 안 됨 — 안드로이드 본질 제약.)</em></li>
+  <li><strong>SAW appop 부여</strong> — <code>adb shell appops set com.CoCo.CHUNA SYSTEM_ALERT_WINDOW allow</code> (BAL 면제용, 기기별 1회, 재부팅 유지).</li>
+  <li><strong>헤드셋 개발자 설정에서 경계선/Guardian OFF</strong> (영속, 기기별 1회).</li>
+</ol>
+<p>→ 이후 콜드부팅마다 <strong>~15초 뒤 추나가 자동 진입·최상위</strong>.</p>
+<blockquote>adb 검증 명령은 Unity 번들 adb 사용:<br><code>C:\Users\USER\AppData\Local\Android\Sdk\platform-tools\adb.exe</code></blockquote>
+
+<h2>10. 한계와 향후</h2>
+<ul>
+  <li><strong>메타 셸 자체는 억제하지 못한다.</strong> 메타 버튼 메뉴 소환은 여전히 유효하고, 경계선이 켜져 있으면 부팅마다 Guardian 다이얼로그가 뜬다(추나는 이미 뒤에서 실행 중이라 1회 통과하면 됨).</li>
+  <li><strong>SAW grant·Guardian OFF가 기기별 수작업</strong>이다. 플릿 배포 시 헤드셋마다 필요 → grant 자동화 스크립트 검토 여지.</li>
+  <li><strong>무거운 VR 앱을 부팅 환경에 직접 던지는 구조라 본질적으로 취약</strong>하다(타이밍·리소스·Guardian 의존). 완전한 견고함은 키오스크(HMS/MDM)뿐 — A안이 흔들리면 <strong>B(HMS) 폴백</strong>.</li>
+</ul>
+
+<h2>부록 A. 관련 파일</h2>
+<table>
+  <tr><th>파일</th><th>역할</th></tr>
+  <tr><td><code>Assets/Plugins/Android/BootReceiver.java</code></td><td>부트 수신 + AlarmManager 예약 + 앱 실행</td></tr>
+  <tr><td><code>Assets/Editor/KioskAutoLaunchBuild.cs</code></td><td>define ON 시 manifest 권한/리시버 주입 (게이팅)</td></tr>
+  <tr><td><code>Assets/Plugins/Android/AndroidManifest.xml</code></td><td>정적 클린 유지(부트 항목 없음)</td></tr>
+  <tr><td><code>ProjectSettings/ProjectSettings.asset</code></td><td>targetSdk / Scripting Define</td></tr>
+</table>
+
+<h2>부록 B. 용어</h2>
+<ul>
+  <li><strong>BAL (Background Activity Launch):</strong> 백그라운드에서 액티비티를 띄우는 행위. Android 10+에서 기본 차단되며, 부팅 브로드캐스트 컨텍스트도 자동 허용되지 않는다.</li>
+  <li><strong>SAW (SYSTEM_ALERT_WINDOW):</strong> "다른 앱 위에 표시" 권한. 부여 시 BAL 면제 사유(<code>BAL_ALLOW_SAW_PERMISSION</code>)가 된다.</li>
+  <li><strong>appop:</strong> 권한 선언과 별개로 OS가 실제 허용 여부를 관리하는 op 상태. SAW는 <code>default</code> 상태에선 동작하지 않아 명시적 <code>allow</code>가 필요하다.</li>
+  <li><strong>Guardian / 경계선:</strong> Quest의 플레이 영역 안전 경계 시스템. 부팅 시 확인 다이얼로그를 띄워 최상위를 점유한다.</li>
+  <li><strong>stopped 상태:</strong> 설치/강제종료 후 앱이 한 번도 실행되지 않은 상태. 이 상태에선 브로드캐스트가 전달되지 않는다.</li>
+</ul>
+
+</body>
+</html>
