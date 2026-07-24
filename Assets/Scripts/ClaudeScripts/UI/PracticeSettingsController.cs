@@ -45,6 +45,12 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField][Range(0f, 1f)] private float realityModeAlpha = 0.5f;   // 현실 모드 시 모델 알파값
     [SerializeField][Range(0f, 1f)] private float normalAlpha = 1f;          // 일반 상태 알파값
 
+    [Tooltip("투명도 처리에서 제외할 렌더러 이름(부분일치). 특수 셰이더(눈·각막·치아 등)는 렌더 상태를 " +
+             "바꾸면 사라지므로 건드리지 않는다.")]
+    [SerializeField] private string[] transparencyExcludeNames =
+        { "CC_Base_Eye", "EyeOcclusion", "TearLine", "CC_Base_Teeth", "Cornea", "Tongue", "Eyelash" };
+
+
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
     [Tooltip("씬 시작 시 패스쓰루 ON 상태로 진입 (HandRecord 등 패스스루 전용 씬용)")]
@@ -303,8 +309,14 @@ public class PracticeSettingsController : MonoBehaviour
         if (patientPositionToggle != null)
             patientPositionToggle.isOn = false;
 
-        if (skeletonDisplayToggle != null && skeletonModel != null)
-            skeletonDisplayToggle.isOn = skeletonModel.activeSelf;
+        // ★시작 시 골격표시 강제 OFF(환자 불투명 유지) — 시작하자마자 자동 반투명되는 것 방지.
+        //   사용자가 토글로 켤 때만 골격표시·반투명 동작. (SetIsOnWithoutNotify로 리스너 미발동)
+        //   ※ xray(피부 투명)는 CranialHeadXray가 담당 — 여기 SetModelTransparency는 Reallusion 피부에
+        //     알파를 못 먹여 옷만 투명해지므로 시작 xray 용도로 쓰지 않는다.
+        if (skeletonModel != null)
+            skeletonModel.SetActive(false);
+        if (skeletonDisplayToggle != null)
+            skeletonDisplayToggle.SetIsOnWithoutNotify(false);
 
         // 환자 모델은 기본적으로 표시 (알파값 기반이므로 초기값 true)
         if (patientModelDisplayToggle != null)
@@ -678,6 +690,17 @@ public class PracticeSettingsController : MonoBehaviour
     /// <param name="renderers">대상 SkinnedMeshRenderer 배열</param>
     /// <param name="targetAlpha">목표 알파값 (0~1)</param>
     /// <param name="modelName">로그용 모델 이름</param>
+    /// <summary>이 렌더러를 투명도 처리에서 제외할지(눈·각막·치아 등 특수 셰이더 보호).</summary>
+    private bool IsTransparencyExcluded(Renderer renderer)
+    {
+        if (renderer == null || transparencyExcludeNames == null) return false;
+        string n = renderer.gameObject.name;
+        foreach (var t in transparencyExcludeNames)
+            if (!string.IsNullOrEmpty(t) && n.IndexOf(t, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        return false;
+    }
+
     private void SetModelTransparency(SkinnedMeshRenderer[] renderers, float targetAlpha, string modelName)
     {
         if (renderers == null || renderers.Length == 0)
@@ -689,6 +712,7 @@ public class PracticeSettingsController : MonoBehaviour
         foreach (var renderer in renderers)
         {
             if (renderer == null) continue;
+            if (IsTransparencyExcluded(renderer)) continue;   // 눈·각막·치아 등 특수 셰이더는 건드리지 않음
 
             Material[] materials = renderer.materials;
 
@@ -831,6 +855,7 @@ public class PracticeSettingsController : MonoBehaviour
         foreach (var renderer in renderers)
         {
             if (renderer == null) continue;
+            if (IsTransparencyExcluded(renderer)) continue;   // 눈·각막·치아 등 특수 셰이더는 건드리지 않음
 
             Material[] materials = renderer.materials;
 
