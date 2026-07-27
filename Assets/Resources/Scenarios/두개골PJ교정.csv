@@ -1,0 +1,9 @@
+scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
+9,두개골PJ교정,시작,가이드,0,1,0,"필요시 [설정] 버튼을 눌러 환자의 위치를 설정합니다
+[시작] 버튼을 눌러 실습을 시작합니다",시작,,,,,,,,,,,
+9,두개골PJ교정,평가,진단,1,1,0,"왼손으로 후두골을, 오른손으로 관골궁과 유양돌기를 잡고 굴곡/외전 리듬을 평가하세요. 우측 굴곡 시 내전이 일어나는 것을 확인하여 기능장애로 진단합니다.",진단1,,,,,,,,,,,
+9,두개골PJ교정,교정,파지,2,1,0,"왼손은 후두골을 잡고, 오른손은 파이브 핑거 홀드를 이용하여 우측 측두골 부위를 정확히 파지하세요.",파지,,,,,,,,,,,
+9,두개골PJ교정,교정,교정·호흡,3,1,0,"환자가 숨을 끝까지 내쉬는 동안 왼손은 최대한 신전, 오른손은 최대한 내전을 가하세요. 숨을 완전히 내쉰 후 굴곡과 외전 방향으로 손을 바꾸고 환자가 크게 숨을 들이마시게 합니다.",교정1,,,,,,,,,,,
+9,두개골PJ교정,재평가,재평가,4,1,10,"다시 처음 위치에서 굴곡과 외전 리듬이 정상적으로 동기화(Sync)되어 일어나는지 재평가합니다. 기법을 종료합니다.",재평가,,,,,,,,,,,
+9,두개골PJ교정,종료,가이드,0,1,0,"실습을 마칩니다
+[메인] 버튼을 눌러 재시작 혹은 메인으로 이동하세요",종료,,,,,,,,,,,

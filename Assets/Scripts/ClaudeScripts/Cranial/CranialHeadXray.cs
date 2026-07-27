@@ -3,6 +3,10 @@ using System.Collections.Generic;
 using UnityEngine;
 using Oculus.Interaction;         // HandVisual
 using Oculus.Interaction.Input;   // HandJointId
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.SceneManagement;
+#endif
 
 /// <summary>
 /// 환자에 "사용자 손이 근접"하면 환자를 통으로 반투명(피부색 유지, 알파만)으로 만들어
@@ -56,9 +60,15 @@ public class CranialHeadXray : MonoBehaviour
     [SerializeField] private string[] activeOnConditionTypes = { "cranialGrip" };
 
     [Header("반투명 제외 (항상 불투명)")]
-    [Tooltip("이 이름 포함 렌더러는 반투명 제외. 옷 + 특수 셰이더(눈·각막·치아 등 — 머티리얼 교체 시 사라짐).")]
-    [SerializeField] private string[] excludeNameContains =
-        { "Shirt", "Jeans", "Boots", "CC_Base_Eye", "EyeOcclusion", "TearLine", "CC_Base_Teeth", "Cornea", "Tongue", "Eyelash" };
+    [Tooltip("이 이름 포함 렌더러는 반투명·숨김 모두 제외 = 항상 불투명 유지. 옷(Shirt/Jeans/Boots)만.")]
+    [SerializeField] private string[] excludeNameContains = { "Shirt", "Jeans", "Boots" };
+
+    [Header("반투명 중 숨김 (머리카락 + 눈·이빨 등 얼굴 특수부위)")]
+    [Tooltip("xray ON 동안 완전히 숨길 렌더러 이름(부분일치). OFF 시 자동 복원. " +
+             "머리카락 + 눈·눈그림자·눈물선·치아·각막·혀·눈꺼풀(특수 셰이더라 반투명이 안 먹어 떠 보이므로 숨김). " +
+             "저장/재컴파일 직전엔 EditorSafety가 복원하므로 씬에 꺼짐이 굳지 않는다.")]
+    [SerializeField] private string[] hideWhenActiveNameContains =
+        { "Undercut_fade", "Half_up", "CC_Base_Eye", "EyeOcclusion", "TearLine", "CC_Base_Teeth", "Cornea", "Tongue", "Eyelash" };
 
     [Header("반투명 (피부색 유지, 알파만)")]
     [Tooltip("색 보정. 흰색이면 원색 그대로.")]
@@ -77,10 +87,15 @@ public class CranialHeadXray : MonoBehaviour
     private readonly List<Material[]> trueOriginals = new List<Material[]>();
     private readonly List<Material[]> appliedXray = new List<Material[]>();  // 재적용용(싸움 방지)
     private readonly List<Material> createdMats = new List<Material>();
+    private readonly List<Renderer> hideTargets = new List<Renderer>();  // 반투명 중 숨길 대상(머리카락 등)
+    private readonly List<Renderer> hiddenByMe = new List<Renderer>();   // 실제로 내가 끈 것만(정확 복원)
     private Shader xrayShader;
     private bool captured;
     private bool active;   // 반투명 상태(래치)
     private bool armed;    // 근접 감지 허용 여부
+
+    /// <summary>현재 반투명(xray)이 켜져 있는지. 에디터 세이프티가 저장 직전 판단에 사용.</summary>
+    public bool IsXrayActive => active;
 
     private void Awake()
     {
@@ -293,11 +308,14 @@ public class CranialHeadXray : MonoBehaviour
 
         targets.Clear();
         trueOriginals.Clear();
+        hideTargets.Clear();
         var oic = StringComparison.OrdinalIgnoreCase;
 
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
         {
             if (!(r is SkinnedMeshRenderer || r is MeshRenderer)) continue;
+            // 머리카락 등: 반투명 대상이 아니라 "숨김" 대상. (반투명 인스턴스 생성 안 함)
+            if (NameContainsAny(r, hideWhenActiveNameContains, oic)) { hideTargets.Add(r); continue; }
             if (IsExcluded(r, oic)) continue;
             var mats = r.sharedMaterials;
             if (mats == null || mats.Length == 0) continue;
@@ -307,15 +325,21 @@ public class CranialHeadXray : MonoBehaviour
         }
 
         captured = true;
-        if (debugLog) Debug.Log($"[CranialHeadXray] 대상 렌더러 {targets.Count}개 캡처(옷 제외).");
+        if (debugLog) Debug.Log($"[CranialHeadXray] 대상 렌더러 {targets.Count}개 캡처(옷 제외), 숨김 대상 {hideTargets.Count}개(머리카락).");
+    }
+
+    private static bool NameContainsAny(Renderer r, string[] tokens, StringComparison oic)
+    {
+        if (r == null || tokens == null) return false;
+        string n = r.gameObject.name;
+        foreach (var t in tokens)
+            if (!string.IsNullOrEmpty(t) && n.IndexOf(t, oic) >= 0) return true;
+        return false;
     }
 
     private bool IsExcluded(Renderer r, StringComparison oic)
     {
-        string n = r.gameObject.name;
-        if (excludeNameContains != null)
-            foreach (var t in excludeNameContains)
-                if (!string.IsNullOrEmpty(t) && n.IndexOf(t, oic) >= 0) return true;
+        if (NameContainsAny(r, excludeNameContains, oic)) return true;
 
         if (skullOverlay != null && r.transform.IsChildOf(skullOverlay.transform)) return true;
 
@@ -330,6 +354,8 @@ public class CranialHeadXray : MonoBehaviour
     public void Activate()
     {
         if (active) return;
+        // 에디트 모드 미리보기도 허용. 씬 저장/재컴파일 직전에는 CranialHeadXrayEditorSafety가
+        // 자동으로 Deactivate(원본 복원)하므로, 임시 머티리얼이 씬에 None으로 굳는 사고는 발생하지 않는다.
         if (!captured) CaptureTargets();
         if (targets.Count == 0) return;
 
@@ -365,9 +391,10 @@ public class CranialHeadXray : MonoBehaviour
 
         if (skullOverlay != null) skullOverlay.SetActive(true);
         SetHighlights(true);
+        HideHair(true);   // 머리카락 숨김(반투명 중)
 
         active = true;
-        if (debugLog) Debug.Log($"[CranialHeadXray] 반투명 ON(래치) — {targets.Count}개(옷 제외), alpha={alpha}");
+        if (debugLog) Debug.Log($"[CranialHeadXray] 반투명 ON(래치) — {targets.Count}개(옷 제외), 머리카락 {hiddenByMe.Count}개 숨김, alpha={alpha}");
     }
 
     [ContextMenu("Deactivate (반투명 OFF)")]
@@ -397,7 +424,29 @@ public class CranialHeadXray : MonoBehaviour
             if (createdMats[i] != null) DestroySafe(createdMats[i]);
         createdMats.Clear();
         appliedXray.Clear();
+        HideHair(false);   // 머리카락 복원
         active = false;
+    }
+
+    /// <summary>머리카락 등 hideTargets를 숨기거나(on=true) 복원(false)한다.
+    /// ★숨김은 Play 중에만 — 에디트 모드에서 renderer.enabled=false가 씬에 저장되어 눌어붙는 것 방지.
+    /// 복원은 언제든 안전(내가 끈 것만 다시 켬).</summary>
+    private void HideHair(bool on)
+    {
+        if (on)
+        {
+            // 에디트 모드에서도 숨기되, 저장/재컴파일 직전에 EditorSafety가 Deactivate→복원하므로
+            // renderer.enabled=false가 씬에 굳지 않는다.
+            hiddenByMe.Clear();
+            foreach (var r in hideTargets)
+                if (r != null && r.enabled) { r.enabled = false; hiddenByMe.Add(r); }
+        }
+        else
+        {
+            foreach (var r in hiddenByMe)
+                if (r != null) r.enabled = true;
+            hiddenByMe.Clear();
+        }
     }
 
     /// <summary>원본 머티리얼의 디퓨즈 텍스처를 복사한 반투명 인스턴스.</summary>
@@ -456,6 +505,25 @@ public class CranialHeadXray : MonoBehaviour
         Debug.Log(sb.ToString());
     }
 
+    /// <summary>눈·이빨·머리카락 등이 어떤 이유로 꺼진 채 남았을 때(씬에 눌어붙음 포함) 강제로 다시 켠다.
+    /// 실행 후 씬을 저장하면 눌어붙은 renderer.enabled=0이 정리된다.</summary>
+    [ContextMenu("★ 눈·이빨·머리카락 다시 켜기")]
+    private void ForceShowFaceAndHair()
+    {
+        Transform root = ResolveRoot();
+        if (root == null) { Debug.LogWarning("[CranialHeadXray] 환자 루트를 찾지 못함."); return; }
+        var oic = StringComparison.OrdinalIgnoreCase;
+        int n = 0;
+        foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+        {
+            if (r == null) continue;
+            if ((NameContainsAny(r, excludeNameContains, oic) || NameContainsAny(r, hideWhenActiveNameContains, oic))
+                && !r.enabled) { r.enabled = true; n++; }
+        }
+        hiddenByMe.Clear();
+        Debug.Log($"[CranialHeadXray] 눈·이빨·머리카락 렌더러 {n}개 다시 켬. (에디트 모드면 씬 저장 필요)");
+    }
+
     /// <summary>환자 하위 렌더러/반투명 대상 여부 덤프(진단).</summary>
     [ContextMenu("진단: 렌더러/머티리얼 덤프")]
     private void DumpRenderers()
@@ -467,7 +535,57 @@ public class CranialHeadXray : MonoBehaviour
         sb.AppendLine($"[CranialHeadXray] 환자='{root.name}', 렌더러 {rs.Length}개");
         var oic = StringComparison.OrdinalIgnoreCase;
         foreach (var r in rs)
-            sb.AppendLine($"  {(IsExcluded(r, oic) ? "[제외]" : "[반투명]")} {r.gameObject.name}  슬롯 {r.sharedMaterials.Length}");
+        {
+            string tag = NameContainsAny(r, hideWhenActiveNameContains, oic) ? "[숨김]"
+                       : IsExcluded(r, oic) ? "[제외]" : "[반투명]";
+            sb.AppendLine($"  {tag} {r.gameObject.name}  슬롯 {r.sharedMaterials.Length}  enabled={r.enabled}");
+        }
         Debug.Log(sb.ToString());
     }
 }
+
+#if UNITY_EDITOR
+/// <summary>
+/// ★에디트 모드에서 xray가 켜진 채로 씬을 저장하거나 스크립트가 재컴파일되면
+/// 임시(HideAndDontSave) 머티리얼 참조가 씬에 None(fileID:0)으로 굳어 렌더러가 마젠타로 깨진다.
+/// 이를 막기 위해 "저장/재컴파일 직전"에 활성 xray를 모두 Deactivate(원본 복원)하고,
+/// 저장 후에는 다시 Activate해 미리보기를 유지한다. → 씬 파일엔 항상 원본 머티리얼이 저장됨.
+/// </summary>
+[InitializeOnLoad]
+static class CranialHeadXrayEditorSafety
+{
+    static readonly List<CranialHeadXray> suspended = new List<CranialHeadXray>();
+
+    static CranialHeadXrayEditorSafety()
+    {
+        EditorSceneManager.sceneSaving += OnSceneSaving;
+        EditorSceneManager.sceneSaved += OnSceneSaved;
+        AssemblyReloadEvents.beforeAssemblyReload += OnBeforeReload;
+    }
+
+    // 저장 직전: 활성 xray를 원본으로 되돌려 두고(그 상태가 파일에 기록됨) 기억해 둔다.
+    static void OnSceneSaving(UnityEngine.SceneManagement.Scene scene, string path)
+    {
+        if (Application.isPlaying) return;
+        suspended.Clear();
+        foreach (var x in UnityEngine.Object.FindObjectsByType<CranialHeadXray>(FindObjectsSortMode.None))
+            if (x != null && x.IsXrayActive) { x.Deactivate(); suspended.Add(x); }
+    }
+
+    // 저장 후: 미리보기 복원(다시 반투명 ON).
+    static void OnSceneSaved(UnityEngine.SceneManagement.Scene scene)
+    {
+        if (Application.isPlaying) { suspended.Clear(); return; }
+        foreach (var x in suspended) if (x != null) x.Activate();
+        suspended.Clear();
+    }
+
+    // 재컴파일 직전: trueOriginals(비직렬화)가 소실되기 전에 원본 복원.
+    static void OnBeforeReload()
+    {
+        if (Application.isPlaying) return;
+        foreach (var x in UnityEngine.Object.FindObjectsByType<CranialHeadXray>(FindObjectsSortMode.None))
+            if (x != null && x.IsXrayActive) x.Deactivate();
+    }
+}
+#endif
