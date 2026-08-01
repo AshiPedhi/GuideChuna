@@ -62,6 +62,11 @@ public class TrainingResultData
         // 시계열 데이터 (웹뷰 그래프용)
         public List<SimilarityTimePoint> similarityTimeline;  // 시간축 유사도 변화
 
+        // ★두개골 술기 전용 지표. 이 술기는 손 포즈 유사도·각도 리밋을 쓰지 않으므로
+        //   위의 similarity/limit 항목이 전부 0으로 남는다. 대신 '자세 성립·유지'를 기록한다.
+        //   null이면 두개골 단계가 아니다(기존 지표를 그대로 보면 된다).
+        public CranialMetrics cranial;
+
         public StepResult(string name)
         {
             stepName = name;
@@ -84,7 +89,51 @@ public class TrainingResultData
             maxSimilarity = 0f;
             peakExceededRatio = 0f;
             similarityTimeline = new List<SimilarityTimePoint>();
+            cranial = null;
         }
+    }
+
+    /// <summary>
+    /// 두개골 교정 술기(OM/PM/PJ) 한 단계의 지표.
+    ///
+    /// 이 술기는 손 포즈 유사도(HandPose)와 각도 리밋 판정을 쓰지 않는다.
+    /// (VR엔 반력이 없어 압력·저항감을 못 재고, 핸드트래킹 오차가 실제 변위와 같은 크기여서
+    ///  깊이·변위 측정을 폐기했다 — useDepthJudging=false)
+    /// 그래서 남길 수 있는 것은 <b>자세를 정확히 잡았는지 / 얼마나 안정적으로 유지했는지</b>다.
+    /// </summary>
+    [Serializable]
+    public class CranialMetrics
+    {
+        // --- 단계 개요 ---
+        public string label;              // 단계 구분(예: 진단1, 파지, 견착·호흡, 재평가)
+        public float elapsedSeconds;      // 단계 소요 시간
+
+        // --- 자세 성립/유지 ---
+        public int posesRequired;         // 요구한 자세 수 (진단: 좌·우 2개 / 그 외 0)
+        public int posesCompleted;        // 유지 시간을 채운 자세 수
+        public float holdSeconds;         // 파지 성립 상태로 있던 누적 시간
+        public float firstContactSeconds = -1f;  // 단계 시작~첫 파지 성립까지(-1 = 끝까지 못 잡음)
+        public int gripDropouts;          // 성립했다가 풀린 횟수(손이 떨어진 횟수)
+        public int holdResets;            // 유예 시간을 넘겨 유지 타이머가 0으로 초기화된 횟수
+
+        // --- 호흡(해당 단계만) ---
+        public int breathsRequired;       // 요구 호흡 횟수(0 = 호흡 단계 아님)
+        public int breathsCompleted;      // 성공한 호흡 주기 수
+        public int breathFailures;        // 유지비율 미달로 카운트가 리셋된 횟수
+        public float breathHoldRatio;     // 마지막 호흡 주기의 자세 유지비율(0~1)
+
+        // --- 견착(삼각근-이마 밀착 프록시) ---
+        public float postureSeconds;      // 견착 성립 상태 누적 시간
+
+        // --- 산출 ---
+        public float score;               // 0~100 (두개골 전용 산식)
+        public string grade;
+
+        /// <summary>자세 완료율 0~1. 요구 자세가 없으면 '파지 성립 여부'로 본다.</summary>
+        public float CompletionRatio =>
+            posesRequired > 0
+                ? Mathf.Clamp01((float)posesCompleted / posesRequired)
+                : (firstContactSeconds >= 0f ? 1f : 0f);
     }
 
     /// <summary>
@@ -381,6 +430,26 @@ public class TrainingResultData
         }
     }
 
+    /// <summary>두개골 단계 2줄 요약. 유사도 대신 '자세 성립·유지'를 보여준다.</summary>
+    private static void AppendCranialStepLines(StringBuilder sb, string phaseName, StepResult step, string grade)
+    {
+        var c = step.cranial;
+
+        // 1줄: 점수 + 완료도(진단은 자세 개수, 파지·호흡 단계는 성립 여부) + 유지 시간
+        string done = c.posesRequired > 0
+            ? $"자세 {c.posesCompleted}/{c.posesRequired}"
+            : $"파지 {(c.firstContactSeconds >= 0f ? "성립" : "미성립")}";
+        sb.AppendLine($"■ {phaseName} {step.stepName}  {step.finalScore:F0}점 ({grade}) · {done} · 유지 {c.holdSeconds:F1}초");
+
+        // 2줄: 안정성 + (해당 단계만) 호흡·견착
+        string firstContact = c.firstContactSeconds >= 0f ? $"{c.firstContactSeconds:F1}초" : "없음";
+        string breath = c.breathsRequired > 0
+            ? $" · 호흡 {c.breathsCompleted}/{c.breathsRequired}(유지율 {c.breathHoldRatio:P0}, 실패 {c.breathFailures}회)"
+            : "";
+        string posture = c.postureSeconds > 0.1f ? $" · 견착 {c.postureSeconds:F1}초" : "";
+        sb.AppendLine($"   이탈 {c.gripDropouts}회 · 유지실패 {c.holdResets}회 · 첫 접촉 {firstContact}{breath}{posture}");
+    }
+
     /// <summary>
     /// 평가모드(공식) 결과를 step당 2줄 컴팩트 포맷으로 직렬화.
     /// 서버 전송(learnLevel2)과 임시 캔버스 결과 표시가 동일한 문자열을 공유 → 이중 관리 없음.
@@ -412,6 +481,13 @@ public class TrainingResultData
                     firstStep = false;
 
                     string grade = string.IsNullOrEmpty(step.grade) ? "-" : step.grade;
+
+                    // ★두개골 단계는 유사도·리밋이 성립하지 않으므로(전부 0) 자세 성립·유지 지표로 대체한다.
+                    if (step.cranial != null)
+                    {
+                        AppendCranialStepLines(sb, phase.phaseName, step, grade);
+                        continue;
+                    }
 
                     // step별 상태 심볼(O/△/X)은 제거 — 점수로 충분, 스킵 개수는 종합에 집계
                     sb.AppendLine($"■ {phase.phaseName} {step.stepName}  {step.finalScore:F0}점 ({grade}) · 유사도 {step.averageSimilarity:P0} · 위험 범위 초과 {step.limitViolationCount}");

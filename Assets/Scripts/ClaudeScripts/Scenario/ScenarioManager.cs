@@ -517,11 +517,21 @@ public class ScenarioManager : MonoBehaviour
     /// <summary>
     /// 시나리오 완료
     /// </summary>
+    /// <summary>두개골 단계에서 모은 지표를 결과에 기록한다(모인 게 없으면 무동작).
+    /// 두개골은 유사도·리밋 채점이 성립하지 않아 이 경로가 유일한 지표 기록이다.</summary>
+    private void FlushCranialMetrics()
+    {
+        if (resultTracker == null || cranialController == null) return;
+        if (!cranialController.HasPendingCranialMetrics) return;
+        resultTracker.RecordCranialStep(cranialController.ConsumeCranialMetrics());
+    }
+
     private void CompleteScenario()
     {
         // ✅ 결과 추적 종료 및 데이터 저장
         if (resultTracker != null)
         {
+            FlushCranialMetrics();   // 마지막 두개골 단계 지표를 놓치지 않게 종료 전에 기록
             var finalResult = resultTracker.FinishTracking();
             if (showDebugLog && finalResult != null)
                 ChunaLogger.Log($"[ScenarioManager] 훈련 결과: 시간={TrainingResultData.FormatTime(finalResult.totalTime)}, 유사도={finalResult.overallSimilarity:P0}, 경고={finalResult.totalWarningCount}, 스킵={finalResult.totalSkipCount}");
@@ -755,6 +765,10 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // 결과 추적: SubStep 시작 기록
         if (resultTracker != null && currentPhase != null && currentStep != null)
         {
+            // ★두개골 지표는 StartSubStep 직전에 넣어야 '방금 끝난 단계'에 붙는다
+            //   (StartSubStep이 이전 SubStep의 완료 처리를 하면서 phase/step 이름을 갱신하기 때문).
+            FlushCranialMetrics();
+
             resultTracker.StartSubStep(currentPhase.phaseName, currentStep.stepName);
         }
 
@@ -789,6 +803,22 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             !cranialType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {
             cranialController.HideBreathingHud();
+        }
+
+        // ★ 진단 단계(유지 타이머·호흡 유도 문구)는 cranialTouch substep에서만 살아 있다.
+        //   그 외 substep 진입 시 정리 — 안 하면 진단3(안내 전용) 이후로도 타이머가 계속 돌고
+        //   진단 파지 구체가 화면에 남는다. (진단1→진단2 전환은 BeginDiagnosisStage가 알아서 재시작)
+        if (cranialController != null &&
+            !cranialType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase))
+        {
+            cranialController.EndDiagnosisStage();
+        }
+
+        // ★ 두개골 조건이 아닌 substep(진단3·재평가·시작/종료 안내 등)에서는 파지 구체를 전부 숨긴다.
+        //   파지 단계에서 켠 교정 파지점을 끄는 곳이 없어 재평가·종료까지 화면에 남아 있었다.
+        if (cranialController != null && !isCranial)
+        {
+            cranialController.HideAllGripPoints();
         }
 
         // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
@@ -889,7 +919,13 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         foreach (var rig in allRigs)
             if (rig != null && string.IsNullOrEmpty(rig.ScenarioName))
                 return rig;   // ② 레거시 기본(이름 미설정 = 기존 OM)
-        return allRigs[0];    // ③ 폴백
+        // ③ 폴백 — 이름이 붙은 리그만 있는데 하나도 안 맞는 상황. 엉뚱한 술기의 리그(파지점 위치·진단 단계가
+        // 전혀 다름)를 조용히 쓰게 되므로 반드시 경고한다. (예: 두개골PJ교정 CSV는 있는데 PJ 리그를 아직 안 만든 경우)
+        ChunaLogger.LogWarning(
+            $"[ScenarioManager] 시나리오 '{scenarioName}'에 맞는 두개골 리그가 없습니다 — " +
+            $"'{allRigs[0].ScenarioName}' 리그로 폴백합니다. 파지점 위치와 진단 단계가 이 술기와 다를 수 있습니다. " +
+            "메뉴 GuideChuna/두개골 진단 파지점 설정 에서 이 시나리오용 리그를 만드세요.");
+        return allRigs[0];
     }
 
     /// <summary>
@@ -939,23 +975,55 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
+        // ★ 환자 애니메이션: 다른 시나리오와 똑같이 CSV의 patientAnimationClip으로 켜고 끈다.
+        //   (예: 진단 단계에 '굴곡신전'을 넣으면 환자가 호흡하고, 다음 단계에 'idle'을 넣으면 멈춘다)
+        //   두개골 단계는 진행 게이트가 조건(cranialTouch 등)이므로 AutoPlay 완료가 단계를 넘기면 안 된다
+        //   → StartAutoPlayFromSubStep(평가·진행 로직 포함)이 아니라 '클립 재생'만 한다.
+        if (chunaPathEvaluator != null && subStep.HasPatientAnimation())
+        {
+            chunaPathEvaluator.SetPatientAnimation(subStep.patientAnimationClip.Trim(),
+                                                   AnimationPlayMode.AutoPlay);
+            if (showDebugLog)
+                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 환자 애니 재생: {subStep.patientAnimationClip}</color>");
+        }
+
         // ★ 가이드 손(녹화) 표시: cranial 스텝에 handTrackingFileName이 있으면 기존 가이드핸드 재생을 그대로 띄운다.
         //   판정은 cranial 구체 게이트가 담당하고, 가이드 손은 순수 시각 안내(손가락별 파지점 없이 '구체 1개 + 가이드손' 방식).
         //   녹화 데이터가 양손이면 양손 그림자 손이 모두 재생된다.
         if (subStep.HasHandTracking() && chunaPathEvaluatorBridge != null)
         {
             chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
-            if (chunaPathEvaluator != null) chunaPathEvaluator.StartGuideHandPlaybackInternal();
+            if (chunaPathEvaluator != null)
+            {
+                // ★두개골 가이드손 = 클립 전체를 1회 재생(루프 없음).
+                //   ⓐ 구간: 기본값이 0~0.4라 그냥 두면 앞 40%만 재생되고 끊긴다. 전체 재생은 원래
+                //      conditionParams에 "guideOnly"가 있을 때만 열리는데, 두개골은 그 칸을
+                //      진단 단계 ID(진단1/진단2)·유지 초로 쓰므로 그 경로를 탈 수 없다.
+                //   ⓑ 루프: 시연을 한 번 보여주면 충분하고, 계속 돌면 파지 위치를 가린다.
+                //   인자로 넘기는 오버로드를 써서 평가기 필드는 그대로 둔다(다른 시나리오에 설정이 새지 않게).
+                chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+
+                // 이후 제어는 컨트롤러가 '동작(자세)마다' 켜고 끈다
+                // (자세 시작 시 재생 → 파지 성립 시 정지 → 다음 자세에서 다시 재생).
+                cranialController.ArmGuideHandAutoHide(chunaPathEvaluator, subStep.handTrackingFileName);
+            }
             if (showDebugLog)
                 ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 가이드손 재생: {subStep.handTrackingFileName}</color>");
         }
+
+        // 평가 지표 수집 시작(이 단계에서 자세 성립·유지·이탈·호흡을 모은다).
+        cranialController.BeginCranialMetrics(
+            string.IsNullOrEmpty(subStep.conditionParams)
+                ? currentStep.stepName
+                : $"{currentStep.stepName}({subStep.conditionParams})");
 
         IScenarioCondition condition;
         string label;
         if (conditionType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase))
         {
-            condition = new DiagnosisTouchCondition(cranialController);
-            label = "Touch(⓪ 진단 촉진)";
+            // conditionParams = 진단 단계 ID(예: 진단1/진단2). 비면 컨트롤러의 첫 단계를 쓴다.
+            condition = new DiagnosisHoldCondition(cranialController, subStep.conditionParams);
+            label = "Touch(⓪ 진단 자세 유지)";
         }
         else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {
@@ -964,8 +1032,19 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         }
         else if (conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase))
         {
-            condition = new PressureCondition(cranialController);
-            label = "Pressure(②a 압력·방향)";
+            // 판정 = 파지(접촉) 유지. conditionParams에 숫자를 넣으면 그 초만큼 유지해야 통과한다(비면 기본 1초).
+            // ★PM 교정·호흡이 이 조건을 쓴다 — 호흡 완료로 자동 진행하면 이마 견착 프록시가 성립해야 해서
+            //   PM(견착 없는 술기)에선 영영 안 넘어갔다. 그래서 '접촉 유지'로 통과시킨다.
+            float holdSec = 1.0f;
+            if (!string.IsNullOrEmpty(subStep.conditionParams) &&
+                float.TryParse(subStep.conditionParams.Trim(),
+                               System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out float parsed) &&
+                parsed > 0f)
+                holdSec = parsed;
+
+            condition = new PressureCondition(cranialController, holdSec);
+            label = $"Pressure(파지 유지 {holdSec:0.#}초)";
         }
         else
         {

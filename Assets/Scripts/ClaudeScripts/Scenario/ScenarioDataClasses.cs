@@ -84,6 +84,8 @@ public class SubStepData
                 return null; // 특수 처리: ScenarioConfig.postureGuideContactTarget 사용
             case "head":
                 return ContactTarget.Head;
+            case "headandshoulder":
+                return ContactTarget.HeadAndShoulder;
             case "shoulder":
                 return ContactTarget.Shoulder;
             case "chest":
@@ -94,6 +96,11 @@ public class SubStepData
                 return ContactTarget.LeftArm;
             case "rightarm":
                 return ContactTarget.RightArm;
+            case "back":
+            case "waist":
+            case "허리":
+            case "등":
+                return ContactTarget.Back;
             default:
                 return null;
         }
@@ -228,10 +235,22 @@ public class SubStepData
         if (!HasPatientAnimation())
             return AnimationPlayMode.None;
 
+        // touchOnce 단계의 손 녹화는 "어디를 터치하는지" 보여주는 가이드 손 전용이다.
+        // 진행은 접촉 1회 + 자동 재생이 담당하므로 SyncWithUser(진행도 스크럽)로 넘기면 안 된다.
+        if (HasTouchOnce())
+            return AnimationPlayMode.AutoPlay;
+
         if (HasHandTracking())
             return AnimationPlayMode.SyncWithUser;
 
         return AnimationPlayMode.AutoPlay;
+    }
+
+    /// <summary>conditionParams에 touchOnce(최초 접촉으로 래치)가 지정됐는지</summary>
+    public bool HasTouchOnce()
+    {
+        return !string.IsNullOrEmpty(conditionParams) &&
+               conditionParams.ToLower().Contains("touchonce");
     }
 }
 
@@ -256,7 +275,10 @@ public enum ContactTarget
     Chest,              // 흉부만 (사각근, 흉쇄유돌근, 대흉근)
     ChestAndShoulder,   // 흉부+어깨 (보조수 등 넓은 범위)
     LeftArm,            // 왼팔 (견갑거근 자세지시 등)
-    RightArm            // 오른팔
+    RightArm,           // 오른팔
+    // ※ 새 값은 반드시 끝에 추가할 것 — ScenarioConfig에 int로 직렬화돼 있어
+    //    중간에 끼우면 기존 시나리오의 접촉 부위가 통째로 밀린다.
+    Back                // 등·허리(흉추) - 복잡추나 흉추/늑골 술기용. 머리·어깨와 별개 콜라이더.
 }
 
 /// <summary>

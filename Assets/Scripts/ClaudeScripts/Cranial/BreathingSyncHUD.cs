@@ -11,14 +11,49 @@ using TMPro;
 public class BreathingSyncHUD : MonoBehaviour
 {
     [Header("=== 호흡 타이밍 (인스펙터 노출) ===")]
-    [Tooltip("들숨 길이 (초)")]
-    [SerializeField] private float breatheInDuration = 4f;
-    [Tooltip("날숨 길이 (초)")]
-    [SerializeField] private float breatheOutDuration = 4f;
-    [Tooltip("필요한 연속 호흡 횟수")]
-    [SerializeField] private int requiredBreaths = 3;
+    [Tooltip("들숨 길이 (초). 실제 술기 = 들이마신 뒤 길게 내쉬므로 날숨보다 짧다.")]
+    [SerializeField] private float breatheInDuration = 3f;
+    [Tooltip("날숨 길이 (초). 이 구간 동안 굴곡을 진행시키며 압을 유지한다 — 들숨보다 길게.")]
+    [SerializeField] private float breatheOutDuration = 7f;
+    [Tooltip("필요한 연속 호흡 횟수. ★실제 술기는 1회(들이마신 뒤 길게 내쉬며 유지)다.")]
+    [SerializeField] private int requiredBreaths = 1;
     [Tooltip("호흡 주기(들숨+날숨) 동안 적정 텐션 유지비율 임계")]
     [SerializeField, Range(0f, 1f)] private float requiredHoldRatio = 0.7f;
+
+    /// <summary>들숨 길이(초). 진단 구간의 애니메이션 루프가 같은 리듬을 쓰도록 노출.</summary>
+    public float BreatheInDuration => breatheInDuration;
+    /// <summary>날숨 길이(초).</summary>
+    public float BreatheOutDuration => breatheOutDuration;
+    /// <summary>필요한 호흡 횟수.</summary>
+    public int RequiredBreaths => requiredBreaths;
+
+    /// <summary>★HUD는 씬에 1개뿐이고 여러 두개골 리그가 공유하므로, 술기마다 호흡이 다르면
+    /// 리그가 호흡 윈도우를 열기 직전에 이 메서드로 자기 값을 밀어 넣는다.
+    /// (OM = 3회 대칭 호흡 / PJ = 1회, 끝까지 내쉬며 신전·내전 → 손을 바꾸고 크게 들이마시며 굴곡·외전 = <b>날숨부터</b>)
+    /// 인자가 0 이하면 그 항목은 기존 인스펙터 값을 유지한다(startPhase는 Keep이 유지).</summary>
+    public void Configure(int breaths, float inhaleSeconds, float exhaleSeconds,
+                          StartPhase startPhase = StartPhase.Keep)
+    {
+        if (breaths > 0) requiredBreaths = breaths;
+        if (inhaleSeconds > 0f) breatheInDuration = inhaleSeconds;
+        if (exhaleSeconds > 0f) breatheOutDuration = exhaleSeconds;
+        if (startPhase != StartPhase.Keep) startWithExhale = (startPhase == StartPhase.Exhale);
+    }
+
+    /// <summary>호흡 윈도우를 어느 위상부터 시작할지. Keep = HUD 인스펙터 값 유지.</summary>
+    public enum StartPhase { Keep = 0, Inhale = 1, Exhale = 2 }
+
+    [Tooltip("★켜면 '날숨부터' 호흡 윈도우를 시작한다(한 주기 = 날숨 → 들숨). " +
+             "PJ 술기가 이 경우다 — 지시문이 '숨을 끝까지 내쉬는 동안 신전·내전 → 완전히 내쉰 후 손을 바꾸고 크게 들이마시게' 라서 " +
+             "날숨과 들숨 둘 다 작업 국면이고 순서가 날숨 먼저다. 들숨부터 시작하면 마지막 '크게 들숨(굴곡·외전)'이 주기 밖으로 밀려난다. " +
+             "OM·PM처럼 들숨부터가 맞으면 끈다(기본).")]
+    [SerializeField] private bool startWithExhale = false;
+
+    [Header("=== 표시 ===")]
+    [Tooltip("★기본 ON. 호흡 링과 카운트('호흡 1/3')를 표시한다. " +
+             "숨소리만으로는 몇 번째 호흡인지·언제 완료인지 판단이 안 된다는 실테스트 피드백(07-30)으로 기본값을 ON으로 되돌렸다. " +
+             "끄면 화면에 아무것도 안 띄우고 호흡 타이밍·숨소리·애니메이션 동기화만 동작한다.")]
+    [SerializeField] private bool showVisuals = true;
 
     [Header("=== 링 비주얼 (선택, World Space) ===")]
     [Tooltip("들숨에 팽창/날숨에 수축하는 링 (localScale로 표현)")]
@@ -55,10 +90,38 @@ public class BreathingSyncHUD : MonoBehaviour
     public bool IsRunning => running;
     public int CompletedBreaths => completedBreaths;
 
+    /// <summary>유지비율 미달로 호흡 카운트가 리셋된 횟수(평가 지표용). StartWindow에서 0으로 초기화.</summary>
+    public int FailedBreaths => failedBreaths;
+    private int failedBreaths = 0;
+
+    /// <summary>마지막으로 평가한 호흡 주기의 자세 유지비율 0~1(평가 지표용).</summary>
+    public float LastHoldRatio => lastHoldRatio;
+    private float lastHoldRatio = 0f;
+
     /// <summary>현재 호흡량 0(완전 날숨)~1(완전 들숨). 링 스케일과 동일 위상.
     /// 환자 흉곽(CranialPatientBreath) 등 외부 시각요소를 링과 동기화하는 데 사용.</summary>
     public float BreathAmount01 => currentBreath01;
     private float currentBreath01 = 0f;
+
+    /// <summary>지금 들숨 국면인가(false = 날숨).</summary>
+    public bool IsInhaling => inhaling;
+
+    /// <summary>한 호흡 주기(들숨→날숨) 안에서의 진행도 0~1.
+    /// 들숨 구간이 0→0.5, 날숨 구간이 0.5→1로 이어진다.
+    /// 굴곡·신전처럼 "한 클립에 주기 전체가 들어 있는" 애니메이션을 스크럽하는 데 쓴다.</summary>
+    public float CycleProgress01
+    {
+        get
+        {
+            if (inhaling)
+            {
+                float d = Mathf.Max(0.0001f, breatheInDuration);
+                return Mathf.Clamp01(phaseTimer / d) * 0.5f;
+            }
+            float o = Mathf.Max(0.0001f, breatheOutDuration);
+            return 0.5f + Mathf.Clamp01(phaseTimer / o) * 0.5f;
+        }
+    }
 
     /// <summary>적정 텐션 유지 여부 공급자 (예: () => left.IsInGoodZone &amp;&amp; right.IsInGoodZone)</summary>
     public void SetTensionProvider(System.Func<bool> provider) => tensionProvider = provider;
@@ -67,15 +130,18 @@ public class BreathingSyncHUD : MonoBehaviour
     {
         running = true;
         complete = false;
-        inhaling = true;
+        inhaling = !startWithExhale;   // 날숨부터 시작하는 술기(PJ)도 있다
         phaseTimer = 0f;
         completedBreaths = 0;
+        failedBreaths = 0;
+        lastHoldRatio = 0f;
         breathHeldTime = 0f;
         breathTotalTime = 0f;
         gameObject.SetActive(true);
+        ApplyVisualVisibility();   // showVisuals=false면 링·카운트를 숨긴다(타이밍 엔진은 계속 동작)
         EnsureBreathAudio();   // 인스펙터 미연결 시 Resources/Audio에서 자동 로드 + AudioSource 자동 생성
         UpdateBreathCountText();
-        PlayBreathClip(true);   // 첫 들숨 소리
+        PlayBreathClip(inhaling);   // 첫 위상 숨소리(날숨부터 시작하면 날숨 소리)
         ChunaLogger.Log("<color=cyan>[BreathingSyncHUD] 호흡 윈도우 시작</color>");
     }
 
@@ -133,8 +199,20 @@ public class BreathingSyncHUD : MonoBehaviour
     /// <summary>호흡 카운트 텍스트 갱신 (연결됐을 때만).
     /// 머리를 숙인 견착 자세에서 곁눈질로 진행/완료를 판별하는 시야 코너 표시.
     /// 완료 시 "호흡 완료"+초록으로 바꿔 "됐구나" 신호를 명확히 준다.</summary>
+    /// <summary>링·카운트 표시를 showVisuals에 맞춰 켜고 끈다.
+    /// ★이 오브젝트 자체는 계속 활성이어야 한다 — Update가 돌아야 호흡 타이밍(숨소리·애니메이션 동기화)이 진행된다.
+    /// 그래서 GameObject를 끄는 대신 자식 비주얼만 숨긴다.</summary>
+    private void ApplyVisualVisibility()
+    {
+        if (ringVisual != null && ringVisual.gameObject.activeSelf != showVisuals)
+            ringVisual.gameObject.SetActive(showVisuals);
+        if (breathCountText != null && breathCountText.gameObject.activeSelf != showVisuals)
+            breathCountText.gameObject.SetActive(showVisuals);
+    }
+
     private void UpdateBreathCountText()
     {
+        if (!showVisuals) return;   // 표시 끔 — 텍스트 갱신 불필요
         if (breathCountText == null) return;
         if (complete)
         {
@@ -166,9 +244,11 @@ public class BreathingSyncHUD : MonoBehaviour
 
             if (phaseTimer >= breatheInDuration)
             {
+                // 날숨부터 시작하는 술기(PJ)에선 '들숨 끝'이 한 주기의 끝이다.
+                if (startWithExhale) CloseBreathCycle();
                 inhaling = false;
                 phaseTimer = 0f;
-                PlayBreathClip(false);   // 날숨 위상 진입
+                if (running) PlayBreathClip(false);   // 날숨 위상 진입(완료 시엔 재생 안 함)
             }
         }
         else // 날숨
@@ -177,19 +257,29 @@ public class BreathingSyncHUD : MonoBehaviour
 
             if (phaseTimer >= breatheOutDuration)
             {
-                EvaluateBreath();
+                if (!startWithExhale) CloseBreathCycle();
                 inhaling = true;
                 phaseTimer = 0f;
-                breathHeldTime = 0f;
-                breathTotalTime = 0f;
                 if (running) PlayBreathClip(true);   // 다음 들숨 위상 진입(완료 시엔 재생 안 함)
             }
         }
     }
 
+    /// <summary>한 호흡 주기의 끝 처리 = 유지비율 평가 + 누적 초기화.
+    /// 주기의 끝은 '시작 위상의 반대 위상이 끝나는 지점'이다
+    /// (들숨부터면 날숨 끝, 날숨부터면 들숨 끝). 이 경계를 잘못 잡으면
+    /// 날숨 6초만 채우고 단계가 끝나 마지막 작업 국면(크게 들숨)이 사라진다.</summary>
+    private void CloseBreathCycle()
+    {
+        EvaluateBreath();
+        breathHeldTime = 0f;
+        breathTotalTime = 0f;
+    }
+
     private void EvaluateBreath()
     {
         float ratio = breathTotalTime > 0f ? breathHeldTime / breathTotalTime : 0f;
+        lastHoldRatio = ratio;   // 평가 지표용
         if (ratio >= requiredHoldRatio)
         {
             completedBreaths++;
@@ -204,6 +294,7 @@ public class BreathingSyncHUD : MonoBehaviour
         else
         {
             // 유지 실패 시 연속 카운트 리셋 (튜닝 포인트: 누적 허용으로 바꿀 수도 있음)
+            failedBreaths++;
             completedBreaths = 0;
             UpdateBreathCountText();
             ChunaLogger.Log($"<color=orange>[BreathingSyncHUD] 호흡 실패 (유지비율 {ratio:P0}) - 카운트 리셋</color>");

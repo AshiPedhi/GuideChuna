@@ -55,9 +55,21 @@ public class CranialHeadXray : MonoBehaviour
              "런타임에 피부 머티리얼을 되돌려도 xray가 유지되게 한다.")]
     [SerializeField] private bool reassertWhileActive = true;
 
-    [Header("발동 허용 구간 (선택)")]
-    [Tooltip("이 conditionType의 SubStep에서만 근접 감지. 비우면 항상 감지. (래치는 종료까지 유지)")]
-    [SerializeField] private string[] activeOnConditionTypes = { "cranialGrip" };
+    [Header("발동 허용 구간")]
+    [Tooltip("xray를 쓰는 SubStep의 conditionType 목록. 여기 없는 단계(진단3·재평가·시작/종료 안내 등 " +
+             "conditionType이 빈 단계)로 넘어가면 xray를 끄고 환자를 원복한다.\n" +
+             "★비우면 '모든 단계에서 허용'이 되어 원복이 일어나지 않는다 — 반드시 채울 것.")]
+    [SerializeField] private string[] activeOnConditionTypes =
+        { "cranialTouch", "cranialGrip", "cranialPressure", "cranialDepthBreath" };
+
+    [Header("단계마다 원복")]
+    [Tooltip("★기본 ON. **xray를 쓰지 않는 단계로 넘어갈 때** xray를 끄고 환자 모델을 원래 모습으로 되돌린다.\n" +
+             "xray를 쓰는 단계끼리 연속될 때는 끄지 않고 그대로 유지한다(깜빡임 방지).\n" +
+             "끄면 한번 켜진 xray가 시나리오 끝까지 래치된다.")]
+    [SerializeField] private bool restoreEachSubStep = true;
+    [Tooltip("단계 전환으로 원복한 뒤 근접 감지를 다시 켜기까지의 대기 시간(초). " +
+             "0이면 손이 아직 머리에 있을 때 같은 프레임에 다시 켜져서 원복이 안 보인다(깜빡임).")]
+    [SerializeField] private float rearmDelaySeconds = 0.6f;
 
     [Header("반투명 제외 (항상 불투명)")]
     [Tooltip("이 이름 포함 렌더러는 반투명·숨김 모두 제외 = 항상 불투명 유지. 옷(Shirt/Jeans/Boots)만.")]
@@ -79,6 +91,12 @@ public class CranialHeadXray : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float rimBoost = 0f;
     [SerializeField, Range(0.2f, 8f)] private float rimPower = 2.5f;
 
+    [Tooltip("반투명 셰이더(GuideChuna/HeadXray). 비워 두면 Shader.Find로 찾는다.\n" +
+             "★빌드에서 xray가 안 되면 이게 원인이다 — 어떤 머티리얼도 참조하지 않는 셰이더는 빌드에서 " +
+             "제거돼 Shader.Find가 null을 돌려준다. 여기에 직접 할당하면(=씬이 셰이더를 참조하므로) 확실히 포함된다. " +
+             "Project Settings > Graphics > Always Included Shaders 등록도 같은 효과.")]
+    [SerializeField] private Shader xrayShaderAsset;
+
     [Header("디버그")]
     [SerializeField] private bool debugLog = false;
 
@@ -93,6 +111,7 @@ public class CranialHeadXray : MonoBehaviour
     private bool captured;
     private bool active;   // 반투명 상태(래치)
     private bool armed;    // 근접 감지 허용 여부
+    private float rearmAt; // 이 시각 전까지는 근접 감지 보류(단계 전환 원복이 보이도록)
 
     /// <summary>현재 반투명(xray)이 켜져 있는지. 에디터 세이프티가 저장 직전 판단에 사용.</summary>
     public bool IsXrayActive => active;
@@ -134,10 +153,25 @@ public class CranialHeadXray : MonoBehaviour
     private void HandleSubStepStarted(SubStepData subStep)
     {
         if (subStep == null) return;
-        // activeOnConditionTypes 비면 항상 armed. 아니면 해당 스텝에서만 근접 감지 시작.
-        armed = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0)
-                || IsTrigger(subStep.conditionType);
-        if (debugLog) Debug.Log($"[CranialHeadXray] arm={armed} (conditionType='{subStep.conditionType}', active={active})");
+
+        // 이 단계가 xray를 쓰는 단계인가. (목록이 비면 '항상 허용' = 예전 동작)
+        bool listEmpty = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0);
+        bool wantsXray = listEmpty || IsTrigger(subStep.conditionType);
+
+        armed = wantsXray;
+
+        // ★ xray를 **안 쓰는** 단계(진단3·재평가·안내·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
+        //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
+        if (restoreEachSubStep && active && !wantsXray)
+        {
+            Deactivate();
+            rearmAt = Time.time + Mathf.Max(0f, rearmDelaySeconds);   // 손이 아직 머리에 있어도 곧바로 재점등되지 않게
+            if (debugLog) Debug.Log($"[CranialHeadXray] xray 미사용 단계 진입 — 환자 모델 원복 (재감지까지 {rearmDelaySeconds:0.0}초)");
+        }
+
+        if (debugLog)
+            Debug.Log($"[CranialHeadXray] arm={armed} xray사용단계={wantsXray} " +
+                      $"(conditionType='{subStep.conditionType}', active={active})");
     }
 
     private void HandleScenarioEnd(ScenarioData _)
@@ -149,6 +183,7 @@ public class CranialHeadXray : MonoBehaviour
     private void Update()
     {
         if (active || !armed) return;      // 이미 켜졌으면(래치) 아무것도 안 함
+        if (Time.time < rearmAt) return;   // 단계 전환 직후: 원복이 보이도록 잠시 재감지 보류
         if (targets.Count == 0) return;
         if (IsHandNear()) Activate();
     }
@@ -309,14 +344,16 @@ public class CranialHeadXray : MonoBehaviour
         targets.Clear();
         trueOriginals.Clear();
         hideTargets.Clear();
+        CacheRigRoots();   // 두개골 리그(파지 구체 등)를 xray 대상에서 빼기 위해
         var oic = StringComparison.OrdinalIgnoreCase;
 
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
         {
             if (!(r is SkinnedMeshRenderer || r is MeshRenderer)) continue;
+            // ★제외 검사를 먼저 — 리그(파지 구체 등)가 숨김 토큰에 우연히 걸려 사라지는 일 방지.
+            if (IsExcluded(r, oic)) continue;
             // 머리카락 등: 반투명 대상이 아니라 "숨김" 대상. (반투명 인스턴스 생성 안 함)
             if (NameContainsAny(r, hideWhenActiveNameContains, oic)) { hideTargets.Add(r); continue; }
-            if (IsExcluded(r, oic)) continue;
             var mats = r.sharedMaterials;
             if (mats == null || mats.Length == 0) continue;
 
@@ -337,6 +374,21 @@ public class CranialHeadXray : MonoBehaviour
         return false;
     }
 
+    /// <summary>씬의 두개골 리그(CranialAdjustmentController) 루트들 — xray 대상에서 제외할 서브트리.
+    /// ★리그가 환자 모델(c9) 하위(CC_Base_Head 밑)에 붙어 있어서, 막지 않으면
+    ///   파지 구체까지 xray 머티리얼로 바뀌어 파지 색(초록/흰색)이 안 보인다.</summary>
+    private Transform[] rigRoots;
+
+    private void CacheRigRoots()
+    {
+        var rigs = FindObjectsByType<CranialAdjustmentController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        var list = new List<Transform>(rigs != null ? rigs.Length : 0);
+        if (rigs != null)
+            foreach (var rig in rigs)
+                if (rig != null) list.Add(rig.transform);
+        rigRoots = list.ToArray();
+    }
+
     private bool IsExcluded(Renderer r, StringComparison oic)
     {
         if (NameContainsAny(r, excludeNameContains, oic)) return true;
@@ -346,6 +398,16 @@ public class CranialHeadXray : MonoBehaviour
         if (gripHighlights != null)
             foreach (var g in gripHighlights)
                 if (g != null && r.transform.IsChildOf(g.transform)) return true;
+
+        // ★ 두개골 리그 하위(파지 구체·깊이 가이드·리듬 지표·호흡 HUD 등)는 전부 제외.
+        //   이걸 안 막으면 xray가 파지 구체 머티리얼까지 교체하고 reassertWhileActive가 매 프레임 덮어써서
+        //   "xray 켜면 파지 색이 안 변한다"가 된다.
+        if (rigRoots != null)
+            foreach (var t in rigRoots)
+                if (t != null && r.transform.IsChildOf(t)) return true;
+
+        // 리그 밖에 따로 놓인 파지점까지 안전하게 제외(부모 어딘가에 GripPointTarget이 있으면 파지 구체다).
+        if (r.GetComponentInParent<GripPointTarget>(true) != null) return true;
 
         return false;
     }
@@ -361,10 +423,15 @@ public class CranialHeadXray : MonoBehaviour
 
         if (xrayShader == null)
         {
-            xrayShader = Shader.Find("GuideChuna/HeadXray");
+            // 인스펙터 직접 할당(빌드 포함 보장) → 이름 탐색 순으로 해석한다.
+            xrayShader = xrayShaderAsset != null ? xrayShaderAsset : Shader.Find("GuideChuna/HeadXray");
             if (xrayShader == null)
             {
-                Debug.LogWarning("[CranialHeadXray] 셰이더 'GuideChuna/HeadXray'를 찾지 못함. (빌드 시 Always Included Shaders 등록 필요)");
+                // ★에디터에선 항상 찾아지지만 빌드에선 null이 될 수 있다(참조 없는 셰이더는 빌드에서 제거됨).
+                //   Project Settings > Graphics > Always Included Shaders에 등록하거나
+                //   위 xrayShaderAsset에 직접 할당하면 해결된다. 조용히 실패하면 원인 추적이 어려워 Error로 남긴다.
+                Debug.LogError("[CranialHeadXray] 셰이더 'GuideChuna/HeadXray'를 찾지 못해 xray를 켤 수 없습니다. " +
+                               "빌드라면 Graphics 설정의 Always Included Shaders 등록 또는 xrayShaderAsset 직접 할당이 필요합니다.");
                 return;
             }
         }

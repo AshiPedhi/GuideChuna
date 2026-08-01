@@ -32,6 +32,8 @@ public class CollisionDetectionManager
         public Collider patientHeadCollider;
         public Collider patientShoulderCollider;
         public Collider patientChestCollider;
+        public Collider[] patientBackColliders;
+        public Collider[] patientShoulderCollidersExtra;
         public Collider[] patientLeftArmColliders;
         public Collider[] patientRightArmColliders;
 
@@ -191,31 +193,60 @@ public class CollisionDetectionManager
                 return false;
 
             case ContactTarget.Shoulder:
-                // 어깨만 체크
-                if (ctx.patientShoulderCollider == null) return false;
-                return CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
+                // 어깨만 체크 (양쪽 어깨)
+                return CheckShoulderTouch(handTransform, handCollider, isLeftHand, ctx);
+
+            case ContactTarget.Back:
+                // 등·허리(흉추) - 복잡추나 흉추/늑골 술기의 실제 시술 부위.
+                // 좌·우 복수 콜라이더. 이 손이 그 중 하나에라도 닿으면 이 손은 접촉으로 인정한다
+                // (양손 각각 요구는 conditionParams=bothHands가 담당).
+                if (ctx.patientBackColliders == null || ctx.patientBackColliders.Length == 0) return false;
+                foreach (var backCol in ctx.patientBackColliders)
+                {
+                    if (backCol != null && CheckHandCollision(handTransform, handCollider, backCol.bounds, isLeftHand, ctx))
+                        return true;
+                }
+                return false;
 
             case ContactTarget.ChestAndShoulder:
             {
-                // 흉부 또는 어깨 체크
+                // 흉부 또는 어깨(양쪽) 체크
                 bool touchChest = ctx.patientChestCollider != null &&
                     CheckHandCollision(handTransform, handCollider, ctx.patientChestCollider.bounds, isLeftHand, ctx);
-                bool touchShoulder = ctx.patientShoulderCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
-                return touchChest || touchShoulder;
+                return touchChest || CheckShoulderTouch(handTransform, handCollider, isLeftHand, ctx);
             }
 
             case ContactTarget.HeadAndShoulder:
             default:
             {
-                // 머리 또는 어깨 체크
+                // 머리 또는 어깨(양쪽) 체크
                 bool touchingHead = ctx.patientHeadCollider != null &&
                     CheckHandCollision(handTransform, handCollider, ctx.patientHeadCollider.bounds, isLeftHand, ctx);
-                bool touchingShoulder = ctx.patientShoulderCollider != null &&
-                    CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx);
-                return touchingHead || touchingShoulder;
+                return touchingHead || CheckShoulderTouch(handTransform, handCollider, isLeftHand, ctx);
             }
         }
+    }
+
+    /// <summary>
+    /// 어깨 접촉 체크. 씬에는 원래 어깨 콜라이더가 **한쪽만** 있었기 때문에
+    /// (단순추나 다른 술기용으로 만들어진 자산) 반대쪽은 patientShoulderCollidersExtra로 보충한다.
+    /// 둘 중 하나라도 닿으면 이 손은 어깨 접촉으로 인정.
+    /// </summary>
+    private bool CheckShoulderTouch(Transform handTransform, Collider handCollider, bool isLeftHand, in CollisionUpdateContext ctx)
+    {
+        if (ctx.patientShoulderCollider != null &&
+            CheckHandCollision(handTransform, handCollider, ctx.patientShoulderCollider.bounds, isLeftHand, ctx))
+            return true;
+
+        if (ctx.patientShoulderCollidersExtra != null)
+        {
+            foreach (var col in ctx.patientShoulderCollidersExtra)
+            {
+                if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand, ctx))
+                    return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>

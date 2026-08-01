@@ -9,7 +9,7 @@ using Oculus.Interaction.Input;   // HandJointId
 ///
 /// 술기 흐름 (substep 3개):
 ///   ① 파지      : BothGripped 게이트 (견착 전, 손 추적 O)
-///   ② 압력 학습 : 영점 저장 → BothInGoodZone 유지 (손가락별 색으로 적정 압력 학습, 과압 방지)
+///   ② 압력 조절 : BothGripped 유지 (누르는 방향·세기는 안내로만, 깊이는 판정 안 함 — useDepthJudging 참고)
 ///   ③ 견착·호흡 : 손 판정 정지 + 호흡 윈도우 (자세 프록시 + 3호흡, 견착이라 손 추적 불가)
 /// </summary>
 public class CranialAdjustmentController : MonoBehaviour
@@ -28,17 +28,79 @@ public class CranialAdjustmentController : MonoBehaviour
     [Tooltip("오른손(측두) 파지점들. 파이브핑거홀드 = 5개(엄지~새끼)를 손가락별로 배치(각 GripPointTarget.finger 지정).")]
     [SerializeField] private GripPointTarget[] rightGrips;
 
-    [Header("=== 진단 촉진 파지 (양손 후두 감싸기, 압력·포즈 무관) ===")]
-    [Tooltip("진단(촉진)은 양손으로 뒤통수(후두)를 감싸는 형태. 왼손은 교정과 동일한 후두 Palm(leftGrips)을 재사용하고, " +
-             "오른손은 이 '후두 우측 Palm' 파지점을 쓴다. finger=Palm, bypassPoseCheck ON = 터치만. 보통 1개.")]
+    [Header("=== 진단 단계 (양손 파지 유지, 압력·포즈 무관) ===")]
+    [Tooltip("진단 substep별 단계 정의. CSV의 conditionType=cranialTouch + conditionParams=<단계 ID>로 선택된다.\n" +
+             "  · OM 진단1 : 양손 측두부 감싸기(양손 손바닥)   — 3초 유지\n" +
+             "  · OM 진단2 : 양손 후두부 모아 베개(양손 손바닥) — 8초 유지\n" +
+             "  · PM·PJ 진단1 : 자세 2개(ⓐ왼손 후두부+오른손 측두 / ⓑ왼손 측두+오른손 후두부) 각 3초\n" +
+             "비워 두면 아래 레거시(diagnosisRightGrips) 방식으로 폴백한다.")]
+    [SerializeField] private CranialDiagnosisStage[] diagnosisStages = new CranialDiagnosisStage[0];
+
+    [Tooltip("유지 타이머 도중 파지가 풀렸을 때 봐주는 시간(초). 이 시간 안에 다시 잡으면 누적이 유지되고, " +
+             "넘기면 0으로 초기화된다. 0으로 두면 '떨어지는 즉시 초기화'. 기본 0.5초 = 추적 튐만 흡수.")]
+    [SerializeField] private float gripGraceSeconds = 0.5f;
+
+    [Tooltip("★기본 ON. 자세를 배열 순서대로(좌 → 우) 하나씩 진행한다 — 지금 해야 하는 자세의 파지점만 보이고 " +
+             "그 자세만 판정한다. 진행 상황은 ProgressCircle에 '1/2' 카운트로 표시된다.\n" +
+             "가이드 손 녹화가 좌→우 한 방향 시연이라 순서를 맞춰야 해서 도입했다(스텝을 좌/우로 쪼개는 대신).\n" +
+             "끄면 예전처럼 순서 무관(어느 자세든 먼저 채워도 됨).")]
+    [SerializeField] private bool enforcePoseOrder = true;
+
+    [Header("=== 진단 호흡 유도 메시지 (선택) ===")]
+    // ★07-30 사용자 요구로 방식 변경: '숨을 마시고/내쉬고' 4초 교대 → **진단 단계에서 한 번만 띄우고 스스로 사라짐**.
+    //   계속 떠 있으면 시야를 가리고, 실제 호흡 페이스는 환자 굴곡·신전 애니와 숨소리가 이미 전달한다.
+    //   표시 구간은 진단(showBreathingCue를 켠 단계)뿐 — ③ 견착·호흡의 링·카운트(BreathingSyncHUD)와는 별개 UI다.
+    [Tooltip("진단 단계 시작 때 한 번 떴다 사라지는 안내 문구용 텍스트. 새로 만든 텍스트 오브젝트를 넣으면 된다. " +
+             "**비워 둬도 된다** — 비어 있으면 메시지만 생략하고 단계는 정상 진행된다.")]
+    [SerializeField] private TMPro.TMP_Text breathingCueText;
+    [Tooltip("문구와 배경을 함께 켜고 끌 루트 오브젝트(선택). 비우면 breathingCueText의 GameObject를 쓴다. " +
+             "텍스트가 배경 이미지(패널)의 자식이면 여기에 그 배경을 넣어야 배경까지 같이 사라진다.")]
+    [SerializeField] private GameObject breathingCueRoot;
+    [Tooltip("표시할 안내 문구. 한 번만 뜨고 사라진다.")]
+    [SerializeField] private string breathingCueMessage = "환자의 호흡에 맞춰 두개골의 움직임을 느껴보세요";
+    [Tooltip("문구가 떠 있는 시간(초). 너무 짧으면 다 읽지 못하고, 너무 길면 시야를 가린다.")]
+    [SerializeField] private float cueVisibleSeconds = 5f;
+    [Tooltip("사라질 때 서서히 흐려지는 시간(초). 0이면 즉시 사라진다.")]
+    [SerializeField] private float cueFadeSeconds = 0.6f;
+    [Tooltip("★기본 ON. 켜면 단계별 showBreathingCue 값과 무관하게 '모든 진단 단계'에서 문구를 띄운다. " +
+             "(씬에 OM 진단1·진단2는 showBreathingCue=0으로 저장돼 있어, 이 옵션이 없으면 OM에선 문구가 안 뜬다.) " +
+             "특정 단계만 골라 띄우려면 끄고 단계별 showBreathingCue로 제어할 것.")]
+    [SerializeField] private bool cueOnAllDiagnosisStages = true;
+
+    [Header("=== [레거시] 진단 촉진 파지 (diagnosisStages 미배선 시 폴백) ===")]
+    [Tooltip("구버전 진단 배선. 위 diagnosisStages를 채우면 이 배열은 쓰이지 않는다.")]
     [SerializeField] private GripPointTarget[] diagnosisRightGrips;
 
-    [Header("=== 깊이 압력 (기능2) ===")]
+    [Header("=== 깊이 압력 (기능2) — 기본 비활성 ===")]
+    [Tooltip("★기본 OFF. 켜면 손끝이 파지 영점에서 얼마나 들어갔는지를 재서 파지 구체를 압력 색으로 칠하고 " +
+             "'적정 텐션 존 유지'로 압력조절 단계를 통과시킨다.\n" +
+             "끄면(기본) 깊이를 아예 재지 않고, 압력조절 단계는 '파지 유지'만으로 통과한다 — " +
+             "VR엔 반력이 없어 누르는 깊이가 실제 술기의 저항감을 대변하지 못하므로 판정에서 제외한 것.\n" +
+             "아래 leftDepth/rightDepth 배선은 그대로 둬도 무방하다(이 값이 꺼져 있으면 동작하지 않음).")]
+    [SerializeField] private bool useDepthJudging = false;
     [SerializeField] private DepthPressureGuide leftDepth;
     [SerializeField] private DepthPressureGuide rightDepth;
 
+    /// <summary>깊이(압력) 측정·판정을 쓰는가. 기본 false = 파지 유지만으로 판정.</summary>
+    public bool UseDepthJudging => useDepthJudging;
+
     [Header("=== 호흡 (기능3) ===")]
     [SerializeField] private BreathingSyncHUD breathingHUD;
+
+    [Tooltip("★술기마다 호흡법이 다르다. 호흡 윈도우를 열 때 HUD에 이 값을 밀어 넣는다(HUD는 씬 공유라 리그별 지정 필요).\n" +
+             "  · OM  = 3회 (호흡 주기에 맞춰 힘을 넣고 빼기를 반복)\n" +
+             "  · PJ  = 1회 (끝까지 내쉬며 신전·내전 → 손을 바꾸고 크게 들이마시며 굴곡·외전)\n" +
+             "0으로 두면 HUD 인스펙터 값을 그대로 쓴다. ※이 값은 '횟수'다 — 들숨 길이는 아래 항목이다.")]
+    [SerializeField] private int breathCountOverride = 0;
+    [Tooltip("이 술기의 들숨 길이(초). 0이면 HUD 값 유지.")]
+    [SerializeField] private float inhaleSecondsOverride = 0f;
+    [Tooltip("이 술기의 날숨 길이(초). 0이면 HUD 값 유지.")]
+    [SerializeField] private float exhaleSecondsOverride = 0f;
+    [Tooltip("이 술기의 호흡을 어느 위상부터 시작할지. Keep = HUD 인스펙터 값 유지.\n" +
+             "  · OM·PM = Inhale(들숨부터)\n" +
+             "  · PJ    = Exhale(날숨부터) — 지시문이 '숨을 끝까지 내쉬는 동안 신전·내전 → 완전히 내쉰 후 " +
+             "손을 바꾸고 크게 들이마시게' 라서 날숨이 먼저다. 들숨부터 시작하면 마지막 작업 국면이 주기 밖으로 밀린다.")]
+    [SerializeField] private BreathingSyncHUD.StartPhase breathStartPhaseOverride = BreathingSyncHUD.StartPhase.Keep;
 
     [Header("=== 자세 안정화 (삼각근-이마, 호흡 게이트) ===")]
     [Tooltip("호흡 단계에서 손 대신 판정하는 자세 프록시(헤드셋-이마 근접). " +
@@ -51,9 +113,14 @@ public class CranialAdjustmentController : MonoBehaviour
              "비우면 태그 'Patient'로 자동 탐색.")]
     [SerializeField] private Transform patientModelRoot;
 
-    [Tooltip("③ 견착·호흡 진입 시 손 메시를 숨길지. OM(견착=손이 FOV 밖으로 나감)은 true. " +
-             "PM처럼 손을 계속 머리에 댄 채 진행하는 술기는 false(손 계속 표시).")]
-    [SerializeField] private bool hideHandsDuringBreathing = true;
+    [Tooltip("③ 견착·호흡 진입 시 손 메시를 숨길지. 원래 목적=견착으로 손이 FOV를 벗어나 튀는 손 비주얼 제거. " +
+             "★현재 테스트 위해 기본 OFF — 손이 계속 보인다.")]
+    [SerializeField] private bool hideHandsDuringBreathing = false;
+
+    [Tooltip("③ 견착·호흡에서 머리를 숙여 카메라가 환자에 근접했을 때 환자 모델을 숨길지. " +
+             "원래 목적=near-clip 뚫림·오버드로우 방지. ★현재 테스트 위해 기본 OFF — 환자가 계속 보인다. " +
+             "켜면 patientModelRoot 하위 렌더러를 근접 시 끄고 고개를 들면 복원한다.")]
+    [SerializeField] private bool hidePatientDuringBreathing = false;
 
     [Header("=== 리듬 인디케이터 (진단/재평가 시각화, 선택) ===")]
     [Tooltip("두개골 리듬 프록시. 호흡 교정 완료 전=비대칭(진단), 완료 후=대칭(재평가)으로 자동 전환.")]
@@ -101,6 +168,618 @@ public class CranialAdjustmentController : MonoBehaviour
     /// 터치 판정은 GripPointTarget.IsGripped(트리거 진입 AND bypassPoseCheck/PoseRecognized)이므로
     /// 진단 파지점은 bypassPoseCheck를 켜서 순수 터치로 성립시킨다.</summary>
     public bool BothHandsTouched => AllGripped(leftGrips) && AllGripped(diagnosisRightGrips);
+
+    // === 진단 단계(유지 타이머) 상태 ===
+    private CranialDiagnosisStage activeStage;     // 유지 타이머가 도는 단계(나레이션 후)
+    private CranialDiagnosisStage preparedStage;   // 파지점이 표시된 단계(substep 진입 즉시)
+    private float[] poseHeld;      // 자세별 누적 유지 시간(초)
+    private float[] poseLostAt;    // 자세별 파지 이탈 시각(-1 = 현재 파지 중)
+
+    // === 호흡 유도 문구(한 번 표시 후 자동 소멸) 상태 ===
+    private bool cueShown;         // 이 단계에서 이미 띄웠는가(단계당 1회)
+    private float cueHideAt = -1f; // 이 시각부터 흐려지기 시작(-1 = 표시 중 아님)
+
+    /// <summary>diagnosisStages가 하나라도 배선됐는가(= 신규 진단 방식 사용).</summary>
+    public bool HasDiagnosisStages => diagnosisStages != null && diagnosisStages.Length > 0;
+
+    /// <summary>진단 단계(유지 타이머)가 진행 중인가.
+    /// 진단 구간에서는 환자가 자연 호흡을 계속하므로 CranialBreathAnimator가 굴곡·신전을 루프 재생한다.</summary>
+    public bool IsDiagnosisStageActive => activeStage != null;
+
+    /// <summary>stageId에 해당하는 단계를 찾는다(대소문자·앞뒤 공백 무시). 없으면 null.
+    /// stageId가 비어 있으면 첫 번째 단계를 돌려준다(단계가 1개뿐인 시나리오 편의).</summary>
+    public CranialDiagnosisStage FindDiagnosisStage(string stageId)
+    {
+        if (!HasDiagnosisStages) return null;
+        if (string.IsNullOrWhiteSpace(stageId)) return diagnosisStages[0];
+
+        string want = stageId.Trim();
+        for (int i = 0; i < diagnosisStages.Length; i++)
+        {
+            var s = diagnosisStages[i];
+            if (s != null && !string.IsNullOrEmpty(s.stageId) &&
+                s.stageId.Trim().Equals(want, System.StringComparison.OrdinalIgnoreCase))
+                return s;
+        }
+        return null;
+    }
+
+    /// <summary>진단 단계 **표시만** 준비(유지 타이머는 시작하지 않음).
+    /// substep 진입 즉시 호출해 나레이션이 흐르는 동안 목표 파지점을 보여준다.
+    /// 단계를 못 찾으면 false(호출부가 레거시 방식으로 폴백).</summary>
+    public bool PrepareDiagnosisStage(string stageId)
+    {
+        CranialDiagnosisStage stage = FindDiagnosisStage(stageId);
+        if (stage == null) return false;
+
+        // ★ 이미 준비된 단계면 아무것도 다시 하지 않는다.
+        //   여기서 ResetState()를 또 부르면 fingerInside가 false로 지워지는데, 손이 이미 파지점 안에
+        //   들어와 있으면 OnTriggerEnter가 재발생하지 않아(신규 진입이 아니므로) 손을 뺐다 넣기 전까지
+        //   영영 파지로 인식되지 않는다. (나레이션 중 미리 손을 대고 기다리는 경우가 정확히 이 상황)
+        if (preparedStage == stage) return true;
+
+        TryInjectFingertips();
+        preparedStage = stage;
+
+        // 이 단계의 파지점만 표시 — 교정용·타 단계 파지점은 전부 숨긴다.
+        // ★ 숨김을 먼저, 표시를 나중에: 같은 오브젝트를 여러 배열이 공유해도 결과가 같아진다.
+        HideAllGrips();
+        var mine = CollectStageGrips(stage);
+        for (int i = 0; i < mine.Count; i++)
+        {
+            if (mine[i] == null) continue;
+            if (!mine[i].gameObject.activeSelf) mine[i].gameObject.SetActive(true);
+            mine[i].ResetState();
+            mine[i].SetEvaluating(true);
+        }
+
+        leftDepth?.SetEvaluating(false);
+        rightDepth?.SetEvaluating(false);   // 진단엔 압력 표시 없음
+        postureStabilizer?.SetActive(false);
+        return true;
+    }
+
+    /// <summary>진단 단계의 유지 타이머 시작. 나레이션이 끝난 뒤(첫 조건 폴 시점) 호출한다 —
+    /// 생성자에서 시작하면 안내를 듣기도 전에 카운트가 흘러 조기 완료될 수 있다
+    /// (압력·호흡 조건과 동일한 규약). 표시는 <see cref="PrepareDiagnosisStage"/>가 이미 해 둔다.</summary>
+    public bool BeginDiagnosisStage(string stageId)
+    {
+        CranialDiagnosisStage stage = FindDiagnosisStage(stageId);
+        if (stage == null) return false;
+
+        PrepareDiagnosisStage(stageId);   // 멱등 — 표시 누락/잔상 방지용 재확인
+
+        activeStage = stage;
+        int n = stage.poses != null ? stage.poses.Length : 0;
+        poseHeld = new float[n];
+        poseLostAt = new float[n];
+        for (int i = 0; i < n; i++) poseLostAt[i] = -1f;
+        ShowBreathingCueOnce();
+        // 순서 강제면 첫 자세의 파지점만 남긴다. ★초기화는 하지 않는다 —
+        //   나레이션 중 미리 손을 대고 기다리는 경우 ResetState가 접촉을 지워 영영 인식되지 않는다.
+        ShowOnlyCurrentPoseGrips(resetNewlyShown: false);
+
+        if (n == 0)
+            ChunaLogger.LogWarning($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}'에 자세가 하나도 없습니다 — 영영 완료되지 않습니다.");
+        else
+            ChunaLogger.Log($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}' 시작 (자세 {n}개, 각 {stage.holdSeconds}초 유지)");
+        return true;
+    }
+
+    /// <summary>진행 중인 진단 단계가 완료됐는가(모든 자세가 각각 holdSeconds 채움).</summary>
+    public bool DiagnosisStageComplete
+    {
+        get
+        {
+            if (activeStage == null || poseHeld == null || poseHeld.Length == 0) return false;
+            for (int i = 0; i < poseHeld.Length; i++)
+                if (poseHeld[i] < activeStage.holdSeconds) return false;
+            return true;
+        }
+    }
+
+    /// <summary>진단 단계 종료(진단이 아닌 substep 진입 시 호출) — 타이머·안내 문구 정리 + 진단 파지점 숨김.
+    /// ★ 숨기는 대상은 diagnosisStages에 등록된 파지점뿐이다(교정용 leftGrips/rightGrips는 건드리지 않음).
+    /// 파지 substep에선 BeginGripPhase가 교정 파지점을 켠 뒤 이 메서드가 호출돼도 안전하다.</summary>
+    public void EndDiagnosisStage()
+    {
+        if (activeStage != null)
+        {
+            activeStage = null;
+            poseHeld = null;
+            poseLostAt = null;
+        }
+        preparedStage = null;   // 다음에 같은 단계로 재진입하면 다시 표시·초기화되도록
+        cueShown = false;       // 다음 진단 단계에서 다시 한 번 띄우도록
+        HideBreathingCue();
+        ResolveGuideUI()?.ForceHideProgressCircle();   // 유지 게이지 정리(다음 단계로 잔상 안 넘어가게)
+
+        if (diagnosisStages == null) return;
+        for (int s = 0; s < diagnosisStages.Length; s++)
+        {
+            var grips = CollectStageGrips(diagnosisStages[s]);
+            for (int i = 0; i < grips.Count; i++)
+                if (grips[i] != null && grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(false);
+        }
+    }
+
+    /// <summary>매 프레임: 자세별 유지 타이머 누적/초기화. 파지가 풀리면 gripGraceSeconds 안에 다시 잡아야 누적이 유지된다.</summary>
+    private void UpdateDiagnosisStage()
+    {
+        if (activeStage == null || activeStage.poses == null || poseHeld == null) return;
+
+        int n = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
+        int current = CurrentPoseIndex();   // 순서 강제 시 판정 대상(-1 = 전부 달성)
+
+        for (int i = 0; i < n; i++)
+        {
+            var pose = activeStage.poses[i];
+            if (pose == null) continue;
+
+            // 이미 채운 자세는 유지를 놓쳐도 달성으로 남긴다(손을 바꿔 잡는 동안 풀리는 것 허용).
+            if (poseHeld[i] >= activeStage.holdSeconds) continue;
+
+            // ★순서 강제: 가이드 손이 좌→우 한 방향으로 시연하므로, 그 순서대로만 판정한다.
+            //   (끄면 예전처럼 순서 무관 — 어느 자세든 먼저 채워도 된다.)
+            if (enforcePoseOrder && i != current) continue;
+
+            if (pose.AllGripped())
+            {
+                poseLostAt[i] = -1f;
+                poseHeld[i] += Time.deltaTime;
+                if (poseHeld[i] >= activeStage.holdSeconds)
+                {
+                    ChunaLogger.Log($"<color=green>[CranialAdjustmentController] 자세 달성: {pose.label} ({activeStage.holdSeconds}초)</color>");
+                    // ★달성한 자세의 파지점은 감춘다 → 남은 자세(반대쪽)만 보여 "이제 저기를 잡으라"가 눈에 들어온다.
+                    //   전부 켜둔 채로 두면 좌·우 파지점이 동시에 떠서 어디를 잡아야 하는지 알 수 없다.
+                    if (enforcePoseOrder) ShowOnlyCurrentPoseGrips(resetNewlyShown: true);
+                    else HideCompletedPoseGrips(i);
+                }
+            }
+            else if (poseHeld[i] > 0f)
+            {
+                if (poseLostAt[i] < 0f) poseLostAt[i] = Time.time;
+                if (Time.time - poseLostAt[i] > gripGraceSeconds)
+                {
+                    poseHeld[i] = 0f;       // 유예 초과 → 초기화
+                    poseLostAt[i] = -1f;
+                    if (metrics != null) metrics.holdResets++;   // 평가 지표: 유지 실패 횟수
+                }
+            }
+        }
+
+        UpdateHoldProgressUI();
+    }
+
+    // ============================ 평가 지표 수집 ============================
+    // 두개골 술기는 손 포즈 유사도·각도 리밋을 쓰지 않아 기존 채점 경로로는 전부 0이 남는다.
+    // 대신 '자세를 정확히 잡았는지 / 얼마나 안정적으로 유지했는지'를 모아 결과에 기록한다.
+
+    private TrainingResultData.CranialMetrics metrics;   // 진행 중인 단계 지표(null = 수집 안 함)
+    private float metricsStartTime;
+    private bool metricsPrevSatisfied;
+
+    /// <summary>두개골 substep 진입 시 ScenarioManager가 호출 — 지표 수집을 시작한다.</summary>
+    public void BeginCranialMetrics(string label)
+    {
+        metrics = new TrainingResultData.CranialMetrics { label = label };
+        metricsStartTime = Time.time;
+        metricsPrevSatisfied = false;
+    }
+
+    /// <summary>모인 지표가 있는가(다음 substep 진입 시 기록할 것이 남았는지).</summary>
+    public bool HasPendingCranialMetrics => metrics != null;
+
+    /// <summary>지표를 확정(점수 산출)해 반환하고 수집을 끝낸다.</summary>
+    public TrainingResultData.CranialMetrics ConsumeCranialMetrics()
+    {
+        if (metrics == null) return null;
+
+        var m = metrics;
+        metrics = null;
+        m.elapsedSeconds = Time.time - metricsStartTime;
+
+        // ── 두개골 전용 산식 ────────────────────────────────────────────────
+        //   완료도 60 : 자세를 요구한 만큼 채웠는가(진단은 좌·우 각각, 그 외는 파지 성립 여부)
+        //   안정성 25 : 잡았다 놓친 횟수·유지 타이머 초기화 횟수만큼 감점
+        //   호흡   15 : 요구 호흡을 채웠는가(호흡 없는 단계는 만점 — 감점 사유가 없음)
+        float completion = m.CompletionRatio * 60f;
+
+        float stability = 25f - (m.gripDropouts * 3f) - (m.holdResets * 5f);
+        stability = Mathf.Max(0f, stability);
+
+        float breath = m.breathsRequired > 0
+            ? Mathf.Clamp01((float)m.breathsCompleted / m.breathsRequired) * 15f
+            : 15f;
+
+        m.score = Mathf.Clamp(completion + stability + breath, 0f, 100f);
+        m.grade = EvaluationScoringEngine.GetGradeFromScore(m.score);
+        return m;
+    }
+
+    /// <summary>매 프레임 지표 누적. 수집 중이 아니면 즉시 반환.</summary>
+    private void UpdateCranialMetrics()
+    {
+        if (metrics == null) return;
+
+        float now = Time.time - metricsStartTime;
+
+        // 파지 성립/이탈
+        bool satisfied = IsJudgedGripSatisfied();
+        if (satisfied)
+        {
+            metrics.holdSeconds += Time.deltaTime;
+            if (metrics.firstContactSeconds < 0f) metrics.firstContactSeconds = now;
+        }
+        else if (metricsPrevSatisfied)
+        {
+            metrics.gripDropouts++;
+        }
+        metricsPrevSatisfied = satisfied;
+
+        // 진단 단계: 요구 자세 수 / 채운 자세 수
+        if (activeStage != null && activeStage.poses != null && poseHeld != null)
+        {
+            int n = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
+            int done = 0;
+            for (int i = 0; i < n; i++)
+                if (poseHeld[i] >= activeStage.holdSeconds) done++;
+            metrics.posesRequired = n;
+            metrics.posesCompleted = done;
+        }
+
+        // 견착(삼각근-이마 프록시) 유지 시간
+        if (postureStabilizer != null && postureStabilizer.IsInPosition)
+            metrics.postureSeconds += Time.deltaTime;
+
+        // 호흡 단계
+        if (breathingHUD != null && breathingHUD.IsRunning)
+        {
+            metrics.breathsRequired = breathingHUD.RequiredBreaths;
+            metrics.breathsCompleted = breathingHUD.CompletedBreaths;
+            metrics.breathFailures = breathingHUD.FailedBreaths;
+            if (breathingHUD.LastHoldRatio > 0f) metrics.breathHoldRatio = breathingHUD.LastHoldRatio;
+        }
+    }
+
+    // === 가이드손: '동작(자세)마다' 켜고 끄기 ===
+    private ChunaPathEvaluator guideHandOwner;   // 무장된 동안만 non-null
+    private string substepGuideClip;             // CSV handTrackingFileName (substep 공용 클립)
+    private string loadedGuideClip;              // 평가기에 지금 로드된 클립 이름(중복 로드 방지)
+    private int guidePoseIndex = -1;             // 지금 가이드를 재생 중인 자세(-1 = 자세 없음/전부 달성)
+    private bool guideHandSawRelease;            // 이 동작에서 '미성립' 상태를 한 번이라도 봤는가
+
+    /// <summary>이번 substep의 가이드손 자동 제어를 무장한다.
+    /// ScenarioManager가 두개골 substep에서 가이드손 재생을 시작한 직후 호출한다.
+    /// ★무장된 동안만 동작하므로 다른 시나리오(사각근 등)의 가이드손에는 영향이 없다.</summary>
+    public void ArmGuideHandAutoHide(ChunaPathEvaluator evaluator, string substepClipName)
+    {
+        guideHandOwner = evaluator;
+        substepGuideClip = substepClipName;
+        loadedGuideClip = substepClipName;   // ScenarioManager가 이미 로드해 둔 상태
+        guidePoseIndex = -1;
+        guideHandSawRelease = false;
+    }
+
+    /// <summary>매 프레임: 가이드손을 <b>동작(자세) 단위</b>로 켜고 끈다.
+    ///   · 자세가 시작되면 그 자세의 가이드를 재생
+    ///   · 그 자세의 파지가 성립하면 정지
+    ///   · 다음 자세로 넘어가면 그 자세 것으로 다시 재생
+    /// 자세가 하나뿐인 단계(파지·압력조절·호흡)에서는 결과적으로 substep 단위와 같다.</summary>
+    private void UpdateGuideHandAutoHide()
+    {
+        if (guideHandOwner == null) return;
+
+        // ★동작 전환 감지: 자세가 바뀌면 그 동작의 가이드를 새로 켠다.
+        if (activeStage != null)
+        {
+            int pose = CurrentPoseIndex();
+            if (pose != guidePoseIndex)
+            {
+                guidePoseIndex = pose;
+                guideHandSawRelease = false;
+                if (pose >= 0) PlayGuideForPose(pose);
+                else guideHandOwner.StopGuideHandPlaybackInternal();   // 전부 달성 — 가이드 종료
+                return;
+            }
+        }
+
+        bool satisfied = IsJudgedGripSatisfied();
+
+        // ★동작이 시작된 직후부터 이미 성립이면 이전 동작의 잔여 접촉일 수 있다(GripPointTarget엔
+        //   OnDisable이 없어 비활성 중 접촉 상태가 남는다) → '한 번 풀린 것'을 본 뒤부터 인정한다.
+        if (!satisfied) { guideHandSawRelease = true; return; }
+        if (!guideHandSawRelease) return;
+
+        guideHandOwner.StopGuideHandPlaybackInternal();
+        guideHandSawRelease = false;   // 이 동작은 끝 — 다음 동작 전환 때 다시 켜진다
+        ChunaLogger.Log("[CranialAdjustmentController] 파지 접촉 — 가이드손 종료");
+    }
+
+    /// <summary>해당 자세의 가이드손을 처음부터 1회 재생한다(루프 없음).
+    /// 자세 전용 클립(guideClipName)이 있으면 그것을, 없으면 substep 공용 클립을 쓴다.
+    /// 한 클립에 좌→우를 이어 녹화한 경우 guideStartRatio/EndRatio로 구간을 나눠 쓸 수 있다.</summary>
+    private void PlayGuideForPose(int index)
+    {
+        if (guideHandOwner == null || activeStage == null || activeStage.poses == null) return;
+        if (index < 0 || index >= activeStage.poses.Length) return;
+
+        var p = activeStage.poses[index];
+        if (p == null) return;
+
+        string clip = !string.IsNullOrEmpty(p.guideClipName) ? p.guideClipName : substepGuideClip;
+        if (string.IsNullOrEmpty(clip)) return;   // 녹화가 없으면 가이드 없이 진행
+
+        if (clip != loadedGuideClip)
+        {
+            guideHandOwner.LoadAndGenerateCheckpoints(clip);   // 프레임만 로드(평가는 두개골 조건이 담당)
+            loadedGuideClip = clip;
+        }
+
+        float s = Mathf.Clamp01(p.guideStartRatio);
+        float e = Mathf.Clamp01(Mathf.Max(p.guideStartRatio, p.guideEndRatio));
+        guideHandOwner.StartGuideHandPlaybackInternal(s, e, false);
+    }
+
+    /// <summary>지금 판정 중인 파지가 성립했는가. 진단 단계면 '지금 차례 자세', 그 외엔 양손 교정 파지.</summary>
+    private bool IsJudgedGripSatisfied()
+    {
+        if (activeStage != null)
+        {
+            int i = CurrentPoseIndex();
+            if (i < 0) return true;                     // 전부 달성
+            if (activeStage.poses == null || i >= activeStage.poses.Length) return false;
+            var p = activeStage.poses[i];
+            return p != null && p.AllGripped();
+        }
+        return BothGripped;
+    }
+
+    /// <summary>아직 못 채운 첫 자세의 인덱스(-1 = 전부 달성). 순서 강제·카운트 표시의 기준.</summary>
+    private int CurrentPoseIndex()
+    {
+        if (activeStage == null || activeStage.poses == null || poseHeld == null) return -1;
+        int n = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
+        for (int i = 0; i < n; i++)
+            if (poseHeld[i] < activeStage.holdSeconds) return i;
+        return -1;
+    }
+
+    /// <summary>진단 '자세 유지' 남은 시간을 기존 ProgressCircle UI에 표시한다.
+    /// 파지가 풀리면 카운트가 되돌아간다. 자세가 2개 이상이면 "1/2" 카운트도 함께 띄운다
+    /// (스텝을 좌/우로 쪼개지 않고 한 substep 안에서 진행 상황을 알리는 방법).</summary>
+    private void UpdateHoldProgressUI()
+    {
+        var ui = ResolveGuideUI();
+        if (ui == null || activeStage == null || activeStage.poses == null || poseHeld == null) return;
+
+        float hold = Mathf.Max(0.01f, activeStage.holdSeconds);
+        int show = -1;
+
+        if (enforcePoseOrder)
+        {
+            show = CurrentPoseIndex();   // 순서 강제 = 지금 해야 하는 자세만 표시
+        }
+        else
+        {
+            // ① 지금 잡고 있는 미완료 자세 우선
+            for (int i = 0; i < activeStage.poses.Length && i < poseHeld.Length; i++)
+            {
+                if (poseHeld[i] >= hold) continue;
+                var p = activeStage.poses[i];
+                if (p != null && p.AllGripped()) { show = i; break; }
+            }
+            // ② 없으면 아직 못 채운 첫 자세
+            if (show < 0) show = CurrentPoseIndex();
+        }
+
+        if (show < 0) return;   // 전부 달성 — 곧 단계가 넘어간다
+
+        int total = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
+        string label = total > 1 ? $"{show + 1}/{total}" : null;
+
+        float remaining = Mathf.Max(0f, hold - poseHeld[show]);
+        ui.DriveProgressExternally(remaining, remaining / hold, label);
+    }
+
+    private ScenarioGuideUIController cachedGuideUI;
+    private bool guideUISearched;
+
+    private ScenarioGuideUIController ResolveGuideUI()
+    {
+        if (cachedGuideUI != null) return cachedGuideUI;
+        if (guideUISearched) return null;
+        guideUISearched = true;
+        cachedGuideUI = FindObjectOfType<ScenarioGuideUIController>(true);
+        return cachedGuideUI;
+    }
+
+    /// <summary>순서 강제일 때, <b>지금 해야 하는 자세</b>의 파지점만 보이게 한다(나머지는 숨김).
+    ///
+    /// <paramref name="resetNewlyShown"/>=true면 새로 켜는 파지점의 접촉 상태를 초기화한다.
+    /// 자세가 넘어가는 순간엔 시술자의 손이 아직 <b>이전</b> 자세에 있으므로(방금 그 자세를 완료했으니)
+    /// 초기화해도 "이미 트리거 안에 있어 OnTriggerEnter가 재발생하지 않는" 함정에 걸리지 않는다.
+    /// 반대로 단계 시작 시점엔 나레이션 중 미리 손을 대고 기다릴 수 있어 초기화하면 안 된다.</summary>
+    private void ShowOnlyCurrentPoseGrips(bool resetNewlyShown)
+    {
+        if (!enforcePoseOrder || activeStage == null || activeStage.poses == null) return;
+
+        int current = CurrentPoseIndex();
+        var want = new System.Collections.Generic.HashSet<GripPointTarget>();
+        if (current >= 0 && current < activeStage.poses.Length)
+        {
+            var list = new System.Collections.Generic.List<GripPointTarget>();
+            var p = activeStage.poses[current];
+            p?.leftHand?.CollectInto(list);
+            p?.rightHand?.CollectInto(list);
+            for (int i = 0; i < list.Count; i++) if (list[i] != null) want.Add(list[i]);
+        }
+
+        var all = CollectStageGrips(activeStage);
+        for (int i = 0; i < all.Count; i++)
+        {
+            var g = all[i];
+            if (g == null) continue;
+            bool on = want.Contains(g);
+            if (g.gameObject.activeSelf == on) continue;      // 상태 동일 — 건드리지 않는다
+            if (on && resetNewlyShown) g.ResetState();        // 이전 자세에서 남은 접촉 상태 제거
+            g.gameObject.SetActive(on);
+        }
+    }
+
+    /// <summary>달성한 자세의 파지점을 감춘다. 단, 아직 못 채운 다른 자세가 같은 파지점을 쓰면 남겨 둔다.</summary>
+    private void HideCompletedPoseGrips(int completedIndex)
+    {
+        if (activeStage == null || activeStage.poses == null) return;
+
+        // 아직 미완료인 자세들이 쓰는 파지점은 계속 보여야 한다.
+        var stillNeeded = new System.Collections.Generic.HashSet<GripPointTarget>();
+        for (int i = 0; i < activeStage.poses.Length; i++)
+        {
+            if (i == completedIndex) continue;
+            if (poseHeld != null && i < poseHeld.Length && poseHeld[i] >= activeStage.holdSeconds) continue;
+            var p = activeStage.poses[i];
+            if (p == null) continue;
+            var list = new System.Collections.Generic.List<GripPointTarget>();
+            p.leftHand?.CollectInto(list);
+            p.rightHand?.CollectInto(list);
+            foreach (var g in list) if (g != null) stillNeeded.Add(g);
+        }
+
+        var mine = new System.Collections.Generic.List<GripPointTarget>();
+        var done = activeStage.poses[completedIndex];
+        done?.leftHand?.CollectInto(mine);
+        done?.rightHand?.CollectInto(mine);
+
+        for (int i = 0; i < mine.Count; i++)
+        {
+            var g = mine[i];
+            if (g == null || stillNeeded.Contains(g)) continue;
+            if (g.gameObject.activeSelf) g.gameObject.SetActive(false);
+        }
+    }
+
+    /// <summary>진단 단계 시작 시 호흡 유도 문구를 <b>한 번만</b> 띄운다(cueVisibleSeconds 뒤 자동 소멸).
+    /// 텍스트 미배선이면 아무것도 안 한다(단계는 정상 진행).</summary>
+    private void ShowBreathingCueOnce()
+    {
+        if (breathingCueText == null) return;
+
+        // 진단 단계가 아니거나 이 단계가 문구를 안 쓰면 남아 있던 문구만 정리한다.
+        bool wants = activeStage != null && (cueOnAllDiagnosisStages || activeStage.showBreathingCue);
+        if (!wants) { HideBreathingCue(); return; }
+        if (cueShown) return;   // 단계당 1회 — 조건이 Begin을 두 번 불러도 다시 안 뜬다
+
+        cueShown = true;
+        breathingCueText.text = breathingCueMessage;
+        SetCueAlpha(1f);
+        SetCueRootActive(true);
+        cueHideAt = Time.time + Mathf.Max(0.1f, cueVisibleSeconds);
+    }
+
+    /// <summary>표시 시간이 지나면 서서히 흐려지다 사라진다. 매 프레임 호출(Update).</summary>
+    private void UpdateBreathingCueFade()
+    {
+        if (breathingCueText == null || cueHideAt < 0f) return;
+
+        float over = Time.time - cueHideAt;
+        if (over < 0f) return;   // 아직 표시 시간 중
+
+        float fade = Mathf.Max(0f, cueFadeSeconds);
+        if (fade <= 0.01f || over >= fade) { HideBreathingCue(); return; }
+        SetCueAlpha(1f - (over / fade));
+    }
+
+    /// <summary>문구를 즉시 감추고 다음 표시를 위해 알파를 원복한다.</summary>
+    private void HideBreathingCue()
+    {
+        cueHideAt = -1f;
+        if (breathingCueText == null) return;
+        SetCueAlpha(1f);
+        if (breathingCueText.text != "") breathingCueText.text = "";
+        SetCueRootActive(false);
+    }
+
+    /// <summary>문구 투명도 조절. TMP 전용 API(alpha) 대신 color를 쓴다(버전 의존 없음).</summary>
+    private void SetCueAlpha(float a)
+    {
+        if (breathingCueText == null) return;
+        Color c = breathingCueText.color;
+        c.a = Mathf.Clamp01(a);
+        breathingCueText.color = c;
+    }
+
+    /// <summary>문구 루트(배경 포함) 켜고 끄기. 지정이 없으면 텍스트 자신의 GameObject를 쓴다.</summary>
+    private void SetCueRootActive(bool on)
+    {
+        GameObject root = breathingCueRoot != null
+            ? breathingCueRoot
+            : (breathingCueText != null ? breathingCueText.gameObject : null);
+        if (root != null && root.activeSelf != on) root.SetActive(on);
+    }
+
+    /// <summary>한 단계에 속한 모든 파지점(양손·전 자세) 수집.</summary>
+    private static System.Collections.Generic.List<GripPointTarget> CollectStageGrips(CranialDiagnosisStage stage)
+    {
+        var list = new System.Collections.Generic.List<GripPointTarget>();
+        if (stage == null || stage.poses == null) return list;
+        for (int i = 0; i < stage.poses.Length; i++)
+        {
+            var p = stage.poses[i];
+            if (p == null) continue;
+            p.leftHand?.CollectInto(list);
+            p.rightHand?.CollectInto(list);
+        }
+        return list;
+    }
+
+    /// <summary>모든 진단 단계 파지점을 한 손(왼손/오른손)별로 모은다 — 손끝 콜라이더 주입용.</summary>
+    private GripPointTarget[] CollectAllStageGrips(bool leftSide)
+    {
+        var list = new System.Collections.Generic.List<GripPointTarget>();
+        if (diagnosisStages != null)
+        {
+            for (int s = 0; s < diagnosisStages.Length; s++)
+            {
+                var stage = diagnosisStages[s];
+                if (stage == null || stage.poses == null) continue;
+                for (int i = 0; i < stage.poses.Length; i++)
+                {
+                    var p = stage.poses[i];
+                    if (p == null) continue;
+                    if (leftSide) p.leftHand?.CollectInto(list);
+                    else p.rightHand?.CollectInto(list);
+                }
+            }
+        }
+        return list.ToArray();
+    }
+
+    /// <summary>파지 구체를 전부 숨긴다(교정용·레거시·전 진단 단계).
+    /// 두개골 조건이 아닌 substep(진단3·재평가·시작/종료 안내)에 들어갈 때 ScenarioManager가 호출한다.
+    /// ★이게 없으면 파지 단계에서 켠 교정 파지 구체가 재평가·종료까지 화면에 남는다
+    ///   (BeginGripPhase가 켜기만 하고 끄는 곳이 없었음).</summary>
+    public void HideAllGripPoints()
+    {
+        HideAllGrips();
+        SetHandJudgingActive(false);   // 남은 판정·사운드도 정지
+        guideHandOwner = null;         // 두개골이 아닌 substep — 가이드손 자동 종료 무장 해제
+    }
+
+    /// <summary>교정용·레거시·전 진단 단계 파지점을 전부 숨긴다(단계 전환 시 잔상 방지).</summary>
+    private void HideAllGrips()
+    {
+        SetGripsActive(leftGrips, false);
+        SetGripsActive(rightGrips, false);
+        SetGripsActive(diagnosisRightGrips, false);
+        if (diagnosisStages == null) return;
+        for (int s = 0; s < diagnosisStages.Length; s++)
+        {
+            var grips = CollectStageGrips(diagnosisStages[s]);
+            for (int i = 0; i < grips.Count; i++)
+                if (grips[i] != null && grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(false);
+        }
+    }
 
     private static bool AllGripped(GripPointTarget[] grips)
     {
@@ -159,8 +838,10 @@ public class CranialAdjustmentController : MonoBehaviour
     public void BeginGripPhase()
     {
         TryInjectFingertips();   // 영점 저장(②a) 전에 손끝 확보
-        // 교정: 진단 전용 오른손 후두 Palm 숨김, 왼손 후두 Palm 유지 + 측두 5지 표시
-        SetGripsActive(diagnosisRightGrips, false);
+        EndDiagnosisStage();     // 진단 유지 타이머·안내 문구 정리
+        // 교정: 진단 파지점(단계·레거시) 전부 숨기고 교정 파지점만 표시.
+        // ★ 숨김을 먼저, 표시를 나중에 — 같은 오브젝트를 공유해도 결과가 같아진다.
+        HideAllGrips();
         SetGripsActive(leftGrips, true);
         SetGripsActive(rightGrips, true);
         SetHandJudgingActive(true);   // 호흡국면에서 정지됐을 수 있으니 재진입 시 재활성(재시작 대비)
@@ -189,6 +870,7 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>②a 진입 시: 현재 파지 위치(휴식)를 영점으로 저장</summary>
     public void SaveZeroPoints()
     {
+        if (!useDepthJudging) return;   // 깊이 판정 OFF면 영점 자체가 필요 없다
         TryInjectFingertips();   // 마지막 안전망 (Joints가 늦게 채워진 경우)
         leftDepth?.SaveZeroPoint();
         rightDepth?.SaveZeroPoint();
@@ -197,19 +879,27 @@ public class CranialAdjustmentController : MonoBehaviour
     // === 라이브 손끝 주입 ===
     // HandVisual 미지정이면 아무것도 안 함 → 인스펙터 fingertip 그대로(기존 동작 불변).
     private bool fingertipsInjected = false;
+    private GripPointTarget[] cachedStageLeftGrips;    // 전 진단 단계의 왼손 파지점(1회 수집)
+    private GripPointTarget[] cachedStageRightGrips;   // 전 진단 단계의 오른손 파지점(1회 수집)
 
     /// <summary>지정된 HandVisual에서 깊이용 검지 끝 + 각 파지점이 지정한 손가락 끝을 주입.</summary>
     private void TryInjectFingertips()
     {
         if (fingertipsInjected) return;
 
+        // 진단 단계 파지점은 런타임에 바뀌지 않으므로 1회만 수집해 캐시한다.
+        if (cachedStageLeftGrips == null) cachedStageLeftGrips = CollectAllStageGrips(true);
+        if (cachedStageRightGrips == null) cachedStageRightGrips = CollectAllStageGrips(false);
+
         // 미지정 손은 "할 일 없음"으로 통과 처리(=인스펙터값 유지).
-        // 교정 파지점 + 진단 촉진 파지점(터치용)을 같은 손에 함께 주입(콜라이더 생성은 멱등).
+        // 교정 파지점 + 진단 파지점(터치용)을 같은 손에 함께 주입(콜라이더 생성은 멱등).
         bool leftDone = leftHandVisual == null
-            || InjectHand(leftHandVisual, leftGrips, leftDepth, "leftHandVisual");
+            || (InjectHand(leftHandVisual, leftGrips, leftDepth, "leftHandVisual")
+                && InjectHand(leftHandVisual, cachedStageLeftGrips, null, "diagnosisStages(왼손)"));
         bool rightDone = rightHandVisual == null
             || (InjectHand(rightHandVisual, rightGrips, rightDepth, "rightHandVisual")
-                && InjectHand(rightHandVisual, diagnosisRightGrips, null, "diagnosisRightGrips"));
+                && InjectHand(rightHandVisual, diagnosisRightGrips, null, "diagnosisRightGrips")
+                && InjectHand(rightHandVisual, cachedStageRightGrips, null, "diagnosisStages(오른손)"));
 
         if (leftDone && rightDone)
         {
@@ -368,6 +1058,10 @@ public class CranialAdjustmentController : MonoBehaviour
         // (PM처럼 손을 계속 머리에 대는 술기는 hideHandsDuringBreathing=false로 숨기지 않음)
         if (hideHandsDuringBreathing) SetHandVisualsHidden(true);
 
+        // ★공유 HUD에 이 술기의 호흡법을 먼저 밀어 넣는다(OM 3회 / PJ 1회 긴 날숨 등).
+        breathingHUD.Configure(breathCountOverride, inhaleSecondsOverride, exhaleSecondsOverride,
+                               breathStartPhaseOverride);
+
         postureStabilizer?.SetActive(true);   // 자세 안내 활성 + 판정 시작
         breathingHUD.SetTensionProvider(() => IsPostureEngaged);
         breathingHUD.StartWindow();
@@ -434,14 +1128,32 @@ public class CranialAdjustmentController : MonoBehaviour
             if (rends[i] != null) rends[i].enabled = visible;
     }
 
+    void Awake()
+    {
+        // 씬에서 문구 오브젝트를 켜 둔 채 저장했더라도 시작부터 떠 있지 않게 한다.
+        HideBreathingCue();
+    }
+
     void Update()
     {
         if (!fingertipsInjected) TryInjectFingertips();
+
+        // 호흡 유도 문구 자동 소멸(진단 단계가 끝나 폴링이 멈춰도 확실히 사라지도록 Update에서 구동).
+        UpdateBreathingCueFade();
+
+        // 가이드손: 사용자 손이 파지 위치에 닿으면 끈다(무장돼 있을 때만).
+        UpdateGuideHandAutoHide();
+
+        // 평가 지표 누적(수집 중일 때만).
+        UpdateCranialMetrics();
 
         if (drivePoseFromComparator)
         {
             // TODO(M1): 여기서 HandPoseComparator 결과를 leftGrips/rightGrips 각 파지점.PoseRecognized에 주입
         }
+
+        // 진단 단계 진행 중이면 자세별 유지 타이머를 누적/초기화한다(활성 단계 없으면 즉시 반환).
+        UpdateDiagnosisStage();
 
         // 압력 표시 = 오른손(측두) 파지 구체 색: 압력 국면(영점 저장 + 판정 중)엔 깊이 색을 덮어씌우고,
         // 그 외(파지 단계·호흡 단계)엔 해제 → 구체가 파지 여부 색(초록/idle)으로 복귀.
@@ -455,7 +1167,9 @@ public class CranialAdjustmentController : MonoBehaviour
 
         // ③ 견착 국면에서 머리를 숙여 자세가 성립(카메라가 환자에 근접)하면 환자 모델을 숨긴다.
         // (near-clip 뚫림·오버드로우 방지) 고개를 들면(release 히스테리시스) 복원. ③ 밖에선 항상 표시.
-        bool bowedClose = breathingHUD != null && breathingHUD.IsRunning
+        // hidePatientDuringBreathing=false(기본)면 아예 숨기지 않는다 — 항상 표시.
+        bool bowedClose = hidePatientDuringBreathing
+                          && breathingHUD != null && breathingHUD.IsRunning
                           && postureStabilizer != null && postureStabilizer.IsInPosition;
         SetPatientVisible(!bowedClose);
     }
@@ -465,6 +1179,13 @@ public class CranialAdjustmentController : MonoBehaviour
     private void UpdatePressureColorOnGrips()
     {
         if (rightGrips == null) return;
+
+        // 깊이 판정 OFF(기본): 압력 색을 칠하지 않고 파지 여부 색(초록/idle)만 남긴다.
+        if (!useDepthJudging)
+        {
+            for (int k = 0; k < rightGrips.Length; k++) rightGrips[k]?.ClearPressureColor();
+            return;
+        }
 
         bool show = rightDepth != null && rightDepth.IsShowingPressure;
         for (int i = 0; i < rightGrips.Length; i++)
@@ -480,16 +1201,65 @@ public class CranialAdjustmentController : MonoBehaviour
         }
     }
 
+    /// <summary>파지점이 왜 색이 안 변하는지 한 번에 판별하는 덤프.
+    /// Play 중 컴포넌트 우클릭 → 이 메뉴 실행. 각 파지점의 활성/판정중/접촉/IsGripped/렌더러/현재색을 출력한다.
+    /// 읽는 법:
+    ///   · 접촉=False   → 손끝 콜라이더가 파지점에 안 닿음(위치·반경 문제). 색이 안 변하는 게 정상.
+    ///   · 접촉=True인데 IsGripped=False → 포즈 인식 미통과(bypassPoseCheck를 켜세요).
+    ///   · IsGripped=True인데 색 그대로 → 압력색덮어씀=True(깊이 판정 끄기) 또는 targetRenderer 미배선.
+    ///   · active=False → 그 단계에서 아예 안 켜진 파지점.</summary>
+    [ContextMenu("진단: 파지점 상태 덤프")]
+    public void DumpGripStates()
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"[CranialAdjustmentController] 파지점 상태 덤프 — {gameObject.name} (시나리오='{scenarioName}')");
+        sb.AppendLine($"  손 배선: leftHandVisual={(leftHandVisual != null ? leftHandVisual.name : "없음")} / " +
+                      $"rightHandVisual={(rightHandVisual != null ? rightHandVisual.name : "없음")} / " +
+                      $"손끝콜라이더자동생성={autoCreateFingerColliders} 주입완료={fingertipsInjected}");
+        sb.AppendLine($"  깊이 판정={useDepthJudging} (false면 압력색이 파지 초록색을 덮지 않음)");
+
+        AppendGrips(sb, "교정 왼손(leftGrips)", leftGrips);
+        AppendGrips(sb, "교정 오른손(rightGrips)", rightGrips);
+        AppendGrips(sb, "레거시 진단(diagnosisRightGrips)", diagnosisRightGrips);
+
+        if (diagnosisStages != null)
+            for (int s = 0; s < diagnosisStages.Length; s++)
+            {
+                var stage = diagnosisStages[s];
+                if (stage == null) continue;
+                var grips = CollectStageGrips(stage);
+                AppendGrips(sb, $"진단단계 '{stage.stageId}' ({stage.holdSeconds}초)", grips.ToArray());
+            }
+
+        ChunaLogger.Log(sb.ToString());
+    }
+
+    private static void AppendGrips(System.Text.StringBuilder sb, string title, GripPointTarget[] grips)
+    {
+        sb.AppendLine($"  ── {title}: {(grips == null || grips.Length == 0 ? "미배선" : grips.Length + "개")}");
+        if (grips == null) return;
+        for (int i = 0; i < grips.Length; i++)
+            sb.AppendLine(grips[i] == null ? "      (null)" : "      " + grips[i].DescribeState());
+    }
+
     /// <summary>술기 종료/리셋 (시나리오 시작·재시작 시 호출 → 래칭 상태 정리)</summary>
     public void ResetAll()
     {
+        EndDiagnosisStage();
         ResetGrips(leftGrips);
         ResetGrips(rightGrips);
         ResetGrips(diagnosisRightGrips);
-        // 기본 표시: 왼손 후두 Palm(진단·교정 공통) 표시, 진단 전용 오른손 후두 Palm·측두 5지는 각 단계 Begin*에서 켬
-        SetGripsActive(leftGrips, true);
-        SetGripsActive(diagnosisRightGrips, false);
-        SetGripsActive(rightGrips, false);
+        if (diagnosisStages != null)
+            for (int s = 0; s < diagnosisStages.Length; s++)
+            {
+                var grips = CollectStageGrips(diagnosisStages[s]);
+                for (int i = 0; i < grips.Count; i++) grips[i]?.ResetState();
+            }
+
+        // 기본 표시: 전부 숨김 → 각 단계 Begin*(진단 단계/파지 단계)에서 필요한 것만 켠다.
+        // (진단 단계를 쓰는 시나리오는 시작 시 아무 파지점도 안 보이는 게 맞다.)
+        HideAllGrips();
+        if (!HasDiagnosisStages) SetGripsActive(leftGrips, true);   // 레거시 배선은 기존 동작 유지
         leftDepth?.ClearZeroPoint();
         rightDepth?.ClearZeroPoint();
         breathingHUD?.ResetState();

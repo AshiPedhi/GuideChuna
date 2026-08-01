@@ -27,8 +27,18 @@ public class HandDataRecorder : MonoBehaviour
     [SerializeField] private Transform rightWristRoot;
 
     [Header("=== 기준점 ===")]
-    [Tooltip("환자 모델 기준 위치 (예: 머리, 어깨 등). 설정 시 상대좌표로 저장됨.")]
+    [Tooltip("녹화 좌표의 기준점. 설정 시 이 트랜스폼 기준 상대좌표로 저장된다.\n" +
+             "★반드시 재생 쪽 기준점과 같아야 한다 — ChunaPathEvaluator.referenceTransform(씬에서는 " +
+             "'HandGuideAxis')과 다른 걸 넣으면 가이드 손이 어긋난 위치에 뜬다. " +
+             "비워 두면 아래 autoResolveReferences가 평가기에서 같은 값을 자동으로 가져온다.")]
     [SerializeField] private Transform patientReference;
+
+    [Header("=== 자동 배선 ===")]
+    [Tooltip("★기본 ON. 비어 있는 참조를 씬에서 자동으로 찾는다(인스펙터에 이미 넣은 값은 건드리지 않음).\n" +
+             "  · 손        = 활성 HandVisual을 Handedness로 좌우 판별(ChunaLimitChecker와 같은 관용구)\n" +
+             "  · 손목 루트 = HandVisual의 조상 중 OpenXRLeftHand/LeftHandAnchor (PracticeHandRecorder와 같은 규약)\n" +
+             "  · 기준점    = ChunaPathEvaluator.referenceTransform을 그대로 가져옴(재생과 좌표계 일치 보장)")]
+    [SerializeField] private bool autoResolveReferences = true;
 
     [Header("=== 녹화 설정 ===")]
     [SerializeField] private string fileName = "NewHandData";
@@ -85,6 +95,8 @@ public class HandDataRecorder : MonoBehaviour
 
     private void Start()
     {
+        if (autoResolveReferences) ResolveReferences();
+
         if (leftWristRoot == null && recordLeftHand)
             ChunaLogger.LogError("[HandDataRecorder] leftWristRoot가 할당되지 않았습니다! Inspector에서 왼손 손목 루트를 할당하세요.");
 
@@ -92,7 +104,58 @@ public class HandDataRecorder : MonoBehaviour
             ChunaLogger.LogError("[HandDataRecorder] rightWristRoot가 할당되지 않았습니다! Inspector에서 오른손 손목 루트를 할당하세요.");
 
         if (patientReference == null)
-            ChunaLogger.LogWarning("[HandDataRecorder] patientReference가 설정되지 않아 절대 좌표로 저장됩니다.");
+            ChunaLogger.LogWarning("[HandDataRecorder] patientReference가 설정되지 않아 절대 좌표로 저장됩니다. " +
+                                   "가이드 손 재생과 좌표계가 어긋나므로, 씬에 ChunaPathEvaluator가 있는지 확인하거나 " +
+                                   "HandGuideAxis를 직접 할당하세요.");
+    }
+
+    /// <summary>비어 있는 참조를 씬에서 채운다(멱등). 손 조인트는 트래킹이 붙기 전엔 준비가 안 되므로
+    /// 녹화 시작 시점에 한 번 더 호출한다.</summary>
+    private void ResolveReferences()
+    {
+        // ① 손 — 활성 HandVisual을 Handedness로 좌우 판별(ChunaLimitChecker·ChunaPathEvaluator와 동일 관용구)
+        if (leftHandVisual == null || rightHandVisual == null)
+        {
+            var hands = FindObjectsByType<HandVisual>(FindObjectsSortMode.None);
+            foreach (var hand in hands)
+            {
+                if (hand == null || !hand.isActiveAndEnabled || hand.Hand == null) continue;
+                if (hand.Hand.Handedness == Handedness.Left && leftHandVisual == null) leftHandVisual = hand;
+                else if (hand.Hand.Handedness == Handedness.Right && rightHandVisual == null) rightHandVisual = hand;
+            }
+        }
+
+        // ② 손목 루트 — PracticeHandRecorder와 같은 규약(조상 이름 탐색). 좌표계를 기존 데이터와 맞추기 위해 규약을 그대로 따른다.
+        if (leftWristRoot == null)
+            leftWristRoot = FindAncestorNamed(leftHandVisual, "OpenXRLeftHand", "LeftHandAnchor");
+        if (rightWristRoot == null)
+            rightWristRoot = FindAncestorNamed(rightHandVisual, "OpenXRRightHand", "RightHandAnchor");
+
+        // ③ 기준점 — ★재생 쪽과 반드시 동일해야 하므로 이름으로 찾지 않고 평가기의 값을 그대로 가져온다.
+        if (patientReference == null)
+        {
+            var evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+            if (evaluator != null && evaluator.ReferenceTransform != null)
+            {
+                patientReference = evaluator.ReferenceTransform;
+                ChunaLogger.Log($"<color=green>[HandDataRecorder] 기준점 자동 연결: {patientReference.name}</color> " +
+                                 "(ChunaPathEvaluator.referenceTransform과 동일 = 재생 좌표계 일치)");
+            }
+        }
+    }
+
+    /// <summary>HandVisual의 조상 중 지정한 이름 조각을 가진 트랜스폼을 찾는다.</summary>
+    private static Transform FindAncestorNamed(HandVisual visual, params string[] nameContains)
+    {
+        if (visual == null) return null;
+        Transform t = visual.transform.parent;
+        while (t != null)
+        {
+            for (int i = 0; i < nameContains.Length; i++)
+                if (t.name.Contains(nameContains[i])) return t;
+            t = t.parent;
+        }
+        return null;
     }
 
     private void Update()
@@ -119,6 +182,9 @@ public class HandDataRecorder : MonoBehaviour
             ChunaLogger.LogWarning("[HandDataRecorder] 이미 녹화 중입니다.");
             return;
         }
+
+        // Start 시점엔 손 트래킹이 아직 안 붙어 HandVisual.Hand가 null일 수 있다 → 여기서 한 번 더 채운다.
+        if (autoResolveReferences) ResolveReferences();
 
         // 손목 루트 할당 검증
         if (recordLeftHand && leftWristRoot == null)

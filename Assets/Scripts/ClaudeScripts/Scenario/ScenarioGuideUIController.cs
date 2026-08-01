@@ -692,6 +692,38 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// ★ 외부가 진행 원을 직접 구동한다(두개골 진단의 '자세 유지' 타이머 등).
+    /// 자체 타이머(StartProgress)는 한 방향으로만 흐르므로, 파지가 풀려 카운트가 되돌아가는
+    /// 유지 게이지에는 쓸 수 없다. 이 메서드는 매 프레임 외부 값을 그대로 그린다.
+    /// </summary>
+    /// <param name="remainingSeconds">남은 시간(초). 텍스트에 올림 표시된다.</param>
+    /// <param name="progress01">채움 비율 0~1 (내부 타이머와 동일하게 '남은 비율').</param>
+    /// <param name="label">진행 원 옆에 함께 띄울 짧은 표시(예: 진단 자세 카운트 "1/2").
+    /// 비우면 표시하지 않는다. 완료 텍스트 오브젝트를 재사용하므로 별도 배선이 필요 없다.</param>
+    public void DriveProgressExternally(float remainingSeconds, float progress01, string label = null)
+    {
+        if (progressCircleObject == null) return;
+
+        isProgressActive = false;   // 내부 타이머 정지 — 값은 외부가 준다
+        if (!progressCircleObject.activeSelf) progressCircleObject.SetActive(true);
+        if (durationText != null && !durationText.gameObject.activeSelf)
+            durationText.gameObject.SetActive(true);
+
+        // 카운트 표시는 완료 텍스트 오브젝트를 빌려 쓴다(라벨이 없으면 원래대로 숨김).
+        bool hasLabel = !string.IsNullOrEmpty(label);
+        if (completeText != null)
+        {
+            if (completeText.gameObject.activeSelf != hasLabel)
+                completeText.gameObject.SetActive(hasLabel);
+            if (hasLabel && completeText.text != label) completeText.text = label;
+        }
+        if (completeIcon != null && completeIcon.activeSelf)
+            completeIcon.SetActive(false);
+
+        UpdateProgressCircle(Mathf.Max(0f, remainingSeconds), Mathf.Clamp01(progress01));
+    }
+
+    /// <summary>
     /// 시작 토글 활성화 (20초 타임아웃 시 HandPosePlayer에서 호출)
     /// </summary>
     public void EnableStartToggle()

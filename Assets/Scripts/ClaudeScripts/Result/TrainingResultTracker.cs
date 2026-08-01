@@ -619,6 +619,59 @@ public class TrainingResultTracker : MonoBehaviour
     }
 
     /// <summary>
+    /// ★두개골 술기 단계의 지표를 현재 Step에 기록한다.
+    ///
+    /// 두개골 단계는 손 포즈 유사도·각도 리밋을 쓰지 않아 기존 경로로는 점수가 0으로만 남는다
+    /// (유사도 샘플은 평가 phase가 Moving/MidHold일 때만 쌓이고, OnEvaluationCompleted도 오지 않는다).
+    /// 그래서 컨트롤러가 모은 '자세 성립·유지' 지표를 여기서 직접 넣고, 점수·등급도 같이 채운다.
+    ///
+    /// 호출 시점 = 다음 SubStep의 <see cref="StartSubStep"/> **직전**(그래야 방금 끝난 단계에 붙는다).
+    /// </summary>
+    public void RecordCranialStep(TrainingResultData.CranialMetrics metrics)
+    {
+        if (!isTracking || resultData == null || metrics == null) return;
+        if (string.IsNullOrEmpty(currentPhaseName) || string.IsNullOrEmpty(currentStepName)) return;
+        if (IsGuideStepName(currentStepName)) return;
+
+        var step = resultData.GetOrCreateStepResult(currentPhaseName, currentStepName);
+
+        // 같은 Step에 여러 SubStep이 있으면(예: 진단1·진단2) 마지막 것만 남지 않게 누적한다.
+        if (step.cranial == null)
+        {
+            step.cranial = metrics;
+        }
+        else
+        {
+            var c = step.cranial;
+            c.elapsedSeconds += metrics.elapsedSeconds;
+            c.posesRequired += metrics.posesRequired;
+            c.posesCompleted += metrics.posesCompleted;
+            c.holdSeconds += metrics.holdSeconds;
+            c.gripDropouts += metrics.gripDropouts;
+            c.holdResets += metrics.holdResets;
+            c.breathsRequired += metrics.breathsRequired;
+            c.breathsCompleted += metrics.breathsCompleted;
+            c.breathFailures += metrics.breathFailures;
+            c.postureSeconds += metrics.postureSeconds;
+            if (c.firstContactSeconds < 0f) c.firstContactSeconds = metrics.firstContactSeconds;
+            if (metrics.breathHoldRatio > 0f) c.breathHoldRatio = metrics.breathHoldRatio;
+            // 점수는 누적값으로 다시 계산한다
+            c.score = (metrics.score + c.score) * 0.5f;
+            c.grade = EvaluationScoringEngine.GetGradeFromScore(c.score);
+        }
+
+        // 기존 결과 UI가 읽는 점수·등급도 채워 준다(비워 두면 0점/F로 보인다).
+        step.finalScore = step.cranial.score;
+        step.grade = step.cranial.grade;
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] 두개골 지표 기록: {currentStepName} " +
+                             $"자세 {step.cranial.posesCompleted}/{step.cranial.posesRequired} " +
+                             $"유지 {step.cranial.holdSeconds:F1}s 이탈 {step.cranial.gripDropouts}회 " +
+                             $"→ {step.cranial.score:F0}점({step.cranial.grade})</color>");
+    }
+
+    /// <summary>
     /// 훈련 종료
     /// </summary>
     /// <param name="completed">정상 완주 여부. false면 중도 종료(미완료)로 기록 — 정식 점수와 분리됨.</param>

@@ -184,6 +184,81 @@ public class HandPoseComparator
         settings.similarityPercentage = simPercentage;
     }
 
+    // ─── 손바닥 지지 모드 (palmSupport) ─────────────────────────────────
+    // 흉추 굴곡처럼 "손바닥으로 받쳐주기만 하면 되는" 단계용. 손가락을 섬세하게 맞출
+    // 필요가 없으므로 손가락 마디를 판정에서 빼고 손바닥 평면(손목+손가락 밑마디)만 본다.
+    // ※ComparePose의 passed는 손가락 유사도 게이트라 가중치만 낮춰선 안 되고
+    //   keyJoints 자체를 줄여야 실제로 완화된다(currentFrameSuccess = framePassed && positionPassed).
+    private bool palmSupportMode = false;
+    private ComparisonSettings savedSettings = null;
+    private List<HandJointId> savedKeyJoints = null;
+
+    /// <summary>손바닥 지지 모드 여부</summary>
+    public bool IsPalmSupportMode => palmSupportMode;
+
+    /// <summary>
+    /// 손바닥 지지 모드 전환. 켜면 손가락 마디를 빼고 손바닥 평면만 판정하며,
+    /// 끄면 원래 설정으로 정확히 복원한다(원본은 최초 1회만 저장).
+    /// </summary>
+    public void SetPalmSupportMode(bool on)
+    {
+        if (on == palmSupportMode) return;
+
+        if (on)
+        {
+            if (savedSettings == null)
+            {
+                savedSettings = CloneSettings(settings);
+                savedKeyJoints = new List<HandJointId>(settings.keyJoints);
+            }
+
+            // 손바닥 평면을 이루는 관절만 남긴다(손목 + 각 손가락 밑마디).
+            settings.keyJoints = new List<HandJointId>
+            {
+                HandJointId.HandWristRoot,
+                HandJointId.HandThumb1,
+                HandJointId.HandIndex1,
+                HandJointId.HandMiddle1,
+                HandJointId.HandRing1,
+                HandJointId.HandPinky1,
+            };
+
+            settings.similarityPercentage = 0.35f;   // 손모양 게이트 완화
+            settings.rotationThreshold = 45f;        // 마디 회전 관대하게
+            settings.handRotationThreshold = 35f;    // 손목 방향도 완화(받치는 방향만 맞으면 OK)
+            // 손 모양(주먹/편 손) 체크는 손바닥 지지와 무관하므로 끈다.
+            settings.rightHandCheckHandShape = false;
+            settings.leftHandCheckNotFisted = false;
+
+            ChunaLogger.Log("<color=cyan>[HandPose] 손바닥 지지 모드 ON - 손가락 마디 판정 제외, 손바닥 평면·위치만 봄</color>");
+        }
+        else if (savedSettings != null)
+        {
+            CopySettingsInto(savedSettings, settings);
+            settings.keyJoints = new List<HandJointId>(savedKeyJoints);
+            ChunaLogger.Log("<color=cyan>[HandPose] 손바닥 지지 모드 OFF - 원래 판정으로 복원</color>");
+        }
+
+        palmSupportMode = on;
+    }
+
+    private static ComparisonSettings CloneSettings(ComparisonSettings src)
+    {
+        var c = new ComparisonSettings();
+        CopySettingsInto(src, c);
+        return c;
+    }
+
+    /// <summary>손바닥 지지 모드가 건드리는 값만 복사(keyJoints는 별도 보관).</summary>
+    private static void CopySettingsInto(ComparisonSettings src, ComparisonSettings dst)
+    {
+        dst.similarityPercentage = src.similarityPercentage;
+        dst.rotationThreshold = src.rotationThreshold;
+        dst.handRotationThreshold = src.handRotationThreshold;
+        dst.rightHandCheckHandShape = src.rightHandCheckHandShape;
+        dst.leftHandCheckNotFisted = src.leftHandCheckNotFisted;
+    }
+
     /// <summary>
     /// 손 전체 비교 설정
     /// </summary>

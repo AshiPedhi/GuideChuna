@@ -20,21 +20,35 @@ public class AutoPlayHandler
     private float autoPlayStartTime = 0f;
     private bool isAutoPlayMode = false;
     private bool isGated = false;              // PassiveStretch: 보조수 접촉으로 재생 게이팅
+    private bool latchGate = false;            // touchOnce: 최초 접촉으로 게이트를 열고 그대로 유지
+    private bool gateLatched = false;          // latchGate 모드에서 이미 열렸는지
+    private bool requireBothHands = false;     // bothHands: 양손이 각각 닿아야 게이트가 열림
 
     // Properties
     public bool IsAutoPlayMode => isAutoPlayMode;
     public float AutoPlayProgress => autoPlayProgress;
     public bool IsGated => isGated;
+    /// <summary>touchOnce 모드 여부. 최초 접촉만으로 끝까지 재생한다(손을 계속 대고 있지 않아도 됨).</summary>
+    public bool LatchGate => latchGate;
+    /// <summary>touchOnce 모드에서 이미 접촉이 인정되어 래치된 상태인지(표시구 색 등에 사용).</summary>
+    public bool IsGateLatched => gateLatched;
+    /// <summary>bothHands 모드 여부. 양손이 각각 대상 부위에 닿아야 게이트가 열린다(양손 파지).</summary>
+    public bool RequireBothHands => requireBothHands;
 
     /// <summary>
     /// Start auto play mode.
     /// </summary>
-    public void StartAutoPlay(float duration, bool gated = false)
+    /// <param name="latchGate">true면 최초 접촉 시점에 게이트를 래치해 손을 떼도 계속 재생한다.</param>
+    /// <param name="requireBothHands">true면 양손이 각각 닿아야 게이트가 열린다.</param>
+    public void StartAutoPlay(float duration, bool gated = false, bool latchGate = false, bool requireBothHands = false)
     {
         isAutoPlayMode = true;
         autoPlayStartTime = Time.time;
         autoPlayProgress = 0f;
         isGated = gated;
+        this.latchGate = latchGate;
+        this.requireBothHands = requireBothHands;
+        gateLatched = false;
 
         if (duration > 0f)
         {
@@ -46,7 +60,8 @@ public class AutoPlayHandler
         }
 
         string durationStr = autoPlayDuration > 0 ? $"{autoPlayDuration:F1}s" : "on animation complete";
-        string gateStr = gated ? " [gated by assistant contact]" : "";
+        string gateStr = gated ? (latchGate ? " [gated: touchOnce - 최초 접촉 후 계속 재생]" : " [gated by assistant contact]") : "";
+        if (gated && requireBothHands) gateStr += " [bothHands - 양손 각각 접촉 필요]";
         ChunaLogger.Log($"<color=green>[AutoPlay] Started! Duration:{durationStr}, Animation:{owner.InternalAnimationStateName ?? "none"}{gateStr}</color>");
     }
 
@@ -56,6 +71,23 @@ public class AutoPlayHandler
     /// </summary>
     public bool UpdateAutoPlay(Animator patientAnimator, bool gateOpen, bool showDebugLogs)
     {
+        // touchOnce: 한 번 열리면 계속 열린 것으로 취급 (손을 떼도 끝까지 재생)
+        if (isGated && latchGate)
+        {
+            if (gateOpen)
+            {
+                if (!gateLatched)
+                {
+                    gateLatched = true;
+                    ChunaLogger.Log("<color=green>[AutoPlay] 접촉 감지 - 이후 손을 떼도 끝까지 재생합니다 (touchOnce)</color>");
+                }
+            }
+            else if (gateLatched)
+            {
+                gateOpen = true;
+            }
+        }
+
         // Gated + 게이트 닫힘 → 일시정지 (elapsed 시간이 증가하지 않도록 startTime을 전진)
         if (isGated && !gateOpen)
         {
@@ -157,6 +189,9 @@ public class AutoPlayHandler
         isAutoPlayMode = false;
         autoPlayProgress = 1f;
         isGated = false;
+        latchGate = false;
+        gateLatched = false;
+        requireBothHands = false;
     }
 
     /// <summary>
@@ -167,5 +202,8 @@ public class AutoPlayHandler
         isAutoPlayMode = false;
         autoPlayProgress = 0f;
         isGated = false;
+        latchGate = false;
+        gateLatched = false;
+        requireBothHands = false;
     }
 }

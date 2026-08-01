@@ -37,6 +37,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("환자 흉부에 부착된 충돌체 - 대흉근 시술용")]
     [SerializeField] private Collider patientChestCollider;
 
+    [Tooltip("반대쪽 어깨 충돌체(보충). 씬 원본 어깨 충돌체가 한쪽에만 있어 양쪽 어깨를 다 " +
+             "판정하려면 여기에 반대쪽을 넣는다. Shoulder/HeadAndShoulder/ChestAndShoulder에 모두 적용")]
+    [SerializeField] private Collider[] patientShoulderCollidersExtra;
+
+    [Tooltip("환자 등·허리(흉추)에 부착된 충돌체들 - 복잡추나 흉추/늑골 술기의 실제 시술 부위. " +
+             "양손이 각각 닿아야 하므로 좌·우 2개를 넣는다(한 손은 아무 것에나 닿으면 인정). " +
+             "머리·어깨·흉부 충돌체(단순추나 다른 술기용)와 별개로 배치할 것")]
+    [SerializeField] private Collider[] patientBackColliders;
+
     [Tooltip("환자 왼팔에 부착된 충돌체들 - 상완+전완 등 복수 가능")]
     [SerializeField] private Collider[] patientLeftArmColliders;
 
@@ -45,6 +54,15 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     [Tooltip("현재 활성화된 접촉 감지 부위 (시나리오에서 설정)")]
     [SerializeField] private ContactTarget[] activeContactTargets = new ContactTarget[] { ContactTarget.HeadAndShoulder };
+
+    [Tooltip("접촉 게이트 구간에서 터치할 부위를 반투명 구체로 표시한다. " +
+             "환자 접촉 콜라이더는 렌더러가 없어 VR에서 안 보이므로 어디를 만져야 하는지 알 수 없다. " +
+             "미접촉=연한 붉은색 / 접촉 성립=초록")]
+    [SerializeField] private bool showContactTargetIndicator = true;
+
+    [Tooltip("접촉 표시구 크기 배율. 1 = 실제 판정 범위와 동일(콜라이더가 작으면 표시도 작다)")]
+    [Range(0.5f, 3f)]
+    [SerializeField] private float contactTargetIndicatorScale = 1f;
 
     // 주동수 충돌체 타겟 (진행률 계산에 사용할 손 결정용)
     private ContactTarget primaryTarget = ContactTarget.HeadAndShoulder;
@@ -532,6 +550,19 @@ public class ChunaPathEvaluator : MonoBehaviour
         StartGuideHandPlayback();
     }
 
+    /// <summary>'시각 안내 전용' 가이드손 재생 — 재생 구간과 루프 여부를 이번 호출에만 적용한다.
+    /// (두개골 술기용: 전체 구간 1회 재생. 평가 파이프라인이 쓰는 비율·루프 필드는 건드리지 않는다.)</summary>
+    internal void StartGuideHandPlaybackInternal(float startRatio, float endRatio, bool loop)
+    {
+        StartGuideHandPlayback(startRatio, endRatio, loop);
+    }
+
+    /// <summary>가이드손 재생 중지 + 숨김. (두개골: 사용자 손이 파지 위치에 닿았을 때 호출)</summary>
+    internal void StopGuideHandPlaybackInternal()
+    {
+        StopGuideHandPlayback();
+    }
+
     // ChunaDataLoader needs
     internal bool ShowDebugLogs => showDebugLogs;
     internal string CurrentProcedureName { get => currentProcedureName; set => currentProcedureName = value; }
@@ -736,7 +767,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             UpdateDebugUI();
         }
 
-        if (!isEvaluating) return;
+        if (!isEvaluating)
+        {
+            HideContactTargetIndicator();
+            return;
+        }
 
         // ★ AutoPlay 모드: 핸드데이터 없이 애니메이션만 자동 재생 (via helper)
         if (autoPlayHandler.IsAutoPlayMode)
@@ -744,7 +779,20 @@ public class ChunaPathEvaluator : MonoBehaviour
             // PassiveStretch: 보조수(왼손) 접촉 중일 때만 애니메이션 재생
             // 게이팅 없는 경우 항상 true로 무시
             UpdateCollisionDetection();
-            bool gateOpen = !autoPlayHandler.IsGated || isLeftHandTouchingPatient;
+            // bothHands: 양손 파지 단계 — 양손이 각각 대상 부위에 닿아야 인정.
+            // touchOnce: 어느 손으로 터치해도 열린다(래치는 AutoPlayHandler가 담당).
+            // 그 외 기존 게이팅(경추ROM 등)은 종전대로 왼손(보조수)만 인정.
+            bool touching;
+            if (autoPlayHandler.RequireBothHands)
+                touching = isLeftHandTouchingPatient && isRightHandTouchingPatient;
+            else
+                touching = isLeftHandTouchingPatient ||
+                           (autoPlayHandler.LatchGate && isRightHandTouchingPatient);
+            bool gateOpen = !autoPlayHandler.IsGated || touching;
+
+            // 접촉해야 진행되는 구간에서만 "여기를 터치" 표시구를 띄운다.
+            UpdateContactTargetIndicator(autoPlayHandler.IsGated,
+                                         touching || autoPlayHandler.IsGateLatched);
 
             bool completed = autoPlayHandler.UpdateAutoPlay(patientAnimator, gateOpen, showDebugLogs);
             if (completed)
@@ -753,6 +801,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
             return;
         }
+
+        HideContactTargetIndicator();
 
         // 손-환자 충돌 체크
         UpdateCollisionDetection();
@@ -1128,6 +1178,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientHeadCollider = patientHeadCollider,
             patientShoulderCollider = patientShoulderCollider,
             patientChestCollider = patientChestCollider,
+            patientBackColliders = patientBackColliders,
+            patientShoulderCollidersExtra = patientShoulderCollidersExtra,
             patientLeftArmColliders = patientLeftArmColliders,
             patientRightArmColliders = patientRightArmColliders,
             activeContactTargets = activeContactTargets,
@@ -1167,6 +1219,89 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         var ctx = BuildCollisionContext();
         collisionDetectionManager.UpdateCollisionDetection(in ctx);
+    }
+
+    // ─── 접촉 표시구 (어디를 터치해야 하는지) ───────────────────────────────
+    private ContactTargetIndicator contactTargetIndicator;
+    private readonly List<Collider> contactIndicatorBuffer = new List<Collider>();
+
+    /// <summary>접촉 게이트 구간에서 터치 대상 부위를 반투명 구체로 표시.</summary>
+    private void UpdateContactTargetIndicator(bool gateActive, bool satisfied)
+    {
+        if (!showContactTargetIndicator || !gateActive)
+        {
+            HideContactTargetIndicator();
+            return;
+        }
+
+        if (contactTargetIndicator == null)
+            contactTargetIndicator = new ContactTargetIndicator();
+
+        CollectActiveContactColliders(contactIndicatorBuffer);
+        contactTargetIndicator.UpdateMarkers(contactIndicatorBuffer, satisfied, contactTargetIndicatorScale);
+    }
+
+    private void HideContactTargetIndicator()
+    {
+        if (contactTargetIndicator != null)
+            contactTargetIndicator.Hide();
+    }
+
+    /// <summary>현재 activeContactTargets가 가리키는 실제 콜라이더들을 중복 없이 모은다.</summary>
+    private void CollectActiveContactColliders(List<Collider> results)
+    {
+        results.Clear();
+        if (activeContactTargets == null) return;
+
+        foreach (var target in activeContactTargets)
+        {
+            switch (target)
+            {
+                case ContactTarget.Head:
+                    AddContactCollider(results, patientHeadCollider);
+                    break;
+                case ContactTarget.Shoulder:
+                    AddContactCollider(results, patientShoulderCollider);
+                    AddContactColliders(results, patientShoulderCollidersExtra);
+                    break;
+                case ContactTarget.Chest:
+                    AddContactCollider(results, patientChestCollider);
+                    break;
+                case ContactTarget.Back:
+                    AddContactColliders(results, patientBackColliders);
+                    break;
+                case ContactTarget.ChestAndShoulder:
+                    AddContactCollider(results, patientChestCollider);
+                    AddContactCollider(results, patientShoulderCollider);
+                    AddContactColliders(results, patientShoulderCollidersExtra);
+                    break;
+                case ContactTarget.LeftArm:
+                    AddContactColliders(results, patientLeftArmColliders);
+                    break;
+                case ContactTarget.RightArm:
+                    AddContactColliders(results, patientRightArmColliders);
+                    break;
+                case ContactTarget.HeadAndShoulder:
+                default:
+                    AddContactCollider(results, patientHeadCollider);
+                    AddContactCollider(results, patientShoulderCollider);
+                    AddContactColliders(results, patientShoulderCollidersExtra);
+                    break;
+            }
+        }
+    }
+
+    private static void AddContactCollider(List<Collider> results, Collider c)
+    {
+        if (c != null && !results.Contains(c))
+            results.Add(c);
+    }
+
+    private static void AddContactColliders(List<Collider> results, Collider[] colliders)
+    {
+        if (colliders == null) return;
+        foreach (var c in colliders)
+            AddContactCollider(results, c);
     }
 
     private void UpdateDebugUI()
@@ -1340,6 +1475,15 @@ public class ChunaPathEvaluator : MonoBehaviour
             specifiedMovementType = null; // 자동 감지 사용
         }
 
+        // 손바닥 지지 모드: conditionParams에 "palmSupport"가 있으면 손가락 마디 판정을 빼고
+        // 손바닥 평면·위치만 본다(흉추 굴곡처럼 받쳐주기만 하면 되는 단계). 없으면 원래 판정으로 복원.
+        if (poseComparator != null)
+        {
+            bool palmSupport = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+                               subStep.conditionParams.ToLower().Contains("palmsupport");
+            poseComparator.SetPalmSupportMode(palmSupport);
+        }
+
         // StartHold만 체크 모드 (등척성운동 등)
         // 1. 핸드데이터 파일명에 "등척성" 포함 시 자동 활성화
         // 2. conditionParams에 "startHoldOnly" 포함 시 활성화
@@ -1433,9 +1577,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     /// <param name="duration">자동 재생 시간 (초). 0이면 애니메이션 완료 시 자동 진행</param>
     /// <param name="gated">true면 보조수 접촉으로 재생 게이팅 (PassiveStretch)</param>
-    public void StartAutoPlay(float duration = 0f, bool gated = false)
+    /// <param name="latchGate">true면 최초 접촉만으로 끝까지 재생 (CSV conditionParams=touchOnce)</param>
+    /// <param name="requireBothHands">true면 양손이 각각 닿아야 진행 (CSV conditionParams=bothHands)</param>
+    public void StartAutoPlay(float duration = 0f, bool gated = false, bool latchGate = false, bool requireBothHands = false)
     {
-        autoPlayHandler.StartAutoPlay(duration, gated);
+        autoPlayHandler.StartAutoPlay(duration, gated, latchGate, requireBothHands);
 
         // 평가 시작 처리
         isEvaluating = true;
@@ -1461,8 +1607,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool gated = !string.IsNullOrEmpty(subStep.conditionType) &&
                      subStep.conditionType.Trim().Equals("PassiveStretch", System.StringComparison.OrdinalIgnoreCase);
 
+        // conditionParams에 "touchOnce"가 있으면 최초 접촉으로 래치 (손을 계속 대고 있지 않아도 끝까지 재생)
+        string prms = subStep.conditionParams != null ? subStep.conditionParams.ToLower() : "";
+        bool latchGate = prms.Contains("touchonce");
+        // "bothHands"면 양손이 각각 닿아야 게이트가 열린다 (양손 파지)
+        bool requireBothHands = prms.Contains("bothhands");
+
         // AutoPlay 시작
-        StartAutoPlay(duration, gated);
+        StartAutoPlay(duration, gated, latchGate, requireBothHands);
     }
 
     /// <summary>
@@ -1650,6 +1802,11 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     void OnDestroy()
     {
+        if (contactTargetIndicator != null)
+        {
+            contactTargetIndicator.Dispose();
+            contactTargetIndicator = null;
+        }
         StopGuideHandPlayback();
     }
 
@@ -2220,6 +2377,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     // This MonoBehaviour wraps IEnumerator with StartCoroutine.
 
     private void StartGuideHandPlayback()
+        => StartGuideHandPlayback(currentStartRatio, currentEndRatio, loopGuideHands);
+
+    /// <summary>재생 구간·루프를 인자로 받는 버전. 인스펙터/런타임 필드를 바꾸지 않으므로
+    /// 특정 술기(두개골)만 다른 설정으로 재생해도 다음 시나리오에 설정이 새지 않는다.</summary>
+    private void StartGuideHandPlayback(float startRatio, float endRatio, bool loop)
     {
         if (!showGuideHands) return;
         if (loadedFrames == null || loadedFrames.Count == 0) return;
@@ -2228,8 +2390,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         IEnumerator routine = guidePlaybackController.PlaybackRoutine(
             loadedFrames, leftGuideHand, rightGuideHand,
-            currentStartRatio, currentEndRatio,
-            guidePlaybackSpeed, loopGuideHands, loopDelaySeconds,
+            startRatio, endRatio,
+            guidePlaybackSpeed, loop, loopDelaySeconds,
             guideHandColor, showDebugLogs);
 
         guideHandCoroutine = StartCoroutine(routine);
