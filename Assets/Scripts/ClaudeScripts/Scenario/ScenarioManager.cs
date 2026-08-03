@@ -852,7 +852,10 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
 
         // StartHold 없이 즉시 가이드 손 재생 (주동수 없음)
-        chunaPathEvaluator.StartGuideHandPlaybackInternal();
+        // ★구간을 (0,1)로 명시하고 루프를 끈다.
+        //   인자 없는 오버로드는 runtimeGuideStartRatio/EndRatio(기본 0~0.4)와 loopGuideHands(=1)를 쓴다
+        //   → 클립 앞 40%만 무한 반복된다. 가이드손 규약은 "전체를 1회"다.
+        chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
 
         // AutoPlay 완료 시 SubStep 완료 처리
         chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
@@ -1027,8 +1030,12 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         }
         else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {
-            condition = new BreathingCondition(cranialController);
-            label = "Breath(②b 호흡)";
+            // conditionParams에 "gripGate"가 있으면 호흡 1회를 인정하는 조건이
+            // '이마 견착 자세'가 아니라 '양손 파지 성립'이 된다(PM처럼 손이 보이는 술기용).
+            bool gripGate = !string.IsNullOrEmpty(subStep.conditionParams) &&
+                            subStep.conditionParams.ToLower().Contains("gripgate");
+            condition = new BreathingCondition(cranialController, gripGate);
+            label = gripGate ? "Breath(호흡 — 파지 유지 게이트)" : "Breath(②b 호흡 — 견착 자세 게이트)";
         }
         else if (conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase))
         {

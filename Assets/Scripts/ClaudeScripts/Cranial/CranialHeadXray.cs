@@ -62,6 +62,12 @@ public class CranialHeadXray : MonoBehaviour
     [SerializeField] private string[] activeOnConditionTypes =
         { "cranialTouch", "cranialGrip", "cranialPressure", "cranialDepthBreath" };
 
+    [Tooltip("CSV conditionParams에 이 토큰이 있으면 conditionType과 무관하게 xray를 쓰고, " +
+             "손 근접을 기다리지 않고 단계 진입 즉시 켠다.\n" +
+             "★근접 기준점이 '환자 머리'라, 손이 머리에서 멀리 떨어지는 술기(흉추 교정 = 손이 등에 있음)는 " +
+             "근접 트리거가 영영 성립하지 않기 때문이다. 빈 문자열이면 이 기능을 끈다.")]
+    [SerializeField] private string forceXrayParamToken = "xray";
+
     [Header("단계마다 원복")]
     [Tooltip("★기본 ON. **xray를 쓰지 않는 단계로 넘어갈 때** xray를 끄고 환자 모델을 원래 모습으로 되돌린다.\n" +
              "xray를 쓰는 단계끼리 연속될 때는 끄지 않고 그대로 유지한다(깜빡임 방지).\n" +
@@ -107,6 +113,8 @@ public class CranialHeadXray : MonoBehaviour
     private readonly List<Material> createdMats = new List<Material>();
     private readonly List<Renderer> hideTargets = new List<Renderer>();  // 반투명 중 숨길 대상(머리카락 등)
     private readonly List<Renderer> hiddenByMe = new List<Renderer>();   // 실제로 내가 끈 것만(정확 복원)
+    /// <summary>이 substep이 conditionParams 옵트인으로 xray를 강제하는가(근접 트리거 생략).</summary>
+    private bool forceOnThisSubStep;
     private Shader xrayShader;
     private bool captured;
     private bool active;   // 반투명 상태(래치)
@@ -156,9 +164,15 @@ public class CranialHeadXray : MonoBehaviour
 
         // 이 단계가 xray를 쓰는 단계인가. (목록이 비면 '항상 허용' = 예전 동작)
         bool listEmpty = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0);
-        bool wantsXray = listEmpty || IsTrigger(subStep.conditionType);
+        // ★conditionParams 옵트인: conditionType이 목록에 없어도 xray를 쓰고, 근접 없이 즉시 켠다.
+        bool forced = !string.IsNullOrEmpty(forceXrayParamToken) &&
+                      !string.IsNullOrEmpty(subStep.conditionParams) &&
+                      subStep.conditionParams.IndexOf(forceXrayParamToken,
+                                                      StringComparison.OrdinalIgnoreCase) >= 0;
+        bool wantsXray = listEmpty || forced || IsTrigger(subStep.conditionType);
 
         armed = wantsXray;
+        forceOnThisSubStep = forced;
 
         // ★ xray를 **안 쓰는** 단계(진단3·재평가·안내·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
         //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
@@ -177,6 +191,7 @@ public class CranialHeadXray : MonoBehaviour
     private void HandleScenarioEnd(ScenarioData _)
     {
         Deactivate();   // 시나리오 끝나면 래치 해제 + 불투명 복원
+        forceOnThisSubStep = false;
         armed = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0);
     }
 
@@ -185,7 +200,8 @@ public class CranialHeadXray : MonoBehaviour
         if (active || !armed) return;      // 이미 켜졌으면(래치) 아무것도 안 함
         if (Time.time < rearmAt) return;   // 단계 전환 직후: 원복이 보이도록 잠시 재감지 보류
         if (targets.Count == 0) return;
-        if (IsHandNear()) Activate();
+        // 옵트인 단계는 손 근접을 기다리지 않는다(손이 머리 근처에 오지 않는 술기 대응).
+        if (forceOnThisSubStep || IsHandNear()) Activate();
     }
 
     private void LateUpdate()

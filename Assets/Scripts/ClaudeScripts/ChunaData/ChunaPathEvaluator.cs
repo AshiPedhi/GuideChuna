@@ -391,6 +391,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
+    /// <summary>CSV conditionParams의 "palmSupport" — 손바닥으로 받치기만 하는 술기.
+    /// 판정 완화(HandPoseComparator)뿐 아니라 접촉 페이드 예외에도 쓴다.</summary>
+    private bool palmSupportMode;
+    /// <summary>startHoldOnly가 **CSV conditionParams**로 켜졌는가(파일명 "등척성" 자동 감지와 구분).
+    /// 가이드 핸드 루프 재생은 이 경우에만 한다 — 기존 단순추나 등척성운동의 표시를 바꾸지 않기 위함.</summary>
+    private bool startHoldOnlyFromParams;
     private bool guideOnlyMode;                 // true면 StartHold/MidHold 스킵, 유사도 비평가 (시각 데모 전용)
     private bool skipMidHold;                   // true면 유사도 평가하되 MidHold 스킵, 임계점 통과 시 즉시 완료 (대흉근 등)
     private float isometricHoldEntryTime = -1f; // 등척성 StartHold 진입 시각 (홀드 완수도 계산용, -1=미진입)
@@ -1192,7 +1198,9 @@ public class ChunaPathEvaluator : MonoBehaviour
             palmThickness = palmThickness,
             palmHeight = palmHeight,
             fingerLength = fingerLength,
-            fadeOnTouch = fadeOnTouch,
+            // ★손바닥 지지 술기(palmSupport)는 시작부터 끝까지 손이 환자에 닿아 있으므로
+            //   접촉 페이드를 걸면 가이드 핸드가 내내 알파 0.15로 보이지 않는다 → 이 모드에서만 예외.
+            fadeOnTouch = fadeOnTouch && !palmSupportMode,
             touchAlpha = touchAlpha,
             guideHandColor = guideHandColor,
             leftGuideHand = leftGuideHand,
@@ -1477,11 +1485,11 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // 손바닥 지지 모드: conditionParams에 "palmSupport"가 있으면 손가락 마디 판정을 빼고
         // 손바닥 평면·위치만 본다(흉추 굴곡처럼 받쳐주기만 하면 되는 단계). 없으면 원래 판정으로 복원.
+        palmSupportMode = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+                          subStep.conditionParams.ToLower().Contains("palmsupport");
         if (poseComparator != null)
         {
-            bool palmSupport = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
-                               subStep.conditionParams.ToLower().Contains("palmsupport");
-            poseComparator.SetPalmSupportMode(palmSupport);
+            poseComparator.SetPalmSupportMode(palmSupportMode);
         }
 
         // StartHold만 체크 모드 (등척성운동 등)
@@ -1491,6 +1499,8 @@ public class ChunaPathEvaluator : MonoBehaviour
             subStep.handTrackingFileName.Contains("등척성");
         bool hasStartHoldOnlyParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
             subStep.conditionParams.ToLower().Contains("startholdonly");
+
+        startHoldOnlyFromParams = hasStartHoldOnlyParam;
 
         if (isIsometricExercise || hasStartHoldOnlyParam)
         {
@@ -2051,7 +2061,19 @@ public class ChunaPathEvaluator : MonoBehaviour
             // ★ 가이드 핸드 표시 전에 충돌 검사 먼저 수행 (접촉 시 투명도 반영)
             UpdateCollisionDetection();
 
-            ShowGuideHandFirstFrame();
+            // ★startHoldOnly(유지형 술기)는 StartHold가 끝나는 즉시 Completed로 빠지므로
+            //   EvaluationPhaseManager의 StartGuideHandPlaybackInternal() 호출을 아예 타지 못한다
+            //   (EvaluationPhaseManager.cs:205-218이 :227 앞에서 return) → 지금까지 정지 첫 프레임만 떴다.
+            //   ★재생은 **클립 전체를 1회, 루프 없음**(사용자 지시) — 두개골 경로와 동일한 규약.
+            //   ★구간을 (0,1)로 **명시**해야 한다. runtimeGuideStartRatio/EndRatio는 스트레칭·재평가
+            //     모드에서만 갱신되고(위 :1971-1984), 그 외 단계에서는 기본값 0~0.4가 남는다 →
+            //     currentStartRatio/currentEndRatio를 그냥 넘기면 앞 40%만 재생되고 끊긴다.
+            //   ※CSV conditionParams로 켠 경우만 — 파일명 "등척성" 자동 감지로 켜지는
+            //     기존 단순추나 등척성운동은 지금까지의 정지 프레임 표시를 그대로 둔다.
+            if (startHoldOnlyFromParams && loadedFrames != null && loadedFrames.Count > 0)
+                StartGuideHandPlayback(0f, 1f, false);
+            else
+                ShowGuideHandFirstFrame();
 
             // 환자 애니메이션도 시작 프레임으로 설정 (스트레칭은 30%, 일반은 0%)
             if (patientAnimator != null && !string.IsNullOrEmpty(currentAnimationStateName))

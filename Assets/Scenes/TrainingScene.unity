@@ -22201,7 +22201,7 @@ MonoBehaviour:
         thumbGrip: {fileID: 45421591}
         indexGrip: {fileID: 876314630}
         pinkyGrip: {fileID: 1627875346}
-      guideClipName: 
+      guideClipName: "PM \uC9C4\uB2E8 \uC88C"
       guideStartRatio: 0
       guideEndRatio: 1
     - label: "\u24D1 \uC67C\uC190 3\uC810 + \uC624\uB978\uC190 \uD6C4\uB450\uBD80"
@@ -22215,7 +22215,7 @@ MonoBehaviour:
         thumbGrip: {fileID: 0}
         indexGrip: {fileID: 0}
         pinkyGrip: {fileID: 0}
-      guideClipName: 
+      guideClipName: "PM \uC9C4\uB2E8 \uC6B0"
       guideStartRatio: 0
       guideEndRatio: 1
   gripGraceSeconds: 0.5
@@ -22249,6 +22249,7 @@ MonoBehaviour:
   palmColliderRadius: 0.05
   drivePoseFromComparator: 0
   debugFreezePressureStep: 0
+  stopGuideHandOnGrip: 0
 --- !u!1 &151342588
 GameObject:
   m_ObjectHideFlags: 0
@@ -23379,7 +23380,7 @@ MonoBehaviour:
   rightWristRoot: {fileID: 226558401}
   patientReference: {fileID: 0}
   autoResolveReferences: 1
-  fileName: "\uD749\uCD94 \uAD74\uACE1 \uB215\uD788\uAE30"
+  fileName: "PM \uC9C4\uB2E8 \uC88C"
   recordInterval: 0.033
   recordLeftHand: 1
   recordRightHand: 1
@@ -50597,6 +50598,7 @@ MonoBehaviour:
   palmColliderRadius: 0.05
   drivePoseFromComparator: 0
   debugFreezePressureStep: 0
+  stopGuideHandOnGrip: 0
 --- !u!114 &375755479
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -171664,6 +171666,7 @@ MonoBehaviour:
   - cranialGrip
   - cranialPressure
   - cranialDepthBreath
+  forceXrayParamToken: xray
   restoreEachSubStep: 1
   rearmDelaySeconds: 0.6
   excludeNameContains:
@@ -219626,7 +219629,7 @@ MonoBehaviour:
         thumbGrip: {fileID: 1304805733}
         indexGrip: {fileID: 2015849985}
         pinkyGrip: {fileID: 1407381810}
-      guideClipName: 
+      guideClipName: "PM \uC9C4\uB2E8 \uC88C"
       guideStartRatio: 0
       guideEndRatio: 1
     - label: "\u24D1 \uC67C\uC190 \uCE21\uB450 + \uC624\uB978\uC190 \uD6C4\uB450"
@@ -219640,7 +219643,7 @@ MonoBehaviour:
         thumbGrip: {fileID: 0}
         indexGrip: {fileID: 0}
         pinkyGrip: {fileID: 0}
-      guideClipName: 
+      guideClipName: "PM \uC9C4\uB2E8 \uC6B0"
       guideStartRatio: 0
       guideEndRatio: 1
   gripGraceSeconds: 0.5
@@ -219657,10 +219660,10 @@ MonoBehaviour:
   leftDepth: {fileID: 0}
   rightDepth: {fileID: 1459905229}
   breathingHUD: {fileID: 425748982}
-  breathCountOverride: 0
-  inhaleSecondsOverride: 0
-  exhaleSecondsOverride: 0
-  breathStartPhaseOverride: 0
+  breathCountOverride: 1
+  inhaleSecondsOverride: 6
+  exhaleSecondsOverride: 6
+  breathStartPhaseOverride: 2
   postureStabilizer: {fileID: 1761297744}
   patientModelRoot: {fileID: 543450652859335547}
   hideHandsDuringBreathing: 0
@@ -219673,6 +219676,7 @@ MonoBehaviour:
   palmColliderRadius: 0.05
   drivePoseFromComparator: 0
   debugFreezePressureStep: 0
+  stopGuideHandOnGrip: 0
 --- !u!1 &1761298682
 GameObject:
   m_ObjectHideFlags: 0
@@ -231249,7 +231253,7 @@ Transform:
   m_GameObject: {fileID: 1806452239}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.08, y: 0.08, z: -0.1}
+  m_LocalPosition: {x: 0.08, y: 0.0083, z: -0.0967}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -231274,7 +231278,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.03
+  m_Radius: 0.05
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1806722301
 GameObject:
@@ -231596,7 +231600,7 @@ Transform:
   m_GameObject: {fileID: 1809232454}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.0001, y: -0.0178, z: 0.013}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.02, y: 0.005, z: 0.02}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -247795,7 +247799,7 @@ Transform:
   m_GameObject: {fileID: 1908568770}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.08, y: 0.08, z: -0.1}
+  m_LocalPosition: {x: -0.08, y: 0.0083, z: -0.0967}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -247820,7 +247824,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.03
+  m_Radius: 0.05
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1909187267
 GameObject:
@@ -255816,7 +255820,7 @@ Transform:
   m_GameObject: {fileID: 1978023190}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.0001, y: 0.1902, z: -0.017}
+  m_LocalPosition: {x: 0.0002, y: 0.1893, z: -0.0029}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -255893,7 +255897,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.02
+  m_Radius: 0.04
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1978550411
 GameObject:

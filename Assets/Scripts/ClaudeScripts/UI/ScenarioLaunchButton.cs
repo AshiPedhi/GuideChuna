@@ -22,7 +22,11 @@ public class ScenarioLaunchButton : MonoBehaviour
 {
     [Tooltip("ScenarioBootstrapper.scenarioConfigs[] 위치와 일치해야 하는 시나리오 인덱스(0부터). " +
              "0상부승모근 1견갑거근 2대흉근 3흉쇄유돌근 4사각근 5두개골교정 6두개골PM교정 " +
-             "7복와위_하부흉추_굴곡변위 8앙와위_흉추_신전변위 9제1늑골_앙와위 10제2늑골_상방변위 11경추ROM측정")]
+             "7두개골PJ교정 8앙와위_흉추_굴곡변위 9앙와위_흉추_신전변위 10제1늑골_앙와위 " +
+             "11제2늑골_상방변위 12경추ROM측정\n" +
+             "★배열 중간에 시나리오를 삽입하면 뒤쪽 카드의 인덱스가 전부 밀린다. " +
+             "삽입 후에는 반드시 lobby.unity의 모든 카드를 재확인할 것 " +
+             "(2026-08-01 PJ를 7에 삽입하면서 카드 8~11이 한 칸씩 어긋난 전례).")]
     [SerializeField] private int scenarioIndex;
 
     [Tooltip("비우면 씬에서 자동 검색. 로그인/팝업/씬로드를 담당하는 브레인")]

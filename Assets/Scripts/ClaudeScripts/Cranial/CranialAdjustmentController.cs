@@ -452,6 +452,10 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>이번 substep의 가이드손 자동 제어를 무장한다.
     /// ScenarioManager가 두개골 substep에서 가이드손 재생을 시작한 직후 호출한다.
     /// ★무장된 동안만 동작하므로 다른 시나리오(사각근 등)의 가이드손에는 영향이 없다.</summary>
+    [Tooltip("★기본 OFF. 켜면 그 자세의 파지가 성립하는 순간 가이드손 재생을 끊는다.\n" +
+             "끄면(기본) 손을 댔는지와 무관하게 1회를 끝까지 재생한다.")]
+    [SerializeField] private bool stopGuideHandOnGrip = false;
+
     public void ArmGuideHandAutoHide(ChunaPathEvaluator evaluator, string substepClipName)
     {
         guideHandOwner = evaluator;
@@ -483,6 +487,10 @@ public class CranialAdjustmentController : MonoBehaviour
                 return;
             }
         }
+
+        // ★기본값 OFF — 가이드손은 손을 댔는지와 무관하게 1회를 끝까지 재생한다(사용자 지시).
+        //   켜면 예전처럼 '그 자세의 파지가 성립하는 순간' 재생을 끊는다.
+        if (!stopGuideHandOnGrip) return;
 
         bool satisfied = IsJudgedGripSatisfied();
 
@@ -1044,7 +1052,11 @@ public class CranialAdjustmentController : MonoBehaviour
     /// 이 국면은 어깨-이마 자세로 손이 FOV를 벗어나 파지/압력 판정이 불가 →
     /// 유지 게이트를 "압력 적정존" 대신 "자세 안정화(헤드셋-이마 근접)"로 둔다.
     /// (압력 정확성은 직전 ②a 압력 substep에서 이미 검증됨.)</summary>
-    public void StartBreathingWindow()
+    /// <param name="gripGate">true면 호흡 1회를 인정하는 조건이 <b>양손 파지 성립</b>이 된다.
+    /// PM처럼 호흡 내내 손이 머리에 남아 파지 판정이 가능한 술기용 — 시간만 흘러서는 카운트가
+    /// 오르지 않고 파지점에 제대로 대고 있어야 세어진다.
+    /// false(기본)면 기존대로 이마 견착 자세 프록시를 쓴다(OM·PJ는 손이 FOV 밖이라 파지 판정 불가).</param>
+    public void StartBreathingWindow(bool gripGate = false)
     {
         if (breathingHUD == null)
         {
@@ -1053,17 +1065,26 @@ public class CranialAdjustmentController : MonoBehaviour
         }
 
         // 손이 FOV를 벗어나 데이터가 튀는 국면 → 파지/깊이 판정 정지(사운드·경고·색 깜빡임·화살표 잔상 방지)
-        SetHandJudgingActive(false);
+        // ★gripGate면 파지 성립 여부가 곧 게이트이므로 손 판정을 계속 살려 둔다.
+        SetHandJudgingActive(gripGate);
         // 견착 국면 내내 손 메시 숨김(트래킹은 유지) — 가림/FOV 밖에서 튀는 손 비주얼 제거.
         // (PM처럼 손을 계속 머리에 대는 술기는 hideHandsDuringBreathing=false로 숨기지 않음)
-        if (hideHandsDuringBreathing) SetHandVisualsHidden(true);
+        if (hideHandsDuringBreathing && !gripGate) SetHandVisualsHidden(true);
 
         // ★공유 HUD에 이 술기의 호흡법을 먼저 밀어 넣는다(OM 3회 / PJ 1회 긴 날숨 등).
         breathingHUD.Configure(breathCountOverride, inhaleSecondsOverride, exhaleSecondsOverride,
                                breathStartPhaseOverride);
 
-        postureStabilizer?.SetActive(true);   // 자세 안내 활성 + 판정 시작
-        breathingHUD.SetTensionProvider(() => IsPostureEngaged);
+        if (gripGate)
+        {
+            // 파지 게이트: 견착 자세 안내는 띄우지 않는다(이 술기엔 견착이 없다).
+            breathingHUD.SetTensionProvider(() => BothGripped);
+        }
+        else
+        {
+            postureStabilizer?.SetActive(true);   // 자세 안내 활성 + 판정 시작
+            breathingHUD.SetTensionProvider(() => IsPostureEngaged);
+        }
         breathingHUD.StartWindow();
     }
 

@@ -172,11 +172,16 @@ public class PressureCondition : IScenarioCondition
 public class BreathingCondition : IScenarioCondition
 {
     private readonly CranialAdjustmentController controller;
+    private readonly bool gripGate;
     private bool started = false;
 
-    public BreathingCondition(CranialAdjustmentController controller)
+    /// <param name="gripGate">true면 호흡 1회 인정 조건이 '이마 견착 자세'가 아니라
+    /// <b>양손 파지 성립</b>이 된다. 손이 시야에 남는 술기(PM)용 — 시간만 흘러도 카운트가
+    /// 오르지 않고, 파지점에 제대로 대고 있어야 호흡이 세어진다.</param>
+    public BreathingCondition(CranialAdjustmentController controller, bool gripGate = false)
     {
         this.controller = controller;
+        this.gripGate = gripGate;
     }
 
     private void TryStart()
@@ -184,8 +189,9 @@ public class BreathingCondition : IScenarioCondition
         if (controller == null || started) return;
 
         // 견착 국면: 압력은 어깨-이마 밀착 상태에서 적용되어 손 추적이 불가하므로
-        // 손 판정 없이 바로 호흡 윈도우 시작(게이트 = 자세 프록시 + 3회 호흡).
-        controller.StartBreathingWindow();
+        // 손 판정 없이 바로 호흡 윈도우 시작(게이트 = 자세 프록시 + N회 호흡).
+        // gripGate면 대신 양손 파지 유지가 게이트가 된다.
+        controller.StartBreathingWindow(gripGate);
         started = true;
     }
 
