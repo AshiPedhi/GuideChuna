@@ -36,6 +36,11 @@ public class GripPointTarget : MonoBehaviour
     //   메뉴 `GuideChuna/파지점 색상 일괄 적용`으로 한 번 적용할 것.
     [SerializeField] private Color idleColor = new Color(1f, 0.35f, 0.35f, 0.5f);
     [SerializeField] private Color grippedColor = Color.green;
+    [Tooltip("손이 닿아 파지가 성립했을 때의 알파. 낮출수록 반투명해져 손·환자를 가리지 않는다.\n" +
+             "0이면 완전히 투명(구체가 사라진 것처럼 보임). 구체를 끄지 않고 흐려지게만 한다.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float grippedAlpha = 0.25f;
+
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip clickSound;
 
@@ -57,6 +62,37 @@ public class GripPointTarget : MonoBehaviour
 
     private bool hasPressureColor = false;   // 압력 단계: 깊이 색이 파지/idle 색을 덮어씀
     private Color pressureColor;
+
+    private bool transparencyEnsured;
+
+    /// <summary>
+    /// 구체 머티리얼을 반투명(Standard - Fade)으로 만든다.
+    /// ★불투명 머티리얼이면 idleColor·grippedAlpha의 알파가 통째로 무시돼
+    /// "빨간 덩어리"로만 보인다. 씬 머티리얼을 건드리지 않도록 인스턴스에만 적용한다.
+    /// </summary>
+    private void EnsureTransparentMaterial()
+    {
+        if (transparencyEnsured || targetRenderer == null) return;
+        transparencyEnsured = true;
+
+        var m = targetRenderer.material;   // 인스턴스 생성(공유 머티리얼 보호)
+        if (m == null || m.shader == null) return;
+        if (!m.HasProperty("_Mode")) return;   // Standard 계열이 아니면 건드리지 않는다
+
+        m.SetFloat("_Mode", 3f);               // Fade
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        m.SetInt("_ZWrite", 0);
+        m.DisableKeyword("_ALPHATEST_ON");
+        m.EnableKeyword("_ALPHABLEND_ON");
+        m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        m.renderQueue = 3000;
+    }
+
+    private void Awake()
+    {
+        EnsureTransparentMaterial();
+    }
 
     /// <summary>파지 판정 활성/정지. 호흡 국면처럼 손이 안 보여 트리거가 튀는 구간에서 정지시켜
     /// clickSound 반복·색 깜빡임을 막는다.</summary>
@@ -130,9 +166,14 @@ public class GripPointTarget : MonoBehaviour
 
         if (targetRenderer != null)
         {
+            // 파지 성립 시에는 구체를 끄지 않고 알파만 낮춘다 — 위치는 계속 보여야 하고,
+            // 손을 댄 뒤 불투명한 구체가 손을 가리는 것을 막는다(사용자 요구).
+            Color grippedShown = new Color(grippedColor.r, grippedColor.g, grippedColor.b,
+                                           grippedColor.a * grippedAlpha);
+
             targetRenderer.material.color =
                 hasPressureColor ? pressureColor            // 압력색(그라데이션) - 컨트롤러가 눌림 손가락에만 주입
-                : (gripped ? grippedColor : idleColor);     // 미주입 = 안 닿음/비접촉 → 흰색(idle)
+                : (gripped ? grippedShown : idleColor);     // 미주입 = 안 닿음/비접촉 → idle(연한 붉은색)
 
             // 색만으로는 VR에서 판별이 어려워 크기로도 알린다(원래 크기 기준 배율).
             ApplyGripScale(gripped);

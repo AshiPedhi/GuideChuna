@@ -26,6 +26,10 @@ public class ScenarioManager : MonoBehaviour
     [Tooltip("CranialAdjustmentController (두개골 교정 술기, 없으면 자동 찾기)")]
     [SerializeField] private CranialAdjustmentController cranialController;
 
+    [Tooltip("힘의 방향 화살표 관리자 (없으면 자동 찾기, 씬에 없으면 기능 자체가 꺼진다)")]
+    [SerializeField] private ForceArrowDirector forceArrowDirector;
+    private bool forceArrowLookupDone;
+
     [Tooltip("두경부(cranial) 시나리오일 때 비활성화할 기존 머리 판정 콜라이더들 " +
              "(비두경부 손접촉 감지용, 머리 본체에 부착됨). 두경부 시술 중 cross-talk 방지. " +
              "비두경부 시나리오에선 자동 재활성. PatientHeadTouchDetector/PokeDetector의 콜라이더를 연결.")]
@@ -778,6 +782,23 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★ 접촉 감지 부위 설정 (시나리오 CSV의 contactTarget 컬럼)
         ApplyContactTarget(subStep);
 
+        // ★ 애니를 지정하지 않은 단계(파지 등)는 직전 자세를 그대로 붙잡는다.
+        //   이 처리가 없으면 남아 있는 직전 클립 이름을 다른 코드가 Play(...,0f)로 다시 틀어
+        //   "단계 들어가자마자 직전 동작만 시작 자세로 풀리는" 현상이 생긴다
+        //   (무릎은 올라간 채 팔만 내려가고, 기대기만 풀려 깍지 낀 자세로 돌아감).
+        if (chunaPathEvaluator != null)
+        {
+            if (subStep.HasPatientAnimation())
+            {
+                chunaPathEvaluator.ReleasePoseHold();
+            }
+            else
+            {
+                chunaPathEvaluator.ClearPatientAnimationBinding();
+                chunaPathEvaluator.HoldCurrentPose();
+            }
+        }
+
         // ★ 각도 표시 UI 제어 (회전/측굴 단계에서만 표시)
         UpdateAngleDisplayVisibility(subStep);
 
@@ -814,15 +835,34 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             cranialController.EndDiagnosisStage();
         }
 
-        // ★ 두개골 조건이 아닌 substep(진단3·재평가·시작/종료 안내 등)에서는 파지 구체를 전부 숨긴다.
+        // ★ 두개골 조건이 아닌 substep(진단3·재평가·시작/종료 안내 등)에서는 파지 구체를 정리한다.
         //   파지 단계에서 켠 교정 파지점을 끄는 곳이 없어 재평가·종료까지 화면에 남아 있었다.
+        //   ★단 '교정' 국면 안에서는 교정 파지점을 남긴다 — 파지를 유지한 채 교정하는 단계인데
+        //     조건 타입이 HandPose라는 이유로 구체를 지우면 어디를 잡고 있어야 하는지 안 보인다.
         if (cranialController != null && !isCranial)
         {
-            cranialController.HideAllGripPoints();
+            bool inCorrectionPhase = currentPhase != null &&
+                                     !string.IsNullOrEmpty(currentPhase.phaseName) &&
+                                     currentPhase.phaseName.Contains("교정");
+            cranialController.HideGripPoints(keepCorrectionGrips: inCorrectionPhase);
         }
+
+        // ★ 힘의 방향 화살표: 이 단계에 배정된 그룹만 켠다.
+        //   그룹이 없는 단계(진단·재평가·안내)는 자동으로 아무것도 안 보인다 —
+        //   촉진으로 좌우를 비교하는 단계에 방향 힌트를 주지 않기 위한 규칙과 일치한다.
+        ResolveForceArrowDirector();
+        forceArrowDirector?.ShowFor(currentPhase?.phaseName, currentStep?.stepName, subStep.subStepNo);
 
         // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
         angleDisplay?.ForceRefreshHoldRange();
+    }
+
+    /// <summary>화살표 관리자를 한 번만 찾는다(씬에 없으면 계속 null — 기능이 꺼진 상태로 동작).</summary>
+    private void ResolveForceArrowDirector()
+    {
+        if (forceArrowDirector != null || forceArrowLookupDone) return;
+        forceArrowLookupDone = true;
+        forceArrowDirector = FindFirstObjectByType<ForceArrowDirector>(FindObjectsInactive.Include);
     }
 
     /// <summary>
@@ -934,6 +974,64 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     /// <summary>
     /// cranial 조건 타입(cranialGrip/cranialPressure/cranialDepthBreath) 여부
     /// </summary>
+    /// <summary>conditionParams를 ';'로 쪼갠다(빈 토큰 제거).</summary>
+    private static string[] SplitParams(string prms)
+    {
+        if (string.IsNullOrEmpty(prms)) return System.Array.Empty<string>();
+        return prms.Split(new[] { ';' }, System.StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    /// <summary>
+    /// 플래그가 아닌 첫 토큰을 돌려준다(진단 단계 ID처럼 '값'으로 쓰이는 토큰).
+    /// xray·gripGate처럼 동작을 켜는 플래그는 건너뛴다.
+    /// </summary>
+    private static readonly System.Collections.Generic.HashSet<string> CranialFlagTokens =
+        new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+        { "xray", "gripgate", "touchonce", "bothhands", "palmsupport", "startholdonly", "guideonly", "skipmidhold" };
+
+    private static string FirstNonFlagToken(string prms)
+    {
+        foreach (string tok in SplitParams(prms))
+        {
+            string t = tok.Trim();
+            // 'key=value' 형태(호흡 규격 등)는 값 토큰이 아니다 — 단계 ID로 오인하면 폴백이 걸린다.
+            if (t.Length > 0 && t.IndexOf('=') < 0 && !CranialFlagTokens.Contains(t)) return t;
+        }
+        return "";
+    }
+
+    /// <summary>conditionParams에서 'key=value' 토큰의 값을 읽는다(없으면 defaultValue).
+    /// 호흡 규격을 substep 단위로 주기 위한 것 — 예: "gripGate;breaths=3;inhale=3;exhale=5;firstScale=1.6".
+    /// ★리그 오버라이드 하나로는 한 술기 안에서 국면마다 다른 호흡을 표현할 수 없어 도입했다(PJ 교정).</summary>
+    private static float NamedParam(string prms, string key, float defaultValue = 0f)
+    {
+        foreach (string tok in SplitParams(prms))
+        {
+            int eq = tok.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!tok.Substring(0, eq).Trim().Equals(key, System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (float.TryParse(tok.Substring(eq + 1).Trim(), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out float v))
+                return v;
+        }
+        return defaultValue;
+    }
+
+    /// <summary>conditionParams의 "start=inhale|exhale"을 읽는다(없으면 Keep = 리그 값 유지).</summary>
+    private static BreathingSyncHUD.StartPhase NamedStartPhase(string prms)
+    {
+        foreach (string tok in SplitParams(prms))
+        {
+            int eq = tok.IndexOf('=');
+            if (eq <= 0) continue;
+            if (!tok.Substring(0, eq).Trim().Equals("start", System.StringComparison.OrdinalIgnoreCase)) continue;
+            string v = tok.Substring(eq + 1).Trim();
+            if (v.Equals("inhale", System.StringComparison.OrdinalIgnoreCase)) return BreathingSyncHUD.StartPhase.Inhale;
+            if (v.Equals("exhale", System.StringComparison.OrdinalIgnoreCase)) return BreathingSyncHUD.StartPhase.Exhale;
+        }
+        return BreathingSyncHUD.StartPhase.Keep;
+    }
+
     private static bool IsCranialConditionType(string conditionType)
     {
         if (string.IsNullOrEmpty(conditionType)) return false;
@@ -984,10 +1082,23 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         //   → StartAutoPlayFromSubStep(평가·진행 로직 포함)이 아니라 '클립 재생'만 한다.
         if (chunaPathEvaluator != null && subStep.HasPatientAnimation())
         {
-            chunaPathEvaluator.SetPatientAnimation(subStep.patientAnimationClip.Trim(),
-                                                   AnimationPlayMode.AutoPlay);
+            // ★conditionParams에 playOnGrip이 있으면 단계 진입이 아니라 '파지가 성립하는 순간' 재생한다.
+            //   (제1늑골: 왼손 웹이 늑골 파지점을 잡으면 그때 머리가 신전·우측 병진)
+            bool playOnGrip = !string.IsNullOrEmpty(subStep.conditionParams) &&
+                              subStep.conditionParams.ToLower().Contains("playongrip");
+            if (playOnGrip)
+            {
+                chunaPathEvaluator.ArmPatientAnimationForDeferredStart(subStep.patientAnimationClip.Trim());
+                cranialController.ArmAnimationOnGrip(chunaPathEvaluator, leftOnly: true);
+            }
+            else
+            {
+                cranialController.DisarmAnimationOnGrip();
+                chunaPathEvaluator.SetPatientAnimation(subStep.patientAnimationClip.Trim(),
+                                                       AnimationPlayMode.AutoPlay);
+            }
             if (showDebugLog)
-                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 환자 애니 재생: {subStep.patientAnimationClip}</color>");
+                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 환자 애니 {(playOnGrip ? "파지 대기" : "재생")}: {subStep.patientAnimationClip}</color>");
         }
 
         // ★ 가이드 손(녹화) 표시: cranial 스텝에 handTrackingFileName이 있으면 기존 가이드핸드 재생을 그대로 띄운다.
@@ -1025,7 +1136,11 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         if (conditionType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase))
         {
             // conditionParams = 진단 단계 ID(예: 진단1/진단2). 비면 컨트롤러의 첫 단계를 쓴다.
-            condition = new DiagnosisHoldCondition(cranialController, subStep.conditionParams);
+            // ★파라미터는 ';'로 여러 토큰이 올 수 있다(xray 등) → 플래그가 아닌 첫 토큰만 단계 ID로 쓴다.
+            // hold= 로 자세 유지 시간을 CSV에서 조절한다(0/미지정이면 스테이지 값).
+            condition = new DiagnosisHoldCondition(cranialController,
+                                                   FirstNonFlagToken(subStep.conditionParams),
+                                                   NamedParam(subStep.conditionParams, "hold"));
             label = "Touch(⓪ 진단 자세 유지)";
         }
         else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
@@ -1034,21 +1149,38 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             // '이마 견착 자세'가 아니라 '양손 파지 성립'이 된다(PM처럼 손이 보이는 술기용).
             bool gripGate = !string.IsNullOrEmpty(subStep.conditionParams) &&
                             subStep.conditionParams.ToLower().Contains("gripgate");
-            condition = new BreathingCondition(cranialController, gripGate);
-            label = gripGate ? "Breath(호흡 — 파지 유지 게이트)" : "Breath(②b 호흡 — 견착 자세 게이트)";
+
+            // substep별 호흡 규격(비면 리그 오버라이드로 폴백). PJ 교정처럼 한 술기 안에서
+            // 국면마다 호흡이 다른 경우에만 쓴다 — OM·PM은 CSV에 안 적어 기존 동작 그대로다.
+            int breaths = Mathf.RoundToInt(NamedParam(subStep.conditionParams, "breaths"));
+            float inhaleSec = NamedParam(subStep.conditionParams, "inhale");
+            float exhaleSec = NamedParam(subStep.conditionParams, "exhale");
+            float firstScale = NamedParam(subStep.conditionParams, "firstScale");
+            BreathingSyncHUD.StartPhase startPhase = NamedStartPhase(subStep.conditionParams);
+
+            condition = new BreathingCondition(cranialController, gripGate,
+                                               breaths, inhaleSec, exhaleSec, startPhase, firstScale);
+            string spec = breaths > 0 ? $" {breaths}회" : "";
+            label = gripGate ? $"Breath(호흡{spec} — 파지 유지 게이트)" : $"Breath(②b 호흡{spec} — 견착 자세 게이트)";
         }
         else if (conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase))
         {
             // 판정 = 파지(접촉) 유지. conditionParams에 숫자를 넣으면 그 초만큼 유지해야 통과한다(비면 기본 1초).
             // ★PM 교정·호흡이 이 조건을 쓴다 — 호흡 완료로 자동 진행하면 이마 견착 프록시가 성립해야 해서
             //   PM(견착 없는 술기)에선 영영 안 넘어갔다. 그래서 '접촉 유지'로 통과시킨다.
+            // ★파라미터에 ';'로 다른 토큰(xray 등)이 섞일 수 있다 → 숫자로 읽히는 토큰만 골라 쓴다.
+            //   통짜로 파싱하면 "5;xray"가 실패해 기본 1초로 떨어진다(등척수축 5초가 1초가 됨).
             float holdSec = 1.0f;
-            if (!string.IsNullOrEmpty(subStep.conditionParams) &&
-                float.TryParse(subStep.conditionParams.Trim(),
-                               System.Globalization.NumberStyles.Float,
-                               System.Globalization.CultureInfo.InvariantCulture, out float parsed) &&
-                parsed > 0f)
-                holdSec = parsed;
+            foreach (string tok in SplitParams(subStep.conditionParams))
+            {
+                if (float.TryParse(tok, System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture, out float parsed) &&
+                    parsed > 0f)
+                {
+                    holdSec = parsed;
+                    break;
+                }
+            }
 
             condition = new PressureCondition(cranialController, holdSec);
             label = $"Pressure(파지 유지 {holdSec:0.#}초)";

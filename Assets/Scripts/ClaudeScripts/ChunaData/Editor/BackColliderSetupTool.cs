@@ -28,6 +28,13 @@ public class BackColliderSetupTool : EditorWindow
 
     private const string OppositeShoulderName = "보조수 충돌체 반대쪽";
 
+    private const string KneeLeftName = "환자 무릎 충돌체 L";
+    private const string KneeRightName = "환자 무릎 충돌체 R";
+
+    private Transform kneeLeftBone;      // CC_Base_L_Calf (본 원점이 무릎 관절)
+    private Transform kneeRightBone;     // CC_Base_R_Calf
+    private float kneeRadius = 0.10f;
+
     private Collider sourceShoulder;      // 씬에 원래 있던 어깨 충돌체(복제 기준)
     private Transform oppositeBone;       // 반대쪽 어깨 본
     private bool mirrorShoulderX = true;  // 복제 시 localPosition.x 반전 여부
@@ -67,6 +74,26 @@ public class BackColliderSetupTool : EditorWindow
         }
         if (oppositeBone == null && sourceShoulder != null)
             oppositeBone = FindOppositeBone(sourceShoulder.transform.parent);
+
+        // ★무릎 본은 반드시 '등 충돌체와 같은 캐릭터'에서 찾는다.
+        //   씬에 환자 모델이 여러 벌(활성 c9 / 비활성 복제본 / 배경 해부모델) 있어서
+        //   이름만으로 전역 검색하면 엉뚱한 모델의 본을 잡는다.
+        if (kneeLeftBone == null) kneeLeftBone = FindBoneInSameRig("CC_Base_L_Calf");
+        if (kneeRightBone == null) kneeRightBone = FindBoneInSameRig("CC_Base_R_Calf");
+
+        var kl = FindUnder(kneeLeftBone, KneeLeftName);
+        if (kl != null) kneeRadius = kl.radius;
+    }
+
+    /// <summary>척추 본(boneOverride)이 속한 리그 안에서 이름으로 본을 찾는다.</summary>
+    private Transform FindBoneInSameRig(string boneName)
+    {
+        if (boneOverride == null) return null;
+        Transform root = boneOverride;
+        while (root.parent != null) root = root.parent;
+        foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            if (t.name == boneName) return t;
+        return null;
     }
 
     /// <summary>기준 콜라이더가 붙은 본의 좌우 반대쪽 본을 이름으로 찾는다(_R_ ↔ _L_).</summary>
@@ -176,6 +203,99 @@ public class BackColliderSetupTool : EditorWindow
                 "기존 어깨 충돌체(보조수 충돌체)와 반대쪽 본(CC_Base_L_Upperarm 등)을 넣어주세요.",
                 MessageType.Warning);
         }
+
+        // ─────────────────────────────────────────────────────────────
+        EditorGUILayout.Space(14f);
+        EditorGUILayout.LabelField("무릎 충돌체 (contactTarget=Knee)", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "앙와위 준비 동작에서 '무릎을 터치하면 환자가 무릎을 세운다'에 쓰입니다.\n" +
+            "종아리 본(CC_Base_*_Calf)의 원점이 무릎 관절이라 그 자리에 좌·우 1개씩 만듭니다.",
+            MessageType.Info);
+
+        kneeLeftBone = (Transform)EditorGUILayout.ObjectField("왼 무릎 본", kneeLeftBone, typeof(Transform), true);
+        kneeRightBone = (Transform)EditorGUILayout.ObjectField("오른 무릎 본", kneeRightBone, typeof(Transform), true);
+        kneeRadius = EditorGUILayout.Slider("반지름 (m)", kneeRadius, 0.03f, 0.25f);
+
+        bool kneeExists = FindUnder(kneeLeftBone, KneeLeftName) != null ||
+                          FindUnder(kneeRightBone, KneeRightName) != null;
+        if (kneeExists)
+            EditorGUILayout.HelpBox("이미 존재합니다. [적용]을 누르면 반지름만 갱신됩니다.", MessageType.None);
+
+        using (new EditorGUI.DisabledScope(kneeLeftBone == null || kneeRightBone == null))
+        {
+            if (GUILayout.Button(kneeExists ? "무릎 적용 (갱신)" : "무릎 생성 후 연결", GUILayout.Height(28f)))
+                ApplyKnee();
+        }
+
+        if (kneeLeftBone == null || kneeRightBone == null)
+        {
+            EditorGUILayout.HelpBox(
+                "무릎 본을 찾지 못했습니다. 하이어라키에서 환자(c9)의 CC_Base_L_Calf / CC_Base_R_Calf를 직접 넣어주세요.\n" +
+                "※씬에 환자 모델이 여러 벌이라 반드시 '활성 환자'의 본이어야 합니다.",
+                MessageType.Warning);
+        }
+    }
+
+    private void ApplyKnee()
+    {
+        if (kneeLeftBone == null || kneeRightBone == null) return;
+
+        var left = CreateOrUpdateUnder(kneeLeftBone, KneeLeftName, kneeRadius);
+        var right = CreateOrUpdateUnder(kneeRightBone, KneeRightName, kneeRadius);
+
+        if (evaluator != null)
+        {
+            var so = new SerializedObject(evaluator);
+            var prop = so.FindProperty("patientKneeColliders");
+            if (prop != null)
+            {
+                prop.arraySize = 2;
+                prop.GetArrayElementAtIndex(0).objectReferenceValue = left;
+                prop.GetArrayElementAtIndex(1).objectReferenceValue = right;
+                so.ApplyModifiedProperties();
+                Debug.Log($"<color=green>[BackColliderSetup] 무릎 충돌체 좌·우 생성·연결 완료 (r={kneeRadius:F3})</color>");
+            }
+            else
+            {
+                Debug.LogWarning("[BackColliderSetup] patientKneeColliders 필드를 찾지 못했습니다. 컴파일이 끝났는지 확인하세요.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[BackColliderSetup] ChunaPathEvaluator를 찾지 못해 연결하지 못했습니다. 인스펙터에서 직접 넣어주세요.");
+        }
+
+        Selection.objects = new Object[] { left.gameObject, right.gameObject };
+    }
+
+    /// <summary>지정한 본 밑에 이름으로 SphereCollider를 만들거나 갱신한다(본 원점에 배치).</summary>
+    private static SphereCollider CreateOrUpdateUnder(Transform bone, string name, float r)
+    {
+        SphereCollider col = FindUnder(bone, name);
+        if (col == null)
+        {
+            var go = new GameObject(name);
+            Undo.RegisterCreatedObjectUndo(go, "무릎 충돌체 생성");
+            Undo.SetTransformParent(go.transform, bone, "무릎 충돌체 부모 설정");
+            go.transform.localRotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
+            col = Undo.AddComponent<SphereCollider>(go);
+        }
+
+        Undo.RecordObject(col.transform, "무릎 충돌체 배치");
+        Undo.RecordObject(col, "무릎 충돌체 설정");
+        col.transform.localPosition = Vector3.zero;   // 종아리 본 원점 = 무릎 관절
+        col.radius = r;
+        col.isTrigger = false;
+        EditorUtility.SetDirty(col.gameObject);
+        return col;
+    }
+
+    private static SphereCollider FindUnder(Transform bone, string name)
+    {
+        if (bone == null) return null;
+        var t = bone.Find(name);
+        return t != null ? t.GetComponent<SphereCollider>() : null;
     }
 
     private SphereCollider FindOpposite()

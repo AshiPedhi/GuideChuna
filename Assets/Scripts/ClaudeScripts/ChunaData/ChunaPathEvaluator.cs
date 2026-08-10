@@ -52,6 +52,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     [Tooltip("환자 오른팔에 부착된 충돌체들 - 상완+전완 등 복수 가능")]
     [SerializeField] private Collider[] patientRightArmColliders;
 
+    [Tooltip("환자 무릎에 부착된 충돌체들 - 좌·우 2개. 앙와위에서 무릎을 세우게 하는 준비 동작용\n" +
+             "메뉴 GuideChuna/환자 접촉 충돌체 설정 에서 생성·배선할 수 있다")]
+    [SerializeField] private Collider[] patientKneeColliders;
+
     [Tooltip("현재 활성화된 접촉 감지 부위 (시나리오에서 설정)")]
     [SerializeField] private ContactTarget[] activeContactTargets = new ContactTarget[] { ContactTarget.HeadAndShoulder };
 
@@ -554,6 +558,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     internal void StartGuideHandPlaybackInternal()
     {
         StartGuideHandPlayback();
+    }
+
+    /// <summary>가이드손을 <b>현재 구간 그대로 1회만</b> 재생한다(루프 금지).
+    /// ★사용자 지시(08-03, 08-10 재확인): 가이드손은 터치 여부와 무관하게 무조건 1회 재생한다.
+    /// 재생이 끝난 지점이 곧 파지 위치라서, 반복하면 어디가 목표인지가 오히려 흐려진다.
+    /// 씬의 loopGuideHands(=1)를 무시하려고 별도 진입점을 둔다 — 인스펙터 값은 건드리지 않는다.</summary>
+    internal void StartGuideHandPlaybackOnce()
+    {
+        StartGuideHandPlayback(currentStartRatio, currentEndRatio, false);
     }
 
     /// <summary>'시각 안내 전용' 가이드손 재생 — 재생 구간과 루프 여부를 이번 호출에만 적용한다.
@@ -1188,6 +1201,7 @@ public class ChunaPathEvaluator : MonoBehaviour
             patientShoulderCollidersExtra = patientShoulderCollidersExtra,
             patientLeftArmColliders = patientLeftArmColliders,
             patientRightArmColliders = patientRightArmColliders,
+            patientKneeColliders = patientKneeColliders,
             activeContactTargets = activeContactTargets,
             primaryTarget = primaryTarget,
             handCollisionShape = handCollisionShape,
@@ -1289,6 +1303,13 @@ public class ChunaPathEvaluator : MonoBehaviour
                 case ContactTarget.RightArm:
                     AddContactColliders(results, patientRightArmColliders);
                     break;
+                case ContactTarget.Knee:
+                    AddContactColliders(results, patientKneeColliders);
+                    break;
+                case ContactTarget.Arms:
+                    AddContactColliders(results, patientLeftArmColliders);
+                    AddContactColliders(results, patientRightArmColliders);
+                    break;
                 case ContactTarget.HeadAndShoulder:
                 default:
                     AddContactCollider(results, patientHeadCollider);
@@ -1369,6 +1390,102 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// 환자 애니메이션 설정 (시나리오 데이터에서)
     /// </summary>
+    // 접촉 게이트가 열릴 때까지 클립 재생을 미룬다(0프레임 강제로 앞 자세가 풀리는 것 방지).
+    private bool deferAnimationUntilGateOpen;
+    private bool pendingAnimationStart;
+
+    /// <summary>게이트가 처음 열렸을 때 보류해 둔 클립을 실제로 재생한다(AutoPlayHandler가 호출).</summary>
+    internal void BeginDeferredAnimation()
+    {
+        if (!pendingAnimationStart) return;
+        pendingAnimationStart = false;
+
+        if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
+        patientAnimator.Play(currentAnimationStateName, 0, 0f);
+        patientAnimator.speed = 1f;
+        if (secondaryPatientAnimator != null)
+        {
+            secondaryPatientAnimator.Play(currentAnimationStateName, 0, 0f);
+            secondaryPatientAnimator.speed = 1f;
+        }
+        ChunaLogger.Log($"<color=green>[Animation] 접촉 감지 — '{currentAnimationStateName}' 재생 시작</color>");
+    }
+
+    internal bool HasPendingAnimation => pendingAnimationStart;
+
+    /// <summary>
+    /// 클립을 '재생 대기' 상태로만 걸어 둔다(자세는 그대로 유지).
+    /// 실제 재생은 <see cref="BeginDeferredAnimation"/>을 부르는 쪽(파지 성립 등)이 결정한다.
+    /// </summary>
+    public void ArmPatientAnimationForDeferredStart(string stateName)
+    {
+        deferAnimationUntilGateOpen = true;
+        SetPatientAnimation(stateName, AnimationPlayMode.AutoPlay);   // defer 분기를 타 pending으로만 남는다
+    }
+
+    /// <summary>
+    /// 이 단계는 환자 애니를 지정하지 않았다 — 직전 클립 이름을 끊어 둔다.
+    /// <para>★이걸 안 하면 남아 있는 이름을 다른 코드가 다시 <c>Play(이름, 0, 0f)</c> 해서
+    /// <b>직전 동작만 시작 자세로 되감긴다</b>(무릎은 올라간 채 팔만 풀리는 증상).
+    /// 되감을 수 있는 곳은 셋 — StartEvaluation의 시작프레임 세팅, UpdateAnimationLerp의 동기화,
+    /// SetPatientAnimation의 재생. 셋 다 이름이 비면 아무것도 하지 않는다.</para>
+    /// <para>애니메이터 자체는 건드리지 않으므로 현재 자세는 그대로 멈춘 채 유지된다.</para>
+    /// </summary>
+    // ── 자세 고정(애니 지정이 없는 단계) ──────────────────────────────
+    private bool holdPoseActive;
+    private int holdPoseHash;
+    private float holdPoseTime;
+
+    /// <summary>
+    /// 지금 자세를 그대로 붙잡는다. 애니를 지정하지 않은 단계(파지 등)에서 쓴다.
+    /// 어떤 코드가 <c>Play(..., 0f)</c>로 되감아도 LateUpdate에서 되돌려 놓으므로
+    /// "단계 들어가자마자 직전 동작이 풀리는" 현상이 원천적으로 막힌다.
+    /// </summary>
+    public void HoldCurrentPose()
+    {
+        if (patientAnimator == null) return;
+        var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
+        holdPoseHash = st.shortNameHash;
+        holdPoseTime = Mathf.Clamp01(st.normalizedTime);
+        holdPoseActive = true;
+        patientAnimator.speed = 0f;
+        if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 0f;
+
+        ChunaLogger.Log($"<color=green>[Animation] 자세 고정 (hash={holdPoseHash}, {holdPoseTime:P0})</color>");
+    }
+
+    /// <summary>자세 고정 해제. 애니를 지정한 단계로 넘어갈 때 호출.</summary>
+    public void ReleasePoseHold() => holdPoseActive = false;
+
+    private void LateUpdate()
+    {
+        if (!holdPoseActive || patientAnimator == null) return;
+
+        var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
+        bool drifted = st.shortNameHash != holdPoseHash ||
+                       Mathf.Abs(Mathf.Clamp01(st.normalizedTime) - holdPoseTime) > 0.01f;
+        if (drifted)
+        {
+            patientAnimator.Play(holdPoseHash, 0, holdPoseTime);
+            if (secondaryPatientAnimator != null)
+                secondaryPatientAnimator.Play(holdPoseHash, 0, holdPoseTime);
+        }
+        patientAnimator.speed = 0f;
+        if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 0f;
+    }
+
+    public void ClearPatientAnimationBinding()
+    {
+        if (string.IsNullOrEmpty(currentAnimationStateName) && !pendingAnimationStart) return;
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=yellow>[Animation] 애니 지정 없는 단계 — 직전 클립('{currentAnimationStateName}') 연결 해제(자세 유지)</color>");
+
+        currentAnimationStateName = null;
+        pendingAnimationStart = false;
+        deferAnimationUntilGateOpen = false;
+    }
+
     public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser)
     {
         // ★ 애니메이션 이름 공백 제거 (CSV 파싱 시 공백 문제 방지)
@@ -1438,6 +1555,20 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         if (playMode == AnimationPlayMode.AutoPlay)
         {
+            // ★접촉 게이트가 있는 단계: 아직 재생하지 않는다(앞 동작의 마지막 자세를 그대로 유지).
+            //   AutoPlayHandler가 게이트가 처음 열리는 순간 BeginDeferredAnimation()을 부른다.
+            //   플래그는 1회성 — 클립 없는 단계를 지나며 남아 다음 재생을 막는 일이 없게 여기서 소비한다.
+            bool defer = deferAnimationUntilGateOpen;
+            deferAnimationUntilGateOpen = false;
+            if (defer)
+            {
+                pendingAnimationStart = true;
+                patientAnimator.speed = 0f;
+                if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 0f;
+                ChunaLogger.Log($"<color=green>[Animation] 접촉 대기 — '{trimmedName}' 재생 보류(앞 자세 유지)</color>");
+                return;
+            }
+
             // 자동 재생 모드
             patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 1f;
@@ -1607,9 +1738,6 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         if (subStep == null) return;
 
-        // 애니메이션 설정
-        SetPatientAnimationFromSubStep(subStep);
-
         // duration 파싱 시도
         float duration = subStep.duration > 0 ? subStep.duration : 0f;
 
@@ -1617,11 +1745,21 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool gated = !string.IsNullOrEmpty(subStep.conditionType) &&
                      subStep.conditionType.Trim().Equals("PassiveStretch", System.StringComparison.OrdinalIgnoreCase);
 
+        // ★게이트가 있는 단계는 '접촉하기 전'에 새 클립의 0프레임을 씌우면 안 된다.
+        //   그러면 손을 대기도 전에 앞 동작의 마지막 자세가 풀려 환자가 초기 자세로 돌아간다.
+        //   → 상태 이름만 잡아 두고 실제 재생은 게이트가 처음 열릴 때 시작한다.
+        deferAnimationUntilGateOpen = gated;
+
+        // 애니메이션 설정
+        SetPatientAnimationFromSubStep(subStep);
+
         // conditionParams에 "touchOnce"가 있으면 최초 접촉으로 래치 (손을 계속 대고 있지 않아도 끝까지 재생)
         string prms = subStep.conditionParams != null ? subStep.conditionParams.ToLower() : "";
         bool latchGate = prms.Contains("touchonce");
         // "bothHands"면 양손이 각각 닿아야 게이트가 열린다 (양손 파지)
         bool requireBothHands = prms.Contains("bothhands");
+
+        deferAnimationUntilGateOpen = false;   // 클립이 없어 소비되지 않은 경우 대비
 
         // AutoPlay 시작
         StartAutoPlay(duration, gated, latchGate, requireBothHands);
@@ -1959,6 +2097,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public void StartEvaluation()
     {
+        // ★ 녹화가 로드되지 않은 채 평가를 시작하면 유사도 샘플이 하나도 쌓이지 않아 채점이 0이 된다.
+        //   원인(파일 없음/이름 오타)이 콘솔에서 바로 보이도록 여기서 한 번 더 알린다.
+        if (loadedFrames == null || loadedFrames.Count == 0)
+            ChunaLogger.LogWarning(
+                $"[ChunaPathEvaluator] 손 녹화 프레임 0개로 평가 시작 ('{CurrentProcedureName}') — " +
+                "판정·채점이 나오지 않습니다. Resources/HandPoseData에 파일이 있는지 확인하세요.");
+
         // ★ 이전 가이드 핸드 재생 중지 + 프레임 인덱스 리셋 (잔류값 방지)
         StopGuideHandPlayback();
         guidePlaybackController.ResetFrameIndex();

@@ -470,12 +470,24 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (patient != null)
         {
-            // ★ 부모(위치초기화 오브젝트)가 있으면 부모 기준으로 동기화
-            Transform syncTarget = patient.transform;
-            if (patient.transform.parent != null)
+            // ★동기화 기준은 '구체가 실제로 끌고 갈 오브젝트'여야 한다.
+            //   ReplacePos가 매 프레임 all을 구체 위치로 옮기므로, 구체를 다른 곳에 놓으면
+            //   그 순간 all이 통째로 순간이동한다(환자·침대가 엉뚱한 곳으로 튐).
+            //   예전에는 '환자의 부모'로 대신 짐작했는데, 계층이 바뀌면(환자 이동 홀더 삽입 등)
+            //   짐작이 빗나가 정확히 그 사고가 난다.
+            Transform syncTarget = null;
+            ReplacePos mover = patientPositionController.GetComponent<ReplacePos>();
+            if (mover != null && mover.all != null)
             {
-                syncTarget = patient.transform.parent;
-                ChunaLogger.Log($"[PracticeSettings] 부모 오브젝트 기준 동기화: {syncTarget.name}");
+                syncTarget = mover.all.transform;
+                ChunaLogger.Log($"[PracticeSettings] 이동 대상 기준 동기화: {syncTarget.name}");
+            }
+
+            if (syncTarget == null)
+            {
+                // 폴백: 예전 동작(환자의 부모 → 환자 자신)
+                syncTarget = patient.transform.parent != null ? patient.transform.parent : patient.transform;
+                ChunaLogger.LogWarning($"[PracticeSettings] ReplacePos.all이 없어 부모 기준으로 폴백: {syncTarget.name}");
             }
 
             // ★ 위치만 동기화, 회전은 변경하지 않음 (환자 회전 문제 방지)

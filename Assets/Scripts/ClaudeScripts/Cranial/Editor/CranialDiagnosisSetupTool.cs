@@ -19,6 +19,7 @@ public class CranialDiagnosisSetupTool : EditorWindow
     {
         OM,      // 진단1 = 양손 측두부 감싸기(손바닥) 3초 / 진단2 = 양손 후두부 베개(손바닥) 8초
         PMPJ,    // 진단1 = 자세 2개(ⓐ왼손 손바닥+오른손 3점 / ⓑ왼손 3점+오른손 손바닥) 각 3초
+        Rib,     // 늑골(제1·제2) 진단1 = 양손 엄지로 좌우를 눌러 높이 비교, 자세 1개 3초
     }
 
     private CranialAdjustmentController rig;
@@ -111,6 +112,8 @@ public class CranialDiagnosisSetupTool : EditorWindow
                 MakeThreePointGrip();
             if (GUILayout.Button("PM 교정 파지 구성 (왼손 엄지·중지 / 오른손 엄지·검지)"))
                 SetupPmCorrectionGrips();
+            if (GUILayout.Button("늑골·흉추 교정 파지 구성 (좌우 손바닥 1점씩)"))
+                SetupRibCorrectionGrips();
             if (GUILayout.Button("레거시 diagnosisRightGrips 배열 비우기"))
                 ClearLegacyDiagnosisArray();
         }
@@ -162,6 +165,12 @@ public class CranialDiagnosisSetupTool : EditorWindow
                        "  → 파지점 8개 (자세당 4개)\n" +
                        "  ※ CSV 지시문이 '한 손은 후두를 손바닥으로 받치고, 다른 손은 관골궁과 유양돌기를 감싸 파지'라서\n" +
                        "     받치는 손만 손바닥이고 측두 쪽은 손가락 파지다.";
+            case Preset.Rib:
+                return "늑골(제1늑골_앙와위 / 제2늑골_상방변위)\n" +
+                       "  · 진단1 — 양손 엄지로 좌우 높이 비교, 자세 1개 3초 유지\n" +
+                       "  → 파지점 2개\n" +
+                       "  ※ 교정 파지는 아래 '늑골 교정 파지 구성' 버튼으로 따로 만든다\n" +
+                       "     (제1늑골 = 왼손 웹 + 오른손 머리 측면 / 제2늑골 = 두상골 접촉 + 반대손 팔 파지).";
         }
         return "";
     }
@@ -208,6 +217,18 @@ public class CranialDiagnosisSetupTool : EditorWindow
                 right: new[] { CranialFinger.Palm }));
             stages.Add(s2);
         }
+        else if (preset == Preset.Rib)
+        {
+            // 늑골 술기의 진단은 '좌우를 눌러 높이를 비교'하는 한 동작뿐이다(자세 2개로 나눌 게 없다).
+            //   제1늑골 — 승모근을 엄지로 제끼고 양쪽 제1늑골을 두방→족방으로 눌러 비교
+            //   제2늑골 — 쇄골 바깥 델토펙토랄 부위를 좌우로 밀어보며 비교
+            // 접촉점이 표면에 있어 손바닥이 아니라 엄지로 판정한다.
+            var s1 = new StageBuild("진단1", 3f, false);
+            s1.poses.Add(new PoseBuild("양손 엄지로 좌우 높이 비교",
+                left: new[] { CranialFinger.Thumb },
+                right: new[] { CranialFinger.Thumb }));
+            stages.Add(s1);
+        }
         else
         {
             // ★PM·PJ 진단 = 한 손은 후두를 '손바닥으로 받치고', 다른 손은 측두골의
@@ -251,6 +272,19 @@ public class CranialDiagnosisSetupTool : EditorWindow
         }
 
         WireStages(rig, stages);
+
+        // ★늑골에는 호흡 유도 문구가 없다. 두개골 리그를 복제해 만들면 cueOnAllDiagnosisStages(기본 ON)가
+        //   딸려와 진단 단계마다 "호흡에 맞춰 두개골의 움직임을 느껴보세요" 문구가 뜬다 → 여기서 끈다.
+        if (preset == Preset.Rib)
+        {
+            var so = new SerializedObject(rig);
+            var cue = so.FindProperty("cueOnAllDiagnosisStages");
+            if (cue != null)
+            {
+                cue.boolValue = false;
+                so.ApplyModifiedProperties();
+            }
+        }
 
         // ※굴곡·신전 애니메이션은 CSV의 patientAnimationClip으로 재생된다(컴포넌트 불필요).
         //   호흡 위상에 정확히 물려야 할 때만 아래 'CranialBreathAnimator' 버튼을 따로 쓴다.
@@ -606,6 +640,35 @@ public class CranialDiagnosisSetupTool : EditorWindow
                  "\n\n★ 새로 만든 파지점은 대략 위치라 씬 뷰에서 옮겨야 합니다:\n" +
                  "   · 왼손 중지 → 환자 정수리\n" +
                  "   · 오른손 검지 → 엄지 옆(귀를 따라간 파리에탈 노치 방향)\n" +
+                 "되돌리려면 Ctrl+Z.";
+    }
+
+    /// <summary>늑골·흉추 술기의 교정 파지를 구성한다 — 양손 모두 '한 점을 대고 유지'하는 형태라 손바닥 1점씩이다.
+    ///   제1늑골 — 왼손 웹(Web)을 좌측 제1늑골에 / 오른손은 머리 측면을 파지
+    ///   제2늑골 — 두상골(Pisiform)을 제2늑골 부위에 / 반대손은 환자 팔을 파지
+    ///   흉추(신전변위) — 좌우 흉추에 지지손을 대는 자세(파지 2.3 = cranialGrip)
+    /// 웹·두상골은 손바닥 슬롯으로 근사한다(손가락 끝이 아니라 손 아래쪽 면이라 Palm이 가장 가깝다).</summary>
+    private void SetupRibCorrectionGrips()
+    {
+        if (rig == null) return;
+
+        var template = FindTemplate(rig);
+        var log = new List<string>();
+
+        var left = EnsureCorrectionSide(rig, "leftGrips", true, template,
+            new[] { CranialFinger.Palm }, log);
+        EnsureCorrectionSide(rig, "rightGrips", false, template,
+            new[] { CranialFinger.Palm }, log);
+
+        EditorUtility.SetDirty(rig);
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(rig.gameObject.scene);
+        if (left != null) Selection.activeGameObject = left.gameObject;
+
+        status = "교정 파지 구성 완료 (좌우 손바닥 1점씩).\n" + string.Join("\n", log) +
+                 "\n\n★ 위치는 씬 뷰에서 옮겨야 합니다:\n" +
+                 "   · 제1늑골 — 왼손 = 좌측 제1늑골(승모근 아래), 오른손 = 머리 우측면\n" +
+                 "   · 제2늑골 — 접촉손 = 쇄골 바깥 델토펙토랄, 반대손 = 환자 팔(상완)\n" +
+                 "   · 흉추 신전변위 — 좌우 흉추(등 아래로 손을 넣는 지점)\n" +
                  "되돌리려면 Ctrl+Z.";
     }
 

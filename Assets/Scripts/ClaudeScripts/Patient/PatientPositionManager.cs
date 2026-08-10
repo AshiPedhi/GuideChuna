@@ -173,6 +173,89 @@ public class PatientPositionManager : MonoBehaviour
     }
 
     /// <summary>
+    // ── 애니메이션 루트 커브 보정 ────────────────────────────────────────
+    // 환자 애니 클립들은 **환자 루트(c9)의 localPosition·localRotation을 직접 애니메이션**한다
+    // (path="" 오브젝트 커브. 클립끼리 끝값→시작값이 이어지도록 저자가 맞춰 둔 값이다).
+    // 그래서 프리셋으로 환자를 옮겨도 재생되는 순간 클립이 기록한 자리로 튄다(침대는 그대로라 어긋나 보임).
+    // → 프리셋 적용 시점의 로컬값을 기준으로 잡아 두고, 이후에는 **기준 대비 변화량만** 살려서
+    //   프리셋 위치에 얹는다. 클립이 의도한 미세 이동(수 cm)은 그대로 남고, 절대 위치만 프리셋을 따른다.
+    [Header("애니메이션 루트 보정")]
+    [Tooltip("★권장 해법: 환자(c9·복제본)를 통째로 담은 빈 부모를 여기 지정한다.\n" +
+             "애니 클립은 c9의 로컬값만 건드리므로, 클립이 절대 손대지 않는 이 부모를 옮기면 충돌이 없다.\n" +
+             "프리셋은 그대로 c9 기준 좌표를 쓴다 — c9가 프리셋 자리에 오도록 부모 위치를 역산한다.\n" +
+             "비워 두면 예전처럼 patientRoot를 직접 옮기고 아래 보정으로 버틴다.")]
+    [SerializeField] private Transform patientMoveRoot;
+
+    [Tooltip("★기본 꺼짐. patientMoveRoot(홀더)를 못 쓰는 경우에만 쓰는 임시 방편이다.\n" +
+             "매 프레임 루트를 되돌리기 때문에, 위치 설정·구체 드래그처럼 다른 코드가 환자를 옮기면\n" +
+             "그 이동을 애니메이션 변화량으로 오인해 환자가 엉뚱한 곳으로 튄다.\n" +
+             "정상 해법은 홀더를 지정하는 것 — 메뉴 GuideChuna/환자 이동 홀더 만들기.")]
+    [SerializeField] private bool holdPresetAgainstAnimation = false;
+
+    /// <summary>홀더 방식을 쓰는가(= 애니메이션과 싸울 필요가 없는 상태).</summary>
+    private bool UsingMoveRoot => patientMoveRoot != null && patientMoveRoot != patientRoot;
+
+    private bool anchored;
+    private Vector3 anchorWorldPos;
+    private Quaternion anchorWorldRot;
+    private Vector3 anchorLocalPos;
+    private Quaternion anchorLocalRot;
+
+    /// <summary>현재 환자 위치를 '프리셋이 원한 위치'로 확정하고, 그때의 로컬값을 기준으로 삼는다.</summary>
+    public void AnchorToCurrentPose()
+    {
+        if (patientRoot == null) { anchored = false; return; }
+        anchorWorldPos = patientRoot.position;
+        anchorWorldRot = patientRoot.rotation;
+        anchorLocalPos = patientRoot.localPosition;
+        anchorLocalRot = patientRoot.localRotation;
+        anchored = true;
+    }
+
+    /// <summary>보정을 끈다(수동으로 환자를 옮기는 기능 등에서 호출).</summary>
+    public void ReleaseAnchor() => anchored = false;
+
+    private bool hasWritten;
+    private Vector3 lastWrittenLocalPos;
+    private Quaternion lastWrittenLocalRot;
+    private Vector3 curDeltaLocal;
+    private Quaternion curDeltaRot = Quaternion.identity;
+
+    private void LateUpdate()
+    {
+        // 홀더를 쓰면 애니메이션과 겹칠 일이 없으므로 보정 자체가 필요 없다.
+        if (UsingMoveRoot) return;
+
+        // Animator가 값을 쓴 뒤(LateUpdate)에 덮어써야 이긴다.
+        if (!holdPresetAgainstAnimation || !anchored || patientRoot == null) return;
+
+        Vector3 nowLocalPos = patientRoot.localPosition;
+        Quaternion nowLocalRot = patientRoot.localRotation;
+
+        // ★우리가 쓴 값을 다시 읽어 델타에 누적시키면 매 프레임 환자가 밀려난다.
+        //   Animator가 새로 쓴 프레임에만 델타를 갱신하고, 아니면 직전 델타를 유지한다.
+        bool animatorWrote = !hasWritten ||
+                             (nowLocalPos - lastWrittenLocalPos).sqrMagnitude > 1e-10f ||
+                             Quaternion.Angle(nowLocalRot, lastWrittenLocalRot) > 0.001f;
+
+        if (animatorWrote)
+        {
+            curDeltaLocal = nowLocalPos - anchorLocalPos;
+            curDeltaRot = Quaternion.Inverse(anchorLocalRot) * nowLocalRot;
+        }
+
+        Transform parent = patientRoot.parent;
+        Vector3 deltaWorld = parent != null ? parent.TransformVector(curDeltaLocal) : curDeltaLocal;
+
+        patientRoot.position = anchorWorldPos + deltaWorld;
+        patientRoot.rotation = anchorWorldRot * curDeltaRot;
+
+        lastWrittenLocalPos = patientRoot.localPosition;
+        lastWrittenLocalRot = patientRoot.localRotation;
+        hasWritten = true;
+    }
+
+    /// <summary>
     /// 프리셋 데이터로 환자/침대 위치 적용
     /// </summary>
     public bool ApplyPreset(PositionPreset preset)
@@ -182,8 +265,23 @@ public class PatientPositionManager : MonoBehaviour
         // 환자 위치 적용
         if (patientRoot != null)
         {
-            patientRoot.position = preset.patientPosition;
-            patientRoot.rotation = Quaternion.Euler(preset.patientRotation);
+            if (UsingMoveRoot)
+            {
+                // 홀더를 옮겨 c9(애니가 로컬값을 쓰는 오브젝트)가 프리셋 자리에 오게 한다.
+                // ① 먼저 회전을 맞추고(회전하면 c9 위치가 홀더 피벗을 중심으로 돌아간다)
+                Quaternion want = Quaternion.Euler(preset.patientRotation);
+                Quaternion deltaRot = want * Quaternion.Inverse(patientRoot.rotation);
+                patientMoveRoot.rotation = deltaRot * patientMoveRoot.rotation;
+                // ② 그다음 남은 위치 차이만큼 홀더를 평행이동
+                patientMoveRoot.position += preset.patientPosition - patientRoot.position;
+            }
+            else
+            {
+                patientRoot.position = preset.patientPosition;
+                patientRoot.rotation = Quaternion.Euler(preset.patientRotation);
+                // 보정을 켠 경우에만 기준점을 잡는다(꺼져 있으면 LateUpdate가 아무것도 하지 않는다).
+                if (holdPresetAgainstAnimation) AnchorToCurrentPose();
+            }
 
             if (showDebugLog)
                 ChunaLogger.Log($"[PatientPositionManager] 환자 위치 적용: pos={preset.patientPosition}, rot={preset.patientRotation}");

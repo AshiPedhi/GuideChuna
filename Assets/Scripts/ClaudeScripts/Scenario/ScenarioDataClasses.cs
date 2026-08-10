@@ -96,6 +96,10 @@ public class SubStepData
                 return ContactTarget.LeftArm;
             case "rightarm":
                 return ContactTarget.RightArm;
+            case "knee":
+                return ContactTarget.Knee;
+            case "arms":
+                return ContactTarget.Arms;
             case "back":
             case "waist":
             case "허리":
@@ -278,7 +282,9 @@ public enum ContactTarget
     RightArm,           // 오른팔
     // ※ 새 값은 반드시 끝에 추가할 것 — ScenarioConfig에 int로 직렬화돼 있어
     //    중간에 끼우면 기존 시나리오의 접촉 부위가 통째로 밀린다.
-    Back                // 등·허리(흉추) - 복잡추나 흉추/늑골 술기용. 머리·어깨와 별개 콜라이더.
+    Back,               // 등·허리(흉추) - 복잡추나 흉추/늑골 술기용. 머리·어깨와 별개 콜라이더.
+    Knee,               // 무릎(좌우) - 앙와위에서 무릎을 세우게 하는 준비 동작용
+    Arms                // 양팔(좌+우) - 어느 팔을 만져도 인정. 팔을 모으는 준비 동작용
 }
 
 /// <summary>

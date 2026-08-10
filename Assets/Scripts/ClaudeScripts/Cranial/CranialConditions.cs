@@ -31,10 +31,14 @@ public class DiagnosisHoldCondition : IScenarioCondition
     private bool usingStage;
     private bool started = false;
 
-    public DiagnosisHoldCondition(CranialAdjustmentController controller, string stageId)
+    /// <param name="holdSeconds">CSV의 hold= 값(초). 0이면 스테이지에 설정된 값을 쓴다.</param>
+    public DiagnosisHoldCondition(CranialAdjustmentController controller, string stageId, float holdSeconds = 0f)
     {
         this.controller = controller;
         this.stageId = string.IsNullOrWhiteSpace(stageId) ? "" : stageId.Trim();
+
+        // ★반드시 PrepareDiagnosisStage보다 먼저 — 준비 시점에 진행 표시가 이 값으로 계산된다.
+        controller?.SetDiagnosisHoldOverride(holdSeconds);
 
         // 표시는 즉시 — 나레이션이 흐르는 동안 어디를 잡아야 하는지 보여준다.
         // 유지 타이머는 나레이션이 끝난 뒤(첫 폴)에 시작한다(TryStart).
@@ -142,7 +146,9 @@ public class PressureCondition : IScenarioCondition
         {
             leftZoneAt = -1f;
             if (heldSince < 0f) heldSince = Time.time;
-            return Time.time - heldSince >= holdDuration;
+            float elapsed = Time.time - heldSince;
+            controller.ReportHoldProgress(holdDuration - elapsed, holdDuration);   // 진단과 같은 타이머 표시
+            return elapsed >= holdDuration;
         }
 
         // 유지 이탈(파지 풀림 / 존 이탈): graceTime 이내의 짧은 흔들림이면 타이머(heldSince) 보존, 초과하면 리셋.
@@ -150,8 +156,14 @@ public class PressureCondition : IScenarioCondition
         if (heldSince >= 0f)
         {
             if (leftZoneAt < 0f) leftZoneAt = Time.time;
-            if (Time.time - leftZoneAt <= graceTime) return false;   // 아직 유예 중 → 리셋 안 함
+            if (Time.time - leftZoneAt <= graceTime)
+            {
+                // 유예 중에도 타이머는 계속 보여 준다(손 떨림에 표시가 깜빡이지 않도록).
+                controller.ReportHoldProgress(holdDuration - (Time.time - heldSince), holdDuration);
+                return false;
+            }
         }
+        controller.ReportHoldProgress(holdDuration, holdDuration);   // 리셋 — 타이머도 원위치
         heldSince = -1f;
         leftZoneAt = -1f;
         return false;
@@ -173,15 +185,28 @@ public class BreathingCondition : IScenarioCondition
 {
     private readonly CranialAdjustmentController controller;
     private readonly bool gripGate;
+    private readonly int breaths;
+    private readonly float inhaleSec, exhaleSec, firstCycleScale;
+    private readonly BreathingSyncHUD.StartPhase startPhase;
     private bool started = false;
 
     /// <param name="gripGate">true면 호흡 1회 인정 조건이 '이마 견착 자세'가 아니라
     /// <b>양손 파지 성립</b>이 된다. 손이 시야에 남는 술기(PM)용 — 시간만 흘러도 카운트가
     /// 오르지 않고, 파지점에 제대로 대고 있어야 호흡이 세어진다.</param>
-    public BreathingCondition(CranialAdjustmentController controller, bool gripGate = false)
+    /// <param name="breaths">이 substep의 호흡 횟수. 0이면 리그 오버라이드를 따른다.</param>
+    /// <param name="firstCycleScale">첫 주기 길이 배수(PJ 교정의 '처음 한 번은 크게'). 0이면 배수 없음.</param>
+    public BreathingCondition(CranialAdjustmentController controller, bool gripGate = false,
+                              int breaths = 0, float inhaleSec = 0f, float exhaleSec = 0f,
+                              BreathingSyncHUD.StartPhase startPhase = BreathingSyncHUD.StartPhase.Keep,
+                              float firstCycleScale = 0f)
     {
         this.controller = controller;
         this.gripGate = gripGate;
+        this.breaths = breaths;
+        this.inhaleSec = inhaleSec;
+        this.exhaleSec = exhaleSec;
+        this.startPhase = startPhase;
+        this.firstCycleScale = firstCycleScale;
     }
 
     private void TryStart()
@@ -191,7 +216,7 @@ public class BreathingCondition : IScenarioCondition
         // 견착 국면: 압력은 어깨-이마 밀착 상태에서 적용되어 손 추적이 불가하므로
         // 손 판정 없이 바로 호흡 윈도우 시작(게이트 = 자세 프록시 + N회 호흡).
         // gripGate면 대신 양손 파지 유지가 게이트가 된다.
-        controller.StartBreathingWindow(gripGate);
+        controller.StartBreathingWindow(gripGate, breaths, inhaleSec, exhaleSec, startPhase, firstCycleScale);
         started = true;
     }
 
@@ -202,5 +227,6 @@ public class BreathingCondition : IScenarioCondition
         return controller.BreathingComplete;
     }
 
-    public string GetConditionDescription() => "호흡 3회 동기화 대기";
+    public string GetConditionDescription() =>
+        breaths > 0 ? $"호흡 {breaths}회 동기화 대기" : "호흡 동기화 대기";
 }

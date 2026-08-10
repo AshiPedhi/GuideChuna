@@ -21797,7 +21797,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EventManager
   passthroughLayer: {fileID: 0}
   BackObj: {fileID: 1938925661}
-  realOn: 1
+  realOn: 0
 --- !u!1 &2094762855
 GameObject:
   m_ObjectHideFlags: 0

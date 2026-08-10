@@ -20,6 +20,13 @@ public class CranialRhythmIndicator : MonoBehaviour
 {
     public enum Mode { Asymmetric, Symmetric }
 
+    [Header("=== 사용 여부 ===")]
+    // CRI(두개천골 리듬)는 별도 기능으로 분리하기로 해 시나리오에서 뺐다(2026-08-10, 회의 08-05 결정).
+    // 신규 필드라 씬에 직렬화된 값이 없어 이 기본값(false)이 기존 인스턴스 5개에 그대로 적용된다.
+    // CRI를 단독 기능으로 다시 붙일 때 켜면 아래 로직이 그대로 살아난다.
+    [Tooltip("CRI 리듬 시각화 사용. 분리 작업 중이라 기본 꺼짐 — 켜면 좌/우 지표가 진동한다.")]
+    [SerializeField] private bool rhythmEnabled = false;
+
     [Header("=== 지표 오브젝트 (좌/우 OM, skullTarget 자식 권장) ===")]
     [Tooltip("좌측 OM 지표 (정상측 - 항상 정상 진폭)")]
     [SerializeField] private Transform leftIndicator;
@@ -68,7 +75,7 @@ public class CranialRhythmIndicator : MonoBehaviour
         CaptureBase();
         mode = Mode.Asymmetric;  // rig 활성(시나리오 시작) 시 기본 = 진단(비대칭)
         phase = 0f;
-        SetIndicatorsActive(true);
+        SetIndicatorsActive(rhythmEnabled);
     }
 
     void OnDisable()
@@ -79,6 +86,8 @@ public class CranialRhythmIndicator : MonoBehaviour
 
     void Update()
     {
+        if (!rhythmEnabled) return;
+
         phase += Time.deltaTime * (cyclesPerMinute / 60f) * 2f * Mathf.PI;
         float wave = (Mathf.Sin(phase) + 1f) * 0.5f;  // 0..1 굴곡 곡선
         float rightRatio = mode == Mode.Symmetric ? 1f : restrictedRatio;

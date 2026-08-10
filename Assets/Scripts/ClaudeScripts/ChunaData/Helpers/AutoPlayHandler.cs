@@ -88,6 +88,14 @@ public class AutoPlayHandler
             }
         }
 
+        // ★게이트가 열린 첫 순간에 보류해 둔 클립을 시작한다.
+        //   (진입 시 0프레임을 씌우면 손을 대기 전에 앞 동작의 마지막 자세가 풀린다)
+        if (isGated && gateOpen && owner.HasPendingAnimation)
+        {
+            owner.BeginDeferredAnimation();
+            autoPlayStartTime = Time.time;   // 대기 시간이 진행률·완료 판정에 섞이지 않게 기준 재설정
+        }
+
         // Gated + 게이트 닫힘 → 일시정지 (elapsed 시간이 증가하지 않도록 startTime을 전진)
         if (isGated && !gateOpen)
         {

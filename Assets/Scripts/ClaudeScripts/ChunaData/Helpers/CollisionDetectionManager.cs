@@ -36,6 +36,7 @@ public class CollisionDetectionManager
         public Collider[] patientShoulderCollidersExtra;
         public Collider[] patientLeftArmColliders;
         public Collider[] patientRightArmColliders;
+        public Collider[] patientKneeColliders;
 
         // Contact targets
         public ContactTarget[] activeContactTargets;
@@ -189,6 +190,30 @@ public class CollisionDetectionManager
                 {
                     if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand, ctx))
                         return true;
+                }
+                return false;
+
+            case ContactTarget.Knee:
+                // 무릎(좌·우) - 앙와위 준비 동작에서 "무릎을 터치하면 환자가 무릎을 세운다".
+                // 어느 쪽 무릎에 닿아도 이 손은 접촉으로 인정한다.
+                if (ctx.patientKneeColliders == null || ctx.patientKneeColliders.Length == 0) return false;
+                foreach (var kneeCol in ctx.patientKneeColliders)
+                {
+                    if (kneeCol != null && CheckHandCollision(handTransform, handCollider, kneeCol.bounds, isLeftHand, ctx))
+                        return true;
+                }
+                return false;
+
+            case ContactTarget.Arms:
+                // 양팔 - 좌우 어느 팔에 닿아도 인정(팔을 모으게 하는 준비 동작용).
+                foreach (var arr in new[] { ctx.patientLeftArmColliders, ctx.patientRightArmColliders })
+                {
+                    if (arr == null) continue;
+                    foreach (var col in arr)
+                    {
+                        if (col != null && CheckHandCollision(handTransform, handCollider, col.bounds, isLeftHand, ctx))
+                            return true;
+                    }
                 }
                 return false;
 

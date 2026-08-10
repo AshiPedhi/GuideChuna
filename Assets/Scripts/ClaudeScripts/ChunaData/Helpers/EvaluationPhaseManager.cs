@@ -224,7 +224,9 @@ public class EvaluationPhaseManager
                     owner.SaveUserHoldReference();
                 }
 
-                owner.StartGuideHandPlaybackInternal();
+                // ★루프 금지 — 씬의 loopGuideHands가 1이라 기존 무인자 호출이 계속 반복 재생했다.
+                //   두개골 파지 단계에서 "가이드손이 계속 반복된다"는 지적의 원인이 여기였다.
+                owner.StartGuideHandPlaybackOnce();
                 ChangePhase(ChunaPathEvaluator.EvaluationPhase.Moving, owner.GetLoadedFrameCount(), currentStartRatio, showDebugLogs);
             }
         }

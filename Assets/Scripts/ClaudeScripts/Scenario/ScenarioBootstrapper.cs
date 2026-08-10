@@ -74,6 +74,11 @@ public class ScenarioBootstrapper : MonoBehaviour
                 ChunaLogger.Log($"[ScenarioBootstrapper] AnatomyMuscleController에 시나리오 적용: '{config.scenarioName}'");
         }
 
+        // ★ 필요 골격 중심적 표시(회의 08-05). 목록에 없는 시나리오는 건드리지 않는다.
+        SkeletonFocusController skeletonFocus =
+            FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
+        skeletonFocus?.ApplyScenario(config.scenarioName);
+
         // ScenarioConditionManager에 나레이션 시나리오 폴더 주입
         ScenarioConditionManager conditionManager = FindFirstObjectByType<ScenarioConditionManager>();
         if (conditionManager != null)
@@ -128,6 +133,11 @@ public class ScenarioBootstrapper : MonoBehaviour
                 if (showDebugLog)
                     ChunaLogger.Log($"[ScenarioBootstrapper] Start()에서 근육 재적용: '{config.scenarioName}'");
             }
+
+            // 골격 포커스도 같은 이유로 재적용(Awake 시점에 해부 모델이 아직 안 켜져 있을 수 있다).
+            SkeletonFocusController skeletonFocus =
+                FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
+            skeletonFocus?.ApplyScenario(config.scenarioName);
         }
     }
 

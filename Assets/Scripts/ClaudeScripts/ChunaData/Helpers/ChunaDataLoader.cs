@@ -30,7 +30,18 @@ public class ChunaDataLoader
 
         if (!result.success)
         {
-            ChunaLogger.LogError($"[ChunaPathEvaluator] CSV 로드 실패: {result.errorMessage}");
+            // ★ 실패해도 직전 시나리오의 프레임이 남아 있으면 '엉뚱한 녹화로 판정'이 조용히 성립한다
+            //   (콘솔 에러 한 줄 말고는 증상이 없어 "채점이 0이다"로만 보인다).
+            //   → 반드시 비워서 판정이 성립하지 않게 만든다. 빈 목록은 최초 상태와 같아 안전하다
+            //     (UpdateUserHandFrame 등 소비처가 Count==0을 이미 early-return으로 처리).
+            if (owner.LoadedFrames != null) owner.LoadedFrames.Clear();
+            else owner.LoadedFrames = new List<PoseFrame>();
+
+            ChunaLogger.LogError(
+                $"[ChunaPathEvaluator] CSV 로드 실패: {result.errorMessage} — " +
+                $"'Resources/HandPoseData/{csvFileName}'가 없습니다. " +
+                "이 단계는 판정이 성립하지 않습니다(직전 녹화로 오판정되지 않도록 프레임을 비웠습니다). " +
+                "시나리오 CSV의 handTrackingFileName을 확인하세요.");
             return;
         }
 

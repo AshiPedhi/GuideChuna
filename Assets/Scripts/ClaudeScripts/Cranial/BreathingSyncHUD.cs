@@ -29,24 +29,35 @@ public class BreathingSyncHUD : MonoBehaviour
 
     /// <summary>★HUD는 씬에 1개뿐이고 여러 두개골 리그가 공유하므로, 술기마다 호흡이 다르면
     /// 리그가 호흡 윈도우를 열기 직전에 이 메서드로 자기 값을 밀어 넣는다.
-    /// (OM = 3회 대칭 호흡 / PJ = 1회, 끝까지 내쉬며 신전·내전 → 손을 바꾸고 크게 들이마시며 굴곡·외전 = <b>날숨부터</b>)
+    /// (OM = 3회 대칭 호흡 / PJ = 국면마다 다름 — 굴곡·외회전으로 잠근 채 1회 길게,
+    /// 신전·내회전으로 전환해 3회이며 첫 회만 크게 = firstCycleScale)
     /// 인자가 0 이하면 그 항목은 기존 인스펙터 값을 유지한다(startPhase는 Keep이 유지).</summary>
     public void Configure(int breaths, float inhaleSeconds, float exhaleSeconds,
-                          StartPhase startPhase = StartPhase.Keep)
+                          StartPhase startPhase = StartPhase.Keep, float firstCycleScaleValue = 0f)
     {
         if (breaths > 0) requiredBreaths = breaths;
         if (inhaleSeconds > 0f) breatheInDuration = inhaleSeconds;
         if (exhaleSeconds > 0f) breatheOutDuration = exhaleSeconds;
         if (startPhase != StartPhase.Keep) startWithExhale = (startPhase == StartPhase.Exhale);
+        firstCycleScale = firstCycleScaleValue > 0f ? firstCycleScaleValue : 1f;
     }
+
+    /// <summary>첫 호흡 주기의 들숨·날숨 길이 배수. PJ 교정처럼 "처음 한 번은 크게 들이쉬고
+    /// 나머지는 평상 호흡"인 술기용. 1 = 전 주기 동일(기본).
+    /// ★유지비율 미달로 카운트가 리셋되면 completedBreaths가 0으로 돌아가므로 '큰 호흡'부터 다시 시작한다.</summary>
+    private float firstCycleScale = 1f;
+
+    private float CurrentInhaleDuration =>
+        Mathf.Max(0.0001f, breatheInDuration * (completedBreaths == 0 ? firstCycleScale : 1f));
+    private float CurrentExhaleDuration =>
+        Mathf.Max(0.0001f, breatheOutDuration * (completedBreaths == 0 ? firstCycleScale : 1f));
 
     /// <summary>호흡 윈도우를 어느 위상부터 시작할지. Keep = HUD 인스펙터 값 유지.</summary>
     public enum StartPhase { Keep = 0, Inhale = 1, Exhale = 2 }
 
     [Tooltip("★켜면 '날숨부터' 호흡 윈도우를 시작한다(한 주기 = 날숨 → 들숨). " +
-             "PJ 술기가 이 경우다 — 지시문이 '숨을 끝까지 내쉬는 동안 신전·내전 → 완전히 내쉰 후 손을 바꾸고 크게 들이마시게' 라서 " +
-             "날숨과 들숨 둘 다 작업 국면이고 순서가 날숨 먼저다. 들숨부터 시작하면 마지막 '크게 들숨(굴곡·외전)'이 주기 밖으로 밀려난다. " +
-             "OM·PM처럼 들숨부터가 맞으면 끈다(기본).")]
+             "주기 경계가 바뀌므로, 마지막 작업 국면이 날숨이면 켜야 그 국면이 주기 안에 들어온다. " +
+             "현재 OM·PM·PJ는 모두 '들이마신 뒤 내쉰다'라 꺼 둔다(기본).")]
     [SerializeField] private bool startWithExhale = false;
 
     [Header("=== 표시 ===")]
@@ -55,8 +66,17 @@ public class BreathingSyncHUD : MonoBehaviour
              "끄면 화면에 아무것도 안 띄우고 호흡 타이밍·숨소리·애니메이션 동기화만 동작한다.")]
     [SerializeField] private bool showVisuals = true;
 
-    [Header("=== 링 비주얼 (선택, World Space) ===")]
-    [Tooltip("들숨에 팽창/날숨에 수축하는 링 (localScale로 표현)")]
+    [Header("=== 원형 게이지 (권장) ===")]
+    [Tooltip("★들숨에 차오르고 날숨에 비워지는 원형 게이지. Image의 Image Type을 Filled / Radial 360으로 두고 연결한다.\n" +
+             "배선하면 아래 '링 비주얼'(커졌다 작아졌다 하는 스케일 방식)은 무시된다.")]
+    [SerializeField] private UnityEngine.UI.Image breathGauge;
+    [Tooltip("들숨 구간 게이지 색")]
+    [SerializeField] private Color inhaleGaugeColor = new Color(0.35f, 0.75f, 1f);
+    [Tooltip("날숨 구간 게이지 색")]
+    [SerializeField] private Color exhaleGaugeColor = new Color(1f, 0.6f, 0.3f);
+
+    [Header("=== 링 비주얼 (구버전 폴백, World Space) ===")]
+    [Tooltip("들숨에 팽창/날숨에 수축하는 링 (localScale). 원형 게이지를 배선하면 쓰이지 않는다.")]
     [SerializeField] private Transform ringVisual;
     [SerializeField] private float ringMinScale = 0.5f;
     [SerializeField] private float ringMaxScale = 1f;
@@ -114,12 +134,8 @@ public class BreathingSyncHUD : MonoBehaviour
         get
         {
             if (inhaling)
-            {
-                float d = Mathf.Max(0.0001f, breatheInDuration);
-                return Mathf.Clamp01(phaseTimer / d) * 0.5f;
-            }
-            float o = Mathf.Max(0.0001f, breatheOutDuration);
-            return 0.5f + Mathf.Clamp01(phaseTimer / o) * 0.5f;
+                return Mathf.Clamp01(phaseTimer / CurrentInhaleDuration) * 0.5f;
+            return 0.5f + Mathf.Clamp01(phaseTimer / CurrentExhaleDuration) * 0.5f;
         }
     }
 
@@ -240,9 +256,9 @@ public class BreathingSyncHUD : MonoBehaviour
 
         if (inhaling)
         {
-            UpdateRing(Mathf.Clamp01(phaseTimer / breatheInDuration), true);
+            UpdateRing(Mathf.Clamp01(phaseTimer / CurrentInhaleDuration), true);
 
-            if (phaseTimer >= breatheInDuration)
+            if (phaseTimer >= CurrentInhaleDuration)
             {
                 // 날숨부터 시작하는 술기(PJ)에선 '들숨 끝'이 한 주기의 끝이다.
                 if (startWithExhale) CloseBreathCycle();
@@ -253,9 +269,9 @@ public class BreathingSyncHUD : MonoBehaviour
         }
         else // 날숨
         {
-            UpdateRing(Mathf.Clamp01(phaseTimer / breatheOutDuration), false);
+            UpdateRing(Mathf.Clamp01(phaseTimer / CurrentExhaleDuration), false);
 
-            if (phaseTimer >= breatheOutDuration)
+            if (phaseTimer >= CurrentExhaleDuration)
             {
                 if (!startWithExhale) CloseBreathCycle();
                 inhaling = true;
@@ -303,12 +319,21 @@ public class BreathingSyncHUD : MonoBehaviour
 
     private void UpdateRing(float t, bool inhale)
     {
-        // 들숨: min→max 팽창, 날숨: max→min 수축
+        // 정규화 호흡량(표시 방식과 무관하게 0~1) - 외부 동기화용
+        currentBreath01 = inhale ? t : 1f - t;
+
+        // ★원형 게이지 방식(기본) — 들숨에 차오르고 날숨에 비워진다. 색으로 위상을 구분한다.
+        //   커졌다 작아졌다 하는 스케일 방식은 "지금 얼마나 남았는지"가 안 읽혀 게이지로 교체했다(08-10).
+        if (breathGauge != null)
+        {
+            breathGauge.fillAmount = currentBreath01;
+            breathGauge.color = inhale ? inhaleGaugeColor : exhaleGaugeColor;
+            return;   // 게이지를 쓰면 링 스케일은 건드리지 않는다
+        }
+
+        // 폴백: 게이지가 배선되지 않은 씬은 기존 스케일 방식으로 동작한다.
         float scale01 = inhale ? Mathf.Lerp(ringMinScale, ringMaxScale, t)
                                : Mathf.Lerp(ringMaxScale, ringMinScale, t);
         if (ringVisual != null) ringVisual.localScale = Vector3.one * scale01;
-
-        // 정규화 호흡량(링 스케일 설정과 무관하게 0~1) - 외부 동기화용
-        currentBreath01 = inhale ? t : 1f - t;
     }
 }

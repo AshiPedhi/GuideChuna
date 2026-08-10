@@ -81,6 +81,11 @@ public class CranialHeadXray : MonoBehaviour
     [Tooltip("이 이름 포함 렌더러는 반투명·숨김 모두 제외 = 항상 불투명 유지. 옷(Shirt/Jeans/Boots)만.")]
     [SerializeField] private string[] excludeNameContains = { "Shirt", "Jeans", "Boots" };
 
+    [Tooltip("CSV conditionParams로 xray를 강제한 단계에서만 함께 반투명해지는 옷.\n" +
+             "흉추 술기는 등 뒤 파지점이 상의에 가려 안 보이므로 Shirt만 넣는다.\n" +
+             "바지·신발은 볼 필요가 없어 제외하고, 손 근접으로 켜지는 두개골 xray는 영향 없다.")]
+    [SerializeField] private string[] forcedTransparentNameContains = { "Shirt" };
+
     [Header("반투명 중 숨김 (머리카락 + 눈·이빨 등 얼굴 특수부위)")]
     [Tooltip("xray ON 동안 완전히 숨길 렌더러 이름(부분일치). OFF 시 자동 복원. " +
              "머리카락 + 눈·눈그림자·눈물선·치아·각막·혀·눈꺼풀(특수 셰이더라 반투명이 안 먹어 떠 보이므로 숨김). " +
@@ -110,6 +115,7 @@ public class CranialHeadXray : MonoBehaviour
     private readonly List<Renderer> targets = new List<Renderer>();
     private readonly List<Material[]> trueOriginals = new List<Material[]>();
     private readonly List<Material[]> appliedXray = new List<Material[]>();  // 재적용용(싸움 방지)
+    private readonly List<bool> isClothing = new List<bool>();               // targets와 인덱스 정렬
     private readonly List<Material> createdMats = new List<Material>();
     private readonly List<Renderer> hideTargets = new List<Renderer>();  // 반투명 중 숨길 대상(머리카락 등)
     private readonly List<Renderer> hiddenByMe = new List<Renderer>();   // 실제로 내가 끈 것만(정확 복원)
@@ -360,14 +366,21 @@ public class CranialHeadXray : MonoBehaviour
         targets.Clear();
         trueOriginals.Clear();
         hideTargets.Clear();
+        isClothing.Clear();
         CacheRigRoots();   // 두개골 리그(파지 구체 등)를 xray 대상에서 빼기 위해
         var oic = StringComparison.OrdinalIgnoreCase;
 
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
         {
             if (!(r is SkinnedMeshRenderer || r is MeshRenderer)) continue;
+
+            // ★상의(Shirt)만 '함께 캡처'해 두고, 실제 반투명 적용 여부는 단계마다 Activate에서 정한다
+            //   (캡처는 Awake에 한 번뿐이라 이때 빼 버리면 나중에 투명하게 만들 수단이 없다).
+            //   바지·신발은 예전처럼 항상 불투명 — 캡처 대상에서 아예 뺀다.
+            bool forcedClothing = NameContainsAny(r, forcedTransparentNameContains, oic);
+
             // ★제외 검사를 먼저 — 리그(파지 구체 등)가 숨김 토큰에 우연히 걸려 사라지는 일 방지.
-            if (IsExcluded(r, oic)) continue;
+            if (IsExcluded(r, oic, allowClothing: forcedClothing)) continue;
             // 머리카락 등: 반투명 대상이 아니라 "숨김" 대상. (반투명 인스턴스 생성 안 함)
             if (NameContainsAny(r, hideWhenActiveNameContains, oic)) { hideTargets.Add(r); continue; }
             var mats = r.sharedMaterials;
@@ -375,6 +388,7 @@ public class CranialHeadXray : MonoBehaviour
 
             targets.Add(r);
             trueOriginals.Add((Material[])mats.Clone()); // ★진짜 원본(불투명)
+            isClothing.Add(forcedClothing);   // true = 강제 xray 단계에서만 반투명
         }
 
         captured = true;
@@ -405,9 +419,12 @@ public class CranialHeadXray : MonoBehaviour
         rigRoots = list.ToArray();
     }
 
-    private bool IsExcluded(Renderer r, StringComparison oic)
+    private bool IsExcluded(Renderer r, StringComparison oic) => IsExcluded(r, oic, false);
+
+    /// <summary><paramref name="allowClothing"/>=true면 옷도 대상에 포함시킨다(캡처 단계에서 사용).</summary>
+    private bool IsExcluded(Renderer r, StringComparison oic, bool allowClothing)
     {
-        if (NameContainsAny(r, excludeNameContains, oic)) return true;
+        if (!allowClothing && NameContainsAny(r, excludeNameContains, oic)) return true;
 
         if (skullOverlay != null && r.transform.IsChildOf(skullOverlay.transform)) return true;
 
@@ -458,6 +475,14 @@ public class CranialHeadXray : MonoBehaviour
         {
             var r = targets[i];
             if (r == null) { appliedXray.Add(null); continue; }
+
+            // 상의는 CSV로 xray를 강제한 단계(= 흉추)에서만 반투명. 그 외에는 불투명 유지.
+            if (i < isClothing.Count && isClothing[i] && !forceOnThisSubStep)
+            {
+                appliedXray.Add(null);   // 인덱스 정렬 유지(재적용 루프가 targets와 짝을 맞춘다)
+                continue;
+            }
+
             var orig = trueOriginals[i]; // ★항상 진짜 원본 기준
 
             var swapped = new Material[orig.Length];

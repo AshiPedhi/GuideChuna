@@ -13,11 +13,15 @@ using UnityEngine;
 /// </summary>
 public class ContactTargetIndicator
 {
-    private static readonly Color IdleColor = new Color(1f, 0.35f, 0.35f, 0.35f);
-    private static readonly Color TouchedColor = new Color(0.25f, 1f, 0.35f, 0.5f);
+    // 팔처럼 긴 부위는 표시구가 커서 0.35만 돼도 "통째로 빨간 덩어리"로 보인다 → 더 옅게.
+    private static readonly Color IdleColor = new Color(1f, 0.35f, 0.35f, 0.18f);
+    // ★닿으면 흐려진다 — 파지점(GripPointTarget.grippedAlpha)과 같은 규칙.
+    //   손을 댄 뒤에도 진한 구체가 남아 있으면 손과 시술 부위를 가린다.
+    private static readonly Color TouchedColor = new Color(0.25f, 1f, 0.35f, 0.12f);
 
     private readonly List<GameObject> markers = new List<GameObject>();
     private readonly List<Renderer> markerRenderers = new List<Renderer>();
+    private readonly List<PrimitiveType> markerKinds = new List<PrimitiveType>();
 
     private Transform root;
     private Material sourceMaterial;
@@ -41,7 +45,7 @@ public class ContactTargetIndicator
         EnsureRoot();
         while (markers.Count < count)
         {
-            CreateMarker();
+            CreateMarker(PrimitiveType.Sphere);
         }
 
         float mul = Mathf.Max(0.1f, scaleMultiplier);
@@ -56,12 +60,27 @@ public class ContactTargetIndicator
                 markers[i].SetActive(use);
             if (!use) continue;
 
-            // 판정은 콜라이더의 월드 AABB(bounds)로 하므로 표시도 그 기준을 그대로 쓴다.
-            Bounds b = target.bounds;
-            float diameter = Mathf.Max(b.extents.x, b.extents.y, b.extents.z) * 2f * mul;
+            // ★캡슐(팔 등 길쭉한 부위)을 AABB 기준 구로 그리면 지름 0.5m짜리 공이 되어
+            //   실제 판정 범위보다 훨씬 크고 보기 흉하다 → 캡슐은 캡슐 모양 그대로 그린다.
+            var capsule = target as CapsuleCollider;
+            PrimitiveType want = capsule != null ? PrimitiveType.Capsule : PrimitiveType.Sphere;
+            if (markerKinds[i] != want)
+                ReplaceMarker(i, want);
 
-            markers[i].transform.position = b.center;
-            markers[i].transform.localScale = new Vector3(diameter, diameter, diameter);
+            if (capsule != null)
+            {
+                ApplyCapsuleShape(markers[i].transform, capsule, mul);
+            }
+            else
+            {
+                // 판정은 콜라이더의 월드 AABB(bounds)로 하므로 표시도 그 기준을 그대로 쓴다.
+                Bounds b = target.bounds;
+                float diameter = Mathf.Max(b.extents.x, b.extents.y, b.extents.z) * 2f * mul;
+
+                markers[i].transform.rotation = Quaternion.identity;
+                markers[i].transform.position = b.center;
+                markers[i].transform.localScale = new Vector3(diameter, diameter, diameter);
+            }
 
             Renderer r = markerRenderers[i];
             if (r != null)
@@ -72,6 +91,45 @@ public class ContactTargetIndicator
         }
 
         anyVisible = true;
+    }
+
+    /// <summary>
+    /// 캡슐 콜라이더의 실제 모양(중심·방향·반지름·길이)을 표시구에 그대로 옮긴다.
+    /// Unity 캡슐 프리미티브는 기본 높이 2·지름 1이라 스케일이 (2r, h/2, 2r)이 된다.
+    /// </summary>
+    private static void ApplyCapsuleShape(Transform marker, CapsuleCollider capsule, float mul)
+    {
+        Transform t = capsule.transform;
+        Vector3 ls = t.lossyScale;
+
+        Vector3 dirAxis;
+        float heightScale, radiusScale;
+        switch (capsule.direction)
+        {
+            case 0:   // X축
+                dirAxis = Vector3.right;
+                heightScale = Mathf.Abs(ls.x);
+                radiusScale = Mathf.Max(Mathf.Abs(ls.y), Mathf.Abs(ls.z));
+                break;
+            case 2:   // Z축
+                dirAxis = Vector3.forward;
+                heightScale = Mathf.Abs(ls.z);
+                radiusScale = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y));
+                break;
+            default:  // Y축
+                dirAxis = Vector3.up;
+                heightScale = Mathf.Abs(ls.y);
+                radiusScale = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.z));
+                break;
+        }
+
+        float radius = capsule.radius * radiusScale * mul;
+        // 캡슐 높이는 양 끝 반구를 포함한 전체 길이이며, 반지름 2배보다 작아질 수 없다.
+        float height = Mathf.Max(capsule.height * heightScale, radius * 2f) * mul;
+
+        marker.position = t.TransformPoint(capsule.center);
+        marker.rotation = t.rotation * Quaternion.FromToRotation(Vector3.up, dirAxis);
+        marker.localScale = new Vector3(radius * 2f, height * 0.5f, radius * 2f);
     }
 
     /// <summary>표시구를 모두 숨긴다(파괴하지 않고 재사용).</summary>
@@ -96,6 +154,7 @@ public class ContactTargetIndicator
         }
         markers.Clear();
         markerRenderers.Clear();
+        markerKinds.Clear();
 
         if (root != null)
         {
@@ -117,10 +176,24 @@ public class ContactTargetIndicator
         root = go.transform;
     }
 
-    private void CreateMarker()
+    /// <summary>대상 콜라이더 모양이 바뀌면(구↔캡슐) 해당 슬롯의 표시구를 새로 만든다.</summary>
+    private void ReplaceMarker(int index, PrimitiveType kind)
     {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        go.name = $"ContactTarget_{markers.Count}";
+        if (markers[index] != null)
+            Object.Destroy(markers[index]);
+
+        markers.RemoveAt(index);
+        markerRenderers.RemoveAt(index);
+        markerKinds.RemoveAt(index);
+
+        CreateMarker(kind, index);
+        markers[index].SetActive(true);
+    }
+
+    private void CreateMarker(PrimitiveType kind, int insertAt = -1)
+    {
+        var go = GameObject.CreatePrimitive(kind);
+        go.name = $"ContactTarget_{(insertAt >= 0 ? insertAt : markers.Count)}";
 
         // 표시 전용 — 손 판정이나 물리에 절대 끼어들면 안 된다.
         var col = go.GetComponent<Collider>();
@@ -141,8 +214,18 @@ public class ContactTargetIndicator
         }
 
         go.SetActive(false);
-        markers.Add(go);
-        markerRenderers.Add(r);
+        if (insertAt >= 0)
+        {
+            markers.Insert(insertAt, go);
+            markerRenderers.Insert(insertAt, r);
+            markerKinds.Insert(insertAt, kind);
+        }
+        else
+        {
+            markers.Add(go);
+            markerRenderers.Add(r);
+            markerKinds.Add(kind);
+        }
     }
 
     /// <summary>
