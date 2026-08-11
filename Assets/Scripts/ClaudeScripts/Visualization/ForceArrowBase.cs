@@ -20,11 +20,14 @@ public abstract class ForceArrowBase : MonoBehaviour
         Patient
     }
 
-    /// <summary>언제 보일지. 기본은 교정 국면 전체 — 힘은 파지부터 교정까지 계속 주는 것이라 그게 맞다.</summary>
+    /// <summary>언제 보일지. 기본은 <b>파지·준비를 뺀</b> 교정 국면이다.</summary>
     public enum ShowScope
     {
-        /// <summary>교정 국면(파지·자세준비·호흡유도·교정) 내내 표시. <b>기본값 — 아무것도 안 적어도 된다.</b></summary>
-        교정국면_전체,
+        /// <summary>교정 국면에서 <b>파지·준비 단계를 빼고</b> 표시(잠금·견착·호흡·교정).
+        /// <b>기본값 — 아무것도 안 적어도 된다.</b>
+        /// ★08-11 사용자 지시: "파지할 때부터 화살표를 보여주면 잠그는 단계가 의미가 없다."
+        /// 파지는 '어디를 잡는가'를 익히는 단계라 방향 지시가 오히려 방해가 된다.</summary>
+        교정국면_파지제외,
         /// <summary>특정 단계에서만 표시. 한 국면 안에서 힘의 방향이 바뀔 때만 쓴다(PJ 호흡유도↔교정).</summary>
         특정_단계만,
         /// <summary>시나리오 내내 표시(진단·재평가 포함). 거의 안 쓴다.</summary>
@@ -32,9 +35,10 @@ public abstract class ForceArrowBase : MonoBehaviour
     }
 
     [Header("=== 언제 보일지 (그룹에 넣었으면 그룹이 이긴다) ===")]
-    [Tooltip("기본 '교정국면 전체' = 파지→자세준비→호흡유도→교정 내내 표시하고 진단·재평가에는 안 나온다.\n" +
-             "힘은 파지부터 교정까지 계속 주는 것이라 이게 기본이다. 아래 칸은 '특정 단계만'일 때만 쓴다.")]
-    [SerializeField] private ShowScope showWhen = ShowScope.교정국면_전체;
+    [Tooltip("기본 '교정국면 파지제외' = 잠금·견착·호흡·교정에만 표시한다.\n" +
+             "★파지·준비 단계와 진단·재평가에는 안 나온다 — 파지에서부터 방향을 보여주면 잠그는 단계가 의미를 잃는다.\n" +
+             "아래 칸은 '특정 단계만'일 때만 쓴다.")]
+    [SerializeField] private ShowScope showWhen = ShowScope.교정국면_파지제외;
 
     [Tooltip("'특정 단계만'일 때 쓸 단계 이름(CSV stepName). 예: 호흡유도 / 교정")]
     [SerializeField] private string stepName = "";
@@ -44,6 +48,18 @@ public abstract class ForceArrowBase : MonoBehaviour
 
     [Tooltip("선택. 채우면 국면(phase)까지 일치해야 표시한다.")]
     [SerializeField] private string phaseName = "";
+
+    [Header("=== 흐름 표현 ===")]
+    [Tooltip("★경로(호·자루) 전체를 켜 둔 채 밝기만 흐르게 하면 '지금 어디가 진행 중인지'가 묻힌다.\n" +
+             "켜면 진행 위치의 1~2칸만 빛나고 나머지는 사라진다 — 방향이 훨씬 또렷하다(08-11 사용자 지시).\n" +
+             "끄면 예전 방식(전체가 은은히 보이고 밝기만 흐름).")]
+    [SerializeField] private bool sharpFlow = true;
+
+    [Tooltip("동시에 빛나는 칸 수. 1~2가 권장값이다.")]
+    [SerializeField, Range(0.6f, 3f)] private float litSegments = 1.2f;
+
+    [Tooltip("빛나지 않는 칸의 알파. 0이면 완전히 사라진다(기본). 경로를 희미하게 남기고 싶으면 0.05~0.1.")]
+    [SerializeField, Range(0f, 0.3f)] private float dimAlpha = 0f;
 
     [Header("=== 주체 (색으로 구분) ===")]
     [Tooltip("Practitioner = 시술자가 가하는 힘(기본) / Patient = 등척성에서 환자가 내는 힘")]
@@ -63,7 +79,7 @@ public abstract class ForceArrowBase : MonoBehaviour
 
     /// <summary>
     /// 표시 판정 — 화살표와 그룹이 같은 규칙을 쓴다.
-    /// ★교정국면_전체가 기본인 이유: 힘은 파지부터 교정까지 <b>계속</b> 주는 것이라
+    /// ★국면 단위가 기본인 이유: 힘은 잠금부터 교정까지 <b>계속</b> 주는 것이라
     /// substep마다 지정하게 하면 쓸데없는 손일이고, 중간을 빠뜨리면 화살표가 깜빡인다
     /// (xray의 restoreEachSubStep에서 겪은 것과 같은 함정).
     /// </summary>
@@ -82,10 +98,21 @@ public abstract class ForceArrowBase : MonoBehaviour
                 if (!string.IsNullOrWhiteSpace(wantPhase) && !Same(wantPhase, phase)) return false;
                 return true;
 
-            default:   // 교정국면_전체
+            default:   // 교정국면_파지제외
                 // ScenarioManager가 교정 파지점을 남길 때 쓰는 것과 같은 판정(phaseName에 '교정' 포함).
-                return !string.IsNullOrEmpty(phase) && phase.Contains("교정");
+                if (string.IsNullOrEmpty(phase) || !phase.Contains("교정")) return false;
+                // ★파지·준비 단계는 뺀다(08-11 사용자 지시) — 방향은 '잠그는 단계'부터 보여준다.
+                return !IsSetupStep(step);
         }
+    }
+
+    /// <summary>'어디를 잡는가'를 익히는 단계인가 = 힘의 방향을 아직 보여주면 안 되는 단계.
+    /// 파지 / 준비 / 자세준비 (제1늑골의 '파지1·파지2'처럼 뒤에 번호가 붙어도 잡힌다).</summary>
+    private static bool IsSetupStep(string step)
+    {
+        if (string.IsNullOrWhiteSpace(step)) return false;
+        string s = step.Trim();
+        return s.Contains("파지") || s.Contains("준비");
     }
 
     public static string Describe(ShowScope scope, string step, int subNo, string phase)
@@ -121,6 +148,16 @@ public abstract class ForceArrowBase : MonoBehaviour
     {
         if (segments == null || segments.Length == 0) return;
 
+        // ★sharpFlow(기본 켬)면 인스펙터의 폭·최소알파 대신 '1~2칸만 빛난다' 규칙이 이긴다.
+        //   화살촉 상시 점등도 끈다 — 종착점이 계속 밝으면 빛나는 칸이 3개로 보여 효과가 반감된다.
+        //   ★신규 필드라 이미 씬에 배치된 화살표에도 코드 기본값이 그대로 먹는다(재배치 불필요).
+        if (sharpFlow)
+        {
+            flowWidth = litSegments;
+            minAlpha = dimAlpha;
+            keepHeadBright = false;
+        }
+
         int n = segments.Length;
         Color baseColor = BaseColor;
         float head = phase01 * n;
@@ -140,6 +177,14 @@ public abstract class ForceArrowBase : MonoBehaviour
                 float t = Mathf.Clamp01(1f - d / Mathf.Max(0.01f, flowWidth));
                 a = Mathf.Lerp(minAlpha, maxAlpha, t);
             }
+
+            // ★알파만 낮추면 '경로 전체가 그대로 보이는' 개체가 생긴다(08-11 증상: 회전 화살표 2개 중
+            //   하나만 1~2칸 점등이 되고 나머지는 멀쩡한 호 위에 러너만 움직였다).
+            //   머티리얼이 Fade가 아니거나 셰이더가 알파를 무시하면 알파는 통째로 버려지기 때문 →
+            //   <b>렌더러 자체를 껐다 켠다.</b> 그러면 머티리얼 상태와 무관하게 항상 같은 모양이 된다.
+            bool visible = a > 0.02f;
+            if (segments[i] != null && segments[i].enabled != visible) segments[i].enabled = visible;
+            if (!visible) continue;
 
             Color c = baseColor;
             c.a = a;

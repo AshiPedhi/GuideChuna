@@ -817,6 +817,15 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             HandleHandPoseTracking(subStep);
         else if (subStep.HasPatientAnimation())
             HandleAutoPlayAnimation(subStep);
+        else if (chunaPathEvaluator != null)
+        {
+            // ★판정도 손 녹화도 없는 단계 = 나레이션이 끝나면 그냥 넘어가는 안내 구간
+            //   (진단 결과·전환 설명 등). 여기서 앞 단계의 가이드손이 남아 있으면
+            //   "지금 이 동작을 따라 하라"는 잘못된 신호가 된다 → 숨긴다(08-11 사용자 지시).
+            //   ★단 '이 클립은 이미 봤다'는 기록은 지우지 않는다 — 지우면 다음 단계에서 같은 동작이
+            //     처음부터 다시 재생돼 "어디서는 초기화되고 어디서는 유지되는" 들쭉날쭉함이 생긴다.
+            chunaPathEvaluator.HideGuideHandKeepHeldInternal();
+        }
 
         // ★ 호흡 HUD(링)는 견착·호흡(③ cranialDepthBreath) substep에서만 활성.
         //   그 외 모든 substep 진입 시 끈다(활성화는 BreathingCondition→StartBreathingWindow가 담당).
@@ -853,6 +862,13 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         ResolveForceArrowDirector();
         forceArrowDirector?.ShowFor(currentPhase?.phaseName, currentStep?.stepName, subStep.subStepNo);
 
+        // ★ 골격 표시: 단계마다 보여야 할 뼈가 다르다(두개골 = 진단·교정·재평가가 서로 다름).
+        //   해당 항목이 없는 단계는 이전 표시를 되돌리고 전체를 보여준다(무회귀).
+        ResolveSkeletonFocus();
+        skeletonFocus?.ApplyStep(
+            currentConfig != null ? currentConfig.scenarioName : currentScenario?.scenarioName,
+            currentPhase?.phaseName, currentStep?.stepName);
+
         // ★ 모든 evaluator 설정 완료 후 각도 디스플레이 홀드 범위 강제 갱신
         angleDisplay?.ForceRefreshHoldRange();
     }
@@ -863,6 +879,17 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         if (forceArrowDirector != null || forceArrowLookupDone) return;
         forceArrowLookupDone = true;
         forceArrowDirector = FindFirstObjectByType<ForceArrowDirector>(FindObjectsInactive.Include);
+    }
+
+    private SkeletonFocusController skeletonFocus;
+    private bool skeletonFocusLookupDone;
+
+    /// <summary>골격 포커스도 한 번만 찾는다(없으면 기능 OFF).</summary>
+    private void ResolveSkeletonFocus()
+    {
+        if (skeletonFocus != null || skeletonFocusLookupDone) return;
+        skeletonFocusLookupDone = true;
+        skeletonFocus = FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
     }
 
     /// <summary>
@@ -1083,7 +1110,7 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         if (chunaPathEvaluator != null && subStep.HasPatientAnimation())
         {
             // ★conditionParams에 playOnGrip이 있으면 단계 진입이 아니라 '파지가 성립하는 순간' 재생한다.
-            //   (제1늑골: 왼손 웹이 늑골 파지점을 잡으면 그때 머리가 신전·우측 병진)
+            //   (제1늑골: 왼손 검지 측면이 늑골 파지점에 닿으면 그때 머리가 신전·우측 병진)
             bool playOnGrip = !string.IsNullOrEmpty(subStep.conditionParams) &&
                               subStep.conditionParams.ToLower().Contains("playongrip");
             if (playOnGrip)
@@ -1104,25 +1131,49 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★ 가이드 손(녹화) 표시: cranial 스텝에 handTrackingFileName이 있으면 기존 가이드핸드 재생을 그대로 띄운다.
         //   판정은 cranial 구체 게이트가 담당하고, 가이드 손은 순수 시각 안내(손가락별 파지점 없이 '구체 1개 + 가이드손' 방식).
         //   녹화 데이터가 양손이면 양손 그림자 손이 모두 재생된다.
-        if (subStep.HasHandTracking() && chunaPathEvaluatorBridge != null)
+        if (subStep.HasHandTracking() && chunaPathEvaluator != null)
         {
-            chunaPathEvaluatorBridge.LoadFromCSV(subStep.handTrackingFileName);
-            if (chunaPathEvaluator != null)
+            // ★같은 동작이 이어지는 단계에서는 다시 재생하지 않는다(08-11 사용자 지시).
+            //   재로드도 건너뛴다 — 프레임을 다시 읽으면 유지 중인 마지막 자세가 깨진다.
+            string guideClip = subStep.handTrackingFileName.Trim();
+            bool held = chunaPathEvaluator.IsGuideClipHeld(guideClip);
+
+            if (!held)
             {
-                // ★두개골 가이드손 = 클립 전체를 1회 재생(루프 없음).
-                //   ⓐ 구간: 기본값이 0~0.4라 그냥 두면 앞 40%만 재생되고 끊긴다. 전체 재생은 원래
-                //      conditionParams에 "guideOnly"가 있을 때만 열리는데, 두개골은 그 칸을
-                //      진단 단계 ID(진단1/진단2)·유지 초로 쓰므로 그 경로를 탈 수 없다.
-                //   ⓑ 루프: 시연을 한 번 보여주면 충분하고, 계속 돌면 파지 위치를 가린다.
-                //   인자로 넘기는 오버로드를 써서 평가기 필드는 그대로 둔다(다른 시나리오에 설정이 새지 않게).
-                chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+                // ★★프레임만 읽는다. 예전에는 Bridge.LoadFromCSV를 썼는데 그 안에서
+                //   StartEvaluation() + StartTracking()이 같이 돌아 <b>유사도 평가 파이프라인</b>이 켜졌다.
+                //   그 부작용이 두개골 술기의 증상 전부였다(08-11 확인):
+                //     · 진단·파지 진입 때 "파지 위치 2초"(StartHold)가 먼저 돌고
+                //     · 유사도 진행률(47% / 목표 50%)이 뜨며
+                //     · <b>왼손만 대도 임계값을 넘겨 파지 단계가 넘어갔다</b>(양손 파지 게이트를 건너뜀).
+                //   두개골 판정은 파지점 구체(cranialGrip)와 유지 타이머가 전부이므로 평가를 켜지 않는다.
+                if (chunaPathEvaluator.IsEvaluating) chunaPathEvaluator.StopEvaluation();
+                chunaPathEvaluator.LoadAndGenerateCheckpoints(guideClip);
+            }
+
+            {
+                if (held)
+                {
+                    // 이미 끝까지 본 동작 — 마지막 자세로 세워만 둔다.
+                    chunaPathEvaluator.ShowGuideHandLastFrameInternal();
+                }
+                else
+                {
+                    // ★두개골 가이드손 = 클립 전체를 1회 재생(루프 없음).
+                    //   ⓐ 구간: 기본값이 0~0.4라 그냥 두면 앞 40%만 재생되고 끊긴다. 전체 재생은 원래
+                    //      conditionParams에 "guideOnly"가 있을 때만 열리는데, 두개골은 그 칸을
+                    //      진단 단계 ID(진단1/진단2)·유지 초로 쓰므로 그 경로를 탈 수 없다.
+                    //   ⓑ 루프: 시연을 한 번 보여주면 충분하고, 계속 돌면 파지 위치를 가린다.
+                    //   ★클립 이름을 넘기는 진입점을 쓴다 — 그래야 다음 단계에서 '같은 동작'인지 판별된다.
+                    chunaPathEvaluator.PlayGuideHandOnceInternal(guideClip, 0f, 1f);
+                }
 
                 // 이후 제어는 컨트롤러가 '동작(자세)마다' 켜고 끈다
-                // (자세 시작 시 재생 → 파지 성립 시 정지 → 다음 자세에서 다시 재생).
-                cranialController.ArmGuideHandAutoHide(chunaPathEvaluator, subStep.handTrackingFileName);
+                // (자세가 바뀌면 그 동작을 재생 / 손을 대면 숨기고 떼면 마지막 자세로 되살림).
+                cranialController.ArmGuideHandAutoHide(chunaPathEvaluator, guideClip);
             }
             if (showDebugLog)
-                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 가이드손 재생: {subStep.handTrackingFileName}</color>");
+                ChunaLogger.Log($"<color=cyan>[ScenarioManager] Cranial 가이드손 {(held ? "유지(재생 안 함)" : "재생")}: {guideClip}</color>");
         }
 
         // 평가 지표 수집 시작(이 단계에서 자세 성립·유지·이탈·호흡을 모은다).

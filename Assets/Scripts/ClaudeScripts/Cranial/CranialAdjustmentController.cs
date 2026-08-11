@@ -242,14 +242,17 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>진단 단계의 유지 타이머 시작. 나레이션이 끝난 뒤(첫 조건 폴 시점) 호출한다 —
     /// 생성자에서 시작하면 안내를 듣기도 전에 카운트가 흘러 조기 완료될 수 있다
     /// (압력·호흡 조건과 동일한 규약). 표시는 <see cref="PrepareDiagnosisStage"/>가 이미 해 둔다.</summary>
-    /// <summary>CSV가 지정한 진단 유지 시간(초). 0이면 스테이지의 holdSeconds를 쓴다.
-    /// ★씬에 박힌 8초가 너무 길다는 지적(08-10) — CSV conditionParams의 hold= 토큰으로 조절한다.</summary>
+    /// <summary>CSV conditionParams의 hold= 값(초). 0이면 아래 기본값을 쓴다.</summary>
     private float diagnosisHoldOverride = 0f;
 
-    /// <summary>지금 적용할 자세 유지 시간. CSV 지정값 > 스테이지 값 순으로 이긴다.</summary>
+    /// <summary>CSV에 hold=를 안 적었을 때의 기본 유지 시간.
+    /// ★유지 시간의 출처는 CSV 하나뿐이다 — 스테이지에 있던 holdSeconds 필드는 08-11에 삭제했다
+    /// (씬 값과 CSV 값이 달라 "표시는 6초인데 판정은 3초"가 되는 사고가 있었다).</summary>
+    public const float DefaultDiagnosisHoldSeconds = 3f;
+
+    /// <summary>지금 적용할 자세 유지 시간 = CSV의 hold=, 없으면 기본값.</summary>
     public float StageHoldSeconds =>
-        diagnosisHoldOverride > 0f ? diagnosisHoldOverride
-                                   : (activeStage != null ? activeStage.holdSeconds : 3f);
+        diagnosisHoldOverride > 0f ? diagnosisHoldOverride : DefaultDiagnosisHoldSeconds;
 
     /// <summary>CSV의 hold= 값을 넣는다(0 = 스테이지 값 사용). 진단 단계를 준비할 때마다 호출된다.</summary>
     public void SetDiagnosisHoldOverride(float seconds) => diagnosisHoldOverride = Mathf.Max(0f, seconds);
@@ -274,7 +277,10 @@ public class CranialAdjustmentController : MonoBehaviour
         if (n == 0)
             ChunaLogger.LogWarning($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}'에 자세가 하나도 없습니다 — 영영 완료되지 않습니다.");
         else
-            ChunaLogger.Log($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}' 시작 (자세 {n}개, 각 {stage.holdSeconds}초 유지)");
+            // ★어느 값이 적용됐는지 로그에 남긴다 — 씬 값과 CSV 값이 달라 헷갈리던 걸 없애기 위해.
+            ChunaLogger.Log($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}' 시작 " +
+                            $"(자세 {n}개, 각 {StageHoldSeconds}초 유지 — " +
+                            $"{(diagnosisHoldOverride > 0f ? "CSV hold=" : "기본값")})");
         return true;
     }
 
@@ -293,13 +299,25 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>진단 단계 종료(진단이 아닌 substep 진입 시 호출) — 타이머·안내 문구 정리 + 진단 파지점 숨김.
     /// ★ 숨기는 대상은 diagnosisStages에 등록된 파지점뿐이다(교정용 leftGrips/rightGrips는 건드리지 않음).
     /// 파지 substep에선 BeginGripPhase가 교정 파지점을 켠 뒤 이 메서드가 호출돼도 안전하다.</summary>
-    public void EndDiagnosisStage()
+    public void EndDiagnosisStage([System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
         if (activeStage != null)
         {
+            // ★"6초를 채우지도 않았는데 타이머가 멈추고 사라졌다"(08-11)의 추적용.
+            //   유지 게이지를 지우는 곳은 여기뿐이므로, 누가 왜 껐는지가 여기 한 줄에 남는다.
+            if (logDiagnosisTrace)
+            {
+                var prog = new System.Text.StringBuilder();
+                int n = poseHeld != null ? poseHeld.Length : 0;
+                for (int i = 0; i < n; i++) prog.Append($"[{i}] {poseHeld[i]:F1}/{StageHoldSeconds:F1}초  ");
+                ChunaLogger.Log($"<color=orange>[CranialAdjustmentController] 진단 단계 '{activeStage.stageId}' 종료 " +
+                                $"— 호출: {caller} / 진행: {(n == 0 ? "자세 없음" : prog.ToString())}</color>");
+            }
+
             activeStage = null;
             poseHeld = null;
             poseLostAt = null;
+            reportedPoseNo = -1;   // 다음 진단에서 자세 1부터 다시 알린다
         }
         preparedStage = null;   // 다음에 같은 단계로 재진입하면 다시 표시·초기화되도록
         cueShown = false;       // 다음 진단 단계에서 다시 한 번 띄우도록
@@ -315,6 +333,34 @@ public class CranialAdjustmentController : MonoBehaviour
         }
     }
 
+    [Tooltip("★진단 유지 타이머가 왜 멈추는지 추적할 때 켠다(08-11 증상 조사용). " +
+             "자세의 접촉 상태가 바뀔 때·단계가 끝날 때만 로그를 남기므로 양이 많지 않다.\n" +
+             "★신규 필드라 이미 배치된 씬 리그에도 코드 기본값(켬)이 그대로 먹는다.")]
+    [SerializeField] private bool logDiagnosisTrace = true;
+
+    /// <summary>자세별 직전 접촉 상태 — 바뀔 때만 로그를 남기기 위한 것.</summary>
+    private bool[] poseGrippedPrev;
+
+    // ★진단 자세(좌·우)가 바뀌면 골격 표시도 같이 바꾼다 — 파지점이 좌우로 옮겨가는 것과 짝을 맞추기 위해.
+    //   골격 쪽에 자세용 줄이 없으면 아무 일도 없다(단계 줄이 그대로 유지된다).
+    private SkeletonFocusController skeletonFocus;
+    private bool skeletonFocusSearched;
+    private int reportedPoseNo = -1;
+
+    private void ReportPoseToSkeletonFocus(int poseIndex)
+    {
+        int poseNo = poseIndex >= 0 ? poseIndex + 1 : 0;   // 표시용은 1부터
+        if (poseNo == reportedPoseNo) return;
+        reportedPoseNo = poseNo;
+
+        if (!skeletonFocusSearched)
+        {
+            skeletonFocusSearched = true;
+            skeletonFocus = FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
+        }
+        skeletonFocus?.SetPose(poseNo);
+    }
+
     /// <summary>매 프레임: 자세별 유지 타이머 누적/초기화. 파지가 풀리면 gripGraceSeconds 안에 다시 잡아야 누적이 유지된다.</summary>
     private void UpdateDiagnosisStage()
     {
@@ -322,6 +368,24 @@ public class CranialAdjustmentController : MonoBehaviour
 
         int n = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
         int current = CurrentPoseIndex();   // 순서 강제 시 판정 대상(-1 = 전부 달성)
+
+        ReportPoseToSkeletonFocus(current);
+
+        // ★접촉이 붙고 떨어지는 순간만 기록한다 — "왜 안 채워지나"의 답이 대부분 여기 있다.
+        if (logDiagnosisTrace)
+        {
+            if (poseGrippedPrev == null || poseGrippedPrev.Length != n) poseGrippedPrev = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                var p = activeStage.poses[i];
+                bool now = p != null && p.AllGripped();
+                if (now == poseGrippedPrev[i]) continue;
+                poseGrippedPrev[i] = now;
+                ChunaLogger.Log($"<color=orange>[CranialAdjustmentController] 자세 {i} '{p?.label}' " +
+                                $"{(now ? "접촉 성립" : "접촉 끊김")} (유지 {poseHeld[i]:F1}/{StageHoldSeconds:F1}초, " +
+                                $"판정대상={current}, 순서강제={enforcePoseOrder})</color>");
+            }
+        }
 
         for (int i = 0; i < n; i++)
         {
@@ -377,6 +441,7 @@ public class CranialAdjustmentController : MonoBehaviour
         metrics = new TrainingResultData.CranialMetrics { label = label };
         metricsStartTime = Time.time;
         metricsPrevSatisfied = false;
+        lastTickSecond = -1;   // 단계가 바뀌면 유지 타이머 소리를 처음부터 센다
     }
 
     /// <summary>모인 지표가 있는가(다음 substep 진입 시 기록할 것이 남았는지).</summary>
@@ -468,9 +533,17 @@ public class CranialAdjustmentController : MonoBehaviour
              "끄면(기본) 손을 댔는지와 무관하게 1회를 끝까지 재생한다.")]
     [SerializeField] private bool stopGuideHandOnGrip = false;
 
+    [Tooltip("★기본 ON(08-11 사용자 지시). 시술자 손이 파지점에 닿아 있는 동안 가이드손을 숨기고, " +
+             "손을 떼면 다시 보여준다. ★되살릴 때는 재생이 아니라 '끝난 마지막 자세'다.\n" +
+             "판정(파지 성립)이 아니라 접촉만 본다 — 손 모양이 안 맞아도 시야를 가리지 않게.\n" +
+             "★신규 필드라 이미 배치된 씬 리그에도 코드 기본값이 그대로 먹는다.")]
+    [SerializeField] private bool hideGuideHandOnTouch = true;
+
     public void ArmGuideHandAutoHide(ChunaPathEvaluator evaluator, string substepClipName)
     {
         guideHandOwner = evaluator;
+        // 단계가 바뀌면 손별 숨김을 푼다 — 아직 손을 대고 있으면 다음 프레임에 다시 숨겨진다.
+        evaluator?.ClearGuideHandSuppression();
         substepGuideClip = substepClipName;
         loadedGuideClip = substepClipName;   // ScenarioManager가 이미 로드해 둔 상태
         guidePoseIndex = -1;
@@ -498,6 +571,15 @@ public class CranialAdjustmentController : MonoBehaviour
                 else guideHandOwner.StopGuideHandPlaybackInternal();   // 전부 달성 — 가이드 종료
                 return;
             }
+        }
+
+        // ★손을 갖다 댄 손의 가이드손만 완전히 숨긴다. 떼면 '끝난 자세' 그대로 다시 보인다(재생 아님).
+        //   ★손 단위인 이유: 왼손을 먼저 대는 술기에서 양손을 같이 숨기면 아직 안 댄 오른손의
+        //     목표 자세까지 사라져 어디를 잡아야 하는지 알 수 없게 된다.
+        if (hideGuideHandOnTouch)
+        {
+            guideHandOwner.SuppressGuideHandInternal(true,  AnyJudgedGripTouched(true));
+            guideHandOwner.SuppressGuideHandInternal(false, AnyJudgedGripTouched(false));
         }
 
         // ★기본값 OFF — 가이드손은 손을 댔는지와 무관하게 1회를 끝까지 재생한다(사용자 지시).
@@ -538,7 +620,36 @@ public class CranialAdjustmentController : MonoBehaviour
 
         float s = Mathf.Clamp01(p.guideStartRatio);
         float e = Mathf.Clamp01(Mathf.Max(p.guideStartRatio, p.guideEndRatio));
-        guideHandOwner.StartGuideHandPlaybackInternal(s, e, false);
+
+        // ★클립+구간을 키로 넘긴다 — 같은 자세가 다음 단계에서 또 요청되면 재생하지 않고
+        //   끝난 자세를 유지한다(08-11 사용자 지시). 자세별로 구간을 나눠 쓴 경우는 키가 달라 정상 재생된다.
+        guideHandOwner.PlayGuideHandOnceInternal(clip, s, e);
+    }
+
+    /// <summary>지금 판정 중인 파지점에 <b>손이 닿아 있는가</b>(하나라도). 가이드손 숨김 판단 전용.
+    /// ★파지 성립(IsGripped)이 아니라 접촉(IsTouched)을 본다 — 손 모양이 아직 안 맞아도
+    /// 손이 그 자리에 가 있으면 가이드손이 시야를 가리기 때문.</summary>
+    private bool AnyJudgedGripTouched(bool leftHand)
+    {
+        if (activeStage != null)
+        {
+            int i = CurrentPoseIndex();
+            if (i < 0) return true;                     // 전부 달성 — 더 보여줄 게 없다
+            if (activeStage.poses == null || i >= activeStage.poses.Length) return false;
+            var p = activeStage.poses[i];
+            if (p == null) return false;
+            var hand = leftHand ? p.leftHand : p.rightHand;
+            return hand != null && hand.AnyTouched();
+        }
+        return AnyTouched(leftHand ? leftGrips : rightGrips);
+    }
+
+    private static bool AnyTouched(GripPointTarget[] grips)
+    {
+        if (grips == null) return false;
+        for (int i = 0; i < grips.Length; i++)
+            if (grips[i] != null && grips[i].IsTouched) return true;
+        return false;
     }
 
     /// <summary>지금 판정 중인 파지가 성립했는가. 진단 단계면 '지금 차례 자세', 그 외엔 양손 교정 파지.</summary>
@@ -590,7 +701,14 @@ public class CranialAdjustmentController : MonoBehaviour
         if (activeStage == null || activeStage.poses == null || poseHeld == null)
         {
             if (Time.time - holdReportTime < 0.3f)
+            {
                 ui.DriveProgressExternally(holdReportRemaining, holdReportRemaining / holdReportTotal, null);
+                PlayHoldTick(holdReportRemaining);
+            }
+            else
+            {
+                lastTickSecond = -1;   // 표시가 끊기면 다음 유지에서 처음부터 센다
+            }
             return;
         }
 
@@ -621,6 +739,50 @@ public class CranialAdjustmentController : MonoBehaviour
 
         float remaining = Mathf.Max(0f, hold - poseHeld[show]);
         ui.DriveProgressExternally(remaining, remaining / hold, label);
+
+        // ★유지 게이지가 안 보이는 자세·각도가 있다는 지적(08-11) → 초마다 소리로도 알린다.
+        PlayHoldTick(remaining);
+    }
+
+    // ================= 유지 타이머 효과음 =================
+    [Header("=== 유지 타이머 소리 (08-11 신규) ===")]
+    [Tooltip("★유지 타이머가 화면에서 안 보이는 각도·단계가 있어 소리로 남은 초를 알린다. " +
+             "1초마다 '틱', 마지막 1초는 조금 높은 소리. 비우면 Resources/Audio/TimerTick·TimerTickLast를 자동으로 쓴다.\n" +
+             "★신규 필드라 이미 배치된 씬 리그에도 코드 기본값이 그대로 먹는다.")]
+    [SerializeField] private bool playHoldTickSound = true;
+    [SerializeField, Range(0f, 1f)] private float holdTickVolume = 0.5f;
+    [SerializeField] private AudioClip holdTickClip;
+    [SerializeField] private AudioClip holdTickLastClip;
+
+    private AudioSource tickSource;
+    private int lastTickSecond = -1;
+
+    /// <summary>남은 초가 바뀌는 순간에만 한 번 울린다(매 프레임 울리지 않게).</summary>
+    private void PlayHoldTick(float remaining)
+    {
+        if (!playHoldTickSound) return;
+
+        int sec = Mathf.CeilToInt(remaining);
+        if (sec == lastTickSecond) return;
+        lastTickSecond = sec;
+        if (sec <= 0) return;               // 0초 = 완료 — 완료음(띵동)이 담당한다
+
+        if (holdTickClip == null) holdTickClip = Resources.Load<AudioClip>("Audio/TimerTick");
+        if (holdTickLastClip == null) holdTickLastClip = Resources.Load<AudioClip>("Audio/TimerTickLast");
+
+        if (tickSource == null)
+        {
+            tickSource = gameObject.GetComponent<AudioSource>();
+            if (tickSource == null)
+            {
+                tickSource = gameObject.AddComponent<AudioSource>();
+                tickSource.playOnAwake = false;
+                tickSource.spatialBlend = 0f;   // 2D — 손이 시야를 벗어나도 들려야 한다
+            }
+        }
+
+        AudioClip clip = sec <= 1 && holdTickLastClip != null ? holdTickLastClip : holdTickClip;
+        if (clip != null) tickSource.PlayOneShot(clip, holdTickVolume);
     }
 
     private ScenarioGuideUIController cachedGuideUI;
@@ -707,7 +869,7 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>
     /// 파지가 성립하는 순간 대기 중인 환자 애니를 재생하도록 무장한다.
     /// <para><paramref name="leftOnly"/>=true면 <b>왼손 파지점만</b> 잡혀도 재생한다
-    /// (제1늑골: 왼손 웹이 늑골을 잡으면 머리가 신전·병진).</para>
+    /// (제1늑골: 왼손 검지 측면이 늑골 파지점에 닿으면 머리가 신전·병진).</para>
     /// </summary>
     public void ArmAnimationOnGrip(ChunaPathEvaluator evaluator, bool leftOnly)
     {
@@ -1355,7 +1517,7 @@ public class CranialAdjustmentController : MonoBehaviour
                 var stage = diagnosisStages[s];
                 if (stage == null) continue;
                 var grips = CollectStageGrips(stage);
-                AppendGrips(sb, $"진단단계 '{stage.stageId}' ({stage.holdSeconds}초)", grips.ToArray());
+                AppendGrips(sb, $"진단단계 '{stage.stageId}'", grips.ToArray());
             }
 
         ChunaLogger.Log(sb.ToString());

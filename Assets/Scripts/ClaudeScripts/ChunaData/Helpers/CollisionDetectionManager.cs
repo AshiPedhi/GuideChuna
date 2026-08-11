@@ -283,17 +283,24 @@ public class CollisionDetectionManager
         HandTransformMapper guideHand = isLeftHand ? ctx.leftGuideHand : ctx.rightGuideHand;
         string handName = isLeftHand ? "왼손" : "오른손";
 
-        if (guideHand != null)
-        {
-            float alpha = isTouching ? ctx.touchAlpha : ctx.guideHandColor.a;
-            guideHand.SetColorAndAlpha(ctx.guideHandColor, alpha);
+        if (guideHand == null) return;
 
-            if (ctx.showDebugLogs)
-            {
-                string state = isTouching ? "접촉" : "미접촉";
-                ChunaLogger.Log($"<color=yellow>[GuideHand] {handName} {state} → 알파: {alpha:F2}</color>");
-            }
+        // ★접촉하면 <b>완전히 숨긴다</b>(08-11 사용자 지시). 예전에는 touchAlpha(0.15)로 반투명하게만
+        //   흐려서 손 위에 잔상이 겹쳐 보였다 — "손을 대면 안 보여야 한다"가 요구사항이다.
+        //   손을 떼면 다시 보인다(이때 재생은 하지 않는다 — 재생 제어는 ChunaPathEvaluator 쪽 규약).
+        if (isTouching)
+        {
+            guideHand.SetVisible(false);
         }
+        else if (owner.GuideHandHasData(isLeftHand))
+        {
+            // ★녹화가 한 손뿐인 클립에서 반대 손을 되살리지 않도록 데이터 유무를 확인한다.
+            guideHand.SetVisible(true);
+            guideHand.SetColorAndAlpha(ctx.guideHandColor, ctx.guideHandColor.a);
+        }
+
+        if (ctx.showDebugLogs)
+            ChunaLogger.Log($"<color=yellow>[GuideHand] {handName} {(isTouching ? "접촉 → 숨김" : "미접촉 → 표시")}</color>");
     }
 
     /// <summary>

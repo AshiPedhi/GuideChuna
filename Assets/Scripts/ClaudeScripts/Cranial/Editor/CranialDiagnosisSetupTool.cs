@@ -55,7 +55,8 @@ public class CranialDiagnosisSetupTool : EditorWindow
 
         EditorGUILayout.HelpBox(
             "진단 단계에 필요한 파지점을 만들고 컨트롤러에 자동 배선합니다.\n" +
-            "★ 생성 후 씬 뷰에서 각 파지점을 실제 위치(측두부·후두부)로 끌어다 놓으세요.",
+            "★ 생성 후 씬 뷰에서 각 파지점을 실제 위치(측두부·후두부)로 끌어다 놓으세요.\n" +
+            "★ 유지 시간(초)은 여기서 정하지 않습니다 - CSV conditionParams의 hold= 하나로만 정합니다.",
             MessageType.Info);
 
         EditorGUILayout.Space();
@@ -112,7 +113,9 @@ public class CranialDiagnosisSetupTool : EditorWindow
                 MakeThreePointGrip();
             if (GUILayout.Button("PM 교정 파지 구성 (왼손 엄지·중지 / 오른손 엄지·검지)"))
                 SetupPmCorrectionGrips();
-            if (GUILayout.Button("늑골·흉추 교정 파지 구성 (좌우 손바닥 1점씩)"))
+            if (GUILayout.Button("제1늑골 교정 파지 구성 (왼손 검지 측면 / 오른손 손바닥)"))
+                SetupRib1CorrectionGrips();
+            if (GUILayout.Button("제2늑골·흉추 교정 파지 구성 (좌우 손바닥 1점씩)"))
                 SetupRibCorrectionGrips();
             if (GUILayout.Button("레거시 diagnosisRightGrips 배열 비우기"))
                 ClearLegacyDiagnosisArray();
@@ -153,13 +156,13 @@ public class CranialDiagnosisSetupTool : EditorWindow
         switch (p)
         {
             case Preset.OM:
-                return "OM(두개골교정)\n" +
-                       "  · 진단1 — 양손 측두부 감싸기 (왼손 손바닥 + 오른손 손바닥), 3초 유지\n" +
-                       "  · 진단2 — 양손 후두부 모아 베개 (왼손 손바닥 + 오른손 손바닥), 8초 유지\n" +
+                return "OM(두개골OM교정)\n" +
+                       "  · 진단1 — 양손 측두부 감싸기 (왼손 손바닥 + 오른손 손바닥)\n" +
+                       "  · 진단2 — 양손 후두부 모아 베개 (왼손 손바닥 + 오른손 손바닥)\n" +
                        "  → 파지점 4개";
             case Preset.PMPJ:
                 return "PM·PJ(두개골PM교정 / 두개골PJ교정)\n" +
-                       "  · 진단1 — 자세 2개, 각 3초 유지 (순서 무관), 호흡 유도 메시지 ON\n" +
+                       "  · 진단1 — 자세 2개 (순서 무관), 호흡 유도 메시지 ON\n" +
                        "      ⓐ 왼손 후두(손바닥) + 오른손 측두(엄지·검지·새끼)\n" +
                        "      ⓑ 왼손 측두(엄지·검지·새끼) + 오른손 후두(손바닥)\n" +
                        "  → 파지점 8개 (자세당 4개)\n" +
@@ -167,10 +170,10 @@ public class CranialDiagnosisSetupTool : EditorWindow
                        "     받치는 손만 손바닥이고 측두 쪽은 손가락 파지다.";
             case Preset.Rib:
                 return "늑골(제1늑골_앙와위 / 제2늑골_상방변위)\n" +
-                       "  · 진단1 — 양손 엄지로 좌우 높이 비교, 자세 1개 3초 유지\n" +
+                       "  · 진단1 — 양손 엄지로 좌우 높이 비교, 자세 1개\n" +
                        "  → 파지점 2개\n" +
-                       "  ※ 교정 파지는 아래 '늑골 교정 파지 구성' 버튼으로 따로 만든다\n" +
-                       "     (제1늑골 = 왼손 웹 + 오른손 머리 측면 / 제2늑골 = 두상골 접촉 + 반대손 팔 파지).";
+                       "  ※ 교정 파지는 아래 '교정 파지 구성' 버튼으로 따로 만든다\n" +
+                       "     (제1늑골 = 왼손 검지 측면 + 오른손 머리 측면 / 제2늑골 = 두상골 접촉 + 반대손 팔 파지).";
         }
         return "";
     }
@@ -468,7 +471,6 @@ public class CranialDiagnosisSetupTool : EditorWindow
             var st = stages[s];
             var sp = stagesProp.GetArrayElementAtIndex(s);
             sp.FindPropertyRelative("stageId").stringValue = st.stageId;
-            sp.FindPropertyRelative("holdSeconds").floatValue = st.holdSeconds;
             sp.FindPropertyRelative("showBreathingCue").boolValue = st.showBreathingCue;
 
             var posesProp = sp.FindPropertyRelative("poses");
@@ -643,11 +645,38 @@ public class CranialDiagnosisSetupTool : EditorWindow
                  "되돌리려면 Ctrl+Z.";
     }
 
-    /// <summary>늑골·흉추 술기의 교정 파지를 구성한다 — 양손 모두 '한 점을 대고 유지'하는 형태라 손바닥 1점씩이다.
-    ///   제1늑골 — 왼손 웹(Web)을 좌측 제1늑골에 / 오른손은 머리 측면을 파지
+    /// <summary>★제1늑골 전용 교정 파지 — 2026-08-05 회의 결정으로 접촉 부위가 바뀌었다.
+    ///   (구) 왼손 웹(Web)을 제1늑골에  →  (신) <b>왼손 검지 측면</b>이 쇄골 중앙 밑으로 들어가 제1늑골 <b>전방</b>에 접촉.
+    /// 그래서 왼손만 Palm이 아니라 <see cref="CranialFinger.Index"/>다(검지 측면이라 검지 콜라이더가 가장 가깝다).
+    /// 오른손은 머리 측면을 받치는 형태라 그대로 손바닥 1점.</summary>
+    private void SetupRib1CorrectionGrips()
+    {
+        if (rig == null) return;
+
+        var template = FindTemplate(rig);
+        var log = new List<string>();
+
+        var left = EnsureCorrectionSide(rig, "leftGrips", true, template,
+            new[] { CranialFinger.Index }, log);
+        EnsureCorrectionSide(rig, "rightGrips", false, template,
+            new[] { CranialFinger.Palm }, log);
+
+        EditorUtility.SetDirty(rig);
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(rig.gameObject.scene);
+        if (left != null) Selection.activeGameObject = left.gameObject;
+
+        status = "제1늑골 교정 파지 구성 완료 (왼손 검지 · 오른손 손바닥).\n" + string.Join("\n", log) +
+                 "\n\n★ 위치는 씬 뷰에서 옮겨야 합니다:\n" +
+                 "   · 왼손 검지 = 좌측 쇄골 중앙 바로 아래, 제1늑골 앞면(피부에서 살짝 안쪽)\n" +
+                 "   · 오른손 손바닥 = 머리 우측면\n" +
+                 "되돌리려면 Ctrl+Z.";
+    }
+
+    /// <summary>제2늑골·흉추 술기의 교정 파지를 구성한다 — 양손 모두 '한 점을 대고 유지'하는 형태라 손바닥 1점씩이다.
     ///   제2늑골 — 두상골(Pisiform)을 제2늑골 부위에 / 반대손은 환자 팔을 파지
     ///   흉추(신전변위) — 좌우 흉추에 지지손을 대는 자세(파지 2.3 = cranialGrip)
-    /// 웹·두상골은 손바닥 슬롯으로 근사한다(손가락 끝이 아니라 손 아래쪽 면이라 Palm이 가장 가깝다).</summary>
+    /// 두상골은 손바닥 슬롯으로 근사한다(손가락 끝이 아니라 손 아래쪽 면이라 Palm이 가장 가깝다).
+    /// ※제1늑골은 접촉 부위가 검지 측면이라 위의 전용 버튼을 쓴다.</summary>
     private void SetupRibCorrectionGrips()
     {
         if (rig == null) return;
@@ -666,7 +695,6 @@ public class CranialDiagnosisSetupTool : EditorWindow
 
         status = "교정 파지 구성 완료 (좌우 손바닥 1점씩).\n" + string.Join("\n", log) +
                  "\n\n★ 위치는 씬 뷰에서 옮겨야 합니다:\n" +
-                 "   · 제1늑골 — 왼손 = 좌측 제1늑골(승모근 아래), 오른손 = 머리 우측면\n" +
                  "   · 제2늑골 — 접촉손 = 쇄골 바깥 델토펙토랄, 반대손 = 환자 팔(상완)\n" +
                  "   · 흉추 신전변위 — 좌우 흉추(등 아래로 손을 넣는 지점)\n" +
                  "되돌리려면 Ctrl+Z.";
@@ -846,14 +874,13 @@ public class CranialDiagnosisSetupTool : EditorWindow
     private class StageBuild
     {
         public readonly string stageId;
-        public readonly float holdSeconds;
         public readonly bool showBreathingCue;
         public readonly List<PoseBuild> poses = new List<PoseBuild>();
 
-        public StageBuild(string stageId, float holdSeconds, bool showBreathingCue)
+        /// <param name="holdSecondsUnused">★유지 시간은 CSV의 hold=만 쓴다(08-11 필드 삭제). 호출부 호환을 위해 남긴 인자.</param>
+        public StageBuild(string stageId, float holdSecondsUnused, bool showBreathingCue)
         {
             this.stageId = stageId;
-            this.holdSeconds = holdSeconds;
             this.showBreathingCue = showBreathingCue;
         }
     }

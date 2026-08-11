@@ -9,7 +9,10 @@ using UnityEngine;
 public class ScenarioConfig : ScriptableObject
 {
     [Header("=== 시나리오 ===")]
-    [Tooltip("시나리오 이름 (CSV 파일명, 표시 이름으로 공용)")]
+    [Tooltip("시나리오 이름 = 화면 제목이자 내부 키. 다음 다섯 곳이 ★전부 같아야 한다:\n" +
+             "  ① 이 칸  ② config 에셋 파일명  ③ CSV 파일명  ④ CSV의 scenarioName 열  ⑤ 나레이션 폴더명\n" +
+             "  ⑥ (두개골·늑골류) 씬 파지점 리그의 scenarioName\n" +
+             "하나라도 다르면 나레이션이 안 나오거나 파지점 리그를 못 찾는다. 개명은 이 여섯 개를 한 번에.")]
     public string scenarioName;  // 예: "상부승모근"
 
     [Header("=== 환자 애니메이션 ===")]

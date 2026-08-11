@@ -97,6 +97,11 @@ public class BreathingSyncHUD : MonoBehaviour
     [Tooltip("숨소리 볼륨. 클립이 작으면 올리고, 너무 크면 낮춘다. (플레이스홀더 클립은 +17dB 증폭돼 있음)")]
     [SerializeField, Range(0f, 1f)] private float breathVolume = 1f;
 
+    [Tooltip("★숨소리가 크다는 지적(08-11) — 위 breathVolume에 이 배수를 곱한다.\n" +
+             "씬에 이미 breathVolume=1이 직렬화돼 있어 그 기본값을 바꿔도 안 먹기 때문에 배수를 따로 둔다.\n" +
+             "★신규 필드라 이미 배치된 씬에도 코드 기본값이 그대로 먹는다.")]
+    [SerializeField, Range(0f, 1f)] private float breathVolumeScale = 0.45f;
+
     private System.Func<bool> tensionProvider;
     private bool running = false;
     private bool complete = false;
@@ -191,7 +196,7 @@ public class BreathingSyncHUD : MonoBehaviour
     {
         if (breathAudioSource == null) return;
         AudioClip clip = inhale ? inhaleClip : exhaleClip;
-        if (clip != null) breathAudioSource.PlayOneShot(clip, breathVolume);
+        if (clip != null) breathAudioSource.PlayOneShot(clip, breathVolume * breathVolumeScale);
     }
 
     public void StopWindow()

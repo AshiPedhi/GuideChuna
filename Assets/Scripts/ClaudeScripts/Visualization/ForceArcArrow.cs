@@ -10,6 +10,9 @@ using UnityEngine;
 /// ★구현: 커스텀 셰이더를 쓰지 않는다(빌드에서 스트립돼 xray가 죽은 전례).
 /// 호를 <b>여러 조각으로 나눈 자식 오브젝트</b>를 만들고 조각마다 알파를 위상차를 두어 흘린다
 /// → 회전 방향으로 빛이 지나가는 것처럼 보인다. 마지막 조각은 화살촉이다.
+///
+/// ★08-11 사용자 지시로 <b>호 전체를 켜 두지 않는다</b> — <c>sharpFlow</c>(기본 켬)가 진행 위치의
+/// 1~2칸만 남기고 나머지를 지운다. 러너와 함께 "빛나는 점이 궤도를 타고 도는" 형태가 된다.
 /// 조각은 에디터 도구가 만들어 둔다(플레이 안 해도 씬에서 모양이 보이도록).
 ///
 /// ★기하 규약: <b>회전축 = 로컬 +Y</b>. 호는 로컬 +Z에서 시작해 +X 쪽으로 돈다.
@@ -116,6 +119,11 @@ public class ForceArcArrow : ForceArrowBase
             float edge = Mathf.Min(phase, 1f - phase) / runnerFadeEnds;
             a = Mathf.Clamp01(edge);
         }
+
+        // 세그먼트와 같은 규칙 — 알파가 0에 가까우면 렌더러를 꺼서 머티리얼 상태와 무관하게 사라지게 한다.
+        bool visible = a > 0.02f;
+        if (runnerRenderer.enabled != visible) runnerRenderer.enabled = visible;
+        if (!visible) return;
 
         Color c = BaseColor;
         c.a = Mathf.Lerp(0f, maxAlpha, a);

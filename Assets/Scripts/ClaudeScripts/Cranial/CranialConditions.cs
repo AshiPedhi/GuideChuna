@@ -31,7 +31,7 @@ public class DiagnosisHoldCondition : IScenarioCondition
     private bool usingStage;
     private bool started = false;
 
-    /// <param name="holdSeconds">CSV의 hold= 값(초). 0이면 스테이지에 설정된 값을 쓴다.</param>
+    /// <param name="holdSeconds">CSV의 hold= 값(초). 0이면 CranialAdjustmentController.DefaultDiagnosisHoldSeconds(3초).</param>
     public DiagnosisHoldCondition(CranialAdjustmentController controller, string stageId, float holdSeconds = 0f)
     {
         this.controller = controller;
@@ -58,6 +58,13 @@ public class DiagnosisHoldCondition : IScenarioCondition
         if (controller == null || started) return;
         if (usingStage) controller.BeginDiagnosisStage(stageId);   // 여기서부터 유지 타이머 카운트
         started = true;
+
+        // ★"타이머가 멈추고 사라진 뒤 진행이 안 된다"(08-11) 추적용 —
+        //   여기서 usingStage=false면 유지 타이머 자체가 없는 레거시 접촉 판정으로 도는 것이고,
+        //   그 경우 게이트는 leftGrips + diagnosisRightGrips라 배선이 다르면 영영 안 넘어간다.
+        ChunaLogger.Log($"<color=orange>[DiagnosisHoldCondition] 판정 시작 — 단계='{stageId}' " +
+                        $"경로={(usingStage ? "스테이지 유지 타이머" : "★레거시 양손 접촉(유지 타이머 없음)")} " +
+                        $"유지={controller.StageHoldSeconds:F1}초</color>");
     }
 
     public bool IsConditionMet()

@@ -12,9 +12,12 @@ using UnityEngine;
 /// 파지점의 자식으로 두면 환자 애니메이션을 따라간다.
 ///
 /// ★표시 방식 2가지 — 어느 쪽인지는 <b>자식 조각 수로 자동 판별</b>한다.
-///   · <b>흐름(권장)</b>: 조각이 2개 이상이면 꼬리→머리로 빛이 흘러 진행 방향이 또렷하다.
-///     에디터 도구의 "(흐름)" 메뉴가 이 형태를 만든다.
-///   · <b>단일</b>: 통짜 화살표 1개면 전체가 같이 밝아졌다 어두워진다(기존 형태 호환).
+///   · <b>흐름(권장)</b>: 조각이 2개 이상이면 <b>1~2칸만 빛나며</b> 꼬리→머리로 지나간다
+///     (<c>sharpFlow</c>, 기본 켬). 에디터 도구의 "(흐름)" 메뉴가 이 형태를 만든다.
+///   · <b>단일</b>: 통짜 화살표 1개면 밝기가 오르내리며 <b>미는 방향으로 앞뒤로 왕복</b>한다(<c>travelPulse</c>).
+///
+/// ★08-11 사용자 지시 — "경로 전체를 켜 둔 채 이펙트만 흐르면 안 되고 진행 위치 1~2칸만 빛나야 한다.
+/// 직선도 늘어나는 게 아니라 앞뒤로 움직여야 한다."
 ///
 /// ★길이로 힘의 크기를 암시하지 말 것 — 압력 판정이 없으므로(useDepthJudging=false)
 /// 학생이 "이만큼 세게"로 오해한다. 길이는 가독성 기준으로만 정한다.
@@ -36,14 +39,22 @@ public class ForceArrow : ForceArrowBase
     [Header("=== 펄스 (조각 1개일 때) ===")]
     [Tooltip("초당 펄스 횟수")]
     [SerializeField] private float pulsePerSecond = 0.8f;
-    [Tooltip("진행 방향(+Z) 길이 펄스 진폭. 0이면 길이 고정.")]
+    [Tooltip("진행 방향(+Z) 길이 펄스 진폭. 0이면 길이 고정.\n" +
+             "★아래 '앞뒤 이동'이 0보다 크면 이 값은 무시된다(길이는 고정).")]
     [SerializeField, Range(0f, 0.3f)] private float lengthPulse = 0.08f;
+
+    [Tooltip("★화살표가 늘었다 줄었다 하면 '힘이 세졌다 약해진다'로 읽힌다 → 길이는 두고 " +
+             "미는 방향으로 앞뒤로 왕복시킨다(08-11 사용자 지시).\n" +
+             "화살표 길이 대비 이동 폭. 0이면 제자리(예전 방식 = 길이 펄스).\n" +
+             "★신규 필드라 이미 배치된 화살표에도 코드 기본값이 먹는다.")]
+    [SerializeField, Range(0f, 1f)] private float travelPulse = 0.35f;
 
     [Header("=== 공통 ===")]
     [SerializeField, Range(0f, 1f)] private float minAlpha = 0.25f;
     [SerializeField, Range(0f, 1f)] private float maxAlpha = 0.95f;
 
     private Vector3 baseScale;
+    private Vector3 basePos;
     private float phase;
     private bool initialized;
 
@@ -57,6 +68,7 @@ public class ForceArrow : ForceArrowBase
         initialized = true;
 
         baseScale = transform.localScale;
+        basePos = transform.localPosition;
 
         if (segments == null || segments.Length == 0)
         {
@@ -75,12 +87,15 @@ public class ForceArrow : ForceArrowBase
         Initialize();
         phase = 0f;
         transform.localScale = baseScale;
+        transform.localPosition = basePos;
     }
 
     private void OnDisable()
     {
-        // 다음에 켜질 때 펄스 도중 크기가 남아 있지 않도록 되돌린다.
-        if (initialized) transform.localScale = baseScale;
+        // 다음에 켜질 때 펄스 도중의 크기·위치가 남아 있지 않도록 되돌린다.
+        if (!initialized) return;
+        transform.localScale = baseScale;
+        transform.localPosition = basePos;
     }
 
     private void Update()
@@ -95,7 +110,7 @@ public class ForceArrow : ForceArrowBase
             return;
         }
 
-        // 통짜 화살표: 전체가 같이 밝아졌다 어두워지고, 길이가 살짝 늘었다 줄어든다.
+        // 통짜 화살표: 전체가 같이 밝아졌다 어두워지면서, 미는 방향으로 앞뒤로 왕복한다.
         phase += Time.deltaTime * Mathf.Max(0.01f, pulsePerSecond);
         if (phase > 1f) phase -= 1f;
         float wave = (Mathf.Sin(phase * 2f * Mathf.PI) + 1f) * 0.5f;
@@ -104,7 +119,16 @@ public class ForceArrow : ForceArrowBase
         c.a = Mathf.Lerp(minAlpha, maxAlpha, wave);
         foreach (Renderer r in segments) SetRendererColor(r, c);
 
-        if (lengthPulse > 0f)
+        if (travelPulse > 0f)
+        {
+            // ★길이는 고정하고 위치만 움직인다 — 늘었다 줄었다 하면 '힘의 크기'로 오해된다.
+            //   화살표 메시는 길이 1이라 실제 길이 = baseScale.z. 그 비율만큼 앞뒤로 오간다.
+            transform.localScale = baseScale;
+            float amp = travelPulse * baseScale.z * 0.5f;
+            Vector3 forwardLocal = transform.localRotation * Vector3.forward;   // 부모 기준 +Z
+            transform.localPosition = basePos + forwardLocal * (Mathf.Sin(phase * 2f * Mathf.PI) * amp);
+        }
+        else if (lengthPulse > 0f)
         {
             Vector3 s = baseScale;
             s.z = baseScale.z * (1f + lengthPulse * (wave - 0.5f) * 2f);

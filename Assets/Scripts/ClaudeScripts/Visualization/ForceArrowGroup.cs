@@ -18,8 +18,9 @@ using UnityEngine;
 public class ForceArrowGroup : MonoBehaviour
 {
     [Header("=== 언제 보일지 ===")]
-    [Tooltip("기본 '교정국면 전체' = 파지→자세준비→호흡유도→교정 내내 표시. 아래 칸은 '특정 단계만'일 때만 쓴다.")]
-    [SerializeField] private ForceArrowBase.ShowScope showWhen = ForceArrowBase.ShowScope.교정국면_전체;
+    [Tooltip("기본 '교정국면 파지제외' = 잠금·견착·호흡·교정에만 표시(파지·준비 제외). " +
+             "아래 칸은 '특정 단계만'일 때만 쓴다.")]
+    [SerializeField] private ForceArrowBase.ShowScope showWhen = ForceArrowBase.ShowScope.교정국면_파지제외;
 
     [Tooltip("'특정 단계만'일 때 쓸 단계 이름(CSV stepName). 예: 호흡유도 / 교정")]
     [SerializeField] private string stepName = "";

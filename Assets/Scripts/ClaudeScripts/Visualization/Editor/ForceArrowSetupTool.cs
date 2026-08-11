@@ -79,10 +79,20 @@ public static class ForceArrowSetupTool
             return;
         }
 
+        ForceArrow made = BuildFlowArrow(parent, "힘의 방향 화살표 (흐름)");
+        Selection.activeGameObject = made.gameObject;
+        EditorGUIUtility.PingObject(made.gameObject);
+        Debug.Log($"[힘의 방향 화살표] '{parent.name}' 아래에 쐐기 {FlowChevrons}개로 생성했습니다. " +
+                  "로컬 +Z가 미는 방향입니다 — 씬에서 회전시켜 맞추세요.");
+    }
+
+    /// <summary>직선(흐름) 화살표 하나를 만들어 돌려준다(메뉴·자동 배치가 공유).</summary>
+    private static ForceArrow BuildFlowArrow(Transform parent, string name)
+    {
         Mesh chevron = LoadOrCreateChevronMesh();
         Material mat = LoadOrCreateMaterial();
 
-        var root = new GameObject("힘의 방향 화살표 (흐름)");
+        var root = new GameObject(name);
         Undo.RegisterCreatedObjectUndo(root, "힘의 방향 화살표 만들기");
         root.transform.SetParent(parent, false);
         root.transform.localPosition = Vector3.zero;
@@ -122,10 +132,7 @@ public static class ForceArrowSetupTool
         }
         so.ApplyModifiedProperties();
 
-        Selection.activeGameObject = root;
-        EditorGUIUtility.PingObject(root);
-        Debug.Log($"[힘의 방향 화살표] '{parent.name}' 아래에 쐐기 {FlowChevrons}개로 생성했습니다. " +
-                  "로컬 +Z가 미는 방향입니다 — 씬에서 회전시켜 맞추세요.");
+        return arrow;
     }
 
     [MenuItem("GuideChuna/힘의 방향 화살표 (회전) 만들기 (선택한 오브젝트 자식으로)")]
@@ -140,9 +147,20 @@ public static class ForceArrowSetupTool
             return;
         }
 
+        ForceArcArrow made = BuildArcArrow(parent, "회전 방향 화살표");
+        Selection.activeGameObject = made.gameObject;
+        EditorGUIUtility.PingObject(made.gameObject);
+        Debug.Log($"[회전 화살표] '{parent.name}' 아래에 {ArcSegments}조각 + 러너로 생성했습니다.\n" +
+                  "★회전축 = 이 오브젝트의 로컬 +Y(초록 축)입니다. 굴곡·신전이면 좌우 귀를 잇는 축에 맞추세요.\n" +
+                  "도는 방향을 뒤집으려면 오브젝트를 Y축으로 180° 돌리거나 X 스케일을 -1로 두면 됩니다.");
+    }
+
+    /// <summary>회전 화살표 하나를 만들어 돌려준다(메뉴·자동 배치가 공유).</summary>
+    private static ForceArcArrow BuildArcArrow(Transform parent, string name)
+    {
         Material mat = LoadOrCreateMaterial();
 
-        var root = new GameObject("회전 방향 화살표");
+        var root = new GameObject(name);
         Undo.RegisterCreatedObjectUndo(root, "회전 화살표 만들기");
         root.transform.SetParent(parent, false);
         root.transform.localPosition = Vector3.zero;
@@ -200,11 +218,7 @@ public static class ForceArrowSetupTool
         }
         so.ApplyModifiedProperties();
 
-        Selection.activeGameObject = root;
-        EditorGUIUtility.PingObject(root);
-        Debug.Log($"[회전 화살표] '{parent.name}' 아래에 {ArcSegments}조각 + 러너로 생성했습니다.\n" +
-                  "★회전축 = 이 오브젝트의 로컬 +Y(초록 축)입니다. 굴곡·신전이면 좌우 귀를 잇는 축에 맞추세요.\n" +
-                  "도는 방향을 뒤집으려면 오브젝트를 Y축으로 180° 돌리거나 X 스케일을 -1로 두면 됩니다.");
+        return arc;
     }
 
     [MenuItem("GuideChuna/힘의 방향 화살표 그룹 만들기 (선택한 오브젝트 자식으로)")]
@@ -225,6 +239,148 @@ public static class ForceArrowSetupTool
 
         Selection.activeGameObject = go;
         Debug.Log("[힘의 방향 화살표] 그룹을 만들었습니다. 인스펙터에서 Step Name(예: 교정)을 채우세요.");
+    }
+
+    // ============================ PM·PJ 자동 배치 ============================
+
+    /// <summary>
+    /// PM·PJ 리그에 힘의 방향 화살표를 규격대로 만들어 붙인다.
+    ///
+    /// ★비파괴 — 같은 이름의 그룹이 이미 있으면 그 리그는 건너뛴다(수작업 배치를 덮지 않는다).
+    /// ★위치·각도는 대략값이다. 만든 뒤 씬 뷰에서 회전시켜 실제 방향에 맞춰야 한다.
+    ///
+    /// 규격(08-10 사용자 구술):
+    ///   PM — 잠금 없음. 양손 유양돌기를 <b>족방→두방으로 견인</b> → 직선 화살표 2개(양손), 국면 전체.
+    ///   PJ — 방향이 중간에 <b>뒤집힌다</b>:
+    ///        ⓐ 굴곡(왼손)·외회전(오른손) : 굴곡외회전 → 견착 → 호흡
+    ///        ⓑ 신전(왼손)·내회전(오른손) : 전환 → 호흡2
+    ///        그래서 같은 화살표 묶음을 단계 이름만 다른 그룹 여러 개가 공유한다.
+    /// </summary>
+    [MenuItem("GuideChuna/힘의 방향 화살표 기본 배치 (PM·PJ)")]
+    private static void PlaceForPmPj()
+    {
+        var rigs = new List<CranialAdjustmentController>();
+        foreach (CranialAdjustmentController c in Resources.FindObjectsOfTypeAll<CranialAdjustmentController>())
+            if (c != null && c.gameObject.scene.IsValid()) rigs.Add(c);
+
+        var log = new System.Text.StringBuilder();
+        int made = 0;
+
+        foreach (CranialAdjustmentController rig in rigs)
+        {
+            string name = ScenarioNameOf(rig);
+            bool isPm = name.Contains("PM");
+            bool isPj = name.Contains("PJ");
+            if (!isPm && !isPj) continue;
+
+            Transform left = FirstGrip(rig, "leftGrips");
+            Transform right = FirstGrip(rig, "rightGrips");
+            if (left == null || right == null)
+            {
+                log.AppendLine($"  {name}: ★교정 파지점이 없어 건너뜀 (leftGrips/rightGrips 확인)");
+                continue;
+            }
+
+            if (isPm)
+            {
+                if (rig.transform.Find(PmGroupName) != null) { log.AppendLine($"  {name}: 이미 있음 — 건너뜀"); continue; }
+
+                // 족방→두방 견인 = 직선. 양손에 같은 방향으로 하나씩.
+                ForceArrow a1 = BuildFlowArrow(left, "힘의 방향 (왼손 견인)");
+                ForceArrow a2 = BuildFlowArrow(right, "힘의 방향 (오른손 견인)");
+                MakeGroup(rig.transform, PmGroupName, ForceArrowBase.ShowScope.교정국면_파지제외, "", 0,
+                          new ForceArrowBase[] { a1, a2 });
+                made += 2;
+                log.AppendLine($"  {name}: 직선 2개(양손 견인) + 그룹 1개 — 국면 전체 표시");
+            }
+            else
+            {
+                if (rig.transform.Find("화살표 그룹 PJ 굴곡외회전") != null) { log.AppendLine($"  {name}: 이미 있음 — 건너뜀"); continue; }
+
+                // ⓐ 굴곡(왼손) + 외회전(오른손)
+                ForceArcArrow flex = BuildArcArrow(left, "회전 (왼손 굴곡)");
+                ForceArcArrow exRot = BuildArcArrow(right, "회전 (오른손 외회전)");
+                var setA = new ForceArrowBase[] { flex, exRot };
+
+                // ⓑ 신전(왼손) + 내회전(오른손) — 같은 호를 반대로 돌린다(X 스케일 -1).
+                ForceArcArrow ext = BuildArcArrow(left, "회전 (왼손 신전)");
+                ForceArcArrow inRot = BuildArcArrow(right, "회전 (오른손 내회전)");
+                Flip(ext); Flip(inRot);
+                var setB = new ForceArrowBase[] { ext, inRot };
+
+                // ★한 그룹은 단계 하나만 매칭한다 → 같은 묶음을 단계별 그룹이 공유한다.
+                foreach (string step in new[] { "굴곡외회전", "견착", "호흡" })
+                    MakeGroup(rig.transform, $"화살표 그룹 PJ {step}", ForceArrowBase.ShowScope.특정_단계만, step, 0, setA);
+                foreach (string step in new[] { "전환", "호흡2" })
+                    MakeGroup(rig.transform, $"화살표 그룹 PJ {step}", ForceArrowBase.ShowScope.특정_단계만, step, 0, setB);
+
+                made += 4;
+                log.AppendLine($"  {name}: 회전 4개(굴곡·외회전 / 신전·내회전) + 그룹 5개 — 단계별 전환");
+            }
+        }
+
+        string msg = made == 0
+            ? "새로 만든 화살표가 없습니다(이미 있거나 PM·PJ 리그를 찾지 못함).\n" + log
+            : $"화살표 {made}개를 만들었습니다.\n{log}\n" +
+              "★씬 뷰에서 각각 회전시켜 실제 방향에 맞추세요:\n" +
+              "   · 직선 = 로컬 +Z(파란 축)가 미는 방향\n" +
+              "   · 회전 = 로컬 +Y(초록 축)가 회전축, +Z에서 +X로 돕니다\n" +
+              "   · 굴곡·신전은 좌우 귀를 잇는 축, 내·외회전은 머리 수직축에 맞추면 대체로 맞습니다\n" +
+              "되돌리려면 Ctrl+Z. 확인은 메뉴 '힘의 방향 화살표 점검'.";
+        Debug.Log("[힘의 방향 화살표 기본 배치]\n" + msg);
+        EditorUtility.DisplayDialog("힘의 방향 화살표 기본 배치 (PM·PJ)", msg, "확인");
+    }
+
+    private const string PmGroupName = "화살표 그룹 PM 견인";
+
+    private static string ScenarioNameOf(CranialAdjustmentController rig)
+    {
+        var so = new SerializedObject(rig);
+        SerializedProperty p = so.FindProperty("scenarioName");
+        return p != null ? p.stringValue ?? "" : rig.gameObject.name;
+    }
+
+    private static Transform FirstGrip(CranialAdjustmentController rig, string arrayName)
+    {
+        var so = new SerializedObject(rig);
+        SerializedProperty arr = so.FindProperty(arrayName);
+        if (arr == null || !arr.isArray) return null;
+        for (int i = 0; i < arr.arraySize; i++)
+        {
+            var g = arr.GetArrayElementAtIndex(i).objectReferenceValue as GripPointTarget;
+            if (g != null) return g.transform;
+        }
+        return null;
+    }
+
+    /// <summary>도는 방향을 뒤집는다(X 스케일 -1) — 굴곡↔신전, 외회전↔내회전.</summary>
+    private static void Flip(ForceArcArrow arc)
+    {
+        Vector3 s = arc.transform.localScale;
+        s.x = -s.x;
+        arc.transform.localScale = s;
+    }
+
+    private static void MakeGroup(Transform parent, string name, ForceArrowBase.ShowScope scope,
+                                  string stepName, int subStepNo, ForceArrowBase[] arrows)
+    {
+        var go = new GameObject(name);
+        Undo.RegisterCreatedObjectUndo(go, "화살표 그룹 만들기");
+        go.transform.SetParent(parent, false);
+        var grp = go.AddComponent<ForceArrowGroup>();
+
+        var so = new SerializedObject(grp);
+        so.FindProperty("showWhen").enumValueIndex = (int)scope;
+        so.FindProperty("stepName").stringValue = stepName;
+        so.FindProperty("subStepNo").intValue = subStepNo;
+        SerializedProperty arr = so.FindProperty("arrows");
+        arr.ClearArray();
+        for (int i = 0; i < arrows.Length; i++)
+        {
+            arr.InsertArrayElementAtIndex(i);
+            arr.GetArrayElementAtIndex(i).objectReferenceValue = arrows[i];
+        }
+        so.ApplyModifiedProperties();
     }
 
     [MenuItem("GuideChuna/힘의 방향 화살표 점검")]

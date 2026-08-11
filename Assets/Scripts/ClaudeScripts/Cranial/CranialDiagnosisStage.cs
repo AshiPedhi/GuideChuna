@@ -37,6 +37,17 @@ public class CranialHandGrips
         if (pinkyGrip != null) dst.Add(pinkyGrip);
     }
 
+    /// <summary>배선된 파지점 중 <b>하나라도</b> 손이 닿아 있는가(포즈 인식은 보지 않는다).
+    /// 가이드손을 '손을 대면 숨기는' 판단에만 쓴다 — 판정용이 아니다.</summary>
+    public bool AnyTouched()
+    {
+        if (palmGrip  != null && palmGrip.IsTouched)  return true;
+        if (thumbGrip != null && thumbGrip.IsTouched) return true;
+        if (indexGrip != null && indexGrip.IsTouched) return true;
+        if (pinkyGrip != null && pinkyGrip.IsTouched) return true;
+        return false;
+    }
+
     /// <summary>배선된 파지점이 전부 접촉했는가. 배선이 하나도 없으면 true(할 일 없음).</summary>
     public bool AllGripped()
     {
@@ -76,6 +87,10 @@ public class CranialDiagnosisPose
     [Range(0f, 1f)] public float guideStartRatio = 0f;
     [Range(0f, 1f)] public float guideEndRatio = 1f;
 
+    /// <summary>이 자세의 파지점 중 하나라도 손이 닿아 있는가(가이드손 숨김 판단용).</summary>
+    public bool AnyTouched() =>
+        (leftHand != null && leftHand.AnyTouched()) || (rightHand != null && rightHand.AnyTouched());
+
     /// <summary>이 자세의 양손 파지점이 전부 접촉했는가.</summary>
     public bool AllGripped()
     {
@@ -90,7 +105,7 @@ public class CranialDiagnosisPose
 /// 진단 substep 하나에 대응하는 단계 정의.
 /// CSV의 conditionType=cranialTouch + conditionParams=&lt;stageId&gt; 로 이 단계가 선택된다.
 ///
-/// 완료 조건 = <see cref="poses"/>의 **모든 자세**가 각각 <see cref="holdSeconds"/>만큼 유지되는 것.
+/// 완료 조건 = <see cref="poses"/>의 **모든 자세**가 각각 CSV의 hold= 초만큼 유지되는 것.
 /// 자세가 여러 개여도 **순서는 무관**하다(먼저 채운 자세는 달성으로 남는다).
 /// </summary>
 [System.Serializable]
@@ -99,14 +114,16 @@ public class CranialDiagnosisStage
     [Tooltip("CSV conditionParams와 매칭할 단계 ID. 예: 진단1, 진단2. 대소문자·앞뒤 공백 무시.")]
     public string stageId = "진단1";
 
-    [Tooltip("각 자세를 몇 초간 유지해야 하는가. OM 진단1=3초, OM 진단2=8초, PM·PJ 진단1=3초")]
-    public float holdSeconds = 3f;
+    // ★holdSeconds 필드는 삭제했다(08-11 사용자 지적).
+    //   유지 시간은 CSV conditionParams의 hold=만 쓴다 — 값이 씬과 CSV 두 군데 살아 있으면
+    //   어느 쪽이 적용됐는지 알 수 없어(OM에서 6초 표시 / 3초 판정으로 겪음) 오판정의 원인이 된다.
+    //   CSV에 hold=를 빠뜨렸을 때의 기본값은 CranialAdjustmentController.DefaultDiagnosisHoldSeconds.
 
     [Tooltip("켜면 이 단계 진행 중 '숨을 마시고 / 숨을 내쉬고' 호흡 유도 메시지를 표시한다. " +
              "표시할 UI(breathingCueText)가 비어 있으면 조용히 생략하고 단계는 정상 진행된다.")]
     public bool showBreathingCue = false;
 
-    [Tooltip("이 단계에서 취해야 하는 자세들. 전부 각각 holdSeconds만큼 채워야 완료(순서 무관). " +
+    [Tooltip("이 단계에서 취해야 하는 자세들. 전부 각각 CSV의 hold= 초만큼 채워야 완료(순서 무관). " +
              "OM 진단1·진단2는 1개, PM·PJ 진단1은 2개(좌우 교대).")]
     public CranialDiagnosisPose[] poses = new CranialDiagnosisPose[0];
 }

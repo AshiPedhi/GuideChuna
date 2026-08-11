@@ -582,6 +582,148 @@ public class ChunaPathEvaluator : MonoBehaviour
         StopGuideHandPlayback();
     }
 
+    // ===== 가이드손 유지 규칙 (08-11 사용자 지시) =====
+    //  ★규약 3가지
+    //   ⓐ 재생이 끝나면 <b>마지막 자세 그대로 남는다</b>(숨기지 않는다).
+    //   ⓑ 같은 클립이 다음 단계에서 또 요청되면 <b>다시 재생하지 않고</b> 그 자세를 유지한다
+    //      — 같은 동작을 하는 단계에서 매번 처음부터 재생되면 이미 잡은 자세를 다시 잡으라는 신호가 된다.
+    //   ⓒ 시술자가 접촉하면 숨기고, 접촉이 풀리면 <b>재생 없이</b> 마지막 자세로 다시 보여준다.
+
+    /// <summary>마지막까지 재생해 그 자세로 붙잡아 둔 클립(없으면 null).</summary>
+    private string guideHeldClip;
+    /// <summary>지금 재생 중인(또는 방금 재생한) 클립 이름 — 완료 시 <see cref="guideHeldClip"/>이 된다.</summary>
+    private string guidePlayingClip;
+    /// <summary>유지 자세로 쓸 구간 끝 비율. 접촉으로 중간에 끊겨도 이 지점을 '끝난 상태'로 본다.</summary>
+    private float guideHeldEndRatio = 1f;
+    private bool guideHiddenByContact;
+
+    /// <summary>유지 판정의 키 = 클립 + 재생 구간.
+    /// ★구간까지 넣는 이유: 한 클립에 좌→우를 이어 녹화하고 자세별로 앞/뒤를 나눠 쓰는 경우
+    /// (진단 자세 2개)가 있어, 클립 이름만 보면 두 번째 자세가 '이미 봤다'로 묻힌다.</summary>
+    private static string GuideKey(string clipName, float startRatio, float endRatio) =>
+        $"{clipName}|{startRatio:0.###}|{endRatio:0.###}";
+
+    /// <summary>이 클립(같은 구간)이 이미 끝난 자세로 유지 중인가(= 다시 재생할 필요가 없는가).</summary>
+    internal bool IsGuideClipHeld(string clipName, float startRatio = 0f, float endRatio = 1f) =>
+        !string.IsNullOrEmpty(clipName) && !string.IsNullOrEmpty(guideHeldClip) &&
+        guideHeldClip == GuideKey(clipName, startRatio, endRatio);
+
+    /// <summary>접촉 때문에 숨겨 둔 상태인가(= 접촉이 풀리면 되살려야 하는가).</summary>
+    internal bool IsGuideHandHidden => guideHiddenByContact;
+
+    // ===== 손별 숨김 (시술자가 그 손을 제자리에 갖다 대면 그 손 가이드만 사라진다) =====
+    private bool guideSuppressLeft, guideSuppressRight;
+
+    /// <summary>재생 루프·정지 표시가 이 손을 다시 켜지 못하게 막는가.</summary>
+    internal bool IsGuideHandSuppressed(bool isLeft) => isLeft ? guideSuppressLeft : guideSuppressRight;
+
+    /// <summary>그 손의 가이드손을 숨기거나 되살린다.
+    /// ★되살릴 때 재생하지 않는다 — 지금 그려져 있는 자세 그대로 다시 보이기만 한다(사용자 지시).</summary>
+    internal void SuppressGuideHandInternal(bool isLeft, bool suppress)
+    {
+        if (isLeft)
+        {
+            if (guideSuppressLeft == suppress) return;
+            guideSuppressLeft = suppress;
+        }
+        else
+        {
+            if (guideSuppressRight == suppress) return;
+            guideSuppressRight = suppress;
+        }
+
+        HandTransformMapper h = isLeft ? leftGuideHand : rightGuideHand;
+        if (h == null) return;
+
+        if (suppress)
+        {
+            h.SetVisible(false);
+            MarkGuideHeld();   // 손을 댔다 = 이 동작은 이미 본 것 → 다음 단계에서 다시 재생하지 않는다
+        }
+        else if (GuideHandHasData(isLeft))
+        {
+            h.SetVisible(true);
+        }
+    }
+
+    /// <summary>양손 숨김 해제(단계가 바뀔 때 잔상 방지).</summary>
+    internal void ClearGuideHandSuppression()
+    {
+        SuppressGuideHandInternal(true, false);
+        SuppressGuideHandInternal(false, false);
+    }
+
+    /// <summary>지금 로드된 녹화에 이 손의 데이터가 있는가.
+    /// ★한 손만 녹화한 클립에서 반대 손 가이드를 되살리지 않기 위한 확인용
+    /// (접촉이 풀렸을 때 무조건 SetVisible(true)를 하면 빈 손이 떠 버린다).</summary>
+    internal bool GuideHandHasData(bool isLeft)
+    {
+        if (loadedFrames == null || loadedFrames.Count == 0) return false;
+        int[] check = loadedFrames.Count > 1 ? new[] { 0, loadedFrames.Count / 2 } : new[] { 0 };
+        foreach (int i in check)
+        {
+            var poses = isLeft ? loadedFrames[i].leftLocalPoses : loadedFrames[i].rightLocalPoses;
+            if (poses != null && poses.Count > 0) return true;
+        }
+        return false;
+    }
+
+    private void MarkGuideHeld()
+    {
+        if (!string.IsNullOrEmpty(guidePlayingClip)) guideHeldClip = guidePlayingClip;
+    }
+
+    /// <summary>클립 이름을 알고 재생하는 진입점. <b>같은 클립이 유지 중이면 재생하지 않고</b>
+    /// 끝난 자세를 그대로 보여준다.</summary>
+    internal void PlayGuideHandOnceInternal(string clipName, float startRatio, float endRatio)
+    {
+        if (IsGuideClipHeld(clipName, startRatio, endRatio))
+        {
+            ShowGuideHandLastFrameInternal();
+            return;
+        }
+        StartGuideHandPlayback(startRatio, endRatio, false, GuideKey(clipName, startRatio, endRatio));
+    }
+
+    /// <summary>마지막 자세로 <b>정지 표시</b>한다(재생 아님). 접촉이 풀렸을 때·같은 동작이 이어질 때 쓴다.</summary>
+    internal void ShowGuideHandLastFrameInternal()
+    {
+        if (!showGuideHands) return;
+        if (loadedFrames == null || loadedFrames.Count == 0) return;
+
+        if (guideHandCoroutine != null)
+        {
+            StopCoroutine(guideHandCoroutine);
+            guideHandCoroutine = null;
+        }
+
+        MarkGuideHeld();
+        guideHiddenByContact = false;
+
+        // ShowFirstFrame은 '지정한 비율의 한 프레임을 그린다' — 끝 비율을 주면 마지막 자세가 된다.
+        guidePlaybackController.ShowFirstFrame(
+            loadedFrames, leftGuideHand, rightGuideHand,
+            guideHeldEndRatio,
+            guideHandColor, showDebugLogs);
+    }
+
+    /// <summary>접촉 중 숨김 — <b>어느 클립의 끝난 자세인지는 기억한다</b>(접촉이 풀리면 그대로 되살린다).</summary>
+    internal void HideGuideHandKeepHeldInternal()
+    {
+        if (guideHiddenByContact) return;
+
+        if (guideHandCoroutine != null)
+        {
+            StopCoroutine(guideHandCoroutine);
+            guideHandCoroutine = null;
+        }
+
+        // 접촉으로 끊긴 것도 '이 동작은 이미 봤다'로 친다 → 다음 단계에서 다시 재생하지 않는다.
+        MarkGuideHeld();
+        guideHiddenByContact = true;
+        HideGuideHands();
+    }
+
     // ChunaDataLoader needs
     internal bool ShowDebugLogs => showDebugLogs;
     internal string CurrentProcedureName { get => currentProcedureName; set => currentProcedureName = value; }
@@ -2548,12 +2690,15 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     /// <summary>재생 구간·루프를 인자로 받는 버전. 인스펙터/런타임 필드를 바꾸지 않으므로
     /// 특정 술기(두개골)만 다른 설정으로 재생해도 다음 시나리오에 설정이 새지 않는다.</summary>
-    private void StartGuideHandPlayback(float startRatio, float endRatio, bool loop)
+    private void StartGuideHandPlayback(float startRatio, float endRatio, bool loop, string clipName = null)
     {
         if (!showGuideHands) return;
         if (loadedFrames == null || loadedFrames.Count == 0) return;
 
-        StopGuideHandPlayback();
+        StopGuideHandPlayback();          // ★여기서 유지 상태가 지워지므로
+
+        guidePlayingClip = clipName;      // ★그 뒤에 이번 클립 이름을 심는다(순서 중요)
+        guideHeldEndRatio = endRatio;
 
         IEnumerator routine = guidePlaybackController.PlaybackRoutine(
             loadedFrames, leftGuideHand, rightGuideHand,
@@ -2561,10 +2706,23 @@ public class ChunaPathEvaluator : MonoBehaviour
             guidePlaybackSpeed, loop, loopDelaySeconds,
             guideHandColor, showDebugLogs);
 
-        guideHandCoroutine = StartCoroutine(routine);
+        guideHandCoroutine = StartCoroutine(PlayThenHold(routine, loop));
 
         if (showDebugLogs)
             ChunaLogger.Log("[ChunaPathEvaluator] 가이드 핸드 재생 시작");
+    }
+
+    /// <summary>재생이 끝나면 <b>마지막 자세 그대로 남긴다</b>(숨기지 않는다).
+    /// ★중첩 StartCoroutine을 쓰지 않고 직접 돌린다 — 그래야 StopCoroutine 한 번으로 확실히 멈춘다.</summary>
+    private IEnumerator PlayThenHold(IEnumerator routine, bool loop)
+    {
+        while (routine.MoveNext()) yield return routine.Current;
+
+        guideHandCoroutine = null;
+        if (loop) yield break;
+
+        // 마지막 프레임은 재생 코루틴이 이미 그려 둔 상태다 — 지우지 않고 '유지 중'으로만 표시한다.
+        MarkGuideHeld();
     }
 
     private void ShowGuideHandFirstFrame()
@@ -2589,6 +2747,11 @@ public class ChunaPathEvaluator : MonoBehaviour
             StopCoroutine(guideHandCoroutine);
             guideHandCoroutine = null;
         }
+
+        // 완전 정지 = 유지 상태도 버린다(다음에 같은 클립이 오면 처음부터 다시 재생한다).
+        guideHeldClip = null;
+        guidePlayingClip = null;
+        guideHiddenByContact = false;
 
         HideGuideHands();
     }

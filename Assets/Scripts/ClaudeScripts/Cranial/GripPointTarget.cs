@@ -126,10 +126,22 @@ public class GripPointTarget : MonoBehaviour
 
     /// <summary>정답 손끝 콜라이더 런타임 주입 (Option B: 검지끝 본이 런타임 생성이라
     /// 인스펙터 연결 불가일 때 CranialAdjustmentController가 생성한 트리거 콜라이더를 연결).</summary>
-    public void SetExpectedFingerCollider(Collider c) => expectedFingerCollider = c;
+    public void SetExpectedFingerCollider(Collider c)
+    {
+        if (expectedFingerCollider == c) return;
+        expectedFingerCollider = c;
+        // ★주입 전에 아무 콜라이더나 스쳐 들어온 접촉이 남아 있을 수 있다 → 진짜 손끝 기준으로 다시 계산한다.
+        //   (주입 시점에 이미 손을 대고 있어도 인식되도록 겹침을 직접 확인한다.)
+        fingerInside = OverlapsExpectedFinger();
+        warnedUnsetCollider = false;
+    }
 
     /// <summary>파지 성립 여부 = 트리거 진입 AND 포즈 인식</summary>
     public bool IsGripped => fingerInside && (bypassPoseCheck || PoseRecognized);
+
+    /// <summary>★접촉만 본다(포즈 인식 무관). 가이드손을 '손을 대면 숨기는' 용도 —
+    /// 손 모양이 아직 안 맞아도 시야를 가리지 않게 하려면 파지 성립이 아니라 접촉이 기준이어야 한다.</summary>
+    public bool IsTouched => fingerInside;
 
     /// <summary>파지가 성립되는 순간 1회 발생</summary>
     public System.Action OnGripped;
@@ -142,6 +154,34 @@ public class GripPointTarget : MonoBehaviour
     void OnTriggerExit(Collider other)
     {
         if (Matches(other)) fingerInside = false;
+    }
+
+    /// <summary>★비활성 상태에서 접촉이 '참'으로 굳는 것을 막는다(08-11).
+    /// 오브젝트를 끄면 OnTriggerExit가 안 오는 경우가 있어, 진단 단계에서 잠깐 켜졌던 파지점이
+    /// <b>손을 대지도 않았는데 성립 상태로 남아</b> 다음 파지 단계가 한 손만으로 통과됐다.</summary>
+    void OnDisable()
+    {
+        fingerInside = false;
+        wasGripped = false;
+    }
+
+    /// <summary>★다시 켜질 때는 '지금 손이 안에 들어와 있는지'를 직접 확인한다.
+    /// 끄면서 지웠는데 손이 이미 안에 있으면 OnTriggerEnter가 재발생하지 않아
+    /// 손을 뺐다 넣기 전까지 영영 인식되지 않기 때문(기존 주석에 남아 있던 함정).</summary>
+    void OnEnable()
+    {
+        fingerInside = OverlapsExpectedFinger();
+    }
+
+    /// <summary>지금 정답 손끝 콜라이더와 겹쳐 있는가(트리거 이벤트 없이 즉시 판정).</summary>
+    private bool OverlapsExpectedFinger()
+    {
+        if (expectedFingerCollider == null || !expectedFingerCollider.enabled) return false;
+        var mine = GetComponent<Collider>();
+        if (mine == null || !mine.enabled) return false;
+        // 정밀 판정(ComputePenetration)은 비용이 크고 회전 콜라이더 조합에서 실패하기도 한다 →
+        // 켜지는 순간 1회뿐이라 경계상자 교차로 충분하다.
+        return mine.bounds.Intersects(expectedFingerCollider.bounds);
     }
 
     void Update()
@@ -196,12 +236,30 @@ public class GripPointTarget : MonoBehaviour
         t.localScale = Vector3.Lerp(t.localScale, want, 1f - Mathf.Exp(-scaleLerpSpeed * Time.deltaTime));
     }
 
+    [Tooltip("★디버그용. 켜면 정답 손끝 콜라이더·태그가 둘 다 비었을 때 '아무 콜라이더나' 파지로 인정한다.\n" +
+             "기본 OFF — 예전 기본값(허용)이 08-11 증상의 원인이었다: 손끝 주입이 끝나기 전이나 배선이 빠진 파지점이 " +
+             "환자 머리·반대 손 콜라이더에 스쳐도 성립해서, 왼손만 후두골에 대도 오른손 측두 파지가 이미 잡힌 것으로 처리됐다.\n" +
+             "★신규 필드라 이미 배치된 씬 파지점 전부에 코드 기본값(끔)이 먹는다.")]
+    [SerializeField] private bool acceptAnyColliderWhenUnset = false;
+
+    private bool warnedUnsetCollider;
+
     private bool Matches(Collider other)
     {
         if (expectedFingerCollider != null) return other == expectedFingerCollider;
         if (!string.IsNullOrEmpty(expectedFingerTag)) return other.CompareTag(expectedFingerTag);
-        // 둘 다 미설정이면 모든 콜라이더 허용 (디버그)
-        return true;
+
+        if (acceptAnyColliderWhenUnset) return true;
+
+        // 손끝 주입(TryInjectFingertips)이 아직 안 끝난 순간일 수 있다 → 무시하고 다음 진입을 기다린다.
+        // 주입이 끝나면 SetExpectedFingerCollider가 접촉을 다시 계산해 준다.
+        if (!warnedUnsetCollider)
+        {
+            warnedUnsetCollider = true;
+            ChunaLogger.LogWarning($"[GripPointTarget] '{gameObject.name}': 정답 손끝 콜라이더가 아직 없어 접촉을 인정하지 않았습니다. " +
+                                   "손끝 주입 전이면 곧 해결되고, 계속 뜨면 리그의 HandVisual 배선을 확인하세요.");
+        }
+        return false;
     }
 
     public void ResetState()

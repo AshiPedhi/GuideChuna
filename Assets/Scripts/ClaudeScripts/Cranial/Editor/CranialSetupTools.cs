@@ -240,7 +240,7 @@ public static class CranialSetupTools
                 var st = stages.GetArrayElementAtIndex(i);
                 var poses = st.FindPropertyRelative("poses");
                 sb.AppendLine($"   stageId={st.FindPropertyRelative("stageId").stringValue} " +
-                              $"유지={st.FindPropertyRelative("holdSeconds").floatValue}초 자세={poses.arraySize}개");
+                              $"자세={poses.arraySize}개 (유지 시간은 CSV의 hold=)");
                 for (int j = 0; j < poses.arraySize; j++)
                 {
                     var p = poses.GetArrayElementAtIndex(j);

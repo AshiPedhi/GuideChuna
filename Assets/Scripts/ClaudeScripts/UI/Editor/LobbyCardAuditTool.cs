@@ -30,7 +30,7 @@ public static class LobbyCardAuditTool
     {
         "상부승모근", "견갑거근", "대흉근", "흉쇄유돌근", "사각근",
         "두개골교정", "두개골PM교정", "두개골PJ교정",
-        "앙와위_흉추_굴곡변위", "앙와위_흉추_신전변위",
+        "복와위_하부흉추_굴곡변위", "앙와위_흉추_신전변위",
         "제1늑골_앙와위", "제2늑골_상방변위", "경추ROM측정",
     };
 
@@ -89,7 +89,7 @@ public static class LobbyCardAuditTool
     [MenuItem("GuideChuna/로비 카드 - 선택한 카드를 idx 8 (흉추 굴곡변위)로 설정")]
     public static void ConfigureSelectedAsFlexionCard()
     {
-        const int NewIndex = 8;   // 앙와위_흉추_굴곡변위
+        const int NewIndex = 8;   // 복와위_하부흉추_굴곡변위
 
         var go = Selection.activeGameObject;
         if (go == null)
@@ -133,7 +133,7 @@ public static class LobbyCardAuditTool
 
         EditorSceneManager.MarkSceneDirty(go.scene);
 
-        Debug.Log($"[로비 카드] '{go.name}' → idx {NewIndex}(앙와위_흉추_굴곡변위) 설정 완료. 라벨 {replaced}개 갱신.\n"
+        Debug.Log($"[로비 카드] '{go.name}' → idx {NewIndex}(복와위_하부흉추_굴곡변위) 설정 완료. 라벨 {replaced}개 갱신.\n"
                   + (replaced == 0 ? "※ '신전'이 든 라벨이 없어 텍스트는 그대로입니다. 라벨을 직접 확인하세요.\n" : "")
                   + "→ 씬을 저장하세요(Ctrl+S). 되돌리려면 Ctrl+Z.");
     }

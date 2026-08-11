@@ -52,6 +52,10 @@ public class ScenarioConditionManager : MonoBehaviour
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip completionSound;
 
+    [Tooltip("단계 완료음(띵동) 볼륨. 비워 두면 Resources/Audio/StepComplete를 자동으로 쓴다.\n" +
+             "★신규 필드라 이미 배치된 씬에도 코드 기본값이 먹는다.")]
+    [SerializeField, Range(0f, 1f)] private float completionVolume = 0.7f;
+
     [Header("=== 나레이션 설정 ===")]
     [Tooltip("나레이션 전용 AudioSource (없으면 audioSource 사용)")]
     [SerializeField] private AudioSource narrationAudioSource;
@@ -1250,10 +1254,29 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private void PlayCompletionSound()
     {
-        if (audioSource != null && completionSound != null)
+        // ★씬에 completionSound·audioSource가 둘 다 비어 있어서 지금까지 완료음이 아예 안 났다(08-11 실측).
+        //   배선을 기다리지 않고 코드에서 확보한다 — 단계가 끝났는지 소리로 알 수 있어야 한다는 요구.
+        if (completionSound == null)
+            completionSound = Resources.Load<AudioClip>("Audio/StepComplete");
+
+        if (audioSource == null)
         {
-            audioSource.PlayOneShot(completionSound);
+            // 나레이션 소스를 재사용하면 PlayOneShot이라 말을 끊지는 않지만, 볼륨·믹서를 따로 두기 위해
+            // 전용 소스를 하나 만들어 쓴다(없을 때만).
+            audioSource = gameObject.GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+                audioSource.playOnAwake = false;
+                audioSource.spatialBlend = 0f;   // 2D — 어느 방향을 보고 있어도 들려야 한다
+            }
         }
+
+        if (audioSource != null && completionSound != null)
+            audioSource.PlayOneShot(completionSound, completionVolume);
+        else
+            ChunaLogger.LogWarning("[ConditionManager] 완료음을 재생할 수 없습니다 " +
+                                   "(Resources/Audio/StepComplete.wav 확인).");
     }
 
     /// <summary>

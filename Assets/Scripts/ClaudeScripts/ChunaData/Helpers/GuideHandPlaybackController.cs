@@ -82,7 +82,8 @@ public class GuideHandPlaybackController
             Vector3 refPos = refT != null ? refT.position : Vector3.zero;
             Quaternion refRot = refT != null ? refT.rotation : Quaternion.identity;
 
-            if (leftGuideHand != null && hasLeftData)
+            // ★그 손을 시술자가 이미 제자리에 갖다 댄 상태면 켜지 않는다(손별 숨김) — 08-11 사용자 지시.
+            if (leftGuideHand != null && hasLeftData && !owner.IsGuideHandSuppressed(true))
             {
                 leftGuideHand.SetVisible(true);
                 if (leftGuideHand.Root != null)
@@ -97,7 +98,7 @@ public class GuideHandPlaybackController
                 }
             }
 
-            if (rightGuideHand != null && hasRightData)
+            if (rightGuideHand != null && hasRightData && !owner.IsGuideHandSuppressed(false))
             {
                 rightGuideHand.SetVisible(true);
                 if (rightGuideHand.Root != null)
@@ -172,7 +173,7 @@ public class GuideHandPlaybackController
 
         if (leftGuideHand != null)
         {
-            if (!hasLeftData)
+            if (!hasLeftData || owner.IsGuideHandSuppressed(true))
             {
                 leftGuideHand.SetVisible(false);
             }
@@ -195,7 +196,7 @@ public class GuideHandPlaybackController
 
         if (rightGuideHand != null)
         {
-            if (!hasRightData)
+            if (!hasRightData || owner.IsGuideHandSuppressed(false))
             {
                 rightGuideHand.SetVisible(false);
             }
