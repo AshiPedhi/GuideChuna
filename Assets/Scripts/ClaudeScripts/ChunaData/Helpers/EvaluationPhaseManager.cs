@@ -189,6 +189,18 @@ public class EvaluationPhaseManager
         bool bothStopped = leftVel < holdVelocityThreshold && rightVel < holdVelocityThreshold;
         bool positionOk = isLeftTouching || isRightTouching;
 
+        // ★startHold=0 → '멈춰서 버티기'를 요구하지 않는다(2026-08-13).
+        //   왕복을 슥슥 반복하는 단계에서는 손이 계속 움직이므로 bothStopped가 성립하지 않아
+        //   "끝에서 멈춰야만 넘어가는 타이머"처럼 느껴진다. 접촉만 확인하고 바로 이동 국면으로 보낸다.
+        if (startHoldDuration <= 0f && positionOk)
+        {
+            owner.FireOnStartHoldComplete();
+            if (useRelativeMovement) owner.SaveUserHoldReference();
+            ChangePhase(ChunaPathEvaluator.EvaluationPhase.Moving, owner.GetLoadedFrameCount(), currentStartRatio, showDebugLogs);
+            owner.StartGuideHandPlaybackOnce();
+            return;
+        }
+
         if (showDebugLogs && Time.frameCount % 10 == 0)
             ChunaLogger.Log($"[StartHold-Collision] stopped:{bothStopped}, touching:{positionOk}, hold:{phaseHoldTime:F1}s");
 
@@ -261,6 +273,19 @@ public class EvaluationPhaseManager
         float progress = owner.GetCurrentProgress();
         float limitRatio = currentMidHoldEnd;
 
+        // ★구간 터치 카운트 모드(touch=N): 홀드도, 진행률 임계 완료도 타지 않는다.
+        //   시작 구간 ↔ 끝 구간을 번갈아 찍은 횟수만 세고, 목표를 채우면 끝난다(2026-08-13 사용자 요구).
+        if (owner.TouchCountMode)
+        {
+            if (owner.CountZoneTouch(progress))
+            {
+                ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed,
+                            owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+                if (!isGuideMode) owner.CompleteEvaluation();
+            }
+            return;
+        }
+
         if (guideOnlyMode)
         {
             // ★ GuideOnly: 진행률 95% 이상 도달 시 완료
@@ -289,6 +314,15 @@ public class EvaluationPhaseManager
         {
             if (progress >= currentMidHoldStart)
             {
+                // ★reps=N이면 도달할 때마다 세고, 남았으면 <b>완료시키지 않고</b> 시작 대기로 되돌린다.
+                //   (단계를 올리기/내리기로 쪼개지 않고 한 단계에서 왕복 N회를 세기 위한 것 — 2026-08-13)
+                if (owner.ConsumeRepAndContinue())
+                {
+                    ChangePhase(ChunaPathEvaluator.EvaluationPhase.WaitingForStart,
+                                owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
+                    return;
+                }
+
                 ChunaLogger.Log($"<color=green>[Moving] SkipMidHold - 임계점 통과 ({progress:P0} >= {currentMidHoldStart:P0}), 완료</color>");
                 ChangePhase(ChunaPathEvaluator.EvaluationPhase.Completed, owner.GetLoadedFrameCount(), owner.CurrentStartRatio, showDebugLogs);
 

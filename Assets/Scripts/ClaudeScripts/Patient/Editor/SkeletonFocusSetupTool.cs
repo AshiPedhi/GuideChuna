@@ -183,6 +183,79 @@ public static class SkeletonFocusSetupTool
             "★비어 있는 줄은 그 단계에서 골격이 전부 숨겨집니다.", "확인");
     }
 
+    /// <summary>
+    /// 같은 (시나리오·국면·단계)에 <b>자세 번호가 겹치는 줄</b>을 찾아 배열 순서대로 1,2,3…으로 다시 매긴다.
+    ///
+    /// ★2026-08-12에 실제로 터진 문제: PJ 진단의 좌·우 두 줄이 <b>둘 다 poseNo 1</b>이라
+    /// 앞의 우측 줄만 계속 적용되고 <b>좌측 측두골·관골이 영영 안 나왔다</b>.
+    /// 자세 줄은 만들어진 순서가 곧 진행 순서(ⓐ→ⓑ)라 순서대로 번호를 주면 맞는다.
+    /// </summary>
+    [MenuItem("GuideChuna/골격 포커스 — 중복 자세 번호 정리")]
+    private static void FixDuplicatePoseNumbers()
+    {
+        var focus = Object.FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
+        if (focus == null)
+        {
+            EditorUtility.DisplayDialog("골격 포커스", "씬에 SkeletonFocusController가 없습니다.", "확인");
+            return;
+        }
+
+        var so = new SerializedObject(focus);
+        SerializedProperty entries = so.FindProperty("entries");
+
+        // (시나리오|국면|단계) → 그 키의 '자세 줄'(poseNo>0) 인덱스 목록
+        var groups = new Dictionary<string, List<int>>();
+        for (int i = 0; i < entries.arraySize; i++)
+        {
+            SerializedProperty e = entries.GetArrayElementAtIndex(i);
+            if (e.FindPropertyRelative("poseNo").intValue <= 0) continue;   // 자세 무관 줄은 대상 아님
+            string key = Key(e.FindPropertyRelative("scenarioName").stringValue,
+                             e.FindPropertyRelative("phaseName").stringValue,
+                             e.FindPropertyRelative("stepName").stringValue);
+            if (!groups.TryGetValue(key, out var list)) groups[key] = list = new List<int>();
+            list.Add(i);
+        }
+
+        var log = new StringBuilder();
+        int fixedCount = 0;
+
+        foreach (var kv in groups)
+        {
+            // 번호가 이미 1..n으로 서로 다르면 손대지 않는다.
+            var seen = new HashSet<int>();
+            bool dup = false;
+            foreach (int i in kv.Value)
+                if (!seen.Add(entries.GetArrayElementAtIndex(i).FindPropertyRelative("poseNo").intValue)) dup = true;
+            if (!dup) continue;
+
+            for (int n = 0; n < kv.Value.Count; n++)
+            {
+                SerializedProperty p = entries.GetArrayElementAtIndex(kv.Value[n]).FindPropertyRelative("poseNo");
+                if (p.intValue == n + 1) continue;
+                log.AppendLine($"  {kv.Key.Replace('|', '/')}  자세 {p.intValue} → {n + 1}");
+                p.intValue = n + 1;
+                fixedCount++;
+            }
+        }
+
+        if (fixedCount == 0)
+        {
+            EditorUtility.DisplayDialog("골격 포커스", "중복된 자세 번호가 없습니다. 고칠 것이 없습니다.", "확인");
+            return;
+        }
+
+        so.ApplyModifiedProperties();
+        EditorUtility.SetDirty(focus);
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(focus.gameObject.scene);
+
+        string msg = $"자세 번호 {fixedCount}개를 다시 매겼습니다.\n\n{log}\n" +
+                     "★줄의 배열 순서 = 실습 진행 순서(ⓐ→ⓑ)입니다.\n" +
+                     "순서가 뒤바뀌어 있으면 인스펙터에서 줄을 위아래로 옮긴 뒤 다시 실행하세요.\n" +
+                     "되돌리려면 Ctrl+Z.";
+        Debug.Log("[골격 포커스 중복 자세 번호 정리]\n" + msg);
+        EditorUtility.DisplayDialog("골격 포커스", msg, "확인");
+    }
+
     [MenuItem("GuideChuna/골격 부위 목록 보기")]
     private static void ListParts()
     {

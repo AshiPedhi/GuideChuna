@@ -16,8 +16,14 @@ public class CranialPostureStabilizer : MonoBehaviour
     [Header("=== 좌표 (씬 연결) ===")]
     [Tooltip("시술자 헤드셋(중앙 카메라). 보통 OVRCameraRig > TrackingSpace > CenterEyeAnchor.")]
     [SerializeField] private Transform headset;
+
+    /// <summary>시술자 머리(HMD) 트랜스폼. 체중 싣기 판정처럼 머리 높이가 필요한 곳에서 읽는다.</summary>
+    public Transform Headset => headset;
     [Tooltip("환자 이마 기준점. 두개골 타겟(CC_Base_Head)이나 이마 표면에 둔 마커.")]
     [SerializeField] private Transform foreheadTarget;
+
+    /// <summary>환자 이마 기준점. 견착 위치 가이드(<see cref="ShoulderBraceGuide"/>)가 따라갈 대상으로 읽는다.</summary>
+    public Transform ForeheadTarget => foreheadTarget;
 
     [Header("=== 근접 임계 (m) — 깊게 숙여야만 도달하게 튜닝 ===")]
     [Tooltip("헤드셋-이마 거리가 이 값 이하이면 '자세 취함'(engage).")]
@@ -40,6 +46,9 @@ public class CranialPostureStabilizer : MonoBehaviour
 
     /// <summary>현재 자세(어깨-이마 밀착 프록시)가 성립했는가. 호흡 유지 게이트에서 읽는다.</summary>
     public bool IsInPosition => engaged;
+
+    /// <summary>자세 성립 임계(m). 견착 위치 가이드가 거리 색 보간의 기준으로 읽는다.</summary>
+    public float EngageDistance => engageDistance;
 
     /// <summary>현재 헤드셋-이마 거리(m). 임계 튜닝/디버그용.</summary>
     public float CurrentDistance { get; private set; } = Mathf.Infinity;

@@ -101,6 +101,18 @@ public class GripPointColorTool : EditorWindow
         if (GUILayout.Button("씬의 파지점에 일괄 적용", GUILayout.Height(32))) Apply();
         GUI.backgroundColor = Color.white;
 
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("빌드 대응 (반투명이 빌드에서만 안 먹을 때)", EditorStyles.boldLabel);
+        EditorGUILayout.HelpBox(
+            "증상: 에디터·Link에서는 반투명인데 빌드하면 생으로(불투명) 보인다.\n" +
+            "원인: 런타임에 Standard 머티리얼을 Fade로 바꾸지만, 빌드에는 그 배리언트(_ALPHABLEND_ON)가 " +
+            "포함되지 않아 스트립된다. 에디터에는 모든 배리언트가 있어서 문제가 안 보인다.\n" +
+            "조치: 처음부터 Fade로 저장된 머티리얼 에셋을 파지점에 물린다 — 에셋이 씬에서 참조되므로 " +
+            "빌드에 그 배리언트가 확실히 포함된다.",
+            MessageType.Warning);
+        if (GUILayout.Button("파지점에 반투명 머티리얼 물리기 (빌드 대응)", GUILayout.Height(26)))
+            ApplyFadeMaterial();
+
         if (!string.IsNullOrEmpty(status))
         {
             EditorGUILayout.Space();
@@ -132,6 +144,73 @@ public class GripPointColorTool : EditorWindow
         status = $"적용 완료 — {changed}개 변경" + (skipped > 0 ? $", {skipped}개 건너뜀(이미 다른 색)" : "")
                + $"\n※씬을 저장해야 유지된다(Ctrl+S).";
         Debug.Log($"[GripPointColorTool] 미파지색 {ColorText(idleColor)} 적용: {changed}개 변경 / {skipped}개 건너뜀");
+    }
+
+    private const string FadeMaterialPath = "Assets/Materials/GripPointFade.mat";
+
+    /// <summary>
+    /// 파지점 구체에 <b>처음부터 Fade로 저장된</b> 머티리얼 에셋을 물린다.
+    ///
+    /// ★빌드에서만 반투명이 안 먹던 원인(2026-08-13): 런타임 코드가 Standard 머티리얼을
+    /// <c>_Mode=3</c>으로 바꿔 Fade로 만드는데, <b>빌드에는 그 셰이더 배리언트가 없다</b> —
+    /// 빌드에 포함된 어떤 머티리얼도 Fade를 안 쓰면 Unity가 그 배리언트를 스트립하기 때문이다.
+    /// 에디터에는 모든 배리언트가 있어 증상이 안 보인다(사용자: "링크에선 잘 보였는데 빌드만 하면").
+    /// 씬이 참조하는 머티리얼 에셋이 Fade면 그 배리언트가 반드시 컴파일되어 들어간다.
+    /// </summary>
+    private void ApplyFadeMaterial()
+    {
+        Material mat = LoadOrCreateFadeMaterial();
+
+        var all = FindAll();
+        int applied = 0, noRenderer = 0;
+
+        foreach (var g in all)
+        {
+            var so = new SerializedObject(g);
+            var rendProp = so.FindProperty("targetRenderer");
+            var rend = rendProp != null ? rendProp.objectReferenceValue as Renderer : null;
+            if (rend == null) { noRenderer++; continue; }
+            if (rend.sharedMaterial == mat) continue;
+
+            Undo.RecordObject(rend, "파지점 반투명 머티리얼");
+            rend.sharedMaterial = mat;
+            EditorUtility.SetDirty(rend);
+            applied++;
+        }
+
+        if (applied > 0)
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+        status = $"반투명 머티리얼 적용 — {applied}개 변경 (파지점 {all.Count}개 중)" +
+                 (noRenderer > 0 ? $", {noRenderer}개는 targetRenderer 미배선이라 건너뜀" : "") +
+                 $"\n머티리얼: {FadeMaterialPath}" +
+                 "\n※씬 저장(Ctrl+S) 후 다시 빌드하세요. 색은 런타임에 파지점별로 덮어씁니다.";
+        Debug.Log("[GripPointColorTool] " + status);
+    }
+
+    private static Material LoadOrCreateFadeMaterial()
+    {
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(FadeMaterialPath);
+        if (mat != null) return mat;
+
+        if (!AssetDatabase.IsValidFolder("Assets/Materials"))
+            AssetDatabase.CreateFolder("Assets", "Materials");
+
+        mat = new Material(Shader.Find("Standard")) { name = "GripPointFade" };
+        mat.SetFloat("_Mode", 3f);                       // Fade
+        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        mat.SetInt("_ZWrite", 0);
+        mat.DisableKeyword("_ALPHATEST_ON");
+        mat.EnableKeyword("_ALPHABLEND_ON");             // ★이 키워드가 에셋에 저장돼야 빌드에 배리언트가 들어간다
+        mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        mat.renderQueue = 3000;
+        mat.color = DefaultIdle;
+
+        AssetDatabase.CreateAsset(mat, FadeMaterialPath);
+        AssetDatabase.SaveAssets();
+        return mat;
     }
 
     private static bool Approximately(Color a, Color b) =>

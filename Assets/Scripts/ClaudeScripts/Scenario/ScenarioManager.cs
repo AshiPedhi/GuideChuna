@@ -809,14 +809,39 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         string cranialType = subStep.conditionType?.Trim() ?? "";
         bool isCranial = IsCranialConditionType(cranialType);
 
+        // ★손 녹화가 없는 substep은 <b>일단 가이드손을 숨기고</b> 시작한다(2026-08-13).
+        //   가이드손은 '로드된 마지막 녹화'를 계속 들고 있어서, 명시적으로 끄지 않으면
+        //   진단에서 쓴 녹화가 파지·교정 단계까지 그대로 떠 있었다(사용자 지적: "양 엄지 진단이
+        //   끝났는데 계속 나온다"). 두개골 단계는 아래 HandleCranial이 자기 가이드를 다시 켜므로
+        //   여기서 꺼도 무해하다 — 켤 단계만 켜지는 구조가 된다.
+        if (chunaPathEvaluator != null && string.IsNullOrEmpty(subStep.handTrackingFileName))
+            chunaPathEvaluator.HideGuideHandKeepHeldInternal();
+
         if (isCranial)
             HandleCranial(subStep, cranialType);
         else if (isPassiveStretch)
             HandlePassiveStretch(subStep);
         else if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
             HandleHandPoseTracking(subStep);
-        else if (subStep.HasPatientAnimation())
+        else if (subStep.HasPatientAnimation() && cranialController == null)
             HandleAutoPlayAnimation(subStep);
+        else if (subStep.HasPatientAnimation() && chunaPathEvaluator != null)
+        {
+            // ★두개골 계열에서 '판정도 손 녹화도 없는데 애니만 있는 단계'(PJ 전환 등).
+            //   예전엔 여기서도 AutoPlay 평가 파이프라인을 돌렸는데, 그 안에서 가이드손이
+            //   <b>처음부터 다시 재생</b>되어 "전환하니까 가이드손이 시작 자세로 튀어나온다"가 됐다
+            //   (2026-08-12 사용자 지적). 두개골의 진행 게이트는 조건이지 AutoPlay 완료가 아니므로
+            //   여기서는 <b>클립만 재생</b>하고 가이드손은 마지막 자세를 유지한 채 숨긴다.
+            //   ★anim=/animSpeed= 도 여기서 읽는다 — 판정 없는 '이어서 마저 재생' 단계가 있다
+            //     (흉추 신전: 바디드롭 뒤 나머지 프레임을 마저 내린다).
+            float spd = ParseTokenFloat(subStep.conditionParams, "animspeed=", 1f);
+            if (TryParseAnimRange(subStep.conditionParams, out float af, out float at))
+                chunaPathEvaluator.PlayPatientAnimationRange(subStep.patientAnimationClip.Trim(), af, at, spd);
+            else
+                chunaPathEvaluator.SetPatientAnimation(subStep.patientAnimationClip.Trim(),
+                                                       AnimationPlayMode.AutoPlay);
+            chunaPathEvaluator.HideGuideHandKeepHeldInternal();
+        }
         else if (chunaPathEvaluator != null)
         {
             // ★판정도 손 녹화도 없는 단계 = 나레이션이 끝나면 그냥 넘어가는 안내 구간
@@ -848,6 +873,10 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         //   파지 단계에서 켠 교정 파지점을 끄는 곳이 없어 재평가·종료까지 화면에 남아 있었다.
         //   ★단 '교정' 국면 안에서는 교정 파지점을 남긴다 — 파지를 유지한 채 교정하는 단계인데
         //     조건 타입이 HandPose라는 이유로 구체를 지우면 어디를 잡고 있어야 하는지 안 보인다.
+        //   ★교정 국면 안에서는 교정 파지점을 <b>계속 남긴다</b> — 파지를 유지한 채 진행하는 구간이라
+        //     접촉 판정이 살아 있어야 하고, 학습자도 어디를 잡고 있어야 하는지 봐야 한다.
+        //     (2026-08-12에 '판정하는 substep에서만 표시'로 좁혔다가, 안내 행을 지나면
+        //      cranialPressure가 영영 성립하지 않는 회귀가 나서 되돌렸다.)
         if (cranialController != null && !isCranial)
         {
             bool inCorrectionPhase = currentPhase != null &&
@@ -859,8 +888,17 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★ 힘의 방향 화살표: 이 단계에 배정된 그룹만 켠다.
         //   그룹이 없는 단계(진단·재평가·안내)는 자동으로 아무것도 안 보인다 —
         //   촉진으로 좌우를 비교하는 단계에 방향 힌트를 주지 않기 위한 규칙과 일치한다.
+        //   ★시나리오까지 넘긴다 — 안 넘기면 OM·PM 화살표가 PJ 실습 중에도 켜진다(08-12 수정).
         ResolveForceArrowDirector();
-        forceArrowDirector?.ShowFor(currentPhase?.phaseName, currentStep?.stepName, subStep.subStepNo);
+        forceArrowDirector?.ShowFor(
+            currentConfig != null ? currentConfig.scenarioName : currentScenario?.scenarioName,
+            currentPhase?.phaseName, currentStep?.stepName, subStep.subStepNo);
+
+        // ★ 이마 견착 위치 가이드: conditionParams에 brace가 있는 substep에서만 어깨 댈 자리를 표시한다.
+        //   어깨는 트래킹 소스가 없어 접촉을 판정하지 않는다 — 자리를 보여주면 거기 대느라 상체가 숙여지고,
+        //   그 숙임은 기존 프록시(헤드셋-이마 근접)가 이미 보고 있다.
+        //   ★자세 안정화의 활성 여부로 켜면 안 된다: 지금 두개골 호흡은 전부 gripGate라 그 값이 늘 false다.
+        cranialController?.SetBraceGuideVisible(HasFlagToken(subStep.conditionParams, "brace"));
 
         // ★ 골격 표시: 단계마다 보여야 할 뼈가 다르다(두개골 = 진단·교정·재평가가 서로 다름).
         //   해당 항목이 없는 단계는 이전 표시를 되돌리고 전체를 보여준다(무회귀).
@@ -922,7 +960,14 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // ★구간을 (0,1)로 명시하고 루프를 끈다.
         //   인자 없는 오버로드는 runtimeGuideStartRatio/EndRatio(기본 0~0.4)와 loopGuideHands(=1)를 쓴다
         //   → 클립 앞 40%만 무한 반복된다. 가이드손 규약은 "전체를 1회"다.
-        chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+        // ★이 단계에 손 녹화가 있을 때만 재생한다(2026-08-13).
+        //   예전엔 무조건 재생해서, 녹화가 없는 단계에서는 <b>직전에 로드된 남의 녹화</b>가 그대로 떴다.
+        //   (제2늑골 '팔 외전'에서 진단 녹화의 왼손 가이드가 남아 있던 원인 — 사용자 지적.
+        //    같은 함정이 08-03에도 판정 쪽에서 나왔다: 파일이 없으면 직전 녹화가 남아 오판정.)
+        if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
+            chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+        else
+            chunaPathEvaluator.HideGuideHandKeepHeldInternal();
 
         // AutoPlay 완료 시 SubStep 완료 처리
         chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;
@@ -989,18 +1034,88 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         foreach (var rig in allRigs)
             if (rig != null && string.IsNullOrEmpty(rig.ScenarioName))
                 return rig;   // ② 레거시 기본(이름 미설정 = 기존 OM)
-        // ③ 폴백 — 이름이 붙은 리그만 있는데 하나도 안 맞는 상황. 엉뚱한 술기의 리그(파지점 위치·진단 단계가
-        // 전혀 다름)를 조용히 쓰게 되므로 반드시 경고한다. (예: 두개골PJ교정 CSV는 있는데 PJ 리그를 아직 안 만든 경우)
-        ChunaLogger.LogWarning(
-            $"[ScenarioManager] 시나리오 '{scenarioName}'에 맞는 두개골 리그가 없습니다 — " +
-            $"'{allRigs[0].ScenarioName}' 리그로 폴백합니다. 파지점 위치와 진단 단계가 이 술기와 다를 수 있습니다. " +
-            "메뉴 GuideChuna/두개골 진단 파지점 설정 에서 이 시나리오용 리그를 만드세요.");
-        return allRigs[0];
+        // ③ 맞는 리그가 없다 → ★<b>아무 리그나 갖다 쓰지 않는다.</b>
+        //   예전에는 allRigs[0]으로 폴백했는데, 그러면 <b>전혀 다른 술기의 파지점이 화면에 뜬다</b>.
+        //   2026-08-12에 제1늑골을 개명하면서 씬 리그의 scenarioName만 옛 이름으로 남자
+        //   두개골 OM 리그가 대신 켜져서 "제1늑골인데 두개골 파지점이 나온다"가 됐다.
+        //   경고만으로는 묻힌다 — 틀린 파지점을 보여 주느니 안 보여 주는 편이 낫다.
+        var names = new System.Text.StringBuilder();
+        foreach (var r in allRigs)
+            if (r != null) names.Append($"'{r.ScenarioName}' ");
+
+        ChunaLogger.LogError(
+            $"[ScenarioManager] 시나리오 '{scenarioName}'에 맞는 파지점 리그가 없습니다 — 파지점을 표시하지 않습니다.\n" +
+            $"   씬에 있는 리그: {names}\n" +
+            $"   ★씬 리그의 scenarioName을 '{scenarioName}'과 똑같이 맞추세요(대소문자·띄어쓰기까지).\n" +
+            "   확인: 메뉴 GuideChuna/시나리오 배선 점검 (읽기 전용)");
+        return null;
     }
 
     /// <summary>
     /// cranial 조건 타입(cranialGrip/cranialPressure/cranialDepthBreath) 여부
     /// </summary>
+    /// <summary>
+    /// conditionParams에서 <c>anim=시작:끝</c>(정규화 0~1)을 읽는다. 없으면 false.
+    /// 예: <c>anim=0:0.5</c> = 클립의 앞 절반만 재생하고 멈춘다.
+    /// </summary>
+    private static bool TryParseAnimRange(string prms, out float from, out float to)
+    {
+        from = 0f; to = 1f;
+        foreach (string tok in SplitParams(prms))
+        {
+            string t = tok.Trim();
+            if (!t.StartsWith("anim=", System.StringComparison.OrdinalIgnoreCase)) continue;
+
+            string[] parts = t.Substring(5).Split(':');
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            if (parts.Length == 2 &&
+                float.TryParse(parts[0], System.Globalization.NumberStyles.Float, inv, out from) &&
+                float.TryParse(parts[1], System.Globalization.NumberStyles.Float, inv, out to))
+                return true;
+
+            ChunaLogger.LogWarning($"[ScenarioManager] anim 구간을 못 읽었습니다: '{t}' (형식: anim=0:0.5)");
+            return false;
+        }
+        return false;
+    }
+
+    /// <summary>conditionParams의 <c>hand=left|right|both</c>를 읽는다(없으면 양손).
+    /// 판정과 가이드손 표시가 <b>같은 토큰</b>을 쓴다 — 두 곳이 어긋나면
+    /// "오른손만 판정하는데 양손 가이드가 뜨는" 상태가 된다.</summary>
+    private static CranialAdjustmentController.JudgeHand ParseJudgeHand(string prms)
+    {
+        string p = (prms ?? "").ToLowerInvariant();
+        if (p.Contains("hand=left")) return CranialAdjustmentController.JudgeHand.왼손;
+        if (p.Contains("hand=right")) return CranialAdjustmentController.JudgeHand.오른손;
+        return CranialAdjustmentController.JudgeHand.양손;
+    }
+
+    /// <summary>conditionParams의 <c>finger=thumb|index|middle|ring|pinky|palm</c>. 없으면 손바닥.</summary>
+    private static CranialFinger ParseFinger(string prms)
+    {
+        string p = (prms ?? "").ToLowerInvariant();
+        if (p.Contains("finger=thumb")) return CranialFinger.Thumb;
+        if (p.Contains("finger=index")) return CranialFinger.Index;
+        if (p.Contains("finger=middle")) return CranialFinger.Middle;
+        if (p.Contains("finger=ring")) return CranialFinger.Ring;
+        if (p.Contains("finger=pinky")) return CranialFinger.Pinky;
+        return CranialFinger.Palm;
+    }
+
+    /// <summary>conditionParams에서 <c>키=값</c> 형태의 실수를 읽는다. 없으면 기본값.</summary>
+    private static float ParseTokenFloat(string prms, string keyLower, float fallback)
+    {
+        foreach (string tok in SplitParams(prms))
+        {
+            string t = tok.Trim();
+            if (!t.ToLowerInvariant().StartsWith(keyLower)) continue;
+            if (float.TryParse(t.Substring(keyLower.Length), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out float v))
+                return v;
+        }
+        return fallback;
+    }
+
     /// <summary>conditionParams를 ';'로 쪼갠다(빈 토큰 제거).</summary>
     private static string[] SplitParams(string prms)
     {
@@ -1014,7 +1129,16 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     /// </summary>
     private static readonly System.Collections.Generic.HashSet<string> CranialFlagTokens =
         new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
-        { "xray", "gripgate", "touchonce", "bothhands", "palmsupport", "startholdonly", "guideonly", "skipmidhold" };
+        { "xray", "gripgate", "touchonce", "bothhands", "palmsupport", "startholdonly", "guideonly", "skipmidhold",
+          "brace" };
+
+    /// <summary>플래그 토큰이 있는가(대소문자 무시). 값 없이 켜고 끄는 표시용 토큰에 쓴다.</summary>
+    private static bool HasFlagToken(string prms, string flag)
+    {
+        foreach (string tok in SplitParams(prms))
+            if (tok.Trim().Equals(flag, System.StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
 
     private static string FirstNonFlagToken(string prms)
     {
@@ -1103,6 +1227,14 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             return;
         }
 
+        // ★ 이번 단계에서 쓸 손 — 판정과 가이드손 표시가 같은 토큰(hand=)을 쓴다.
+        //   한 손씩 순서대로 대는 술기에서 반대 손 가이드가 떠 있으면 어느 손을 대라는지 알 수 없다.
+        var handScope = ParseJudgeHand(subStep.conditionParams);
+        cranialController.SetGuideHandScope(handScope);
+        //   ★가이드손 '이미 봤다' 판정에도 손 범위를 넣는다 — 오른손만 보여 준 뒤 양손을 보여 줄 때
+        //     키가 같으면 새로 보이는 왼손이 멈춘 채로 나타난다.
+        chunaPathEvaluator?.SetGuideScopeTag(handScope.ToString());
+
         // ★ 환자 애니메이션: 다른 시나리오와 똑같이 CSV의 patientAnimationClip으로 켜고 끈다.
         //   (예: 진단 단계에 '굴곡신전'을 넣으면 환자가 호흡하고, 다음 단계에 'idle'을 넣으면 멈춘다)
         //   두개골 단계는 진행 게이트가 조건(cranialTouch 등)이므로 AutoPlay 완료가 단계를 넘기면 안 된다
@@ -1113,10 +1245,29 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             //   (제1늑골: 왼손 검지 측면이 늑골 파지점에 닿으면 그때 머리가 신전·우측 병진)
             bool playOnGrip = !string.IsNullOrEmpty(subStep.conditionParams) &&
                               subStep.conditionParams.ToLower().Contains("playongrip");
+            float animSpeed = ParseTokenFloat(subStep.conditionParams, "animspeed=", 1f);
+
             if (playOnGrip)
             {
-                chunaPathEvaluator.ArmPatientAnimationForDeferredStart(subStep.patientAnimationClip.Trim());
-                cranialController.ArmAnimationOnGrip(chunaPathEvaluator, leftOnly: true);
+                // 구간(anim=)이 같이 적혀 있으면 접촉 시 그 구간만 재생한다.
+                bool ranged = TryParseAnimRange(subStep.conditionParams, out float gf, out float gt);
+                chunaPathEvaluator.ArmPatientAnimationForDeferredStart(
+                    subStep.patientAnimationClip.Trim(), gf, gt, ranged, animSpeed);
+
+                // ★어느 손이 닿으면 시작할지 — playOnGrip=right / left / both (기본 left)
+                var trigger = CranialAdjustmentController.GripAnimTrigger.왼손;
+                string prm = (subStep.conditionParams ?? "").ToLowerInvariant();
+                if (prm.Contains("playongrip=right")) trigger = CranialAdjustmentController.GripAnimTrigger.오른손;
+                else if (prm.Contains("playongrip=both")) trigger = CranialAdjustmentController.GripAnimTrigger.양손;
+                cranialController.ArmAnimationOnGrip(chunaPathEvaluator, trigger);
+            }
+            else if (TryParseAnimRange(subStep.conditionParams, out float from, out float to))
+            {
+                // ★conditionParams의 anim=시작:끝 → 클립의 그 구간만 재생하고 멈춘다.
+                //   한 동작을 여러 단계에 나눠 보여줄 때 쓴다(흉추 신전: 절반만 일으켰다가 나중에 끝까지).
+                cranialController.DisarmAnimationOnGrip();
+                chunaPathEvaluator.PlayPatientAnimationRange(
+                    subStep.patientAnimationClip.Trim(), from, to, animSpeed);
             }
             else
             {
@@ -1180,7 +1331,8 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         cranialController.BeginCranialMetrics(
             string.IsNullOrEmpty(subStep.conditionParams)
                 ? currentStep.stepName
-                : $"{currentStep.stepName}({subStep.conditionParams})");
+                : $"{currentStep.stepName}({subStep.conditionParams})",
+            currentPhase?.phaseName, currentStep?.stepName);
 
         IScenarioCondition condition;
         string label;
@@ -1189,10 +1341,16 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             // conditionParams = 진단 단계 ID(예: 진단1/진단2). 비면 컨트롤러의 첫 단계를 쓴다.
             // ★파라미터는 ';'로 여러 토큰이 올 수 있다(xray 등) → 플래그가 아닌 첫 토큰만 단계 ID로 쓴다.
             // hold= 로 자세 유지 시간을 CSV에서 조절한다(0/미지정이면 스테이지 값).
+            // ★stack=0.10;finger=thumb → 파지점 하나에 두 손(엄지 등)을 모으는 방식으로 판정.
+            float dStack = ParseTokenFloat(subStep.conditionParams, "stack=", 0f);
+            CranialFinger dFinger = ParseFinger(subStep.conditionParams);
+
             condition = new DiagnosisHoldCondition(cranialController,
                                                    FirstNonFlagToken(subStep.conditionParams),
-                                                   NamedParam(subStep.conditionParams, "hold"));
-            label = "Touch(⓪ 진단 자세 유지)";
+                                                   NamedParam(subStep.conditionParams, "hold"),
+                                                   dStack, dFinger);
+            label = dStack > 0f ? $"Touch(양손 {dFinger} 포개짐 {dStack * 100f:F0}cm)"
+                                : "Touch(⓪ 진단 자세 유지)";
         }
         else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {
@@ -1209,10 +1367,28 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             float firstScale = NamedParam(subStep.conditionParams, "firstScale");
             BreathingSyncHUD.StartPhase startPhase = NamedStartPhase(subStep.conditionParams);
 
+            // ★headThrust=가 함께 적히면 '호흡 유도 + 순간 교정'을 한 단계에서 처리한다.
+            //   다 내쉰 뒤 누르면 완료, 그 전에 누르면 감점하고 계속 기다린다.
+            float bThrust = ParseTokenFloat(subStep.conditionParams, "headthrust=", 0f);
+            float bDrop = ParseTokenFloat(subStep.conditionParams, "headdrop=", 0f);
+            // ★handThrust=0.02 → 머리 대신 <b>손이 눌러 들어갔다 나오는</b> 것으로 판정.
+            //   헤드셋 하강은 몸을 크게 낮춰야 해서 실제 술기 동작보다 과하다(사용자 지적).
+            float bHand = ParseTokenFloat(subStep.conditionParams, "handthrust=", 0f);
+            bool byHands = bHand > 0f;
+            if (byHands) bDrop = bHand;
+
+            // ★late=3 → 다 내쉰 뒤 이 시간(초) 안에 누르면 정상. 넘기면 감점(진행은 계속).
+            float lateWin = ParseTokenFloat(subStep.conditionParams, "late=", 3f);
+
             condition = new BreathingCondition(cranialController, gripGate,
-                                               breaths, inhaleSec, exhaleSec, startPhase, firstScale);
+                                               breaths, inhaleSec, exhaleSec, startPhase, firstScale,
+                                               bThrust, bDrop, byHands, lateWin);
             string spec = breaths > 0 ? $" {breaths}회" : "";
-            label = gripGate ? $"Breath(호흡{spec} — 파지 유지 게이트)" : $"Breath(②b 호흡{spec} — 견착 자세 게이트)";
+            label = byHands
+                ? $"Breath(호흡{spec} → 날숨 끝 손 누름 {bHand * 100f:F0}cm)"
+                : bThrust > 0f
+                    ? $"Breath(호흡{spec} → 날숨 끝 순간 교정 {bThrust:0.##}m/s)"
+                    : gripGate ? $"Breath(호흡{spec} — 파지 유지 게이트)" : $"Breath(②b 호흡{spec} — 견착 자세 게이트)";
         }
         else if (conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase))
         {
@@ -1233,13 +1409,45 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
                 }
             }
 
-            condition = new PressureCondition(cranialController, holdSec);
-            label = $"Pressure(파지 유지 {holdSec:0.#}초)";
+            // ★headDrop=0.06 → '파지 유지 + 머리가 6cm 내려감'. 체중을 싣는 동작(바디드롭·마지막 압박)용.
+            float headDrop = 0f;
+            foreach (string tok in SplitParams(subStep.conditionParams))
+            {
+                string t = tok.Trim();
+                if (!t.StartsWith("headdrop=", System.StringComparison.OrdinalIgnoreCase)) continue;
+                float.TryParse(t.Substring(9), System.Globalization.NumberStyles.Float,
+                               System.Globalization.CultureInfo.InvariantCulture, out headDrop);
+                break;
+            }
+
+            // ★headThrust=0.25 → '휙' 내려가는 순간 통과(유지 시간 없음). 바디드롭·순간 교정용.
+            float headThrust = ParseTokenFloat(subStep.conditionParams, "headthrust=", 0f);
+            // ★handThrust=0.02 → 손이 눌러 들어갔다 나오는 것으로 판정(머리보다 적게 움직여도 잡힌다).
+            float handThrust = ParseTokenFloat(subStep.conditionParams, "handthrust=", 0f);
+            bool byHands = handThrust > 0f;
+            if (byHands) headDrop = handThrust;
+
+            condition = new PressureCondition(cranialController, holdSec, 0.5f, headDrop, headThrust, byHands);
+            label = byHands
+                ? $"Pressure(손 누름 {handThrust * 100f:F0}cm — 들어갔다 나오기)"
+                : headThrust > 0f
+                    ? $"Pressure(순간 하강 {headThrust:0.##}m/s · 최소 {(headDrop > 0f ? headDrop : 0.03f) * 100f:F0}cm)"
+                    : headDrop > 0f
+                        ? $"Pressure(파지 유지 {holdSec:0.#}초 + 머리 {headDrop * 100f:F0}cm 하강)"
+                        : $"Pressure(파지 유지 {holdSec:0.#}초)";
         }
         else
         {
-            condition = new GripPointCondition(cranialController);
-            label = "Grip(① 파지)";
+            // ★hand=left|right|both → 한 손만 판정한다.
+            //   흉추 신전은 보조수(두방수)가 먼저 머리를 받쳐 환자를 들어야 주동수(족방수) 주먹이
+            //   등 밑에 들어간다 — 양손을 동시에 요구하면 물리적으로 성립할 수 없다.
+            var jh = ParseJudgeHand(subStep.conditionParams);
+            // ★stack=0.08 → 손끝 관절이 아니라 '양손이 한 지점에 포개졌는가'로 판정한다.
+            //   두상골처럼 관절 매핑이 없는 접촉점을 쓰는 술기용(복와위 양손두상골).
+            float stackGap = ParseTokenFloat(subStep.conditionParams, "stack=", 0f);
+
+            condition = new GripPointCondition(cranialController, jh, stackGap);
+            label = stackGap > 0f ? $"Grip(양손 포개짐 {stackGap * 100f:F0}cm)" : $"Grip(① 파지 — {jh})";
         }
 
         conditionManager.RegisterCondition(currentPhase.phaseName, currentStep.stepName, subStep.subStepNo, condition);

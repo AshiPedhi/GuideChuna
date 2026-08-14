@@ -288,6 +288,15 @@ public class CollisionDetectionManager
         // ★접촉하면 <b>완전히 숨긴다</b>(08-11 사용자 지시). 예전에는 touchAlpha(0.15)로 반투명하게만
         //   흐려서 손 위에 잔상이 겹쳐 보였다 — "손을 대면 안 보여야 한다"가 요구사항이다.
         //   손을 떼면 다시 보인다(이때 재생은 하지 않는다 — 재생 제어는 ChunaPathEvaluator 쪽 규약).
+        // ★이 단계가 가이드손을 아예 안 쓰기로 하고 숨겨 뒀으면 되살리지 않는다(2026-08-13).
+        //   이 함수는 접촉이 풀릴 때마다 SetVisible(true)를 해서, 손 녹화가 없는 단계에서 숨겨 둔
+        //   가이드손이 환자를 터치했다 떼는 순간 계속 되살아났다(사용자 지적 3회).
+        if (owner.IsGuideHandHidden)
+        {
+            guideHand.SetVisible(false);
+            return;
+        }
+
         if (isTouching)
         {
             guideHand.SetVisible(false);

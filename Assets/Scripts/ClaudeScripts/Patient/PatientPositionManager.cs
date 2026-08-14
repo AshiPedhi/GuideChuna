@@ -25,6 +25,11 @@ public class PatientPositionManager : MonoBehaviour
         [Tooltip("Euler angles (Inspector 편의)")]
         public Vector3 patientRotation;
 
+        [Tooltip("★켜면 회전은 프리셋이 건드리지 않고 <b>애니메이션에 맡긴다</b>(위치만 맞춤).\n" +
+                 "복와위처럼 클립이 자세(엎드림)를 만드는 시나리오용 — 끄면 프리셋 회전이 " +
+                 "클립이 만든 자세를 덮어써 환자가 뒤집힌다.")]
+        public bool useAnimationRotation = false;
+
         [Header("침대 위치")]
         public Vector3 bedPosition;
         [Tooltip("Euler angles (Inspector 편의)")]
@@ -269,16 +274,22 @@ public class PatientPositionManager : MonoBehaviour
             {
                 // 홀더를 옮겨 c9(애니가 로컬값을 쓰는 오브젝트)가 프리셋 자리에 오게 한다.
                 // ① 먼저 회전을 맞추고(회전하면 c9 위치가 홀더 피벗을 중심으로 돌아간다)
-                Quaternion want = Quaternion.Euler(preset.patientRotation);
-                Quaternion deltaRot = want * Quaternion.Inverse(patientRoot.rotation);
-                patientMoveRoot.rotation = deltaRot * patientMoveRoot.rotation;
+                //   ★useAnimationRotation이면 회전은 건드리지 않는다 — 클립이 만든 자세(엎드림 등)를
+                //     프리셋 회전이 덮어써 환자가 뒤집히기 때문이다(복와위, 2026-08-12).
+                if (!preset.useAnimationRotation)
+                {
+                    Quaternion want = Quaternion.Euler(preset.patientRotation);
+                    Quaternion deltaRot = want * Quaternion.Inverse(patientRoot.rotation);
+                    patientMoveRoot.rotation = deltaRot * patientMoveRoot.rotation;
+                }
                 // ② 그다음 남은 위치 차이만큼 홀더를 평행이동
                 patientMoveRoot.position += preset.patientPosition - patientRoot.position;
             }
             else
             {
                 patientRoot.position = preset.patientPosition;
-                patientRoot.rotation = Quaternion.Euler(preset.patientRotation);
+                if (!preset.useAnimationRotation)
+                    patientRoot.rotation = Quaternion.Euler(preset.patientRotation);
                 // 보정을 켠 경우에만 기준점을 잡는다(꺼져 있으면 LateUpdate가 아무것도 하지 않는다).
                 if (holdPresetAgainstAnimation) AnchorToCurrentPose();
             }

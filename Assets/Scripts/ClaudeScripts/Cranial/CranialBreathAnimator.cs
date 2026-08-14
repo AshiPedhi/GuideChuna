@@ -40,6 +40,11 @@ public class CranialBreathAnimator : MonoBehaviour
     [Tooltip("루프를 돌릴 substep의 conditionType 목록. 진단은 cranialTouch.\n" +
              "★파지점 배선과 무관하게 이 단계에 들어오기만 하면 재생된다.")]
     [SerializeField] private string[] loopOnConditionTypes = { "cranialTouch" };
+
+    [Tooltip("호흡 유도 substep의 conditionType 목록. 이 단계가 아니면 HUD가 아직 돌고 있어도 재생하지 않는다.\n" +
+             "★2026-08-12 사용자 지시: \"전환할 때 호흡 애니메이션 꺼라. 내뱉고 전환한 다음에 호흡해야 하는데 " +
+             "계속 까딱까딱거려 거슬린다.\" HUD 정지에만 기대면 정지가 한 박자 늦거나 누락될 때 환자가 계속 움직인다.")]
+    [SerializeField] private string[] breathOnConditionTypes = { "cranialDepthBreath" };
     [Tooltip("진단 루프의 들숨 길이(초). 진단은 '자연 호흡 관찰'이라 안정 호흡 비율(날숨이 더 김)로 둔다.")]
     [SerializeField] private float diagnosisInhaleSeconds = 3.2f;
     [Tooltip("진단 루프의 날숨 길이(초).")]
@@ -54,6 +59,13 @@ public class CranialBreathAnimator : MonoBehaviour
     [Tooltip("재생이 끝났을 때 돌아갈 State 이름. 비우면 그대로 둔다.\n" +
              "★비워 두면 굴곡·신전 State에 남아 다음 단계에서도 환자가 계속 호흡한다.")]
     [SerializeField] private string returnStateName = "idle";
+
+    [Tooltip("복귀 State를 어느 지점으로 되돌릴지(0=처음, 1=끝).\n" +
+             "★기본 0이면 그 클립이 처음부터 다시 재생된다. 자세를 '유지'시키려면 1로 둘 것 —\n" +
+             "예) 제2늑골은 호흡이 끝나면 팔이 외전된 채로 있어야 하는데, 복귀 State('제2늑골 팔 외전')를\n" +
+             "0으로 되돌리면 팔이 중립에서 다시 올라가는 게 보인다. 1이면 끝 자세로 바로 고정된다.")]
+    [Range(0f, 1f)]
+    [SerializeField] private float returnStateNormalizedTime = 0f;
 
     [Header("어느 구간에서 재생할지")]
     [Tooltip("★기본 ON. ③ 견착·호흡(시술) 구간에서 호흡 유도에 맞춰 재생한다.\n" +
@@ -85,6 +97,7 @@ public class CranialBreathAnimator : MonoBehaviour
     private int stateHash;
     private bool stateChecked;
     private bool stateValid;
+    private RuntimeAnimatorController checkedController;   // 이 컨트롤러 기준으로 검사했다
     private bool driving;          // 지금 이 스크립트가 Animator를 잡고 있는가
     private float restoreSpeed = 1f;
 
@@ -110,18 +123,27 @@ public class CranialBreathAnimator : MonoBehaviour
     /// <summary>지금 substep이 '진단'인지만 본다. 파지점·진단단계 배선과 무관 — 단계에 들어오면 재생한다.</summary>
     private void HandleSubStepStarted(SubStepData subStep)
     {
-        inLoopSubStep = subStep != null && MatchesLoopType(subStep.conditionType);
+        inLoopSubStep = subStep != null && MatchesAny(subStep.conditionType, loopOnConditionTypes);
+        inBreathSubStep = subStep != null && MatchesAny(subStep.conditionType, breathOnConditionTypes);
         if (!inLoopSubStep) loopTimer = 0f;
+
+        // ★이 substep이 자기 클립을 지정했으면 복귀 State로 되돌리지 않는다.
+        //   안 그러면 CSV가 방금 튼 클립을 우리가 idle로 덮어써서 "애니메이션이 아예 안 움직인다"가 된다.
+        //   (2026-08-13 실제 증상: PM 교정 '준비'가 PM고개회전을 트는데 진단에서 빠져나오며 idle로 덮였다.)
+        string ownClip = subStep != null ? (subStep.patientAnimationClip ?? "").Trim() : "";
+        substepHasOwnClip = ownClip.Length > 0 &&
+                            !ownClip.Equals((stateName ?? "").Trim(), System.StringComparison.OrdinalIgnoreCase);
         if (debugLog)
-            Debug.Log($"[CranialBreathAnimator] substep '{subStep?.conditionType}' → 진단루프={inLoopSubStep}");
+            Debug.Log($"[CranialBreathAnimator] substep '{subStep?.conditionType}' → " +
+                      $"진단루프={inLoopSubStep} 호흡={inBreathSubStep}");
     }
 
-    private bool MatchesLoopType(string conditionType)
+    private static bool MatchesAny(string conditionType, string[] list)
     {
-        if (loopOnConditionTypes == null || loopOnConditionTypes.Length == 0) return false;
+        if (list == null || list.Length == 0) return false;
         if (string.IsNullOrWhiteSpace(conditionType)) return false;
         string t = conditionType.Trim();
-        foreach (var v in loopOnConditionTypes)
+        foreach (var v in list)
             if (!string.IsNullOrEmpty(v) && v.Trim().Equals(t, System.StringComparison.OrdinalIgnoreCase))
                 return true;
         return false;
@@ -149,11 +171,21 @@ public class CranialBreathAnimator : MonoBehaviour
         return breathingHUD;
     }
 
-    /// <summary>Animator에 해당 State가 실제로 있는지 1회 확인(없으면 경고 후 영구 비활성).</summary>
+    /// <summary>
+    /// Animator에 해당 State가 실제로 있는지 확인한다.
+    ///
+    /// ★<b>컨트롤러가 바뀌면 다시 검사한다</b>(2026-08-12). 예전에는 한 번 검사하고 영구 캐시했는데,
+    /// 시나리오마다 환자 Animator Controller가 교체되므로 두개골(굴곡신전 있음)을 먼저 돌린 뒤
+    /// 늑골(그 State 없음)로 넘어가면 캐시된 '있음'을 믿고 <b>없는 State를 Play하며 speed를 0으로</b>
+    /// 세워 버렸다 — 환자 애니가 통째로 멈추는 원인이었다.
+    /// </summary>
     private bool EnsureState(Animator anim)
     {
-        if (stateChecked) return stateValid;
+        var ctrl = anim.runtimeAnimatorController;
+        if (stateChecked && ctrl == checkedController) return stateValid;
+
         stateChecked = true;
+        checkedController = ctrl;
 
         if (anim.runtimeAnimatorController == null)
         {
@@ -180,8 +212,14 @@ public class CranialBreathAnimator : MonoBehaviour
         // 구동 소스 결정:
         //   ① 견착·호흡(③) 진행 중 → HUD의 실제 호흡 위상에 물린다(시술자가 호흡에 맞춰 압을 준다).
         //   ② 진단 단계 진행 중   → 환자 자연 호흡을 자체 타이머로 루프 재생(관찰용).
-        bool byBreathWindow = syncDuringBreathingWindow && hud != null && hud.IsRunning;
-        bool byDiagnosisLoop = !byBreathWindow && loopDuringDiagnosis && inLoopSubStep;
+        // ★호흡 substep일 때만 HUD 위상에 물린다 — '전환'처럼 판정 없는 단계에서 HUD가 아직
+        //   돌고 있더라도 환자가 계속 까딱거리지 않게 한다(08-12 사용자 지시).
+        // ★substep이 CSV로 자기 클립을 지정했으면 아예 손대지 않는다 — 그 클립이 우선이다.
+        //   (PM 재평가는 cranialTouch면서 clip=PM중립이다. 이 가드가 없으면 진단 루프가 굴곡신전을
+        //    스크럽하며 PM중립을 덮어써 "애니메이션이 안 움직인다"가 된다. 2026-08-13)
+        bool byBreathWindow = syncDuringBreathingWindow && inBreathSubStep && !substepHasOwnClip
+                              && hud != null && hud.IsRunning;
+        bool byDiagnosisLoop = !byBreathWindow && loopDuringDiagnosis && inLoopSubStep && !substepHasOwnClip;
 
         if (!byBreathWindow && !byDiagnosisLoop)
         {
@@ -217,7 +255,9 @@ public class CranialBreathAnimator : MonoBehaviour
     }
 
     private float loopTimer;
-    private bool inLoopSubStep;   // 지금 substep이 진단인가(OnSubStepStarted가 갱신)
+    private bool inLoopSubStep;      // 지금 substep이 진단인가(OnSubStepStarted가 갱신)
+    private bool inBreathSubStep;    // 지금 substep이 호흡 유도인가
+    private bool substepHasOwnClip;  // 지금 substep이 CSV로 자기 클립을 지정했는가(그러면 복귀 State를 강제하지 않는다)
 
     /// <summary>진단 구간용 자체 호흡 루프. 들숨/날숨 길이를 따로 두고 주기 진행도(0→1)를 계속 돌린다.</summary>
     private float AdvanceDiagnosisLoop()
@@ -266,13 +306,20 @@ public class CranialBreathAnimator : MonoBehaviour
         {
             patientAnimator.speed = restoreSpeed;
 
-            if (!string.IsNullOrWhiteSpace(returnStateName))
+            // ★복귀 State를 강제해도 되는 경우만:
+            //   ⓐ 지금 substep이 자기 클립을 지정하지 않았고(지정했으면 그게 우선이다)
+            //   ⓑ Animator가 아직 <b>우리가 올려둔 State</b>에 있을 때(다른 클립으로 이미 넘어갔으면 남의 것이다)
+            bool onOurState = patientAnimator.runtimeAnimatorController != null &&
+                              patientAnimator.GetCurrentAnimatorStateInfo(layer).shortNameHash == stateHash;
+
+            if (!string.IsNullOrWhiteSpace(returnStateName) && !substepHasOwnClip && onOurState)
             {
                 int backHash = Animator.StringToHash(returnStateName.Trim());
                 if (patientAnimator.runtimeAnimatorController != null &&
                     patientAnimator.HasState(layer, backHash))
                 {
-                    patientAnimator.Play(backHash, layer, 0f);
+                    patientAnimator.Play(backHash, layer, returnStateNormalizedTime);
+                    patientAnimator.Update(0f);   // 즉시 그 자세로 반영(한 프레임 옛 자세가 보이는 것 방지)
                 }
                 else if (debugLog)
                 {

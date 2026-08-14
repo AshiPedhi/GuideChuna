@@ -37,8 +37,11 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("조건 체크 간격 (초)")]
     [SerializeField] private float checkInterval = 0.5f;
 
-    [Tooltip("완료 후 다음 단계까지 딜레이 (초)")]
+    [Tooltip("완료 알림 패널이 스스로 사라지기까지 (초). ★진행을 막지 않는다 — 표시만 하고 곧바로 다음 단계로 넘어간다.")]
     [SerializeField] private float completionDelay = 2f;
+
+    [Tooltip("완료 피드백(유사도) 표시 시간 (초). ★진행을 막지 않는다.")]
+    [SerializeField] private float feedbackVisibleSeconds = 2.5f;
 
     [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
     [SerializeField] private float progressTimeout = 20f;
@@ -197,6 +200,11 @@ public class ScenarioConditionManager : MonoBehaviour
         StopNarration();
         StopConditionCheck();
 
+        // ★앞 단계의 완료 피드백을 즉시 지운다 — 여기서 해야 <b>모든</b> 단계에 적용된다.
+        //   ProcessConditionByType에만 두면 마지막 판정(재평가) 다음의 '종료' 가이드 단계처럼
+        //   조건이 없는 단계로 넘어갈 때 정리되지 않아 종료 문구 위에 퍼센트가 겹쳐 남았다(2026-08-12).
+        HideCompletionFeedbackNow();
+
         ChunaLogger.Log($"<color=cyan>[ConditionManager] ===== OnSubStepStarted 호출 =====</color>");
         ChunaLogger.Log($"[ConditionManager] Phase: {scenarioManager.CurrentPhase.phaseName}, Step: {scenarioManager.CurrentStep.stepName}, SubStep: {subStep.subStepNo}");
         ChunaLogger.Log($"[ConditionManager] Duration: {subStep.duration}초");
@@ -248,6 +256,11 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private void ProcessConditionByType(SubStepData subStep)
     {
+        // ★새 단계가 시작되면 앞 단계의 완료 피드백을 즉시 지운다 (2026-08-12).
+        //   완료 후 곧바로 진행하도록 바꾸면서 피드백이 타이머로만 사라지게 됐는데,
+        //   그 사이에 다음 단계 지시문이 그려져 이전 퍼센트 텍스트 위에 겹쳐 보였다.
+        HideCompletionFeedbackNow();
+
         string conditionKey = GetConditionKey(subStep);
 
         // conditionType이 명시되어 있으면 우선 사용
@@ -1128,50 +1141,60 @@ public class ScenarioConditionManager : MonoBehaviour
             }
         }
 
-        // 2. 피드백 UI가 있는 경우 분리 방식으로 표시
-        if (stepFeedbackUI != null)
-        {
-            // 2-1. 가이드 콘텐츠 숨김
-            if (guideUIController != null)
-            {
-                guideUIController.HideGuideContent();
-            }
+        // ★2026-08-12 규약 통일 — <b>판정이 끝나면 곧바로 다음 단계로 넘어간다.</b>
+        //   진입 규약은 이미 '나레이션이 끝나야 판정이 시작된다'로 통일돼 있다
+        //   (PlayNarrationThenStartHandPose — HandPose·cranial* 전부 같은 경로).
+        //   그런데 출구에서만 피드백 3초 + 알림 2초 + 나레이션 대기가 겹쳐 있어서
+        //   "완료했는데 왜 안 넘어가지?" 하고 이것저것 더 만지게 만들었다(사용자 지적).
+        //   → 피드백·알림은 <b>띄우기만 하고 기다리지 않는다</b>. 숨기는 일은 별도 코루틴이 맡는다.
+        ShowCompletionFeedbackNonBlocking(currentSimilarity);
 
-            // 2-2. 피드백 UI 표시 및 애니메이션 시작
-            stepFeedbackUI.gameObject.SetActive(true);
-            stepFeedbackUI.ShowFeedback(currentSimilarity);
-
-            ChunaLogger.Log($"<color=green>[ConditionManager] 피드백 표시: {currentSimilarity:P0}</color>");
-
-            // 2-3. 피드백 표시 시간만큼 대기 (StepFeedbackUI 내부에서 자동 숨김됨)
-            yield return new WaitForSeconds(3.0f);  // 2.5초 표시 + 0.5초 여유
-
-            // 2-4. 피드백 UI 숨김 (혹시 안 숨겨졌을 경우 대비)
-            stepFeedbackUI.Hide();
-            stepFeedbackUI.gameObject.SetActive(false);
-
-            // 2-5. 가이드 콘텐츠 복원
-            if (guideUIController != null)
-            {
-                guideUIController.ShowGuideContent();
-            }
-        }
-        else
-        {
-            // 피드백 UI 없을 경우 기존 방식 (completionAlertPanel)
-            ShowCompletionAlert();
-            yield return cachedCompletionDelay;
-            HideCompletionAlert();
-        }
-
-        // ★ 3. 나래이션이 아직 재생 중이면 완료까지 대기
-        yield return WaitForNarrationComplete();
-
-        // 4. 다음 SubStep으로 진행
+        // 다음 SubStep으로 진행 — 대기 없음.
         if (scenarioManager != null)
         {
             scenarioManager.NextSubStep();
         }
+        yield break;
+    }
+
+    /// <summary>완료 피드백을 띄우고 <b>스스로 사라지게</b> 한다 — 진행을 막지 않는다.</summary>
+    private void ShowCompletionFeedbackNonBlocking(float similarity)
+    {
+        if (stepFeedbackUI != null)
+        {
+            stepFeedbackUI.gameObject.SetActive(true);
+            stepFeedbackUI.ShowFeedback(similarity);
+            ChunaLogger.Log($"<color=green>[ConditionManager] 피드백 표시(비대기): {similarity:P0}</color>");
+            StartCoroutine(HideFeedbackLater());
+        }
+        else
+        {
+            ShowCompletionAlert();
+            StartCoroutine(HideAlertLater());
+        }
+    }
+
+    private IEnumerator HideFeedbackLater()
+    {
+        yield return new WaitForSeconds(feedbackVisibleSeconds);
+        HideCompletionFeedbackNow();
+    }
+
+    /// <summary>완료 피드백·알림을 지금 즉시 지운다(다음 단계 시작 시 겹치지 않게).</summary>
+    private void HideCompletionFeedbackNow()
+    {
+        if (stepFeedbackUI != null && stepFeedbackUI.gameObject.activeSelf)
+        {
+            stepFeedbackUI.Hide();
+            stepFeedbackUI.gameObject.SetActive(false);
+        }
+        HideCompletionAlert();
+    }
+
+    private IEnumerator HideAlertLater()
+    {
+        yield return cachedCompletionDelay;
+        HideCompletionAlert();
     }
 
     /// <summary>
@@ -1532,7 +1555,10 @@ public class CheckpointPoseCondition : IScenarioCondition
     private string fileName;
     private float creationTime;  // ★ 생성 시간 기록
     private bool isActive = true;  // ★ 활성화 상태
-    private const float MIN_ACTIVE_TIME = 1.0f;  // ★ 최소 활성화 시간 (1초)
+    // ★0.15초로 낮췄다(2026-08-13). 원래 1초는 "직전 단계의 완료가 흘러 들어와 즉시 넘어가는 것"을
+    //   막으려던 안전장치인데, 왕복을 빠르게 반복하는 단계에서는 <b>끝에 도달해도 1초를 기다려야</b>
+    //   넘어가서 "끝에서 홀드가 걸린다"가 됐다(사용자 지적). 오탐 방지는 0.15초로도 충분하다.
+    private const float MIN_ACTIVE_TIME = 0.15f;
 
     /// <summary>
     /// CheckpointPoseCondition 생성자

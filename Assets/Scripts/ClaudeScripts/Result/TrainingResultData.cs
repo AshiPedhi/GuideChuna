@@ -108,6 +108,12 @@ public class TrainingResultData
         public string label;              // 단계 구분(예: 진단1, 파지, 견착·호흡, 재평가)
         public float elapsedSeconds;      // 단계 소요 시간
 
+        // ★어느 국면·단계의 지표인지 <b>수집을 시작한 시점에</b> 박아 둔다.
+        //   기록은 다음 substep에 진입할 때 이뤄지는데, 그때는 이미 다음 단계 이름으로 바뀌어 있어서
+        //   지표가 통째로 한 칸씩 밀려 붙었다(PJ 평가에 점수가 안 나오던 원인 — 2026-08-12).
+        public string phaseName;
+        public string stepName;
+
         // --- 자세 성립/유지 ---
         public int posesRequired;         // 요구한 자세 수 (진단: 좌·우 2개 / 그 외 0)
         public int posesCompleted;        // 유지 시간을 채운 자세 수
@@ -121,6 +127,9 @@ public class TrainingResultData
         public int breathsCompleted;      // 성공한 호흡 주기 수
         public int breathFailures;        // 유지비율 미달로 카운트가 리셋된 횟수
         public float breathHoldRatio;     // 마지막 호흡 주기의 자세 유지비율(0~1)
+        public int breathGripDropouts;    // ★호흡을 유도하는 동안 파지를 놓친 횟수(유예시간 이상 떨어진 것만)
+        public int earlyThrusts;          // ★다 내쉬기 전에 순간 교정을 가한 횟수 — 타이밍 실수
+        public int lateThrusts;           // ★날숨 끝 허용 시간을 넘겨 교정한 횟수
 
         // --- 견착(삼각근-이마 밀착 프록시) ---
         public float postureSeconds;      // 견착 성립 상태 누적 시간
@@ -444,7 +453,10 @@ public class TrainingResultData
         // 2줄: 안정성 + (해당 단계만) 호흡·견착
         string firstContact = c.firstContactSeconds >= 0f ? $"{c.firstContactSeconds:F1}초" : "없음";
         string breath = c.breathsRequired > 0
-            ? $" · 호흡 {c.breathsCompleted}/{c.breathsRequired}(유지율 {c.breathHoldRatio:P0}, 실패 {c.breathFailures}회)"
+            ? $" · 호흡 {c.breathsCompleted}/{c.breathsRequired}(유지율 {c.breathHoldRatio:P0}, 실패 {c.breathFailures}회" +
+              (c.breathGripDropouts > 0 ? $", ★호흡 중 이탈 {c.breathGripDropouts}회" : "") +
+              (c.earlyThrusts > 0 ? $", ★이른 교정 {c.earlyThrusts}회" : "") +
+              (c.lateThrusts > 0 ? $", ★늦은 교정 {c.lateThrusts}회" : "") + ")"
             : "";
         string posture = c.postureSeconds > 0.1f ? $" · 견착 {c.postureSeconds:F1}초" : "";
         sb.AppendLine($"   이탈 {c.gripDropouts}회 · 유지실패 {c.holdResets}회 · 첫 접촉 {firstContact}{breath}{posture}");

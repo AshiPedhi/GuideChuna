@@ -7,7 +7,7 @@ AnimatorState:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: "\uC81C1\uB291\uACE8 \uACE0\uAC1C \uC6D0\uBCF5"
+  m_Name: "\uC81C1\uB291\uACE8 \uACE0\uAC1C"
   m_Speed: 1
   m_CycleOffset: 0
   m_Transitions: []
@@ -170,7 +170,7 @@ AnimatorState:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: "\uC81C1\uB291\uACE8 \uACE0\uAC1C"
+  m_Name: "\uC81C1\uB291\uACE8 \uACE0\uAC1C \uC6D0\uBCF5"
   m_Speed: 1
   m_CycleOffset: 0
   m_Transitions: []

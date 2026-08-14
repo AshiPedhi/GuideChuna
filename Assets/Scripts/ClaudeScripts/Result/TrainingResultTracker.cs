@@ -630,10 +630,17 @@ public class TrainingResultTracker : MonoBehaviour
     public void RecordCranialStep(TrainingResultData.CranialMetrics metrics)
     {
         if (!isTracking || resultData == null || metrics == null) return;
-        if (string.IsNullOrEmpty(currentPhaseName) || string.IsNullOrEmpty(currentStepName)) return;
-        if (IsGuideStepName(currentStepName)) return;
 
-        var step = resultData.GetOrCreateStepResult(currentPhaseName, currentStepName);
+        // ★지표를 모으기 시작한 시점의 국면·단계에 붙인다. 기록은 '다음 substep 진입' 때 일어나므로
+        //   여기서 currentPhaseName/currentStepName을 읽으면 한 칸 뒤 단계에 붙는다
+        //   (PJ에서 평가는 점수가 없고 재평가에만 점수가 나오던 원인 — 2026-08-12).
+        string phase = !string.IsNullOrEmpty(metrics.phaseName) ? metrics.phaseName : currentPhaseName;
+        string stepName = !string.IsNullOrEmpty(metrics.stepName) ? metrics.stepName : currentStepName;
+
+        if (string.IsNullOrEmpty(phase) || string.IsNullOrEmpty(stepName)) return;
+        if (IsGuideStepName(stepName)) return;
+
+        var step = resultData.GetOrCreateStepResult(phase, stepName);
 
         // 같은 Step에 여러 SubStep이 있으면(예: 진단1·진단2) 마지막 것만 남지 않게 누적한다.
         if (step.cranial == null)
@@ -652,6 +659,9 @@ public class TrainingResultTracker : MonoBehaviour
             c.breathsRequired += metrics.breathsRequired;
             c.breathsCompleted += metrics.breathsCompleted;
             c.breathFailures += metrics.breathFailures;
+            c.breathGripDropouts += metrics.breathGripDropouts;
+            c.earlyThrusts += metrics.earlyThrusts;
+            c.lateThrusts += metrics.lateThrusts;
             c.postureSeconds += metrics.postureSeconds;
             if (c.firstContactSeconds < 0f) c.firstContactSeconds = metrics.firstContactSeconds;
             if (metrics.breathHoldRatio > 0f) c.breathHoldRatio = metrics.breathHoldRatio;
@@ -665,7 +675,7 @@ public class TrainingResultTracker : MonoBehaviour
         step.grade = step.cranial.grade;
 
         if (showDebugLogs)
-            ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] 두개골 지표 기록: {currentStepName} " +
+            ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] 두개골 지표 기록: {phase}/{stepName} " +
                              $"자세 {step.cranial.posesCompleted}/{step.cranial.posesRequired} " +
                              $"유지 {step.cranial.holdSeconds:F1}s 이탈 {step.cranial.gripDropouts}회 " +
                              $"→ {step.cranial.score:F0}점({step.cranial.grade})</color>");

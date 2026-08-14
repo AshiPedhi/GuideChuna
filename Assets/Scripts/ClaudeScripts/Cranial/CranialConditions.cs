@@ -24,6 +24,92 @@ using UnityEngine;
 /// diagnosisStages가 비었거나 단계 ID를 못 찾으면 **레거시 양손 터치 판정으로 폴백**한다
 /// (구버전 배선 시나리오가 그대로 동작하도록).
 /// </summary>
+/// <summary>
+/// 머리(HMD)가 <b>아래로 순간 하강</b>하는 것을 잡아낸다 — 바디드롭·순간 교정 판정용.
+///
+/// ★손으로 '누르는 깊이'는 VR에서 신뢰할 수 없다(반력이 없고 트래킹 오차가 변위와 비슷하다).
+/// 반면 체중을 싣는 동작은 시술자가 실제로 몸을 낮추므로 헤드셋이 눈에 띄게 내려간다.
+/// 아무 움직임이나 잡히지 않도록 세 가지를 동시에 본다:
+///   ① <b>파지가 성립</b>해 있어야 한다 — 손을 뗀 채 몸만 숙이는 건 무시
+///   ② <b>아래 방향</b>이어야 한다 — 고개를 들거나 옆으로 움직이는 건 안 잡힌다
+///   ③ 빠른 하강이 <b>최소 변위</b>만큼 누적돼야 한다 — 미세한 떨림 배제(올라가면 리셋)
+/// </summary>
+public class HeadThrustDetector
+{
+    private readonly CranialAdjustmentController controller;
+    private readonly float speed;      // m/s (0이면 속도를 보지 않는다)
+    private readonly float minDrop;    // m
+    private readonly bool useHands;    // true면 머리 대신 <b>양손 손바닥 평균 높이</b>를 본다
+    private float lastY = float.NaN, lastT, accumulated;
+    private bool pressed;              // 눌러 들어간 상태인가(되돌아 나오면 발동)
+    private float rise;                // 되돌아 올라온 양
+
+    /// <param name="speed">아래로 이 속도(m/s) 이상일 때만 누적. 0이면 속도 무관(손 방식 기본).</param>
+    /// <param name="useHands">true면 손 깊이로 판정 — <b>들어갔다 나오는</b> 것을 본다.</param>
+    public HeadThrustDetector(CranialAdjustmentController controller, float speed, float minDrop,
+                              bool useHands = false)
+    {
+        this.controller = controller;
+        this.speed = speed;
+        this.useHands = useHands;
+        this.minDrop = minDrop > 0f ? minDrop : (useHands ? 0.02f : 0.03f);
+    }
+
+    /// <summary>마지막 판정에서 잰 하강 속도(m/s)·누적 하강(m) — 로그·튜닝용.</summary>
+    public float LastSpeed { get; private set; }
+    public float Accumulated => accumulated;
+
+    /// <summary>이번 프레임에 순간 하강이 성립했는가. 성립하면 누적을 비워 연속 발동을 막는다.</summary>
+    public bool Detect(bool gripped)
+    {
+        bool ok = useHands ? controller != null && controller.TryGetHandDepth(out lastSample)
+                           : controller != null && controller.TryGetHeadHeight(out lastSample);
+        if (!ok) return false;
+        float y = lastSample;
+
+        float now = Time.time;
+        float dt = float.IsNaN(lastY) ? 0f : now - lastT;
+        float drop = float.IsNaN(lastY) ? 0f : lastY - y;   // 양수 = 내려감
+        lastY = y;
+        lastT = now;
+
+        if (!gripped) { accumulated = 0f; pressed = false; rise = 0f; return false; }
+        if (dt <= 0f) return false;
+
+        LastSpeed = drop / dt;
+
+        // ── 손 방식: <b>눌러 들어갔다 되돌아 나오면</b> 발동 ──────────────────
+        //   속도를 요구하지 않으므로 천천히 눌러도 잡힌다. 되돌아 나오는 것까지 봐야
+        //   '자세를 낮춘 채 유지'가 아니라 '한 번 눌렀다 뗀' 동작으로 구분된다.
+        if (useHands)
+        {
+            if (!pressed)
+            {
+                if (drop > 0f) accumulated += drop;
+                else if (drop < 0f) accumulated = Mathf.Max(0f, accumulated + drop);
+                if (accumulated >= minDrop) { pressed = true; rise = 0f; }
+                return false;
+            }
+
+            if (drop < 0f) rise += -drop;              // 되돌아 올라온 양
+            if (rise < minDrop * 0.5f) return false;
+
+            accumulated = 0f; pressed = false; rise = 0f;
+            return true;
+        }
+
+        // ── 머리 방식: 빠른 하강이 최소 변위만큼 쌓이면 발동 ─────────────────
+        if (LastSpeed >= speed) accumulated += drop;
+        else if (LastSpeed <= 0f) accumulated = 0f;   // 올라가면 리셋 — 왕복으로 못 채우게
+
+        if (accumulated < minDrop) return false;
+        accumulated = 0f;
+        return true;
+    }
+
+    private float lastSample;
+}
+
 public class DiagnosisHoldCondition : IScenarioCondition
 {
     private readonly CranialAdjustmentController controller;
@@ -31,11 +117,20 @@ public class DiagnosisHoldCondition : IScenarioCondition
     private bool usingStage;
     private bool started = false;
 
+    /// <summary>0보다 크면 <b>양손 포개짐</b>으로 판정한다 — 파지점 하나에 두 손을 모으는 진단용.
+    /// CSV: <c>stack=0.10;finger=thumb</c> (두 엄지가 10cm 이내로 모이고 그 자리가 파지점 근처)</summary>
+    private readonly float stackGap;
+    private readonly CranialFinger stackFinger;
+    private float stackHeldSince = -1f;
+
     /// <param name="holdSeconds">CSV의 hold= 값(초). 0이면 CranialAdjustmentController.DefaultDiagnosisHoldSeconds(3초).</param>
-    public DiagnosisHoldCondition(CranialAdjustmentController controller, string stageId, float holdSeconds = 0f)
+    public DiagnosisHoldCondition(CranialAdjustmentController controller, string stageId, float holdSeconds = 0f,
+                                  float stackGap = 0f, CranialFinger stackFinger = CranialFinger.Palm)
     {
         this.controller = controller;
         this.stageId = string.IsNullOrWhiteSpace(stageId) ? "" : stageId.Trim();
+        this.stackGap = stackGap;
+        this.stackFinger = stackFinger;
 
         // ★반드시 PrepareDiagnosisStage보다 먼저 — 준비 시점에 진행 표시가 이 값으로 계산된다.
         controller?.SetDiagnosisHoldOverride(holdSeconds);
@@ -71,11 +166,30 @@ public class DiagnosisHoldCondition : IScenarioCondition
     {
         if (controller == null) return false;
         if (!started) { TryStart(); return false; }   // 첫 폴(나레이션 후) 시점에 타이머 시작
+
+        // ★파지점 하나에 두 손(엄지 등)을 모으는 진단 — 손별 파지점을 둘 만들 필요가 없다.
+        //   유지 시간은 여기서 직접 잰다(스테이지 자세 타이머를 쓰지 않으므로).
+        if (stackGap > 0f)
+        {
+            float need = controller.StageHoldSeconds;
+            bool on = controller.HandsStackedAt(controller.DiagnosisStackTarget,
+                                                stackGap, stackGap * 1.5f, stackFinger);
+
+            if (!on) { stackHeldSince = -1f; controller.ReportHoldProgress(need, need); return false; }
+
+            if (stackHeldSince < 0f) stackHeldSince = Time.time;
+            float elapsed = Time.time - stackHeldSince;
+            controller.ReportHoldProgress(need - elapsed, need);
+            return elapsed >= need;
+        }
+
         return usingStage ? controller.DiagnosisStageComplete : controller.BothHandsTouched;
     }
 
     public string GetConditionDescription() =>
-        usingStage ? $"진단 자세 유지 대기 ({stageId})" : "진단 촉진(양손 접촉) 대기";
+        stackGap > 0f
+            ? $"양손 {stackFinger} 포개짐 유지 대기 ({stackGap * 100f:F0}cm 이내)"
+            : usingStage ? $"진단 자세 유지 대기 ({stageId})" : "진단 촉진(양손 접촉) 대기";
 }
 
 /// <summary>
@@ -85,19 +199,39 @@ public class DiagnosisHoldCondition : IScenarioCondition
 public class GripPointCondition : IScenarioCondition
 {
     private readonly CranialAdjustmentController controller;
+    private readonly CranialAdjustmentController.JudgeHand hand;
 
-    public GripPointCondition(CranialAdjustmentController controller)
+    /// <summary>0보다 크면 <b>양손 포개짐</b>으로 판정한다 — 두 손바닥 사이 허용 간격(m).
+    /// CSV: <c>stack=0.08</c> (두 손이 8cm 이내로 붙고, 그 자리가 파지점 근처여야 성립)</summary>
+    private readonly float stackGap;
+
+    public GripPointCondition(CranialAdjustmentController controller,
+                              CranialAdjustmentController.JudgeHand hand = CranialAdjustmentController.JudgeHand.양손,
+                              float stackGap = 0f)
     {
         this.controller = controller;
+        this.hand = hand;
+        this.stackGap = stackGap;
         this.controller?.BeginGripPhase();
     }
 
     public bool IsConditionMet()
     {
-        return controller != null && controller.BothGripped;
+        if (controller == null) return false;
+        if (stackGap > 0f)
+            return controller.HandsStackedAt(controller.StackTarget, stackGap, stackGap * 1.5f);
+        return controller.GrippedBy(hand);
     }
 
-    public string GetConditionDescription() => "두개골 파지(양손 파이브핑거홀드) 대기";
+    // ★문구에 '두개골'·'파이브핑거홀드'를 쓰지 않는다 — 이 조건은 늑골·흉추도 공용으로 쓰고,
+    //   판정은 '리그에 등록된 양손 파지점이 전부 접촉했는가'일 뿐 손가락 수와 무관하다.
+    //   옛 문구가 제1늑골 로그에 "두개골 파지(양손 파이브핑거홀드)"로 찍혀 혼란을 줬다(2026-08-12).
+    public string GetConditionDescription() =>
+        stackGap > 0f
+            ? $"양손 포개짐 대기 (손 간격 {stackGap * 100f:F0}cm 이내 · 파지점 근처)"
+            : hand == CranialAdjustmentController.JudgeHand.양손
+                ? "파지 성립 대기 (양손 파지점 전부 접촉)"
+                : $"파지 성립 대기 ({hand} 파지점 접촉)";
 }
 
 /// <summary>
@@ -119,11 +253,47 @@ public class PressureCondition : IScenarioCondition
     private float heldSince = -1f;
     private float leftZoneAt = -1f;     // 적정존을 벗어난 시각(-1 = 존 안)
 
-    public PressureCondition(CranialAdjustmentController controller, float holdDuration = 1.0f, float graceTime = 0.5f)
+    /// <summary>
+    /// 0보다 크면 <b>머리(HMD)가 이 높이만큼 내려가야</b> 유지로 인정한다. 단위 m.
+    ///
+    /// ★손으로 '누르는 깊이'는 VR에서 신뢰할 수 없다(반력이 없고 트래킹 오차가 변위와 비슷하다).
+    /// 반면 체중을 싣는 동작은 <b>시술자가 실제로 몸을 낮추므로 헤드셋이 눈에 띄게 내려간다</b> —
+    /// 흉추 신전의 바디드롭·마지막 압박처럼 '눌렀는지'를 봐야 하는 단계에서 이걸 쓴다.
+    /// CSV: <c>conditionParams=1;headDrop=0.06;xray</c> (1초 유지 · 6cm 하강)
+    /// </summary>
+    private readonly float headDrop;
+    private float headBaseline = float.NaN;
+
+    /// <summary>
+    /// 0보다 크면 <b>순간 하강(쓰러스트)</b>으로 판정한다 — 이 속도(m/s) 이상으로 머리가 내려가면 즉시 통과.
+    ///
+    /// ★바디드롭·순간 교정은 '버티는' 동작이 아니라 '한순간'이다. 유지 시간을 요구하면
+    /// 술기와 어긋난다(사용자 지적). 대신 아무 움직임이나 잡히지 않도록 세 가지를 동시에 본다:
+    ///   ① <b>파지가 성립해 있어야 한다</b> — 손이 파지점을 벗어나 있으면 무시
+    ///   ② <b>아래 방향</b>이어야 한다 — 고개를 들거나 옆으로 움직이는 건 안 잡힌다
+    ///   ③ 빠른 하강이 <b>최소 변위</b>만큼 누적돼야 한다 — 미세한 떨림 배제
+    /// </summary>
+    private readonly float headThrust;
+    private readonly HeadThrustDetector thrust;
+    private float lastY = float.NaN, lastT;
+    private float thrustDrop;
+
+    public PressureCondition(CranialAdjustmentController controller, float holdDuration = 1.0f,
+                             float graceTime = 0.5f, float headDrop = 0f, float headThrust = 0f,
+                             bool thrustByHands = false)
     {
         this.controller = controller;
         this.holdDuration = holdDuration;
         this.graceTime = graceTime;
+        this.headDrop = headDrop;
+        this.headThrust = headThrust;
+        if (headThrust > 0f || thrustByHands)
+            thrust = new HeadThrustDetector(controller, headThrust, headDrop, thrustByHands);
+
+        // ★판정 대상이 '파지 유지'이므로 교정 파지점이 켜져 있어야 한다.
+        //   앞의 안내 substep에서 파지점이 꺼졌을 수 있다(판정 없는 단계는 구체를 감춘다) →
+        //   여기서 다시 켜지 않으면 영영 성립하지 않는다(제1늑골 3.2에서 20초 폴백, 2026-08-12).
+        this.controller?.ShowCorrectionGrips();
     }
 
     private void TrySaveZero()
@@ -134,9 +304,90 @@ public class PressureCondition : IScenarioCondition
         zeroSaved = true;
     }
 
-    /// <summary>이 단계의 유지 조건. 기본 = 파지 유지, 깊이 판정을 켠 경우만 적정 텐션 존.</summary>
-    private bool Holding =>
-        controller.UseDepthJudging ? controller.BothInGoodZone : controller.BothGripped;
+    /// <summary>이 단계의 유지 조건. 기본 = 파지 유지, 깊이 판정을 켠 경우만 적정 텐션 존.
+    /// headDrop이 지정되면 <b>머리가 그만큼 내려가 있어야</b> 인정한다.</summary>
+    private bool Holding
+    {
+        get
+        {
+            bool grip = controller.UseDepthJudging ? controller.BothInGoodZone : controller.BothGripped;
+            if (headDrop <= 0f) return grip;
+
+            if (!controller.TryGetHeadHeight(out float y))
+            {
+                Trace($"HMD를 못 찾음 — 파지만 판정 (파지={grip})");
+                return grip;
+            }
+
+            // 영점은 <b>파지와 무관하게</b> 단계 진입 시 잡는다. 파지가 성립할 때까지 기다리면
+            // 이미 몸을 낮춘 자세가 영점이 되어 '더 내려가야' 하는 상태가 된다.
+            if (float.IsNaN(headBaseline)) headBaseline = y;
+
+            // 영점보다 더 올라가면 갱신한다(자세를 고쳐 잡는 동안 기준이 어긋나지 않게).
+            if (y > headBaseline) headBaseline = y;
+
+            float drop = headBaseline - y;
+            bool dropped = drop >= headDrop;
+            if (!grip || !dropped)
+                Trace($"파지={grip} 머리 하강={drop * 100f:F1}cm / 필요 {headDrop * 100f:F0}cm");
+            return grip && dropped;
+        }
+    }
+
+    /// <summary>
+    /// 순간 하강 판정. 파지가 성립한 상태에서 <b>아래로</b> headThrust(m/s) 이상 빠르게 움직이고,
+    /// 그 빠른 하강이 최소 변위만큼 누적되면 통과한다.
+    /// </summary>
+    private bool CheckThrust()
+    {
+        bool grip = controller.UseDepthJudging ? controller.BothInGoodZone : controller.BothGripped;
+        if (!controller.TryGetHeadHeight(out float y))
+        {
+            Trace("HMD를 못 찾아 순간 하강을 판정할 수 없습니다");
+            return false;
+        }
+
+        float now = Time.time;
+        float dt = float.IsNaN(lastY) ? 0f : now - lastT;
+        float drop = float.IsNaN(lastY) ? 0f : lastY - y;   // 양수 = 내려감
+        lastY = y;
+        lastT = now;
+
+        // ① 파지를 놓으면 누적을 버린다 — 손을 뗀 채 몸만 숙이는 걸 막는다.
+        if (!grip) { thrustDrop = 0f; Trace("파지가 풀려 순간 하강 누적 초기화"); return false; }
+        if (dt <= 0f) return false;
+
+        float v = drop / dt;                                // 아래 방향 속도(m/s)
+        if (v >= headThrust) thrustDrop += drop;             // ② 빠른 하강만 쌓는다
+        else if (v <= 0f) thrustDrop = 0f;                   // ③ 올라가면 리셋(왕복으로 못 채우게)
+
+        // 최소 변위 — headDrop을 적어 두면 그 값, 없으면 3cm
+        float need = headDrop > 0f ? headDrop : 0.03f;
+        if (thrustDrop >= need)
+        {
+            ChunaLogger.Log($"<color=green>[Pressure] 순간 하강 감지 — {thrustDrop * 100f:F1}cm " +
+                            $"(속도 {v:0.##}m/s ≥ {headThrust:0.##})</color>");
+            return true;
+        }
+
+        Trace($"파지={grip} 하강속도={v:0.##}m/s (필요 {headThrust:0.##}) 누적={thrustDrop * 100f:F1}cm / {need * 100f:F0}cm");
+        return false;
+    }
+
+    private float nextTraceTime;
+
+    /// <summary>0.5초에 한 번만 남기는 진단 로그 — 임계값 튜닝용.</summary>
+    private void Trace(string msg)
+    {
+        if (Time.time < nextTraceTime) return;
+        nextTraceTime = Time.time + 0.5f;
+        ChunaLogger.Log($"<color=orange>[Pressure] {msg}</color>");
+    }
+
+    /// <summary>지금 머리가 얼마나 내려가 있는지(m). 표시·튜닝용.</summary>
+    public float HeadDropNow =>
+        (!float.IsNaN(headBaseline) && controller != null && controller.TryGetHeadHeight(out float y))
+            ? headBaseline - y : 0f;
 
     public bool IsConditionMet()
     {
@@ -144,7 +395,31 @@ public class PressureCondition : IScenarioCondition
 
         // 첫 폴(나레이션 후) 시점에 휴식 위치를 영점으로 저장. 파지가 잠깐 풀렸으면 다음 폴에서 재시도.
         // (깊이 판정 OFF면 SaveZeroPoints가 no-op이라 파지만 확인하고 지나간다.)
-        if (!zeroSaved) { TrySaveZero(); return false; }
+        if (!zeroSaved)
+        {
+            // ★영점을 못 잡았어도 <b>타이머는 띄운다</b>(2026-08-12).
+            //   예전엔 여기서 그냥 빠져나가 ReportHoldProgress가 한 번도 안 불렸고,
+            //   파지가 성립하기 전까지 "몇 초를 유지해야 하는지"가 화면에 아예 안 나왔다
+            //   (등척성 5초 단계에서 타이머가 안 보인다는 지적).
+            controller.ReportHoldProgress(holdDuration, holdDuration);
+            TrySaveZero();
+            if (!zeroSaved) Trace($"파지 대기 중 (양손 파지 성립 안 됨)");
+            return false;
+        }
+
+        // ★순간 교정 판정 — 유지 시간을 요구하지 않는다.
+        //   손 방식이면 '눌러 들어갔다 나오면', 머리 방식이면 '휙 내려가면' 통과.
+        if (thrust != null)
+        {
+            bool grip = controller.UseDepthJudging ? controller.BothInGoodZone : controller.BothGripped;
+            if (thrust.Detect(grip))
+            {
+                ChunaLogger.Log("<color=green>[Pressure] 순간 교정 감지</color>");
+                return true;
+            }
+            Trace($"파지={grip} — 눌렀다 떼는 동작 대기 중");
+            return false;
+        }
 
         // 디버그: 완료는 시키지 않음 → 자유 관찰
         if (controller.DebugFreezePressureStep) return false;
@@ -177,9 +452,11 @@ public class PressureCondition : IScenarioCondition
     }
 
     public string GetConditionDescription() =>
-        controller != null && controller.UseDepthJudging
-            ? "압력·방향 적용 (양손 적정 텐션 유지) 대기"
-            : "압력·방향 적용 (양손 파지 유지) 대기";
+        headDrop > 0f
+            ? $"파지 유지 + 머리 {headDrop * 100f:F0}cm 하강(체중 싣기) 대기"
+            : controller != null && controller.UseDepthJudging
+                ? "적정 텐션 유지 대기"
+                : "파지 유지 대기";
 }
 
 /// <summary>
@@ -205,8 +482,11 @@ public class BreathingCondition : IScenarioCondition
     public BreathingCondition(CranialAdjustmentController controller, bool gripGate = false,
                               int breaths = 0, float inhaleSec = 0f, float exhaleSec = 0f,
                               BreathingSyncHUD.StartPhase startPhase = BreathingSyncHUD.StartPhase.Keep,
-                              float firstCycleScale = 0f)
+                              float firstCycleScale = 0f,
+                              float thrustSpeed = 0f, float thrustMinDrop = 0f, bool thrustByHands = false,
+                              float lateWindow = 3f)
     {
+        this.lateWindow = lateWindow > 0f ? lateWindow : 3f;
         this.controller = controller;
         this.gripGate = gripGate;
         this.breaths = breaths;
@@ -214,7 +494,35 @@ public class BreathingCondition : IScenarioCondition
         this.exhaleSec = exhaleSec;
         this.startPhase = startPhase;
         this.firstCycleScale = firstCycleScale;
+
+        this.thrustSpeed = thrustSpeed;
+        this.thrustByHands = thrustByHands;
+        if (thrustSpeed > 0f || thrustByHands)
+            thrust = new HeadThrustDetector(controller, thrustSpeed, thrustMinDrop, thrustByHands);
     }
+
+    /// <summary>
+    /// 0보다 크면 <b>호흡 유도와 순간 교정을 한 단계에서</b> 처리한다.
+    ///
+    /// ★단계를 나누면 흐름이 끊긴다(사용자 지시) — "다 내쉬면 누른다"는 하나의 동작이다.
+    /// 호흡을 끝까지 따라간 뒤 순간 하강이 오면 완료, <b>다 내쉬기 전에 누르면 감점</b>하고
+    /// 계속 기다린다. 성급한 쓰러스트를 그 자리에서 잡아 주는 것이 이 술기의 학습 목표다.
+    /// </summary>
+    private readonly float thrustSpeed;
+    private readonly bool thrustByHands;
+    private readonly HeadThrustDetector thrust;
+    private int earlyThrusts;
+    private float nextThrustLog;
+
+    /// <summary>
+    /// 다 내쉰 뒤 <b>이 시간 안에</b> 눌러야 정상으로 본다(초). 넘기면 '늦은 교정'으로 감점한다.
+    ///
+    /// ★타이밍 맞추기 게임이 아니므로 날숨 끝에 딱 맞출 필요는 없다. 다만 조작 인식이 한 박자
+    /// 늦을 수 있어 여유를 주는 것이지, 한없이 기다려도 된다는 뜻은 아니다(사용자 지시).
+    /// </summary>
+    private readonly float lateWindow;
+    private float exhaleDoneAt = -1f;
+    private bool lateCounted;
 
     private void TryStart()
     {
@@ -231,9 +539,67 @@ public class BreathingCondition : IScenarioCondition
     {
         if (controller == null) return false;
         if (!started) { TryStart(); return false; }   // 첫 폴(나레이션 후) 시점에 호흡 윈도우 시작
-        return controller.BreathingComplete;
+
+        bool breathDone = controller.BreathingComplete;
+        if (thrust == null) return breathDone;
+
+        // ── 호흡 유도 + 순간 교정을 한 단계에서 ──────────────────────────
+        bool hit = thrust.Detect(controller.BothGripped);
+
+        if (!breathDone)
+        {
+            if (hit)
+            {
+                // ★다 내쉬기 전에 눌렀다 — 감점하고 계속 기다린다.
+                earlyThrusts++;
+                controller.ReportEarlyThrust();
+                ChunaLogger.LogWarning($"[Breathing] ★너무 이른 교정 — 아직 다 내쉬지 않았습니다 " +
+                                       $"({earlyThrusts}회째, 감점)");
+            }
+            else if (Time.time >= nextThrustLog)
+            {
+                nextThrustLog = Time.time + 1f;
+                ChunaLogger.Log($"<color=cyan>[Breathing] 호흡 따라가는 중 — 다 내쉬면 누르세요</color>");
+            }
+            return false;
+        }
+
+        // 날숨이 끝난 시각을 기록해 '늦음'을 잰다.
+        if (exhaleDoneAt < 0f) exhaleDoneAt = Time.time;
+        float since = Time.time - exhaleDoneAt;
+
+        if (hit)
+        {
+            bool late = since > lateWindow;
+            if (late) controller.ReportLateThrust();
+
+            ChunaLogger.Log($"<color={(late ? "orange" : "green")}>[Breathing] 순간 교정 감지 " +
+                            $"(날숨 끝 +{since:0.#}초{(late ? $" — ★{lateWindow:0.#}초 초과, 감점" : "")})" +
+                            $"{(earlyThrusts > 0 ? $" · 이른 교정 {earlyThrusts}회 감점" : "")}</color>");
+            return true;
+        }
+
+        // 상한을 넘기면 한 번만 감점하고, 그래도 계속 기다린다(진행이 막히면 더 곤란하다).
+        if (!lateCounted && since > lateWindow)
+        {
+            lateCounted = true;
+            controller.ReportLateThrust();
+            ChunaLogger.LogWarning($"[Breathing] ★교정이 늦습니다 ({lateWindow:0.#}초 초과) — 감점");
+        }
+
+        if (Time.time >= nextThrustLog)
+        {
+            nextThrustLog = Time.time + 1f;
+            float left = lateWindow - since;
+            ChunaLogger.Log(left > 0f
+                ? $"<color=yellow>[Breathing] 다 내쉬었습니다 — 지금 순간 교정하세요 (남은 여유 {left:0.#}초)</color>"
+                : "<color=orange>[Breathing] 여유 시간을 넘겼습니다 — 지금이라도 교정하세요</color>");
+        }
+        return false;
     }
 
     public string GetConditionDescription() =>
-        breaths > 0 ? $"호흡 {breaths}회 동기화 대기" : "호흡 동기화 대기";
+        thrust != null
+            ? $"호흡 {(breaths > 0 ? breaths : 1)}회 후 순간 교정 대기 (다 내쉬기 전 누르면 감점)"
+            : breaths > 0 ? $"호흡 {breaths}회 동기화 대기" : "호흡 동기화 대기";
 }

@@ -177,12 +177,19 @@ public class CranialHeadXray : MonoBehaviour
                                                       StringComparison.OrdinalIgnoreCase) >= 0;
         bool wantsXray = listEmpty || forced || IsTrigger(subStep.conditionType);
 
-        armed = wantsXray;
+        // ★2026-08-12 사용자 지시: "전환할 때 환자 불투명 필요 없음. 그냥 반투명한 상태로 유지해."
+        //   PJ의 '전환'처럼 판정 없이 안내만 하는 단계는 conditionType이 비어 있어 wantsXray=false가 되고,
+        //   그 순간 환자가 불투명으로 튀었다가 다음 단계에서 다시 반투명이 됐다.
+        //   판정이 없는 단계는 '중간 다리'일 뿐이므로 현재 상태를 그대로 이어간다.
+        bool narrationOnly = string.IsNullOrWhiteSpace(subStep.conditionType);
+        bool keepThrough = narrationOnly && active;
+
+        armed = wantsXray || keepThrough;
         forceOnThisSubStep = forced;
 
-        // ★ xray를 **안 쓰는** 단계(진단3·재평가·안내·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
+        // ★ xray를 **안 쓰는** 단계(진단3·재평가·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
         //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
-        if (restoreEachSubStep && active && !wantsXray)
+        if (restoreEachSubStep && active && !wantsXray && !keepThrough)
         {
             Deactivate();
             rearmAt = Time.time + Mathf.Max(0f, rearmDelaySeconds);   // 손이 아직 머리에 있어도 곧바로 재점등되지 않게
@@ -309,30 +316,56 @@ public class CranialHeadXray : MonoBehaviour
         EnsureHands();
         if (resolvedHands.Count == 0) return false;
 
-        Transform tgt = ResolveProximityTarget();
-        if (tgt == null) return false;
-
-        Vector3 p = tgt.position;
         float sqr = activateDistance * activateDistance;
         float nearest = float.MaxValue;
         bool near = false;
+
+        // ★기준점 = 머리 본 <b>+ 지금 켜져 있는 파지점들</b> (2026-08-12).
+        //   예전엔 머리 하나뿐이라 두개골에서만 쓸모가 있었다. 늑골은 쇄골 밑, 흉추는 등이라
+        //   손이 파지점에 가 있어도 머리에서 멀어 xray가 안 켜졌다.
+        //   → 이 술기에서 실제로 잡아야 하는 지점 근처면 켜지게 한다.
+        CollectProximityPoints();
 
         for (int i = 0; i < resolvedHands.Count; i++)
         {
             var h = resolvedHands[i];
             if (h == null) continue;
-            float d2 = (h.position - p).sqrMagnitude;
-            if (d2 < nearest) nearest = d2;
-            if (d2 <= sqr) near = true;
+            for (int t = 0; t < proximityPoints.Count; t++)
+            {
+                Transform tp = proximityPoints[t];
+                if (tp == null) continue;
+                float d2 = (h.position - tp.position).sqrMagnitude;
+                if (d2 < nearest) nearest = d2;
+                if (d2 <= sqr) near = true;
+            }
         }
+        if (proximityPoints.Count == 0) return false;
 
         // 거리 튜닝용 로그(0.5초 간격)
         if (debugLog && nearest < float.MaxValue && Time.time >= nextDistanceLogTime)
         {
             nextDistanceLogTime = Time.time + 0.5f;
-            Debug.Log($"[CranialHeadXray] 손↔기준점 최단 {Mathf.Sqrt(nearest) * 100f:F1}cm (발동 ≤{activateDistance * 100f:F0}cm)");
+            Debug.Log($"[CranialHeadXray] 손↔기준점({proximityPoints.Count}개) 최단 " +
+                      $"{Mathf.Sqrt(nearest) * 100f:F1}cm (발동 ≤{activateDistance * 100f:F0}cm)");
         }
         return near;
+    }
+
+    private readonly List<Transform> proximityPoints = new List<Transform>();
+
+    /// <summary>근접 판정 기준점을 모은다 — 머리 본 + 현재 활성화된 파지점 전부.</summary>
+    private void CollectProximityPoints()
+    {
+        proximityPoints.Clear();
+
+        Transform head = ResolveProximityTarget();
+        if (head != null) proximityPoints.Add(head);
+
+        // 켜져 있는 파지 구체만 — 그 단계에서 실제로 잡아야 하는 지점이다.
+        // ★UnityEngine.Object로 명시 — 이 파일은 using System이 있어 Object가 모호해진다.
+        foreach (GripPointTarget g in UnityEngine.Object.FindObjectsByType<GripPointTarget>(
+                     FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            if (g != null) proximityPoints.Add(g.transform);
     }
 
     private bool IsTrigger(string conditionType)
@@ -425,6 +458,12 @@ public class CranialHeadXray : MonoBehaviour
     private bool IsExcluded(Renderer r, StringComparison oic, bool allowClothing)
     {
         if (!allowClothing && NameContainsAny(r, excludeNameContains, oic)) return true;
+
+        // ★골격(skeletal_system)은 xray 대상이 아니다 — 2026-08-12.
+        //   xray는 '피부를 투과해 뼈를 보는' 기능인데, 뼈까지 같이 반투명으로 덮어쓰고 있었다.
+        //   그 탓에 ①뼈가 흐려져 관찰이 어렵고 ②부위별 색상이 반투명 인스턴스로 교체돼 사라졌다.
+        for (Transform t = r.transform; t != null; t = t.parent)
+            if (t.name.IndexOf("skeletal_system", oic) >= 0) return true;
 
         if (skullOverlay != null && r.transform.IsChildOf(skullOverlay.transform)) return true;
 

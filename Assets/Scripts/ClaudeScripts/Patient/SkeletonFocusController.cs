@@ -64,6 +64,33 @@ public class SkeletonFocusController : MonoBehaviour
     [SerializeField] private List<FocusEntry> entries = new List<FocusEntry>();
 
     [Header("=== 숨기는 방식 ===")]
+    [Header("=== 두개골 자동 숨김 (술기 무관 시) ===")]
+    [Tooltip("두개골 술기가 아닌 시나리오(늑골·흉추·근육)에서 ★두개골만 자동으로 숨긴다(기본 켬).\n" +
+             "리듬(CRI) 표시를 시나리오 이름으로 자동 OFF 하는 것과 같은 규약이다 — 줄을 채울 필요가 없다.\n" +
+             "★골격이 거슬린다고 오브젝트를 통째로 비활성화하면 안 된다: 이 컴포넌트는 <b>렌더러를 껐다 켜는</b> " +
+             "방식이고 자기가 끈 것만 되돌리므로, 꺼 둔 오브젝트는 다시 켜 주지 않아 다른 시나리오에서도 " +
+             "골격이 영영 안 보이게 된다(2026-08-13 실사용).")]
+    [SerializeField] private bool hideSkullOutsideCranial = true;
+
+    [Tooltip("숨길 두개골 오브젝트. 비우면 부위 이름으로 자동으로 찾는다.\n" +
+             "★'skull'로 찾으면 안 된다 — 분리 두개골은 skeletal_system 바로 밑의 개별 뼈이고, " +
+             "이름에 skull이 든 것은 안 쓰는 통짜 구버전(skull_Old)뿐이라 그것만 꺼져서 화면은 그대로였다(08-13).")]
+    [SerializeField] private List<Transform> skullRoots = new List<Transform>();
+
+    /// <summary>★사용자가 분리 두개골을 묶어 둔 오브젝트 이름(08-13). 이게 있으면 이것만 숨긴다.</summary>
+    private const string SkullGroupName = "두개골 분할";
+
+    /// <summary>두개골을 이루는 부위 이름(부분 일치, 대소문자 무시). 위 그룹이 없을 때만 쓰는 폴백.
+    /// 모델 이름이 '한글(부위)_영문'이라 영문 쪽으로 잡는다.
+    /// ★설골(hyoid)·경추(cervical)는 두개골이 아니므로 넣지 않는다.</summary>
+    private static readonly string[] SkullPartKeywords =
+    {
+        "frontal bone", "occipital bone", "parietal bone", "temporal bone", "sphenoid bone",
+        "zygomatic bone", "maxilla", "jaw", "nasal bone", "upper teeth", "lower teeth",
+        "skull",          // 통짜 구버전(skull_Old)도 같이 숨긴다 — 켜져 있으면 어차피 두개골이다
+        "두개골 분할"      // 사용자가 따로 묶어 둔 경우
+    };
+
     [Tooltip("켜면(기본) 렌더러만 꺼서 보이지 않게 한다 — 오브젝트·콜라이더는 살아 있어 xray 등과 간섭이 없다.\n" +
              "끄면 GameObject를 통째로 비활성화한다.")]
     [SerializeField] private bool hideByRendererOnly = true;
@@ -77,7 +104,7 @@ public class SkeletonFocusController : MonoBehaviour
 
     /// <summary>지금 적용 중인 줄. substep마다 호출되므로 같은 줄이면 계층을 다시 훑지 않는다.</summary>
     private FocusEntry appliedEntry;
-    private Transform scope;
+    private readonly List<Transform> scopes = new List<Transform>();
     private bool scopeResolved;
 
     /// <summary>시나리오 진입 시(국면·단계 없이) 호출.</summary>
@@ -91,6 +118,9 @@ public class SkeletonFocusController : MonoBehaviour
         lastStep = stepName;
         lastPose = 0;                     // 단계가 바뀌면 자세는 처음부터
         Apply(FindBest(scenarioName, phaseName, stepName, 0));
+        // ★반드시 Apply <b>뒤</b>에 — Apply 안의 RestoreAll이 줄 때문에 껐던 렌더러를 되살리므로,
+        //   먼저 숨기면 그 프레임에 두개골이 다시 켜진다.
+        ApplySkullVisibility(scenarioName);
     }
 
     /// <summary>
@@ -102,7 +132,14 @@ public class SkeletonFocusController : MonoBehaviour
     {
         if (poseNo == lastPose) return;
         lastPose = poseNo;
-        Apply(FindBest(lastScenario, lastPhase, lastStep, poseNo));
+
+        FocusEntry e = FindBest(lastScenario, lastPhase, lastStep, poseNo);
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[SkeletonFocus] 자세 {poseNo} → " +
+                            $"{(e == null ? "★맞는 줄 없음(전체 표시)" : e.Describe() + $" 뼈 {(e.showBones == null ? 0 : e.showBones.Count)}개")}" +
+                            $"  (시나리오='{lastScenario}' 국면='{lastPhase}' 단계='{lastStep}')</color>");
+        Apply(e);
+        ApplySkullVisibility(lastScenario);   // Apply 뒤 — ApplyStep과 같은 이유
     }
 
     private string lastScenario, lastPhase, lastStep;
@@ -111,6 +148,7 @@ public class SkeletonFocusController : MonoBehaviour
     private void Apply(FocusEntry entry)
     {
         string scenarioName = lastScenario, phaseName = lastPhase, stepName = lastStep;
+
         if (entry != null && entry == appliedEntry) return;
         appliedEntry = entry;
 
@@ -123,8 +161,8 @@ public class SkeletonFocusController : MonoBehaviour
             return;
         }
 
-        Transform root = ResolveScope();
-        if (root == null)
+        List<Transform> roots = ResolveScopes();
+        if (roots.Count == 0)
         {
             ChunaLogger.LogWarning("[SkeletonFocus] 표시할 뼈가 한 줄도 배정되지 않았습니다 — " +
                                    "각 줄의 Show Bones에 뼈를 드래그해 넣으세요.");
@@ -132,8 +170,9 @@ public class SkeletonFocusController : MonoBehaviour
         }
 
         int shown = 0, hidden = 0;
-        foreach (Transform child in root)
-            Walk(child, entry, ref shown, ref hidden);
+        foreach (Transform root in roots)
+            foreach (Transform child in root)
+                Walk(child, entry, ref shown, ref hidden);
 
         if (showDebugLogs)
             ChunaLogger.Log($"<color=cyan>[SkeletonFocus] {entry.Describe()} → 표시 {shown} / 숨김 {hidden}</color>");
@@ -180,6 +219,121 @@ public class SkeletonFocusController : MonoBehaviour
             if (HasShownDescendant(child, entry)) return true;
         }
         return false;
+    }
+
+    // === 두개골 자동 숨김 (술기 무관 시) ===
+
+    /// <summary>두개골 때문에 끈 렌더러. 줄 단위 복원(disabledRenderers)과 <b>따로</b> 관리한다 —
+    /// 섞으면 단계가 바뀔 때마다 두개골이 되살아났다 다시 꺼지며 깜빡인다.</summary>
+    private readonly List<Renderer> skullDisabled = new List<Renderer>();
+    private bool skullHidden;
+    private bool skullRootsResolved;
+
+    /// <summary>
+    /// 두개골 술기가 아닌 시나리오에서 두개골만 숨긴다.
+    /// ★문제 상황(08-13): 늑골·흉추 실습 중에도 두개골이 계속 떠 있었다. 줄로 일일이 막는 대신
+    /// 시나리오 이름으로 판단한다 — 리듬(CRI) 표시를 두개골 전용으로 자동 OFF 하는 것과 같은 규약.
+    /// </summary>
+    private void ApplySkullVisibility(string scenarioName)
+    {
+        bool wantHidden = hideSkullOutsideCranial &&
+                          !string.IsNullOrEmpty(scenarioName) &&
+                          scenarioName.IndexOf("두개골", StringComparison.Ordinal) < 0;
+
+        if (!wantHidden)
+        {
+            if (!skullHidden) return;
+            skullHidden = false;
+            foreach (Renderer r in skullDisabled)
+                if (r != null) r.enabled = true;
+            skullDisabled.Clear();
+            if (showDebugLogs) ChunaLogger.Log($"[SkeletonFocus] '{scenarioName}' — 두개골 표시 복원");
+            return;
+        }
+
+        // ★상태가 그대로여도 매번 다시 훑는다 — 직전 단계에서 줄 때문에 꺼졌던 두개골 렌더러를
+        //   Apply의 RestoreAll이 되살려 놓았을 수 있다(그때 그 렌더러는 우리 목록에 없다).
+        int added = 0;
+        foreach (Transform root in ResolveSkullRoots())
+        {
+            if (root == null) continue;
+            foreach (Renderer r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null || !r.enabled) continue;   // 이미 꺼진 것(원래 꺼둔 것 포함)은 건드리지 않는다
+                r.enabled = false;
+                skullDisabled.Add(r);
+                added++;
+            }
+        }
+
+        bool first = !skullHidden;
+        skullHidden = true;
+        if (showDebugLogs && (first || added > 0))
+            ChunaLogger.Log($"<color=cyan>[SkeletonFocus] '{scenarioName}'은 두개골 술기가 아니므로 " +
+                            $"두개골 렌더러 {added}개를 숨겼습니다(누적 {skullDisabled.Count}).</color>");
+    }
+
+    /// <summary>두개골 루트 목록. 비어 있으면 이름에 'skull'이 든 오브젝트를 1회 탐색해 채운다.</summary>
+    private List<Transform> ResolveSkullRoots()
+    {
+        if (skullRootsResolved) return skullRoots;
+        skullRootsResolved = true;
+
+        skullRoots.RemoveAll(t => t == null);
+        if (skullRoots.Count > 0) return skullRoots;
+
+        // 자동 탐색: 두개골 부위 이름으로 찾는다(분리 두개골은 skeletal_system 바로 밑의 개별 뼈다).
+        // 안쪽 것은 담지 않는다 — 이미 담은 오브젝트의 자손이면 부모를 끌 때 같이 꺼진다.
+        // 줄에 뼈가 하나도 배정 안 됐으면 범위를 못 구하므로 씬 전체에서 찾는다(1회).
+        List<Transform> searchRoots = ResolveScopes();
+        if (searchRoots.Count == 0)
+        {
+            searchRoots = new List<Transform>();
+            foreach (Transform t in FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t != null && t.parent == null) searchRoots.Add(t);
+        }
+
+        // ★1순위: 사용자가 분리 두개골을 묶어 둔 오브젝트('두개골 분할'). 있으면 그것만 쓴다 —
+        //   부위 이름 훑기는 다른 계층의 턱·치아까지 집을 수 있어 정확도가 떨어진다.
+        foreach (Transform scope in searchRoots)
+        {
+            if (scope == null) continue;
+            foreach (Transform t in scope.GetComponentsInChildren<Transform>(true))
+                if (t.name.IndexOf(SkullGroupName, StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    !skullRoots.Contains(t))
+                    skullRoots.Add(t);
+        }
+        if (skullRoots.Count > 0)
+        {
+            if (showDebugLogs)
+                ChunaLogger.Log($"[SkeletonFocus] 두개골 그룹 '{SkullGroupName}' {skullRoots.Count}개를 찾았습니다.");
+            return skullRoots;
+        }
+
+        // 2순위: 부위 이름으로 개별 뼈를 모은다(그룹으로 안 묶여 있는 프로젝트 상태 대비).
+        foreach (Transform scope in searchRoots)
+        {
+            if (scope == null) continue;
+            foreach (Transform t in scope.GetComponentsInChildren<Transform>(true))
+            {
+                if (!IsSkullPart(t.name)) continue;
+                bool insideAlready = false;
+                foreach (Transform have in skullRoots)
+                    if (have != null && t.IsChildOf(have)) { insideAlready = true; break; }
+                if (!insideAlready) skullRoots.Add(t);
+            }
+        }
+
+        if (skullRoots.Count == 0)
+            ChunaLogger.LogWarning("[SkeletonFocus] 두개골을 찾지 못했습니다 — " +
+                                   "Skull Roots에 두개골 오브젝트를 직접 넣으세요(부위 이름이 모델과 다르면 자동 탐색이 안 됩니다).");
+        else if (showDebugLogs)
+        {
+            string names = "";
+            foreach (Transform t in skullRoots) names += Describe(t) + "  ";
+            ChunaLogger.Log($"[SkeletonFocus] 두개골 루트 {skullRoots.Count}개 = {names}");
+        }
+        return skullRoots;
     }
 
     /// <summary>이 오브젝트에 직접 붙은 렌더러만 끈다(자식은 그대로).</summary>
@@ -230,57 +384,144 @@ public class SkeletonFocusController : MonoBehaviour
         turnedOff.Clear();
     }
 
-    /// <summary>시나리오·국면·단계에 맞는 것 중 가장 구체적인 줄. 없으면 null.</summary>
+    /// <summary>
+    /// 시나리오·국면·단계에 맞는 것 중 가장 구체적인 줄. 없으면 null.
+    ///
+    /// ★2026-08-12 수정 — 자세(poseNo)가 안 맞으면 <b>자세를 무시하고 다시 찾는다</b>.
+    /// 예전에는 못 찾으면 그대로 null을 돌려줬고, 그러면 Apply가 <c>RestoreAll()</c>로
+    /// <b>골격 전체를 도로 켰다</b>. PJ처럼 줄이 poseNo 1·2로만 있는 국면은
+    /// 단계 진입 시점(poseNo=0)에 매칭이 없어서 <b>늑골·흉추가 계속 보였다</b>(사용자 보고).
+    /// 자세별 줄만 있으면 그중 첫 자세 줄을 기본으로 쓴다 — 전체 표시로 튀는 것보다 훨씬 낫다.
+    /// </summary>
     private FocusEntry FindBest(string scenarioName, string phaseName, string stepName, int poseNo)
     {
         if (string.IsNullOrWhiteSpace(scenarioName)) return null;
 
+        FocusEntry best = Search(scenarioName, phaseName, stepName, poseNo, ignorePose: false);
+        if (best == null)
+            best = Search(scenarioName, phaseName, stepName, poseNo, ignorePose: true);
+
+        // ★국면 줄이 없으면 <b>그 시나리오의 줄</b>을 그대로 쓴다.
+        //   늑골·흉추는 <b>처음 할당한 골격이 전 과정에서 계속 보이면 되는</b> 술기라
+        //   국면별로 뼈를 나눌 필요가 없다 — 줄 하나만 만들어 두는 것이 정상 배선이다.
+        //   (두개골은 진단·교정·재평가에서 보여야 할 뼈가 달라 국면 줄을 나눠 쓴다.)
+        //   예전에는 여기서 null을 돌려줘 '골격 전체 표시'로 빠졌고, 그 탓에 흉추 실습인데
+        //   늑골·두개골 뼈까지 전부 켜졌다(2026-08-12).
+        if (best == null)
+            best = FirstOfScenario(scenarioName);
+
+        return best;
+    }
+
+    /// <summary>국면·단계를 따지지 않고 그 시나리오의 첫 줄을 돌려준다(최후의 폴백).</summary>
+    private FocusEntry FirstOfScenario(string scenarioName)
+    {
+        foreach (FocusEntry e in entries)
+            if (e != null && e.HasRule && Same(e.scenarioName, scenarioName))
+                return e;
+        return null;
+    }
+
+    private FocusEntry Search(string scenarioName, string phaseName, string stepName, int poseNo, bool ignorePose)
+    {
         FocusEntry best = null;
+        int tied = 0;
         foreach (FocusEntry e in entries)
         {
             if (e == null || !e.HasRule) continue;   // ★비어 있는 줄은 무시 — 더 넓은 줄을 따른다
             if (!Same(e.scenarioName, scenarioName)) continue;
             if (!string.IsNullOrWhiteSpace(e.phaseName) && !Same(e.phaseName, phaseName)) continue;
             if (!string.IsNullOrWhiteSpace(e.stepName) && !Same(e.stepName, stepName)) continue;
-            if (e.poseNo > 0 && e.poseNo != poseNo) continue;
-            if (best == null || e.Specificity > best.Specificity) best = e;
+            if (!ignorePose && e.poseNo > 0 && e.poseNo != poseNo) continue;
+
+            if (best == null) { best = e; continue; }
+            if (e.Specificity > best.Specificity) { best = e; tied = 0; continue; }
+            if (e.Specificity == best.Specificity)
+            {
+                // 같은 구체성인데 자세를 무시하고 고르는 중이면 낮은 자세 번호(=첫 자세)를 쓴다.
+                if (ignorePose && e.poseNo < best.poseNo) { best = e; continue; }
+                // ★자세 번호까지 같은 줄이 둘 이상이면 앞의 것이 조용히 이긴다 —
+                //   PJ 진단이 좌·우 두 줄을 모두 poseNo 1로 두는 바람에 좌측 측두골·관골이
+                //   영영 안 나왔다(2026-08-12). 다시는 조용히 묻히지 않게 경고한다.
+                if (!ignorePose && e.poseNo == best.poseNo) tied++;
+            }
+        }
+
+        if (tied > 0 && !warnedTie)
+        {
+            warnedTie = true;
+            ChunaLogger.LogWarning(
+                $"[SkeletonFocus] '{scenarioName}/{phaseName}/{stepName}' 자세 {poseNo}에 같은 조건의 줄이 " +
+                $"{tied + 1}개 있습니다 — 앞의 줄만 적용되고 나머지는 무시됩니다.\n" +
+                "   메뉴 'GuideChuna/골격 포커스 — 중복 자세 번호 정리'로 번호를 매겨 주세요.");
         }
         return best;
     }
 
+    private bool warnedTie;
+
     /// <summary>숨김 범위 = <b>모든 줄에 배정된 뼈들의 공통 부모</b>. 배정이 하나도 없으면 null.
     /// 한 번만 계산한다(배정이 런타임에 바뀌지 않으므로).</summary>
-    private Transform ResolveScope()
+    /// <summary>
+    /// 숨김 범위 = 배정된 뼈들이 속한 <b>골격 루트(skeletal_system)들</b>.
+    ///
+    /// ★2026-08-12 버그 수정 — 예전에는 배정된 뼈 전체의 '공통 부모' 하나를 범위로 삼았다.
+    /// 그런데 이 씬의 골격은 <b>두 계층으로 나뉘어 있다</b>:
+    ///     두개골  : c9/c8/…/CC_Base_Head/skeletal_system/뒤통수뼈…
+    ///     흉추·늑골: c9/근육골격/skeletal_system/thoracic_spine…
+    /// 그래서 공통 부모가 <b>c9 — 환자 모델 통째</b>가 되어, '보일 뼈가 없는 가지'로 판정된
+    /// <b>환자 메시까지 전부 렌더러가 꺼졌다</b>(PM·PJ 실행 중 환자가 사라진 원인).
+    ///
+    /// 이제는 뼈마다 자기가 속한 골격 루트를 찾아 그 안에서만 숨긴다 →
+    /// 골격 밖(환자 피부·옷·눈)은 어떤 경우에도 건드리지 않는다.
+    /// </summary>
+    private List<Transform> ResolveScopes()
     {
-        if (scopeResolved) return scope;
+        if (scopeResolved) return scopes;
         scopeResolved = true;
+        scopes.Clear();
 
-        Transform result = null;
         foreach (FocusEntry e in entries)
         {
             if (e?.showBones == null) continue;
             foreach (Transform t in e.showBones)
             {
                 if (t == null) continue;
-                if (result == null) { result = t.parent != null ? t.parent : t; continue; }
-                Transform a = result;
-                while (a != null && !IsAncestorOf(a, t)) a = a.parent;
-                result = a != null ? a : result;
+                Transform root = SkeletonRootOf(t);
+                if (root != null && !scopes.Contains(root)) scopes.Add(root);
             }
         }
 
-        scope = result;
         if (showDebugLogs)
-            ChunaLogger.Log($"[SkeletonFocus] 숨김 범위 = {(scope == null ? "(배정 없음)" : scope.name)}");
-        return scope;
+        {
+            string names = scopes.Count == 0 ? "(배정 없음)" : "";
+            foreach (Transform s in scopes) names += Describe(s) + "  ";
+            ChunaLogger.Log($"[SkeletonFocus] 숨김 범위 {scopes.Count}개 = {names}");
+        }
+        return scopes;
     }
 
-    private static bool IsAncestorOf(Transform ancestor, Transform node)
+    /// <summary>이 이름이 두개골 부위인가(부분 일치).</summary>
+    private static bool IsSkullPart(string name)
     {
-        for (Transform t = node; t != null; t = t.parent)
-            if (t == ancestor) return true;
+        if (string.IsNullOrEmpty(name)) return false;
+        foreach (string k in SkullPartKeywords)
+            if (name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0) return true;
         return false;
     }
+
+    /// <summary>이 뼈가 속한 골격 루트 — 가장 바깥쪽 skeletal_system. 없으면 바로 위 부모.</summary>
+    private static Transform SkeletonRootOf(Transform bone)
+    {
+        Transform found = null;
+        for (Transform t = bone; t != null; t = t.parent)
+            if (t.name.IndexOf("skeletal_system", StringComparison.OrdinalIgnoreCase) >= 0)
+                found = t;                       // 계속 올라가며 갱신 → 최종적으로 가장 바깥 것
+        return found != null ? found : bone.parent;
+    }
+
+    private static string Describe(Transform t) =>
+        t == null ? "(없음)" : (t.parent != null ? t.parent.name + "/" + t.name : t.name);
 
     private static bool Same(string a, string b) =>
         !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b) &&

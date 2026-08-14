@@ -49,6 +49,30 @@ public abstract class ForceArrowBase : MonoBehaviour
     [Tooltip("선택. 채우면 국면(phase)까지 일치해야 표시한다.")]
     [SerializeField] private string phaseName = "";
 
+    [Tooltip("선택. 비우면 부모 리그(CranialAdjustmentController)의 시나리오를 자동으로 물려받는다.\n" +
+             "★리그 밖에 둔 화살표만 직접 적는다. 비어 있고 부모 리그도 없으면 '모든 시나리오'가 된다.")]
+    [SerializeField] private string scenarioName = "";
+
+    /// <summary>이 화살표가 속한 시나리오. 비었으면 부모 리그에서 물려받는다(캐시).</summary>
+    public string ResolvedScenario
+    {
+        get
+        {
+            if (scenarioCached) return resolvedScenario;
+            scenarioCached = true;
+            resolvedScenario = scenarioName;
+            if (string.IsNullOrWhiteSpace(resolvedScenario))
+            {
+                var rig = GetComponentInParent<CranialAdjustmentController>(true);
+                if (rig != null) resolvedScenario = rig.ScenarioName;
+            }
+            return resolvedScenario;
+        }
+    }
+
+    private string resolvedScenario;
+    private bool scenarioCached;
+
     [Header("=== 흐름 표현 ===")]
     [Tooltip("★경로(호·자루) 전체를 켜 둔 채 밝기만 흐르게 하면 '지금 어디가 진행 중인지'가 묻힌다.\n" +
              "켜면 진행 위치의 1~2칸만 빛나고 나머지는 사라진다 — 방향이 훨씬 또렷하다(08-11 사용자 지시).\n" +
@@ -65,17 +89,46 @@ public abstract class ForceArrowBase : MonoBehaviour
     [Tooltip("Practitioner = 시술자가 가하는 힘(기본) / Patient = 등척성에서 환자가 내는 힘")]
     [SerializeField] protected Actor actor = Actor.Practitioner;
     [Tooltip("시술자 색 (주황)")]
-    [SerializeField] protected Color practitionerColor = new Color(1f, 0.55f, 0.15f, 1f);
+    // ★시술자 = 초록 #26FF51 (2026-08-12 사용자 지정). 기본값이 주황이라 새로 만든 화살표마다
+    //   색을 다시 칠해야 했다 — 기본값 자체를 초록으로 바꾼다.
+    [SerializeField] protected Color practitionerColor = new Color(0.149f, 1f, 0.318f, 1f);
     [Tooltip("환자 색 (청록)")]
     [SerializeField] protected Color patientColor = new Color(0.25f, 0.8f, 0.95f, 1f);
 
     protected Color BaseColor => actor == Actor.Patient ? patientColor : practitionerColor;
 
     /// <summary>인스펙터에 뭐라고 적혔는지 — 점검 도구 출력용.</summary>
-    public string DescribeMatch() => Describe(showWhen, stepName, subStepNo, phaseName);
+    public string DescribeMatch() =>
+        $"[{(string.IsNullOrWhiteSpace(ResolvedScenario) ? "모든 시나리오" : ResolvedScenario)}] " +
+        Describe(showWhen, stepName, subStepNo, phaseName);
 
-    public bool Matches(string phase, string step, int subNo) =>
+    public bool Matches(string scenario, string phase, string step, int subNo) =>
+        ScenarioMatch(this, ResolvedScenario, scenario) &&
         ScopeMatch(showWhen, stepName, subStepNo, phaseName, phase, step, subNo);
+
+    /// <summary>
+    /// ★2026-08-12 신설 — 화살표에 시나리오 개념이 없어서 <b>OM·PM 화살표가 PJ 실습 중에도 같이 켜졌다</b>
+    /// (사용자 보고: "굴곡외회 신전내회가 왜 한번에 나와"). 기본 스코프가 '교정국면_파지제외'라
+    /// 단계 이름이 비어 있으면 어느 시나리오든 교정 국면 내내 표시됐던 것이다.
+    ///
+    /// 이제 화살표는 자기 리그의 시나리오에서만 켜진다. 소속을 못 찾은 화살표(리그 밖)는
+    /// 예전처럼 모든 시나리오에서 동작한다 — 기존 배치를 깨지 않기 위해서다.
+    ///
+    /// ★<b>이름 비교에 기대지 않는다</b>(2026-08-12 재수정). 시나리오를 개명했을 때
+    /// 씬 리그의 scenarioName만 옛 이름으로 남으면 화살표가 통째로 조용히 사라졌다
+    /// (제1늑골 개명 직후 실제로 발생). ScenarioManager는 <b>현재 시나리오의 리그 하나만 활성</b>으로
+    /// 두므로, "내 리그가 살아 있는가"를 보는 편이 개명에 흔들리지 않고 더 정확하다.
+    /// 이름 비교는 리그를 못 찾았을 때의 보조 수단으로만 쓴다.
+    /// </summary>
+    public static bool ScenarioMatch(Component arrow, string owner, string current)
+    {
+        var rig = arrow != null ? arrow.GetComponentInParent<CranialAdjustmentController>(true) : null;
+        if (rig != null) return rig.gameObject.activeInHierarchy;   // 내 리그가 이번 시나리오의 리그인가
+
+        if (string.IsNullOrWhiteSpace(owner)) return true;      // 소속 불명 = 어디서나(구버전 호환)
+        if (string.IsNullOrWhiteSpace(current)) return true;    // 시나리오를 모르면 막지 않는다
+        return Same(owner, current);
+    }
 
     /// <summary>
     /// 표시 판정 — 화살표와 그룹이 같은 규칙을 쓴다.

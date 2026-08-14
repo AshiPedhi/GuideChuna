@@ -107,6 +107,11 @@ public class CranialAdjustmentController : MonoBehaviour
              "비우면 호흡은 순수 3회 타이머로 동작(자세 판정 없음).")]
     [SerializeField] private CranialPostureStabilizer postureStabilizer;
 
+    [Tooltip("이마 견착 위치 가이드(어깨를 댈 자리 표시). 비우면 이 리그 하위에서 자동으로 찾는다. " +
+             "★어깨 접촉을 판정하지 않는다 — Quest에 어깨 트래킹 소스가 없어 '여기에 대라'는 표시만 한다. " +
+             "표시 구간은 CSV conditionParams의 brace 토큰이 정한다.")]
+    [SerializeField] private ShoulderBraceGuide braceGuide;
+
     [Header("=== 견착·호흡(③) 렌더링 정리 (머리 숙임 부작용 방지) ===")]
     [Tooltip("환자 모델 루트. ③에서 머리를 숙여 자세가 성립(카메라가 환자에 근접)하면 이 하위 렌더러를 꺼서 " +
              "near-clip 뚫림/오버드로우를 막고, 고개를 들면 복원한다. CranialRig 하위(파지 구체 등)는 자동 제외. " +
@@ -162,6 +167,89 @@ public class CranialAdjustmentController : MonoBehaviour
     // === 파지 상태 ===
     /// <summary>양손의 모든 파지점이 성립해야 true (Model B: 손가락별 5점이면 5개 전부).</summary>
     public bool BothGripped => AllGripped(leftGrips) && AllGripped(rightGrips);
+
+    /// <summary>왼손(주동수 쪽) 파지점이 전부 잡혔는가.</summary>
+    public bool LeftGripped => AllGripped(leftGrips);
+
+    /// <summary>오른손(보조수 쪽) 파지점이 전부 잡혔는가.</summary>
+    public bool RightGripped => AllGripped(rightGrips);
+
+    /// <summary>한 손만 판정해야 하는 단계용 — CSV conditionParams의 <c>hand=left|right|both</c>.</summary>
+    public enum JudgeHand { 양손, 왼손, 오른손 }
+
+    public bool GrippedBy(JudgeHand hand) =>
+        hand == JudgeHand.왼손 ? LeftGripped :
+        hand == JudgeHand.오른손 ? RightGripped : BothGripped;
+
+    /// <summary>
+    /// <b>양손이 한 지점에 포개졌는가</b> — 두 손의 손바닥이 서로 <paramref name="maxGap"/> 이내이고,
+    /// 둘 다 지정한 파지점 근처에 있는지 본다.
+    ///
+    /// ★두상골(pisiform)처럼 <b>관절 매핑이 없는 접촉점</b>을 쓰는 술기용이다.
+    /// 손끝 관절 하나를 정답으로 삼으면 실제 접촉 부위와 어긋난다
+    /// (Palm은 중지 뿌리라 손목 쪽 두상골과 3~4cm 떨어져 있다).
+    /// 그래서 "정확히 어느 관절이 닿았나" 대신 <b>두 손이 겹쳐 한 분절을 누르고 있는가</b>를 본다 —
+    /// 복와위 양손두상골 교정처럼 두 손을 포개는 술기의 실제 모양과 맞는다(2026-08-12 사용자 제안).
+    /// </summary>
+    public bool HandsStackedAt(Transform target, float maxGap, float maxDistanceToTarget,
+                               CranialFinger finger = CranialFinger.Palm)
+    {
+        if (target == null || leftHandVisual == null || rightHandVisual == null) return false;
+
+        Transform lp = ResolveFingertip(leftHandVisual, finger);
+        Transform rp = ResolveFingertip(rightHandVisual, finger);
+        if (lp == null || rp == null) return false;
+
+        if (Vector3.Distance(lp.position, rp.position) > maxGap) return false;      // 두 손이 붙어 있는가
+        Vector3 mid = (lp.position + rp.position) * 0.5f;
+        return Vector3.Distance(mid, target.position) <= maxDistanceToTarget;       // 그 자리가 목표 분절인가
+    }
+
+    /// <summary>포개짐 판정에 쓸 <b>교정</b> 목표 지점 — 교정 파지점 중 첫 번째(두상골 자리).</summary>
+    public Transform StackTarget
+    {
+        get
+        {
+            if (leftGrips != null)
+                foreach (var g in leftGrips)
+                    if (g != null) return g.transform;
+            if (rightGrips != null)
+                foreach (var g in rightGrips)
+                    if (g != null) return g.transform;
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// 포개짐 판정에 쓸 <b>진단</b> 목표 지점 — 지금 준비된 진단 단계의 첫 파지점(엄지 촉지 자리).
+    ///
+    /// ★진단과 교정은 접촉 부위가 다르다(진단=극돌기 엄지 / 교정=횡돌기 두상골).
+    /// 같은 지점을 쓰면 진단에서 교정 자리를 짚어야 통과하는 엉뚱한 판정이 된다.
+    /// </summary>
+    public Transform DiagnosisStackTarget
+    {
+        get
+        {
+            var stage = activeStage ?? preparedStage;
+            if (stage?.poses != null)
+            {
+                foreach (var p in stage.poses)
+                {
+                    if (p == null) continue;
+                    var list = new System.Collections.Generic.List<GripPointTarget>();
+                    p.leftHand?.CollectInto(list);
+                    p.rightHand?.CollectInto(list);
+                    foreach (var g in list)
+                        if (g != null) return g.transform;
+                }
+            }
+            // 진단 파지점이 없으면 레거시 배열 → 그것도 없으면 교정 파지점으로 폴백
+            if (diagnosisRightGrips != null)
+                foreach (var g in diagnosisRightGrips)
+                    if (g != null) return g.transform;
+            return StackTarget;
+        }
+    }
 
     /// <summary>진단 촉진: 양손으로 후두(뒤통수)를 감쌌는가(터치만, 압력·깊이 무관).
     /// 왼손 = 후두 Palm(leftGrips, 교정과 공유) + 오른손 = 후두 우측 Palm(diagnosisRightGrips).
@@ -424,24 +512,67 @@ public class CranialAdjustmentController : MonoBehaviour
             }
         }
 
-        UpdateHoldProgressUI();
     }
 
     // ============================ 평가 지표 수집 ============================
     // 두개골 술기는 손 포즈 유사도·각도 리밋을 쓰지 않아 기존 채점 경로로는 전부 0이 남는다.
     // 대신 '자세를 정확히 잡았는지 / 얼마나 안정적으로 유지했는지'를 모아 결과에 기록한다.
 
+    // ── 배점표 ──────────────────────────────────────────────────────────────
+    // ★인스펙터로 빼지 않고 const로 둔다. 씬에 두개골 리그가 5개(OM·PM·PJ·제1늑골·흉추)라
+    //   직렬화 필드로 만들면 리그마다 기준이 갈라진다(이 프로젝트에서 이미 여러 번 겪은 함정).
+    //   평가 기준을 바꿀 때는 여기 한 곳만 고치면 전 술기에 같이 먹는다.
+    private const float CompletionWeight = 45f;   // 자세 완료도
+    private const float StabilityWeight = 40f;    // 유지 안정성
+    private const float BreathWeight = 15f;       // 호흡
+
+    private const float DropoutPenalty = 8f;        // 파지를 놓칠 때마다(안정성에서)
+    private const float HoldResetPenalty = 10f;     // 유지 타이머가 0으로 초기화될 때마다(안정성에서)
+    private const float BreathDropoutPenalty = 5f;  // 호흡 중 파지를 놓칠 때마다(호흡에서)
+    private const float EarlyThrustPenalty = 5f;    // 다 내쉬기 전에 순간 교정을 가할 때마다
+
+    /// <summary>이 시간 미만으로 떨어진 것은 이탈로 세지 않는다(핸드트래킹이 한두 프레임 튀는 것).
+    /// 사용자 지시: "약간 튀는 건 인정하지만 누가 봐도 손을 이탈한 경우는 감점".</summary>
+    private const float DropoutTolerance = 0.35f;
+
     private TrainingResultData.CranialMetrics metrics;   // 진행 중인 단계 지표(null = 수집 안 함)
     private float metricsStartTime;
     private bool metricsPrevSatisfied;
+    private float metricsLostSince = -1f;    // 파지가 풀린 시각(-1 = 풀린 상태 아님)
+    private bool metricsLostCounted;         // 이번 이탈을 이미 셌는가(유예를 넘긴 순간 1회만)
+    private bool metricsLostDuringBreath;    // 이번 이탈이 호흡을 유도하는 중에 시작됐는가
 
     /// <summary>두개골 substep 진입 시 ScenarioManager가 호출 — 지표 수집을 시작한다.</summary>
-    public void BeginCranialMetrics(string label)
+    public void BeginCranialMetrics(string label) => BeginCranialMetrics(label, null, null);
+
+    /// <summary>★국면·단계 이름을 같이 받는다 — 기록은 다음 substep 진입 때 일어나므로
+    /// 그때 이름을 읽으면 지표가 한 칸 뒤로 밀려 붙는다(PJ 평가 점수 누락의 원인).</summary>
+    public void BeginCranialMetrics(string label, string phaseName, string stepName)
     {
-        metrics = new TrainingResultData.CranialMetrics { label = label };
+        metrics = new TrainingResultData.CranialMetrics
+        {
+            label = label,
+            phaseName = phaseName,
+            stepName = stepName
+        };
         metricsStartTime = Time.time;
         metricsPrevSatisfied = false;
+        metricsLostSince = -1f;
+        metricsLostCounted = false;
+        metricsLostDuringBreath = false;
         lastTickSecond = -1;   // 단계가 바뀌면 유지 타이머 소리를 처음부터 센다
+    }
+
+    /// <summary>다 내쉬기 전에 순간 교정을 가했다 — 타이밍 실수로 기록한다.</summary>
+    public void ReportEarlyThrust()
+    {
+        if (metrics != null) metrics.earlyThrusts++;
+    }
+
+    /// <summary>다 내쉰 뒤 허용 시간을 넘겨 교정했다 — 같은 타이밍 실수로 기록한다.</summary>
+    public void ReportLateThrust()
+    {
+        if (metrics != null) metrics.lateThrusts++;
     }
 
     /// <summary>모인 지표가 있는가(다음 substep 진입 시 기록할 것이 남았는지).</summary>
@@ -457,17 +588,35 @@ public class CranialAdjustmentController : MonoBehaviour
         m.elapsedSeconds = Time.time - metricsStartTime;
 
         // ── 두개골 전용 산식 ────────────────────────────────────────────────
-        //   완료도 60 : 자세를 요구한 만큼 채웠는가(진단은 좌·우 각각, 그 외는 파지 성립 여부)
-        //   안정성 25 : 잡았다 놓친 횟수·유지 타이머 초기화 횟수만큼 감점
-        //   호흡   15 : 요구 호흡을 채웠는가(호흡 없는 단계는 만점 — 감점 사유가 없음)
-        float completion = m.CompletionRatio * 60f;
+        // 2026-08-12 재배분: '한 번 잡았나'의 비중을 낮추고 '얼마나 안 놓쳤나'를 올렸다.
+        // (구) 완료 60 / 안정 25(이탈3·리셋5) / 호흡 15
+        // (신) 완료 45 / 안정 40(이탈8·리셋10) / 호흡 15(호흡 중 이탈 감점 신설)
+        //   완료도 45 : 자세를 요구한 만큼 채웠는가(진단은 자세별, 그 외는 파지 성립 여부)
+        //   안정성 40 : 잡았다 놓친 횟수·유지 타이머 초기화 횟수만큼 감점
+        //   호흡   15 : 요구 호흡을 채웠는가 + 호흡을 유도하는 동안 손을 놓쳤는가
+        //               (호흡 없는 단계는 만점 — 감점 사유가 없음)
+        float completion = m.CompletionRatio * CompletionWeight;
 
-        float stability = 25f - (m.gripDropouts * 3f) - (m.holdResets * 5f);
+        float stability = StabilityWeight
+                          - (m.gripDropouts * DropoutPenalty)
+                          - (m.holdResets * HoldResetPenalty);
         stability = Mathf.Max(0f, stability);
 
-        float breath = m.breathsRequired > 0
-            ? Mathf.Clamp01((float)m.breathsCompleted / m.breathsRequired) * 15f
-            : 15f;
+        float breath;
+        if (m.breathsRequired > 0)
+        {
+            breath = Mathf.Clamp01((float)m.breathsCompleted / m.breathsRequired) * BreathWeight;
+            // ★호흡 단계에서 손이 떨어지는 것은 잠금이 풀렸다는 뜻이라 별도로 감점한다.
+            //   손떨림 수준(DropoutTolerance 미만)은 이탈로 세지 않는다.
+            breath -= m.breathGripDropouts * BreathDropoutPenalty;
+            // ★다 내쉬기 전에 누른 것 — 이 술기의 핵심 타이밍을 놓친 것이라 같은 무게로 깎는다.
+            breath -= (m.earlyThrusts + m.lateThrusts) * EarlyThrustPenalty;
+            breath = Mathf.Max(0f, breath);
+        }
+        else
+        {
+            breath = BreathWeight;
+        }
 
         m.score = Mathf.Clamp(completion + stability + breath, 0f, 100f);
         m.grade = EvaluationScoringEngine.GetGradeFromScore(m.score);
@@ -480,17 +629,42 @@ public class CranialAdjustmentController : MonoBehaviour
         if (metrics == null) return;
 
         float now = Time.time - metricsStartTime;
+        bool breathing = breathingHUD != null && breathingHUD.IsRunning;
 
         // 파지 성립/이탈
+        // ★한 프레임만 튄 것은 이탈로 세지 않는다 — 유예(DropoutTolerance)를 넘겨 떨어져 있어야
+        //   비로소 1회로 센다. 안정성 배점이 40으로 올라가 1회당 8점이라, 트래킹 노이즈를
+        //   그대로 세면 정상 수행도 점수가 무너진다.
         bool satisfied = IsJudgedGripSatisfied();
         if (satisfied)
         {
             metrics.holdSeconds += Time.deltaTime;
             if (metrics.firstContactSeconds < 0f) metrics.firstContactSeconds = now;
+            metricsLostSince = -1f;
+            metricsLostCounted = false;
         }
-        else if (metricsPrevSatisfied)
+        else
         {
-            metrics.gripDropouts++;
+            if (metricsPrevSatisfied)
+            {
+                // 방금 떨어졌다 — 아직 세지 않고 유예 시간을 잰다.
+                metricsLostSince = Time.time;
+                metricsLostCounted = false;
+                metricsLostDuringBreath = breathing;
+            }
+
+            if (!metricsLostCounted && metricsLostSince >= 0f
+                && Time.time - metricsLostSince >= DropoutTolerance)
+            {
+                metricsLostCounted = true;
+                metrics.gripDropouts++;
+                // 호흡을 유도하는 동안 놓친 것은 '잠금이 풀렸다'는 뜻이라 호흡 배점에서도 깎는다.
+                if (metricsLostDuringBreath || breathing) metrics.breathGripDropouts++;
+
+                if (logDiagnosisTrace)
+                    ChunaLogger.Log($"<color=orange>[CranialAdjustmentController] 파지 이탈 {metrics.gripDropouts}회" +
+                                    $"{((metricsLostDuringBreath || breathing) ? " (호흡 중 — 호흡 배점 감점)" : "")}</color>");
+            }
         }
         metricsPrevSatisfied = satisfied;
 
@@ -525,6 +699,17 @@ public class CranialAdjustmentController : MonoBehaviour
     private string loadedGuideClip;              // 평가기에 지금 로드된 클립 이름(중복 로드 방지)
     private int guidePoseIndex = -1;             // 지금 가이드를 재생 중인 자세(-1 = 자세 없음/전부 달성)
     private bool guideHandSawRelease;            // 이 동작에서 '미성립' 상태를 한 번이라도 봤는가
+
+    /// <summary>
+    /// 이번 substep에서 <b>어느 손의 가이드를 보여줄지</b>. CSV의 <c>hand=left|right</c>를 그대로 쓴다.
+    ///
+    /// ★한 손씩 순서대로 대는 술기(흉추 신전: 보조수로 머리를 받쳐 들어 올린 뒤 주동수 주먹)에서
+    /// 양손 가이드가 다 떠 있으면 "지금 어느 손을 대라는 건지"가 안 보인다.
+    /// 녹화는 그대로 두고(양손이 다 들어 있다) 표시만 손 단위로 가린다.
+    /// </summary>
+    private JudgeHand guideHandScope = JudgeHand.양손;
+
+    public void SetGuideHandScope(JudgeHand scope) => guideHandScope = scope;
 
     /// <summary>이번 substep의 가이드손 자동 제어를 무장한다.
     /// ScenarioManager가 두개골 substep에서 가이드손 재생을 시작한 직후 호출한다.
@@ -576,11 +761,15 @@ public class CranialAdjustmentController : MonoBehaviour
         // ★손을 갖다 댄 손의 가이드손만 완전히 숨긴다. 떼면 '끝난 자세' 그대로 다시 보인다(재생 아님).
         //   ★손 단위인 이유: 왼손을 먼저 대는 술기에서 양손을 같이 숨기면 아직 안 댄 오른손의
         //     목표 자세까지 사라져 어디를 잡아야 하는지 알 수 없게 된다.
-        if (hideGuideHandOnTouch)
-        {
-            guideHandOwner.SuppressGuideHandInternal(true,  AnyJudgedGripTouched(true));
-            guideHandOwner.SuppressGuideHandInternal(false, AnyJudgedGripTouched(false));
-        }
+        // ★이번 단계에서 쓰지 않는 손의 가이드는 아예 숨긴다(hand=left/right).
+        //   접촉 여부와 무관하게 가려야 "지금 이 손을 대라"가 분명해진다.
+        bool leftOutOfScope = guideHandScope == JudgeHand.오른손;
+        bool rightOutOfScope = guideHandScope == JudgeHand.왼손;
+
+        guideHandOwner.SuppressGuideHandInternal(
+            true, leftOutOfScope || (hideGuideHandOnTouch && AnyJudgedGripTouched(true)));
+        guideHandOwner.SuppressGuideHandInternal(
+            false, rightOutOfScope || (hideGuideHandOnTouch && AnyJudgedGripTouched(false)));
 
         // ★기본값 OFF — 가이드손은 손을 댔는지와 무관하게 1회를 끝까지 재생한다(사용자 지시).
         //   켜면 예전처럼 '그 자세의 파지가 성립하는 순간' 재생을 끊는다.
@@ -610,7 +799,17 @@ public class CranialAdjustmentController : MonoBehaviour
         if (p == null) return;
 
         string clip = !string.IsNullOrEmpty(p.guideClipName) ? p.guideClipName : substepGuideClip;
-        if (string.IsNullOrEmpty(clip)) return;   // 녹화가 없으면 가이드 없이 진행
+        if (string.IsNullOrEmpty(clip))
+        {
+            // ★"반대쪽 자세를 안 보여준다"의 1순위 원인 — 그 자세에 시연 클립이 없다.
+            ChunaLogger.LogWarning($"[CranialAdjustmentController] 자세 {index} '{p.label}' 가이드손 클립이 없습니다 " +
+                                   $"(자세 guideClipName·CSV handTrackingFileName 둘 다 빔) — 시연 없이 진행합니다.");
+            return;
+        }
+
+        if (logDiagnosisTrace)
+            ChunaLogger.Log($"<color=cyan>[CranialAdjustmentController] 자세 {index} '{p.label}' 가이드손 재생 " +
+                            $"→ 클립='{clip}' 구간={p.guideStartRatio:0.##}~{p.guideEndRatio:0.##}</color>");
 
         if (clip != loadedGuideClip)
         {
@@ -619,7 +818,13 @@ public class CranialAdjustmentController : MonoBehaviour
         }
 
         float s = Mathf.Clamp01(p.guideStartRatio);
-        float e = Mathf.Clamp01(Mathf.Max(p.guideStartRatio, p.guideEndRatio));
+        float e = Mathf.Clamp01(p.guideEndRatio);
+
+        // ★끝 비율이 시작보다 작거나 같으면 '구간 미지정'으로 보고 <b>클립 끝까지</b> 재생한다.
+        //   씬에서 새로 만든 자세는 guideEndRatio가 0으로 직렬화돼 있는데, 예전 코드는 그걸
+        //   0~0 구간으로 해석해 첫 프레임만 찍고 멈췄다 — "가이드손이 재생 안 되고 멈춰 있다"의 원인
+        //   (제1늑골 진단, 2026-08-12). 구간을 나눠 쓰려면 EndRatio를 명시해야 한다.
+        if (e <= s) e = 1f;
 
         // ★클립+구간을 키로 넘긴다 — 같은 자세가 다음 단계에서 또 요청되면 재생하지 않고
         //   끝난 자세를 유지한다(08-11 사용자 지시). 자세별로 구간을 나눠 쓴 경우는 키가 달라 정상 재생된다.
@@ -864,18 +1069,25 @@ public class CranialAdjustmentController : MonoBehaviour
 
     // ── 파지 성립 시 환자 애니 재생 ──────────────────────────────────
     private ChunaPathEvaluator gripAnimEvaluator;
-    private bool gripAnimLeftOnly;
 
     /// <summary>
     /// 파지가 성립하는 순간 대기 중인 환자 애니를 재생하도록 무장한다.
     /// <para><paramref name="leftOnly"/>=true면 <b>왼손 파지점만</b> 잡혀도 재생한다
     /// (제1늑골: 왼손 검지 측면이 늑골 파지점에 닿으면 머리가 신전·병진).</para>
     /// </summary>
+    /// <summary>어느 손이 닿으면 애니를 시작할지.</summary>
+    public enum GripAnimTrigger { 왼손, 오른손, 양손 }
+
     public void ArmAnimationOnGrip(ChunaPathEvaluator evaluator, bool leftOnly)
+        => ArmAnimationOnGrip(evaluator, leftOnly ? GripAnimTrigger.왼손 : GripAnimTrigger.양손);
+
+    public void ArmAnimationOnGrip(ChunaPathEvaluator evaluator, GripAnimTrigger trigger)
     {
         gripAnimEvaluator = evaluator;
-        gripAnimLeftOnly = leftOnly;
+        gripAnimTrigger = trigger;
     }
+
+    private GripAnimTrigger gripAnimTrigger = GripAnimTrigger.왼손;
 
     /// <summary>무장 해제(단계 전환 시).</summary>
     public void DisarmAnimationOnGrip() => gripAnimEvaluator = null;
@@ -885,7 +1097,9 @@ public class CranialAdjustmentController : MonoBehaviour
         if (gripAnimEvaluator == null) return;
         if (!gripAnimEvaluator.HasPendingAnimation) { gripAnimEvaluator = null; return; }
 
-        bool ok = gripAnimLeftOnly ? AllGripped(leftGrips) : BothGripped;
+        bool ok = gripAnimTrigger == GripAnimTrigger.왼손 ? AllGripped(leftGrips)
+                : gripAnimTrigger == GripAnimTrigger.오른손 ? AllGripped(rightGrips)
+                : BothGripped;
         if (!ok) return;
 
         gripAnimEvaluator.BeginDeferredAnimation();
@@ -1009,6 +1223,13 @@ public class CranialAdjustmentController : MonoBehaviour
         else HideAllGrips();
 
         SetHandJudgingActive(keepCorrectionGrips);   // 파지점을 남기면 색이 갱신되도록 판정도 살려 둔다
+
+        // ★손별 가이드손 억제를 반드시 풀고 무장 해제한다(2026-08-13).
+        //   두개골 단계에서 파지점에 손을 대면 그 손의 가이드를 숨기는데(SuppressGuideHandInternal),
+        //   그 플래그는 <b>클립이 아니라 손 단위 전역 상태</b>라 무장만 해제하면 <b>억제가 그대로 남는다.</b>
+        //   그 결과 다음 substep이 궤적(HandPose) 단계여도 가이드손이 안 뜨거나 한쪽만 떠서
+        //   "가이드가 나왔다 사라졌다 하고, 시연이 진행되지 않는다"가 됐다(제2늑골 Play 검증).
+        guideHandOwner?.ClearGuideHandSuppression();
         guideHandOwner = null;                       // 두개골이 아닌 substep — 가이드손 자동 종료 무장 해제
     }
 
@@ -1093,17 +1314,64 @@ public class CranialAdjustmentController : MonoBehaviour
         ChunaLogger.Log("[CranialAdjustmentController] 진단 촉진 단계 시작 (양손 후두 감싸기)");
     }
 
-    /// <summary>① 파지 substep 시작 시 호출 (초기화/활성화 훅)</summary>
-    public void BeginGripPhase()
+    /// <summary>
+    /// 교정 파지점을 켜고 판정을 살린다.
+    ///
+    /// ★2026-08-12: "파지점은 직접 쓸 때만 보이게" 규칙을 넣으면서, 판정이 없는 안내 substep에서
+    /// 교정 파지점을 끄도록 바꿨다. 그런데 <b>파지 유지를 판정하는 조건들이 파지점을 다시 켜지 않아서</b>
+    /// 안내 행을 한 번 지나면 <c>cranialPressure</c>가 영영 성립하지 않았다(제1늑골 3.2에서 20초 폴백).
+    /// → 파지점이 필요한 조건은 진입할 때 이걸 부른다.
+    /// </summary>
+    /// <summary>
+    /// 지금 시술자 머리(HMD)의 높이(m). 체중을 싣는 동작을 판정하는 데 쓴다.
+    /// 견착용 <see cref="postureStabilizer"/>에 배선된 헤드셋을 우선 쓰고, 없으면 메인 카메라를 본다.
+    /// </summary>
+    /// <summary>
+    /// 양손 손바닥의 평균 높이(m). <b>손이 눌러 들어갔다 나오는</b> 것을 재는 데 쓴다.
+    ///
+    /// ★헤드셋 하강으로 순간 교정을 판정했더니 "생각보다 과하게 움직여야 해서 힘들다"는 지적이 있었다.
+    /// 손은 실제로 누르는 부위라 변위가 작아도 의미가 분명하고, 시술자가 몸을 크게 낮출 필요가 없다.
+    /// </summary>
+    public bool TryGetHandDepth(out float y)
     {
-        TryInjectFingertips();   // 영점 저장(②a) 전에 손끝 확보
-        EndDiagnosisStage();     // 진단 유지 타이머·안내 문구 정리
-        // 교정: 진단 파지점(단계·레거시) 전부 숨기고 교정 파지점만 표시.
+        y = 0f;
+        Transform lp = leftHandVisual != null ? ResolveFingertip(leftHandVisual, CranialFinger.Palm) : null;
+        Transform rp = rightHandVisual != null ? ResolveFingertip(rightHandVisual, CranialFinger.Palm) : null;
+
+        if (lp == null && rp == null) return false;
+        if (lp == null) { y = rp.position.y; return true; }
+        if (rp == null) { y = lp.position.y; return true; }
+
+        y = (lp.position.y + rp.position.y) * 0.5f;
+        return true;
+    }
+
+    public bool TryGetHeadHeight(out float y)
+    {
+        Transform h = postureStabilizer != null ? postureStabilizer.Headset : null;
+        if (h == null && Camera.main != null) h = Camera.main.transform;
+
+        if (h == null) { y = 0f; return false; }
+        y = h.position.y;
+        return true;
+    }
+
+    public void ShowCorrectionGrips()
+    {
+        TryInjectFingertips();
+        // 진단 파지점(단계·레거시)은 전부 숨기고 교정 파지점만 표시.
         // ★ 숨김을 먼저, 표시를 나중에 — 같은 오브젝트를 공유해도 결과가 같아진다.
         HideAllGrips();
         SetGripsActive(leftGrips, true);
         SetGripsActive(rightGrips, true);
-        SetHandJudgingActive(true);   // 호흡국면에서 정지됐을 수 있으니 재진입 시 재활성(재시작 대비)
+        SetHandJudgingActive(true);   // 안내 substep에서 정지됐을 수 있으니 재활성
+    }
+
+    /// <summary>① 파지 substep 시작 시 호출 (초기화/활성화 훅)</summary>
+    public void BeginGripPhase()
+    {
+        EndDiagnosisStage();     // 진단 유지 타이머·안내 문구 정리
+        ShowCorrectionGrips();   // 손끝 주입 + 교정 파지점 표시 + 판정 활성
         leftDepth?.ClearZeroPoint();
         rightDepth?.ClearZeroPoint();
         postureStabilizer?.SetActive(false);   // 자세 안내는 호흡 국면에서만
@@ -1299,6 +1567,22 @@ public class CranialAdjustmentController : MonoBehaviour
     /// <summary>현재 자세(어깨-이마 밀착 프록시)가 성립했는가. 자세 안정화 미설정 시 통과 처리(순수 호흡 타이머).</summary>
     public bool IsPostureEngaged => postureStabilizer == null || postureStabilizer.IsInPosition;
 
+    private bool braceGuideLookupDone;
+
+    /// <summary>이마 견착 위치 가이드 표시/숨김.
+    /// ScenarioManager가 substep 진입마다 CSV의 <c>brace</c> 토큰을 보고 호출한다
+    /// (호흡 국면이 전부 gripGate라 자세 안정화의 활성 여부로는 판단할 수 없다 — 2026-08-13).
+    /// 판정과는 무관한 순수 표시다.</summary>
+    public void SetBraceGuideVisible(bool on)
+    {
+        if (braceGuide == null && !braceGuideLookupDone)
+        {
+            braceGuideLookupDone = true;   // 씬 배선을 빼먹어도 리그 하위에 있으면 살린다(도구가 리그 밑에 만든다).
+            braceGuide = GetComponentInChildren<ShoulderBraceGuide>(true);
+        }
+        braceGuide?.SetVisible(on);
+    }
+
     /// <summary>②b 호흡 윈도우 시작.
     /// 이 국면은 어깨-이마 자세로 손이 FOV를 벗어나 파지/압력 판정이 불가 →
     /// 유지 게이트를 "압력 적정존" 대신 "자세 안정화(헤드셋-이마 근접)"로 둔다.
@@ -1326,6 +1610,8 @@ public class CranialAdjustmentController : MonoBehaviour
 
         // 손이 FOV를 벗어나 데이터가 튀는 국면 → 파지/깊이 판정 정지(사운드·경고·색 깜빡임·화살표 잔상 방지)
         // ★gripGate면 파지 성립 여부가 곧 게이트이므로 손 판정을 계속 살려 둔다.
+        //   ★파지점 자체도 켜 둬야 한다 — 앞의 안내 substep에서 꺼졌을 수 있다(2026-08-12).
+        if (gripGate) ShowCorrectionGrips();
         SetHandJudgingActive(gripGate);
         // 견착 국면 내내 손 메시 숨김(트래킹은 유지) — 가림/FOV 밖에서 튀는 손 비주얼 제거.
         // (PM처럼 손을 계속 머리에 대는 술기는 hideHandsDuringBreathing=false로 숨기지 않음)
@@ -1418,7 +1704,47 @@ public class CranialAdjustmentController : MonoBehaviour
     {
         // 씬에서 문구 오브젝트를 켜 둔 채 저장했더라도 시작부터 떠 있지 않게 한다.
         HideBreathingCue();
+        DisableRhythmIndicatorIfNotCranial();
+
+        // ★같은 이유로 호흡링과 파지 구체도 시작 전에는 보이면 안 된다(2026-08-13 사용자 지적).
+        //   둘 다 씬에 켜진 채 저장돼 있어 로비→시작 안내 구간 내내 떠 있었다.
+        //   켜는 곳은 각각 StartBreathingWindow(③)와 파지 단계뿐이므로 여기서 꺼도 회귀가 없다.
+        if (breathingHUD != null) breathingHUD.ResetState();   // 완료 래칭까지 초기화 + 오브젝트 끔
+        HideAllGrips();
     }
+
+    /// <summary>
+    /// 두개골 리듬(CRI) 표시는 <b>두개골 술기 전용</b>이다 — 늑골·흉추에서는 끈다.
+    ///
+    /// ★리그를 두개골에서 복제해 만들다 보니 늑골·흉추 리그에도 리듬 표시가 딸려 와서
+    /// 관계없는 술기에 좌우 비대칭 지표가 계속 떠 있었다(2026-08-12 사용자 지적).
+    /// 인스펙터에서 일일이 비우게 하는 대신, 시나리오 이름으로 판단해 자동으로 끈다.
+    /// </summary>
+    private void DisableRhythmIndicatorIfNotCranial()
+    {
+        if (!string.IsNullOrEmpty(scenarioName) && scenarioName.Contains("두개골")) return;
+
+        if (rhythmIndicator != null)
+        {
+            rhythmIndicator.gameObject.SetActive(false);
+            rhythmIndicator = null;   // 이후 SetMode 호출도 무시되게
+        }
+
+        // ★호흡 유도 문구도 두개골 전용이다("두개골을 이완시키며 촉진하세요").
+        //   늑골·흉추 진단에서 이 박스가 뜨는 건 술기와 무관한 안내다.
+        cueOnAllDiagnosisStages = false;
+        HideBreathingCue();
+
+        ChunaLogger.Log($"[CranialAdjustmentController] '{scenarioName}'은 두개골 술기가 아니므로 " +
+                        "리듬 표시와 호흡 유도 문구를 껐습니다.");
+    }
+
+    // ★2026-08-12: 여기서 CranialBreathAnimator를 자동으로 붙였다가 <b>철회했다.</b>
+    //   그 컴포넌트는 환자 Animator의 speed를 0으로 만들고 클립을 직접 스크럽하는데,
+    //   State 존재 여부를 <b>한 번만 검사해 캐시</b>한다(stateChecked). 두개골(굴곡신전 있음)을 먼저 돌린 뒤
+    //   늑골(그 State 없음)로 넘어가면 캐시된 '있음'을 믿고 애니메이터를 세워 버려
+    //   "파지해도 애니가 제대로 재생 안 되고 재평가에서 중립도 안 지킨다"가 됐다.
+    //   호흡 길이 동기화가 필요하면 씬에 직접 붙이되, 그 술기의 컨트롤러에 해당 State가 있어야 한다.
 
     void Update()
     {
@@ -1432,6 +1758,12 @@ public class CranialAdjustmentController : MonoBehaviour
 
         // 평가 지표 누적(수집 중일 때만).
         UpdateCranialMetrics();
+
+        // ★유지 타이머 표시 — <b>진단이 아닌 단계에서도</b> 돌아야 한다.
+        //   예전에는 이 호출이 UpdateDiagnosisStage() 안에 있었는데, 그 함수는 진단 스테이지가 없으면
+        //   첫 줄에서 return 해 버린다. 그래서 cranialPressure(등척성 5초 등)에서는 표시 함수가
+        //   아예 호출되지 않아, 판정은 도는데 화면에 타이머가 안 나왔다(2026-08-12).
+        UpdateHoldProgressUI();
 
         if (drivePoseFromComparator)
         {

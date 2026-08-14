@@ -422,7 +422,55 @@ public class ChunaPathEvaluator : MonoBehaviour
     // ★ 회전(rotation) 단계는 재평가 모드에서도 적정범위 확장 안 함 (가동범위 고정)
     private bool isRotationStep => specifiedMovementType == "rotation";
     // ★ 스트레칭 모드: 진행도가 StartHold(stretchingStart) 기준 상대값이므로 임계점도 오프셋 차감
-    private float currentMidHoldStart => isStretchingMode ? (stretchingHoldStart - stretchingStart) :
+    /// <summary>★<c>reach=0.9</c> 토큰이 있으면 그 substep의 완료 임계점을 이 값으로 덮어쓴다(&lt;0 = 미지정).
+    /// 왕복 동작처럼 "끝점까지 실제로 갔다"를 요구해야 하는 단계용 — 기본 30%면 조금만 움직여도 완료된다.</summary>
+    private float reachOverride = -1f;
+
+    /// <summary>★<c>reps=3</c> — 이 단계에서 궤적 도달을 몇 번 세고 완료할지(기본 1).</summary>
+    private int repsRequired = 1;
+    private int repsDone;
+
+    /// <summary>궤적 끝에 도달했다. 아직 반복이 남았으면 true(= 완료시키지 말고 처음부터 다시 세라).
+    /// EvaluationPhaseManager가 임계점 통과 시 호출한다.</summary>
+    internal bool ConsumeRepAndContinue()
+    {
+        repsDone++;
+        bool more = repsDone < repsRequired;
+        if (repsRequired > 1)
+            ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 반복 {repsDone}/{repsRequired}" +
+                            $"{(more ? " — 계속" : " — 완료")}</color>");
+        return more;
+    }
+
+    // ===== 구간 터치 카운트 모드 (touch=6) =====
+    // ★홀드·진행률 임계 완료를 <b>아예 타지 않는다</b>. 궤적의 시작 구간과 끝 구간을
+    //   번갈아 찍은 횟수만 센다 — "터치 터치 터치… 6번"이 요구사항이다(2026-08-13 사용자).
+    private int touchTarget;        // 0이면 이 모드 아님
+    private int touchCount;
+    private int lastZone;           // 0=아직 / 1=시작 구간 / 2=끝 구간
+    private float touchZone = 0.15f;   // 구간 폭(진행률). 시작 ≤ 0.15, 끝 ≥ 0.85
+
+    internal bool TouchCountMode => touchTarget > 0;
+
+    /// <summary>지금 진행률이 어느 구간인지 보고, <b>직전과 다른 구간</b>에 들어오면 1회로 센다.
+    /// 목표 횟수를 채우면 true(= 이 단계 완료).</summary>
+    internal bool CountZoneTouch(float progress)
+    {
+        int zone = progress <= touchZone ? 1
+                 : progress >= 1f - touchZone ? 2
+                 : 0;
+
+        if (zone == 0 || zone == lastZone) return false;   // 중간 구간이거나 같은 구간 반복 — 안 센다
+
+        lastZone = zone;
+        touchCount++;
+        ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 구간 터치 {touchCount}/{touchTarget} " +
+                        $"({(zone == 1 ? "시작" : "끝")} 구간, 진행률 {progress:P0})</color>");
+        return touchCount >= touchTarget;
+    }
+
+    private float currentMidHoldStart => reachOverride >= 0f ? reachOverride :
+                                         isStretchingMode ? (stretchingHoldStart - stretchingStart) :
                                          (isExtendedLimitMode && !isRotationStep ? extendedMidHoldStartRatio : midHoldStartRatio);
     private float currentMidHoldEnd => isStretchingMode ? (stretchingEnd - stretchingStart) :
                                        (isExtendedLimitMode && !isRotationStep ? extendedMidHoldEndRatio : midHoldEndRatio);
@@ -597,13 +645,27 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float guideHeldEndRatio = 1f;
     private bool guideHiddenByContact;
 
-    /// <summary>유지 판정의 키 = 클립 + 재생 구간.
-    /// ★구간까지 넣는 이유: 한 클립에 좌→우를 이어 녹화하고 자세별로 앞/뒤를 나눠 쓰는 경우
-    /// (진단 자세 2개)가 있어, 클립 이름만 보면 두 번째 자세가 '이미 봤다'로 묻힌다.</summary>
-    private static string GuideKey(string clipName, float startRatio, float endRatio) =>
-        $"{clipName}|{startRatio:0.###}|{endRatio:0.###}";
+    /// <summary>
+    /// 유지 판정의 키 = 클립 + 재생 구간 + <b>표시할 손 범위</b>.
+    ///
+    /// ★구간을 넣는 이유: 한 클립에 좌→우를 이어 녹화하고 자세별로 앞/뒤를 나눠 쓰는 경우가 있어
+    ///   클립 이름만 보면 두 번째 자세가 '이미 봤다'로 묻힌다.
+    /// ★손 범위를 넣는 이유(2026-08-12): 같은 클립·같은 구간이라도 <b>보여 줄 손이 늘어나면</b>
+    ///   새 손 입장에서는 처음 보는 동작이다. 흉추 신전이 그렇다 —
+    ///   보조수 단계에서 오른손만 보여 준 뒤 주동수 단계에서 양손을 보여 주는데,
+    ///   키가 같으면 '이미 봤다'로 묻혀 <b>왼손 가이드가 멈춘 채로 나타난다.</b>
+    /// </summary>
+    private string GuideKey(string clipName, float startRatio, float endRatio) =>
+        $"{clipName}|{startRatio:0.###}|{endRatio:0.###}|{guideScopeTag}";
 
-    /// <summary>이 클립(같은 구간)이 이미 끝난 자세로 유지 중인가(= 다시 재생할 필요가 없는가).</summary>
+    /// <summary>이번 단계에서 보여 줄 손 범위 표식(예: 양손/오른손). ScenarioManager가 substep 진입 때 넣는다.
+    /// ★suppress 플래그를 직접 읽지 않는 이유 — 그 플래그는 컨트롤러가 <b>매 프레임</b> 갱신해서,
+    /// 재생을 시작하는 시점에는 아직 <b>이전 단계 값</b>이다.</summary>
+    private string guideScopeTag = "";
+
+    internal void SetGuideScopeTag(string tag) => guideScopeTag = tag ?? "";
+
+    /// <summary>이 클립(같은 구간·같은 손 범위)이 이미 끝난 자세로 유지 중인가(= 다시 재생할 필요가 없는가).</summary>
     internal bool IsGuideClipHeld(string clipName, float startRatio = 0f, float endRatio = 1f) =>
         !string.IsNullOrEmpty(clipName) && !string.IsNullOrEmpty(guideHeldClip) &&
         guideHeldClip == GuideKey(clipName, startRatio, endRatio);
@@ -646,11 +708,18 @@ public class ChunaPathEvaluator : MonoBehaviour
         }
     }
 
-    /// <summary>양손 숨김 해제(단계가 바뀔 때 잔상 방지).</summary>
+    /// <summary>손별 숨김 플래그만 푼다(단계가 바뀔 때 한쪽 손만 숨은 채 남는 것 방지).
+    /// ★가이드손 전체가 숨김 상태(<see cref="guideHiddenByContact"/>)면 <b>되살리지 않는다</b> —
+    /// 안 그러면 "손 녹화가 없는 단계라 숨겼는데 곧바로 다시 켜지는" 충돌이 난다(2026-08-13).</summary>
     internal void ClearGuideHandSuppression()
     {
-        SuppressGuideHandInternal(true, false);
-        SuppressGuideHandInternal(false, false);
+        guideSuppressLeft = false;
+        guideSuppressRight = false;
+
+        if (guideHiddenByContact) return;   // 이 단계는 아예 가이드손을 안 쓴다 — 그대로 둔다
+
+        if (leftGuideHand != null && GuideHandHasData(true)) leftGuideHand.SetVisible(true);
+        if (rightGuideHand != null && GuideHandHasData(false)) rightGuideHand.SetVisible(true);
     }
 
     /// <summary>지금 로드된 녹화에 이 손의 데이터가 있는가.
@@ -1543,6 +1612,18 @@ public class ChunaPathEvaluator : MonoBehaviour
         pendingAnimationStart = false;
 
         if (patientAnimator == null || string.IsNullOrEmpty(currentAnimationStateName)) return;
+
+        // ★구간이 지정돼 있으면(anim=시작:끝) 그 구간만 재생한다.
+        //   흉추 신전은 '손이 파지점에 닿으면 30프레임까지만' 재생해 살짝 들리는 것을 연출한다.
+        if (deferredRangeSet)
+        {
+            deferredRangeSet = false;
+            PlayPatientAnimationRange(currentAnimationStateName, deferredFrom, deferredTo, deferredSpeed);
+            ChunaLogger.Log($"<color=green>[Animation] 접촉 감지 — '{currentAnimationStateName}' " +
+                            $"구간 재생 ({deferredFrom:P0}~{deferredTo:P0})</color>");
+            return;
+        }
+
         patientAnimator.Play(currentAnimationStateName, 0, 0f);
         patientAnimator.speed = 1f;
         if (secondaryPatientAnimator != null)
@@ -1553,6 +1634,9 @@ public class ChunaPathEvaluator : MonoBehaviour
         ChunaLogger.Log($"<color=green>[Animation] 접촉 감지 — '{currentAnimationStateName}' 재생 시작</color>");
     }
 
+    private bool deferredRangeSet;
+    private float deferredFrom, deferredTo, deferredSpeed = 1f;
+
     internal bool HasPendingAnimation => pendingAnimationStart;
 
     /// <summary>
@@ -1560,7 +1644,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 실제 재생은 <see cref="BeginDeferredAnimation"/>을 부르는 쪽(파지 성립 등)이 결정한다.
     /// </summary>
     public void ArmPatientAnimationForDeferredStart(string stateName)
+        => ArmPatientAnimationForDeferredStart(stateName, 0f, 1f, false, 1f);
+
+    /// <summary>구간(anim=시작:끝)·속도(animSpeed=)까지 지정해 재생을 대기시킨다.</summary>
+    public void ArmPatientAnimationForDeferredStart(string stateName, float from, float to,
+                                                    bool useRange, float speed)
     {
+        deferredRangeSet = useRange;
+        deferredFrom = from;
+        deferredTo = to;
+        deferredSpeed = speed;
         deferAnimationUntilGateOpen = true;
         SetPatientAnimation(stateName, AnimationPlayMode.AutoPlay);   // defer 분기를 타 pending으로만 남는다
     }
@@ -1588,20 +1681,120 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (patientAnimator == null) return;
         var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
         holdPoseHash = st.shortNameHash;
-        holdPoseTime = Mathf.Clamp01(st.normalizedTime);
         holdPoseActive = true;
-        patientAnimator.speed = 0f;
-        if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 0f;
 
-        ChunaLogger.Log($"<color=green>[Animation] 자세 고정 (hash={holdPoseHash}, {holdPoseTime:P0})</color>");
+        // ★재생 중인 1회성 클립은 <b>끝까지 재생한 뒤에</b> 고정한다 (2026-08-12).
+        //   예전엔 호출 시점의 재생 위치로 즉시 얼려서, 파지가 성립하자마자 다음 단계로 넘어갈 때
+        //   동작이 중간에 멈춰 "재생되다 말고 원복된다"로 보였다(제1늑골 '제1늑골 고개').
+        //   완료 지연을 없애 단계 전환이 빨라지면서 더 두드러졌다.
+        holdPoseWaitFinish = !st.loop && st.normalizedTime < 1f;
+        holdPoseTime = holdPoseWaitFinish ? 1f : Mathf.Clamp01(st.normalizedTime);
+
+        if (!holdPoseWaitFinish)
+        {
+            patientAnimator.speed = 0f;
+            if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 0f;
+        }
+
+        ChunaLogger.Log($"<color=green>[Animation] 자세 고정 (hash={holdPoseHash}, {holdPoseTime:P0}" +
+                        $"{(holdPoseWaitFinish ? " — 재생을 끝까지 마친 뒤 고정" : "")})</color>");
     }
 
+    /// <summary>재생이 끝나기를 기다리는 중인가(1회성 클립을 중간에 얼리지 않기 위해).</summary>
+    private bool holdPoseWaitFinish;
+
     /// <summary>자세 고정 해제. 애니를 지정한 단계로 넘어갈 때 호출.</summary>
-    public void ReleasePoseHold() => holdPoseActive = false;
+    public void ReleasePoseHold()
+    {
+        holdPoseActive = false;
+        holdPoseWaitFinish = false;
+        rangeActive = false;
+
+        // ★속도를 되돌린다 — 자세 고정·구간 재생은 speed=0으로 세워 두는데,
+        //   풀어 줄 때 복구하지 않으면 <b>다음 단계 애니가 아예 움직이지 않는다</b>(2026-08-12).
+        if (patientAnimator != null) patientAnimator.speed = 1f;
+        if (secondaryPatientAnimator != null) secondaryPatientAnimator.speed = 1f;
+    }
+
+    // ── 구간 재생(클립의 일부만) ──────────────────────────────────────────
+    private bool rangeActive;
+    private int rangeHash;
+    private float rangeEnd;
+
+    /// <summary>
+    /// 환자 클립을 <b>정규화 구간 [from, to]</b>만 재생하고 그 자세에서 멈춘다.
+    ///
+    /// ★한 동작을 여러 단계에 나눠 보여줄 때 쓴다 — 흉추 신전은 '파지하면서 절반만 일으키고',
+    /// 파지가 확인되면 '들이마시며 끝까지' 일으킨다. 클립을 쪼개지 않고 같은 클립을 두 번에 나눠 쓴다.
+    /// CSV에서는 conditionParams에 <c>anim=0:0.5</c> 처럼 적는다.
+    /// </summary>
+    public void PlayPatientAnimationRange(string stateName, float from, float to, float speed = 1f)
+    {
+        if (patientAnimator == null || string.IsNullOrWhiteSpace(stateName)) return;
+
+        string trimmed = stateName.Trim();
+        int hash = Animator.StringToHash(trimmed);
+        if (patientAnimator.runtimeAnimatorController == null || !patientAnimator.HasState(0, hash))
+        {
+            ChunaLogger.LogWarning($"[Animation] 구간 재생 실패 — State '{trimmed}'가 현재 컨트롤러에 없습니다.");
+            return;
+        }
+
+        ReleasePoseHold();
+        rangeHash = hash;
+        rangeEnd = Mathf.Clamp01(to);
+        rangeActive = true;
+        currentAnimationStateName = trimmed;
+
+        float start = Mathf.Clamp01(from);
+        float spd = Mathf.Max(0.05f, speed);   // 0이면 영영 안 끝난다
+        patientAnimator.speed = spd;
+        patientAnimator.Play(hash, 0, start);
+        if (secondaryPatientAnimator != null)
+        {
+            secondaryPatientAnimator.speed = spd;
+            secondaryPatientAnimator.Play(hash, 0, start);
+        }
+
+        ChunaLogger.Log($"<color=magenta>[Animation] 구간 재생 '{trimmed}' " +
+                        $"{start:P0} → {rangeEnd:P0} (속도 {spd:0.##}배)</color>");
+    }
 
     private void LateUpdate()
     {
+        // 구간 재생: 끝 지점에 닿으면 그 자세로 멈춰 세우고 유지로 넘긴다.
+        if (rangeActive && patientAnimator != null)
+        {
+            var rs = patientAnimator.GetCurrentAnimatorStateInfo(0);
+            if (rs.shortNameHash == rangeHash && rs.normalizedTime >= rangeEnd)
+            {
+                patientAnimator.Play(rangeHash, 0, rangeEnd);
+                patientAnimator.speed = 0f;
+                if (secondaryPatientAnimator != null)
+                {
+                    secondaryPatientAnimator.Play(rangeHash, 0, rangeEnd);
+                    secondaryPatientAnimator.speed = 0f;
+                }
+                rangeActive = false;
+
+                // 그 자세를 그대로 붙잡는다(다른 코드가 되감아도 되돌려 놓는다).
+                holdPoseHash = rangeHash;
+                holdPoseTime = rangeEnd;
+                holdPoseWaitFinish = false;
+                holdPoseActive = true;
+            }
+            return;
+        }
+
         if (!holdPoseActive || patientAnimator == null) return;
+
+        // 아직 재생 중인 1회성 클립은 끝날 때까지 손대지 않는다 — 끝나면 그 자세로 고정한다.
+        if (holdPoseWaitFinish)
+        {
+            var playing = patientAnimator.GetCurrentAnimatorStateInfo(0);
+            if (playing.shortNameHash == holdPoseHash && playing.normalizedTime < 1f) return;
+            holdPoseWaitFinish = false;
+        }
 
         var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
         bool drifted = st.shortNameHash != holdPoseHash ||
@@ -1767,6 +1960,22 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // StartHold만 체크 모드 (등척성운동 등)
         // 1. 핸드데이터 파일명에 "등척성" 포함 시 자동 활성화
+        // ※ conditionParams의 'key=값' 토큰을 읽는다(없으면 defaultValue).
+        //   ';'로 여러 토큰이 오므로 통짜 파싱하면 안 된다.
+        static float ParseNamedFloat(SubStepData s, string key, float defaultValue)
+        {
+            if (s == null || string.IsNullOrEmpty(s.conditionParams)) return defaultValue;
+            foreach (string tok in s.conditionParams.Split(';'))
+            {
+                string t = tok.Trim();
+                if (!t.StartsWith(key, System.StringComparison.OrdinalIgnoreCase)) continue;
+                if (float.TryParse(t.Substring(key.Length), System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture, out float v))
+                    return v;
+            }
+            return defaultValue;
+        }
+
         // 2. conditionParams에 "startHoldOnly" 포함 시 활성화
         bool isIsometricExercise = subStep != null && !string.IsNullOrEmpty(subStep.handTrackingFileName) &&
             subStep.handTrackingFileName.Contains("등척성");
@@ -1795,7 +2004,15 @@ public class ChunaPathEvaluator : MonoBehaviour
             startHoldOnly = false;
             // ★ 등척성 운동이 아니면 기본값(3초)으로 초기화
             startHoldDuration = 3f;
-            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 일반 모드 - startHoldDuration 기본값 복원: {startHoldDuration}초</color>");
+
+            // ★startHold=0.5 → 이 단계만 시작 홀드를 짧게(2026-08-13).
+            //   왕복을 여러 번 반복하는 단계(제2늑골 팔 올리고 내리기 3회)는 방향마다 3초를 붙잡으면
+            //   "붕붕 왔다갔다"가 안 된다 — 시작 정렬만 확인하고 바로 이동으로 넘어가야 한다.
+            //   토큰이 없으면 종전대로 3초라 기존 시나리오에는 영향이 없다.
+            float sh = ParseNamedFloat(subStep, "starthold=", -1f);
+            if (sh >= 0f) startHoldDuration = sh;
+
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 일반 모드 - startHoldDuration: {startHoldDuration}초</color>");
         }
 
         // ★ GuideOnly 모드 (시각 데모 전용 - StartHold/MidHold 스킵, 유사도 비평가)
@@ -1815,6 +2032,28 @@ public class ChunaPathEvaluator : MonoBehaviour
         // conditionParams에 "skipMidHold" 포함 시 활성화 (대흉근, 흉쇄유돌근 등 직선 가동범위)
         bool hasSkipMidHoldParam = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
             subStep.conditionParams.ToLower().Contains("skipmidhold");
+        // ★reach=0.9 → 이 단계는 진행률 90%까지 실제로 가야 완료된다(2026-08-13).
+        //   기본 완료 임계점은 config의 midHoldStart(=30%)라, 왕복 동작에서 손을 조금만 움직여도
+        //   "갑자기 다음으로 점프"했다(사용자 지적). 토큰이 없으면 종전 동작 그대로다.
+        // ★reps=3 → 한 단계 안에서 궤적 도달을 3번 세고 나서 완료한다(2026-08-13).
+        //   단계를 올리기/내리기로 쪼개지 않고 "왔다갔다 3회"를 한 단계에서 카운트하기 위한 것.
+        repsRequired = Mathf.Max(1, Mathf.RoundToInt(ParseNamedFloat(subStep, "reps=", 1f)));
+        repsDone = 0;
+
+        // ★touch=6 → 시작 구간·끝 구간을 번갈아 찍은 횟수만 센다(홀드·진행률 완료 안 탄다).
+        //   zone=0.15 로 구간 폭(여유값)을 조절한다.
+        touchTarget = Mathf.RoundToInt(ParseNamedFloat(subStep, "touch=", 0f));
+        touchCount = 0;
+        lastZone = 0;
+        touchZone = Mathf.Clamp(ParseNamedFloat(subStep, "zone=", 0.15f), 0.02f, 0.45f);
+        if (touchTarget > 0)
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 구간 터치 카운트 모드 — 목표 {touchTarget}회, " +
+                            $"구간 폭 {touchZone:P0} (홀드·임계 완료 없음)</color>");
+
+        reachOverride = ParseNamedFloat(subStep, "reach=", -1f);
+        if (reachOverride >= 0f)
+            ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 도달 임계점 재정의: 진행률 {reachOverride:P0}까지 가야 완료</color>");
+
         skipMidHold = hasSkipMidHoldParam;
         if (skipMidHold)
         {
@@ -2428,6 +2667,17 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         isEvaluating = false;
 
+        // ★세션 없이 끝나는 경우가 있다 — StartAutoPlay는 isEvaluating만 켜고 세션은 만들지 않는다
+        //   (세션은 StartEvaluation에서만 생성). 그대로 두면 AutoPlay가 끝나는 순간
+        //   여기서 NullReference가 나고, Update에서 터지므로 그 뒤 로직이 통째로 죽어
+        //   "유지해도 단계가 안 넘어간다"가 된다(2026-08-12).
+        if (currentSession == null)
+        {
+            ChunaLogger.Log("<color=yellow>[ChunaPathEvaluator] 평가 세션 없이 완료 — 점수 계산을 건너뜁니다 " +
+                            "(AutoPlay 전용 단계).</color>");
+            return null;
+        }
+
         // 세션 완료
         currentSession.endTime = DateTime.Now;
         currentSession.duration = Time.time - evaluationStartTime;
@@ -2727,6 +2977,11 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     private void ShowGuideHandFirstFrame()
     {
+        // ★이 단계가 가이드손을 쓰지 않기로 하고 숨겨 뒀으면 다시 그리지 않는다(2026-08-13).
+        //   평가가 시작될 때마다 첫 프레임을 그려서, 손 녹화가 없는 단계에서 숨겨 둔 가이드손이
+        //   환자를 터치하는 순간 되살아났다(사용자: "머리 터치하니까 다시 생기고 안 사라진다").
+        if (guideHiddenByContact) return;
+
         if (!showGuideHands)
         {
             if (showDebugLogs)

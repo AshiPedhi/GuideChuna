@@ -331,6 +331,294 @@ public static class ForceArrowSetupTool
         EditorUtility.DisplayDialog("힘의 방향 화살표 기본 배치 (PM·PJ)", msg, "확인");
     }
 
+    /// <summary>
+    /// 늑골·흉추 술기의 힘의 방향 화살표를 CSV 술기 순서대로 배치한다.
+    ///
+    /// ★<b>주체가 둘</b>이라 색으로 나눈다 — 시술자(주황) / 환자(청록).
+    /// 제1늑골은 중간에 <b>환자가 미는 등척성 저항</b>이 들어가는데, 이게 표현되지 않으면
+    /// "누가 힘을 내는 단계인지"가 화면에 전혀 안 드러난다(사용자 지시).
+    ///
+    /// 제1늑골 교정기법 (교정·호흡 3.1~3.6)
+    ///   ※신전·우측 병진의 <b>첫 세팅은 파지 단계(2.3~2.4)</b>에서 <c>제1늑골 고개</c> 클립이
+    ///     파지 성립과 함께 자동으로 만들어 준다 — 교정 국면의 화살표는 그 다음 이야기다.
+    ///   3.1~3.2  시술자: 왼손 검지 측면으로 제1늑골을 <b>족방</b>으로 누름
+    ///   3.3~3.4  ★등척성 — <b>세 힘이 동시에</b> 걸린다:
+    ///              · 왼손이 늑골을 족방으로 누르는 동안
+    ///              · 환자가 <b>우측으로 밀고</b>                          (청록)
+    ///              · 시술자 오른손이 <b>측두에서 맞저항</b>한다            (주황, 환자와 반대 방향)
+    ///            서로 맞서는 두 힘을 같이 그려야 '등척성'이 화면에 드러난다.
+    ///   3.3      늘어난 범위까지 다시 신전·우측 병진 — <b>설명만 하는 단계라 화살표를 두지 않는다.</b>
+    ///
+    /// 앙와위_흉추_신전변위 (교정 3.1~3.5)
+    ///   시술자: 환자를 세우고 내리는 <b>견인</b> — 국면 내내 표시
+    ///
+    /// 복와위_하부흉추_굴곡변위 (교정 3.3 — 순간 교정)
+    ///   주동수(족방수) <b>후방 → 전방</b>   · 보조수(두방수) <b>두방 → 족방</b>
+    ///   두 손이 서로 다른 방향으로 동시에 민다 — 둘 다 띄워야 역할 차이가 보인다.
+    /// </summary>
+    [MenuItem("GuideChuna/힘의 방향 화살표 기본 배치 (늑골·흉추)")]
+    private static void PlaceForRibThoracic()
+    {
+        var log = new System.Text.StringBuilder();
+        int made = 0;
+        created = 0;
+
+        foreach (CranialAdjustmentController rig in Resources.FindObjectsOfTypeAll<CranialAdjustmentController>())
+        {
+            if (rig == null || !rig.gameObject.scene.IsValid()) continue;
+
+            string name = ScenarioNameOf(rig);
+            bool isRib1 = name.Contains("제1늑골");
+            bool isRib2 = name.Contains("제2늑골");
+            bool isProne = name.Contains("복와위");
+            bool isThoracic = !isProne && name.Contains("흉추");
+            if (!isRib1 && !isRib2 && !isThoracic && !isProne) continue;
+
+            Transform left = FirstGrip(rig, "leftGrips");
+            Transform right = FirstGrip(rig, "rightGrips");
+            if (left == null || right == null)
+            {
+                log.AppendLine($"  {name}: ★교정 파지점이 없어 건너뜀 (leftGrips/rightGrips 확인)");
+                continue;
+            }
+            // ★이미 만든 그룹이 있으면 <b>지우고 다시 만든다</b>(2026-08-12).
+            //   예전엔 '이미 있음 — 건너뜀'이라, 도구를 고쳐도 다시 돌리면 아무 일이 안 일어났다.
+            //   그래서 화살표가 1개인 옛 배치가 계속 남아 "저항 단계에 환자 화살표만 나온다"가 됐다.
+            //   ★<b>화살표는 절대 지우지 않는다</b> — 위치·회전·색을 씬에서 손으로 맞춰 둔 자산이다.
+            //     그룹(빈 오브젝트, 참조만 들고 있음)만 지우고 다시 엮는다.
+            //     없는 화살표만 새로 만들고, 그때 색은 같은 리그의 기존 화살표에서 물려받는다.
+            for (int c = rig.transform.childCount - 1; c >= 0; c--)
+            {
+                Transform child = rig.transform.GetChild(c);
+                if (child != null && child.name.StartsWith("화살표 그룹 "))
+                    Undo.DestroyObjectImmediate(child.gameObject);
+            }
+
+            if (isRib1)
+            {
+                // ① 시술자 — 제1늑골 족방 압박.
+                //    ★등척성 구간(3.1 지시 · 3.2 판정)에서만 표시한다.
+                //      3.3 '재병진'은 판정이 없는 설명 단계라 압박 유지를 요구하지 않는다 →
+                //      거기까지 화살표를 띄우면 하지 않아도 되는 걸 하라는 신호가 된다(2026-08-12 사용자 지시).
+                ForceArrowBase press = Reuse(rig, "족방 압박")
+                                       ?? Adopt(rig, BuildFlowArrow(left, "힘의 방향 (왼손 족방 압박)"));
+                foreach (int sub in new[] { 1, 2 })
+                    MakeGroup(rig.transform, $"화살표 그룹 {name} 압박 {sub}",
+                              ForceArrowBase.ShowScope.특정_단계만, "교정·호흡", sub, new ForceArrowBase[] { press });
+
+                // ② 등척성 — ★서로 맞서는 두 힘을 <b>같이</b> 보여야 원리가 보인다.
+                //    환자가 신전·우측 병진 방향으로 저항하고, 시술자는 측두에서 그걸 맞받는다.
+                //    한쪽만 그리면 "누르는 힘"으로만 읽혀 등척성이라는 게 드러나지 않는다.
+                //    ★환자가 내는 힘은 <b>'우측으로 미는' 것뿐</b>이다(CSV 교정2).
+                //      신전·우측 병진은 시술자가 환자 머리를 움직이는 것이라 환자 화살표에 붙이면 틀린다.
+                ForceArrowBase resist = Reuse(rig, "환자 우측 밀기") ?? Reuse(rig, "환자 저항");
+                if (resist == null)
+                {
+                    resist = Adopt(rig, BuildFlowArrow(right, "힘의 방향 (환자 우측 밀기)"));
+                    SetActor(resist, ForceArrowBase.Actor.Patient);
+                }
+
+                ForceArrowBase counter = Reuse(rig, "맞저항");
+                if (counter == null)
+                {
+                    // ★새로 만드는 맞저항은 <b>환자 화살표를 복제</b>해 만든다 —
+                    //   위치·회전을 그대로 물려받고 방향만 뒤집으면 되므로 씬 작업이 거의 없다.
+                    counter = Adopt(rig, CloneArrow(resist, "힘의 방향 (오른손 맞저항 · 측두)"));
+                    SetActor(counter, ForceArrowBase.Actor.Practitioner);
+                    FlipDirection(counter);
+                }
+
+                // ★두 화살표를 <b>같은 그룹</b>에 넣어야 지시(3.1)와 판정(3.2) 내내 <b>함께</b> 켜진다.
+                var isometric = new ForceArrowBase[] { resist, counter };
+                foreach (int sub in new[] { 1, 2 })
+                    MakeGroup(rig.transform, $"화살표 그룹 {name} 등척성 {sub}",
+                              ForceArrowBase.ShowScope.특정_단계만, "교정·호흡", sub, isometric);
+
+                // ③ 신전·우측 병진 화살표는 <b>쓰지 않는다</b>(2026-08-12 사용자 결정).
+                //    3.3은 판정도 애니메이션도 없이 말로만 설명하는 단계라 방향 표시를 두지 않는다.
+                //    ★남아 있으면 어느 그룹에도 안 묶여 '단독 화살표'로 취급돼 교정 국면 내내 켜지므로 지운다.
+                ForceArrowBase stale = Reuse(rig, "신전·우측 병진") ?? Reuse(rig, "병진");
+                if (stale != null)
+                {
+                    log.AppendLine($"  {name}: 사용하지 않는 '{stale.name}' 화살표 삭제");
+                    Undo.DestroyObjectImmediate(stale.gameObject);
+                }
+
+                made += created;
+                log.AppendLine($"  {name}: 화살표 3개 중 {created}개 신규 생성 · 나머지는 기존 것 재사용 / 그룹 4개 재구성 " +
+                               "(압박·등척성 모두 3.1~3.2에만 표시, 3.3 재병진에는 화살표 없음)");
+            }
+            else if (isRib2)
+            {
+                // ① 시술자 — 두상골로 제2늑골 족방 압박. 교정·호흡 내내.
+                ForceArrow press = BuildFlowArrow(left, "힘의 방향 (두상골 족방 압박)");
+                MakeGroup(rig.transform, $"화살표 그룹 {name} 압박",
+                          ForceArrowBase.ShowScope.특정_단계만, "교정·호흡", 0, new ForceArrowBase[] { press });
+
+                // ② 시술자 — 호흡에 맞춰 팔을 올리고 내림(3.3~3.5).
+                ForceArrow lift = BuildFlowArrow(right, "힘의 방향 (팔 거상)");
+                foreach (int sub in new[] { 3, 4, 5 })
+                    MakeGroup(rig.transform, $"화살표 그룹 {name} 거상 {sub}",
+                              ForceArrowBase.ShowScope.특정_단계만, "교정·호흡", sub, new ForceArrowBase[] { lift });
+
+                made += 2;
+                log.AppendLine($"  {name}: 시술자 2 + 그룹 4개");
+            }
+            else if (isProne)
+            {
+                // 복와위 하부흉추 — ★두 손이 <b>서로 다른 방향</b>으로 동시에 민다(매뉴얼).
+                //     주동수(족방수) 후방 → 전방   = 등에서 배 쪽, 아래로
+                //     보조수(두방수) 두방 → 족방   = 머리 쪽에서 발 쪽으로
+                //   방향이 달라야 두 손의 역할이 드러나므로 반드시 둘 다 띄운다.
+                //   순간 교정(3.3)에서만 표시 — 호흡을 따라가는 동안에는 힘을 주지 않는다.
+                ForceArrowBase down = Reuse(rig, "후방")
+                                      ?? Adopt(rig, BuildFlowArrow(left, "힘의 방향 (주동수 후방→전방)"));
+                ForceArrowBase footward = Reuse(rig, "족방")
+                                          ?? Adopt(rig, BuildFlowArrow(right, "힘의 방향 (보조수 두방→족방)"));
+
+                // ★호흡 유도와 순간 교정을 한 substep으로 합치면서 3.3 → 3.2로 당겨졌다.
+                MakeGroup(rig.transform, $"화살표 그룹 {name} 순간교정",
+                          ForceArrowBase.ShowScope.특정_단계만, "교정", 2,
+                          new ForceArrowBase[] { down, footward });
+
+                made += created;
+                log.AppendLine($"  {name}: 화살표 2개 중 {created}개 신규 · 그룹 1개 (교정 3.2에만 표시)");
+            }
+            // ★앙와위 흉추 신전은 화살표를 쓰지 않는다(2026-08-12 사용자 결정).
+            //   환자를 세우고 내리는 동작 자체가 방향을 보여 주므로 화살표가 군더더기다.
+            //   전에 만든 게 남아 있으면 지운다 — 그룹에 안 묶인 화살표는 '단독'으로 취급돼
+            //   교정 국면 내내 켜지기 때문이다.
+            else if (isThoracic)
+            {
+                foreach (ForceArrowBase stale in rig.GetComponentsInChildren<ForceArrowBase>(true))
+                {
+                    if (stale == null) continue;
+                    log.AppendLine($"  {name}: 사용하지 않는 '{stale.name}' 화살표 삭제");
+                    Undo.DestroyObjectImmediate(stale.gameObject);
+                }
+            }
+        }
+
+        string msg =
+            $"화살표 신규 생성 {created}개 · 그룹 재구성 완료.\n{log}\n" +
+            "★기존 화살표는 지우지 않았습니다 — 위치·회전·색 그대로입니다.\n" +
+            "   새로 만든 것만 씬 뷰에서 방향을 맞추세요(로컬 +Z가 미는 방향).\n" +
+            "   맞저항 화살표는 환자 화살표를 복제해 180° 돌려 둔 것이라 대개 그대로 맞습니다.\n\n" +
+            "※제2늑골·복와위는 씬에 리그가 없으면 붙일 대상이 없습니다.\n" +
+            "되돌리려면 Ctrl+Z. 확인은 메뉴 '힘의 방향 화살표 점검'.";
+        Debug.Log("[힘의 방향 화살표 기본 배치 (늑골·흉추)]\n" + msg);
+        EditorUtility.DisplayDialog("힘의 방향 화살표 기본 배치 (늑골·흉추)", msg, "확인");
+    }
+
+    /// <summary>
+    /// 씬의 모든 화살표 색을 <b>시술자 초록 · 환자 청록</b>으로 통일한다.
+    ///
+    /// ★색은 씬에 직렬화돼 있어 코드 기본값을 바꿔도 <b>이미 배치된 화살표에는 안 먹는다</b>.
+    /// 새로 만든 것만 초록이고 옛것은 주황으로 남아 뒤섞이므로, 한 번에 맞추는 버튼을 둔다.
+    /// </summary>
+    [MenuItem("GuideChuna/힘의 방향 화살표 색 통일 (시술자 초록)")]
+    private static void UnifyArrowColors()
+    {
+        Color practitioner = new Color(0.149f, 1f, 0.318f, 1f);   // #26FF51
+        Color patient = new Color(0.25f, 0.8f, 0.95f, 1f);        // #3FCCF2
+
+        int n = 0;
+        var log = new System.Text.StringBuilder();
+        foreach (ForceArrowBase a in Resources.FindObjectsOfTypeAll<ForceArrowBase>())
+        {
+            if (a == null || !a.gameObject.scene.IsValid()) continue;
+
+            var so = new SerializedObject(a);
+            SerializedProperty p = so.FindProperty("practitionerColor");
+            SerializedProperty q = so.FindProperty("patientColor");
+            bool changed = false;
+
+            if (p != null && p.colorValue != practitioner) { p.colorValue = practitioner; changed = true; }
+            if (q != null && q.colorValue != patient) { q.colorValue = patient; changed = true; }
+
+            if (!changed) continue;
+            Undo.RecordObject(a, "화살표 색 통일");
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(a);
+            log.AppendLine($"  {Path(a.transform)}");
+            n++;
+        }
+
+        if (n > 0)
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEditor.SceneManagement.EditorSceneManager.GetActiveScene());
+
+        string msg = n == 0
+            ? "이미 전부 통일돼 있습니다."
+            : $"화살표 {n}개의 색을 맞췄습니다 (시술자 #26FF51 · 환자 #3FCCF2).\n\n{log}\n되돌리려면 Ctrl+Z.";
+        Debug.Log("[힘의 방향 화살표 색 통일]\n" + msg);
+        EditorUtility.DisplayDialog("힘의 방향 화살표 색 통일", msg, "확인");
+    }
+
+    /// <summary>화살표를 정반대 방향으로 돌린다(맞저항 표현용). 직선 화살표는 로컬 +Z가 미는 방향이다.</summary>
+    private static void FlipDirection(ForceArrowBase arrow)
+    {
+        arrow.transform.localRotation *= Quaternion.Euler(0f, 180f, 0f);
+    }
+
+    // ── 비파괴 재사용 ────────────────────────────────────────────────────────
+    // ★씬에서 손으로 맞춰 둔 위치·회전·색은 자산이다. 도구를 다시 돌려도 지우지 않는다.
+    //   이름에 핵심어가 들어간 화살표가 이미 있으면 그걸 쓰고, 없는 것만 새로 만든다.
+
+    private static int created;   // 이번 실행에서 실제로 새로 만든 화살표 수
+
+    /// <summary>리그 안에서 이름에 <paramref name="key"/>가 들어간 화살표를 찾는다.</summary>
+    private static ForceArrowBase Reuse(CranialAdjustmentController rig, string key)
+    {
+        foreach (ForceArrowBase a in rig.GetComponentsInChildren<ForceArrowBase>(true))
+            if (a != null && a.name.IndexOf(key, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return a;
+        return null;
+    }
+
+    /// <summary>새로 만든 화살표에 <b>같은 리그의 기존 색</b>을 물려준다 — 색을 다시 칠하지 않아도 되게.</summary>
+    private static ForceArrowBase Adopt(CranialAdjustmentController rig, ForceArrowBase made)
+    {
+        created++;
+        if (made == null) return null;
+
+        foreach (ForceArrowBase a in rig.GetComponentsInChildren<ForceArrowBase>(true))
+        {
+            if (a == null || a == made) continue;
+            var src = new SerializedObject(a);
+            var dst = new SerializedObject(made);
+            foreach (string f in new[] { "practitionerColor", "patientColor" })
+            {
+                SerializedProperty sp = src.FindProperty(f), dp = dst.FindProperty(f);
+                if (sp != null && dp != null) dp.colorValue = sp.colorValue;
+            }
+            dst.ApplyModifiedProperties();
+            break;   // 첫 번째 기존 화살표의 색이면 충분하다(리그 안에서는 같은 색을 쓴다)
+        }
+        return made;
+    }
+
+    /// <summary>기존 화살표를 그대로 복제한다 — 위치·회전·색·굵기를 전부 물려받는다.</summary>
+    private static ForceArrowBase CloneArrow(ForceArrowBase src, string newName)
+    {
+        if (src == null) return null;
+        var go = Object.Instantiate(src.gameObject, src.transform.parent);
+        go.name = newName;
+        go.transform.localPosition = src.transform.localPosition;
+        go.transform.localRotation = src.transform.localRotation;
+        go.transform.localScale = src.transform.localScale;
+        Undo.RegisterCreatedObjectUndo(go, "맞저항 화살표 만들기");
+        return go.GetComponent<ForceArrowBase>();
+    }
+
+    /// <summary>주체(시술자/환자)를 지정한다 — 색이 자동으로 갈린다.</summary>
+    private static void SetActor(ForceArrowBase arrow, ForceArrowBase.Actor actor)
+    {
+        var so = new SerializedObject(arrow);
+        SerializedProperty p = so.FindProperty("actor");
+        if (p != null) { p.enumValueIndex = (int)actor; so.ApplyModifiedProperties(); }
+    }
+
     private const string PmGroupName = "화살표 그룹 PM 견인";
 
     private static string ScenarioNameOf(CranialAdjustmentController rig)

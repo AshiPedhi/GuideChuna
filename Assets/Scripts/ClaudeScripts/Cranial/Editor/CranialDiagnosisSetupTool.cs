@@ -99,6 +99,8 @@ public class CranialDiagnosisSetupTool : EditorWindow
         {
             if (GUILayout.Button("굴곡·신전 호흡 애니메이터 추가 / 설정"))
                 SetupBreathAnimator();
+            if (GUILayout.Button("굴곡·신전 호흡 애니메이터 제거"))
+                RemoveBreathAnimator();
         }
 
         EditorGUILayout.Space();
@@ -132,6 +134,29 @@ public class CranialDiagnosisSetupTool : EditorWindow
         {
             if (GUILayout.Button("선택한 리그 복제"))
                 DuplicateRig();
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("제2늑골 리그 한 번에 만들기", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "복제 → Rib 진단 파지점 → 교정 파지(좌우 손바닥 1점씩)를 한 번에 실행합니다.\n" +
+            "★진단은 손별 파지점 2개입니다 — 복와위의 포개짐(stack) 방식이 아닙니다. " +
+            "제2늑골은 한 손이 두상골로 늑골을, 반대 손이 환자 팔을 잡아 두 손이 멀리 떨어지기 때문입니다.\n" +
+            "실행 후 씬 뷰에서 파지점 4개의 위치만 맞추면 됩니다.",
+            EditorStyles.wordWrappedMiniLabel);
+        using (new EditorGUI.DisabledScope(rig == null))
+        {
+            if (GUILayout.Button("제2늑골 리그 만들기 (복제 + 진단 + 교정 파지)", GUILayout.Height(26)))
+                BuildRib2Rig();
+            if (GUILayout.Button("제2늑골 호흡 애니메이터 설정 (팔 올리고 내리기)"))
+                SetupRib2BreathAnimator();
+            rib2ArmParent = (Transform)EditorGUILayout.ObjectField(
+                new GUIContent("팔 파지 부모",
+                               "환자 손과 함께 움직이는 기준점(예: 직접 만든 '손 축')을 넣으세요.\n" +
+                               "비우면 이름에 '손'과 '축'이 들어간 오브젝트 → CC_Base_R_Hand 순으로 자동 탐색합니다."),
+                rib2ArmParent, typeof(Transform), true);
+            if (GUILayout.Button("제2늑골 파지점을 손 축(또는 손 본) 밑으로 옮기기"))
+                ReparentRib2ArmGrip();
         }
 
         EditorGUILayout.Space();
@@ -547,6 +572,24 @@ public class CranialDiagnosisSetupTool : EditorWindow
         Selection.activeGameObject = rig.gameObject;
     }
 
+    /// <summary>선택한 리그에서 호흡 애니메이터를 뗀다. 애니가 꼬일 때 원상복구용(Ctrl+Z로도 되돌아온다).</summary>
+    private void RemoveBreathAnimator()
+    {
+        if (rig == null) return;
+
+        var anim = rig.GetComponent<CranialBreathAnimator>();
+        if (anim == null)
+        {
+            status = "이 리그에는 CranialBreathAnimator가 없습니다.";
+            return;
+        }
+
+        Undo.DestroyObjectImmediate(anim);
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(rig.gameObject.scene);
+        status = $"'{rig.gameObject.name}'에서 CranialBreathAnimator를 제거했습니다.\n" +
+                 "환자 애니메이션은 CSV의 patientAnimationClip으로만 재생됩니다(호흡과의 템포 동기화는 없음).";
+    }
+
     /// <summary>환자 모델의 Animator를 찾는다(리그의 patientModelRoot → 태그 Patient → 씬에서 Humanoid Animator).</summary>
     private Animator FindPatientAnimator()
     {
@@ -854,6 +897,220 @@ public class CranialDiagnosisSetupTool : EditorWindow
         status = $"'{wanted}' 리그 복제 완료 ({copy.name}).\n" +
                  "이제 프리셋을 PMPJ로 두고 ①을 실행한 뒤, 파지점 위치를 맞추세요.";
     }
+
+    /// <summary>
+    /// 제2늑골 리그를 한 번에 만든다: 리그 복제 → Rib 프리셋 진단 파지점(①) → 교정 파지(좌우 손바닥).
+    /// ★씬 리그 0개가 제2늑골의 유일한 병목이라 클릭 수를 줄인 것이다(2026-08-13).
+    /// 이미 리그가 있으면 복제를 건너뛰고 나머지만 다시 구성한다.
+    /// </summary>
+    private void BuildRib2Rig()
+    {
+        const string Rib2 = "제2늑골_상방변위";
+
+        // 1) 복제 — 이미 있으면 그 리그를 대상으로 삼는다.
+        CranialAdjustmentController exist = null;
+        foreach (var r in FindRigs())
+            if (r.ScenarioName != null && r.ScenarioName.Trim() == Rib2) { exist = r; break; }
+
+        if (exist != null)
+        {
+            rig = exist;
+        }
+        else
+        {
+            newRigScenarioName = Rib2;
+            DuplicateRig();                                   // 성공하면 rig가 복제본으로 바뀐다
+            if (rig == null || rig.ScenarioName == null || rig.ScenarioName.Trim() != Rib2)
+            {
+                status = "리그 복제에 실패했습니다 — 위 '대상 리그'에서 복제 원본(예: 제1늑골)을 고른 뒤 다시 실행하세요.\n" + status;
+                return;
+            }
+        }
+
+        // 2) 진단 파지점 — 늑골 프리셋(양손으로 좌우 높이 비교, 자세 1개).
+        //    ★손별 파지점 2개다. 복와위처럼 한 점에 두 손을 포개는 방식(stack=)이 아니다.
+        preset = Preset.Rib;
+        Build();
+        string diag = status;
+
+        // 3) 교정 파지 — 좌우 손바닥 1점씩(왼손 두상골로 늑골, 오른손은 환자 팔).
+        SetupRibCorrectionGrips();
+
+        // ★복제하면 원본 리그의 화살표 그룹이 자식으로 따라온다. 제1늑골의 화살표는 stepName이
+        //   '교정·호흡'으로 제2늑골과 같아서 그대로 두면 <b>제1늑골 방향의 화살표가 제2늑골에서 뜬다.</b>
+        var inherited = rig.GetComponentsInChildren<ForceArrowGroup>(true);
+        string arrowNote = inherited.Length == 0
+            ? "  · 화살표 그룹 없음 — 필요하면 메뉴 '힘의 방향 화살표 기본 배치'로 만드세요.\n"
+            : $"  · ★화살표 그룹 {inherited.Length}개가 복제돼 따라왔습니다(원본 리그 것). " +
+              "단계 이름이 겹치면 그대로 뜨므로 제2늑골 방향(늑골 족방 누름 / 팔 외전)으로 " +
+              "위치·회전을 다시 맞추거나, 안 쓸 거면 지우세요.\n";
+
+        status = $"제2늑골 리그 구성 완료 ({rig.gameObject.name}).\n\n" +
+                 "① 진단: " + diag + "\n\n" +
+                 "② 교정: " + status + "\n\n" +
+                 "★남은 일 — 씬 뷰에서 위치 맞추기:\n" +
+                 "  · 진단(양손 엄지) = 좌우 쇄골 바깥, 높이를 비교하는 자리\n" +
+                 "  · 교정 왼손(손바닥/두상골) = 제2늑골 위\n" +
+                 "  · 교정 오른손(손바닥) = 환자 팔(외전시켜 잡는 쪽)\n" +
+                 arrowNote +
+                 "  · 이어서 '제2늑골 호흡 애니메이터 설정' 버튼도 누르세요(팔 올리고 내리기 동기화).";
+    }
+
+    /// <summary>
+    /// 제2늑골 리그의 호흡 애니메이터를 술기에 맞게 설정한다.
+    ///
+    /// ★근거(08-13 클립 실측): `제2늑골 팔 교정`은 <b>팔 올리기</b>(Right Arm Down-Up 0.2→0.9),
+    /// `제2늑골 팔 교정2`는 그 <b>정확한 시간 역순 = 내리기</b>다(나머지 커브는 전부 동일).
+    /// → 두 클립을 번갈아 트는 대신 <b>올리기 하나를 PingPong으로 스크럽</b>하면
+    ///   들숨에 올라가고 날숨에 내려온다. 호흡 길이를 바꿔도 자동으로 맞고, `교정2`는 필요 없어진다.
+    /// </summary>
+    private void SetupRib2BreathAnimator()
+    {
+        if (rig == null) return;
+
+        var anim = rig.GetComponent<CranialBreathAnimator>();
+        if (anim == null) anim = Undo.AddComponent<CranialBreathAnimator>(rig.gameObject);
+
+        var patientAnimator = FindPatientAnimator();
+        var huds = Object.FindObjectsByType<BreathingSyncHUD>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+
+        var so = new SerializedObject(anim);
+        if (patientAnimator != null) so.FindProperty("patientAnimator").objectReferenceValue = patientAnimator;
+        if (huds.Length > 0) so.FindProperty("breathingHUD").objectReferenceValue = huds[0];
+
+        so.FindProperty("stateName").stringValue = "제2늑골 팔 교정";     // 올리기 클립
+        so.FindProperty("syncMode").enumValueIndex = (int)CranialBreathAnimator.SyncMode.PingPong;
+        so.FindProperty("syncDuringBreathingWindow").boolValue = true;
+
+        // ★진단은 쇄골 높이를 촉진하는 단계다 — 팔이 까딱거리면 안 된다.
+        so.FindProperty("loopDuringDiagnosis").boolValue = false;
+
+        // 호흡이 끝나면 '팔 외전' 끝 자세로 고정한다(0으로 두면 팔이 중립에서 다시 올라간다).
+        so.FindProperty("returnStateName").stringValue = "제2늑골 팔 외전";
+        so.FindProperty("returnStateNormalizedTime").floatValue = 1f;
+        so.ApplyModifiedProperties();
+
+        bool hasUp = HasState(patientAnimator, "제2늑골 팔 교정");
+        bool hasBack = HasState(patientAnimator, "제2늑골 팔 외전");
+
+        status =
+            "제2늑골 호흡 애니메이터 설정 완료.\n" +
+            $"  Animator = {(patientAnimator != null ? patientAnimator.name : "못 찾음 — 직접 연결 필요")}\n" +
+            $"  Controller = {(patientAnimator != null && patientAnimator.runtimeAnimatorController != null ? patientAnimator.runtimeAnimatorController.name : "없음")}\n" +
+            $"  State '제2늑골 팔 교정' 존재 = {(hasUp ? "예" : "아니오 ← 제2늑골 컨트롤러가 연결됐는지 확인")}\n" +
+            $"  복귀 State '제2늑골 팔 외전' 존재 = {(hasBack ? "예" : "아니오")}\n\n" +
+            "· 들숨에 팔이 올라가고 날숨에 내려옵니다(PingPong). 호흡 3회 = 3번 왕복.\n" +
+            "· 진단 구간 루프는 껐습니다 — 쇄골을 촉진하는 단계라 팔이 움직이면 안 됩니다.\n" +
+            "· `제2늑골 팔 교정2`(내리기)는 이 방식에서 쓰이지 않습니다.";
+
+        EditorUtility.SetDirty(anim);
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(rig.gameObject.scene);
+        Selection.activeGameObject = rig.gameObject;
+    }
+
+    /// <summary>
+    /// 제2늑골의 <b>팔을 잡는 교정 파지점</b>을 환자 팔 본 아래로 옮긴다(월드 위치 유지).
+    ///
+    /// ★왜 필요한가: 리그는 <c>CC_Base_Spine02</c> 밑에 있어서 그 하위 파지점은 <b>척추를 따라간다.</b>
+    /// 그런데 제2늑골 교정은 환자 팔을 외전시키고(<c>제2늑골 팔 외전</c>) 호흡에 맞춰 올렸다 내린다 →
+    /// 팔 쪽 파지점이 척추에 매달려 있으면 <b>팔만 움직이고 파지점은 제자리에 남는다.</b>
+    /// 늑골(두상골) 쪽 파지점은 흉곽 기준이라 지금 부모가 맞다 — 옮기지 않는다.
+    /// </summary>
+    private void ReparentRib2ArmGrip()
+    {
+        if (rig == null) return;
+
+        // ★잡는 곳은 팔이 아니라 <b>손</b>이다(사용자 확인) → 손과 함께 움직이는 기준점이 부모여야 한다.
+        //   기존 `팔축`(전완)·`팔축상완`은 각도 판정용 pivot이라 손 파지 위치와 맞지 않는다.
+        // 지정이 있으면 그것을 쓰고(사용자가 만든 '손 축'), 없으면 이름 → 본 순으로 찾는다.
+        Transform bone = rib2ArmParent
+                         ?? FindHandAxis()
+                         ?? FindPatientBone("CC_Base_R_Hand")
+                         ?? FindPatientBone("CC_Base_R_Forearm")
+                         ?? FindPatientBone("CC_Base_R_Upperarm");
+        if (bone == null)
+        {
+            status = "부모로 쓸 기준점을 찾지 못했습니다.\n" +
+                     "위 '팔 파지 부모' 칸에 손 축 오브젝트를 직접 넣고 다시 실행하세요.";
+            return;
+        }
+
+        var so = new SerializedObject(rig);
+        var arr = so.FindProperty("rightGrips");     // 오른손 = 환자 팔을 잡는 손(CSV 2.4)
+        if (arr == null || !arr.isArray || arr.arraySize == 0)
+        {
+            status = "이 리그의 교정 파지점(rightGrips)이 비어 있습니다.\n" +
+                     "먼저 '제2늑골·흉추 교정 파지 구성'으로 파지점을 만드세요.";
+            return;
+        }
+
+        var moved = new List<string>();
+        for (int i = 0; i < arr.arraySize; i++)
+        {
+            var grip = arr.GetArrayElementAtIndex(i).objectReferenceValue as GripPointTarget;
+            if (grip == null) continue;
+            if (grip.transform.IsChildOf(bone)) { moved.Add($"{grip.name} (이미 팔 본 밑)"); continue; }
+
+            Undo.SetTransformParent(grip.transform, bone, "제2늑골 팔 파지점 재부모화");
+            moved.Add($"{grip.name} → {bone.name}");
+        }
+
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(rig.gameObject.scene);
+        status = $"제2늑골 파지점을 '{bone.name}' 밑으로 옮겼습니다 (월드 위치는 그대로 유지).\n  " +
+                 string.Join("\n  ", moved) +
+                 "\n\n· 늑골(두상골) 쪽 파지점은 흉곽 기준이라 옮기지 않았습니다.\n" +
+                 "· 팔 외전 자세에서 위치가 맞는지 확인하세요 — 중립 자세 기준으로 맞춰 두면 외전 후 어긋납니다.\n" +
+                 "  (Animation 창에서 '제2늑골 팔 외전'을 끝 프레임으로 놓고 맞추는 게 정확합니다.)";
+    }
+
+    private Transform rib2ArmParent;
+
+    /// <summary>사용자가 환자 손에 만들어 둔 기준점 <c>손 축</c>(띄어쓰기 포함)을 찾는다.
+    /// 정확히 그 이름이 1순위이고, 없으면 '손'과 '축'이 모두 든 이름을 받아 준다(오타·접미사 대비).
+    /// ★느슨한 매칭에서 후보가 여럿이면 계층이 깊은 것을 고른다 — 전완의 <c>팔축</c>과 헷갈리지 않게.</summary>
+    private static Transform FindHandAxis()
+    {
+        Transform exact = null, loose = null;
+        int looseDepth = -1;
+
+        foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            if (EditorUtility.IsPersistent(t)) continue;
+            string n = t.name.Trim();
+
+            if (n == "손 축") { if (exact == null) exact = t; continue; }
+            if (n.IndexOf('손') < 0 || n.IndexOf('축') < 0) continue;
+
+            int depth = 0;
+            for (Transform p = t; p != null; p = p.parent) depth++;
+            if (depth > looseDepth) { looseDepth = depth; loose = t; }
+        }
+        return exact != null ? exact : loose;
+    }
+
+    /// <summary>환자 계층에서 이름으로 본을 찾는다(비활성 포함).</summary>
+    private Transform FindPatientBone(string boneName)
+    {
+        var so = new SerializedObject(rig);
+        var rootProp = so.FindProperty("patientModelRoot");
+        Transform root = rootProp != null ? rootProp.objectReferenceValue as Transform : null;
+
+        if (root != null)
+        {
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == boneName) return t;
+        }
+
+        // 리그가 환자 뼈 계층 안에 있으므로 위로 올라가며 찾아도 된다.
+        foreach (var t in Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            if (t.name == boneName) return t;
+
+        return null;
+    }
+
+    private static bool HasState(Animator anim, string stateName)
+        => anim != null && anim.runtimeAnimatorController != null &&
+           anim.HasState(0, Animator.StringToHash(stateName));
 
     private void DeleteGroup()
     {

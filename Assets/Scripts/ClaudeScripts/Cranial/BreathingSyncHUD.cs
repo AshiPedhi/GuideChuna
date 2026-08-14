@@ -267,6 +267,9 @@ public class BreathingSyncHUD : MonoBehaviour
             {
                 // 날숨부터 시작하는 술기(PJ)에선 '들숨 끝'이 한 주기의 끝이다.
                 if (startWithExhale) CloseBreathCycle();
+                // ★요구 횟수를 다 채웠으면 여기서 멈춘다 — 위상을 넘기면 링이 다시 돌아
+                //   "다 뱉었는데 또 마시라고 한다"가 된다(2026-08-12).
+                if (complete) { phaseTimer = CurrentInhaleDuration; return; }
                 inhaling = false;
                 phaseTimer = 0f;
                 if (running) PlayBreathClip(false);   // 날숨 위상 진입(완료 시엔 재생 안 함)
@@ -279,6 +282,9 @@ public class BreathingSyncHUD : MonoBehaviour
             if (phaseTimer >= CurrentExhaleDuration)
             {
                 if (!startWithExhale) CloseBreathCycle();
+                // ★다 뱉었으면 날숨 끝에서 멈춘다. 늦게 눌러도 되도록 재촉하지 않는다 —
+                //   타이밍 맞추기 게임이 아니다(사용자 지시).
+                if (complete) { phaseTimer = CurrentExhaleDuration; return; }
                 inhaling = true;
                 phaseTimer = 0f;
                 if (running) PlayBreathClip(true);   // 다음 들숨 위상 진입(완료 시엔 재생 안 함)
