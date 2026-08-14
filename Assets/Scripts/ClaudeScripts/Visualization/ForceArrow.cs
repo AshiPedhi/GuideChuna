@@ -24,6 +24,24 @@ using UnityEngine;
 /// </summary>
 public class ForceArrow : ForceArrowBase
 {
+    /// <summary>어떻게 보여줄지. 조각 수로 자동 판별하던 것을 <b>강제로 지정</b>할 수 있게 한 것.</summary>
+    public enum DisplayMode
+    {
+        /// <summary>조각이 2개 이상이면 흐름, 1개면 통짜 왕복(예전 동작).</summary>
+        자동,
+        /// <summary>진행 위치 1~2칸만 빛나며 지나간다(점이 흐르는 형태).</summary>
+        흐름,
+        /// <summary>★<b>화살표 전체를 항상 켜 둔 채</b> 통째로 미는 방향으로 크게 왕복한다.</summary>
+        통짜왕복
+    }
+
+    [Header("=== 표시 방식 ===")]
+    [Tooltip("★기본 = 통짜 왕복(2026-08-14 사용자 요구: \"점선 이동 말고 전체 화살표가 크게 움직이면서 방향을 보여주는 게 좋겠다\").\n" +
+             "흐름 모드는 진행 위치의 1~2칸만 켜고 <b>나머지 조각의 렌더러를 꺼 버리기 때문에</b> " +
+             "화살표 대부분이 항상 안 보인다 — 이게 \"눈에 잘 안 보인다\"의 원인이었다.\n" +
+             "자동 = 예전 동작(조각 2개 이상이면 흐름).")]
+    [SerializeField] private DisplayMode displayMode = DisplayMode.통짜왕복;
+
     [Header("=== 조각 (비우면 자식에서 자동 수집, +Z 순으로 정렬) ===")]
     [Tooltip("배열 순서 = 진행 순서(꼬리 → 머리). 마지막이 화살촉.")]
     [SerializeField] private Renderer[] segments;
@@ -46,8 +64,9 @@ public class ForceArrow : ForceArrowBase
     [Tooltip("★화살표가 늘었다 줄었다 하면 '힘이 세졌다 약해진다'로 읽힌다 → 길이는 두고 " +
              "미는 방향으로 앞뒤로 왕복시킨다(08-11 사용자 지시).\n" +
              "화살표 길이 대비 이동 폭. 0이면 제자리(예전 방식 = 길이 펄스).\n" +
-             "★신규 필드라 이미 배치된 화살표에도 코드 기본값이 먹는다.")]
-    [SerializeField, Range(0f, 1f)] private float travelPulse = 0.35f;
+             "★이 값은 씬에 이미 직렬화돼 있어 코드 기본값이 안 먹는다 — 일괄로 키우려면 " +
+             "메뉴 `GuideChuna/화살표 그룹 점검 · 이름 정리`의 <b>가시성 프리셋</b> 버튼을 쓸 것.")]
+    [SerializeField, Range(0f, 2f)] private float travelPulse = 0.6f;
 
     [Header("=== 공통 ===")]
     [SerializeField, Range(0f, 1f)] private float minAlpha = 0.25f;
@@ -58,7 +77,9 @@ public class ForceArrow : ForceArrowBase
     private float phase;
     private bool initialized;
 
-    private bool FlowMode => segments != null && segments.Length > 1;
+    private bool FlowMode =>
+        displayMode == DisplayMode.흐름 ||
+        (displayMode == DisplayMode.자동 && segments != null && segments.Length > 1);
 
     private void Awake() => Initialize();
 
@@ -67,8 +88,9 @@ public class ForceArrow : ForceArrowBase
         if (initialized) return;
         initialized = true;
 
-        baseScale = transform.localScale;
+        baseScale = ScaledBase(transform.localScale);
         basePos = transform.localPosition;
+        transform.localScale = baseScale;
 
         if (segments == null || segments.Length == 0)
         {
@@ -79,7 +101,7 @@ public class ForceArrow : ForceArrowBase
         }
 
         foreach (Renderer r in segments)
-            EnsureTransparentMaterial(r);
+            EnsureMaterialMode(r);
     }
 
     private void OnEnable()
@@ -115,9 +137,15 @@ public class ForceArrow : ForceArrowBase
         if (phase > 1f) phase -= 1f;
         float wave = (Mathf.Sin(phase * 2f * Mathf.PI) + 1f) * 0.5f;
 
-        Color c = BaseColor;
-        c.a = Mathf.Lerp(minAlpha, maxAlpha, wave);
-        foreach (Renderer r in segments) SetRendererColor(r, c);
+        // ★조각을 전부 켠다 — 흐름 모드로 돌다가 이 모드로 바뀌면 렌더러가 꺼진 채 남아 있다
+        //   (흐름은 안 빛나는 칸의 renderer.enabled를 false로 둔다).
+        Color c = Shade(BaseColor, Mathf.Lerp(minAlpha, maxAlpha, wave));
+        foreach (Renderer r in segments)
+        {
+            if (r == null) continue;
+            if (!r.enabled) r.enabled = true;
+            SetRendererColor(r, c);
+        }
 
         if (travelPulse > 0f)
         {

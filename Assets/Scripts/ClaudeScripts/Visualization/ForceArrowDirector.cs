@@ -27,6 +27,12 @@ public class ForceArrowDirector : MonoBehaviour
     private readonly HashSet<ForceArrowBase> owned = new HashSet<ForceArrowBase>();
     /// <summary>이번 substep에 각 화살표를 켤지 — 공유 화살표 때문에 모아서 한 번에 적용한다.</summary>
     private readonly Dictionary<ForceArrowBase, bool> want = new Dictionary<ForceArrowBase, bool>();
+
+    /// <summary>타겟 부위 하이라이트 — 화살표와 <b>같은 타이밍</b>에 켜고 끈다.
+    /// ★별도 관리자를 만들지 않은 이유: 이 Director는 이미 씬에 배선돼 있고 substep마다 호출된다.
+    /// 새 컴포넌트를 위해 씬 배선을 하나 더 요구하면 빠뜨리기 쉽다(단계 완료음이 fileID 0으로
+    /// 방치돼 한 번도 안 울렸던 전례).</summary>
+    private readonly List<TargetAreaHighlight> highlights = new List<TargetAreaHighlight>();
     private bool collected;
 
     private void Awake()
@@ -78,6 +84,14 @@ public class ForceArrowDirector : MonoBehaviour
             loose.Add(a);
         }
 
+        // 타겟 부위 하이라이트 — 화살표와 같은 방식으로 비활성 포함 수집한다(리그가 꺼져 있을 수 있다).
+        highlights.Clear();
+        foreach (TargetAreaHighlight h in Resources.FindObjectsOfTypeAll<TargetAreaHighlight>())
+        {
+            if (h == null || !h.gameObject.scene.IsValid()) continue;
+            highlights.Add(h);
+        }
+
         // ★한 번만 찍는 배선 요약 — debugLog와 무관하게 남긴다.
         //   "화살표가 왜 저 시나리오에서 뜨냐"를 로그만 보고 판별할 수 있어야 한다(08-12).
         var sb = new System.Text.StringBuilder();
@@ -86,6 +100,12 @@ public class ForceArrowDirector : MonoBehaviour
             if (g != null) sb.Append($"\n   [그룹] {g.name} → {g.DescribeMatch()} (화살표 {g.Arrows.Length}개)");
         foreach (ForceArrowBase a in loose)
             if (a != null) sb.Append($"\n   [단독] {a.name} → {a.DescribeMatch()}");
+        if (highlights.Count > 0)
+        {
+            sb.Append($"\n   부위 하이라이트 {highlights.Count}개");
+            foreach (TargetAreaHighlight h in highlights)
+                if (h != null) sb.Append($"\n   [하이라이트] {h.name} → {h.DescribeMatch()}");
+        }
         ChunaLogger.Log(sb.ToString());
     }
 
@@ -130,6 +150,15 @@ public class ForceArrowDirector : MonoBehaviour
             if (kv.Key != null && kv.Key.gameObject.activeSelf != kv.Value)
                 kv.Key.gameObject.SetActive(kv.Value);
 
+        // 타겟 부위 하이라이트도 같은 시점에 갱신한다(공유되지 않으므로 바로 적용).
+        foreach (TargetAreaHighlight h in highlights)
+        {
+            if (h == null) continue;
+            bool on = h.Matches(scenarioName, phaseName, stepName, subStepNo);
+            if (h.gameObject.activeSelf != on) h.gameObject.SetActive(on);
+            if (on) shown++;
+        }
+
         if (debugLog && shown > 0)
             ChunaLogger.Log($"[ForceArrowDirector] {scenarioName} {phaseName}/{stepName}.{subStepNo} → 매칭 {shown}개");
     }
@@ -142,5 +171,7 @@ public class ForceArrowDirector : MonoBehaviour
             if (g != null) g.SetShown(false);
         foreach (ForceArrowBase a in loose)
             if (a != null && a.gameObject.activeSelf) a.gameObject.SetActive(false);
+        foreach (TargetAreaHighlight h in highlights)
+            if (h != null && h.gameObject.activeSelf) h.gameObject.SetActive(false);
     }
 }

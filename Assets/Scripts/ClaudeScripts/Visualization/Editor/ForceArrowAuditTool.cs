@@ -17,6 +17,10 @@ public class ForceArrowAuditTool : EditorWindow
     private Vector2 scroll;
     private string report = "";
 
+    private float presetSize = 1.6f;
+    private float presetTravel = 0.6f;
+    private float presetMinBright = 0.45f;
+
     [MenuItem("GuideChuna/화살표 그룹 점검 · 이름 정리")]
     public static void Open()
     {
@@ -71,6 +75,18 @@ public class ForceArrowAuditTool : EditorWindow
             }
         }
 
+        // 타겟 부위 하이라이트도 같은 Director가 켜고 끄므로 여기서 같이 보여 준다.
+        var hls = new List<TargetAreaHighlight>();
+        foreach (var h in Resources.FindObjectsOfTypeAll<TargetAreaHighlight>())
+        {
+            if (h == null || EditorUtility.IsPersistent(h)) continue;
+            if (!h.gameObject.scene.IsValid()) continue;
+            hls.Add(h);
+        }
+        sb.AppendLine($"\n\n■ 타겟 부위 하이라이트 {hls.Count}개");
+        foreach (var h in hls)
+            sb.AppendLine($"   · {h.gameObject.name}\n       {h.DescribeMatch()}");
+
         report = sb.ToString();
         Debug.Log("[화살표 그룹 점검]\n" + report);
     }
@@ -111,6 +127,30 @@ public class ForceArrowAuditTool : EditorWindow
             EditorStyles.wordWrappedMiniLabel);
         if (GUILayout.Button("제2늑골 화살표 구성", GUILayout.Height(24)))
             ConfigureRib2();
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("가시성 (2026-08-14 사용자 요구)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "\"점선 이동 말고 전체 화살표가 크게 움직이면서 방향을 보여주는 게 좋겠다\" + " +
+            "\"어느 면은 투명하게 보인다\"에 대한 일괄 적용입니다.\n" +
+            "  · 표시 방식 → 통짜 왕복 (전체를 켜 두고 통째로 왕복)\n" +
+            "  · 재질 → 불투명 (면이 서로 비쳐 보이는 현상·빌드 배리언트 문제 제거)\n" +
+            "  · 왕복 폭·밝기 → 아래 값으로\n" +
+            "★크기·표시방식은 신규 필드라 코드 기본값이 이미 먹지만, 왕복 폭·밝기는 씬에 저장돼 있어 " +
+            "이 버튼으로만 바뀝니다.",
+            EditorStyles.wordWrappedMiniLabel);
+
+        presetSize = EditorGUILayout.Slider("크기 배율", presetSize, 0.5f, 3f);
+        presetTravel = EditorGUILayout.Slider("왕복 폭(길이 대비)", presetTravel, 0f, 2f);
+        presetMinBright = EditorGUILayout.Slider("최저 밝기", presetMinBright, 0f, 1f);
+
+        GUI.backgroundColor = new Color(0.75f, 1f, 0.8f);
+        if (GUILayout.Button("가시성 프리셋 일괄 적용 (직선 + 호 전부)", GUILayout.Height(26)))
+            ApplyVisibilityPreset();
+        GUI.backgroundColor = Color.white;
+
+        if (GUILayout.Button("되돌리기 — 예전 방식(흐름 + 반투명)으로", GUILayout.Height(20)))
+            ApplyLegacyPreset();
 
         scroll = EditorGUILayout.BeginScrollView(scroll);
         EditorGUILayout.TextArea(report, GUILayout.ExpandHeight(true));
@@ -175,6 +215,72 @@ public class ForceArrowAuditTool : EditorWindow
                  "늑골 압박용 화살표를 따로 두시려면 그 그룹만 subStep 2로 바꾸세요.\n\n" + report;
         Debug.Log("[화살표 그룹] " + report);
         Scan();
+    }
+
+    /// <summary>씬의 모든 화살표(직선·호)를 비활성 포함 수집한다.</summary>
+    private static List<ForceArrowBase> FindAllArrows()
+    {
+        var list = new List<ForceArrowBase>();
+        foreach (var a in Resources.FindObjectsOfTypeAll<ForceArrowBase>())
+        {
+            if (a == null || EditorUtility.IsPersistent(a)) continue;
+            if (!a.gameObject.scene.IsValid()) continue;
+            list.Add(a);
+        }
+        return list;
+    }
+
+    /// <summary>가시성 프리셋 — 통짜 왕복 + 불투명 + 큰 왕복 폭.</summary>
+    private void ApplyVisibilityPreset() => ApplyPreset(false);
+
+    /// <summary>예전 방식으로 되돌린다(흐름 + 반투명). 마음에 안 들 때의 탈출구.</summary>
+    private void ApplyLegacyPreset() => ApplyPreset(true);
+
+    private void ApplyPreset(bool legacy)
+    {
+        var arrows = FindAllArrows();
+        int n = 0;
+
+        foreach (var a in arrows)
+        {
+            Undo.RecordObject(a, "화살표 가시성 프리셋");
+            var so = new SerializedObject(a);
+
+            Set(so, "useTransparency", p => p.boolValue = legacy);
+            Set(so, "sizeMultiplier", p => p.floatValue = legacy ? 1f : presetSize);
+
+            // 직선 화살표만 갖는 값들 — 호(ForceArcArrow)에는 없다.
+            Set(so, "displayMode", p => p.enumValueIndex = legacy
+                ? (int)ForceArrow.DisplayMode.자동
+                : (int)ForceArrow.DisplayMode.통짜왕복);
+            Set(so, "travelPulse", p => p.floatValue = legacy ? 0.35f : presetTravel);
+            Set(so, "pulsePerSecond", p => p.floatValue = legacy ? 0.8f : 0.9f);
+
+            Set(so, "minAlpha", p => p.floatValue = legacy ? 0.25f : presetMinBright);
+            Set(so, "maxAlpha", p => p.floatValue = legacy ? 0.95f : 1f);
+
+            so.ApplyModifiedProperties();
+            EditorUtility.SetDirty(a);
+            n++;
+        }
+
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+        report = legacy
+            ? $"예전 방식으로 되돌렸습니다 — 화살표 {n}개 (흐름 + 반투명 + 원래 크기)\n\n" + report
+            : $"가시성 프리셋 적용 — 화살표 {n}개\n" +
+              $"  통짜 왕복 / 불투명 / 크기 ×{presetSize:0.0} / 왕복 폭 {presetTravel:0.00} / 최저 밝기 {presetMinBright:0.00}\n" +
+              "  ★씬을 저장해야 유지됩니다.\n\n" + report;
+        Debug.Log("[화살표 가시성] " + report);
+        Scan();
+    }
+
+    /// <summary>그 컴포넌트에 없는 필드는 조용히 건너뛴다(직선/호가 필드 구성이 다르다).</summary>
+    private static void Set(SerializedObject so, string field, System.Action<SerializedProperty> apply)
+    {
+        var p = so.FindProperty(field);
+        if (p != null) apply(p);
     }
 
     /// <summary>그룹에 든 화살표 이름을 모두 이어 붙인다(용도 판별용).</summary>

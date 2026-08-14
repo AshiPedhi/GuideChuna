@@ -97,6 +97,40 @@ public abstract class ForceArrowBase : MonoBehaviour
 
     protected Color BaseColor => actor == Actor.Patient ? patientColor : practitionerColor;
 
+    [Header("=== 재질 · 크기 ===")]
+    [Tooltip("★기본 = 불투명. 반투명(Standard Fade)은 ZWrite를 끄기 때문에 <b>같은 메시의 앞면과 뒷면이 서로 비쳐</b> " +
+             "보는 각도에 따라 어떤 면은 뚫려 보이고 어떤 면은 겹쳐서 진해진다(2026-08-14 사용자 보고: " +
+             "\"묘하게 어느 면은 투명하게 보인다\"). 불투명이면 그 현상도, 08-13에 겪은 " +
+             "<b>빌드 반투명 배리언트 스트립</b>도 같이 사라진다.\n" +
+             "★불투명에서는 알파가 무시되므로 밝기(RGB)로 흐름·펄스를 표현한다 — 아래 min/max는 그대로 쓰인다.\n" +
+             "켜면 예전처럼 반투명으로 그린다. 겹쳐 보여야만 하는 배치에서만 쓸 것.")]
+    [SerializeField] protected bool useTransparency = false;
+
+    [Tooltip("화살표 크기 배율. 씬에 직렬화된 localScale은 그대로 두고 <b>실행 시에만</b> 곱한다.\n" +
+             "★크기는 씬 인스턴스마다 따로 저장돼 있어(직선 8 · 호 6개) 코드 기본값으로 일괄 조정할 방법이 이것뿐이다.\n" +
+             "1 = 원래 크기. 되돌리려면 1로 두면 된다.")]
+    [SerializeField, Range(0.2f, 4f)] protected float sizeMultiplier = 1.6f;
+
+    /// <summary>씬에 저장된 크기에 배율을 먹인 값. 각 화살표가 기준 크기를 잡을 때 쓴다.</summary>
+    protected Vector3 ScaledBase(Vector3 sceneScale) => sceneScale * Mathf.Max(0.05f, sizeMultiplier);
+
+    /// <summary>
+    /// 밝기와 투명도를 한 값(0~1)으로 다룬다.
+    /// ★불투명 모드에서는 알파가 통째로 무시되므로 <b>RGB를 어둡게</b> 해서 같은 인상을 만든다.
+    /// 이렇게 해 두면 흐름·펄스 코드가 두 모드에서 그대로 동작한다.
+    /// </summary>
+    protected Color Shade(Color c, float t01)
+    {
+        if (useTransparency)
+        {
+            c.a = t01;
+            return c;
+        }
+
+        float k = Mathf.Lerp(0.25f, 1f, Mathf.Clamp01(t01));
+        return new Color(c.r * k, c.g * k, c.b * k, 1f);
+    }
+
     /// <summary>인스펙터에 뭐라고 적혔는지 — 점검 도구 출력용.</summary>
     public string DescribeMatch() =>
         $"[{(string.IsNullOrWhiteSpace(ResolvedScenario) ? "모든 시나리오" : ResolvedScenario)}] " +
@@ -235,36 +269,51 @@ public abstract class ForceArrowBase : MonoBehaviour
             //   하나만 1~2칸 점등이 되고 나머지는 멀쩡한 호 위에 러너만 움직였다).
             //   머티리얼이 Fade가 아니거나 셰이더가 알파를 무시하면 알파는 통째로 버려지기 때문 →
             //   <b>렌더러 자체를 껐다 켠다.</b> 그러면 머티리얼 상태와 무관하게 항상 같은 모양이 된다.
+            //   (불투명 모드에서는 이게 유일한 숨김 수단이기도 하다.)
             bool visible = a > 0.02f;
             if (segments[i] != null && segments[i].enabled != visible) segments[i].enabled = visible;
             if (!visible) continue;
 
-            Color c = baseColor;
-            c.a = a;
-            SetRendererColor(segments[i], c);
+            SetRendererColor(segments[i], Shade(baseColor, a));
         }
     }
 
     /// <summary>
-    /// 머티리얼을 반투명(Standard - Fade)으로 만든다.
-    /// ★불투명 머티리얼이면 알파가 통째로 무시된다(파지점 구체에서 겪은 것과 같은 함정).
+    /// 머티리얼을 <see cref="useTransparency"/>에 맞춰 불투명 / 반투명(Standard - Fade)으로 맞춘다.
     /// 공유 머티리얼을 건드리지 않도록 인스턴스에만 적용한다.
+    ///
+    /// ★기본이 <b>불투명</b>인 이유(2026-08-14): 반투명은 ZWrite를 꺼야 해서 같은 메시의 앞뒤 면이
+    /// 서로 비쳐 보인다. 화살촉처럼 두께가 있는 입체에서 "어느 면은 투명하게 보인다"로 나타난다.
+    /// 게다가 빌드에 Fade 머티리얼이 없으면 <c>_ALPHABLEND_ON</c> 배리언트가 스트립돼 빌드에서만 깨진다.
     /// </summary>
-    protected static void EnsureTransparentMaterial(Renderer r)
+    protected void EnsureMaterialMode(Renderer r)
     {
         if (r == null) return;
         Material m = r.material;   // 인스턴스 생성(공유 머티리얼 보호)
         if (m == null || m.shader == null) return;
         if (!m.HasProperty("_Mode")) return;   // Standard 계열이 아니면 건드리지 않는다
 
-        m.SetFloat("_Mode", 3f);               // Fade
-        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        m.SetInt("_ZWrite", 0);
+        if (useTransparency)
+        {
+            m.SetFloat("_Mode", 3f);               // Fade
+            m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            m.SetInt("_ZWrite", 0);
+            m.DisableKeyword("_ALPHATEST_ON");
+            m.EnableKeyword("_ALPHABLEND_ON");
+            m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            m.renderQueue = 3000;
+            return;
+        }
+
+        m.SetFloat("_Mode", 0f);                   // Opaque
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+        m.SetInt("_ZWrite", 1);
         m.DisableKeyword("_ALPHATEST_ON");
-        m.EnableKeyword("_ALPHABLEND_ON");
+        m.DisableKeyword("_ALPHABLEND_ON");
         m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        m.renderQueue = 3000;
+        m.renderQueue = -1;                        // 셰이더 기본(Geometry)으로 되돌린다
     }
 
     protected static void SetRendererColor(Renderer r, Color c)

@@ -73,8 +73,11 @@ public class ForceArcArrow : ForceArrowBase
         }
 
         foreach (Renderer r in segments)
-            EnsureTransparentMaterial(r);
-        EnsureTransparentMaterial(runnerRenderer);
+            EnsureMaterialMode(r);
+        EnsureMaterialMode(runnerRenderer);
+
+        // 크기 배율 — 호는 루트 스케일이 반지름까지 같이 키운다(러너는 로컬 좌표라 자동으로 따라간다).
+        transform.localScale = ScaledBase(transform.localScale);
     }
 
     private void OnEnable()
@@ -125,8 +128,6 @@ public class ForceArcArrow : ForceArrowBase
         if (runnerRenderer.enabled != visible) runnerRenderer.enabled = visible;
         if (!visible) return;
 
-        Color c = BaseColor;
-        c.a = Mathf.Lerp(0f, maxAlpha, a);
-        SetRendererColor(runnerRenderer, c);
+        SetRendererColor(runnerRenderer, Shade(BaseColor, Mathf.Lerp(0f, maxAlpha, a)));
     }
 }
