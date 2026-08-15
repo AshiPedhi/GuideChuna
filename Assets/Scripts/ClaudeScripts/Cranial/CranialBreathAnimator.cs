@@ -167,7 +167,7 @@ public class CranialBreathAnimator : MonoBehaviour
     private BreathingSyncHUD ResolveHud()
     {
         if (breathingHUD != null) return breathingHUD;
-        breathingHUD = FindObjectOfType<BreathingSyncHUD>(true);
+        breathingHUD = FindFirstObjectByType<BreathingSyncHUD>(FindObjectsInactive.Include);
         return breathingHUD;
     }
 

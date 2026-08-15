@@ -160,23 +160,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private float metricsRecordInterval = 0.1f;
 
     [Header("=== 홀드 감지 (다음 단계 진행 조건) ===")]
-    [Tooltip("홀드 감지 활성화")]
-    [SerializeField] private bool enableHoldDetection = true;
-
-    [Tooltip("다음 단계로 넘어가기 위해 유지해야 하는 시간 (초)")]
-    [SerializeField] private float requiredHoldTime = 2f;
-
+    // 홀드 시간은 CSV 토큰 startHold= 와 config의 startHoldDuration·midHoldDuration이 정한다.
+    // 예전 enableHoldDetection·requiredHoldTime 노브는 EvaluationPhaseManager로 로직이 옮겨가며 아무도 안 읽게 돼 제거했다.
     [Tooltip("정지 판정 속도 임계값 (m/s) - 이 속도 이하면 정지로 판정")]
     [SerializeField] private float holdVelocityThreshold = 0.05f;
 
     [Tooltip("MidHold 중 적정범위 안에서 이 속도 이상으로 진행도가 변하면 홀드 타이머 일시정지 (ratio/s) - 훑고 지나가기 방지")]
     [SerializeField] private float pauseProgressVelocity = 0.1f;
 
-    [Tooltip("홀드 위치 (리밋 범위 내에 있어야 함)")]
-    [SerializeField] private bool requireLimitSafeForHold = true;
-
-    [Tooltip("시작 위치 근처에서만 평가 시작")]
-    [SerializeField] private bool requireNearStartToBegin = true;
+    // requireLimitSafeForHold·requireNearStartToBegin도 같은 이유로 제거했다(참조 0개, 켜도 안 걸렸다).
 
     [Header("=== 상대 이동 감지 설정 ===")]
     [Tooltip("상대 이동 모드 사용 (시작 홀드 위치 기준으로 진행률 계산)")]
@@ -351,11 +343,8 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     // 새로운 평가 흐름 상태
     private EvaluationPhase currentPhase = EvaluationPhase.Idle;
-    private float phaseHoldTime = 0f;
     private Vector3 leftHandStartHoldPosition;  // 시작 홀드 시 왼손 위치 저장
-
-    // 50% 초과 경고 상태
-    private bool isOverLimitBarrier = false;
+    // phaseHoldTime·isOverLimitBarrier는 EvaluationPhaseManager가 자기 사본으로 관리한다(여기 것은 아무도 안 읽어 제거).
 
     // 충돌 감지 상태
     private bool isLeftHandTouchingPatient = false;
@@ -2552,9 +2541,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         Vector3 initRightPos = playerRightHand != null ? playerRightHand.transform.position : Vector3.zero;
         phaseManager.Initialize(initLeftPos, initRightPos);
         currentPhase = EvaluationPhase.WaitingForStart;
-        phaseHoldTime = 0f;
         leftHandStartHoldPosition = Vector3.zero;
-        isOverLimitBarrier = false;  // 50% 초과 경고 상태 초기화
         isometricHoldEntryTime = -1f; // 등척성 홀드 완수도 계산용 리셋
 
         // ★ 충돌 감지 플래그 리셋 (이전 SubStep에서 남아있을 수 있음)

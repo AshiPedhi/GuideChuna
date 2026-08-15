@@ -998,7 +998,7 @@ public class CranialAdjustmentController : MonoBehaviour
         if (cachedGuideUI != null) return cachedGuideUI;
         if (guideUISearched) return null;
         guideUISearched = true;
-        cachedGuideUI = FindObjectOfType<ScenarioGuideUIController>(true);
+        cachedGuideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
         return cachedGuideUI;
     }
 

@@ -784,15 +784,12 @@ public class PracticeSettingsController : MonoBehaviour
                 }
 
                 // 알파값 적용 - 다양한 셰이더의 컬러/알파 프로퍼티 지원
-                bool alphaApplied = false;
-
                 // 1. _Color (Standard Shader, Unity Built-in)
                 if (mat.HasProperty("_Color"))
                 {
                     Color mainColor = mat.GetColor("_Color");
                     mainColor.a = targetAlpha;
                     mat.SetColor("_Color", mainColor);
-                    alphaApplied = true;
                 }
 
                 // 2. _BaseColor (URP/HDRP Lit Shader)
@@ -801,7 +798,6 @@ public class PracticeSettingsController : MonoBehaviour
                     Color baseColor = mat.GetColor("_BaseColor");
                     baseColor.a = targetAlpha;
                     mat.SetColor("_BaseColor", baseColor);
-                    alphaApplied = true;
                 }
 
                 // 3. _MainColor (일부 커스텀 셰이더)
@@ -810,7 +806,6 @@ public class PracticeSettingsController : MonoBehaviour
                     Color mainColor = mat.GetColor("_MainColor");
                     mainColor.a = targetAlpha;
                     mat.SetColor("_MainColor", mainColor);
-                    alphaApplied = true;
                 }
 
                 // 4. _DiffuseColor (Reallusion 셰이더)
@@ -819,21 +814,18 @@ public class PracticeSettingsController : MonoBehaviour
                     Color diffuseColor = mat.GetColor("_DiffuseColor");
                     diffuseColor.a = targetAlpha;
                     mat.SetColor("_DiffuseColor", diffuseColor);
-                    alphaApplied = true;
                 }
 
                 // 5. _Opacity (Reallusion 셰이더 - float 타입)
                 if (mat.HasProperty("_Opacity"))
                 {
                     mat.SetFloat("_Opacity", targetAlpha);
-                    alphaApplied = true;
                 }
 
                 // 6. _Alpha (일부 커스텀 셰이더 - float 타입)
                 if (mat.HasProperty("_Alpha"))
                 {
                     mat.SetFloat("_Alpha", targetAlpha);
-                    alphaApplied = true;
                 }
 
                 // 7. _AlphaClip (알파 클리핑 임계값 - 0으로 설정하여 투명도 활성화)
