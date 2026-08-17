@@ -1189,7 +1189,8 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         return conditionType.Equals("cranialTouch", System.StringComparison.OrdinalIgnoreCase) ||
                conditionType.Equals("cranialGrip", System.StringComparison.OrdinalIgnoreCase) ||
                conditionType.Equals("cranialPressure", System.StringComparison.OrdinalIgnoreCase) ||
-               conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase);
+               conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase) ||
+               conditionType.Equals("cranialGlide", System.StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -1351,6 +1352,15 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
                                                    dStack, dFinger);
             label = dStack > 0f ? $"Touch(양손 {dFinger} 포개짐 {dStack * 100f:F0}cm)"
                                 : "Touch(⓪ 진단 자세 유지)";
+        }
+        else if (conditionType.Equals("cranialGlide", System.StringComparison.OrdinalIgnoreCase))
+        {
+            // ★척추를 손가락으로 두방→족방 한 번 쓸어내리는 촉지 진단(2026-08-18 사용자 요구).
+            //   판정은 전부 SpineGlideGuide가 한다 — 여기서는 리그 하위의 그 컴포넌트를 찾아 넘길 뿐이다.
+            //   ★리그 안에서 찾는다: 다른 술기 리그의 구간을 집어 오면 엉뚱한 곳을 훑어야 통과된다.
+            var glide = cranialController.GetComponentInChildren<SpineGlideGuide>(true);
+            condition = new SpineGlideCondition(glide);
+            label = glide != null ? $"Glide({glide.DescribeSegment()})" : "Glide(★미배선 — 즉시 통과)";
         }
         else if (conditionType.Equals("cranialDepthBreath", System.StringComparison.OrdinalIgnoreCase))
         {

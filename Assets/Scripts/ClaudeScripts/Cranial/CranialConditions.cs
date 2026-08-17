@@ -652,3 +652,39 @@ public class BreathingCondition : IScenarioCondition
             ? $"호흡 {(breaths > 0 ? breaths : 1)}회 후 순간 교정 대기 (다 내쉬기 전 누르면 감점)"
             : breaths > 0 ? $"호흡 {breaths}회 동기화 대기" : "호흡 동기화 대기";
 }
+
+/// <summary>
+/// ⓪-b 쓸어내리기 진단 substep: 손가락 2개로 척추를 <b>두방→족방으로 한 번 훑으면</b> 완료.
+///
+/// 판정은 전부 <see cref="SpineGlideGuide"/>가 한다 — 이 조건은 시작·종료만 걸어 준다.
+/// 다른 두개골 조건들과 같은 규칙으로, <b>부수효과는 생성자가 아니라 첫 폴에서</b> 시작한다
+/// (나레이션이 흐르는 동안 진행도가 차 버리면 "말도 끝나기 전에 넘어간다"가 된다).
+///
+/// 구간(시작점·끝점)이 배선돼 있지 않으면 판정할 방법이 없으므로 <b>바로 통과</b>시키고 경고를 남긴다 —
+/// 배선 실수로 실습이 영영 막히는 것보다 낫다(20초 폴백 버튼에 기대지 않는다).
+/// </summary>
+public class SpineGlideCondition : IScenarioCondition
+{
+    private readonly SpineGlideGuide guide;
+    private bool started;
+
+    public SpineGlideCondition(SpineGlideGuide guide)
+    {
+        this.guide = guide;
+        if (guide == null)
+            ChunaLogger.LogWarning("[SpineGlideCondition] SpineGlideGuide를 찾지 못했습니다 — " +
+                                   "이 단계는 즉시 통과합니다. 리그 하위에 컴포넌트를 두세요.");
+    }
+
+    public bool IsConditionMet()
+    {
+        if (guide == null) return true;          // 미배선 = 막지 않는다
+        if (!started) { guide.BeginGlide(); started = true; return false; }
+        if (!guide.HasSegment) return true;      // 구간 미배선 = 막지 않는다(경고는 BeginGlide가 남김)
+        return guide.Completed;
+    }
+
+    public string GetConditionDescription() =>
+        guide == null ? "쓸어내리기 (미배선 — 즉시 통과)"
+                      : $"쓸어내리기 대기 ({guide.Progress01 * 100f:F0}%)";
+}

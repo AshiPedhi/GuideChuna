@@ -205,6 +205,32 @@ public class CranialAdjustmentController : MonoBehaviour
         return Vector3.Distance(mid, target.position) <= maxDistanceToTarget;       // 그 자리가 목표 분절인가
     }
 
+    /// <summary>
+    /// 지정한 손의 손가락 끝 Transform(못 찾으면 null).
+    ///
+    /// ★리그 밖 표시·판정 컴포넌트가 손 위치를 읽기 위한 <b>읽기 전용</b> 통로다
+    /// (<see cref="SpineGlideGuide"/>가 검지·중지 위치로 쓸어내림을 잰다).
+    /// <see cref="JudgeHand.양손"/>은 뜻이 없으므로 왼손을 돌려준다 — 두 손이 필요하면 각각 부를 것.
+    /// </summary>
+    public Transform GetFingertip(JudgeHand hand, CranialFinger finger)
+    {
+        HandVisual hv = hand == JudgeHand.오른손 ? rightHandVisual : leftHandVisual;
+        return hv != null ? ResolveFingertip(hv, finger) : null;
+    }
+
+    /// <summary>
+    /// 지정한 손의 <b>임의 관절</b> Transform(못 찾으면 null).
+    ///
+    /// ★손끝(<see cref="GetFingertip"/>)만으로는 표현할 수 없는 접촉점을 위한 것이다 —
+    /// 두상골(pisiform)은 손목 새끼손가락 쪽에 있어 손끝 관절이 하나도 대응하지 않는다.
+    /// <see cref="PisiformHighlight"/>가 손목·새끼 MCP를 읽어 그 사이를 보간해 자리를 잡는다.
+    /// </summary>
+    public Transform GetHandJoint(JudgeHand hand, HandJointId joint)
+    {
+        HandVisual hv = hand == JudgeHand.오른손 ? rightHandVisual : leftHandVisual;
+        return hv != null ? JointAt(hv, joint) : null;
+    }
+
     /// <summary>포개짐 판정에 쓸 <b>교정</b> 목표 지점 — 교정 파지점 중 첫 번째(두상골 자리).</summary>
     public Transform StackTarget
     {

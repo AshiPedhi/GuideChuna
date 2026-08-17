@@ -50,6 +50,18 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField] private string[] transparencyExcludeNames =
         { "CC_Base_Eye", "EyeOcclusion", "TearLine", "CC_Base_Teeth", "Cornea", "Tongue", "Eyelash" };
 
+    [Tooltip("★기본 ON — 골격(skeletal_system 하위)은 어떤 경우에도 반투명으로 만들지 않는다.\n\n" +
+             "2026-08-17 사용자 지적: \"xray 키니까 뼈 색상 빠지고 반투명해진다\".\n" +
+             "원인 = 여기 SetModelTransparency/SetMeshTransparency가 골격 렌더러의 머티리얼에 " +
+             "_Mode=3(Transparent) · ZWrite=0 · _Color.a=알파를 직접 먹였다. 그 알파가 부위별 색까지 " +
+             "씻어내 <b>분할·색칠한 의미가 사라진다.</b>\n" +
+             "★xray가 켜지면 skullOverlay(=이 skeletonModel과 같은 '근육골격' 오브젝트)가 활성화되므로 " +
+             "그때부터 skeletonModel.activeSelf가 true가 되고, 현실 모드 경로가 골격까지 반투명 대상으로 " +
+             "잡아 버린다 — 그래서 'xray를 켠 순간'에 증상이 난다.\n" +
+             "CranialHeadXray는 이미 같은 규칙(skeletal_system 제외)을 쓰고 있다. 여기만 빠져 있었다.\n" +
+             "끄면 예전 동작(골격도 현실 모드에서 반투명).")]
+    [SerializeField] private bool keepSkeletonOpaque = true;
+
 
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
@@ -705,7 +717,17 @@ public class PracticeSettingsController : MonoBehaviour
     /// <summary>이 렌더러를 투명도 처리에서 제외할지(눈·각막·치아 등 특수 셰이더 보호).</summary>
     private bool IsTransparencyExcluded(Renderer renderer)
     {
-        if (renderer == null || transparencyExcludeNames == null) return false;
+        if (renderer == null) return false;
+
+        // ★골격은 반투명 대상이 아니다 — 뼈를 부위별로 나누고 색칠한 이유가 '잘 보이게'이기 때문이다.
+        //   여기서 알파를 먹이면 _Color.a가 부위색을 씻어내고 ZWrite까지 꺼져 뼈 안쪽이 비쳐 보인다.
+        //   CranialHeadXray가 쓰는 것과 같은 판정(조상 중에 skeletal_system이 있는가).
+        if (keepSkeletonOpaque)
+            for (Transform t = renderer.transform; t != null; t = t.parent)
+                if (t.name.IndexOf("skeletal_system", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+
+        if (transparencyExcludeNames == null) return false;
         string n = renderer.gameObject.name;
         foreach (var t in transparencyExcludeNames)
             if (!string.IsNullOrEmpty(t) && n.IndexOf(t, System.StringComparison.OrdinalIgnoreCase) >= 0)
