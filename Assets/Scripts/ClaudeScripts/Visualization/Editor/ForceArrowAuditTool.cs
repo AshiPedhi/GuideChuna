@@ -21,11 +21,14 @@ public class ForceArrowAuditTool : EditorWindow
     private float presetTravel = 0.6f;
     private float presetMinBright = 0.45f;
 
+    /// <summary>통짜로 바꿀 때의 단면 모양. 박스형은 화살촉 두께가 자루와 같아 위아래에 단차가 없다.</summary>
+    private bool boxedShape = true;
+
     [MenuItem("GuideChuna/화살표 그룹 점검 · 이름 정리")]
     public static void Open()
     {
         var w = GetWindow<ForceArrowAuditTool>(true, "화살표 그룹 점검");
-        w.minSize = new Vector2(560, 420);
+        w.minSize = new Vector2(560, 760);   // 버튼이 창 밖으로 밀려 안 보이던 것을 막는다
         w.Scan();
     }
 
@@ -152,6 +155,35 @@ public class ForceArrowAuditTool : EditorWindow
         if (GUILayout.Button("되돌리기 — 예전 방식(흐름 + 반투명)으로", GUILayout.Height(20)))
             ApplyLegacyPreset();
 
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("★VR에서 안 보이는 문제 (2026-08-17 실측)", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "① 메시가 안팎이 뒤집혀 있습니다. 자루·화살촉의 옆면 노멀이 전부 축 안쪽을 향해 있어 " +
+            "(실측: 표면 정점 (+0.085,0,0)의 노멀이 (-0.994,-0.066,-0.083)) Standard의 Cull Back에 " +
+            "가까운 면이 잘려 나갑니다 → \"속이 빈 느낌\", \"보는 각도·위치에 따라 안 보임\". " +
+            "불투명 전환으로는 안 고쳐집니다(컬링은 투명도와 무관).\n" +
+            "② 화살표가 조각으로 만들어져 있습니다. 직선은 쐐기(>) 5조각, 호는 7조각 + 사이 18% 틈이라 " +
+            "전부 켜도 점선처럼 읽힙니다 — 요구는 덩어리진 실선입니다.\n" +
+            "아래 두 버튼을 위에서부터 순서대로 누르세요.",
+            EditorStyles.wordWrappedMiniLabel);
+
+        boxedShape = EditorGUILayout.Toggle(
+            new GUIContent("박스형으로", "켬 = 사각기둥 자루 + 같은 두께의 납작 화살촉(위아래 단차 없음).\n" +
+                                        "끔 = 원통 자루 + 원뿔 화살촉."), boxedShape);
+
+        GUI.backgroundColor = new Color(1f, 0.85f, 0.6f);
+        if (GUILayout.Button("① 화살표 메시 다시 굽기 (안팎 뒤집힘 수정)", GUILayout.Height(26)))
+        {
+            report = ForceArrowSetupTool.RebakeMeshAssets() + "\n\n" + report;
+            Debug.Log("[화살표 메시] " + report);
+        }
+        if (GUILayout.Button($"② 통짜 실선으로 교체 — 직선 + 곡선 ({(boxedShape ? "박스형" : "원통형")})", GUILayout.Height(26)))
+            ConvertToSolid(false);
+        GUI.backgroundColor = Color.white;
+
+        if (GUILayout.Button("②만 되돌리기 — 조각 화살표로", GUILayout.Height(20)))
+            ConvertToSolid(true);
+
         scroll = EditorGUILayout.BeginScrollView(scroll);
         EditorGUILayout.TextArea(report, GUILayout.ExpandHeight(true));
         EditorGUILayout.EndScrollView();
@@ -274,6 +306,252 @@ public class ForceArrowAuditTool : EditorWindow
               "  ★씬을 저장해야 유지됩니다.\n\n" + report;
         Debug.Log("[화살표 가시성] " + report);
         Scan();
+    }
+
+    /// <summary>
+    /// 조각으로 만들어진 화살표를 <b>통짜 실선 하나</b>로 바꾼다.
+    /// 직선(쐐기 5조각)과 회전(호 7조각 + 러너) <b>둘 다</b> 대상이다.
+    ///
+    /// ★비파괴 — 조각 자식을 <b>지우지 않고 비활성화만</b> 한다(07-30 파지점 도구가 사용자 수작업을
+    /// 날린 전례). 되돌리기가 그대로 되살린다. 전부 Undo도 된다.
+    /// ★트랜스폼(위치·회전·크기)은 손대지 않는다 — 사용자가 손으로 겨눠 둔 방향이다.
+    ///   다만 직선은 통짜 메시가 길이 1.0, 쐐기 5개 사슬은 약 1.19라 <b>약 16% 짧아진다.</b>
+    ///   길이를 맞추려면 루트의 Scale Z만 1.19배 하면 된다. (호는 각도가 같아 차이 없다.)
+    /// </summary>
+    private void ConvertToSolid(bool revert)
+    {
+        report = DoConvert(revert, boxedShape) + "\n\n" + report;
+        Scan();
+    }
+
+    [MenuItem("GuideChuna/화살표 ② 통짜 실선으로 교체 — 박스형 (권장)")]
+    private static void ConvertBoxMenu()
+    {
+        string r = DoConvert(false, true);
+        Debug.Log("[화살표] " + r);
+        EditorUtility.DisplayDialog("② 통짜 실선(박스형)으로 교체", r, "확인");
+    }
+
+    [MenuItem("GuideChuna/화살표 ② 통짜 실선으로 교체 — 원통형")]
+    private static void ConvertRoundMenu()
+    {
+        string r = DoConvert(false, false);
+        Debug.Log("[화살표] " + r);
+        EditorUtility.DisplayDialog("② 통짜 실선(원통형)으로 교체", r, "확인");
+    }
+
+    [MenuItem("GuideChuna/화살표 ②를 되돌리기 (조각으로)")]
+    private static void RevertMenu()
+    {
+        string r = DoConvert(true, false);
+        Debug.Log("[화살표] " + r);
+        EditorUtility.DisplayDialog("조각으로 되돌리기", r, "확인");
+    }
+
+    private static string DoConvert(bool revert, bool boxed)
+    {
+        Material mat = ForceArrowSetupTool.ArrowMaterial();
+
+        var log = new StringBuilder();
+        int changed = 0, skipped = 0;
+
+        foreach (var a in FindAllArrows())
+        {
+            if (a == null) continue;
+
+            bool isArc = a is ForceArcArrow;
+            Mesh solid = isArc
+                ? ForceArrowSetupTool.SolidArcMesh(boxed)
+                : (boxed ? ForceArrowSetupTool.BoxArrowMesh() : ForceArrowSetupTool.SolidArrowMesh());
+
+            GameObject go = a.gameObject;
+            var chevrons = new List<Renderer>();
+            foreach (Transform c in go.transform)
+            {
+                var r = c.GetComponent<Renderer>();
+                if (r != null) chevrons.Add(r);
+            }
+
+            if (chevrons.Count == 0)
+            {
+                log.AppendLine($"  · {go.name} — 자식 조각이 없어 건너뜀(이미 통짜)");
+                skipped++;
+                continue;
+            }
+
+            var mf = go.GetComponent<MeshFilter>();
+            var mr = go.GetComponent<MeshRenderer>();
+
+            if (revert)
+            {
+                foreach (var r in chevrons)
+                {
+                    Undo.RecordObject(r.gameObject, "조각 화살표로 되돌리기");
+                    r.gameObject.SetActive(true);
+                }
+                if (mr != null) Undo.DestroyObjectImmediate(mr);
+                if (mf != null) Undo.DestroyObjectImmediate(mf);
+                // ★호는 비워 둔다 — 자동 수집이 러너를 목록에서 빼 주기 때문(직접 채우면 러너가 섞인다).
+                SetSegments(a, isArc ? new List<Renderer>() : chevrons);
+                SetEnum(a, "displayMode", (int)ForceArrow.DisplayMode.자동);
+                log.AppendLine($"  · {go.name} — 조각 {chevrons.Count}개 복구");
+            }
+            else
+            {
+                if (mf == null) mf = Undo.AddComponent<MeshFilter>(go);
+                if (mr == null) mr = Undo.AddComponent<MeshRenderer>(go);
+
+                Undo.RecordObject(mf, "통짜 실선으로 교체");
+                mf.sharedMesh = solid;
+                Undo.RecordObject(mr, "통짜 실선으로 교체");
+                mr.sharedMaterial = mat;
+                mr.enabled = true;
+                mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+                mr.receiveShadows = false;
+
+                foreach (var r in chevrons)
+                {
+                    Undo.RecordObject(r.gameObject, "통짜 실선으로 교체");
+                    r.gameObject.SetActive(false);
+                }
+
+                // ★segments를 루트 렌더러 하나로 못 박는다. 비워 두면 Awake의 자동 수집이
+                //   비활성 자식(GetComponentsInChildren(true))까지 긁어와 조각이 목록에 남는다.
+                SetSegments(a, new List<Renderer> { mr });
+                SetEnum(a, "displayMode", (int)ForceArrow.DisplayMode.통짜왕복);
+                log.AppendLine($"  · {go.name} — {(isArc ? "통짜 곡선" : "통짜 직선")}({(boxed ? "박스형" : "원통형")})으로 교체 " +
+                               $"(조각 {chevrons.Count}개는 끄기만 함)");
+            }
+
+            EditorUtility.SetDirty(a);
+            changed++;
+        }
+
+        UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+        return (revert
+                   ? $"조각 화살표로 되돌렸습니다 — {changed}개"
+                   : $"통짜 실선({(boxed ? "박스형" : "원통형")})으로 교체 — {changed}개 (건너뜀 {skipped}개)") +
+               "\n" + log +
+               "\n★Ctrl+S로 씬을 저장해야 유지됩니다. 트랜스폼은 건드리지 않았습니다.\n" +
+               (revert ? "" : "★직선은 통짜 메시가 조각 사슬보다 약 16% 짧습니다 — 맞추려면 루트 Scale Z만 1.19배 하세요.\n");
+    }
+
+    // ── 진단 ───────────────────────────────────────────────────────────
+    //
+    // ★"눌렀는데 된 건지 모르겠다"를 없애기 위한 것. 눈으로 판단하지 말고 이걸 돌린다.
+
+    [MenuItem("GuideChuna/화살표 상태 진단 (지금 어떤 상태인지)")]
+    private static void DiagnoseMenu()
+    {
+        string r = Diagnose();
+        Debug.Log("[화살표 진단]\n" + r);
+        EditorUtility.DisplayDialog("화살표 상태 진단", r, "확인");
+    }
+
+    private static string Diagnose()
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("■ ① 메시 안팎 — 옆면이 바깥을 향해야 정상");
+        sb.AppendLine(CheckMeshZ("Assets/Meshes/ForceArrow.asset", "통짜 화살표"));
+        sb.AppendLine(CheckMeshZ("Assets/Meshes/ForceFlow_Chevron.asset", "쐐기"));
+
+        sb.AppendLine();
+        sb.AppendLine("■ 공유 머티리얼");
+        var mat = AssetDatabase.LoadAssetAtPath<Material>("Assets/Materials/ForceArrow.mat");
+        if (mat == null) sb.AppendLine("   ★ForceArrow.mat 없음");
+        else if (!mat.HasProperty("_ZWrite")) sb.AppendLine("   Standard 계열이 아님 — 판단 보류");
+        else sb.AppendLine(mat.GetInt("_ZWrite") == 1
+                ? "   불투명(ZWrite 1) ✓"
+                : "   ★반투명(ZWrite 0) — ①을 아직 안 돌렸습니다");
+
+        sb.AppendLine();
+        sb.AppendLine("■ ② 씬의 화살표 (직선 + 곡선)");
+        int solidCnt = 0, piecedCnt = 0;
+        foreach (var a in FindAllArrows())
+        {
+            if (a == null) continue;
+
+            var mf = a.GetComponent<MeshFilter>();
+            bool rootSolid = mf != null && mf.sharedMesh != null;
+
+            int liveChildren = 0;
+            foreach (Transform c in a.transform)
+                if (c.gameObject.activeSelf && c.GetComponent<Renderer>() != null) liveChildren++;
+
+            string kind = a is ForceArcArrow ? "곡선" : "직선";
+            if (rootSolid && liveChildren == 0)
+            {
+                solidCnt++;
+                sb.AppendLine($"   {kind} {a.gameObject.name} — 통짜 [{mf.sharedMesh.name}] ✓");
+            }
+            else
+            {
+                piecedCnt++;
+                sb.AppendLine($"   ★{kind} {a.gameObject.name} — 아직 조각 {liveChildren}개");
+            }
+        }
+        sb.AppendLine($"   → 통짜 {solidCnt}개 / 아직 조각인 것 {piecedCnt}개");
+
+        sb.AppendLine();
+        sb.AppendLine(piecedCnt == 0 && solidCnt > 0
+            ? "→ ②는 적용됐습니다."
+            : "→ ★②를 아직 안 돌렸습니다. 메뉴 `GuideChuna/화살표 ② 통짜 실선으로 교체 — 박스형 (권장)`");
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 로컬 +Z를 축으로 하는 메시의 <b>옆면 노멀</b>이 축 바깥을 향하는지 센다.
+    /// 뚜껑 노멀은 축과 나란해서 판정에서 자동으로 빠진다(내적 ≈ 0).
+    /// </summary>
+    private static string CheckMeshZ(string path, string label)
+    {
+        var m = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (m == null) return $"   ★{label} — 에셋이 없습니다 ({path})";
+
+        Vector3[] v = m.vertices;
+        Vector3[] nr = m.normals;
+        if (nr == null || nr.Length != v.Length) return $"   ★{label} — 노멀이 없습니다";
+
+        int outward = 0, inward = 0;
+        for (int i = 0; i < v.Length; i++)
+        {
+            var radial = new Vector2(v[i].x, v[i].y);
+            if (radial.sqrMagnitude < 1e-8f) continue;      // 축 위 정점(꼭짓점·중심)
+            radial.Normalize();
+            float d = nr[i].x * radial.x + nr[i].y * radial.y;
+            if (d > 0.1f) outward++;
+            else if (d < -0.1f) inward++;
+        }
+
+        return inward == 0 && outward > 0
+            ? $"   {label} — 옆면 {outward}개 전부 바깥 ✓"
+            : $"   ★{label} — 안쪽을 향한 옆면 {inward}개 (바깥 {outward}개). ①을 아직 안 돌렸습니다";
+    }
+
+    private static void SetSegments(Component arrow, List<Renderer> renderers)
+    {
+        var so = new SerializedObject(arrow);
+        SerializedProperty p = so.FindProperty("segments");
+        p.ClearArray();
+        for (int i = 0; i < renderers.Count; i++)
+        {
+            p.InsertArrayElementAtIndex(i);
+            p.GetArrayElementAtIndex(i).objectReferenceValue = renderers[i];
+        }
+        so.ApplyModifiedProperties();
+    }
+
+    private static void SetEnum(Object target, string field, int value)
+    {
+        var so = new SerializedObject(target);
+        var p = so.FindProperty(field);
+        if (p == null) return;
+        p.enumValueIndex = value;
+        so.ApplyModifiedProperties();
     }
 
     /// <summary>그 컴포넌트에 없는 필드는 조용히 건너뛴다(직선/호가 필드 구성이 다르다).</summary>

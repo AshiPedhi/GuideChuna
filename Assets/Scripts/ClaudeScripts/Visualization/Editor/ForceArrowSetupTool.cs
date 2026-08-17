@@ -15,6 +15,11 @@ using UnityEngine;
 public static class ForceArrowSetupTool
 {
     private const string MeshPath = "Assets/Meshes/ForceArrow.asset";
+    private const string ChevronMeshPath = "Assets/Meshes/ForceFlow_Chevron.asset";
+    private const string ArcHeadMeshPath = "Assets/Meshes/ForceArc_Head.asset";
+    private const string BoxArrowMeshPath = "Assets/Meshes/ForceArrow_Box.asset";
+    private const string ArcSolidMeshPath = "Assets/Meshes/ForceArc_Solid.asset";
+    private const string ArcSolidBoxMeshPath = "Assets/Meshes/ForceArc_SolidBox.asset";
     private const string MaterialPath = "Assets/Materials/ForceArrow.mat";
     private const float DefaultLength = 0.08f;   // 8cm — 두개골처럼 손과 머리 사이가 좁은 곳 기준
 
@@ -737,28 +742,47 @@ public static class ForceArrowSetupTool
         EnsureFolder("Assets/Materials");
         Shader shader = Shader.Find("Standard");
         mat = new Material(shader) { name = "ForceArrow" };
-        // ForceArrow가 런타임에 Fade로 바꾸지만, 에디터에서도 반투명하게 보이도록 미리 맞춰 둔다.
-        mat.SetFloat("_Mode", 3f);
-        mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        mat.SetInt("_ZWrite", 0);
-        mat.EnableKeyword("_ALPHABLEND_ON");
-        mat.renderQueue = 3000;
-        mat.color = new Color(1f, 0.55f, 0.15f, 0.85f);
+        MakeOpaque(mat);
+        mat.color = new Color(0.149f, 1f, 0.318f, 1f);
         AssetDatabase.CreateAsset(mat, MaterialPath);
         AssetDatabase.SaveAssets();
         return mat;
     }
 
+    /// <summary>
+    /// 공유 머티리얼을 불투명으로 맞춘다.
+    /// ★런타임에는 <c>ForceArrowBase.EnsureMaterialMode</c>가 <b>인스턴스</b>를 불투명으로 바꾸지만,
+    /// 에디터는 공유 머티리얼을 그대로 그리므로 에셋이 Fade면 <b>씬 뷰에서만 계속 반투명하게 보인다</b>
+    /// — "고쳤는데 여전히 비쳐 보인다"로 오해하게 된다. 둘을 같은 상태로 맞춘다.
+    /// </summary>
+    private static void MakeOpaque(Material m)
+    {
+        m.SetFloat("_Mode", 0f);
+        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.One);
+        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+        m.SetInt("_ZWrite", 1);
+        m.DisableKeyword("_ALPHATEST_ON");
+        m.DisableKeyword("_ALPHABLEND_ON");
+        m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        m.renderQueue = -1;
+    }
+
     /// <summary>흐름 화살표의 쐐기(>) 메시. 원뿔이라 정지 상태에서도 방향이 읽힌다. 모든 쐐기가 공유한다.</summary>
     private static Mesh LoadOrCreateChevronMesh()
     {
-        const string path = "Assets/Meshes/ForceFlow_Chevron.asset";
-        var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(ChevronMeshPath);
         if (mesh != null) return mesh;
 
         EnsureFolder("Assets/Meshes");
+        mesh = BuildChevronMesh();
+        AssetDatabase.CreateAsset(mesh, ChevronMeshPath);
+        AssetDatabase.SaveAssets();
+        return mesh;
+    }
 
+    /// <summary>쐐기 기하. ★<see cref="BuildArrowMesh"/>와 같은 이유로 옆면이 뒤집혀 있었다(2026-08-17 수정).</summary>
+    private static Mesh BuildChevronMesh()
+    {
         const int seg = 14;
         const float r = 0.15f, len = 0.2f;
         var v = new List<Vector3>();
@@ -766,28 +790,27 @@ public static class ForceArrowSetupTool
 
         int ring = AddRing(v, seg, r, 0f);
         int apex = v.Count; v.Add(new Vector3(0f, 0f, len));
+        int capRing = AddRing(v, seg, r, 0f);          // 뚜껑용 복제 링(노멀 분리)
         int center = v.Count; v.Add(Vector3.zero);
         for (int i = 0; i < seg; i++)
         {
             int n = (i + 1) % seg;
-            tri.Add(ring + i); tri.Add(apex); tri.Add(ring + n);      // 옆면
-            tri.Add(center); tri.Add(ring + n); tri.Add(ring + i);    // 밑면
+            tri.Add(ring + i); tri.Add(ring + n); tri.Add(apex);          // 옆면 (바깥)
+            tri.Add(center); tri.Add(capRing + n); tri.Add(capRing + i);  // 밑면 (-Z)
         }
 
-        mesh = new Mesh { name = "ForceFlow_Chevron" };
+        var mesh = new Mesh { name = "ForceFlow_Chevron" };
         mesh.SetVertices(v);
         mesh.SetTriangles(tri, 0);
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
-        AssetDatabase.CreateAsset(mesh, path);
-        AssetDatabase.SaveAssets();
         return mesh;
     }
 
     /// <summary>회전 화살표 조각 메시를 에셋으로 만들어 공유한다(모든 회전 화살표가 같은 기하).</summary>
     private static Mesh LoadOrCreateArcMesh(int index, bool isHead, float a0, float a1)
     {
-        string path = isHead ? "Assets/Meshes/ForceArc_Head.asset"
+        string path = isHead ? ArcHeadMeshPath
                              : $"Assets/Meshes/ForceArc_Seg{index}.asset";
         var mesh = AssetDatabase.LoadAssetAtPath<Mesh>(path);
         if (mesh != null) return mesh;
@@ -822,6 +845,18 @@ public static class ForceArrowSetupTool
     /// <summary>
     /// +Z를 향하는 화살표(자루 원기둥 + 머리 원뿔). 전체 길이 1 → 오브젝트 스케일로 크기를 준다.
     /// Unity 기본 프리미티브에 원뿔이 없어 직접 만든다.
+    ///
+    /// ★2026-08-17 수정 — <b>옆면 삼각형이 전부 안팎이 뒤집혀 있었다.</b>
+    /// 실측(에셋 정점 디코드): 자루 표면 정점 <c>(+0.085, 0, 0)</c>의 노멀이 <c>(-0.994, -0.066, -0.083)</c>,
+    /// 화살촉 밑동 <c>(+0.210, 0, 0.68)</c>의 노멀이 <c>(-1, 0, 0)</c> — 전부 축 <b>안쪽</b>을 향했다.
+    /// Built-in Standard는 Cull Back이 고정이라 바깥에서 보면 <b>가까운 면이 잘려 나가고 반대편 안쪽 벽만 보인다</b>
+    /// → 사용자 보고 "속이 빈 느낌", "보는 각도·위치에 따라 안 보인다". VR은 양눈 각도가 달라 더 심하다.
+    /// 08-14의 '불투명 전환'으로는 이게 안 고쳐진다(컬링은 투명도와 무관하다).
+    ///
+    /// ★뚜껑용 링을 따로 복제해 쓴다 — 옆면과 정점을 공유하면 <see cref="Mesh.RecalculateNormals"/>가
+    /// 두 면의 노멀을 평균내 화살촉 테두리가 뭉개진다(실측: 원뿔 노멀 <c>(0.836,0,0.549)</c>가
+    /// 밑면과 섞여 순수 <c>-X</c>로 납작해져 있었다). 복제하면 원뿔과 밑면이 각진 경계로 갈려
+    /// '덩어리진' 인상이 살아난다.
     /// </summary>
     private static Mesh BuildArrowMesh()
     {
@@ -832,30 +867,34 @@ public static class ForceArrowSetupTool
         var v = new List<Vector3>();
         var tri = new List<int>();
 
-        // 각 링의 시작 인덱스를 기록해 가며 쌓는다.
+        // 옆면용 링 — 이웃 면끼리 노멀을 공유해 원통·원뿔이 부드럽게 이어진다.
         int shaftBack = AddRing(v, seg, shaftR, 0f);
         int shaftFront = AddRing(v, seg, shaftR, shaftLen);
         int headBase = AddRing(v, seg, headR, shaftLen);
         int apex = v.Count; v.Add(new Vector3(0f, 0f, 1f));
+
+        // 뚜껑용 링 — 위치는 같지만 정점을 따로 둬서 노멀이 섞이지 않게 한다.
+        int backCapRing = AddRing(v, seg, shaftR, 0f);
         int backCenter = v.Count; v.Add(Vector3.zero);
+        int headCapRing = AddRing(v, seg, headR, shaftLen);
         int headBaseCenter = v.Count; v.Add(new Vector3(0f, 0f, shaftLen));
 
         for (int i = 0; i < seg; i++)
         {
             int n = (i + 1) % seg;
 
-            // 자루 옆면
-            tri.Add(shaftBack + i); tri.Add(shaftFront + i); tri.Add(shaftFront + n);
-            tri.Add(shaftBack + i); tri.Add(shaftFront + n); tri.Add(shaftBack + n);
+            // 자루 옆면 (바깥 = 축에서 멀어지는 쪽)
+            tri.Add(shaftBack + i); tri.Add(shaftFront + n); tri.Add(shaftFront + i);
+            tri.Add(shaftBack + i); tri.Add(shaftBack + n); tri.Add(shaftFront + n);
 
-            // 자루 뒷면 뚜껑
-            tri.Add(backCenter); tri.Add(shaftBack + n); tri.Add(shaftBack + i);
+            // 자루 뒷면 뚜껑 (-Z를 향한다)
+            tri.Add(backCenter); tri.Add(backCapRing + n); tri.Add(backCapRing + i);
 
             // 머리 옆면(원뿔)
-            tri.Add(headBase + i); tri.Add(apex); tri.Add(headBase + n);
+            tri.Add(headBase + i); tri.Add(headBase + n); tri.Add(apex);
 
-            // 머리 밑면(도넛 대신 중심으로 채운다 — 자루보다 넓어 가려지지 않는다)
-            tri.Add(headBaseCenter); tri.Add(headBase + i); tri.Add(headBase + n);
+            // 머리 밑면(도넛 대신 중심으로 채운다 — 자루보다 넓어 가려지지 않는다). -Z를 향한다.
+            tri.Add(headBaseCenter); tri.Add(headCapRing + n); tri.Add(headCapRing + i);
         }
 
         var mesh = new Mesh { name = "ForceArrow" };
@@ -914,7 +953,9 @@ public static class ForceArrowSetupTool
         return mesh;
     }
 
-    /// <summary>호 끝의 화살촉 = 접선 방향을 향한 원뿔.</summary>
+    /// <summary>호 끝의 화살촉 = 접선 방향을 향한 원뿔.
+    /// ★옆면이 뒤집혀 있었다(2026-08-17 수정) — 자세한 배경은 <see cref="BuildArrowMesh"/>.
+    /// 호 튜브(<see cref="BuildArcSegmentMesh"/>)는 실측 결과 정상이라 건드리지 않는다.</summary>
     private static Mesh BuildArcHeadMesh(float a0)
     {
         const float headLen = 0.022f;
@@ -934,13 +975,19 @@ public static class ForceArrowSetupTool
             v.Add(baseCenter + outward * (Mathf.Cos(th) * headR) + side * (Mathf.Sin(th) * headR));
         }
         int apex = v.Count; v.Add(baseCenter + dir * headLen);
+        int capRing = v.Count;                          // 뚜껑용 복제 링(노멀 분리)
+        for (int i = 0; i < ArcRadialSeg; i++)
+        {
+            float th = i / (float)ArcRadialSeg * Mathf.PI * 2f;
+            v.Add(baseCenter + outward * (Mathf.Cos(th) * headR) + side * (Mathf.Sin(th) * headR));
+        }
         int center = v.Count; v.Add(baseCenter);
 
         for (int i = 0; i < ArcRadialSeg; i++)
         {
             int n = (i + 1) % ArcRadialSeg;
-            tri.Add(i); tri.Add(apex); tri.Add(n);       // 옆면
-            tri.Add(center); tri.Add(n); tri.Add(i);     // 밑면
+            tri.Add(i); tri.Add(n); tri.Add(apex);                        // 옆면 (바깥)
+            tri.Add(center); tri.Add(capRing + n); tri.Add(capRing + i);  // 밑면 (-접선)
         }
 
         var mesh = new Mesh();
@@ -949,6 +996,365 @@ public static class ForceArrowSetupTool
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    // ── 메시 다시 굽기 · 다른 도구에 넘겨줄 것 ─────────────────────────────
+    //
+    // ★반드시 <b>제자리에서</b> 다시 굽는다 — 에셋을 지우고 새로 만들면 GUID가 바뀌어
+    //   씬의 참조 53개(쐐기 41 · 호 12)가 전부 끊기고 화살표가 통째로 사라진다.
+    //   기존 에셋 객체의 내용만 갈아 끼우면 GUID·fileID가 그대로 유지된다.
+
+    /// <summary>없으면 굽고, 있으면 그대로 쓴다.</summary>
+    private static Mesh LoadOrBake(string path, System.Func<Mesh> build)
+    {
+        var m = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        if (m != null) return m;
+        EnsureFolder("Assets/Meshes");
+        m = build();
+        AssetDatabase.CreateAsset(m, path);
+        AssetDatabase.SaveAssets();
+        return m;
+    }
+
+    /// <summary>통짜 실선 직선 화살표 — 원통형(자루 원기둥 + 원뿔 화살촉).</summary>
+    public static Mesh SolidArrowMesh() => LoadOrCreateMesh();
+
+    /// <summary>통짜 실선 직선 화살표 — 박스형(사각기둥 자루 + 같은 두께의 납작 화살촉, 위아래 단차 없음).</summary>
+    public static Mesh BoxArrowMesh() => LoadOrBake(BoxArrowMeshPath, BuildBoxArrowMesh);
+
+    /// <summary>틈 없는 통짜 회전(곡선) 화살표. <paramref name="boxed"/>면 사각 단면.</summary>
+    public static Mesh SolidArcMesh(bool boxed) => boxed
+        ? LoadOrBake(ArcSolidBoxMeshPath, () => BuildArcSolidMesh(ArcSweepDeg, true))
+        : LoadOrBake(ArcSolidMeshPath, () => BuildArcSolidMesh(ArcSweepDeg, false));
+
+    /// <summary>화살표 공용 머티리얼(없으면 만든다). 씬을 고치는 도구가 쓴다.</summary>
+    public static Material ArrowMaterial() => LoadOrCreateMaterial();
+
+    [MenuItem("GuideChuna/화살표 ① 메시 다시 굽기 (안팎 뒤집힘 수정)")]
+    private static void RebakeMeshAssetsMenu()
+    {
+        string log = RebakeMeshAssets();
+        Debug.Log("[화살표 메시] " + log);
+        EditorUtility.DisplayDialog("① 화살표 메시 다시 굽기", log, "확인");
+    }
+
+    /// <summary>
+    /// 뒤집혀 있던 메시 3종을 <b>제자리에서</b> 다시 굽는다(에셋 GUID 유지 → 씬 참조 안 끊김).
+    /// 호 튜브 <c>ForceArc_Seg*</c>는 실측 결과 정상이라 건드리지 않는다.
+    /// </summary>
+    public static string RebakeMeshAssets()
+    {
+        float headA0 = (ArcSegments - 1) * (ArcSweepDeg / ArcSegments);
+
+        var lines = new List<string>();
+        lines.Add(Rebake(MeshPath, BuildArrowMesh()));
+        lines.Add(Rebake(ChevronMeshPath, BuildChevronMesh()));
+        lines.Add(Rebake(ArcHeadMeshPath, BuildArcHeadMesh(headA0)));
+        lines.Add(Rebake(BoxArrowMeshPath, BuildBoxArrowMesh()));
+        lines.Add(Rebake(ArcSolidMeshPath, BuildArcSolidMesh(ArcSweepDeg, false)));
+        lines.Add(Rebake(ArcSolidBoxMeshPath, BuildArcSolidMesh(ArcSweepDeg, true)));
+
+        // 공유 머티리얼도 불투명으로 — 안 그러면 씬 뷰에서만 계속 반투명하게 보인다.
+        var mat = AssetDatabase.LoadAssetAtPath<Material>(MaterialPath);
+        if (mat != null && mat.HasProperty("_Mode"))
+        {
+            MakeOpaque(mat);
+            EditorUtility.SetDirty(mat);
+            lines.Add("  · ForceArrow.mat — 불투명으로 맞춤(씬 뷰와 런타임을 같게)");
+        }
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+        return string.Join("\n", lines) +
+               "\n\n에셋 GUID는 그대로라 씬 참조는 끊기지 않았습니다.\n" +
+               "호 튜브(ForceArc_Seg*)는 원래 정상이라 건드리지 않았습니다.";
+    }
+
+    /// <summary>에셋 하나를 제자리에서 갈아 끼운다. 없으면 새로 만든다.</summary>
+    private static string Rebake(string path, Mesh fresh)
+    {
+        var existing = AssetDatabase.LoadAssetAtPath<Mesh>(path);
+        string name = System.IO.Path.GetFileNameWithoutExtension(path);
+
+        if (existing == null)
+        {
+            EnsureFolder("Assets/Meshes");
+            fresh.name = name;
+            AssetDatabase.CreateAsset(fresh, path);
+            return $"  · {name} — 없어서 새로 만듦";
+        }
+
+        int before = existing.vertexCount;
+        existing.Clear();
+        existing.SetVertices(new List<Vector3>(fresh.vertices));
+        existing.SetTriangles(new List<int>(fresh.triangles), 0);
+        existing.RecalculateNormals();
+        existing.RecalculateBounds();
+        EditorUtility.SetDirty(existing);
+        Object.DestroyImmediate(fresh);
+
+        return $"  · {name} — 다시 구움 (정점 {before} → {existing.vertexCount})";
+    }
+
+    // ── 박스형(각기둥) 화살표 ───────────────────────────────────────────
+    //
+    // ★2026-08-17 사용자 요구: "원통형 말고 박스형으로, 위아래는 박스랑 단차 없이 이어지는 화살표".
+    //   원뿔 화살촉은 자루보다 사방으로 굵어져 <b>위아래에도 턱이 생긴다</b>. 납작 화살표는
+    //   <b>두께(Y)를 자루와 똑같이 두고 폭(X)만 넓히므로</b> 윗면·아랫면이 한 평면으로 이어진다.
+    //   면마다 정점을 따로 둬서(공유 없음) 모서리가 각지게 나온다 — 덩어리 인상이 산다.
+
+    /// <summary>바깥을 향하는 사각형 면 하나(정점 4개 + 삼각형 2개). 순서는 바깥에서 봤을 때 기준.</summary>
+    private static void Quad(List<Vector3> v, List<int> tri, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+    {
+        int i = v.Count;
+        v.Add(a); v.Add(b); v.Add(c); v.Add(d);
+        tri.Add(i); tri.Add(i + 1); tri.Add(i + 2);
+        tri.Add(i); tri.Add(i + 2); tri.Add(i + 3);
+    }
+
+    /// <summary>바깥을 향하는 삼각형 면 하나.</summary>
+    private static void Tri(List<Vector3> v, List<int> tri, Vector3 a, Vector3 b, Vector3 c)
+    {
+        int i = v.Count;
+        v.Add(a); v.Add(b); v.Add(c);
+        tri.Add(i); tri.Add(i + 1); tri.Add(i + 2);
+    }
+
+    /// <summary>
+    /// +Z를 향하는 <b>박스형 납작 화살표</b>. 전체 길이 1 — 원통형 <see cref="BuildArrowMesh"/>와
+    /// 치수를 맞춰 뒀으므로 씬에서 메시만 바꿔 끼우면 된다.
+    /// 자루 = 사각기둥(폭 2·sw, 두께 2·ht) / 화살촉 = 같은 두께의 삼각기둥(폭 2·hw → 끝은 선).
+    /// ★두께가 같으므로 윗면·아랫면에 <b>단차가 없다.</b>
+    /// </summary>
+    private static Mesh BuildBoxArrowMesh()
+    {
+        const float L1 = 0.68f;     // 자루 끝
+        const float L = 1f;         // 전체 길이
+        const float sw = 0.085f;    // 자루 반폭   (원통 자루 반지름과 동일)
+        const float ht = 0.085f;    // 반두께      (자루가 정사각 단면이 된다)
+        const float hw = 0.21f;     // 화살촉 반폭 (원뿔 반지름과 동일)
+
+        var v = new List<Vector3>();
+        var tri = new List<int>();
+
+        // 자루 뒷뚜껑 (-Z)
+        Quad(v, tri, new Vector3(-sw, -ht, 0), new Vector3(-sw, ht, 0),
+                     new Vector3(sw, ht, 0), new Vector3(sw, -ht, 0));
+
+        // 자루 옆면 +X / -X
+        Quad(v, tri, new Vector3(sw, -ht, 0), new Vector3(sw, ht, 0),
+                     new Vector3(sw, ht, L1), new Vector3(sw, -ht, L1));
+        Quad(v, tri, new Vector3(-sw, -ht, 0), new Vector3(-sw, -ht, L1),
+                     new Vector3(-sw, ht, L1), new Vector3(-sw, ht, 0));
+
+        // 자루 윗면 +Y / 아랫면 -Y  ← 화살촉과 같은 평면으로 이어진다
+        Quad(v, tri, new Vector3(-sw, ht, 0), new Vector3(-sw, ht, L1),
+                     new Vector3(sw, ht, L1), new Vector3(sw, ht, 0));
+        Quad(v, tri, new Vector3(-sw, -ht, 0), new Vector3(sw, -ht, 0),
+                     new Vector3(sw, -ht, L1), new Vector3(-sw, -ht, L1));
+
+        // 화살촉 미늘(자루보다 넓어진 만큼의 뒷면, -Z) 좌우
+        Quad(v, tri, new Vector3(sw, -ht, L1), new Vector3(sw, ht, L1),
+                     new Vector3(hw, ht, L1), new Vector3(hw, -ht, L1));
+        Quad(v, tri, new Vector3(-hw, -ht, L1), new Vector3(-hw, ht, L1),
+                     new Vector3(-sw, ht, L1), new Vector3(-sw, -ht, L1));
+
+        // 화살촉 빗면 +X / -X
+        Quad(v, tri, new Vector3(hw, -ht, L1), new Vector3(hw, ht, L1),
+                     new Vector3(0, ht, L), new Vector3(0, -ht, L));
+        Quad(v, tri, new Vector3(-hw, -ht, L1), new Vector3(0, -ht, L),
+                     new Vector3(0, ht, L), new Vector3(-hw, ht, L1));
+
+        // 화살촉 윗면 / 아랫면 — 자루와 같은 y라 단차 없이 이어진다
+        Tri(v, tri, new Vector3(hw, ht, L1), new Vector3(-hw, ht, L1), new Vector3(0, ht, L));
+        Tri(v, tri, new Vector3(hw, -ht, L1), new Vector3(0, -ht, L), new Vector3(-hw, -ht, L1));
+
+        var mesh = new Mesh { name = "ForceArrow_Box" };
+        mesh.SetVertices(v);
+        mesh.SetTriangles(tri, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    // ── 통짜(연속) 회전 화살표 ──────────────────────────────────────────
+    //
+    // ★기존 회전 화살표는 조각 7개 + 조각 사이 18% 틈이라 점선으로 읽힌다(2026-08-17 사용자 지적
+    //   "곡선도 실선 안돼?"). 여기서는 <b>틈 없는 호 하나 + 화살촉</b>을 메시 한 장으로 굽는다.
+
+    /// <summary>호가 끝나고 화살촉이 시작되는 각도. 기존 조각 배치의 화살촉 위치와 같게 맞춘다.</summary>
+    private static float ArcHeadAngle(float sweepDeg) => (ArcSegments - 1) * (sweepDeg / ArcSegments);
+
+    /// <summary>
+    /// 틈 없는 통짜 회전 화살표. <paramref name="boxed"/>면 단면이 사각형이라
+    /// <b>윗면·아랫면이 평평하게 이어지고</b> 화살촉도 같은 두께의 납작 쐐기가 된다.
+    /// </summary>
+    private static Mesh BuildArcSolidMesh(float sweepDeg, bool boxed)
+    {
+        float headA = ArcHeadAngle(sweepDeg);
+        int lengthSeg = Mathf.Max(12, Mathf.RoundToInt(headA / 3f));   // 3도에 한 마디
+
+        var v = new List<Vector3>();
+        var tri = new List<int>();
+
+        if (boxed) BuildArcBoxTube(v, tri, 0f, headA, lengthSeg);
+        else BuildArcRoundTube(v, tri, 0f, headA, lengthSeg);
+
+        BuildArcSolidHead(v, tri, headA, boxed);
+
+        var mesh = new Mesh { name = boxed ? "ForceArc_SolidBox" : "ForceArc_Solid" };
+        mesh.SetVertices(v);
+        mesh.SetTriangles(tri, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    /// <summary>원형 단면 튜브 + 양 끝 뚜껑. 감김은 기존 <see cref="BuildArcSegmentMesh"/>와 같다(실측 정상).</summary>
+    private static void BuildArcRoundTube(List<Vector3> v, List<int> tri, float a0, float a1, int lengthSeg)
+    {
+        int start = v.Count;
+        for (int s = 0; s <= lengthSeg; s++)
+        {
+            float a = Mathf.Lerp(a0, a1, s / (float)lengthSeg);
+            Vector3 center = ArcPoint(a);
+            Vector3 outward = center.normalized;
+            for (int i = 0; i < ArcRadialSeg; i++)
+            {
+                float th = i / (float)ArcRadialSeg * Mathf.PI * 2f;
+                v.Add(center + outward * (Mathf.Cos(th) * ArcTube) + Vector3.up * (Mathf.Sin(th) * ArcTube));
+            }
+        }
+
+        for (int s = 0; s < lengthSeg; s++)
+        {
+            int b0 = start + s * ArcRadialSeg, b1 = start + (s + 1) * ArcRadialSeg;
+            for (int i = 0; i < ArcRadialSeg; i++)
+            {
+                int n = (i + 1) % ArcRadialSeg;
+                tri.Add(b0 + i); tri.Add(b1 + i); tri.Add(b1 + n);
+                tri.Add(b0 + i); tri.Add(b1 + n); tri.Add(b0 + n);
+            }
+        }
+
+        // 꼬리 뚜껑 — 안 막으면 뚫린 구멍으로 안쪽이 들여다보인다.
+        Vector3 c0 = ArcPoint(a0);
+        Vector3 out0 = c0.normalized;
+        int capStart = v.Count;
+        for (int i = 0; i < ArcRadialSeg; i++)
+        {
+            float th = i / (float)ArcRadialSeg * Mathf.PI * 2f;
+            v.Add(c0 + out0 * (Mathf.Cos(th) * ArcTube) + Vector3.up * (Mathf.Sin(th) * ArcTube));
+        }
+        int capCenter = v.Count; v.Add(c0);
+        for (int i = 0; i < ArcRadialSeg; i++)
+        {
+            int n = (i + 1) % ArcRadialSeg;
+            tri.Add(capCenter); tri.Add(capStart + i); tri.Add(capStart + n);
+        }
+    }
+
+    /// <summary>
+    /// 사각 단면 튜브. ★면마다 정점을 따로 둔다 — 공유하면 <c>RecalculateNormals</c>가 네 모서리를
+    /// 둥글려서 '박스'로 안 보인다. 윗면·아랫면은 회전축과 나란한 평면이라 화살촉과 단차 없이 이어진다.
+    /// </summary>
+    private static void BuildArcBoxTube(List<Vector3> v, List<int> tri, float a0, float a1, int lengthSeg)
+    {
+        // 단면 네 귀퉁이 (반지름 방향 offset, 축 방향 offset)
+        var corner = new[]
+        {
+            new Vector2(+ArcTube, +ArcTube),   // 바깥·위
+            new Vector2(+ArcTube, -ArcTube),   // 바깥·아래
+            new Vector2(-ArcTube, -ArcTube),   // 안쪽·아래
+            new Vector2(-ArcTube, +ArcTube)    // 안쪽·위
+        };
+
+        for (int f = 0; f < 4; f++)
+        {
+            int p = (f + 1) % 4;
+            int start = v.Count;
+            for (int s = 0; s <= lengthSeg; s++)
+            {
+                float a = Mathf.Lerp(a0, a1, s / (float)lengthSeg);
+                Vector3 center = ArcPoint(a);
+                Vector3 outward = center.normalized;
+                v.Add(center + outward * corner[f].x + Vector3.up * corner[f].y);
+                v.Add(center + outward * corner[p].x + Vector3.up * corner[p].y);
+            }
+            // ★감김 주의: 호의 로컬 기저는 Cross(위, 바깥) = 진행방향 이라, 소박하게 감으면
+            //   네 면이 전부 안쪽을 향한다(검산으로 확인). 아래가 바깥을 향하는 순서다.
+            for (int s = 0; s < lengthSeg; s++)
+            {
+                int b0 = start + s * 2, b1 = start + (s + 1) * 2;
+                tri.Add(b0); tri.Add(b1 + 1); tri.Add(b1);
+                tri.Add(b0); tri.Add(b0 + 1); tri.Add(b1 + 1);
+            }
+        }
+
+        // 꼬리 뚜껑
+        Vector3 c0 = ArcPoint(a0);
+        Vector3 o0 = c0.normalized;
+        int cap = v.Count;
+        for (int i = 0; i < 4; i++) v.Add(c0 + o0 * corner[i].x + Vector3.up * corner[i].y);
+        tri.Add(cap + 2); tri.Add(cap + 1); tri.Add(cap + 0);
+        tri.Add(cap + 3); tri.Add(cap + 2); tri.Add(cap + 0);
+    }
+
+    /// <summary>통짜 호 끝의 화살촉. 박스형이면 튜브와 <b>같은 두께</b>의 납작 쐐기라 단차가 없다.</summary>
+    private static void BuildArcSolidHead(List<Vector3> v, List<int> tri, float a0, bool boxed)
+    {
+        const float headLen = 0.030f;
+        float headR = ArcTube * 2.4f;
+
+        Vector3 baseCenter = ArcPoint(a0);
+        Vector3 dir = ArcTangent(a0);
+        Vector3 outward = baseCenter.normalized;
+        Vector3 apex = baseCenter + dir * headLen;
+
+        if (!boxed)
+        {
+            Vector3 side = Vector3.Cross(dir, outward).normalized;
+            int ring = v.Count;
+            for (int i = 0; i < ArcRadialSeg; i++)
+            {
+                float th = i / (float)ArcRadialSeg * Mathf.PI * 2f;
+                v.Add(baseCenter + outward * (Mathf.Cos(th) * headR) + side * (Mathf.Sin(th) * headR));
+            }
+            int ap = v.Count; v.Add(apex);
+            int capRing = v.Count;
+            for (int i = 0; i < ArcRadialSeg; i++)
+            {
+                float th = i / (float)ArcRadialSeg * Mathf.PI * 2f;
+                v.Add(baseCenter + outward * (Mathf.Cos(th) * headR) + side * (Mathf.Sin(th) * headR));
+            }
+            int center = v.Count; v.Add(baseCenter);
+            for (int i = 0; i < ArcRadialSeg; i++)
+            {
+                int n = (i + 1) % ArcRadialSeg;
+                tri.Add(ring + i); tri.Add(ring + n); tri.Add(ap);
+                tri.Add(center); tri.Add(capRing + n); tri.Add(capRing + i);
+            }
+            return;
+        }
+
+        // 박스형 = 두께(축 방향)는 튜브와 똑같이 두고 폭(반지름 방향)만 넓힌 납작 쐐기.
+        Vector3 up = Vector3.up * ArcTube;                 // 튜브와 같은 반두께 → 단차 없음
+        Vector3 wideOut = outward * headR;
+        Vector3 narrowOut = outward * ArcTube;
+
+        Vector3 bOutTop = baseCenter + wideOut + up, bOutBot = baseCenter + wideOut - up;
+        Vector3 bInTop = baseCenter - wideOut + up, bInBot = baseCenter - wideOut - up;
+        Vector3 tipTop = apex + up, tipBot = apex - up;
+
+        // 미늘(뒷면) 좌우 — 튜브보다 넓어진 부분만. 진행 반대쪽(-접선)을 향한다.
+        Quad(v, tri, baseCenter + narrowOut - up, bOutBot, bOutTop, baseCenter + narrowOut + up);
+        Quad(v, tri, bInBot, baseCenter - narrowOut - up, baseCenter - narrowOut + up, bInTop);
+        // 빗면 좌우
+        Quad(v, tri, bOutBot, tipBot, tipTop, bOutTop);
+        Quad(v, tri, bInBot, bInTop, tipTop, tipBot);
+        // 윗면 · 아랫면 — 튜브와 같은 두께라 단차 없이 이어진다
+        Tri(v, tri, bOutTop, tipTop, bInTop);
+        Tri(v, tri, bOutBot, bInBot, tipBot);
     }
 
     private static int AddRing(List<Vector3> v, int seg, float radius, float z)

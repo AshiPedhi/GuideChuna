@@ -21,8 +21,25 @@ using UnityEngine;
 /// </summary>
 public class ForceArcArrow : ForceArrowBase
 {
+    [Header("=== 표시 방식 ===")]
+    [Tooltip("★기본 = 통짜 왕복 (2026-08-17 사용자 요구: \"곡선도 실선\").\n" +
+             "흐름 모드는 진행 위치의 1~2칸만 켜고 <b>나머지 조각의 렌더러를 꺼 버리며</b>, " +
+             "조각 사이에 18% 틈까지 있어 점선으로 읽힌다.\n" +
+             "통짜 왕복 = 호 전체를 켜 둔 채 <b>회전축 둘레로 통째로 앞뒤로 흔든다</b> — " +
+             "직선 화살표의 앞뒤 왕복과 같은 원리다.\n" +
+             "자동 = 예전 동작(조각 2개 이상이면 흐름).")]
+    [SerializeField] private ForceArrow.DisplayMode displayMode = ForceArrow.DisplayMode.통짜왕복;
+
+    [Tooltip("통짜 왕복일 때 초당 왕복 횟수")]
+    [SerializeField] private float pulsePerSecond = 0.8f;
+
+    [Tooltip("★호를 늘였다 줄였다 하면 '힘이 세졌다 약해진다'로 읽힌다 → 길이는 두고 " +
+             "회전 방향으로 통째로 흔든다. 흔드는 폭(도). 0이면 제자리.")]
+    [SerializeField, Range(0f, 40f)] private float travelPulseDeg = 12f;
+
     [Header("=== 조각 (에디터 도구가 채운다. 비우면 자식에서 자동 수집) ===")]
-    [Tooltip("호를 이루는 조각들. 배열 순서 = 회전 진행 순서. 마지막이 화살촉.")]
+    [Tooltip("호를 이루는 조각들. 배열 순서 = 회전 진행 순서. 마지막이 화살촉.\n" +
+             "★통짜 왕복으로 바꿨다면 여기에 <b>통짜 호 렌더러 하나만</b> 들어간다.")]
     [SerializeField] private Renderer[] segments;
 
     [Header("=== 흐름 ===")]
@@ -54,6 +71,14 @@ public class ForceArcArrow : ForceArrowBase
     private float phase;
     private bool initialized;
 
+    /// <summary>씬에서 사용자가 맞춰 둔 회전. 통짜 왕복은 여기에 흔들림을 <b>얹기만</b> 한다 —
+    /// 덮어쓰면 사용자가 맞춘 회전축이 날아간다.</summary>
+    private Quaternion baseRotation;
+
+    private bool FlowMode =>
+        displayMode == ForceArrow.DisplayMode.흐름 ||
+        (displayMode == ForceArrow.DisplayMode.자동 && segments != null && segments.Length > 1);
+
     private void Awake() => Initialize();
 
     private void Initialize()
@@ -78,23 +103,63 @@ public class ForceArcArrow : ForceArrowBase
 
         // 크기 배율 — 호는 루트 스케일이 반지름까지 같이 키운다(러너는 로컬 좌표라 자동으로 따라간다).
         transform.localScale = ScaledBase(transform.localScale);
+        baseRotation = transform.localRotation;
     }
 
     private void OnEnable()
     {
         Initialize();
         phase = 0f;
+        transform.localRotation = baseRotation;
+    }
+
+    private void OnDisable()
+    {
+        // 왕복 도중의 기울기가 남지 않도록 되돌린다.
+        if (initialized) transform.localRotation = baseRotation;
     }
 
     private void Update()
     {
-        phase += Time.deltaTime * Mathf.Max(0.01f, flowPerSecond);
+        if (FlowMode)
+        {
+            phase += Time.deltaTime * Mathf.Max(0.01f, flowPerSecond);
+            if (phase > 1f) phase -= 1f;
+
+            if (segments != null && segments.Length > 0)
+                ApplyFlow(segments, phase, flowWidth, minAlpha, maxAlpha, keepHeadBright);
+
+            UpdateRunner();
+            return;
+        }
+
+        // ── 통짜 왕복 ─────────────────────────────────────────────
+        // 호 전체를 켜 둔 채 밝기가 오르내리고, 회전축 둘레로 통째로 앞뒤로 흔든다.
+        phase += Time.deltaTime * Mathf.Max(0.01f, pulsePerSecond);
         if (phase > 1f) phase -= 1f;
+        float wave = (Mathf.Sin(phase * 2f * Mathf.PI) + 1f) * 0.5f;
 
-        if (segments != null && segments.Length > 0)
-            ApplyFlow(segments, phase, flowWidth, minAlpha, maxAlpha, keepHeadBright);
+        // ★조각을 전부 켠다 — 흐름 모드로 돌다 이 모드로 바뀌면 렌더러가 꺼진 채 남아 있다.
+        Color c = Shade(BaseColor, Mathf.Lerp(minAlpha, maxAlpha, wave));
+        if (segments != null)
+        {
+            foreach (Renderer r in segments)
+            {
+                if (r == null) continue;
+                if (!r.enabled) r.enabled = true;
+                SetRendererColor(r, c);
+            }
+        }
 
-        UpdateRunner();
+        // ★러너는 '조각이 호를 타고 달리는' 연출이라 통짜에서는 오히려 점선처럼 읽힌다 → 숨긴다.
+        if (runnerRenderer != null && runnerRenderer.enabled) runnerRenderer.enabled = false;
+
+        if (travelPulseDeg > 0f)
+        {
+            // 길이(호의 각도)는 고정하고 회전만 흔든다 — 늘었다 줄었다 하면 '힘의 크기'로 오해된다.
+            float swing = Mathf.Sin(phase * 2f * Mathf.PI) * travelPulseDeg * 0.5f;
+            transform.localRotation = baseRotation * Quaternion.AngleAxis(swing, Vector3.up);
+        }
     }
 
     /// <summary>러너를 호 위 phase 지점에 놓고 진행 방향(접선)을 보게 한다.</summary>
