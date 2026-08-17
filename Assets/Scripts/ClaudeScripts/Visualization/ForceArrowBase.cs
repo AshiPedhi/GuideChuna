@@ -31,7 +31,16 @@ public abstract class ForceArrowBase : MonoBehaviour
         /// <summary>특정 단계에서만 표시. 한 국면 안에서 힘의 방향이 바뀔 때만 쓴다(PJ 호흡유도↔교정).</summary>
         특정_단계만,
         /// <summary>시나리오 내내 표시(진단·재평가 포함). 거의 안 쓴다.</summary>
-        항상
+        항상,
+        /// <summary>★<b>아예 안 쓴다.</b> 어느 단계에서도 뜨지 않는다.
+        ///
+        /// ★<b>씬에서 GameObject를 비활성으로 꺼 봐야 소용없다</b>(2026-08-17 사용자 지적) —
+        /// <see cref="ForceArrowDirector"/>가 단계가 바뀔 때마다 매칭되는 화살표를
+        /// <c>SetActive(true)</c>로 <b>다시 켜기</b> 때문이다. 지우지 않고 잠시 빼두려면 이 값을 쓴다.
+        /// (예: PM의 유양돌기 손은 고정만 하므로 힘 방향 표시가 필요 없다.)
+        ///
+        /// ★열거값을 <b>맨 뒤에 추가</b>했으므로 이미 씬에 저장된 값(0·1·2)은 그대로 유지된다.</summary>
+        사용안함
     }
 
     [Header("=== 언제 보일지 (그룹에 넣었으면 그룹이 이긴다) ===")]
@@ -175,6 +184,9 @@ public abstract class ForceArrowBase : MonoBehaviour
     {
         switch (scope)
         {
+            case ShowScope.사용안함:
+                return false;   // 어느 단계에서도 안 뜬다 — Director가 다시 켜지도 못한다
+
             case ShowScope.항상:
                 return true;
 
@@ -211,6 +223,7 @@ public abstract class ForceArrowBase : MonoBehaviour
     {
         switch (scope)
         {
+            case ShowScope.사용안함: return "사용 안 함 (어느 단계에서도 안 뜸)";
             case ShowScope.항상: return "항상";
             case ShowScope.특정_단계만:
                 if (string.IsNullOrWhiteSpace(step)) return "특정 단계만 — ★단계 이름이 비어 있음";

@@ -21,6 +21,11 @@ public class ForceArrowAuditTool : EditorWindow
     private float presetTravel = 0.6f;
     private float presetMinBright = 0.45f;
 
+    /// <summary>호(회전) 화살표가 한 방향으로 쓸어가는 폭(도).
+    /// ★호 자체가 100°라 12°는 자기 길이의 12%뿐이라 회전이 안 보인다(2026-08-17 사용자 지적).
+    /// 30° 정도면 호 길이의 1/3을 훑어 회전이 확실히 읽힌다.</summary>
+    private float presetSweepDeg = 30f;
+
     /// <summary>통짜로 바꿀 때의 단면 모양. 박스형은 화살촉 두께가 자루와 같아 위아래에 단차가 없다.</summary>
     private bool boxedShape = true;
 
@@ -144,7 +149,13 @@ public class ForceArrowAuditTool : EditorWindow
             EditorStyles.wordWrappedMiniLabel);
 
         presetSize = EditorGUILayout.Slider("크기 배율", presetSize, 0.5f, 3f);
-        presetTravel = EditorGUILayout.Slider("왕복 폭(길이 대비)", presetTravel, 0f, 2f);
+        presetTravel = EditorGUILayout.Slider("직선 왕복 폭(길이 대비)", presetTravel, 0f, 2f);
+        presetSweepDeg = EditorGUILayout.Slider(
+            new GUIContent("곡선 회전 폭(도)",
+                           "호 화살표가 한 방향으로 쓸어가는 각도.\n" +
+                           "★호 자체가 100°라 12°면 자기 길이의 12%뿐이라 회전이 안 보인다.\n" +
+                           "30° 정도면 호의 1/3을 훑어 확실히 읽힌다."),
+            presetSweepDeg, 0f, 60f);
         presetMinBright = EditorGUILayout.Slider("최저 밝기", presetMinBright, 0f, 1f);
 
         GUI.backgroundColor = new Color(0.75f, 1f, 0.8f);
@@ -286,6 +297,8 @@ public class ForceArrowAuditTool : EditorWindow
                 ? (int)ForceArrow.DisplayMode.자동
                 : (int)ForceArrow.DisplayMode.통짜왕복);
             Set(so, "travelPulse", p => p.floatValue = legacy ? 0.35f : presetTravel);
+            // 호(회전) 화살표만 갖는 값 — 직선에는 없어서 조용히 건너뛴다.
+            Set(so, "travelPulseDeg", p => p.floatValue = legacy ? 12f : presetSweepDeg);
             Set(so, "pulsePerSecond", p => p.floatValue = legacy ? 0.8f : 0.9f);
 
             Set(so, "minAlpha", p => p.floatValue = legacy ? 0.25f : presetMinBright);
@@ -302,7 +315,8 @@ public class ForceArrowAuditTool : EditorWindow
         report = legacy
             ? $"예전 방식으로 되돌렸습니다 — 화살표 {n}개 (흐름 + 반투명 + 원래 크기)\n\n" + report
             : $"가시성 프리셋 적용 — 화살표 {n}개\n" +
-              $"  통짜 왕복 / 불투명 / 크기 ×{presetSize:0.0} / 왕복 폭 {presetTravel:0.00} / 최저 밝기 {presetMinBright:0.00}\n" +
+              $"  통짜 / 불투명 / 크기 ×{presetSize:0.0} / 직선 왕복 {presetTravel:0.00} / " +
+              $"곡선 회전 {presetSweepDeg:0}° / 최저 밝기 {presetMinBright:0.00}\n" +
               "  ★씬을 저장해야 유지됩니다.\n\n" + report;
         Debug.Log("[화살표 가시성] " + report);
         Scan();

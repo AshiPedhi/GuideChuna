@@ -42599,7 +42599,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &401119824
 Transform:
   m_ObjectHideFlags: 0
@@ -44513,7 +44513,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!224 &425748981
 RectTransform:
   m_ObjectHideFlags: 0
@@ -62598,8 +62598,6 @@ MonoBehaviour:
     stepName: 
     poseNo: 0
     showBones:
-    - {fileID: 8445858230126594054}
-    - {fileID: 8445858230298892027}
     - {fileID: 8445858229789502215}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8OM\uAD50\uC815"
@@ -62615,25 +62613,19 @@ MonoBehaviour:
     poseNo: 1
     showBones:
     - {fileID: 8445858229789502215}
-    - {fileID: 8445858230298892027}
-    - {fileID: 8445858230126594054}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8PJ\uAD50\uC815"
     phaseName: "\uD3C9\uAC00"
     stepName: 
     poseNo: 2
     showBones:
-    - {fileID: 8445858230298892027}
     - {fileID: 8445858228629732509}
-    - {fileID: 8445858230107905040}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8PJ\uAD50\uC815"
     phaseName: "\uAD50\uC815"
     stepName: 
     poseNo: 0
     showBones:
-    - {fileID: 8445858230126594054}
-    - {fileID: 8445858230298892027}
     - {fileID: 8445858229789502215}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8PJ\uAD50\uC815"
@@ -62642,17 +62634,13 @@ MonoBehaviour:
     poseNo: 1
     showBones:
     - {fileID: 8445858229789502215}
-    - {fileID: 8445858230298892027}
-    - {fileID: 8445858230126594054}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8PJ\uAD50\uC815"
     phaseName: "\uC7AC\uD3C9\uAC00"
     stepName: 
     poseNo: 2
     showBones:
-    - {fileID: 8445858230298892027}
     - {fileID: 8445858228629732509}
-    - {fileID: 8445858230107905040}
     hideAllBones: 0
   - scenarioName: "\uB450\uAC1C\uACE8PM\uAD50\uC815"
     phaseName: "\uD3C9\uAC00"
@@ -62666,7 +62654,6 @@ MonoBehaviour:
     stepName: 
     poseNo: 0
     showBones:
-    - {fileID: 8445858228581603428}
     - {fileID: 8445858228629732509}
     - {fileID: 8445858229789502215}
     hideAllBones: 0
@@ -87871,7 +87858,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
@@ -88615,7 +88602,7 @@ Transform:
   m_GameObject: {fileID: 793925635}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.0706, y: 0.1094, z: -0.0225}
+  m_LocalPosition: {x: -0.0706, y: 0.1021, z: -0.0295}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -88696,7 +88683,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.02
+  m_Radius: 0.03
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &794111057
 GameObject:
@@ -120186,15 +120173,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 40
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -120202,11 +120189,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 20
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -19
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1399643648098774758, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_Layer
@@ -120554,7 +120541,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
@@ -137753,7 +137740,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
@@ -203502,7 +203489,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
@@ -213564,7 +213551,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
@@ -215363,7 +215350,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!114 &1814026283
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -215376,7 +215363,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4a2a367a141d6e84f8bd502202bcdc50, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ForceArrow
-  showWhen: 0
+  showWhen: 3
   stepName: 
   subStepNo: 0
   phaseName: 
@@ -236970,7 +236957,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 358cfbb104314934979cc0a8abf3187d, type: 2}
   - {fileID: 11400000, guid: e208a326390d40c29827ca69221756ec, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
-  defaultScenarioIndex: 5
+  defaultScenarioIndex: 6
   forceDefaultIndex: 1
   showDebugLog: 1
 --- !u!4 &1964066469
@@ -237720,7 +237707,7 @@ Transform:
   m_GameObject: {fileID: 1978023190}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.00028, y: 0.17033, z: 0.01313}
+  m_LocalPosition: {x: 0.0003, y: 0.1802, z: 0.0033}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -237800,7 +237787,7 @@ SphereCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.04
+  m_Radius: 0.05
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &1978550411
 GameObject:
@@ -245814,7 +245801,7 @@ MonoBehaviour:
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
-  pulsePerSecond: 0.8
+  pulsePerSecond: 0.9
   travelPulseDeg: 12
   sweepFadeEnds: 0.18
   segments:
