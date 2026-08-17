@@ -193,13 +193,18 @@ public abstract class ForceArrowBase : MonoBehaviour
         }
     }
 
-    /// <summary>'어디를 잡는가'를 익히는 단계인가 = 힘의 방향을 아직 보여주면 안 되는 단계.
-    /// 파지 / 준비 / 자세준비 (제1늑골의 '파지1·파지2'처럼 뒤에 번호가 붙어도 잡힌다).</summary>
+    /// <summary>'어디를 잡는가·어떻게 자세를 만드는가'를 익히는 단계인가 = 힘의 방향을 아직 보여주면 안 되는 단계.
+    /// 파지 / 준비 / 자세준비 / <b>견착</b> (제1늑골의 '파지1·파지2'처럼 뒤에 번호가 붙어도 잡힌다).
+    ///
+    /// ★<b>견착 추가(2026-08-17)</b>: 08-17에 순서를 '파지 → 견착 → 회전'으로 바로잡으면서
+    /// 견착이 회전보다 앞으로 왔는데, 견착은 <b>팔을 이마에 붙이는 자세 단계</b>이지 힘을 주는 단계가 아니다.
+    /// 그런데 화살표가 거기서부터 떠서 사용자 지적("견착할 때 화살표 왜 나오냐").
+    /// 08-11에 파지를 뺀 것과 같은 이유다 — <b>방향은 '잠그는 단계'부터</b> 보여준다.</summary>
     private static bool IsSetupStep(string step)
     {
         if (string.IsNullOrWhiteSpace(step)) return false;
         string s = step.Trim();
-        return s.Contains("파지") || s.Contains("준비");
+        return s.Contains("파지") || s.Contains("준비") || s.Contains("견착");
     }
 
     public static string Describe(ShowScope scope, string step, int subNo, string phase)

@@ -209,6 +209,13 @@ public class GripPointVisibilityTool : EditorWindow
                 GUI.color = old;
 
                 EditorGUILayout.LabelField(e.slot, GUILayout.Width(96));
+
+                bool req = e.grip == null || e.grip.IsRequired;
+                if (!req) GUI.color = new Color(1f, 0.8f, 0.4f);
+                EditorGUILayout.LabelField(req ? "필수" : "선택", GUILayout.Width(32));
+                GUI.color = old;
+
+                EditorGUILayout.LabelField(e.grip != null ? e.grip.Finger.ToString() : "", GUILayout.Width(52));
                 if (GUILayout.Button(e.path, EditorStyles.miniButton))
                 {
                     Selection.activeGameObject = e.grip.gameObject;
@@ -218,6 +225,26 @@ public class GripPointVisibilityTool : EditorWindow
         }
 
         EditorGUILayout.EndScrollView();
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("필수 / 선택", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "'선택'으로 빼면 접촉·색 표시는 그대로인데 파지 성립을 막지 않습니다.\n" +
+            "★호흡 게이트가 '모든 파지점'이라 트래킹이 불안한 손가락 하나가 튈 때마다 호흡 누적이 0으로 " +
+            "초기화됩니다(새끼손가락이 대표적). 배선을 빼는 것과 다릅니다 — 보되 통과를 막지 않습니다.",
+            EditorStyles.wordWrappedMiniLabel);
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            GUI.backgroundColor = new Color(1f, 0.9f, 0.7f);
+            if (GUILayout.Button("새끼손가락 전부 → 선택", GUILayout.Height(22)))
+                SetRequired(e => e.grip != null && e.grip.Finger == CranialFinger.Pinky, false);
+            GUI.backgroundColor = Color.white;
+            if (GUILayout.Button("체크한 것 → 선택", GUILayout.Height(22)))
+                SetRequired(e => e.check, false);
+            if (GUILayout.Button("체크한 것 → 필수", GUILayout.Height(22)))
+                SetRequired(e => e.check, true);
+        }
 
         EditorGUILayout.Space();
         int checkedCount = entries.Count(e => e.check);
@@ -353,6 +380,67 @@ public class GripPointVisibilityTool : EditorWindow
             if (GUILayout.Button("다시 켜기", GUILayout.Height(24), GUILayout.Width(90)))
                 SetBraceHidden(braces, false);
         }
+
+        // ── 견착 위치·임계 ──────────────────────────────────────────────
+        EditorGUILayout.Space(4);
+        var stabs = Resources.FindObjectsOfTypeAll<CranialPostureStabilizer>()
+            .Where(s => s != null && !EditorUtility.IsPersistent(s) && s.gameObject.scene.IsValid())
+            .ToList();
+
+        EditorGUILayout.LabelField($"견착 위치·임계 (자세 안정기 {stabs.Count}개)", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField(
+            "마커 높이 = 이마 기준점에서 위로 얼마나 띄울지. 올릴수록 마커가 이마 위쪽에 붙습니다.\n" +
+            "견착 거리 = 헤드셋과 이마 기준점이 이 거리 안으로 들어와야 '견착'으로 인정합니다. " +
+            "★줄일수록 더 숙여야 걸립니다. 풀림 거리는 자동으로 +8cm(히스테리시스, 임계 근처 깜빡임 방지).",
+            EditorStyles.wordWrappedMiniLabel);
+
+        braceOffsetY = EditorGUILayout.Slider("마커 높이 (m)", braceOffsetY, 0f, 0.35f);
+        engageCm = EditorGUILayout.Slider("견착 거리 (cm)", engageCm, 8f, 40f);
+
+        if (GUILayout.Button($"적용 — 마커 높이 {braceOffsetY:0.000}m / 견착 {engageCm:0}cm", GUILayout.Height(22)))
+            ApplyBracePose(braces, stabs);
+    }
+
+    private float braceOffsetY = 0.20f;   // 씬 현재값 0.154 → 조금 올린 제안치
+    private float engageCm = 24f;         // 씬 현재값 30cm → 더 숙여야 걸리게
+
+    /// <summary>견착 마커 높이와 자세 안정기 임계를 씬 인스턴스에 밀어 넣는다(둘 다 직렬화 필드라 코드 기본값이 안 먹는다).</summary>
+    private void ApplyBracePose(List<ShoulderBraceGuide> braces, List<CranialPostureStabilizer> stabs)
+    {
+        int nb = 0, ns = 0;
+
+        foreach (var b in braces)
+        {
+            var so = new SerializedObject(b);
+            SerializedProperty p = so.FindProperty("localOffset");
+            if (p == null) continue;
+            Vector3 v = p.vector3Value;
+            if (Mathf.Approximately(v.y, braceOffsetY)) continue;
+            v.y = braceOffsetY;
+            p.vector3Value = v;
+            if (so.ApplyModifiedProperties()) nb++;
+        }
+
+        float engage = engageCm * 0.01f;
+        foreach (var s in stabs)
+        {
+            var so = new SerializedObject(s);
+            SerializedProperty e = so.FindProperty("engageDistance");
+            SerializedProperty r = so.FindProperty("releaseDistance");
+            if (e == null) continue;
+            e.floatValue = engage;
+            // ★release는 engage보다 커야 한다 — 같거나 작으면 임계에서 계속 깜빡인다.
+            if (r != null) r.floatValue = engage + 0.08f;
+            if (so.ApplyModifiedProperties()) ns++;
+        }
+
+        if (nb > 0 || ns > 0)
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+        status = $"견착 마커 높이 {braceOffsetY:0.000}m — {nb}개 / 견착 거리 {engageCm:0}cm(풀림 {engageCm + 8:0}cm) — {ns}개" +
+                 "\n★Ctrl+S로 씬을 저장해야 유지됩니다. 값이 맞는지는 Play에서 실제로 숙여보며 맞추세요.";
+        Debug.Log("[견착 위치·임계] " + status);
     }
 
     private void SetBraceHidden(List<ShoulderBraceGuide> braces, bool hide)
@@ -379,6 +467,35 @@ public class GripPointVisibilityTool : EditorWindow
     private void CheckIf(System.Func<Entry, bool> pred)
     {
         foreach (Entry e in entries) e.check = pred(e);
+    }
+
+    /// <summary>파지점의 필수/선택을 바꾼다. 렌더러는 건드리지 않는다.</summary>
+    private void SetRequired(System.Func<Entry, bool> pred, bool required)
+    {
+        int n = 0;
+        var log = new StringBuilder();
+        foreach (Entry e in entries)
+        {
+            if (e.grip == null || !pred(e)) continue;
+            var so = new SerializedObject(e.grip);
+            SerializedProperty p = so.FindProperty("required");
+            if (p == null || p.boolValue == required) continue;
+            p.boolValue = required;
+            if (so.ApplyModifiedProperties())
+            {
+                n++;
+                if (log.Length < 3000) log.AppendLine($"  · [{e.rig}] {e.path}");
+            }
+        }
+
+        if (n > 0)
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+        status = $"파지점 {n}개를 '{(required ? "필수" : "선택")}'으로 바꿨습니다.\n" + log +
+                 "★Ctrl+S로 씬을 저장해야 유지됩니다. 접촉·색 표시는 그대로이고 성립 판정에서만 빠집니다.";
+        Debug.Log("[파지점 필수/선택] " + status);
+        Scan();
     }
 
     /// <summary>렌더러 enabled만 바꾼다. <paramref name="onlyChecked"/>가 false면 씬 전체가 대상.</summary>

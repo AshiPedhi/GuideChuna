@@ -1427,7 +1427,13 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             bool byHands = handThrust > 0f;
             if (byHands) headDrop = handThrust;
 
-            condition = new PressureCondition(cranialController, holdSec, 0.5f, headDrop, headThrust, byHands);
+            // ★brace 토큰이 붙은 유지 단계는 '이마 견착'까지 돼야 통과한다(2026-08-17).
+            //   그전에는 brace가 마커 표시만 켰고 판정에는 아무 영향이 없어서,
+            //   견착을 안 해도 파지만 유지되면 단계가 그냥 넘어갔다(사용자 보고).
+            bool requireBrace = HasFlagToken(subStep.conditionParams, "brace");
+
+            condition = new PressureCondition(cranialController, holdSec, 0.5f, headDrop, headThrust, byHands,
+                                              requireBrace);
             label = byHands
                 ? $"Pressure(손 누름 {handThrust * 100f:F0}cm — 들어갔다 나오기)"
                 : headThrust > 0f

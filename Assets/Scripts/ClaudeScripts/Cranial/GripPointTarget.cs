@@ -29,6 +29,16 @@ public class GripPointTarget : MonoBehaviour
     [SerializeField] private bool bypassPoseCheck = false;
 
     [Header("=== 피드백 (선택) ===")]
+    [Tooltip("★끄면 이 파지점은 <b>'선택'</b>이 되어 파지 성립을 막지 않는다(접촉·색 표시는 그대로).\n" +
+             "2026-08-17 사용자 지시: \"새끼손가락 파지 필수 아닌 걸로 빼\" — 호흡 3회가 통과되지 않았다.\n" +
+             "★이유: 호흡 게이트가 `BothGripped`(= 배열의 <b>모든</b> 파지점)이라, 트래킹이 제일 불안한 " +
+             "새끼손가락이 한 번 튈 때마다 호흡 누적이 0으로 초기화된다.\n" +
+             "★배선을 빼는 것과 다르다 — 빼면 접촉 자체를 안 보지만, 이건 보되 <b>통과를 막지 않는다</b>.")]
+    [SerializeField] private bool required = true;
+
+    /// <summary>이 파지점이 성립에 필수인가. false면 파지 판정에서 건너뛴다.</summary>
+    public bool IsRequired => required;
+
     [SerializeField] private Renderer targetRenderer;
     // 흰색(1,1,1,0.3)은 환자 피부·배경에 묻혀 VR에서 잘 안 보였다(사용자 피드백) → 연한 붉은색.
     // 미파지=붉은색 / 파지 성립=초록(grippedColor)으로 신호가 갈린다.

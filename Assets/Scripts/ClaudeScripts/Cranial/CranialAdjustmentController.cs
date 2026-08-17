@@ -1261,11 +1261,21 @@ public class CranialAdjustmentController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 이 손의 파지가 성립했는가. ★<b>'선택'으로 표시된 파지점(<see cref="GripPointTarget.IsRequired"/>=false)은
+    /// 건너뛴다</b> — 트래킹이 불안한 손가락(새끼) 하나 때문에 호흡 누적이 계속 리셋되던 것을 막기 위한 것이다(08-17).
+    /// 배선이 비어 있는 것(<c>null</c>)은 실수이므로 그대로 미성립 처리한다.
+    /// </summary>
     private static bool AllGripped(GripPointTarget[] grips)
     {
         if (grips == null || grips.Length == 0) return false;   // 미설정 손 = 미성립(양손 파지 강제)
         for (int i = 0; i < grips.Length; i++)
-            if (grips[i] == null || !grips[i].IsGripped) return false;
+        {
+            GripPointTarget g = grips[i];
+            if (g == null) return false;      // 배선 구멍은 미성립
+            if (!g.IsRequired) continue;      // ★선택 파지점은 성립을 막지 않는다
+            if (!g.IsGripped) return false;
+        }
         return true;
     }
 

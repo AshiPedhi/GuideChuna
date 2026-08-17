@@ -278,15 +278,43 @@ public class PressureCondition : IScenarioCondition
     private float lastY = float.NaN, lastT;
     private float thrustDrop;
 
+    /// <summary>
+    /// true면 <b>이마 견착까지 돼야</b> 유지로 인정한다(CSV <c>conditionParams=…;brace</c>).
+    ///
+    /// ★2026-08-17 사용자 보고: "이마 견착도 안 했는데 혼자 넘어가더라."
+    /// 원인 = <c>brace</c> 토큰이 <see cref="ShoulderBraceGuide"/> <b>마커 표시만</b> 켰고 판정에는
+    /// 아무 영향이 없었다. 이 조건은 <see cref="Holding"/>이 파지만 봤기 때문에,
+    /// 앞 단계에서 이미 잡고 있던 파지가 그대로 유지되어 견착 단계가 즉시 통과됐다.
+    /// </summary>
+    private readonly bool requireBrace;
+
+    /// <summary>
+    /// ★<b>견착 중에는 파지 추적이 끊긴다.</b> 머리를 숙여 팔을 이마에 붙이면 손이 헤드셋 시야 밖으로
+    /// 나가서 파지가 false로 떨어진다(2026-08-17 사용자 보고: "머리 숙인 채로는 진행이 안 되고
+    /// 머리를 올리고 파지하니까 그제서야 된다").
+    ///
+    /// 그래서 <b>이 단계에서 파지가 한 번이라도 성립했으면, 견착이 유지되는 동안은 유지된 것으로 본다.</b>
+    /// 견착이 풀리면 래치도 풀린다 — 손을 놓고 버티는 것으로 통과되지 않는다.
+    ///
+    /// ★이 래치가 없으면 견착 판정과 파지 판정이 서로를 막아 <b>영영 못 넘어간다</b>
+    /// (숙이면 파지가 끊기고, 파지하려고 들면 견착이 풀린다).
+    /// </summary>
+    private bool gripLatched;
+
     public PressureCondition(CranialAdjustmentController controller, float holdDuration = 1.0f,
                              float graceTime = 0.5f, float headDrop = 0f, float headThrust = 0f,
-                             bool thrustByHands = false)
+                             bool thrustByHands = false, bool requireBrace = false)
     {
         this.controller = controller;
         this.holdDuration = holdDuration;
         this.graceTime = graceTime;
         this.headDrop = headDrop;
         this.headThrust = headThrust;
+        this.requireBrace = requireBrace;
+        // ★단계에 들어오는 순간 이미 파지 중이면 래치를 미리 걸어 둔다.
+        //   앞 단계(파지·견착)에서 잡고 들어오는 흐름이라, 여기서 안 걸면 첫 프레임에
+        //   손이 시야 밖이었을 때 영영 래치가 안 걸린다.
+        this.gripLatched = requireBrace && controller != null && controller.BothGripped;
         if (headThrust > 0f || thrustByHands)
             thrust = new HeadThrustDetector(controller, headThrust, headDrop, thrustByHands);
 
@@ -311,6 +339,27 @@ public class PressureCondition : IScenarioCondition
         get
         {
             bool grip = controller.UseDepthJudging ? controller.BothInGoodZone : controller.BothGripped;
+
+            if (requireBrace)
+            {
+                // ★견착 단계(brace)는 파지만으로는 안 된다 — 이마에 삼각근을 붙여야 인정.
+                //   stabilizer가 씬에 없으면 IsPostureEngaged가 true를 주므로 예전처럼 동작한다.
+                if (!controller.IsPostureEngaged)
+                {
+                    gripLatched = false;   // 견착이 풀리면 파지 래치도 푼다
+                    Trace("견착 미성립 — 이마에 밀착해야 유지로 인정");
+                    return false;
+                }
+
+                // 견착 중에는 손이 시야 밖이라 파지가 끊긴다 → 한 번 성립했으면 유지로 본다.
+                if (grip) gripLatched = true;
+                else if (gripLatched)
+                {
+                    grip = true;
+                    Trace("견착 유지 중 — 파지 추적이 끊겼지만 래치로 유지 인정");
+                }
+            }
+
             if (headDrop <= 0f) return grip;
 
             if (!controller.TryGetHeadHeight(out float y))

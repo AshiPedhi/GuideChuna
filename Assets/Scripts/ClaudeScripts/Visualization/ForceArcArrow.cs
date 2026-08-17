@@ -34,8 +34,15 @@ public class ForceArcArrow : ForceArrowBase
     [SerializeField] private float pulsePerSecond = 0.8f;
 
     [Tooltip("★호를 늘였다 줄였다 하면 '힘이 세졌다 약해진다'로 읽힌다 → 길이는 두고 " +
-             "회전 방향으로 통째로 흔든다. 흔드는 폭(도). 0이면 제자리.")]
+             "회전 방향으로 통째로 쓸어간다. 쓸어가는 폭(도). 0이면 제자리.")]
     [SerializeField, Range(0f, 40f)] private float travelPulseDeg = 12f;
+
+    [Tooltip("★한 방향으로만 쓸어간다(2026-08-17 사용자 지시: \"화살표 회전은 왔다갔다 말고 한 방향으로만\").\n" +
+             "왕복하면 '반대로도 민다'로 읽혀 회전 방향이 흐려진다.\n" +
+             "끝까지 가면 시작으로 되돌아가는데, 그 순간을 감추려고 양 끝에서 밝기를 죽인다.\n" +
+             "이 값 = 밝기를 올리고 내리는 구간의 비율(0~0.5). 0이면 밝기 변화 없이 그냥 되돌아간다.\n" +
+             "★되돌아가는 게 눈에 거슬리면 아래 minAlpha를 낮출 것 — 어두울수록 안 보인다.")]
+    [SerializeField, Range(0f, 0.5f)] private float sweepFadeEnds = 0.18f;
 
     [Header("=== 조각 (에디터 도구가 채운다. 비우면 자식에서 자동 수집) ===")]
     [Tooltip("호를 이루는 조각들. 배열 순서 = 회전 진행 순서. 마지막이 화살촉.\n" +
@@ -133,11 +140,16 @@ public class ForceArcArrow : ForceArrowBase
             return;
         }
 
-        // ── 통짜 왕복 ─────────────────────────────────────────────
-        // 호 전체를 켜 둔 채 밝기가 오르내리고, 회전축 둘레로 통째로 앞뒤로 흔든다.
+        // ── 통짜 한 방향 쓸기 ──────────────────────────────────────
+        // 호 전체를 켜 둔 채 회전축 둘레로 통째로 <b>한 방향으로만</b> 쓸어간다.
+        // ★왕복이 아니다 — 되돌아오는 구간이 보이면 '반대로도 민다'로 읽혀 방향이 흐려진다.
+        //   끝까지 가면 시작으로 되돌아가는데, 그 순간은 양 끝에서 밝기를 죽여 감춘다.
         phase += Time.deltaTime * Mathf.Max(0.01f, pulsePerSecond);
         if (phase > 1f) phase -= 1f;
-        float wave = (Mathf.Sin(phase * 2f * Mathf.PI) + 1f) * 0.5f;
+
+        float wave = 1f;
+        if (sweepFadeEnds > 0.001f)
+            wave = Mathf.Clamp01(Mathf.Min(phase, 1f - phase) / sweepFadeEnds);
 
         // ★조각을 전부 켠다 — 흐름 모드로 돌다 이 모드로 바뀌면 렌더러가 꺼진 채 남아 있다.
         Color c = Shade(BaseColor, Mathf.Lerp(minAlpha, maxAlpha, wave));
@@ -156,9 +168,10 @@ public class ForceArcArrow : ForceArrowBase
 
         if (travelPulseDeg > 0f)
         {
-            // 길이(호의 각도)는 고정하고 회전만 흔든다 — 늘었다 줄었다 하면 '힘의 크기'로 오해된다.
-            float swing = Mathf.Sin(phase * 2f * Mathf.PI) * travelPulseDeg * 0.5f;
-            transform.localRotation = baseRotation * Quaternion.AngleAxis(swing, Vector3.up);
+            // 길이(호의 각도)는 고정하고 회전만 쓸어간다 — 늘었다 줄었다 하면 '힘의 크기'로 오해된다.
+            // 0 → travelPulseDeg 로 한 방향 진행한 뒤 시작으로 돌아간다(밝기로 가려진다).
+            float sweep = (phase - 0.5f) * travelPulseDeg;   // 기준 회전을 가운데 두고 ±절반씩
+            transform.localRotation = baseRotation * Quaternion.AngleAxis(sweep, Vector3.up);
         }
     }
 

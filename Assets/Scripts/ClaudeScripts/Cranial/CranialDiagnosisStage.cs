@@ -49,14 +49,13 @@ public class CranialHandGrips
     }
 
     /// <summary>배선된 파지점이 전부 접촉했는가. 배선이 하나도 없으면 true(할 일 없음).</summary>
+    /// <summary>★'선택'으로 표시된 파지점은 건너뛴다 — 컨트롤러의 교정 파지 판정과 같은 규칙(08-17).</summary>
     public bool AllGripped()
     {
-        if (palmGrip  != null && !palmGrip.IsGripped)  return false;
-        if (thumbGrip != null && !thumbGrip.IsGripped) return false;
-        if (indexGrip != null && !indexGrip.IsGripped) return false;
-        if (pinkyGrip != null && !pinkyGrip.IsGripped) return false;
-        return true;
+        return Ok(palmGrip) && Ok(thumbGrip) && Ok(indexGrip) && Ok(pinkyGrip);
     }
+
+    private static bool Ok(GripPointTarget g) => g == null || !g.IsRequired || g.IsGripped;
 }
 
 /// <summary>

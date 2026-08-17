@@ -158,6 +158,12 @@ public class BreathingSyncHUD : MonoBehaviour
         lastHoldRatio = 0f;
         breathHeldTime = 0f;
         breathTotalTime = 0f;
+        gateWasOpen = true;
+        // 바 게이지는 항상 기준선(0)에서 출발한다 — 첫 들숨이 '완전히 내쉰 상태(-1)'에서
+        // 시작하는 것처럼 보이면 안 된다.
+        CurrentBreathLevel = 0f;
+        levelFrom = 0f;
+        UpdateLevelBar();
         gameObject.SetActive(true);
         ApplyVisualVisibility();   // showVisuals=false면 링·카운트를 숨긴다(타이밍 엔진은 계속 동작)
         EnsureBreathAudio();   // 인스펙터 미연결 시 Resources/Audio에서 자동 로드 + AudioSource 자동 생성
@@ -263,10 +269,17 @@ public class BreathingSyncHUD : MonoBehaviour
     /// 그래서 GameObject를 끄는 대신 자식 비주얼만 숨긴다.</summary>
     private void ApplyVisualVisibility()
     {
-        if (ringVisual != null && ringVisual.gameObject.activeSelf != showVisuals)
-            ringVisual.gameObject.SetActive(showVisuals);
-        if (breathCountText != null && breathCountText.gameObject.activeSelf != showVisuals)
-            breathCountText.gameObject.SetActive(showVisuals);
+        // ★호흡이 도는 중에 파지가 풀렸으면 숨긴다 — "표시가 떠 있다 = 파지가 됐다"가 성립하도록.
+        bool show = showVisuals && (!running || !pauseWhenGateClosed || GateOpen);
+
+        if (ringVisual != null && ringVisual.gameObject.activeSelf != show)
+            ringVisual.gameObject.SetActive(show);
+        if (breathCountText != null && breathCountText.gameObject.activeSelf != show)
+            breathCountText.gameObject.SetActive(show);
+        if (levelBar != null && levelBar.gameObject.activeSelf != show)
+            levelBar.gameObject.SetActive(show);
+        if (breathGauge != null && breathGauge.gameObject.activeSelf != show)
+            breathGauge.gameObject.SetActive(show);
     }
 
     private void UpdateBreathCountText()
@@ -285,9 +298,98 @@ public class BreathingSyncHUD : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 지금 호흡을 진행시켜도 되는 상태인가 = 파지(또는 견착 자세)가 성립해 있는가.
+    /// <see cref="tensionProvider"/>가 없으면 항상 true(주입 전 씬 호환).
+    /// </summary>
+    private bool GateOpen => tensionProvider == null || tensionProvider();
+
+    /// <summary>
+    /// ★<b>파지가 성립해야만 호흡이 진행된다</b>(2026-08-17 사용자 지시:
+    /// "호흡을 막 재생하지 말고, 파지를 한 상태에서 내가 유도하는 거라 제대로 파지 안 되면 호흡 표시가 안 돼야 한다").
+    ///
+    /// 예전에는 단계에 들어오면 파지와 무관하게 링·숨소리가 돌았고, 유지비율만 깎였다.
+    /// 그래서 <b>파지가 어긋난 줄 모르고</b> 호흡만 계속 유도하다 3회가 안 채워졌다.
+    /// 이제 게이트가 닫히면 위상 타이머가 멈추고 표시도 숨겨진다 →
+    /// <b>"호흡 표시가 떠 있다 = 파지가 제대로 됐다"</b>가 성립한다.
+    ///
+    /// 끄면 예전 동작(계속 돌고 비율만 깎임).
+    /// </summary>
+    [Header("=== 파지 게이트 ===")]
+    [Tooltip("★켜면(기본) 파지가 성립해야 호흡이 진행된다. 파지가 풀리면 위상이 멈추고 표시도 사라진다.\n" +
+             "끄면 예전처럼 파지와 무관하게 돌고 유지비율만 깎인다.")]
+    [SerializeField] private bool pauseWhenGateClosed = true;
+
+    private bool gateWasOpen = true;
+
+    // ── 바 형태 호흡 게이지 (3단계) ─────────────────────────────────────
+    //
+    // ★2026-08-17 사용자 지시 — 08-13 회의의 "급흡기 구분용 3단계 계단식 UI"가 이것이다.
+    //   0을 기준선으로 두고 유도해야 할 호흡이 어느 칸인지 바로 보여준다.
+    //        2  크게 마시는 호흡(급흡기)
+    //        1  일반 호흡 들숨
+    //        0  기준선(평상)
+    //       -1  완전히 내쉬기
+    // ★새 CSV 토큰이 필요 없다 — 이미 있는 값에서 그대로 나온다.
+    //   `firstScale>1`인 첫 주기 = 2 / 날숨이 fullExhaleSeconds 이상 = -1 / 그 외 = 1·0.
+
+    [Header("=== 바 형태 호흡 게이지 (3단계) ===")]
+    [Tooltip("세로 바. Image Type=Filled · Fill Method=Vertical 로 두면 채워지는 높이가 레벨이 된다.\n" +
+             "비워 두면 이 기능만 조용히 꺼진다(기존 링은 그대로 동작).")]
+    [SerializeField] private UnityEngine.UI.Image levelBar;
+
+    [Tooltip("날숨이 이 시간 이상이면 '완전히 내쉬기(-1)'로 본다. PJ 호흡1이 exhale=6이라 여기 걸린다.\n" +
+             "평상 호흡(exhale=3)은 걸리지 않아 기준선 0까지만 내려간다.")]
+    [SerializeField] private float fullExhaleSeconds = 5f;
+
+    [Tooltip("레벨별 바 색. 완전히 내쉬기 / 평상 / 크게 마시기.")]
+    [SerializeField] private Color exhaleLevelColor = new Color(1f, 0.55f, 0.3f);
+    [SerializeField] private Color normalLevelColor = new Color(0.35f, 0.75f, 1f);
+    [SerializeField] private Color deepLevelColor = new Color(0.4f, 1f, 0.6f);
+
+    /// <summary>지금 유도해야 할 호흡 레벨(-1 ~ 2). 바가 없어도 계산은 돈다(디버그·확장용).</summary>
+    public float CurrentBreathLevel { get; private set; }
+
+    /// <summary>이번 위상이 시작될 때의 레벨. 여기서 목표 레벨로 부드럽게 옮겨 간다.</summary>
+    private float levelFrom;
+
+    /// <summary>이번 들숨의 목표 = 첫 주기이고 firstScale이 걸려 있으면 '크게 마시기(2)', 아니면 1.</summary>
+    private float InhaleTargetLevel => (completedBreaths == 0 && firstCycleScale > 1.01f) ? 2f : 1f;
+
+    /// <summary>이번 날숨의 목표 = 날숨이 길면 '완전히 내쉬기(-1)', 아니면 기준선(0).</summary>
+    private float ExhaleTargetLevel => breatheOutDuration >= fullExhaleSeconds ? -1f : 0f;
+
+    /// <summary>레벨(-1~2)을 바에 반영한다. -1 → 0%, 0 → 33%, 1 → 67%, 2 → 100%.</summary>
+    private void UpdateLevelBar()
+    {
+        if (levelBar == null) return;
+        levelBar.fillAmount = Mathf.Clamp01((CurrentBreathLevel + 1f) / 3f);
+        levelBar.color = CurrentBreathLevel < -0.05f ? exhaleLevelColor
+                       : CurrentBreathLevel > 1.05f ? deepLevelColor
+                       : normalLevelColor;
+    }
+
     void Update()
     {
         if (!running) return;
+
+        // ★게이트가 닫히면(파지 풀림) 호흡을 통째로 멈춘다 — 표시·소리·위상 전부.
+        if (pauseWhenGateClosed && !GateOpen)
+        {
+            if (gateWasOpen)
+            {
+                gateWasOpen = false;
+                ApplyVisualVisibility();   // 표시 숨김
+                ChunaLogger.Log("<color=orange>[BreathingSyncHUD] 파지가 풀려 호흡을 멈춥니다 — 다시 잡으면 이어집니다.</color>");
+            }
+            return;
+        }
+        if (!gateWasOpen)
+        {
+            gateWasOpen = true;
+            ApplyVisualVisibility();       // 표시 복귀
+            ChunaLogger.Log("<color=green>[BreathingSyncHUD] 파지 성립 — 호흡을 이어갑니다.</color>");
+        }
 
         phaseTimer += Time.deltaTime;
 
@@ -296,6 +398,14 @@ public class BreathingSyncHUD : MonoBehaviour
         breathTotalTime += Time.deltaTime;
         if (tensionProvider != null && tensionProvider())
             breathHeldTime += Time.deltaTime;
+
+        // 바 게이지: 이번 위상의 시작 레벨 → 목표 레벨로 옮겨 간다.
+        {
+            float dur = inhaling ? CurrentInhaleDuration : CurrentExhaleDuration;
+            float t = Mathf.Clamp01(phaseTimer / Mathf.Max(0.0001f, dur));
+            CurrentBreathLevel = Mathf.Lerp(levelFrom, inhaling ? InhaleTargetLevel : ExhaleTargetLevel, t);
+            UpdateLevelBar();
+        }
 
         if (inhaling)
         {
@@ -309,6 +419,7 @@ public class BreathingSyncHUD : MonoBehaviour
                 //   "다 뱉었는데 또 마시라고 한다"가 된다(2026-08-12).
                 if (complete) { phaseTimer = CurrentInhaleDuration; return; }
                 inhaling = false;
+                levelFrom = CurrentBreathLevel;   // 바 게이지: 이 지점에서 날숨 목표로 옮겨간다
                 phaseTimer = 0f;
                 if (running) PlayBreathClip(false);   // 날숨 위상 진입(완료 시엔 재생 안 함)
             }
@@ -324,6 +435,7 @@ public class BreathingSyncHUD : MonoBehaviour
                 //   타이밍 맞추기 게임이 아니다(사용자 지시).
                 if (complete) { phaseTimer = CurrentExhaleDuration; return; }
                 inhaling = true;
+                levelFrom = CurrentBreathLevel;   // 바 게이지: 이 지점에서 들숨 목표로 옮겨간다
                 phaseTimer = 0f;
                 if (running) PlayBreathClip(true);   // 다음 들숨 위상 진입(완료 시엔 재생 안 함)
             }
