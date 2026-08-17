@@ -68,6 +68,15 @@ public class ShoulderBraceGuide : MonoBehaviour
     [SerializeField] private float scaleLerpSpeed = 12f;
 
     [Header("=== 디버그 ===")]
+    [Header("=== 표시 끄기 ===")]
+    [Tooltip("★켜면 마커와 라벨을 아예 그리지 않는다(2026-08-13 회의 결정).\n" +
+             "이마에 밀착하면 HMD 시야를 가려서 가이드 마커를 없애기로 했다 — " +
+             "★<b>견착 동작 자체를 없애는 게 아니라 표시만 지우는 것</b>이다.\n" +
+             "이 가이드는 표시 전용이고 판정에 관여하지 않으므로(자세 안정화는 " +
+             "CranialPostureStabilizer가 따로 본다) 꺼도 시나리오 진행에는 영향이 없다.\n" +
+             "★씬에서 markerRenderer를 직접 꺼 봐야 소용없다 — SetShown()이 견착 국면마다 다시 켠다.")]
+    [SerializeField] private bool hideMarker = false;
+
     [SerializeField] private bool debugLog = false;
 
     private Vector3 baseScale;
@@ -102,6 +111,7 @@ public class ShoulderBraceGuide : MonoBehaviour
         if (!shown) return;
 
         FollowTarget();
+        if (hideMarker) return;   // 그릴 게 없으면 색·펄스 계산도 건너뛴다
 
         // 접촉 판정이 아니라 '상체를 숙였는가'(기존 프록시)를 비추는 것뿐이다. 끄거나 프록시가 없으면 순수 위치 표시.
         bool reflect = reflectEngagement && stabilizer != null;
@@ -174,8 +184,11 @@ public class ShoulderBraceGuide : MonoBehaviour
     private void SetShown(bool on)
     {
         shown = on;
-        if (markerRenderer != null) markerRenderer.enabled = on;
-        if (label != null) label.SetActive(on);
+        // ★hideMarker면 국면 상태(shown)는 그대로 두고 '그리기'만 막는다 —
+        //   견착 국면 자체는 살아 있어야 CSV 흐름과 나레이션이 어긋나지 않는다.
+        bool draw = on && !hideMarker;
+        if (markerRenderer != null) markerRenderer.enabled = draw;
+        if (label != null) label.SetActive(draw);
         if (!on)
         {
             wasEngaged = false;

@@ -30,6 +30,12 @@ public class TargetAreaHighlightTool : EditorWindow
     private bool deleteBoxAfter = true;
     private bool wholeTriangleInside = false;
 
+    /// <summary>박스 없이 원본 뼈 <b>전체</b>를 하이라이트로 뜬다(2026-08-17 신설).
+    /// ★그래도 오브젝트는 원본의 <b>자식 오버레이</b>로 만든다 — 원본 뼈에 직접
+    /// <see cref="TargetAreaHighlight"/>를 붙이면 <c>ForceArrowDirector</c>가 표시를 끌 때
+    /// <c>SetActive(false)</c>로 <b>뼈 자체가 사라진다.</b></summary>
+    private bool useWholeMesh = false;
+
     private string report = "";
     private Vector2 scroll;
 
@@ -61,9 +67,10 @@ public class TargetAreaHighlightTool : EditorWindow
     private void OnGUI()
     {
         EditorGUILayout.HelpBox(
-            "뼈 메시에서 지정한 영역의 조각만 뽑아 하이라이트 오브젝트를 만듭니다.\n" +
+            "뼈 메시에서 하이라이트 오브젝트를 만듭니다 — 영역만 뽑거나, 뼈 전체를 뜨거나.\n" +
             "원본 메시는 건드리지 않습니다 — 되돌리려면 만들어진 오브젝트를 지우면 됩니다.\n" +
-            "예: 흉추(thoracic_spine)에서 좌우 횡돌기만 뽑아 주동수/보조수 색으로 각각 강조",
+            "예1: 흉추(thoracic_spine) 전체를 통째로 강조 → ②에서 '박스 없이' 켜기\n" +
+            "예2: 흉추에서 좌우 횡돌기만 뽑아 주동수/보조수 색으로 각각 강조 → 박스 사용",
             MessageType.Info);
 
         EditorGUILayout.Space();
@@ -84,17 +91,34 @@ public class TargetAreaHighlightTool : EditorWindow
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("② 추출 영역", EditorStyles.boldLabel);
-        box = (Transform)EditorGUILayout.ObjectField("영역 박스", box, typeof(Transform), true);
 
-        using (new EditorGUI.DisabledScope(source == null))
+        useWholeMesh = EditorGUILayout.ToggleLeft(
+            new GUIContent("박스 없이 — 이 뼈 전체를 하이라이트",
+                           "흉추(thoracic_spine)처럼 뼈 하나를 통째로 강조할 때. 박스를 맞출 필요가 없습니다.\n" +
+                           "부위만 집으려면 끄고 박스를 쓰세요."),
+            useWholeMesh);
+
+        using (new EditorGUI.DisabledScope(useWholeMesh))
         {
-            if (GUILayout.Button("추출 박스 만들기 / 원본 앞에 놓기", GUILayout.Height(24)))
-                CreateBox();
+            box = (Transform)EditorGUILayout.ObjectField("영역 박스", box, typeof(Transform), true);
+
+            using (new EditorGUI.DisabledScope(source == null))
+            {
+                if (GUILayout.Button("추출 박스 만들기 / 원본 앞에 놓기", GUILayout.Height(24)))
+                    CreateBox();
+            }
+            EditorGUILayout.LabelField(
+                "박스를 씬 뷰에서 옮기고 크기를 조절해 원하는 부위(예: 횡돌기)를 감싸세요.\n" +
+                "박스는 표시용일 뿐이고 회전시켜도 됩니다.",
+                EditorStyles.wordWrappedMiniLabel);
         }
-        EditorGUILayout.LabelField(
-            "박스를 씬 뷰에서 옮기고 크기를 조절해 원하는 부위(예: 횡돌기)를 감싸세요.\n" +
-            "박스는 표시용일 뿐이고 회전시켜도 됩니다.",
-            EditorStyles.wordWrappedMiniLabel);
+
+        if (useWholeMesh)
+            EditorGUILayout.HelpBox(
+                "뼈 전체를 뜹니다. 원본 뼈는 그대로 두고 살짝 띄운 껍데기를 자식으로 얹습니다.\n" +
+                "★원본 뼈에 직접 붙이면 안 됩니다 — Director가 표시를 끌 때 SetActive(false)로 " +
+                "뼈 자체가 사라집니다. 이 도구는 항상 자식 오버레이로 만듭니다.",
+                MessageType.Info);
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("③ 만들기", EditorStyles.boldLabel);
@@ -109,10 +133,11 @@ public class TargetAreaHighlightTool : EditorWindow
             wholeTriangleInside);
         deleteBoxAfter = EditorGUILayout.Toggle("만든 뒤 박스 삭제", deleteBoxAfter);
 
-        using (new EditorGUI.DisabledScope(source == null || box == null))
+        using (new EditorGUI.DisabledScope(source == null || (!useWholeMesh && box == null)))
         {
             GUI.backgroundColor = new Color(0.75f, 1f, 0.8f);
-            if (GUILayout.Button("이 영역으로 하이라이트 만들기", GUILayout.Height(30)))
+            if (GUILayout.Button(useWholeMesh ? "이 뼈 전체로 하이라이트 만들기" : "이 영역으로 하이라이트 만들기",
+                                 GUILayout.Height(30)))
                 Extract();
             GUI.backgroundColor = Color.white;
         }
@@ -259,14 +284,17 @@ public class TargetAreaHighlightTool : EditorWindow
 
         bool Inside(Vector3 worldPoint)
         {
+            if (useWholeMesh) return true;          // 뼈 전체 모드 — 박스를 보지 않는다
             Vector3 p = box.InverseTransformPoint(worldPoint);
             return Mathf.Abs(p.x) <= 0.5f && Mathf.Abs(p.y) <= 0.5f && Mathf.Abs(p.z) <= 0.5f;
         }
 
         if (keptTris.Count == 0)
         {
-            report = $"★영역 안에 들어온 면이 없습니다(원본 삼각형 {totalTris:N0}개).\n" +
-                     "박스를 뼈 표면에 겹치도록 옮기거나 키워 보세요.";
+            report = useWholeMesh
+                ? $"★원본에 면이 없습니다(삼각형 {totalTris:N0}개)."
+                : $"★영역 안에 들어온 면이 없습니다(원본 삼각형 {totalTris:N0}개).\n" +
+                  "박스를 뼈 표면에 겹치도록 옮기거나 키워 보세요.";
             return;
         }
 

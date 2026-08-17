@@ -96,8 +96,13 @@ public class CranialHeadXray : MonoBehaviour
     [Header("반투명 (피부색 유지, 알파만)")]
     [Tooltip("색 보정. 흰색이면 원색 그대로.")]
     [SerializeField] private Color skinTint = Color.white;
-    [Tooltip("★이 값만 조절. 0=완전투명, 1=불투명.")]
-    [SerializeField, Range(0f, 1f)] private float alpha = 0.35f;
+    [Tooltip("★이 값만 조절. 0=완전투명, 1=불투명.\n" +
+             "★2026-08-17에 0.35 → 0.2로 낮췄다. 사용자 보고: \"손이 환자 뒤쪽으로 넘어가면 잘 안 보인다\".\n" +
+             "반투명은 ZWrite를 끄므로 뒤에 있는 손도 그려지긴 한다 — 다만 환자 피부색이 alpha만큼 " +
+             "위에 얹혀 색이 묻힌다. 0.35면 손 위에 35%가 덮이는 셈이라 흐릿해진다.\n" +
+             "★이 값은 씬에 직렬화돼 있어 코드 기본값이 기존 인스턴스에 안 먹는다 — " +
+             "메뉴 `GuideChuna/파지점 표시 정리`의 'xray 진하기'로 씬 값을 바꿀 것.")]
+    [SerializeField, Range(0f, 1f)] private float alpha = 0.2f;
     [Tooltip("가장자리 진하게(형태 가독성). 0이면 순수 알파.")]
     [SerializeField, Range(0f, 1f)] private float rimBoost = 0f;
     [SerializeField, Range(0.2f, 8f)] private float rimPower = 2.5f;

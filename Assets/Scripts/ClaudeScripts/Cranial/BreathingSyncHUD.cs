@@ -90,9 +90,9 @@ public class BreathingSyncHUD : MonoBehaviour
     [Header("=== 숨소리 (선택) ===")]
     [Tooltip("숨소리 재생용 AudioSource. 어깨-이마 자세로 링이 잘 안 보일 때 호흡 페이스를 소리로 안내한다.")]
     [SerializeField] private AudioSource breathAudioSource;
-    [Tooltip("들숨 시작 시 재생할 클립 (선택). 클립 길이를 breatheInDuration에 맞추면 자연스럽다.")]
+    [Tooltip("들숨 기본 클립. ★길이별 클립(CranialBreathIn_2s 등)이 있으면 그쪽이 우선한다 — 이건 폴백.")]
     [SerializeField] private AudioClip inhaleClip;
-    [Tooltip("날숨 시작 시 재생할 클립 (선택).")]
+    [Tooltip("날숨 기본 클립. ★길이별 클립(CranialBreathOut_3s 등)이 있으면 그쪽이 우선한다 — 이건 폴백.")]
     [SerializeField] private AudioClip exhaleClip;
     [Tooltip("숨소리 볼륨. 클립이 작으면 올리고, 너무 크면 낮춘다. (플레이스홀더 클립은 +17dB 증폭돼 있음)")]
     [SerializeField, Range(0f, 1f)] private float breathVolume = 1f;
@@ -191,11 +191,49 @@ public class BreathingSyncHUD : MonoBehaviour
             ChunaLogger.LogWarning("[BreathingSyncHUD] 숨소리 클립 로드 실패 — Resources/Audio/CranialBreathIn(Out).wav 확인");
     }
 
+    /// <summary>길이별 숨소리 캐시. 키 = 반올림한 초. <see cref="Configure"/>로 길이가 바뀌면 자동으로 다른 키를 탄다.</summary>
+    private readonly System.Collections.Generic.Dictionary<int, AudioClip> inhaleByLength =
+        new System.Collections.Generic.Dictionary<int, AudioClip>();
+    private readonly System.Collections.Generic.Dictionary<int, AudioClip> exhaleByLength =
+        new System.Collections.Generic.Dictionary<int, AudioClip>();
+
+    /// <summary>
+    /// 이 위상 길이에 맞는 숨소리를 고른다.
+    ///
+    /// ★<b>클립을 늘리거나 줄이지 않는다</b>(2026-08-17 사용자 지시: "파일 돌려쓰기 말고 들숨 날숨
+    /// 시간에 맞게 각각 녹음해서 각각 넣어서 재생해"). 길이마다 파일이 따로 있고 그걸 그대로 튼다.
+    ///
+    /// ★왜 필요했나: <see cref="AudioSource.PlayOneShot"/>은 클립을 <b>그대로</b> 재생한다.
+    /// 예전 클립은 코드 기본값(들숨 3초·날숨 7초) 시절에 만든 것이라, CSV가 들숨 2초·날숨 3초로
+    /// 덮어쓴 뒤로는 소리가 위상을 넘어가 <b>다음 호흡과 겹쳤다.</b>
+    /// 시나리오 CSV에 실제로 쓰이는 조합은 들숨 2·4초 / 날숨 3·4·6초다.
+    /// </summary>
+    private AudioClip ResolveBreathClip(bool inhale)
+    {
+        float seconds = inhale ? breatheInDuration : breatheOutDuration;
+        int key = Mathf.Max(1, Mathf.RoundToInt(seconds));
+
+        var cache = inhale ? inhaleByLength : exhaleByLength;
+        if (cache.TryGetValue(key, out AudioClip cached)) return cached;
+
+        string baseName = inhale ? "CranialBreathIn" : "CranialBreathOut";
+        AudioClip clip = Resources.Load<AudioClip>($"Audio/{baseName}_{key}s");
+        if (clip == null)
+        {
+            // 그 길이 파일이 없으면 기본 클립 — 길이가 안 맞으면 다음 위상까지 소리가 넘어간다.
+            clip = inhale ? inhaleClip : exhaleClip;
+            ChunaLogger.LogWarning($"[BreathingSyncHUD] Audio/{baseName}_{key}s 가 없어 기본 클립으로 재생합니다. " +
+                                   $"{key}초짜리 파일을 만들어 넣으면 위상과 정확히 맞습니다.");
+        }
+        cache[key] = clip;
+        return clip;
+    }
+
     /// <summary>위상 진입 시 해당 숨소리 재생 (클립 미연결이면 무음).</summary>
     private void PlayBreathClip(bool inhale)
     {
         if (breathAudioSource == null) return;
-        AudioClip clip = inhale ? inhaleClip : exhaleClip;
+        AudioClip clip = ResolveBreathClip(inhale);
         if (clip != null) breathAudioSource.PlayOneShot(clip, breathVolume * breathVolumeScale);
     }
 
