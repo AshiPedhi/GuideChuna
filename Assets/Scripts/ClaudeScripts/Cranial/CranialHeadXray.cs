@@ -68,6 +68,15 @@ public class CranialHeadXray : MonoBehaviour
              "근접 트리거가 영영 성립하지 않기 때문이다. 빈 문자열이면 이 기능을 끈다.")]
     [SerializeField] private string forceXrayParamToken = "xray";
 
+    [Header("=== 평가 모드 ===")]
+    [Tooltip("★켜면(기본) <b>가이드가 없는 난이도(상급·평가)에서는 xray를 켜지 않는다.</b>\n" +
+             "2026-08-17 사용자 지시: \"평가 모드는 가이드핸드랑 환자 xray 꺼줘\".\n" +
+             "가이드핸드는 난이도 프리셋의 showGuideHands가 이미 끄고 있었는데(상급·평가 모두 false) " +
+             "xray에는 난이도 게이트가 없어서 <b>환자만 계속 비쳐 보였다.</b>\n" +
+             "★상급도 같이 끈다 — 상급은 '평가 전 모의'라 본 평가와 보이는 게 달라지면 모의 의미가 없다.\n" +
+             "★이 컴포넌트는 복잡추나에만 걸린다(xray 토큰이 흉추·늑골 CSV에만 있고 단순추나엔 0개).")]
+    [SerializeField] private bool hideInGuidelessLevels = true;
+
     [Header("단계마다 원복")]
     [Tooltip("★기본 ON. **xray를 쓰지 않는 단계로 넘어갈 때** xray를 끄고 환자 모델을 원래 모습으로 되돌린다.\n" +
              "xray를 쓰는 단계끼리 연속될 때는 끄지 않고 그대로 유지한다(깜빡임 방지).\n" +
@@ -189,8 +198,16 @@ public class CranialHeadXray : MonoBehaviour
         bool narrationOnly = string.IsNullOrWhiteSpace(subStep.conditionType);
         bool keepThrough = narrationOnly && active;
 
+        // ★가이드 없는 난이도(상급·평가)에서는 xray를 아예 켜지 않는다.
+        //   wantsXray·keepThrough를 둘 다 내리면 아래 원복 블록이 켜져 있던 것도 꺼 준다.
+        if (GuidesHidden())
+        {
+            wantsXray = false;
+            keepThrough = false;
+        }
+
         armed = wantsXray || keepThrough;
-        forceOnThisSubStep = forced;
+        forceOnThisSubStep = forced && !GuidesHidden();
 
         // ★ xray를 **안 쓰는** 단계(진단3·재평가·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
         //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
@@ -213,8 +230,29 @@ public class CranialHeadXray : MonoBehaviour
         armed = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0);
     }
 
+    /// <summary>
+    /// 가이드를 숨기는 난이도인가(상급·평가). 난이도 프리셋의 <c>showGuideHands</c>가 false인 두 단계와 같다.
+    /// ★DifficultyManager가 없으면 false — 난이도 시스템 없이 씬만 돌릴 때 xray가 통째로 죽지 않게.
+    /// </summary>
+    private bool GuidesHidden()
+    {
+        if (!hideInGuidelessLevels) return false;
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm == null) return false;
+        return dm.CurrentLevel == ChunaTraining.DifficultyLevel.Advanced
+            || dm.CurrentLevel == ChunaTraining.DifficultyLevel.Evaluation;
+    }
+
     private void Update()
     {
+        // ★시나리오 종료 시 armed가 '항상 허용'으로 되돌아가므로 여기서도 한 번 막는다
+        //   (안 그러면 손 근접만으로 다시 켜진다).
+        if (GuidesHidden())
+        {
+            if (active) Deactivate();
+            return;
+        }
+
         if (active || !armed) return;      // 이미 켜졌으면(래치) 아무것도 안 함
         if (Time.time < rearmAt) return;   // 단계 전환 직후: 원복이 보이도록 잠시 재감지 보류
         if (targets.Count == 0) return;
