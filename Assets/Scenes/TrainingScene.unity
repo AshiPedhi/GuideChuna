@@ -39326,6 +39326,7 @@ MonoBehaviour:
   actor: 1
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -42857,6 +42858,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -50667,6 +50669,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -66041,6 +66044,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -88461,6 +88465,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -116477,6 +116482,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -121411,6 +121417,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -132861,6 +132868,8 @@ MonoBehaviour:
   maxIntensity: 1.8
   pulsePerSecond: 1.1
   color: {r: 0.149, g: 1, b: 0.318, a: 1}
+  leftRole: 0
+  rightRole: 0
   debugLog: 0
 --- !u!1001 &1166073313
 PrefabInstance:
@@ -138499,6 +138508,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -156929,9 +156939,6 @@ MonoBehaviour:
   phaseName: 
   scenarioName: "\uC559\uC640\uC704_\uD749\uCD94_\uC2E0\uC804\uBCC0\uC704"
   role: 0
-  "\uC8FC\uB3D9\uC218\uC0C9": {r: 0.149, g: 1, b: 0.318, a: 0.6431373}
-  "\uBCF4\uC870\uC218\uC0C9": {r: 0.6, g: 1, b: 0.72, a: 0.6431373}
-  "\uC911\uB9BD\uC0C9": {r: 1, g: 0.86, b: 0.35, a: 0.6431373}
   minIntensity: 0.6
   maxIntensity: 1.8
   pulsePerSecond: 0.9
@@ -169829,6 +169836,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -198087,6 +198095,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -204930,6 +204939,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -214992,6 +215002,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -216729,6 +216740,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
@@ -238401,7 +238413,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 358cfbb104314934979cc0a8abf3187d, type: 2}
   - {fileID: 11400000, guid: e208a326390d40c29827ca69221756ec, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
-  defaultScenarioIndex: 8
+  defaultScenarioIndex: 11
   forceDefaultIndex: 1
   showDebugLog: 1
 --- !u!4 &1964066469
@@ -247242,6 +247254,7 @@ MonoBehaviour:
   actor: 0
   practitionerColor: {r: 0.149, g: 1, b: 0.318, a: 1}
   patientColor: {r: 0.25, g: 0.8, b: 0.95, a: 1}
+  colorRole: 0
   useTransparency: 0
   sizeMultiplier: 1.6
   displayMode: 2
