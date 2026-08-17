@@ -114,7 +114,27 @@ public abstract class ForceArrowBase : MonoBehaviour
     [Tooltip("환자 색 (청록)")]
     [SerializeField] protected Color patientColor = new Color(0.25f, 0.8f, 0.95f, 1f);
 
-    protected Color BaseColor => actor == Actor.Patient ? patientColor : practitionerColor;
+    [Tooltip("★이 화살표가 <b>주동수인지 보조수인지</b> 직접 지정한다(2026-08-18 사용자 요구).\n\n" +
+             "그전에는 시술자 화살표가 주동수든 보조수든 전부 같은 진녹이라 둘이 구분되지 않았다.\n" +
+             "색 값은 HandRole.cs의 전역 규약에서 온다 — 여기서는 역할만 고르고, " +
+             "색을 바꾸려면 그 파일 한 곳만 고치면 모든 화살표·하이라이트가 따라온다.\n\n" +
+             "'기존색 유지'(기본)면 위의 주체(Actor) 색을 그대로 쓴다 — 지금 씬은 아무것도 안 바뀐다.\n" +
+             "★시나리오 단위 자동 판정은 없다: PJ 진단처럼 한 단계 안에서 좌우가 번갈아 바뀌는 " +
+             "술기가 있어서 자동으로는 맞출 수 없다.")]
+    [SerializeField] protected HandRole.Role colorRole = HandRole.Role.기존색유지;
+
+    /// <summary>
+    /// 이 화살표의 기준 색.
+    /// <see cref="colorRole"/>을 지정했으면 전역 규약 색이 이기고, 아니면 종전대로 주체(Actor) 색을 쓴다.
+    /// </summary>
+    protected Color BaseColor =>
+        HandRole.UsesRoleColor(colorRole) ? HandRole.ColorOf(colorRole)
+        : actor == Actor.Patient ? patientColor
+        : practitionerColor;
+
+    /// <summary>점검 도구 출력용 — 지금 무슨 색 규칙을 쓰는가.</summary>
+    public string DescribeColorRole() =>
+        HandRole.UsesRoleColor(colorRole) ? colorRole.ToString() : $"기존색({actor})";
 
     [Header("=== 재질 · 크기 ===")]
     [Tooltip("★기본 = 불투명. 반투명(Standard Fade)은 ZWrite를 끄기 때문에 <b>같은 메시의 앞면과 뒷면이 서로 비쳐</b> " +

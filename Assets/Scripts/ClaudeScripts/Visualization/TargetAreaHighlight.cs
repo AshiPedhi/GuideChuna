@@ -64,14 +64,11 @@ public class TargetAreaHighlight : MonoBehaviour
     [SerializeField] private string scenarioName = "";
 
     [Header("=== 색 (회의 규약: 주동수 진녹 / 보조수 연녹) ===")]
+    [Tooltip("이 부위를 어느 손이 잡는가. 색 값은 HandRole.cs의 전역 규약에서 온다 — " +
+             "여기서는 역할만 고른다.\n" +
+             "★2026-08-18: 예전엔 색 세 칸을 오브젝트마다 들고 있어서 색을 바꾸려면 " +
+             "씬의 하이라이트를 전부 찾아다녀야 했다. 이제 규약 파일 한 곳만 고치면 된다.")]
     [SerializeField] private Role role = Role.주동수;
-
-    [Tooltip("주동수 — 화살표의 시술자 색과 같은 진한 녹색.")]
-    [SerializeField] private Color 주동수색 = new Color(0.149f, 1f, 0.318f, 1f);
-    [Tooltip("보조수 — 같은 계열의 연한 녹색. 파란색이 아니다(08-13 정정판).")]
-    [SerializeField] private Color 보조수색 = new Color(0.60f, 1f, 0.72f, 1f);
-    [Tooltip("중립 — 손 역할과 무관한 목표 표시.")]
-    [SerializeField] private Color 중립색 = new Color(1f, 0.86f, 0.35f, 1f);
 
     [Header("=== 발광 ===")]
     [Tooltip("발광 세기의 최저/최고. 이 사이를 오가며 맥동한다. 맥동을 끄려면 두 값을 같게.")]
@@ -87,10 +84,10 @@ public class TargetAreaHighlight : MonoBehaviour
     private float phase;
     private bool initialized;
 
-    /// <summary>지금 이 표시가 쓰는 색.</summary>
+    /// <summary>지금 이 표시가 쓰는 색 — 전역 규약(<see cref="HandRole"/>)에서 온다.</summary>
     public Color CurrentColor =>
-        role == Role.보조수 ? 보조수색 :
-        role == Role.중립 ? 중립색 : 주동수색;
+        role == Role.보조수 ? HandRole.보조수색 :
+        role == Role.중립 ? HandRole.중립색 : HandRole.주동수색;
 
     /// <summary>이 표시가 속한 시나리오. 비었으면 부모 리그에서 물려받는다.</summary>
     public string ResolvedScenario

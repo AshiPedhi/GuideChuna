@@ -60,8 +60,18 @@ public class PisiformHighlight : MonoBehaviour
     [SerializeField, Range(0f, 4f)] private float maxIntensity = 1.8f;
     [SerializeField, Range(0f, 3f)] private float pulsePerSecond = 1.1f;
 
-    [Tooltip("강조 색. 화살표·타겟과 같은 계열의 녹색.")]
+    [Tooltip("강조 색. 화살표·타겟과 같은 계열의 녹색. 아래 역할을 지정하면 그쪽이 이긴다.")]
     [SerializeField] private Color color = new Color(0.149f, 1f, 0.318f, 1f);
+
+    [Tooltip("★손별 역할. 두상골은 양손에 다 나오는데 한쪽은 주동수, 한쪽은 보조수인 경우가 많다.\n" +
+             "색 값은 HandRole.cs의 전역 규약에서 온다 — 여기서는 역할만 고른다.\n" +
+             "'기존색 유지'(기본)면 위의 강조 색을 양손에 똑같이 쓴다(무회귀).")]
+    [SerializeField] private HandRole.Role leftRole = HandRole.Role.기존색유지;
+    [SerializeField] private HandRole.Role rightRole = HandRole.Role.기존색유지;
+
+    /// <summary>그 손이 쓸 색 — 역할을 지정했으면 규약 색, 아니면 공용 강조 색.</summary>
+    private Color ColorFor(HandRole.Role role) =>
+        HandRole.UsesRoleColor(role) ? HandRole.ColorOf(role) : color;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool debugLog = false;
@@ -177,18 +187,18 @@ public class PisiformHighlight : MonoBehaviour
             intensity = Mathf.Lerp(minIntensity, maxIntensity, wave);
         }
 
-        Apply(leftRenderer, intensity);
-        Apply(rightRenderer, intensity);
+        Apply(leftRenderer, ColorFor(leftRole), intensity);
+        Apply(rightRenderer, ColorFor(rightRole), intensity);
     }
 
-    private void Apply(Renderer r, float intensity)
+    private static void Apply(Renderer r, Color c, float intensity)
     {
         if (r == null) return;
         Material m = r.material;          // 인스턴스(공유 머티리얼 보호)
         if (m == null) return;
-        if (m.HasProperty("_Color")) m.color = color;
+        if (m.HasProperty("_Color")) m.color = c;
         if (m.HasProperty("_EmissionColor"))
-            m.SetColor("_EmissionColor", new Color(color.r * intensity, color.g * intensity, color.b * intensity, 1f));
+            m.SetColor("_EmissionColor", new Color(c.r * intensity, c.g * intensity, c.b * intensity, 1f));
     }
 
     /// <summary>에디터 도구가 만든 마커를 연결한다.</summary>
