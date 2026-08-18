@@ -2053,6 +2053,17 @@ public class CranialAdjustmentController : MonoBehaviour
         ChunaLogger.Log(sb.ToString());
     }
 
+    /// <summary>★계측(2026-08-18): 파지가 왜 미성립인지 한 줄로 요약한다.
+    /// 오브젝트 활성 여부·손끝 콜라이더 주입 여부·접촉 여부를 파지점마다 찍는다 —
+    /// "학습모드는 되는데 평가모드만 안 된다"의 원인을 여기서 가른다.</summary>
+    public string DescribeGripState(JudgeHand hand)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (hand != JudgeHand.오른손) AppendGrips(sb, "왼손(leftGrips)", leftGrips);
+        if (hand != JudgeHand.왼손) AppendGrips(sb, "오른손(rightGrips)", rightGrips);
+        return sb.ToString().TrimEnd();
+    }
+
     private static void AppendGrips(System.Text.StringBuilder sb, string title, GripPointTarget[] grips)
     {
         sb.AppendLine($"  ── {title}: {(grips == null || grips.Length == 0 ? "미배선" : grips.Length + "개")}");

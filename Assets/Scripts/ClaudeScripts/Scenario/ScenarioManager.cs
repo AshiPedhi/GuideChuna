@@ -410,10 +410,13 @@ public class ScenarioManager : MonoBehaviour
         //   ⓐ ConditionManager.PlayNarrationThenApplyDuration (나레이션·AutoPlay 완료 후 진행)
         //   ⓑ ScenarioManager.OnAutoPlayCompletedHandler → WaitForNarrationThenNextStep
         //   둘 다 호출하면 substep이 한 칸 건너뛴다. substep당 1회만 진행시킨다.
+        // ★계측(2026-08-18): 이 가드가 조용히 걸리면 "조건은 만족했는데 진행이 안 된다"가 된다.
+        //   showDebugLog와 무관하게 항상 남긴다.
         if (currentSubStep != null && ReferenceEquals(advancedFromSubStep, currentSubStep))
         {
-            if (showDebugLog)
-                ChunaLogger.Log("[ScenarioManager] NextSubStep 중복 호출 무시 (이 substep은 이미 진행됨)");
+            ChunaLogger.LogWarning($"<color=red>[완료추적] ★NextSubStep 중복 가드에 막힘 — " +
+                                   $"Phase={currentPhase?.phaseName} Step={currentStep?.stepName} " +
+                                   $"SubStep={currentSubStep.subStepNo} (이 substep은 이미 진행됨으로 표시돼 있다)</color>");
             return;
         }
         advancedFromSubStep = currentSubStep;

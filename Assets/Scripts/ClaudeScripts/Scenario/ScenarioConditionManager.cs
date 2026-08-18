@@ -275,7 +275,16 @@ public class ScenarioConditionManager : MonoBehaviour
             conditionType = "HandPose";
         }
 
-        ChunaLogger.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>");
+        // ★계측(2026-08-18): "학습모드는 되는데 평가모드만 진행이 안 된다"의 원인을 정적 분석으로
+        //   좁히지 못했다(난이도로 갈리는 지점은 전부 표시 전용이었다). 실제 런타임 상태를 찍는다.
+        //   조건이 등록됐는가 / 나레이션 분기로 갔는가 / 폴링이 시작됐는가가 여기서 다 갈린다.
+        {
+            var _dm = DifficultyManager.Instance;
+            ChunaLogger.Log($"<color=yellow>[ConditionManager] 조건 타입 처리: {conditionType}</color>" +
+                            $"  난이도={(_dm != null ? _dm.CurrentLevel.ToString() : "없음")}" +
+                            $"  key='{conditionKey}'  등록됨={conditionRegistry.ContainsKey(conditionKey)}" +
+                            $"  나레이션={(subStep.HasNarration() ? $"있음('{subStep.voiceInstruction.Trim()}')" : "없음")}");
+        }
 
         // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
         if (subStep.HasNarration())
@@ -648,6 +657,7 @@ public class ScenarioConditionManager : MonoBehaviour
         if (conditionRegistry.ContainsKey(conditionKey))
         {
             currentCondition = conditionRegistry[conditionKey];
+            LogPollingStart("StartHandPoseCondition");
             StartConditionCheck();  // 20초 타이머 포함
             eventSystem.RequestButtonStateUpdate(false);
             ChunaLogger.Log($"<color=magenta>[ConditionManager] HandPose 조건 시작 - 충돌체/가이드핸드 활성화, 20초 타이머 시작</color>");
@@ -1051,6 +1061,14 @@ public class ScenarioConditionManager : MonoBehaviour
     /// <summary>
     /// 조건 체크 시작
     /// </summary>
+    /// <summary>★계측: 폴링이 실제로 시작되는지. 이게 안 찍히면 20초 폴백도 안 도는 단계다.</summary>
+    private void LogPollingStart(string where)
+    {
+        var dm = DifficultyManager.Instance;
+        ChunaLogger.Log($"<color=lime>[ConditionManager] 조건 폴링 시작({where}) — 20초 타이머 가동" +
+                        $" / 난이도={(dm != null ? dm.CurrentLevel.ToString() : "없음")}</color>");
+    }
+
     private void StartConditionCheck()
     {
         StopConditionCheck();
@@ -1128,11 +1146,17 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator OnConditionCompleted()
     {
+        // ★계측(2026-08-18): "조건은 성립했다고 로그에 뜨는데 진행을 안 한다"의 위치를 찾는다.
+        //   완료 경로 각 지점을 무조건 찍는다 — 마지막으로 찍힌 줄이 끊긴 지점이다.
+        ChunaLogger.Log("<color=lime>[완료추적] ① OnConditionCompleted 진입</color>");
+
         // 1. 완료 사운드 재생 (딩동)
         PlayCompletionSound();
+        ChunaLogger.Log("<color=lime>[완료추적] ② 완료음 재생 통과</color>");
 
         // 현재 유사도 가져오기
         float currentSimilarity = GetCurrentSimilarity();
+        ChunaLogger.Log($"<color=lime>[완료추적] ③ 유사도 산출 통과 ({currentSimilarity:P0})</color>");
 
         // ★ StepFeedbackUI가 null이면 다시 찾기 (첫 단계에서 못 찾은 경우 대비)
         if (stepFeedbackUI == null)
@@ -1151,11 +1175,18 @@ public class ScenarioConditionManager : MonoBehaviour
         //   "완료했는데 왜 안 넘어가지?" 하고 이것저것 더 만지게 만들었다(사용자 지적).
         //   → 피드백·알림은 <b>띄우기만 하고 기다리지 않는다</b>. 숨기는 일은 별도 코루틴이 맡는다.
         ShowCompletionFeedbackNonBlocking(currentSimilarity);
+        ChunaLogger.Log("<color=lime>[완료추적] ④ 피드백 표시 통과</color>");
 
         // 다음 SubStep으로 진행 — 대기 없음.
         if (scenarioManager != null)
         {
+            ChunaLogger.Log("<color=lime>[완료추적] ⑤ NextSubStep 호출 직전</color>");
             scenarioManager.NextSubStep();
+            ChunaLogger.Log("<color=lime>[완료추적] ⑥ NextSubStep 반환</color>");
+        }
+        else
+        {
+            ChunaLogger.LogError("[완료추적] ★scenarioManager 가 null — 진행 불가");
         }
         yield break;
     }

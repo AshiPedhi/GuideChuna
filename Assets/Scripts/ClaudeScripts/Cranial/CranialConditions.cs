@@ -215,12 +215,29 @@ public class GripPointCondition : IScenarioCondition
         this.controller?.BeginGripPhase();
     }
 
+    /// <summary>★계측(2026-08-18): "학습모드는 되는데 평가모드만 파지가 안 먹힌다"의 원인을
+    /// 정적 분석으로 못 좁혔다(난이도로 갈리는 코드는 전부 표시 전용이었다).
+    /// 1초에 한 번, <b>어느 파지점이 안 닿았는지</b>를 난이도와 함께 찍는다.
+    /// 파지점이 비활성인지·손끝 콜라이더가 주입 안 됐는지가 여기서 갈린다.</summary>
+    private float nextProbe;
+
     public bool IsConditionMet()
     {
         if (controller == null) return false;
-        if (stackGap > 0f)
-            return controller.HandsStackedAt(controller.StackTarget, stackGap, stackGap * 1.5f);
-        return controller.GrippedBy(hand);
+
+        bool met = stackGap > 0f
+            ? controller.HandsStackedAt(controller.StackTarget, stackGap, stackGap * 1.5f)
+            : controller.GrippedBy(hand);
+
+        if (!met && Time.time >= nextProbe)
+        {
+            nextProbe = Time.time + 1f;
+            var dm = ChunaTraining.DifficultyManager.Instance;
+            ChunaLogger.Log($"<color=orange>[Grip] 미성립 — 난이도={(dm != null ? dm.CurrentLevel.ToString() : "없음")}" +
+                            $" hand={hand} stack={stackGap:0.##}" + System.Environment.NewLine +
+                            $"{controller.DescribeGripState(hand)}</color>");
+        }
+        return met;
     }
 
     // ★문구에 '두개골'·'파이브핑거홀드'를 쓰지 않는다 — 이 조건은 늑골·흉추도 공용으로 쓰고,

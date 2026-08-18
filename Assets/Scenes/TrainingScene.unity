@@ -14075,6 +14075,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!1 &151342588
 GameObject:
   m_ObjectHideFlags: 0
@@ -22270,6 +22271,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!1 &222415722
 GameObject:
   m_ObjectHideFlags: 0
@@ -40185,6 +40187,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!114 &375755479
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -43764,6 +43767,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!120 &407814876
 LineRenderer:
   serializedVersion: 2
@@ -65849,7 +65853,7 @@ Transform:
   m_GameObject: {fileID: 568078678}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: -0.0003, y: 0.0081, z: -0.0227}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -86598,7 +86602,7 @@ Transform:
   m_GameObject: {fileID: 740880071}
   serializedVersion: 2
   m_LocalRotation: {x: 0.00000010430811, y: -0.0000000073378015, z: 0.000000020578677, w: 1}
-  m_LocalPosition: {x: -0.018281074, y: -0.27491942, z: -0.045655232}
+  m_LocalPosition: {x: -0.0186, y: -0.267, z: -0.0677}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -123249,15 +123253,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 40
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -123265,11 +123269,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 20
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -19
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1399643648098774758, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_Layer
@@ -134987,6 +134991,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!120 &1166056566
 LineRenderer:
   serializedVersion: 2
@@ -155604,7 +155609,7 @@ Transform:
   m_GameObject: {fileID: 1303985026}
   serializedVersion: 2
   m_LocalRotation: {x: 0.00000010430811, y: -0.0000000073378015, z: 0.000000020578677, w: 1}
-  m_LocalPosition: {x: 0.018081045, y: -0.27508035, z: -0.04594465}
+  m_LocalPosition: {x: 0.0178, y: -0.2672, z: -0.068}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -174886,8 +174891,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.015
-  m_Height: 0.015
+  m_Radius: 0.03
+  m_Height: 0.03
   m_Direction: 0
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1482364666
@@ -204160,6 +204165,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!1 &1725902137
 GameObject:
   m_ObjectHideFlags: 0
@@ -208167,6 +208173,7 @@ MonoBehaviour:
   holdTickVolume: 0.5
   holdTickClip: {fileID: 0}
   holdTickLastClip: {fileID: 0}
+  hideGripPointsInEvaluation: 0
 --- !u!114 &1761297746
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -242268,8 +242275,8 @@ CapsuleCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 2
-  m_Radius: 0.015
-  m_Height: 0.015
+  m_Radius: 0.03
+  m_Height: 0.03
   m_Direction: 0
   m_Center: {x: 0, y: 0, z: 0}
 --- !u!114 &1971760914
@@ -273262,7 +273269,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!1 &919132148920932801
 GameObject:
   m_ObjectHideFlags: 0
