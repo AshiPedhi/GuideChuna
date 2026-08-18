@@ -814,8 +814,21 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         //   진단에서 쓴 녹화가 파지·교정 단계까지 그대로 떠 있었다(사용자 지적: "양 엄지 진단이
         //   끝났는데 계속 나온다"). 두개골 단계는 아래 HandleCranial이 자기 가이드를 다시 켜므로
         //   여기서 꺼도 무해하다 — 켤 단계만 켜지는 구조가 된다.
+        // ★난이도 프리셋을 매 substep 반영한다 — 여태 StartEvaluation 안에서만 돌아서,
+        //   평가 파이프라인을 안 켜는 두개골·늑골·흉추 단계는 난이도가 적용되지 않았다
+        //   (평가·상급인데도 가이드손이 나오던 원인). 같은 값을 다시 쓰는 것뿐이라 반복 호출이 안전하다.
+        chunaPathEvaluator?.SyncDifficultyNow();
+
         if (chunaPathEvaluator != null && string.IsNullOrEmpty(subStep.handTrackingFileName))
             chunaPathEvaluator.HideGuideHandKeepHeldInternal();
+
+        // ★noGuide 토큰 — 손 녹화를 <b>판정 기준으로는 쓰되 가이드손 시연은 감추는</b> 단계.
+        //   위의 숨김은 handTrackingFileName이 '비어 있을 때'만 걸리므로, 녹화를 기준으로 쓰는
+        //   "이제 직접 합니다" 단계에는 닿지 않는다. 제2늑골 3-7이 그 경우다 —
+        //   3-5·3-6에서 올리고 내리는 시연을 마친 가이드손이 마지막 자세로 남아(MarkGuideHeld)
+        //   사용자가 직접 3회 반복하는 내내 떠 있었다(사용자 지적: "왔다갔다 할 때 왜 안 사라져").
+        //   ★핸들러보다 먼저 걸어야 한다 — 뒤에 걸면 평가 시작 때 첫 프레임이 이미 그려진다.
+        chunaPathEvaluator?.SetGuideHandsSuppressedForStep(HasParamToken(subStep.conditionParams, "noguide"));
 
         if (isCranial)
             HandleCranial(subStep, cranialType);
@@ -1103,6 +1116,15 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
     }
 
     /// <summary>conditionParams에서 <c>키=값</c> 형태의 실수를 읽는다. 없으면 기본값.</summary>
+    /// <summary>conditionParams에 이 토큰이 있는가(대소문자 무시). 값 없는 깃발 토큰용.</summary>
+    private static bool HasParamToken(string conditionParams, string token)
+    {
+        if (string.IsNullOrEmpty(conditionParams) || string.IsNullOrEmpty(token)) return false;
+        foreach (string part in conditionParams.Split(';'))
+            if (part.Trim().Equals(token, System.StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
     private static float ParseTokenFloat(string prms, string keyLower, float fallback)
     {
         foreach (string tok in SplitParams(prms))
@@ -1232,6 +1254,12 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         //   한 손씩 순서대로 대는 술기에서 반대 손 가이드가 떠 있으면 어느 손을 대라는지 알 수 없다.
         var handScope = ParseJudgeHand(subStep.conditionParams);
         cranialController.SetGuideHandScope(handScope);
+
+        // ★handAfter=both — 시연이 끝나면 손 범위를 양손으로 넓힌다(복와위 두방수: 두 두상골이 맞붙은 최종 자세).
+        string afterParams = subStep.conditionParams ?? "";
+        cranialController.SetGuideScopeAfterFinish(
+            afterParams.IndexOf("handafter=both", System.StringComparison.OrdinalIgnoreCase) >= 0,
+            afterParams.IndexOf("handafter=none", System.StringComparison.OrdinalIgnoreCase) >= 0);
         //   ★가이드손 '이미 봤다' 판정에도 손 범위를 넣는다 — 오른손만 보여 준 뒤 양손을 보여 줄 때
         //     키가 같으면 새로 보이는 왼손이 멈춘 채로 나타난다.
         chunaPathEvaluator?.SetGuideScopeTag(handScope.ToString());

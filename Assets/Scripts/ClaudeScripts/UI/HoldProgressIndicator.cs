@@ -164,6 +164,9 @@ public class HoldProgressIndicator : MonoBehaviour
         }
     }
 
+    /// <summary>틱 소리용 직전 초. 유지가 끊기면 -1로 되돌려 다음 유지에서 처음부터 센다.</summary>
+    private int lastTickSecond = -1;
+
     private void OnHoldProgressChanged(float currentTime, float requiredTime)
     {
         lastCurrentTime = currentTime;
@@ -173,8 +176,14 @@ public class HoldProgressIndicator : MonoBehaviour
         {
             targetFillAmount = 0f;
             UpdateTimeText(0f, 0f);
+            HoldTickAudio.ResetCounter(ref lastTickSecond);
             return;
         }
+
+        // ★유지 타이머 틱 — 여태 두개골 계열에만 있어서, 같은 '유지' 동작인데 술기에 따라
+        //   소리가 나기도 하고 안 나기도 했다(08-18 사용자 지적). 두개골과 같은 재생기를 쓴다.
+        if (currentTime <= 0f) HoldTickAudio.ResetCounter(ref lastTickSecond);
+        else HoldTickAudio.Play(requiredTime - currentTime, ref lastTickSecond, HoldTickAudio.MinVolume);
 
         float progress = Mathf.Clamp01(currentTime / requiredTime);
 

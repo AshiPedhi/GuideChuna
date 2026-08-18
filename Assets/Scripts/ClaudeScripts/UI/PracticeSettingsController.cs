@@ -727,6 +727,19 @@ public class PracticeSettingsController : MonoBehaviour
                 if (t.name.IndexOf("skeletal_system", System.StringComparison.OrdinalIgnoreCase) >= 0)
                     return true;
 
+        // ★훈련 표시물은 환자 투명도 조절 대상이 아니다 (2026-08-18).
+        //   patientRoot.GetComponentsInChildren<MeshRenderer>로 렌더러를 모으는데(:173),
+        //   파지점 구체·접촉 표시구·화살표는 전부 환자 본(CC_Base_*) 아래에 붙어 있어 그 배열에 딸려 들어온다.
+        //   알파가 1이면 아래 else 분기가 _Mode 0 · ZWrite 1 · _ALPHABLEND_ON 해제 · renderQueue -1로 되돌려
+        //   <b>표시물이 전부 완전 불투명</b>해졌다(사용자 지적: "제2늑골만이 아니라 흉추 신전 무릎·팔까지 다").
+        //   CranialHeadXray가 이미 같은 이유로 리그 하위와 파지점을 제외하고 있는데 여기만 빠져 있었다.
+        if (renderer.GetComponentInParent<CranialAdjustmentController>(true) != null) return true;  // 리그 하위 표시물 일체
+        if (renderer.GetComponentInParent<GripPointTarget>(true) != null) return true;              // 리그 밖에 둔 파지점
+        if (renderer.GetComponentInParent<ForceArrowBase>(true) != null) return true;               // 힘의 방향 화살표
+        if (renderer.GetComponentInParent<TargetAreaHighlight>(true) != null) return true;          // 타겟 부위 하이라이트
+        if (renderer.gameObject.name.StartsWith("ContactTarget_", System.StringComparison.Ordinal))
+            return true;                                                                            // 접촉 터치 표시구
+
         if (transparencyExcludeNames == null) return false;
         string n = renderer.gameObject.name;
         foreach (var t in transparencyExcludeNames)

@@ -209,6 +209,15 @@ public class CranialHeadXray : MonoBehaviour
         armed = wantsXray || keepThrough;
         forceOnThisSubStep = forced && !GuidesHidden();
 
+        // ★래치 보정 — 상의(Shirt)는 Activate() 한 번에 결정되고 다시는 안 바뀌던 문제(2026-08-18).
+        //   Activate()는 `if (active) return;`인 래치라, <b>xray가 이미 켜진 뒤에</b> xray 토큰이 붙은
+        //   단계로 넘어가도 상의 판정을 다시 하지 않는다.
+        //   제2늑골이 그 경우다 — 진단 1-2(cranialTouch)는 conditionParams에 xray가 없어서 손 근접으로
+        //   먼저 켜지고(상의 불투명), 그 뒤 교정 단계 전부가 xray 토큰을 갖고 있어도 상의가 계속 불투명이었다
+        //   (사용자 지적: "늑골 교정할 때도 셔츠까지 반투명하게"). 흉추는 진단 행에도 xray가 있어 우연히 멀쩡했다.
+        //   → 켜져 있는 상태에서 강제 단계로 들어오면 상의만 뒤늦게 반투명으로 바꾼다(깜빡임 없음).
+        if (active && forceOnThisSubStep) ApplyClothingTransparencyNow();
+
         // ★ xray를 **안 쓰는** 단계(진단3·재평가·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
         //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
         if (restoreEachSubStep && active && !wantsXray && !keepThrough)
@@ -585,6 +594,43 @@ public class CranialHeadXray : MonoBehaviour
 
         active = true;
         if (debugLog) Debug.Log($"[CranialHeadXray] 반투명 ON(래치) — {targets.Count}개(옷 제외), 머리카락 {hiddenByMe.Count}개 숨김, alpha={alpha}");
+    }
+
+    /// <summary>이미 반투명이 켜진 상태에서 <b>상의만 뒤늦게</b> 반투명으로 바꾼다(래치 보정).
+    ///
+    /// Activate()를 다시 부르는 대신 이 방법을 쓰는 이유: Deactivate→Activate로 되돌리면 한 프레임
+    /// 환자가 불투명으로 튄다. 08-12에 "전환할 때 불투명 필요 없음, 반투명 그대로 유지"라는 지시가 있었다.
+    /// 여기서는 아직 원본 그대로인 상의 렌더러만 골라 바꾸므로 나머지 표시는 전혀 건드리지 않는다.</summary>
+    public void ApplyClothingTransparencyNow()
+    {
+        if (!active || xrayShader == null) return;
+
+        int changed = 0;
+        for (int i = 0; i < targets.Count && i < appliedXray.Count; i++)
+        {
+            if (i >= isClothing.Count || !isClothing[i]) continue;   // 상의가 아니면 대상 아님
+            if (appliedXray[i] != null) continue;                    // 이미 반투명
+            var r = targets[i];
+            if (r == null || i >= trueOriginals.Count) continue;
+
+            var orig = trueOriginals[i];
+            if (orig == null) continue;
+
+            var swapped = new Material[orig.Length];
+            for (int s = 0; s < orig.Length; s++)
+            {
+                if (orig[s] == null) { swapped[s] = null; continue; }
+                var inst = MakeTransparent(orig[s]);
+                swapped[s] = inst;
+                createdMats.Add(inst);
+            }
+            r.sharedMaterials = swapped;
+            appliedXray[i] = swapped;
+            changed++;
+        }
+
+        if (changed > 0 && debugLog)
+            Debug.Log($"[CranialHeadXray] 상의 {changed}개 뒤늦게 반투명 적용(래치 보정)");
     }
 
     [ContextMenu("Deactivate (반투명 OFF)")]

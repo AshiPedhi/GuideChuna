@@ -162,8 +162,28 @@ public class TargetAreaHighlight : MonoBehaviour
 
             if (m.HasProperty("_Color")) m.color = c;
             if (m.HasProperty("_EmissionColor"))
-                m.SetColor("_EmissionColor", new Color(c.r * intensity, c.g * intensity, c.b * intensity, 1f));
+                m.SetColor("_EmissionColor", EmissionOf(c, intensity));
         }
+    }
+
+    /// <summary>발광 색 — <b>역할 색의 밝기에 끌려가지 않게</b> 색조만 남기고 밝기를 정규화한다.
+    ///
+    /// ★왜 (2026-08-18): 발광을 역할 색에 그대로 곱하고 있었다. 그래서 08-18에 주동수색을
+    /// 대비 때문에 어둡게(#26FF51 → #05BF29) 바꾸자 <b>하이라이트가 같이 어두워졌다</b>
+    /// (사용자: "하이라이트가 잘 안 보인다"). 색 규약은 '무슨 색인가'를 정하는 것이지
+    /// '얼마나 밝게 빛나는가'를 정하는 게 아니므로 둘을 분리한다.
+    ///
+    /// 최대 채널을 1로 맞춘 뒤 세기를 곱하므로, 규약 색을 아무리 어둡게 바꿔도 발광 밝기는 유지된다.
+    /// <see cref="Boost"/>는 씬에 직렬화된 maxIntensity(1.8)를 코드에서 더 올리기 위한 배수다
+    /// — 인스펙터 값을 고치지 않아도 잘 보이게 하기 위한 것.</summary>
+    private const float Boost = 1.5f;
+
+    private static Color EmissionOf(Color c, float intensity)
+    {
+        float mx = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+        if (mx > 0.001f) c = new Color(c.r / mx, c.g / mx, c.b / mx, 1f);
+        float k = intensity * Boost;
+        return new Color(c.r * k, c.g * k, c.b * k, 1f);
     }
 
     /// <summary>Standard의 발광을 켠다. ★키워드를 안 켜면 <c>_EmissionColor</c>를 아무리 넣어도 안 빛난다.</summary>

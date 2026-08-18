@@ -364,10 +364,49 @@ public abstract class ForceArrowBase : MonoBehaviour
         m.renderQueue = -1;                        // 셰이더 기본(Geometry)으로 되돌린다
     }
 
+    private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+    private static MaterialPropertyBlock colorBlock;
+
+    /// <summary>렌더러 색을 <b>MaterialPropertyBlock으로</b> 칠한다.
+    ///
+    /// ★예전에는 <c>r.material.color</c>였다. 그러면 렌더러마다 머티리얼 <b>인스턴스가 생기고</b>,
+    /// 에디트 모드에서 부르면 그 임시 머티리얼이 씬에 눌어붙는다(07-27 xray 사고의 유력 원인).
+    /// 프로퍼티 블록은 직렬화되지 않아 씬을 더럽히지 않으므로 <b>에디터 미리보기와 런타임이 같은 경로</b>를 쓴다.</summary>
     protected static void SetRendererColor(Renderer r, Color c)
     {
         if (r == null) return;
-        Material m = r.material;
-        if (m != null && m.HasProperty("_Color")) m.color = c;
+        Material shared = r.sharedMaterial;
+        if (shared == null || !shared.HasProperty(ColorPropertyId)) return;
+
+        if (colorBlock == null) colorBlock = new MaterialPropertyBlock();
+        r.GetPropertyBlock(colorBlock);
+        colorBlock.SetColor(ColorPropertyId, c);
+        r.SetPropertyBlock(colorBlock);
     }
+
+    /// <summary>지금 역할 색을 <b>펄스 없이</b> 그대로 칠한다. 에디터에서 색을 바로 확인하기 위한 것.</summary>
+    public void ApplyRoleColorNow()
+    {
+        Renderer[] all = GetComponentsInChildren<Renderer>(true);
+        for (int i = 0; i < all.Length; i++) SetRendererColor(all[i], BaseColor);
+    }
+
+#if UNITY_EDITOR
+    /// <summary>인스펙터에서 colorRole을 바꾸면 <b>씬 뷰에도 바로</b> 반영한다.
+    ///
+    /// ★왜 필요한가(2026-08-18 사용자 지적: "화살표마다 지정한 걸로 색이 바뀌어야지 안 바뀐다"):
+    /// 색은 Update에서만 칠해지는데 이 컴포넌트들은 ExecuteAlways가 아니라 <b>Play 중에만</b> 돈다.
+    /// 그래서 역할을 지정해도 에디터에서는 아무 변화가 없어 '적용이 안 된다'로 보였다.
+    /// (Play에서는 원래도 정상 동작했다 — 칠하는 코드 자체는 BaseColor를 옳게 읽고 있었다.)</summary>
+    protected virtual void OnValidate()
+    {
+        if (Application.isPlaying) return;
+        UnityEditor.EditorApplication.delayCall += () =>
+        {
+            if (this == null) return;                 // 사이에 삭제됐을 수 있다
+            if (Application.isPlaying) return;
+            ApplyRoleColorNow();
+        };
+    }
+#endif
 }

@@ -25,6 +25,7 @@ public class ContactTargetIndicator
 
     private Transform root;
     private Material sourceMaterial;
+    private static bool materialStateLogged;
     private bool anyVisible;
 
     /// <summary>
@@ -85,8 +86,8 @@ public class ContactTargetIndicator
             Renderer r = markerRenderers[i];
             if (r != null)
             {
+                // Sprites/Default는 _Color 하나로 색과 알파가 정해진다(발광 속성 없음).
                 r.material.color = color;
-                r.material.SetColor("_EmissionColor", color * 0.6f);
             }
         }
 
@@ -211,6 +212,21 @@ public class ContactTargetIndicator
 
             Material src = GetSourceMaterial();
             if (src != null) r.material = src;
+
+            // ★계측(2026-08-18): "표시구가 불투명하다"가 반복되는데 원인을 정적으로 좁히지 못했다.
+            //   실제 런타임 상태를 한 번만 찍어 둔다 — 셰이더가 무엇인지, 알파블렌드가 켜졌는지,
+            //   렌더큐가 투명 구간(3000)인지가 여기 다 나온다. 다음 Play 로그로 원인이 확정된다.
+            if (!materialStateLogged && r != null && r.sharedMaterial != null)
+            {
+                materialStateLogged = true;
+                Material m = r.sharedMaterial;
+                ChunaLogger.Log($"<color=cyan>[ContactIndicator] 표시구 머티리얼 상태 — " +
+                                $"shader={m.shader?.name} / renderQueue={m.renderQueue} / " +
+                                $"_ALPHABLEND_ON={m.IsKeywordEnabled("_ALPHABLEND_ON")} / " +
+                                $"_ZWrite={(m.HasProperty("_ZWrite") ? m.GetInt("_ZWrite").ToString() : "없음")} / " +
+                                $"_Mode={(m.HasProperty("_Mode") ? m.GetFloat("_Mode").ToString("0") : "없음")} / " +
+                                $"color.a={m.color.a:F2}</color>");
+            }
         }
 
         go.SetActive(false);
@@ -237,15 +253,34 @@ public class ContactTargetIndicator
     {
         if (sourceMaterial != null) return sourceMaterial;
 
-        Shader shader = Shader.Find("Standard");
-        if (shader == null)
+        // ★2026-08-18 전면 교체 — Standard + Fade 조합을 버린다.
+        //   "표시구가 불투명한 덩어리로 보인다"가 반복됐다. Standard를 반투명으로 만들려면
+        //   _Mode·_SrcBlend·_DstBlend·_ZWrite·키워드·renderQueue를 <b>전부</b> 맞춰야 하고,
+        //   하나라도 어긋나거나 알파블렌드 배리언트가 빌드에서 스트립되면 <b>조용히 불투명</b>이 된다.
+        //   런타임에 만든 머티리얼은 어떤 머티리얼 에셋도 참조하지 않아 그 위험이 특히 크다.
+        //
+        //   Sprites/Default는 셰이더 자체가 알파 블렌드(Blend SrcAlpha OneMinusSrcAlpha,
+        //   ZWrite Off)로 고정돼 있어 <b>맞출 상태가 없다</b>. _Color 하나로 색과 알파가 정해지고,
+        //   UI가 늘 쓰기 때문에 빌드에서 빠질 일도 없다. 표시구는 위치만 알리면 되므로
+        //   조명·발광이 필요 없어 무광(Unlit)인 점도 오히려 알맞다.
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader != null)
         {
-            ChunaLogger.LogWarning("<color=orange>[ContactIndicator] Standard 셰이더를 찾지 못해 표시구 머티리얼을 만들 수 없습니다.</color>");
-            return null;
+            sourceMaterial = new Material(shader) { name = "ContactTargetIndicatorMat" };
+            sourceMaterial.renderQueue = 3000;   // 불투명 뒤에 그린다
+            return sourceMaterial;
         }
 
+        // 폴백 — Sprites/Default조차 없으면 예전 방식(Standard Fade)을 쓴다.
+        ChunaLogger.LogWarning("<color=orange>[ContactIndicator] Sprites/Default를 찾지 못해 " +
+                               "Standard Fade로 대체합니다(불투명하게 보일 수 있음).</color>");
+        shader = Shader.Find("Standard");
+        if (shader == null)
+        {
+            ChunaLogger.LogWarning("<color=orange>[ContactIndicator] Standard 셰이더도 없어 표시구 머티리얼을 만들 수 없습니다.</color>");
+            return null;
+        }
         sourceMaterial = new Material(shader) { name = "ContactTargetIndicatorMat" };
-        // Standard - Fade(반투명) 설정
         sourceMaterial.SetFloat("_Mode", 3f);
         sourceMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
         sourceMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
@@ -253,10 +288,8 @@ public class ContactTargetIndicator
         sourceMaterial.DisableKeyword("_ALPHATEST_ON");
         sourceMaterial.EnableKeyword("_ALPHABLEND_ON");
         sourceMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        sourceMaterial.EnableKeyword("_EMISSION");
         sourceMaterial.renderQueue = 3000;
         sourceMaterial.SetFloat("_Glossiness", 0f);
-
         return sourceMaterial;
     }
 }

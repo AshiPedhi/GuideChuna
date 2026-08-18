@@ -134,6 +134,13 @@ public class TrainingResultData
         // --- 견착(삼각근-이마 밀착 프록시) ---
         public float postureSeconds;      // 견착 성립 상태 누적 시간
 
+        // --- 손모양 유사도 (가이드 클립 마지막 프레임 기준) ---
+        // ★가이드 클립의 끝 프레임이 곧 '유지해야 할 자세'라서, 파지가 성립해 있는 동안
+        //   그 프레임과의 유사도를 표본으로 모아 평균 낸다(2026-08-18 사용자 제안).
+        //   표본이 0이면 채점에서 이 항목을 빼고 만점 처리한다 — 클립이 없는 단계·제2늑골 대응.
+        public float poseSimilarity;      // 0~1 평균
+        public int similaritySamples;     // 표본 수(0 = 측정 안 함)
+
         // --- 산출 ---
         public float score;               // 0~100 (두개골 전용 산식)
         public string grade;

@@ -35,6 +35,27 @@ public class ForceArrowDirector : MonoBehaviour
     private readonly List<TargetAreaHighlight> highlights = new List<TargetAreaHighlight>();
     private bool collected;
 
+    // ===== 진단 자세(좌·우) =====
+    /// <summary>지금 판정 중인 진단 자세 번호(1부터, 0 = 자세 개념 없음).
+    /// CranialAdjustmentController가 자세가 바뀔 때만 알려 준다(SkeletonFocusController와 같은 경로).</summary>
+    private int currentPoseNo;
+    // 자세만 바뀌었을 때 같은 단계로 다시 계산하기 위해 마지막 인자를 들고 있는다.
+    private string lastScenario, lastPhase, lastStep;
+    private int lastSubStepNo;
+    private bool hasLastStep;
+
+    /// <summary>진단 자세가 바뀌었다 - 같은 단계 안에서 화살표만 갈아 끼운다.
+    /// ★substep이 바뀐 게 아니라 ScenarioManager는 ShowFor를 부르지 않는다. 그래서 여기서 직접 다시 돌린다.</summary>
+    public void SetPose(int poseNo)
+    {
+        if (currentPoseNo == poseNo) return;
+        currentPoseNo = poseNo;
+        if (hasLastStep) ShowFor(lastScenario, lastPhase, lastStep, lastSubStepNo);
+    }
+
+    /// <summary>그룹의 자세 지정과 지금 자세가 맞는가. 0(자세 무관)이면 항상 통과.</summary>
+    private bool PoseOk(int groupPoseNo) => groupPoseNo <= 0 || groupPoseNo == currentPoseNo;
+
     private void Awake()
     {
         Collect();
@@ -118,6 +139,9 @@ public class ForceArrowDirector : MonoBehaviour
     {
         Collect();
 
+        lastScenario = scenarioName; lastPhase = phaseName; lastStep = stepName;
+        lastSubStepNo = subStepNo; hasLastStep = true;
+
         // ★화살표 하나를 여러 그룹이 공유할 수 있다(PJ: 굴곡외회전·견착·호흡이 같은 쌍을 쓴다).
         //   그룹마다 바로 SetShown을 부르면 <b>마지막에 처리된 그룹이 이겨</b> 켜져야 할 화살표가 꺼진다.
         //   그래서 원하는 상태를 먼저 모으고(하나라도 켜라면 켠다) 마지막에 한 번만 적용한다.
@@ -127,7 +151,7 @@ public class ForceArrowDirector : MonoBehaviour
         foreach (ForceArrowGroup g in resolved)
         {
             if (g == null) continue;
-            bool match = g.Matches(scenarioName, phaseName, stepName, subStepNo);
+            bool match = g.Matches(scenarioName, phaseName, stepName, subStepNo) && PoseOk(g.PoseNo);
             if (match) shown++;
             foreach (ForceArrowBase a in g.Arrows)
             {

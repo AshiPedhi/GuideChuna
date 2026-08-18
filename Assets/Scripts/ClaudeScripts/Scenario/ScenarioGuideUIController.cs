@@ -408,8 +408,9 @@ public class ScenarioGuideUIController : MonoBehaviour
             }
             else
             {
-                // 비가이드 step (진단/제한장벽확인/등척성운동/스트레칭/재평가)
-                descriptionText.text = GetEvaluationStepText(scenarioManager.CurrentStep.stepName);
+                // 비가이드 step — 단계 이름 + 진행 표시
+                descriptionText.text = GetEvaluationStepText(scenarioManager.CurrentStep.stepName)
+                                       + EvaluationProgressSuffix();
             }
             return;
         }
@@ -424,15 +425,61 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private static string GetEvaluationStepText(string stepName)
     {
-        switch (stepName)
+        if (string.IsNullOrWhiteSpace(stepName)) return "";
+
+        switch (stepName.Trim())
         {
+            // ── 단순추나 (기존) ──
             case "진단": return "진단하세요.";
             case "제한장벽확인": return "제한장벽을 확인하세요.";
             case "등척성운동": return "등척성 운동을 실시하세요.";
             case "스트레칭": return "스트레칭을 실시하세요.";
             case "재평가": return "재평가를 실시하세요.";
-            default: return "";
+
+            // ── 복잡추나 (2026-08-18 신설) ──
+            //   ★여기 없던 단계명은 전부 default로 빠져 <b>화면이 완전히 비었다</b>.
+            //     사용자: "아무 지시문도 없어서 제대로 하고 있는 건지 막힌 건지 오류인지 구분이 안 된다."
+            //   ★평가모드이므로 '무엇을 하는 단계인가'만 알리고 <b>수행 방법은 알려주지 않는다.</b>
+            case "준비": return "자세를 준비하세요.";
+            case "자세준비": return "자세를 준비하세요.";
+            case "파지": return "파지하세요.";
+            case "견착": return "견착하세요.";
+            case "교정": return "교정하세요.";
+            case "교정·호흡": return "호흡에 맞춰 교정하세요.";
+            case "호흡": return "호흡을 유도하세요.";
+            case "호흡2": return "호흡을 이어 유도하세요.";
+            case "전환": return "방향을 전환하세요.";
+            case "굴곡외회전": return "굴곡·외회전 방향으로 잠그세요.";
+            case "신전내회전": return "신전·내회전 방향으로 잠그세요.";
         }
+
+        // 경추ROM 측정 6종(굴곡측정·신전측정·좌우 측굴/회전측정) — 규칙으로 처리한다.
+        string t = stepName.Trim();
+        if (t.EndsWith("측정"))
+        {
+            string what = t.Substring(0, t.Length - 2).Replace('_', ' ').Trim();
+            return string.IsNullOrEmpty(what) ? "측정하세요." : $"{what}을 측정하세요.";
+        }
+
+        return "";
+    }
+
+    /// <summary>평가모드 진행 표시 — 같은 단계에 subStep이 여럿이면 "(2/5)"를 덧붙인다.
+    ///
+    /// ★왜: 평가모드는 지시문이 거의 없어서 <b>내가 진행 중인지 멈춰 있는지</b>를 알 수 없다.
+    /// 숫자가 올라가면 정상 진행, 안 올라가면 내가 못 하고 있는 것 — 이 구분만 되면
+    /// "오류인지 내가 못하는 건지"를 학습자가 스스로 판단할 수 있다.</summary>
+    private string EvaluationProgressSuffix()
+    {
+        var step = scenarioManager != null ? scenarioManager.CurrentStep : null;
+        var sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
+        if (step == null || sub == null || step.subSteps == null) return "";
+
+        int total = step.subSteps.Count;
+        if (total <= 1) return "";
+
+        int now = Mathf.Clamp(sub.subStepNo, 1, total);
+        return $"  ({now}/{total})";
     }
 
     /// <summary>

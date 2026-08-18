@@ -663,6 +663,12 @@ public class TrainingResultTracker : MonoBehaviour
             c.earlyThrusts += metrics.earlyThrusts;
             c.lateThrusts += metrics.lateThrusts;
             c.postureSeconds += metrics.postureSeconds;
+            // 손모양 유사도 — 표본 수로 가중 평균한다(단순 평균을 내면 표본 1개짜리 단계가 과대평가된다).
+            int total = c.similaritySamples + metrics.similaritySamples;
+            if (total > 0)
+                c.poseSimilarity = (c.poseSimilarity * c.similaritySamples
+                                    + metrics.poseSimilarity * metrics.similaritySamples) / total;
+            c.similaritySamples = total;
             if (c.firstContactSeconds < 0f) c.firstContactSeconds = metrics.firstContactSeconds;
             if (metrics.breathHoldRatio > 0f) c.breathHoldRatio = metrics.breathHoldRatio;
             // 점수는 누적값으로 다시 계산한다
@@ -673,6 +679,14 @@ public class TrainingResultTracker : MonoBehaviour
         // 기존 결과 UI가 읽는 점수·등급도 채워 준다(비워 두면 0점/F로 보인다).
         step.finalScore = step.cranial.score;
         step.grade = step.cranial.grade;
+
+        // ★유사도도 채운다 — 두개골 계열은 HandPose 평가 파이프라인을 안 타서 averageSimilarity가
+        //   줄곧 0이었고, 결과표에 '유사도 0%'로 찍혔다(사용자 지적 2026-08-18).
+        //   이제 가이드 클립 마지막 프레임과의 손모양 유사도를 그 칸에 넣는다(0~1, UI는 :P0로 찍는다).
+        //   ★표본이 없으면(제2늑골처럼 유지형이 아닌 술기·클립 없는 단계) 건드리지 않는다 —
+        //     0을 덮어써서 '0%'로 보이게 만드느니, 채점에서 빠진 것과 같이 비워 두는 편이 정직하다.
+        if (step.cranial.similaritySamples > 0)
+            step.averageSimilarity = Mathf.Clamp01(step.cranial.poseSimilarity);
 
         if (showDebugLogs)
             ChunaLogger.Log($"<color=yellow>[TrainingResultTracker] 두개골 지표 기록: {phase}/{stepName} " +

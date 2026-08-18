@@ -1,11 +1,11 @@
 ﻿scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
 9,두개골PJ교정,시작,가이드,0,1,0,필요시 [설정]으로 환자 위치를 맞추고 [시작]을 누르세요.,시작,,,,,,,,,,,
-9,두개골PJ교정,평가,진단,1,1,0,"왼손은 후두골, 오른손은 관골궁을 잡고 좌우 3초씩 굴곡·외회전을 확인하세요.",진단1,PM 진단 좌,cranialTouch,진단1;hold=3,굴곡신전,,,,,,,
+9,두개골PJ교정,평가,진단,1,1,0,"왼손은 후두골, 오른손은 관골궁을 잡고 좌우 3초씩 굴곡·외회전을 확인하세요.",진단1,OM교정,cranialTouch,진단1;hold=3,굴곡신전,,,,,,,
 9,두개골PJ교정,교정,파지,2,1,0,"보조수 왼손은 후두골을 받치고, 주동수 오른손은 우측 관골궁을 파지하세요.",파지,OM교정,cranialGrip,,,,,,,,,
 9,두개골PJ교정,교정,견착,3,1,0,후두골을 잡은 팔의 삼각근을 이마에 밀착시키세요.,견착,,cranialPressure,2;brace,,,,,,,,
 9,두개골PJ교정,교정,신전내회전,4,1,0,"보조수 왼손은 신전 방향, 주동수 오른손은 내회전 방향으로 잠그세요.",신전내회전,,cranialPressure,2;brace,,,,,,,,
 9,두개골PJ교정,교정,호흡,5,1,0,"편하게 들이마신 뒤, 끝까지 완전히 내쉬게 하세요.",호흡1,,cranialDepthBreath,gripGate;breaths=1;inhale=2;exhale=6;start=inhale;brace,굴곡신전,,,,,,,
 9,두개골PJ교정,교정,전환,6,1,3,"숨을 참은 채, 보조수 왼손은 굴곡으로 주동수 오른손은 외회전으로 바꿔 잠그세요.",전환,,,brace,idle,,,,,,,
 9,두개골PJ교정,교정,호흡2,7,1,0,"이제 크게 들이마시게 하고, 이후 2회는 평상 호흡으로 유지하세요.",호흡2,,cranialDepthBreath,gripGate;breaths=3;inhale=2;exhale=3;start=inhale;firstScale=1.5;brace,굴곡신전,,,,,,,
-9,두개골PJ교정,재평가,재평가,8,1,10,처음 위치에서 굴곡과 외회전을 다시 확인하세요.,재평가,PM 진단 좌,cranialTouch,진단1;hold=3,,,,,,,,
+9,두개골PJ교정,재평가,재평가,8,1,10,처음 위치에서 굴곡과 외회전을 다시 확인하세요.,재평가,OM교정,cranialTouch,진단1;hold=3,,,,,,,,
 9,두개골PJ교정,종료,가이드,0,1,0,실습을 마칩니다. [메인] 버튼을 누르세요.,종료,,,,,,,,,,,

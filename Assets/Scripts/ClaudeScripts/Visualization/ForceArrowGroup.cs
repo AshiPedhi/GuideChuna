@@ -37,6 +37,16 @@ public class ForceArrowGroup : MonoBehaviour
     [Tooltip("선택. 채우면 국면(phase)까지 일치해야 표시한다.")]
     [SerializeField] private string phaseName = "";
 
+    [Tooltip("0 = 진단 자세와 무관(기본). 1 이상이면 그 번호의 진단 자세에서만 표시한다. "
+             + "★왜 필요한가: 진단은 한 substep 안에서 좌·우 자세가 바뀐다(PJ 진단1 = ⓐ/ⓑ 2자세). "
+             + "위의 단계·subStep 매칭으로는 그 전환을 가를 수 없어, 한쪽 화살표가 반대쪽 자세에서도 계속 떠 있었다. "
+             + "ⓐ·ⓑ는 파지점이 서로 다른 좌우 반전 자세라 같은 화살표를 돌려쓸 수도 없다. "
+             + "파지점이 ShowOnlyCurrentPoseGrips로 '현재 자세만' 보여 주는 규약과 짝을 맞춘 것이다.")]
+    [SerializeField] private int poseNo = 0;
+
+    /// <summary>이 그룹이 걸린 진단 자세 번호(0 = 자세 무관). Director가 자세 전환마다 확인한다.</summary>
+    public int PoseNo => poseNo;
+
     [Tooltip("선택. 비우면 부모 리그(CranialAdjustmentController)의 시나리오를 자동으로 물려받는다.\n" +
              "★이게 없으면 OM 화살표가 PJ 실습 중에도 켜진다(08-12 수정).")]
     [SerializeField] private string scenarioName = "";

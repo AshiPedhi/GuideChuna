@@ -40,10 +40,16 @@ public static class HandRole
         환자
     }
 
-    /// <summary>주동수 — 힘을 주는 손.</summary>
-    public static readonly Color 주동수색 = new Color(0.149f, 1f, 0.318f, 1f);
-    /// <summary>보조수 — 지지하는 손. 같은 계열의 연한 녹색(파란색이 아니다, 08-13 정정판).</summary>
-    public static readonly Color 보조수색 = new Color(0.60f, 1f, 0.72f, 1f);
+    // ★대비를 크게 벌린 값(2026-08-18). 이전 값은 주동수 (0.149,1,0.318) · 보조수 (0.60,1,0.72)로
+    //   둘 다 G=1.0 최대 채도 녹색이라 <b>헤드셋에서 구분이 안 됐다</b>(사용자: "색이 똑같다").
+    //   화살표는 불투명이라 알파로는 구분할 수 없고(useTransparency=false → 알파 무시),
+    //   밝기 펄스(0.25~1.0)가 계속 흔들려 미세한 채도 차이는 더 묻힌다.
+    //   → 회의 결정(같은 녹색 계열, 진녹/연녹)은 지키되 <b>명도와 채도를 함께</b> 벌린다.
+
+    /// <summary>주동수 — 힘을 주는 손. <b>짙고 채도 높은</b> 녹색.</summary>
+    public static readonly Color 주동수색 = new Color(0.02f, 0.75f, 0.16f, 1f);
+    /// <summary>보조수 — 지지하는 손. <b>밝고 옅은</b> 민트(파란색이 아니다, 08-13 정정판).</summary>
+    public static readonly Color 보조수색 = new Color(0.72f, 1f, 0.84f, 1f);
     /// <summary>중립 — 손 역할과 무관한 목표 표시.</summary>
     public static readonly Color 중립색 = new Color(1f, 0.86f, 0.35f, 1f);
     /// <summary>환자가 내는 힘.</summary>

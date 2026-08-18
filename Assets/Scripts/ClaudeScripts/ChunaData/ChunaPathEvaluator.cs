@@ -634,6 +634,34 @@ public class ChunaPathEvaluator : MonoBehaviour
     private float guideHeldEndRatio = 1f;
     private bool guideHiddenByContact;
 
+    /// <summary>이번 substep에서만 가이드손을 끄는가 — CSV conditionParams의 <c>noGuide</c>.
+    ///
+    /// ★왜 난이도 필드(showGuideHands)를 쓰지 않는가: 그 값은 LoadFromCSV마다 난이도 프리셋에서
+    /// 다시 덮어써진다(ChunaDataLoader). substep 하나만 끄려고 거기에 손대면 다음 단계에
+    /// 설정이 새거나 난이도 설정이 지워진다. 그래서 별도 플래그로 둔다.
+    ///
+    /// ★쓰는 곳: "이제 직접 합니다" 처럼 <b>손 녹화는 판정 기준으로 쓰되 시연은 감추는</b> 단계.
+    /// 제2늑골 3-7이 그렇다 — 3-5·3-6에서 가이드손이 올리고 내리는 시연을 마친 뒤에도
+    /// 마지막 자세가 그대로 남아(MarkGuideHeld) 사용자가 직접 반복하는 내내 떠 있었다.</summary>
+    private bool guideSuppressedForStep;
+
+    /// <summary>이번 substep 동안 가이드손을 끈다(켤 때는 즉시 감춘다). ScenarioManager가 substep 진입 때 넣는다.</summary>
+    internal void SetGuideHandsSuppressedForStep(bool suppress)
+    {
+        if (guideSuppressedForStep == suppress) return;
+        guideSuppressedForStep = suppress;
+        if (!suppress) return;
+
+        if (guideHandCoroutine != null)
+        {
+            StopCoroutine(guideHandCoroutine);
+            guideHandCoroutine = null;
+        }
+        // '이 동작은 이미 봤다'는 기록은 남긴다 — 지우면 다음 단계에서 처음부터 다시 재생된다.
+        MarkGuideHeld();
+        HideGuideHands();
+    }
+
     /// <summary>
     /// 유지 판정의 키 = 클립 + 재생 구간 + <b>표시할 손 범위</b>.
     ///
@@ -746,7 +774,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>마지막 자세로 <b>정지 표시</b>한다(재생 아님). 접촉이 풀렸을 때·같은 동작이 이어질 때 쓴다.</summary>
     internal void ShowGuideHandLastFrameInternal()
     {
-        if (!showGuideHands) return;
+        if (!showGuideHands || guideSuppressedForStep) return;
         if (loadedFrames == null || loadedFrames.Count == 0) return;
 
         if (guideHandCoroutine != null)
@@ -789,6 +817,38 @@ public class ChunaPathEvaluator : MonoBehaviour
     internal Transform ReferenceTransform => referenceTransform;
     internal Transform PivotTransform => pivotTransform;
     internal HandPoseComparator PoseComparator => poseComparator;
+
+    /// <summary>지금 로드된 가이드 클립의 <b>마지막 프레임</b>과 현재 두 손의 유사도(0~1).
+    ///
+    /// ★두개골·늑골·흉추 계열의 가이드 클립은 <b>마지막 프레임이 곧 유지해야 할 목표 자세</b>다
+    /// (사용자 확인, 2026-08-18). 그래서 동작 전체를 따라갔는지 대신 '끝 자세를 얼마나 닮게 잡고
+    /// 있는가'만 보면 유지형 술기의 손모양을 채점할 수 있다.
+    /// ※제2늑골 교정만 예외 — 팔을 올리고 내리는 <b>움직이는</b> 동작이라 끝 프레임이 목표가 아니다.
+    ///
+    /// 평가 파이프라인(StartEvaluation)을 건드리지 않는다 — 두개골 판정은 파지점 게이트가 담당하고,
+    /// 여기서는 읽기만 한다(08-11에 평가를 같이 켰다가 파지 게이트가 통째로 무너진 전례).</summary>
+    internal bool TryGetLastFrameSimilarity(HandVisual left, HandVisual right, out float similarity)
+    {
+        similarity = 0f;
+        if (poseComparator == null) return false;
+        if (loadedFrames == null || loadedFrames.Count == 0) return false;
+        if (left == null && right == null) return false;
+
+        PoseFrame last = loadedFrames[loadedFrames.Count - 1];
+        if (last == null) return false;
+
+        if (left != null && right != null)
+        {
+            var r = poseComparator.CompareBothHands(left, right, last);
+            similarity = Mathf.Clamp01((r.leftHandSimilarity + r.rightHandSimilarity) * 0.5f);
+        }
+        else if (left != null)
+            similarity = Mathf.Clamp01(poseComparator.CompareLeftPose(left, last).leftHandSimilarity);
+        else
+            similarity = Mathf.Clamp01(poseComparator.CompareRightPose(right, last).rightHandSimilarity);
+
+        return true;
+    }
     internal ChunaLimitChecker LimitChecker => limitChecker;
     internal RotationDetectionAxis PivotPlaneAxis => pivotPlaneAxis;
     internal bool AutoCalculateTargetAngle => autoCalculateTargetAngle;
@@ -1450,7 +1510,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>접촉 게이트 구간에서 터치 대상 부위를 반투명 구체로 표시.</summary>
     private void UpdateContactTargetIndicator(bool gateActive, bool satisfied)
     {
-        if (!showContactTargetIndicator || !gateActive)
+        if (!showContactTargetIndicator || !gateActive || HideContactHintsForDifficulty())
         {
             HideContactTargetIndicator();
             return;
@@ -1461,6 +1521,21 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         CollectActiveContactColliders(contactIndicatorBuffer);
         contactTargetIndicator.UpdateMarkers(contactIndicatorBuffer, satisfied, contactTargetIndicatorScale);
+    }
+
+    /// <summary>평가·상급 난이도에서는 접촉 표시구를 감춘다(2026-08-18 사용자 지적).
+    ///
+    /// ★파지점과 다르게 다루는 이유: 파지점은 횡돌기·유양돌기처럼 <b>손으로 더듬어 찾아야 하는 작은 지점</b>이라
+    /// 촉각이 없는 VR에서 구체가 유일한 단서다(그래서 평가에서도 남긴다). 반면 접촉 표시구는
+    /// <b>무릎·팔처럼 누구나 아는 큰 부위</b>를 "여기를 터치하세요"라고 알려주는 힌트에 가깝다 —
+    /// 평가에서까지 띄우면 답을 주는 셈이다.
+    ///
+    /// ★판정에는 영향이 없다 — 접촉 판정은 씬의 콜라이더로 하고, 표시구는 콜라이더를 지운 표시 전용이다.
+    /// 기준은 가이드손을 숨기는 난이도(상급·평가)와 같다.</summary>
+    private bool HideContactHintsForDifficulty()
+    {
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        return dm != null && !dm.ShowGuideHands;
     }
 
     private void HideContactTargetIndicator()
@@ -2422,6 +2497,15 @@ public class ChunaPathEvaluator : MonoBehaviour
 
     public void LoadAndGenerateCheckpoints(string csvFileName) => dataLoader.LoadAndGenerateCheckpoints(csvFileName);
 
+    /// <summary>난이도 프리셋(가이드손 표시·투명도·홀드시간)을 <b>지금</b> 반영한다.
+    ///
+    /// ★왜 필요한가 (2026-08-18 실측): 이 동기화는 여태 <see cref="StartEvaluation"/> 안에서만 돌았다.
+    /// 그런데 두개골·늑골·흉추(cranial*) 단계는 평가 파이프라인을 <b>일부러 켜지 않는다</b>
+    /// (08-11에 같이 켰다가 파지 게이트가 무너진 전례) → 그 술기들에서는 난이도가 한 번도 적용되지 않아
+    /// <b>평가·상급 모드에서도 가이드손이 그대로 나왔다</b>(씬 직렬화 값 showGuideHands=1).
+    /// ScenarioManager가 substep 진입 때 불러 준다.</summary>
+    public void SyncDifficultyNow() => dataLoader.SyncWithDifficultySettings();
+
     /// <summary>
     /// 측굴 모드 수동 전환 (제한장벽 확인 / 스트레칭 / 재평가)
     /// </summary>
@@ -2929,7 +3013,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 특정 술기(두개골)만 다른 설정으로 재생해도 다음 시나리오에 설정이 새지 않는다.</summary>
     private void StartGuideHandPlayback(float startRatio, float endRatio, bool loop, string clipName = null)
     {
-        if (!showGuideHands) return;
+        if (!showGuideHands || guideSuppressedForStep) return;
         if (loadedFrames == null || loadedFrames.Count == 0) return;
 
         StopGuideHandPlayback();          // ★여기서 유지 상태가 지워지므로
@@ -2968,6 +3052,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         //   평가가 시작될 때마다 첫 프레임을 그려서, 손 녹화가 없는 단계에서 숨겨 둔 가이드손이
         //   환자를 터치하는 순간 되살아났다(사용자: "머리 터치하니까 다시 생기고 안 사라진다").
         if (guideHiddenByContact) return;
+        if (guideSuppressedForStep) return;   // noGuide 단계 — 평가가 시작돼도 첫 프레임을 그리지 않는다
 
         if (!showGuideHands)
         {

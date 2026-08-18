@@ -80,28 +80,67 @@ public class GripPointTarget : MonoBehaviour
     /// ★불투명 머티리얼이면 idleColor·grippedAlpha의 알파가 통째로 무시돼
     /// "빨간 덩어리"로만 보인다. 씬 머티리얼을 건드리지 않도록 인스턴스에만 적용한다.
     /// </summary>
+    /// <summary>구체를 <b>처음부터 반투명인 셰이더</b>로 갈아끼운다.
+    ///
+    /// ★2026-08-18 전면 교체 — 예전에는 씬의 불투명 머티리얼을 받아 Standard의 Fade 설정
+    ///   (_Mode·_SrcBlend·_DstBlend·_ZWrite·키워드 3개·renderQueue = <b>7가지</b>)을 런타임에 맞췄다.
+    ///   하나라도 어긋나거나 알파블렌드 배리언트가 빌드에서 스트립되면 <b>조용히 불투명</b>이 됐고,
+    ///   실패해도 예외도 로그도 없었다. "파지점이 진한 덩어리로 보인다"가 반복된 원인이다.
+    ///
+    ///   Sprites/Default는 알파 블렌드가 셰이더에 고정(Blend SrcAlpha OneMinusSrcAlpha, ZWrite Off)이라
+    ///   <b>맞출 상태가 없다.</b> _Color 하나로 색과 알파가 정해지므로 아래 색 갱신 코드도 그대로 쓴다.
+    ///   UI가 늘 쓰는 셰이더라 빌드에서 빠질 일도 없다(원래 Standard를 고른 이유였던 스트립 위험도 해소).
+    ///   파지 구체는 위치·성립 여부만 알리면 되므로 조명이 필요 없다.</summary>
     private void EnsureTransparentMaterial()
     {
         if (transparencyEnsured || targetRenderer == null) return;
         transparencyEnsured = true;
 
-        var m = targetRenderer.material;   // 인스턴스 생성(공유 머티리얼 보호)
-        if (m == null || m.shader == null) return;
-        if (!m.HasProperty("_Mode")) return;   // Standard 계열이 아니면 건드리지 않는다
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            Debug.LogWarning($"[GripPointTarget] {name}: Sprites/Default를 찾지 못해 반투명 전환에 실패했습니다. " +
+                             "구체가 불투명하게 보입니다(판정에는 영향 없음).");
+            return;
+        }
 
-        m.SetFloat("_Mode", 3f);               // Fade
-        m.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
-        m.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
-        m.SetInt("_ZWrite", 0);
-        m.DisableKeyword("_ALPHATEST_ON");
-        m.EnableKeyword("_ALPHABLEND_ON");
-        m.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        m.renderQueue = 3000;
+        Color keep = targetRenderer.sharedMaterial != null && targetRenderer.sharedMaterial.HasProperty("_Color")
+                     ? targetRenderer.sharedMaterial.color : idleColor;
+
+        var m = new Material(shader) { name = "GripPointMat" };
+        m.color = keep;
+        m.renderQueue = 3000;      // 불투명 뒤에 그린다
+        targetRenderer.material = m;
     }
+
+    /// <summary>씬에 직렬화된 렌더러 표시 여부. 평가모드 숨김을 풀 때 여기로 되돌린다
+    /// (도구 `GuideChuna/파지점 표시 정리`로 이미 꺼 둔 파지점을 되살리지 않기 위함).</summary>
+    private bool rendererDefaultEnabled = true;
+    private bool rendererDefaultCaptured;
 
     private void Awake()
     {
         EnsureTransparentMaterial();
+        CaptureRendererDefault();
+    }
+
+    private void CaptureRendererDefault()
+    {
+        if (rendererDefaultCaptured || targetRenderer == null) return;
+        rendererDefaultCaptured = true;
+        rendererDefaultEnabled = targetRenderer.enabled;
+    }
+
+    /// <summary>구체 <b>표시만</b> 켜고 끈다. 콜라이더·트리거는 그대로라 판정은 계속 돈다.
+    ///
+    /// ★오브젝트를 끄면(SetActive) 판정이 조용히 죽는다 — 파지점은 cranialGrip·cranialPressure의
+    /// 접촉 소스다(08-13 회의 결론). 그래서 평가모드 숨김은 반드시 렌더러 단위로 한다.
+    /// ★끄기는 '원래 켜져 있던 것'에만 적용된다. 도구로 이미 꺼 둔 파지점은 켜지지 않는다.</summary>
+    public void SetRendererVisible(bool on)
+    {
+        CaptureRendererDefault();
+        if (targetRenderer == null) return;
+        targetRenderer.enabled = on && rendererDefaultEnabled;
     }
 
     /// <summary>파지 판정 활성/정지. 호흡 국면처럼 손이 안 보여 트리거가 튀는 구간에서 정지시켜

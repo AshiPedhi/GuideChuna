@@ -387,6 +387,7 @@ public class CranialAdjustmentController : MonoBehaviour
         // 순서 강제면 첫 자세의 파지점만 남긴다. ★초기화는 하지 않는다 —
         //   나레이션 중 미리 손을 대고 기다리는 경우 ResetState가 접촉을 지워 영영 인식되지 않는다.
         ShowOnlyCurrentPoseGrips(resetNewlyShown: false);
+        ApplyGripVisibilityForDifficulty();
 
         if (n == 0)
             ChunaLogger.LogWarning($"[CranialAdjustmentController] 진단 단계 '{stage.stageId}'에 자세가 하나도 없습니다 — 영영 완료되지 않습니다.");
@@ -443,7 +444,7 @@ public class CranialAdjustmentController : MonoBehaviour
         {
             var grips = CollectStageGrips(diagnosisStages[s]);
             for (int i = 0; i < grips.Count; i++)
-                if (grips[i] != null && grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(false);
+                if (grips[i] != null) { if (!grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(true); grips[i].SetRendererVisible(false); }
         }
     }
 
@@ -461,7 +462,15 @@ public class CranialAdjustmentController : MonoBehaviour
     private bool skeletonFocusSearched;
     private int reportedPoseNo = -1;
 
-    private void ReportPoseToSkeletonFocus(int poseIndex)
+    // ★화살표도 자세를 따라가야 한다(2026-08-18).
+    //   진단은 한 substep 안에서 좌·우 자세가 바뀌는데(PJ 진단1 = ⓐ/ⓑ), 화살표 그룹은
+    //   (시나리오·국면·단계·subStep)으로만 매칭돼서 그 전환을 가를 수 없었다.
+    //   ⓐ·ⓑ는 파지점이 서로 다른 좌우 반전 자세라 같은 화살표를 쓸 수 없다(사용자 지적).
+    //   파지점이 ShowOnlyCurrentPoseGrips로 '현재 자세만' 보여 주는 것과 짝을 맞춘다.
+    private ForceArrowDirector arrowDirector;
+    private bool arrowDirectorSearched;
+
+    private void ReportPoseChanged(int poseIndex)
     {
         int poseNo = poseIndex >= 0 ? poseIndex + 1 : 0;   // 표시용은 1부터
         if (poseNo == reportedPoseNo) return;
@@ -473,6 +482,13 @@ public class CranialAdjustmentController : MonoBehaviour
             skeletonFocus = FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
         }
         skeletonFocus?.SetPose(poseNo);
+
+        if (!arrowDirectorSearched)
+        {
+            arrowDirectorSearched = true;
+            arrowDirector = FindFirstObjectByType<ForceArrowDirector>(FindObjectsInactive.Include);
+        }
+        arrowDirector?.SetPose(poseNo);
     }
 
     /// <summary>매 프레임: 자세별 유지 타이머 누적/초기화. 파지가 풀리면 gripGraceSeconds 안에 다시 잡아야 누적이 유지된다.</summary>
@@ -483,7 +499,7 @@ public class CranialAdjustmentController : MonoBehaviour
         int n = Mathf.Min(activeStage.poses.Length, poseHeld.Length);
         int current = CurrentPoseIndex();   // 순서 강제 시 판정 대상(-1 = 전부 달성)
 
-        ReportPoseToSkeletonFocus(current);
+        ReportPoseChanged(current);
 
         // ★접촉이 붙고 떨어지는 순간만 기록한다 — "왜 안 채워지나"의 답이 대부분 여기 있다.
         if (logDiagnosisTrace)
@@ -522,7 +538,7 @@ public class CranialAdjustmentController : MonoBehaviour
                     ChunaLogger.Log($"<color=green>[CranialAdjustmentController] 자세 달성: {pose.label} ({StageHoldSeconds}초)</color>");
                     // ★달성한 자세의 파지점은 감춘다 → 남은 자세(반대쪽)만 보여 "이제 저기를 잡으라"가 눈에 들어온다.
                     //   전부 켜둔 채로 두면 좌·우 파지점이 동시에 떠서 어디를 잡아야 하는지 알 수 없다.
-                    if (enforcePoseOrder) ShowOnlyCurrentPoseGrips(resetNewlyShown: true);
+                    if (enforcePoseOrder) { ShowOnlyCurrentPoseGrips(resetNewlyShown: true); ApplyGripVisibilityForDifficulty(); }
                     else HideCompletedPoseGrips(i);
                 }
             }
@@ -548,9 +564,20 @@ public class CranialAdjustmentController : MonoBehaviour
     // ★인스펙터로 빼지 않고 const로 둔다. 씬에 두개골 리그가 5개(OM·PM·PJ·제1늑골·흉추)라
     //   직렬화 필드로 만들면 리그마다 기준이 갈라진다(이 프로젝트에서 이미 여러 번 겪은 함정).
     //   평가 기준을 바꿀 때는 여기 한 곳만 고치면 전 술기에 같이 먹는다.
-    private const float CompletionWeight = 45f;   // 자세 완료도
-    private const float StabilityWeight = 40f;    // 유지 안정성
+    private const float CompletionWeight = 40f;   // 자세 완료도
+    private const float StabilityWeight = 35f;    // 유지 안정성
     private const float BreathWeight = 15f;       // 호흡
+    private const float SimilarityWeight = 10f;   // 손모양(가이드 끝 프레임 유사도)
+
+    /// <summary>유사도 표본을 얼마나 자주 뜨는가(초). 매 프레임 비교하면 비싸고, 흔들림도 그대로 들어온다.</summary>
+    private const float SimilaritySampleInterval = 0.25f;
+
+    [Tooltip("파지 유지 중 가이드 클립 마지막 프레임과 손모양 유사도를 재서 채점에 10점 반영한다. " +
+             "★제2늑골처럼 가이드가 '움직이는 동작'인 리그에서는 꺼 둘 것 — 끝 프레임이 목표 자세가 아니다. " +
+             "끄면 표본이 0이 되어 이 항목은 만점 처리된다(기존 점수와 같아진다).")]
+    [SerializeField] private bool sampleHoldSimilarity = true;
+
+    private float lastSimilaritySampleAt;
 
     private const float DropoutPenalty = 8f;        // 파지를 놓칠 때마다(안정성에서)
     private const float HoldResetPenalty = 10f;     // 유지 타이머가 0으로 초기화될 때마다(안정성에서)
@@ -644,9 +671,36 @@ public class CranialAdjustmentController : MonoBehaviour
             breath = BreathWeight;
         }
 
-        m.score = Mathf.Clamp(completion + stability + breath, 0f, 100f);
+        // 손모양 — 표본이 없으면(클립 없음·제2늑골 등) 감점 사유가 없으므로 만점.
+        //   ★비중을 10으로 낮게 둔 이유: 핸드트래킹 오차가 실제 자세 차이와 비슷한 크기라
+        //     이 항목을 크게 잡으면 정상 수행도 점수가 흔들린다(사용자: "비중이 높지 않아도 된다").
+        float shape = m.similaritySamples > 0
+            ? Mathf.Clamp01(m.poseSimilarity) * SimilarityWeight
+            : SimilarityWeight;
+
+        m.score = Mathf.Clamp(completion + stability + breath + shape, 0f, 100f);
         m.grade = EvaluationScoringEngine.GetGradeFromScore(m.score);
         return m;
+    }
+
+    /// <summary>파지가 성립한 동안 <b>가이드 클립 마지막 프레임</b>과의 손모양 유사도를 표본으로 모은다.
+    ///
+    /// ★왜 마지막 프레임인가: 이 계열의 가이드손 녹화는 끝 자세가 곧 유지해야 할 자세다
+    ///   (사용자 확인 2026-08-18). 동작 전체 추종을 요구하면 유지형 술기에서는 의미가 없다.
+    /// ★제2늑골만 예외 — 팔 거상은 <b>움직이는</b> 동작이라 끝 프레임이 목표 자세가 아니다.
+    ///   그 리그에서는 아래 스위치를 꺼 두면 표본이 0이 되고, 채점에서 이 항목은 만점 처리된다.</summary>
+    private void SampleHoldSimilarity()
+    {
+        if (!sampleHoldSimilarity || metrics == null || guideHandOwner == null) return;
+        if (Time.time - lastSimilaritySampleAt < SimilaritySampleInterval) return;
+        lastSimilaritySampleAt = Time.time;
+
+        if (!guideHandOwner.TryGetLastFrameSimilarity(leftHandVisual, rightHandVisual, out float sim)) return;
+
+        // 누적 평균 — 표본 수만 들고 있으면 되므로 리스트를 만들지 않는다.
+        int n = metrics.similaritySamples + 1;
+        metrics.poseSimilarity += (sim - metrics.poseSimilarity) / n;
+        metrics.similaritySamples = n;
     }
 
     /// <summary>매 프레임 지표 누적. 수집 중이 아니면 즉시 반환.</summary>
@@ -668,6 +722,7 @@ public class CranialAdjustmentController : MonoBehaviour
             if (metrics.firstContactSeconds < 0f) metrics.firstContactSeconds = now;
             metricsLostSince = -1f;
             metricsLostCounted = false;
+            SampleHoldSimilarity();   // 파지가 성립해 있을 때만 손모양을 본다
         }
         else
         {
@@ -737,6 +792,29 @@ public class CranialAdjustmentController : MonoBehaviour
 
     public void SetGuideHandScope(JudgeHand scope) => guideHandScope = scope;
 
+    // ===== 재생이 끝나면 양손으로 넓히기 (CSV handAfter=both) =====
+    /// <summary>가이드 재생이 끝나면 손 범위를 양손으로 넓히는가.
+    ///
+    /// ★왜 필요한가(2026-08-18 사용자 요구): 복와위 파지는 족방수(왼손) → 두방수(오른손) 순서로 대는데,
+    /// 각 단계에서 그 손만 보여 줘야 "지금 이 손을 대라"가 분명하다. 그런데 <b>두방수 시연이 끝난 뒤에는</b>
+    /// 두 두상골이 맞붙은 <b>최종 자세를 양손으로</b> 보여 줘야 완성형을 알 수 있다.
+    /// hand=만으로는 단계 내내 한 손으로 고정돼 그 그림이 나오지 않는다.</summary>
+    private bool expandScopeAfterFinish;
+    /// <summary>이미 넓혔는가 — 한 번만 한다. 넓힌 뒤에도 계속 검사하면 유지 판정 키가 흔들려 재생이 되풀이된다.</summary>
+    private bool scopeExpanded;
+
+    /// <summary>시연이 끝난 뒤 가이드손을 아예 감추는가(CSV <c>handAfter=none</c>).
+    /// ★"한 번 보여줬으면 사라져야지 계속 떠 있어 거슬린다"(2026-08-18 사용자 지적).
+    /// 기본 동작은 마지막 자세를 유지하는 것이라(MarkGuideHeld) 이 토큰이 없으면 그대로 남는다.</summary>
+    private bool hideGuideAfterFinish;
+
+    public void SetGuideScopeAfterFinish(bool expandBoth, bool hideAll = false)
+    {
+        expandScopeAfterFinish = expandBoth;
+        hideGuideAfterFinish = hideAll;
+        scopeExpanded = false;
+    }
+
     /// <summary>이번 substep의 가이드손 자동 제어를 무장한다.
     /// ScenarioManager가 두개골 substep에서 가이드손 재생을 시작한 직후 호출한다.
     /// ★무장된 동안만 동작하므로 다른 시나리오(사각근 등)의 가이드손에는 영향이 없다.</summary>
@@ -759,6 +837,7 @@ public class CranialAdjustmentController : MonoBehaviour
         loadedGuideClip = substepClipName;   // ScenarioManager가 이미 로드해 둔 상태
         guidePoseIndex = -1;
         guideHandSawRelease = false;
+        scopeExpanded = false;   // 단계가 바뀌면 다시 좁힌 범위로 시작한다
     }
 
     /// <summary>매 프레임: 가이드손을 <b>동작(자세) 단위</b>로 켜고 끈다.
@@ -789,6 +868,24 @@ public class CranialAdjustmentController : MonoBehaviour
         //     목표 자세까지 사라져 어디를 잡아야 하는지 알 수 없게 된다.
         // ★이번 단계에서 쓰지 않는 손의 가이드는 아예 숨긴다(hand=left/right).
         //   접촉 여부와 무관하게 가려야 "지금 이 손을 대라"가 분명해진다.
+        // ★시연이 끝났으면 손 범위를 양손으로 넓힌다(handAfter=both).
+        //   두 손이 맞붙은 최종 자세를 보여 주기 위한 것이다.
+        //   ★한 번만 — 넓힌 뒤에도 매 프레임 검사하면 유지 판정 키(클립+구간+손범위)가 흔들려
+        //     '아직 안 본 동작'으로 오인되고 재생이 되풀이된다.
+        if ((expandScopeAfterFinish || hideGuideAfterFinish) && !scopeExpanded
+            && !string.IsNullOrEmpty(substepGuideClip)
+            && guideHandOwner.IsGuideClipHeld(substepGuideClip))
+        {
+            scopeExpanded = true;
+            if (expandScopeAfterFinish) guideHandScope = JudgeHand.양손;
+            if (hideGuideAfterFinish)
+            {
+                // 1회 시연이 끝났다 — 마지막 자세를 남기지 않고 치운다.
+                guideHandOwner.HideGuideHandKeepHeldInternal();
+                return;   // 아래 손별 억제 계산이 다시 켜지 못하게 이번 프레임은 여기서 끝낸다
+            }
+        }
+
         bool leftOutOfScope = guideHandScope == JudgeHand.오른손;
         bool rightOutOfScope = guideHandScope == JudgeHand.왼손;
 
@@ -998,22 +1095,31 @@ public class CranialAdjustmentController : MonoBehaviour
         lastTickSecond = sec;
         if (sec <= 0) return;               // 0초 = 완료 — 완료음(띵동)이 담당한다
 
-        if (holdTickClip == null) holdTickClip = Resources.Load<AudioClip>("Audio/TimerTick");
-        if (holdTickLastClip == null) holdTickLastClip = Resources.Load<AudioClip>("Audio/TimerTickLast");
-
-        if (tickSource == null)
+        // 인스펙터에서 클립을 직접 꽂았으면 그것을 쓰고, 아니면 공용 재생기에 맡긴다.
+        if (holdTickClip != null || holdTickLastClip != null)
         {
-            tickSource = gameObject.GetComponent<AudioSource>();
             if (tickSource == null)
             {
-                tickSource = gameObject.AddComponent<AudioSource>();
-                tickSource.playOnAwake = false;
-                tickSource.spatialBlend = 0f;   // 2D — 손이 시야를 벗어나도 들려야 한다
+                tickSource = gameObject.GetComponent<AudioSource>();
+                if (tickSource == null)
+                {
+                    tickSource = gameObject.AddComponent<AudioSource>();
+                    tickSource.playOnAwake = false;
+                    tickSource.spatialBlend = 0f;   // 2D — 손이 시야를 벗어나도 들려야 한다
+                }
             }
+            AudioClip clip = sec <= 1 && holdTickLastClip != null ? holdTickLastClip : holdTickClip;
+            if (clip != null) tickSource.PlayOneShot(clip, Mathf.Max(holdTickVolume, HoldTickAudio.MinVolume));
+            return;
         }
 
-        AudioClip clip = sec <= 1 && holdTickLastClip != null ? holdTickLastClip : holdTickClip;
-        if (clip != null) tickSource.PlayOneShot(clip, holdTickVolume);
+        // ★공용 재생기 — HandPose(단순추나·제2늑골 직접하기)의 유지 타이머와 같은 소리를 쓴다.
+        //   ★볼륨은 하한이 걸린다: holdTickVolume이 씬 리그 7개에 0.5로 직렬화돼 있어
+        //     코드 기본값을 올려도 안 먹기 때문이다(08-18 실측).
+        // ★-1을 넘긴다 — 중복 방지는 위의 lastTickSecond가 이미 했다.
+        //   여기에 sec을 그대로 넘기면 Play 안에서 '같은 초'로 걸러져 소리가 아예 안 난다.
+        int carry = -1;
+        HoldTickAudio.Play(remaining, ref carry, holdTickVolume);
     }
 
     private ScenarioGuideUIController cachedGuideUI;
@@ -1055,9 +1161,10 @@ public class CranialAdjustmentController : MonoBehaviour
             var g = all[i];
             if (g == null) continue;
             bool on = want.Contains(g);
-            if (g.gameObject.activeSelf == on) continue;      // 상태 동일 — 건드리지 않는다
+            // ★오브젝트는 끄지 않는다(판정 유지) — 표시만 바꾼다.
+            if (!g.gameObject.activeSelf) g.gameObject.SetActive(true);
             if (on && resetNewlyShown) g.ResetState();        // 이전 자세에서 남은 접촉 상태 제거
-            g.gameObject.SetActive(on);
+            g.SetRendererVisible(on);
         }
     }
 
@@ -1089,7 +1196,8 @@ public class CranialAdjustmentController : MonoBehaviour
         {
             var g = mine[i];
             if (g == null || stillNeeded.Contains(g)) continue;
-            if (g.gameObject.activeSelf) g.gameObject.SetActive(false);
+            if (!g.gameObject.activeSelf) g.gameObject.SetActive(true);
+            g.SetRendererVisible(false);
         }
     }
 
@@ -1232,6 +1340,46 @@ public class CranialAdjustmentController : MonoBehaviour
     /// 두개골 조건이 아닌 substep(진단3·재평가·시작/종료 안내)에 들어갈 때 ScenarioManager가 호출한다.
     /// ★이게 없으면 파지 단계에서 켠 교정 파지 구체가 재평가·종료까지 화면에 남는다
     ///   (BeginGripPhase가 켜기만 하고 끄는 곳이 없었음).</summary>
+    /// <summary>평가·상급 난이도면 파지점 구체를 <b>렌더러만</b> 끈다(판정은 그대로).
+    ///
+    /// ★오브젝트를 끄면 안 된다 — 파지점은 cranialGrip·cranialPressure의 접촉 소스라
+    ///   SetActive(false)하면 판정이 조용히 죽는다(08-13 회의 결론, 사용자 재확인 08-18).
+    /// ★가이드손은 난이도 프리셋(showGuideHands)이 담당하고, 여기서는 파지점만 본다 —
+    ///   파지점에는 난이도 게이트가 아예 없어서 평가모드에서도 구체가 그대로 떠 있었다(08-18 실측).
+    /// ★상급도 같이 끈다 — '평가 전 모의'라 본 평가와 보이는 게 달라지면 모의 의미가 없다
+    ///   (CranialHeadXray가 xray를 끌 때 쓰는 것과 같은 기준).</summary>
+    [Tooltip("평가·상급 난이도에서 파지점 구체까지 숨긴다. ★기본 꺼짐(2026-08-18 실사용 결과). "
+             + "켜서 테스트해 보니 대부분의 술기가 진행 자체를 못 했다 — VR은 촉각이 없어서 "
+             + "'튀어나온 지점을 손으로 더듬는' 감각이 없고, 구체가 어디를 잡아야 하는지 알려주는 유일한 단서다. "
+             + "가이드손은 난이도 프리셋(showGuideHands)이 계속 숨기므로 '가이드 없이 평가'라는 취지는 유지된다.")]
+    [SerializeField] private bool hideGripPointsInEvaluation = false;
+
+    private void ApplyGripVisibilityForDifficulty()
+    {
+        if (!hideGripPointsInEvaluation) return;   // ★기본 경로 — 파지점은 난이도와 무관하게 그대로 둔다
+
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        if (dm == null) return;                 // 난이도 시스템 없이 씬만 돌릴 때는 건드리지 않는다
+        bool show = dm.ShowGuideHands;          // 가이드를 숨기는 난이도(상급·평가)와 같은 기준
+
+        SetGripRenderers(leftGrips, show);
+        SetGripRenderers(rightGrips, show);
+        SetGripRenderers(diagnosisRightGrips, show);
+        if (diagnosisStages == null) return;
+        for (int s = 0; s < diagnosisStages.Length; s++)
+        {
+            var grips = CollectStageGrips(diagnosisStages[s]);
+            for (int i = 0; i < grips.Count; i++)
+                grips[i]?.SetRendererVisible(show);
+        }
+    }
+
+    private static void SetGripRenderers(GripPointTarget[] grips, bool show)
+    {
+        if (grips == null) return;
+        for (int i = 0; i < grips.Length; i++) grips[i]?.SetRendererVisible(show);
+    }
+
     public void HideAllGripPoints()
     {
         HideGripPoints(keepCorrectionGrips: false);
@@ -1247,6 +1395,9 @@ public class CranialAdjustmentController : MonoBehaviour
     {
         if (keepCorrectionGrips) HideDiagnosisGrips();
         else HideAllGrips();
+
+        // ★substep마다 불리는 공통 진입점 — 평가·상급이면 남겨 둔 구체의 렌더러를 끈다(판정은 유지).
+        ApplyGripVisibilityForDifficulty();
 
         SetHandJudgingActive(keepCorrectionGrips);   // 파지점을 남기면 색이 갱신되도록 판정도 살려 둔다
 
@@ -1268,7 +1419,7 @@ public class CranialAdjustmentController : MonoBehaviour
         {
             var grips = CollectStageGrips(diagnosisStages[s]);
             for (int i = 0; i < grips.Count; i++)
-                if (grips[i] != null && grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(false);
+                if (grips[i] != null) { if (!grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(true); grips[i].SetRendererVisible(false); }
         }
     }
 
@@ -1283,7 +1434,7 @@ public class CranialAdjustmentController : MonoBehaviour
         {
             var grips = CollectStageGrips(diagnosisStages[s]);
             for (int i = 0; i < grips.Count; i++)
-                if (grips[i] != null && grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(false);
+                if (grips[i] != null) { if (!grips[i].gameObject.activeSelf) grips[i].gameObject.SetActive(true); grips[i].SetRendererVisible(false); }
         }
     }
 
@@ -1306,12 +1457,23 @@ public class CranialAdjustmentController : MonoBehaviour
     }
 
     /// <summary>파지점 GameObject 표시/숨김(구체 자체를 켜고 끔 — 단계별로 관련 없는 파지점 숨김).</summary>
-    private static void SetGripsActive(GripPointTarget[] grips, bool active)
+    /// <summary>파지점 <b>표시</b>만 켜고 끈다 — 오브젝트는 항상 활성으로 둔다.
+    ///
+    /// ★2026-08-18 사용자 지시: "판정 있는 애들은 다 비활성화 말고 렌더러를 꺼버려."
+    ///   파지점은 cranialGrip·cranialTouch·cranialPressure의 <b>접촉 판정 소스</b>다.
+    ///   SetActive(false)로 끄면 트리거가 죽어 판정이 조용히 성립하지 않는다 —
+    ///   평가모드에서 여러 술기가 진행되지 않던 원인이다(08-13 회의에서도 같은 결론).
+    ///   콜라이더는 살려 두고 구체만 감춘다.</summary>
+    private static void SetGripsActive(GripPointTarget[] grips, bool shown)
     {
         if (grips == null) return;
         for (int i = 0; i < grips.Length; i++)
-            if (grips[i] != null && grips[i].gameObject.activeSelf != active)
-                grips[i].gameObject.SetActive(active);
+        {
+            var g = grips[i];
+            if (g == null) continue;
+            if (!g.gameObject.activeSelf) g.gameObject.SetActive(true);   // 판정은 항상 살려 둔다
+            g.SetRendererVisible(shown);
+        }
     }
 
 

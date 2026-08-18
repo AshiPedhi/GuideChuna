@@ -57,7 +57,10 @@ public class ScenarioConditionManager : MonoBehaviour
 
     [Tooltip("단계 완료음(띵동) 볼륨. 비워 두면 Resources/Audio/StepComplete를 자동으로 쓴다.\n" +
              "★신규 필드라 이미 배치된 씬에도 코드 기본값이 먹는다.")]
-    [SerializeField, Range(0f, 1f)] private float completionVolume = 0.7f;
+    [SerializeField, Range(0f, 1f)] private float completionVolume = 1f;
+
+    /// <summary>완료음 볼륨 하한. 씬에 0.7로 직렬화돼 있어 코드 기본값만 올려서는 안 먹는다(08-18 실측).</summary>
+    private const float MinCompletionVolume = 0.95f;
 
     [Header("=== 나레이션 설정 ===")]
     [Tooltip("나레이션 전용 AudioSource (없으면 audioSource 사용)")]
@@ -1282,6 +1285,9 @@ public class ScenarioConditionManager : MonoBehaviour
         if (completionSound == null)
             completionSound = Resources.Load<AudioClip>("Audio/StepComplete");
 
+        // ★볼륨 하한 — completionVolume이 씬에 0.7로 직렬화돼 있어 코드 기본값을 올려도 안 먹는다(08-18 실측).
+        //   "확실히 인지되게 해 달라"는 요구라 하한을 걸고, 인스펙터에서 더 키우는 것은 그대로 반영한다.
+
         if (audioSource == null)
         {
             // 나레이션 소스를 재사용하면 PlayOneShot이라 말을 끊지는 않지만, 볼륨·믹서를 따로 두기 위해
@@ -1296,7 +1302,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         if (audioSource != null && completionSound != null)
-            audioSource.PlayOneShot(completionSound, completionVolume);
+            audioSource.PlayOneShot(completionSound, Mathf.Max(completionVolume, MinCompletionVolume));
         else
             ChunaLogger.LogWarning("[ConditionManager] 완료음을 재생할 수 없습니다 " +
                                    "(Resources/Audio/StepComplete.wav 확인).");
