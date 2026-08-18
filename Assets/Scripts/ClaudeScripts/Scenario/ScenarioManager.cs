@@ -854,8 +854,11 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
             if (TryParseAnimRange(subStep.conditionParams, out float af, out float at))
                 chunaPathEvaluator.PlayPatientAnimationRange(subStep.patientAnimationClip.Trim(), af, at, spd);
             else
+                // ★blend= 토큰: 앞 자세에서 섞어 넘어갈 시간(초). 중립 복귀처럼 길이 0짜리 포즈
+                //   클립을 넣는 자리에서 순간이동을 막는다(제2늑골 재평가 4-1).
                 chunaPathEvaluator.SetPatientAnimation(subStep.patientAnimationClip.Trim(),
-                                                       AnimationPlayMode.AutoPlay);
+                                                       AnimationPlayMode.AutoPlay,
+                                                       ParseTokenFloat(subStep.conditionParams, "blend=", 0f));
             chunaPathEvaluator.HideGuideHandKeepHeldInternal();
         }
         else if (chunaPathEvaluator != null)

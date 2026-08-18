@@ -46,6 +46,13 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
     [SerializeField] private float progressTimeout = 20f;
 
+    /// <summary>
+    /// 게이트 조건도 duration도 없는 '작업' 단계의 폴백 진행 시간(초).
+    /// 상급·평가에서 통합 나레이션이 없어 무음이 된 안내 단계가 여기에 걸린다(HandleDurationOrManual 참조).
+    /// ★인스펙터에 노출하지 않는다 — 씬에 리그가 5개라 직렬화값이 코드 기본값을 덮어써 손으로 5곳을 맞춰야 한다.
+    /// </summary>
+    private const int SilentStepFallbackSeconds = 3;
+
     [Header("=== 완료 알림 UI (Final Fallback) ===")]
     [Tooltip("피드백 UI가 없을 때 사용되는 간단한 완료 알림")]
     [SerializeField] private GameObject completionAlertPanel;
@@ -398,12 +405,37 @@ public class ScenarioConditionManager : MonoBehaviour
             StopConditionCheck();
             eventSystem.RequestButtonStateUpdate(false);
             StartCoroutine(AutoProgressWithoutAlert(subStep.duration));
+            return;
         }
-        else
+
+        // ★2026-08-19 진행 막힘 수정:
+        //   여기로 오는 경로는 전부 "기다릴 게이트 조건이 없다"는 뜻이다(호출부 7곳 전부 동일).
+        //   그 상태에서 duration까지 0이면 수동 버튼 대기로 빠지는데, 작업 단계에서는 그대로 멈춰버린다.
+        //   상급·평가는 CSV voice를 무시하고 {난이도}/{stepName} 통합 클립만 찾고
+        //   (LoadNarrationClipInternal의 'CSV 무시 원칙'), 신규 시나리오는 그 클립이 없어 무음 →
+        //   나레이션 완료 트리거도 없고 조건도 등록 안 돼 20초 폴백·유지 타이머도 안 돈다.
+        //   → 폴백 타이머로 진행시킨다. AutoProgressWithoutAlert가 나레이션·환자 애니 완료를
+        //     기다려 주므로 재생 중인 것을 자르지 않는다.
+        //   stepNo==0(가이드 = 시작 버튼·phase 전환 안내)은 원래 버튼 대기가 설계이므로 건드리지 않는다.
+        bool isGuideStep = scenarioManager != null && scenarioManager.CurrentStep != null
+                           && scenarioManager.CurrentStep.IsGuideStep();
+
+        if (!isGuideStep)
         {
-            ChunaLogger.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행");
-            HandleManualProgress();
+            ChunaLogger.LogWarning(
+                $"<color=orange>[ConditionManager] 게이트 조건도 duration도 없는 작업 단계 — " +
+                $"{SilentStepFallbackSeconds}초 폴백으로 자동 진행 " +
+                $"(Step='{(scenarioManager?.CurrentStep != null ? scenarioManager.CurrentStep.stepName : "?")}' " +
+                $"SubStep={subStep.subStepNo})</color>");
+            currentCondition = null;
+            StopConditionCheck();
+            eventSystem.RequestButtonStateUpdate(false);
+            StartCoroutine(AutoProgressWithoutAlert(SilentStepFallbackSeconds));
+            return;
         }
+
+        ChunaLogger.Log("[ConditionManager] Duration 없음 - 토글로 수동 진행 (가이드 단계)");
+        HandleManualProgress();
     }
 
     /// <summary>

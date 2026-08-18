@@ -438,6 +438,11 @@ public class ChunaPathEvaluator : MonoBehaviour
     private int touchCount;
     private int lastZone;           // 0=아직 / 1=시작 구간 / 2=끝 구간
     private float touchZone = 0.15f;   // 구간 폭(진행률). 시작 ≤ 0.15, 끝 ≥ 0.85
+    // ★2026-08-19: 첫 샘플은 세지 않고 '출발 구간'으로만 기록한다.
+    //   이게 없으면 팔을 내린 채(진행률 0 = 시작 구간) 단계에 들어서는 순간 1회가 공짜로 세어져,
+    //   touch=6이 (공짜)·올림·내림·올림·내림·올림 으로 끝나 <b>마지막 내리기가 빠진 채</b> 넘어갔다
+    //   (제2늑골 3-7 "올렸다 내리기 3회" — 사용자 지적).
+    private bool touchSeeded;
 
     internal bool TouchCountMode => touchTarget > 0;
 
@@ -448,6 +453,17 @@ public class ChunaPathEvaluator : MonoBehaviour
         int zone = progress <= touchZone ? 1
                  : progress >= 1f - touchZone ? 2
                  : 0;
+
+        // ★첫 샘플: 출발 구간만 기록하고 세지 않는다. 이후로는 '구간이 바뀔 때'만 1회다.
+        //   → touch=6 이 올림·내림 3세트가 되고, 마지막이 <b>내리기</b>로 끝난다.
+        if (!touchSeeded)
+        {
+            touchSeeded = true;
+            lastZone = zone;
+            ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 구간 터치 시작 지점 기록 " +
+                            $"({(zone == 1 ? "시작" : zone == 2 ? "끝" : "중간")} 구간, 진행률 {progress:P0}) — 세지 않음</color>");
+            return false;
+        }
 
         if (zone == 0 || zone == lastZone) return false;   // 중간 구간이거나 같은 구간 반복 — 안 센다
 
@@ -1885,7 +1901,14 @@ public class ChunaPathEvaluator : MonoBehaviour
         deferAnimationUntilGateOpen = false;
     }
 
-    public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser)
+    /// <param name="blendSeconds">
+    /// AutoPlay 모드에서 앞 자세와 섞어 넘어갈 시간(초). 0이면 종전대로 즉시 전환(Play).
+    /// CSV conditionParams의 <b>blend=</b> 토큰으로 지정한다.
+    /// ★특히 '중립' 클립은 길이 0짜리 포즈라 Play로 넣으면 순간이동한다(제2늑골 재평가 4-1).
+    ///   CrossFade로 넣으면 현재 자세에서 중립까지 그 시간 동안 부드럽게 흘러간다.
+    /// </param>
+    public void SetPatientAnimation(string animationStateName, AnimationPlayMode playMode = AnimationPlayMode.SyncWithUser,
+                                    float blendSeconds = 0f)
     {
         // ★ 애니메이션 이름 공백 제거 (CSV 파싱 시 공백 문제 방지)
         string trimmedName = animationStateName?.Trim();
@@ -1969,6 +1992,22 @@ public class ChunaPathEvaluator : MonoBehaviour
             }
 
             // 자동 재생 모드
+            // ★blend>0이면 앞 자세에서 섞어 들어간다. Play는 첫 프레임으로 즉시 튀므로
+            //   중립 복귀처럼 '스르륵 돌아가야' 하는 자리에서는 순간이동으로 보인다.
+            float blend = Mathf.Clamp(blendSeconds, 0f, 2f);
+            if (blend > 0f)
+            {
+                patientAnimator.CrossFadeInFixedTime(trimmedName, blend, 0, 0f);
+                patientAnimator.speed = 1f;
+                if (secondaryPatientAnimator != null)
+                {
+                    secondaryPatientAnimator.CrossFadeInFixedTime(trimmedName, blend, 0, 0f);
+                    secondaryPatientAnimator.speed = 1f;
+                }
+                ChunaLogger.Log($"<color=green>[Animation] ★ 자동 재생 시작(블렌드 {blend:F2}s): '{trimmedName}' (speed=1)</color>");
+                return;
+            }
+
             patientAnimator.Play(trimmedName, 0, 0f);
             patientAnimator.speed = 1f;
 
@@ -2109,6 +2148,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         touchTarget = Mathf.RoundToInt(ParseNamedFloat(subStep, "touch=", 0f));
         touchCount = 0;
         lastZone = 0;
+        touchSeeded = false;
         touchZone = Mathf.Clamp(ParseNamedFloat(subStep, "zone=", 0.15f), 0.02f, 0.45f);
         if (touchTarget > 0)
             ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 구간 터치 카운트 모드 — 목표 {touchTarget}회, " +
@@ -2129,7 +2169,8 @@ public class ChunaPathEvaluator : MonoBehaviour
         {
             string animStateName = subStep.patientAnimationClip;
             AnimationPlayMode mode = subStep.GetAnimationPlayMode();
-            SetPatientAnimation(animStateName, mode);
+            // ★blend= 토큰(초): AutoPlay일 때 앞 자세와 섞어 넘어간다. 0이면 종전대로 즉시 전환.
+            SetPatientAnimation(animStateName, mode, ParseNamedFloat(subStep, "blend=", 0f));
             ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 환자 애니메이션 로드: {animStateName}</color>");
         }
         else
