@@ -183,6 +183,43 @@ public class ScenarioConditionManager : MonoBehaviour
     // ★ 조건 처리 대기용 코루틴
     private Coroutine conditionProcessCoroutine;
 
+    /// <summary>
+    /// ★2026-08-19 '앞 단계의 폴백이 다음 단계를 잡아먹는' 문제 차단용 토큰.
+    ///
+    /// 자동 진행 코루틴들은 전부 "무언가를 기다린 뒤 NextSubStep()"인데, 기다리는 대상이
+    /// (나레이션·AutoPlay) 단계 경계를 넘어 계속될 수 있어서 <b>단계가 이미 넘어간 뒤에</b>
+    /// 깨어나 다음 단계를 한 칸 더 밀어버렸다.
+    ///
+    /// 실측(Editor.log, 상부승모근 평가):
+    ///   83026  진단 SubStep2 → 3초 폴백 시작
+    ///   83419  NextSubStep   → AutoPlay 완료가 정상 진행시킴
+    ///   87871  제한장벽확인 게이트 오픈
+    ///   87915  "3초 경과 - 다음 단계로 자동 진행"  ← 진단의 폴백이 뒤늦게 만료
+    ///   87928  NextSubStep   → 제한장벽확인을 손도 못 대고 통과
+    /// 스트레칭→재평가도 같은 순서로 재현됐다(103938 / 104288 / 109098 / 109111).
+    /// 결과 CSV에도 그 두 단계만 유사도 샘플 0개로 남는다.
+    ///
+    /// OnSubStepStarted마다 1씩 올리고, 코루틴은 시작 시점의 값을 들고 있다가
+    /// 진행 직전에 대조한다. <b>값이 다르면 = 그 단계는 이미 끝났다 = 진행은 이미 일어났다</b>
+    /// 이므로 무시해도 진행이 막히지 않는다(현재 단계가 예약한 진행은 값이 같아 그대로 통과).
+    /// </summary>
+    private int subStepToken;
+
+    /// <summary>
+    /// 코루틴이 예약될 당시의 SubStep이 아직 현재 SubStep인지 확인한다.
+    /// false면 그 사이 단계가 넘어간 것이므로 NextSubStep을 호출하면 안 된다.
+    /// </summary>
+    private bool IsProgressStillOwned(int token, string where)
+    {
+        if (token == subStepToken) return true;
+
+        ChunaLogger.LogWarning(
+            $"<color=orange>[ConditionManager] 지난 단계의 자동 진행 무시({where}) — " +
+            $"예약 당시 토큰={token}, 현재={subStepToken}. " +
+            $"단계가 이미 넘어갔으므로 중복 진행을 취소한다.</color>");
+        return false;
+    }
+
     // ★ AutoPlay 대기 중인 코루틴 추적 (이중 진행 방지)
     private bool isWaitingForAutoPlay = false;
 
@@ -209,6 +246,12 @@ public class ScenarioConditionManager : MonoBehaviour
         // ★ 이전 SubStep의 나레이션/조건 체크 중단 (토글로 빠르게 진행 시 충돌 방지)
         StopNarration();
         StopConditionCheck();
+
+        // ★단계가 바뀌었음을 표시한다 — 앞 단계가 예약해 둔 자동 진행 코루틴은 여기서 무효가 된다.
+        //   (코루틴을 직접 StopCoroutine 하지 않는 이유: WaitForNarrationThenNextStep처럼
+        //    ScenarioManager가 외부에서 시작하는 것도 있어 핸들을 전부 붙잡을 수 없다.
+        //    토큰 대조는 시작 경로와 무관하게 걸린다.)
+        subStepToken++;
 
         // ★앞 단계의 완료 피드백을 즉시 지운다 — 여기서 해야 <b>모든</b> 단계에 적용된다.
         //   ProcessConditionByType에만 두면 마지막 판정(재평가) 다음의 '종료' 가이드 단계처럼
@@ -637,6 +680,7 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator PlayNarrationThenApplyDuration(AudioClip clip, string clipName, SubStepData subStep)
     {
+        int token = subStepToken;
         currentNarrationClip = clip;
 
         // AudioSource 선택
@@ -675,7 +719,7 @@ public class ScenarioConditionManager : MonoBehaviour
 
         // 다음 SubStep으로 자동 진행
         ChunaLogger.Log("[ConditionManager] 나레이션 완료 → 다음 단계로 자동 진행");
-        if (scenarioManager != null)
+        if (scenarioManager != null && IsProgressStillOwned(token, "PlayNarrationThenApplyDuration"))
         {
             scenarioManager.NextSubStep();
         }
@@ -877,6 +921,7 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator PlayNarrationAndProgress(AudioClip clip, string clipName)
     {
+        int token = subStepToken;
         currentNarrationClip = clip;
 
         // AudioSource 선택 (narrationAudioSource 우선, 없으면 audioSource 사용)
@@ -905,7 +950,7 @@ public class ScenarioConditionManager : MonoBehaviour
         yield return WaitForAutoPlayComplete();
 
         // 다음 SubStep으로 진행
-        if (scenarioManager != null)
+        if (scenarioManager != null && IsProgressStillOwned(token, "PlayNarrationAndProgress"))
         {
             scenarioManager.NextSubStep();
         }
@@ -998,10 +1043,12 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator WaitForAutoPlayThenProgress(SubStepData subStep)
     {
+        int token = subStepToken;
+
         yield return WaitForAutoPlayComplete();
         yield return WaitForNarrationComplete();
 
-        if (scenarioManager != null)
+        if (scenarioManager != null && IsProgressStillOwned(token, "WaitForAutoPlayThenProgress"))
         {
             ChunaLogger.Log("[ConditionManager] PatientAnimation 완료 - 다음 단계로 진행");
             scenarioManager.NextSubStep();
@@ -1019,9 +1066,11 @@ public class ScenarioConditionManager : MonoBehaviour
 
     private IEnumerator WaitForNarrationThenNextStepCoroutine()
     {
+        int token = subStepToken;
+
         yield return WaitForNarrationComplete();
 
-        if (scenarioManager != null)
+        if (scenarioManager != null && IsProgressStillOwned(token, "WaitForNarrationThenNextStep"))
         {
             scenarioManager.NextSubStep();
         }
@@ -1292,6 +1341,8 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private IEnumerator AutoProgressWithoutAlert(int duration)
     {
+        int token = subStepToken;
+
         // duration만큼 대기
         yield return new WaitForSeconds(duration);
 
@@ -1302,7 +1353,7 @@ public class ScenarioConditionManager : MonoBehaviour
         yield return WaitForAutoPlayComplete();
 
         // 완료 알림 없이 바로 다음 SubStep으로 진행
-        if (scenarioManager != null)
+        if (scenarioManager != null && IsProgressStillOwned(token, $"AutoProgressWithoutAlert({duration}초)"))
         {
             ChunaLogger.Log($"[ConditionManager] {duration}초 경과 - 다음 단계로 자동 진행");
             scenarioManager.NextSubStep();
