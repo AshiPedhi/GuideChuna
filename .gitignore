@@ -103,3 +103,10 @@ Recording_BurstDebugInformation_DoNotShip/
 
 # Keystore (sensitive)
 *.keystore
+
+# 실습·평가 결과 CSV (런타임 생성물). 이미 커밋된 2026-04월분은 그대로 두고
+# 이후 실행분만 무시한다 — git status가 결과 파일로 덮여 실제 변경이 안 보였다.
+/[Aa]ssets/[Rr]esults/*_summary.csv
+/[Aa]ssets/[Rr]esults/*_summary.csv.meta
+/[Aa]ssets/[Rr]esults/*_timeline.csv
+/[Aa]ssets/[Rr]esults/*_timeline.csv.meta

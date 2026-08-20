@@ -600,7 +600,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4217222142677417399, guid: 90ae27b2ef005bc479d956c3d244f591, type: 3}
       propertyPath: m_text
-      value: "\uC655\uC640\uC704 \uCE21\uB450\uACE8\uCD94\uCCB4 \uC544\uD0C8\uAD6C
+      value: "\uC559\uC640\uC704 \uCE21\uB450\uACE8\uCD94\uCCB4 \uC544\uD0C8\uAD6C
         \uAD50\uC815\uAE30\uBC95"
       objectReference: {fileID: 0}
     - target: {fileID: 4217222142677417399, guid: 90ae27b2ef005bc479d956c3d244f591, type: 3}
