@@ -29,10 +29,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "손의 회전각을 소스로 바꾸기 전까지 쓰는 임시값이다.")]
     [SerializeField] private float overpressureRampSeconds = 3f;
 
+    [Tooltip("목표에 못 닿아도 이 시간이 지나면 넘긴다(초). 세션이 영영 멈추는 걸 막는 안전장치다.")]
+    [SerializeField] private float stallTimeoutSeconds = 30f;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
     private string lastStepKey;
+    private string advancedKey;      // 같은 substep을 두 번 넘기지 않게
+    private float stepEnteredTime;
     private bool warnedNotTarget;
     private float overpressureProgress;
     private bool active;
@@ -88,6 +93,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (key != lastStepKey)
         {
             lastStepKey = key;
+            stepEnteredTime = Time.time;
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
 
@@ -95,6 +101,61 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         // 손을 떼면 그 자리에서 멈춘다.
         driver.Paused = !BothHandsTouching();
+
+        TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
+    }
+
+    /// <summary>
+    /// 동작·압박·복귀 substep은 <b>타이머가 아니라 목표 도달로</b> 끝낸다.
+    /// CSV의 duration을 0으로 두면 AutoPlay가 스스로 완료하지 않으므로 여기서만 넘긴다
+    /// (ScenarioConditionManager의 subStepToken 가드가 중복 진행을 막는다).
+    /// </summary>
+    private void TryAdvanceWhenDone(string stepName, int subStepNo, string key)
+    {
+        if (advancedKey == key) return;
+        if (DirectionOf(stepName) == CervicalRomDriver.Direction.None) return;
+
+        bool isOverpressure = stepName.EndsWith("압박", System.StringComparison.Ordinal);
+        bool done;
+        string reason;
+
+        if (!isOverpressure)
+        {
+            if (subStepNo < 2) return;
+            done = driver.ActiveReached;
+            reason = $"능동 끝점 도달 {driver.CurrentAngle:F0}°";
+        }
+        else if (subStepNo == 2)
+        {
+            done = overpressureProgress >= 1f;
+            reason = $"압박 완료 {driver.CurrentAngle:F0}° (부족각 {driver.DeficitAngle:F1}°)";
+        }
+        else
+        {
+            done = driver.AtNeutral;
+            reason = "중립 복귀 완료";
+        }
+
+        // 안전장치 — 무언가 막혀도 세션이 영영 멈추지 않게 한다.
+        if (!done)
+        {
+            if (stepEnteredTime > 0f && Time.time - stepEnteredTime > stallTimeoutSeconds)
+            {
+                ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
+                                       $"{stallTimeoutSeconds:F0}초 동안 목표에 못 닿아 넘긴다. " +
+                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {driver.ActiveTargetAngle:F0}°</color>");
+                done = true;
+                reason = "정체 타임아웃";
+            }
+            else
+            {
+                return;
+            }
+        }
+
+        advancedKey = key;
+        Log($"{stepName} {subStepNo} 진행 — {reason}");
+        scenarioManager.NextSubStep();
     }
 
     private void OnSubStepEntered(string stepName, int subStepNo)
