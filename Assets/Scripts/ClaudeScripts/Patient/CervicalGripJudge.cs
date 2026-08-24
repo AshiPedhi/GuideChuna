@@ -37,6 +37,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [SerializeField] private bool showDebugLogs = false;
 
     private GripPair currentPair = GripPair.None;
+    private Collider headCollider;
 
     /// <summary>두 접촉점이 서로 다른 손에 각각 잡혔는가.</summary>
     public bool IsGripped { get; private set; }
@@ -75,12 +76,21 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         currentPair = pair;
         IsGripped = false;
 
+        // ★판정을 가져간 동안에는 머리 구체를 끈다. 접촉점과 겹쳐 있어 방해가 된다.
+        //   해제하면 원래대로 돌려놓는다.
+        SetHeadColliderEnabled(pair == GripPair.None);
+
         Apply(forehead, pair == GripPair.Sagittal);
         Apply(occiput, pair == GripPair.Sagittal);
         Apply(temporalLeft, pair == GripPair.Lateral);
         Apply(temporalRight, pair == GripPair.Lateral);
 
         if (showDebugLogs) ChunaLogger.Log($"<color=cyan>[GripJudge] 접촉점 전환: {pair}</color>");
+    }
+
+    private void OnDisable()
+    {
+        SetHeadColliderEnabled(true);   // 꺼둔 채로 남기지 않는다
     }
 
     private void Update()
@@ -105,6 +115,30 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
                                 $"A(왼{a.LeftGripping}/오{a.RightGripping}) B(왼{b.LeftGripping}/오{b.RightGripping})</color>");
             }
         }
+    }
+
+    /// <summary>
+    /// ChunaPathEvaluator가 들고 있는 머리 구체(patientHeadCollider)를 켜고 끈다.
+    /// 파지 판정을 이쪽이 가져간 동안에는 그 구체가 필요 없고, 접촉점과 겹쳐 방해만 된다.
+    /// </summary>
+    private void SetHeadColliderEnabled(bool enabled)
+    {
+        if (headCollider == null)
+        {
+            ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+            if (evaluator == null) return;
+
+            System.Reflection.FieldInfo info = typeof(ChunaPathEvaluator).GetField(
+                "patientHeadCollider",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            headCollider = info != null ? info.GetValue(evaluator) as Collider : null;
+            if (headCollider == null) return;
+        }
+
+        if (headCollider.enabled == enabled) return;
+
+        headCollider.enabled = enabled;
+        ChunaLogger.Log($"<color=cyan>[GripJudge] 머리 구체({headCollider.name}) {(enabled ? "복구" : "끔")}</color>");
     }
 
     private void Apply(GripContactPoint p, bool inUse)
