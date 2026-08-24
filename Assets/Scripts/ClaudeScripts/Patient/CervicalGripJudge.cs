@@ -231,7 +231,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     /// <summary>손끝에 표식과 트리거가 없을 때만 넣는다. 이미 있으면 그대로 둔다.</summary>
     private int EnsureTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
-        Transform bone = FindDeepInScene(boneName);
+        Transform bone = FindTipUnderPlayerHand(side, boneName);
         if (bone == null)
         {
             ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
@@ -289,7 +289,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
     private int MakeTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
-        Transform bone = FindDeepInScene(boneName);
+        Transform bone = FindTipUnderPlayerHand(side, boneName);
         if (bone == null)
         {
             ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
@@ -308,11 +308,32 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         return 1;
     }
 
-    private static Transform FindDeepInScene(string name)
+    /// <summary>
+    /// ★이름으로 씬 전체를 뒤지면 안 된다. 손 리그가 여러 벌이라 같은 이름이 52개까지 나오고
+    ///   (OVR 손·가이드 손·녹화 손), 그중 아무거나 잡으면 실제 트래킹되는 손이 아닐 수 있다.
+    ///   2026-08-24 실측: 그래서 왼손 2개에만 표식이 붙고 오른손은 하나도 안 붙었다.
+    ///   판정기가 들고 있는 손(playerLeftHand / playerRightHand) 아래에서만 찾는다.
+    /// </summary>
+    private static Transform FindTipUnderPlayerHand(GripFingerTip.Side side, string boneName)
     {
-        foreach (Transform t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
-            if (t.name == name) return t;
-        return null;
+        ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+        if (evaluator == null) return null;
+
+        string field = side == GripFingerTip.Side.Left ? "playerLeftHand" : "playerRightHand";
+        System.Reflection.FieldInfo info = typeof(ChunaPathEvaluator).GetField(
+            field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        Component hand = info != null ? info.GetValue(evaluator) as Component : null;
+        if (hand == null)
+        {
+            ChunaLogger.LogWarning($"[GripJudge] ChunaPathEvaluator의 {field}가 비어 있습니다.");
+            return null;
+        }
+
+        Transform found = FindDeep(hand.transform, boneName);
+        if (found == null)
+            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {boneName}을 찾지 못했습니다.");
+        return found;
     }
 
     private static Transform FindDeep(Transform root, string name)

@@ -52,16 +52,31 @@ public class GripContactPoint : MonoBehaviour
 
     private void OnDisable() => inside.Clear();
 
+    [Tooltip("트리거에 들어오는 것을 전부 찍는다. 판정이 아예 안 걸릴 때 켜서 원인을 본다 —\n" +
+             "아무것도 안 찍히면 트리거 자체가 안 뜨는 것이고(레이어·Rigidbody 문제),\n" +
+             "다른 콜라이더만 찍히면 손끝 표식이 안 붙은 것이다.")]
+    [SerializeField] private bool logAllTriggers = false;
+
     private void OnTriggerEnter(Collider other)
     {
         GripFingerTip tip = other.GetComponent<GripFingerTip>();
         if (tip != null) inside.Add(tip);
+
+        if (logAllTriggers)
+        {
+            ChunaLogger.Log($"<color=cyan>[{name}] 진입: {other.name} " +
+                            $"(손끝표식 {(tip != null ? $"{tip.HandSide} {tip.FingerKind}" : "없음")}, " +
+                            $"레이어 {LayerMask.LayerToName(other.gameObject.layer)}, " +
+                            $"트리거 {other.isTrigger})</color>");
+        }
     }
 
     private void OnTriggerExit(Collider other)
     {
         GripFingerTip tip = other.GetComponent<GripFingerTip>();
         if (tip != null) inside.Remove(tip);
+
+        if (logAllTriggers) ChunaLogger.Log($"[{name}] 이탈: {other.name}");
     }
 
     private bool Gripping(GripFingerTip.Side side)
