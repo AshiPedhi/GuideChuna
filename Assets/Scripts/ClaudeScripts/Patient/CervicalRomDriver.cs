@@ -63,10 +63,10 @@ public class CervicalRomDriver : MonoBehaviour
 
     [Header("=== 진행 ===")]
     [Tooltip("능동 구간 진행 속도 (도/초). 굴곡 38°면 약 2.5초.")]
-    [SerializeField] private float activeSpeed = 15f;
+    [SerializeField] private float activeSpeed = 25f;
 
     [Tooltip("중립으로 돌아오는 속도 (도/초). 갈 때보다 조금 느린 편이 자연스럽다.")]
-    [SerializeField] private float returnSpeed = 12f;
+    [SerializeField] private float returnSpeed = 20f;
 
     [Tooltip("각도 변화를 부드럽게 하는 시간 (초). " +
              "★속도를 만드는 값이 아니라 방향이 바뀌는 순간의 각을 없애는 값이다. " +
@@ -80,6 +80,7 @@ public class CervicalRomDriver : MonoBehaviour
 
     private float[] gaps;                   // 방향별 여유 구간(도). 시나리오 로드 때 뽑는다.
     private Direction currentDirection = Direction.None;
+    private Direction pendingDirection = Direction.None;   // 중립 복귀를 기다리는 다음 방향
     private float targetAngle;          // 최종 목표 각도 (도)
     private float commandedAngle;       // 속도 제한을 거친 중간 목표 (도)
     private float appliedAngle;         // 실제로 얹고 있는 각도 (도)
@@ -105,6 +106,13 @@ public class CervicalRomDriver : MonoBehaviour
 
     /// <summary>정상각 대비 부족한 각도. 평가 단계에서 기록할 값이다.</summary>
     public float DeficitAngle => Mathf.Max(0f, NormalAngle - appliedAngle);
+
+    /// <summary>
+    /// 켜면 각도 진행이 멈춘다. 손이 환자에게서 떨어졌을 때 쓴다 —
+    /// 환자 움직임을 손이 따라간다는 규약상, 손을 떼면 그 자리에서 멈춰야 한다.
+    /// 감쇠는 계속 돌아 이미 밀린 각도는 부드럽게 마무리된다.
+    /// </summary>
+    public bool Paused { get; set; }
 
     private void Awake()
     {
@@ -159,10 +167,32 @@ public class CervicalRomDriver : MonoBehaviour
         return gaps[(int)d];
     }
 
-    /// <summary>방향을 정하고 능동 구간을 시작한다. 자동으로 능동 끝점까지 간다.</summary>
+    /// <summary>
+    /// 방향을 정하고 능동 구간을 시작한다. 자동으로 능동 끝점까지 간다.
+    /// ★앞 방향의 각도가 남아 있으면 <b>중립까지 먼저 돌아온 뒤</b> 시작한다.
+    ///   각 측정은 압박 → 중립 복귀 → 다음 방향 순서를 지켜야 한다.
+    /// </summary>
     public void BeginActive(Direction direction)
     {
+        if (currentDirection != Direction.None && currentDirection != direction && appliedAngle > 0.5f)
+        {
+            pendingDirection = direction;
+            ReturnToNeutral();
+            if (showDebugLogs)
+            {
+                ChunaLogger.Log($"<color=cyan>[CervicalROM] {currentDirection} 각도가 {appliedAngle:F1}° 남아 " +
+                                $"중립 복귀 후 {direction} 시작</color>");
+            }
+            return;
+        }
+
+        StartActiveInternal(direction);
+    }
+
+    private void StartActiveInternal(Direction direction)
+    {
         currentDirection = direction;
+        pendingDirection = Direction.None;
         targetAngle = ActiveTargetAngle;
         ramifySpeed = activeSpeed;       // ★즉시 대입하면 안 된다. 속도로 밀어야 부드럽다.
 
@@ -194,6 +224,9 @@ public class CervicalRomDriver : MonoBehaviour
         targetAngle = Mathf.Max(0f, degrees);
     }
 
+    /// <summary>중립에 도달했는가. 다음 방향으로 넘어가도 되는 시점이다.</summary>
+    public bool AtNeutral => currentDirection == Direction.None || appliedAngle < 0.5f;
+
     /// <summary>중립으로 되돌린다. returnSpeed로 천천히 내려온다.</summary>
     public void ReturnToNeutral()
     {
@@ -207,7 +240,11 @@ public class CervicalRomDriver : MonoBehaviour
         if (currentDirection == Direction.None) return;
 
         // 1단계 — 속도 제한. 능동·복귀는 도/초로 밀고, 압박은 손을 즉시 따라간다.
-        if (ramifySpeed > 0f)
+        if (Paused)
+        {
+            // 손을 뗀 상태. 진행을 멈추고 감쇠만 돌린다.
+        }
+        else if (ramifySpeed > 0f)
         {
             commandedAngle = Mathf.MoveTowards(commandedAngle, targetAngle, ramifySpeed * Time.deltaTime);
         }
@@ -232,6 +269,9 @@ public class CervicalRomDriver : MonoBehaviour
             commandedAngle = 0f;
             angleVelocity = 0f;
             currentDirection = Direction.None;
+
+            // 중립에 닿았다. 기다리던 다음 방향이 있으면 여기서 이어 간다.
+            if (pendingDirection != Direction.None) StartActiveInternal(pendingDirection);
             return;
         }
 

@@ -19,11 +19,14 @@ dotnet build Assembly-CSharp.csproj -v q --nologo      # 약 23초, 기존 경�
 - ★ csproj는 **Unity가 생성한다.** 파일을 새로 추가/삭제했으면 Unity에 포커스를 줘 재생성한 뒤에 빌드해야 반영된다.
 - 경고 15건은 기존 상태다. **오류 0개**만 확인하면 된다.
 - Unity 에디터가 열려 있으면 `-batchmode` 실행은 프로젝트 락 때문에 실패한다.
-- ★**`Assembly-CSharp-Editor.csproj`는 `dotnet build`로 안 된다** — ProjectReference에 Project GUID 메타데이터가 없어 MSB3107로 죽는다. 기존 제약이다.
-  에디터 스크립트를 검증하려면 임시 csproj를 만들어 그 파일만 컴파일한다:
-  `TargetFramework netstandard2.1` + **`UnityEngine.dll`과 `UnityEditor.dll`만** 참조
-  (`Editor/Data/Managed/`). ★`UnityEngine.CoreModule` 같은 모듈을 같이 넣으면
-  파사드와 중복돼 **CS0433**이 쏟아진다. 모듈은 넣지 말 것.
+- 에디터 스크립트는 `Assembly-CSharp-Editor.csproj`로 똑같이 빌드된다.
+- ★**새 파일을 임시로 끼워 검증할 때는 `<Import ...>` 줄 <b>앞에</b> `<ItemGroup>`을 넣는다.**
+  레거시 csproj라 타깃 임포트 <b>뒤</b>에 붙이면 ProjectReference 해석이 깨져
+  **MSB3107**이 쏟아진다. 파일 내용 문제로 오해하기 쉽다(2026-08-24에 한 번 오진했다).
+  검증이 끝나면 csproj를 원복한다. 어차피 Unity가 다시 생성한다.
+- 파일 하나만 떼어 문법만 보고 싶으면 임시 csproj에 **`UnityEngine.dll`과 `UnityEditor.dll`만**
+  참조한다(`Editor/Data/Managed/`). ★`UnityEngine.CoreModule` 같은 모듈을 같이 넣으면
+  파사드와 중복돼 **CS0433**이 쏟아진다.
 
 ## 절대 규칙 (전부 사고 이력에서 나왔다)
 
