@@ -129,16 +129,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             return;
         }
 
-        // ★뼈 밑에 직접 두지 않는다. 상위에 미러(음수) 스케일이 있어 BoxCollider가 무효가 된다.
-        //   스케일이 깨끗한 홀더를 씬 루트에 두고 머리뼈를 따라가게 한다.
-        Transform holder = GetOrCreateHolder(head);
-
-        forehead = MakePoint(forehead, holder, "접촉점_이마");
-        occiput = MakePoint(occiput, holder, "접촉점_뒤통수");
-        temporalLeft = MakePoint(temporalLeft, holder, "접촉점_좌측두");
-        temporalRight = MakePoint(temporalRight, holder, "접촉점_우측두");
-
-        MoveUnderHolder(holder, forehead, occiput, temporalLeft, temporalRight);
+        forehead = MakePoint(forehead, head, "접촉점_이마");
+        occiput = MakePoint(occiput, head, "접촉점_뒤통수");
+        temporalLeft = MakePoint(temporalLeft, head, "접촉점_좌측두");
+        temporalRight = MakePoint(temporalRight, head, "접촉점_우측두");
 
         int tips = 0;
         tips += MakeTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
@@ -151,50 +145,19 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
                         "showSpheres를 켜면 보입니다.");
     }
 
-    /// <summary>머리뼈를 따라가는 스케일 1짜리 홀더. 음수 스케일을 물려받지 않는다.</summary>
-    private Transform GetOrCreateHolder(Transform head)
-    {
-        BoneFollower[] existing = Object.FindObjectsByType<BoneFollower>(FindObjectsSortMode.None);
-        foreach (BoneFollower f in existing)
-            if (f.name == "접촉점 홀더") return f.transform;
-
-        GameObject go = new GameObject("접촉점 홀더");
-        go.transform.SetParent(null, true);          // 씬 루트 — 어떤 스케일도 물려받지 않는다
-        go.transform.localScale = Vector3.one;
-        go.AddComponent<BoneFollower>().SetTarget(head);
-        return go.transform;
-    }
-
-    /// <summary>이미 뼈 밑에 만들어 둔 접촉점을 홀더로 옮긴다. 월드 위치는 그대로 둔다.</summary>
-    private void MoveUnderHolder(Transform holder, params GripContactPoint[] points)
-    {
-        foreach (GripContactPoint p in points)
-        {
-            if (p == null || p.transform.parent == holder) continue;
-
-            Vector3 worldPos = p.transform.position;
-            Quaternion worldRot = p.transform.rotation;
-            p.transform.SetParent(holder, true);
-            p.transform.SetPositionAndRotation(worldPos, worldRot);
-            p.transform.localScale = new Vector3(
-                Mathf.Abs(p.transform.localScale.x),
-                Mathf.Abs(p.transform.localScale.y),
-                Mathf.Abs(p.transform.localScale.z));
-        }
-    }
-
     private GripContactPoint MakePoint(GripContactPoint existing, Transform parent, string name)
     {
         if (existing != null) return existing;
 
-        // 이마·뒤통수·측두부는 점이 아니라 면이다. 납작한 판으로 만들고
-        // 크기·회전은 씬에서 맞춘다. 박스 콜라이더가 스케일을 그대로 따라간다.
-        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        // ★캡슐을 쓴다. c8에 X축 -1 스케일이 걸려 있어 그 밑에서는 BoxCollider가 무효가 된다
+        //   (2026-08-24 실측: 기존 파지점 44개가 전부 Capsule 33 · Sphere 11, Box는 0개다).
+        //   길쭉해서 이마·측두부 같은 면에도 구체보다 잘 맞는다. 크기·회전은 씬에서 맞춘다.
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
         go.name = name;
         go.transform.SetParent(parent, false);
-        go.transform.localScale = new Vector3(0.10f, 0.06f, 0.03f);
+        go.transform.localScale = new Vector3(0.05f, 0.035f, 0.05f);
 
-        BoxCollider col = go.GetComponent<BoxCollider>();
+        CapsuleCollider col = go.GetComponent<CapsuleCollider>();
         col.isTrigger = true;
 
         // 트리거는 한쪽에 Rigidbody가 있어야 뜬다. 손이 아니라 이쪽에 붙인다 —

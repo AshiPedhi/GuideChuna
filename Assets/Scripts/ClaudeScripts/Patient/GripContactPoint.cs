@@ -40,13 +40,13 @@ public class GripContactPoint : MonoBehaviour
             ChunaLogger.Log($"[GripContactPoint] {name}의 Is Trigger가 꺼져 있어 켰습니다.");
         }
 
-        // ★음수 스케일이 걸린 부모 밑에서는 BoxCollider가 무효가 된다.
-        //   c9 리그 상위에 미러 스케일이 있어 이마·뒤통수가 여기에 걸렸다(2026-08-24).
+        // ★c8에 X축 -1 스케일이 걸려 있다. 그 밑에서 BoxCollider는 무효가 된다.
+        //   Sphere·Capsule은 멀쩡히 돈다 — 기존 파지점 44개가 전부 그 둘이다(2026-08-24 실측).
         Vector3 s = transform.lossyScale;
-        if (s.x < 0f || s.y < 0f || s.z < 0f)
+        if (col is BoxCollider && (s.x < 0f || s.y < 0f || s.z < 0f))
         {
-            ChunaLogger.LogError($"[GripContactPoint] {name}의 월드 스케일이 음수다 {s} — " +
-                                 "콜라이더가 동작하지 않는다. BoneFollower 홀더 밑으로 옮겨야 한다.");
+            ChunaLogger.LogError($"[GripContactPoint] {name}이 음수 스케일 {s} 아래의 BoxCollider다 — " +
+                                 "동작하지 않는다. Capsule이나 Sphere로 바꿔야 한다.");
         }
     }
 
