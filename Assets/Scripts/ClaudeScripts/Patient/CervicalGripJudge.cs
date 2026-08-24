@@ -38,6 +38,11 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [Tooltip("켜면 엄지와 검지가 <b>둘 다</b> 반경 안에 있어야 한다. 끄면 둘 중 하나로 인정.")]
     [SerializeField] private bool requireBothFingers = true;
 
+    [Header("=== 배치 (머리 중심에서의 거리, m) ===")]
+    [Tooltip("이마까지")] [SerializeField] private float frontOffset = 0.09f;
+    [Tooltip("뒤통수까지")] [SerializeField] private float backOffset = 0.10f;
+    [Tooltip("측두부까지 (좌우 공통)")] [SerializeField] private float sideOffset = 0.08f;
+
     [Header("=== 표시 ===")]
     [Tooltip("접촉점 구체를 보이게 할지. 기본은 꺼 둔다 — 판정만 하고 눈에는 안 띄게 한다. " +
              "접촉점 위치를 맞출 때만 잠깐 켜면 된다.")]
@@ -232,34 +237,64 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     }
 
 #if UNITY_EDITOR
-    [ContextMenu("접촉점 4개 만들기 (이마·뒤통수·좌측두·우측두)")]
+    [ContextMenu("접촉점 4개 배치 (눈·목 위치로 실측)")]
     private void CreateTargets()
     {
         Transform head = FindDeep(transform.root, "CC_Base_Head");
-        if (head == null)
+        Transform neck = FindDeep(transform.root, "CC_Base_NeckTwist01");
+        Transform eyeL = FindDeep(transform.root, "CC_Base_L_Eye");
+        Transform eyeR = FindDeep(transform.root, "CC_Base_R_Eye");
+
+        if (head == null || neck == null || (eyeL == null && eyeR == null))
         {
-            ChunaLogger.LogWarning("[GripJudge] CC_Base_Head를 찾지 못했습니다.");
+            ChunaLogger.LogWarning("[GripJudge] 머리·목·눈 뼈를 찾지 못했습니다 — " +
+                $"Head{(head != null)} Neck{(neck != null)} Eye{(eyeL != null || eyeR != null)}");
             return;
         }
 
-        // 머리 로컬 기준 대략 위치. 눈으로 보고 인스펙터에서 맞추면 된다.
-        forehead = forehead != null ? forehead : Make(head, "접촉점_이마", new Vector3(0f, 0.06f, 0.09f));
-        occiput = occiput != null ? occiput : Make(head, "접촉점_뒤통수", new Vector3(0f, 0.04f, -0.10f));
-        temporalLeft = temporalLeft != null ? temporalLeft : Make(head, "접촉점_좌측두", new Vector3(-0.08f, 0.04f, 0.01f));
-        temporalRight = temporalRight != null ? temporalRight : Make(head, "접촉점_우측두", new Vector3(0.08f, 0.04f, 0.01f));
+        // ★축을 추측하지 않는다. 리그마다 로컬 축 규약이 달라 앞뒤가 뒤집히기 때문이다
+        //   (2026-08-24: 추측으로 넣었다가 이마·뒤통수가 뒤바뀌어 양손이 한쪽에서만 잡혔다).
+        //   위 = 목에서 머리로, 앞 = 머리에서 눈으로. 둘 다 해부학적으로 확정된 방향이다.
+        Vector3 headPos = head.position;
+        Vector3 eyePos = eyeL != null && eyeR != null ? (eyeL.position + eyeR.position) * 0.5f
+                       : (eyeL != null ? eyeL.position : eyeR.position);
 
-        ChunaLogger.Log("[GripJudge] 접촉점 4개 생성 — 위치는 인스펙터에서 맞추세요.");
+        Vector3 up = (headPos - neck.position).normalized;
+        Vector3 forward = (eyePos - headPos);
+        forward = (forward - Vector3.Project(forward, up)).normalized;   // 위 성분을 뺀 순수 전방
+        Vector3 right = Vector3.Cross(up, forward).normalized;
+
+        float eyeHeight = Vector3.Dot(eyePos - headPos, up);
+
+        forehead = Place(forehead, head, "접촉점_이마",
+                         headPos + forward * frontOffset + up * (eyeHeight + 0.04f));
+        occiput = Place(occiput, head, "접촉점_뒤통수",
+                        headPos - forward * backOffset + up * (eyeHeight + 0.01f));
+        temporalLeft = Place(temporalLeft, head, "접촉점_좌측두",
+                             headPos - right * sideOffset + up * (eyeHeight + 0.02f));
+        temporalRight = Place(temporalRight, head, "접촉점_우측두",
+                              headPos + right * sideOffset + up * (eyeHeight + 0.02f));
+
+        ChunaLogger.Log($"<color=cyan>[GripJudge] 접촉점 배치 완료 — 앞={forward} 위={up} 우={right}\n" +
+                        $"  이마 {forehead.position} · 뒤통수 {occiput.position}\n" +
+                        $"  좌측두 {temporalLeft.position} · 우측두 {temporalRight.position}\n" +
+                        $"  showSpheres를 켜서 눈으로 확인하고 필요하면 옮기세요.</color>");
     }
 
-    private Transform Make(Transform parent, string name, Vector3 localPos)
+    private Transform Place(Transform existing, Transform parent, string name, Vector3 worldPos)
     {
-        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        go.name = name;
-        go.transform.SetParent(parent, false);
-        go.transform.localPosition = localPos;
-        go.transform.localScale = Vector3.one * (grabRadius * 2f);
-        Object.DestroyImmediate(go.GetComponent<Collider>());   // 판정은 거리로 한다
-        return go.transform;
+        Transform t = existing;
+        if (t == null)
+        {
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = name;
+            Object.DestroyImmediate(go.GetComponent<Collider>());   // 판정은 거리로 한다
+            t = go.transform;
+            t.SetParent(parent, false);
+        }
+        t.position = worldPos;
+        t.localScale = Vector3.one * (grabRadius * 2f);
+        return t;
     }
 
     private static Transform FindDeep(Transform root, string name)

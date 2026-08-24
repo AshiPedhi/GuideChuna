@@ -175,12 +175,17 @@ public class ScenarioGuideUIController : MonoBehaviour
             // ★접촉 게이트가 걸린 단계에서는 손이 닿아 있는 동안에만 게이지가 찬다 (2026-08-24).
             //   이 게이지는 자기 타이머로 도는데, 실제 진행은 AutoPlay가 접촉 게이트로 따로 센다.
             //   묶어 두지 않으면 손을 안 댔는데 게이지만 혼자 차서 '완료'까지 뜨고,
-            //   정작 단계는 안 넘어간다. 사용자가 '타이머가 혼자 돈다'고 한 게 이것이다.
-            if (canProgress && pathEvaluator != null && IsContactGatedSubStep(out bool needsBothHands))
+            //   정작 단계는 안 넘어간다.
+            if (canProgress && IsContactGatedSubStep(out bool needsBothHands))
             {
-                canProgress = needsBothHands
-                    ? pathEvaluator.IsLeftHandTouchingPatient && pathEvaluator.IsRightHandTouchingPatient
-                    : pathEvaluator.IsLeftHandTouchingPatient;
+                // ★판정기가 없으면 멈춘다. 씬에서 pathEvaluator가 비어 있어(fileID 0)
+                //   '판정기 없음 = 게이트 없음'으로 빠지는 바람에 이 수정이 통째로 무시됐다.
+                if (pathEvaluator == null) pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+
+                canProgress = pathEvaluator != null &&
+                              (needsBothHands
+                                  ? pathEvaluator.IsLeftHandTouchingPatient && pathEvaluator.IsRightHandTouchingPatient
+                                  : pathEvaluator.IsLeftHandTouchingPatient);
             }
 
             if (canProgress)
