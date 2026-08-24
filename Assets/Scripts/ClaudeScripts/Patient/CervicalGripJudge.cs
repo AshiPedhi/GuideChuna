@@ -39,7 +39,10 @@ public class CervicalGripJudge : MonoBehaviour
     [SerializeField] private bool requireBothFingers = true;
 
     [Header("=== 표시 ===")]
-    [SerializeField] private bool showSpheres = true;
+    [Tooltip("접촉점 구체를 보이게 할지. 기본은 꺼 둔다 — 판정만 하고 눈에는 안 띄게 한다.
+" +
+             "접촉점 위치를 맞출 때만 잠깐 켜면 된다.")]
+    [SerializeField] private bool showSpheres = false;
     [SerializeField] private Color idleColor = new Color(1f, 0.45f, 0.45f, 0.55f);
     [SerializeField] private Color grippedColor = new Color(0.3f, 1f, 0.45f, 0.75f);
 
@@ -130,14 +133,21 @@ public class CervicalGripJudge : MonoBehaviour
     }
 
     /// <summary>
-    /// ★오브젝트를 끄지 않고 <b>렌더러만</b> 끈다.
-    ///   접촉점은 판정 소스라 오브젝트를 끄면 위치를 못 읽는다(프로젝트 규칙, 08-13).
+    /// 쓰는 쌍만 켠다.
+    ///   · 지금 판정하지 않는 접촉점 → <b>오브젝트째 끈다</b>(SetActive false).
+    ///   · 판정하는 접촉점 → 오브젝트는 켜 두고 <b>렌더러만 끈다</b>.
+    ///     위치를 읽어야 판정이 되지만 눈에는 안 보이게 한다(시선 분산 방지).
+    ///     showSpheres를 켜면 위치를 맞출 때 볼 수 있다.
     /// </summary>
-    private void Show(Transform t, bool on)
+    private void Show(Transform t, bool inUse)
     {
         if (t == null) return;
+
+        if (t.gameObject.activeSelf != inUse) t.gameObject.SetActive(inUse);
+        if (!inUse) return;
+
         foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true))
-            r.enabled = on && showSpheres;
+            r.enabled = showSpheres;
     }
 
     private void Tint(Renderer r, bool on)
