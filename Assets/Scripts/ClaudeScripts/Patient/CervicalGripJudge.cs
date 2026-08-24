@@ -149,12 +149,14 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     {
         if (existing != null) return existing;
 
-        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        // 이마·뒤통수·측두부는 점이 아니라 면이다. 납작한 판으로 만들고
+        // 크기·회전은 씬에서 맞춘다. 박스 콜라이더가 스케일을 그대로 따라간다.
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
         go.name = name;
         go.transform.SetParent(parent, false);
-        go.transform.localScale = Vector3.one * 0.06f;
+        go.transform.localScale = new Vector3(0.10f, 0.06f, 0.03f);
 
-        SphereCollider col = go.GetComponent<SphereCollider>();
+        BoxCollider col = go.GetComponent<BoxCollider>();
         col.isTrigger = true;
 
         // 트리거는 한쪽에 Rigidbody가 있어야 뜬다. 손이 아니라 이쪽에 붙인다 —
