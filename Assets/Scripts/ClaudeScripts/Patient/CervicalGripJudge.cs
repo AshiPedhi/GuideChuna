@@ -25,6 +25,14 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [SerializeField] private GripContactPoint temporalLeft;
     [SerializeField] private GripContactPoint temporalRight;
 
+    [Header("=== 손끝 (직접 넣는 쪽이 확실하다) ===")]
+    [Tooltip("여기에 넣으면 자동 탐색을 하지 않고 이것만 쓴다.\n" +
+             "OpenXR 리그면 OVRLeftHandVisual/OpenXRLeftHand/.../XRHand_ThumbTip 같은 것들이다.")]
+    [SerializeField] private Transform leftThumbTip;
+    [SerializeField] private Transform leftIndexTip;
+    [SerializeField] private Transform rightThumbTip;
+    [SerializeField] private Transform rightIndexTip;
+
     [Header("=== 판정 ===")]
     [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.")]
     [SerializeField] private bool requireBothFingers = true;
@@ -348,8 +356,16 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     ///   2026-08-24 실측: 그래서 왼손 2개에만 표식이 붙고 오른손은 하나도 안 붙었다.
     ///   판정기가 들고 있는 손(playerLeftHand / playerRightHand) 아래에서만 찾는다.
     /// </summary>
-    private static Transform FindTipUnderPlayerHand(GripFingerTip.Side side, GripFingerTip.Finger finger)
+    private Transform FindTipUnderPlayerHand(GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
+        // ★인스펙터에 넣어 두면 그것만 쓴다. 이름 규칙이 리그마다 달라
+        //   자동 탐색으로 헤매느니 직접 지정하는 쪽이 확실하다.
+        Transform assigned =
+            side == GripFingerTip.Side.Left
+                ? (finger == GripFingerTip.Finger.Thumb ? leftThumbTip : leftIndexTip)
+                : (finger == GripFingerTip.Finger.Thumb ? rightThumbTip : rightIndexTip);
+        if (assigned != null) return assigned;
+
         ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (evaluator == null) return null;
 
@@ -360,7 +376,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         Component hand = info != null ? info.GetValue(evaluator) as Component : null;
         if (hand == null)
         {
-            ChunaLogger.LogWarning($"[GripJudge] ChunaPathEvaluator의 {field}가 비어 있습니다.");
+            ChunaLogger.LogWarning($"[GripJudge] ChunaPathEvaluator의 {field}가 비어 있습니다 — 인스펙터에 손끝을 직접 넣어 주세요.");
             return null;
         }
 
@@ -379,7 +395,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
         if (found == null)
         {
-            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {side} {finger} 끝을 찾지 못했습니다.");
+            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {side} {finger} 끝을 찾지 못했습니다 — " +
+                                   $"인스펙터의 '{(side == GripFingerTip.Side.Left ? "left" : "right")}" +
+                                   $"{(finger == GripFingerTip.Finger.Thumb ? "ThumbTip" : "IndexTip")}'에 " +
+                                   "손끝 트랜스폼을 직접 넣어 주세요.");
         }
         return found;
     }
