@@ -114,6 +114,9 @@ public class ScenarioManager : MonoBehaviour
     // 현재 Config 참조
     private ScenarioConfig currentConfig;
 
+    /// <summary>현재 시나리오의 설정(부트스트래퍼가 주입). 실측 모드 지원 여부 판단 등에 쓴다.</summary>
+    public ScenarioConfig CurrentConfig => currentConfig;
+
 
     // 프로퍼티
     public ScenarioData CurrentScenario => currentScenario;
@@ -346,8 +349,41 @@ public class ScenarioManager : MonoBehaviour
         }
 
         ScenarioData scenario = collection.scenarios[0];
-        ApplyEvaluationPhaseFilter(scenario);
+        ApplyModePhaseFilter(scenario);        // 교육/실측 — 난이도와 별개 축이라 먼저 가른다
+        ApplyEvaluationPhaseFilter(scenario);  // 그 안에서 평가모드 부분 진행
         StartScenario(scenario);
+    }
+
+    /// <summary>
+    /// 진행 방식(교육/실측)에 따라 phase를 거른다.
+    /// ScenarioConfig의 educationPhases / measurementPhases가 비어 있으면 무동작이므로
+    /// 이 필드를 안 채운 기존 시나리오는 종전과 완전히 동일하게 돈다.
+    /// ★CSV 로드 시점에 1회만 적용된다 — 실습 도중 모드를 바꾸려면 시나리오를 다시 로드해야 한다.
+    /// </summary>
+    private void ApplyModePhaseFilter(ScenarioData scenario)
+    {
+        if (scenario == null || currentConfig == null) return;
+
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        ChunaTraining.ScenarioMode mode = dm != null ? dm.CurrentMode : ChunaTraining.ScenarioMode.Education;
+
+        if (currentConfig.GetModePhases(mode) == null) return;   // 이 모드에 화이트리스트 없음 → 필터 안 함
+
+        int before = scenario.phases.Count;
+        scenario.phases = scenario.phases
+            .Where(p => currentConfig.IsModePhaseAllowed(mode, p.phaseName))
+            .ToList();
+
+        ChunaLogger.Log($"<color=cyan>[ScenarioManager] 진행 방식 phase 필터({mode}): {before} → {scenario.phases.Count}개 " +
+                        $"({string.Join(", ", currentConfig.GetModePhases(mode))})</color>");
+
+        if (scenario.phases.Count == 0)
+        {
+            ChunaLogger.LogError($"[ScenarioManager] {mode} 모드 phase 필터 결과가 0개다 — " +
+                                 $"ScenarioConfig의 화이트리스트 이름이 CSV의 phase 열과 일치하는지 확인할 것.");
+        }
+
+        RemoveRedundantLeadingGuide(scenario);
     }
 
     /// <summary>
@@ -397,7 +433,7 @@ public class ScenarioManager : MonoBehaviour
         {
             var removed = second.steps[0];
             second.steps.RemoveAt(0);
-            ChunaLogger.Log($"<color=cyan>[ScenarioManager] 평가모드 시작 직후 중복 가이드 제거: {second.phaseName} - '{removed.stepName}'</color>");
+            ChunaLogger.Log($"<color=cyan>[ScenarioManager] phase 필터 후 시작 직후 중복 가이드 제거: {second.phaseName} - '{removed.stepName}'</color>");
         }
     }
 

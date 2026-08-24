@@ -16,6 +16,22 @@ namespace ChunaTraining
     }
 
     /// <summary>
+    /// 진행 방식 — 난이도와 <b>별개 축</b>이다.
+    ///
+    /// 같은 시나리오를 두 갈래로 쓴다:
+    ///  · Education   가상 환자로 과정을 익힌다. 난이도(초급~평가)가 여기 안에서 의미를 갖는다.
+    ///  · Measurement 패스스루에서 실제 환자를 잰다. 훈련이 아니라 측정 도구라 난이도가 무의미하다.
+    ///
+    /// 어느 단계를 진행할지는 ScenarioConfig의 educationPhases / measurementPhases 화이트리스트가 가른다.
+    /// ★ 새 값은 반드시 끝에 추가할 것 — 씬에 int로 직렬화된다.
+    /// </summary>
+    public enum ScenarioMode
+    {
+        Education,      // 교육 (기본값. 기존 동작)
+        Measurement     // 실측
+    }
+
+    /// <summary>
     /// 나래이션 타입 - 난이도별로 다른 나래이션 재생
     /// </summary>
     public enum NarrationType

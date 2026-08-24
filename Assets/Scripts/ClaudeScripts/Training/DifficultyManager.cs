@@ -21,6 +21,11 @@ namespace ChunaTraining
         [Header("=== 현재 난이도 ===")]
         [SerializeField] private DifficultyLevel currentLevel = DifficultyLevel.Beginner;
 
+        [Header("=== 진행 방식 (난이도와 별개 축) ===")]
+        [Tooltip("교육 = 가상 환자로 과정을 익힌다(기존). 실측 = 패스스루에서 실제 환자를 잰다.\n" +
+                 "난이도(초급~평가)는 교육 안에서만 의미가 있다.")]
+        [SerializeField] private ScenarioMode currentMode = ScenarioMode.Education;
+
         [Header("=== 난이도별 프리셋 ===")]
         [SerializeField] private DifficultyPreset beginnerPreset;
         [SerializeField] private DifficultyPreset intermediatePreset;
@@ -39,6 +44,23 @@ namespace ChunaTraining
         // 프로퍼티
         public DifficultyLevel CurrentLevel => currentLevel;
         public DifficultyPreset CurrentPreset => currentPreset;
+
+        /// <summary>진행 방식(교육/실측). 난이도와 별개 축이다.</summary>
+        public ScenarioMode CurrentMode => currentMode;
+        public bool IsMeasurementMode => currentMode == ScenarioMode.Measurement;
+
+        /// <summary>
+        /// 진행 방식 변경.
+        /// ★시나리오 진입 <b>전에</b> 정해져 있어야 한다 — phase 필터가 CSV 로드 시점에 1회만
+        ///   적용되므로(ScenarioManager.LoadFromCSV), 실습 도중에 바꾸면 반영되지 않는다.
+        /// </summary>
+        public void SetMode(ScenarioMode newMode)
+        {
+            if (currentMode == newMode) return;
+            currentMode = newMode;
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[DifficultyManager] 진행 방식 변경: {newMode}</color>");
+        }
 
         void Awake()
         {

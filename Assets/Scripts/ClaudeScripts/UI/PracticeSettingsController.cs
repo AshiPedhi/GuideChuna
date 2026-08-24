@@ -622,6 +622,18 @@ public class PracticeSettingsController : MonoBehaviour
 
     #region 5. 현실 모드 (패스쓰루)
     /// <summary>
+    /// 현실 모드(패스쓰루)를 코드에서 켜고 끈다. 토글 UI 상태도 같이 맞춘다.
+    /// 실측 모드 진입 시 InfoPanelController가 호출한다 — 사용자가 설정에서 따로 켜지 않아도 되게.
+    /// </summary>
+    public void SetRealityMode(bool isOn)
+    {
+        if (realityModeToggle != null)
+            realityModeToggle.SetIsOnWithoutNotify(isOn);
+
+        OnRealityModeToggle(isOn);
+    }
+
+    /// <summary>
     /// 패스쓰루 on/off
     /// </summary>
     private void OnRealityModeToggle(bool isOn)

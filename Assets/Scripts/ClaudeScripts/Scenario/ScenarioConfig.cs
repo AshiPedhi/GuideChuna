@@ -86,6 +86,39 @@ public class ScenarioConfig : ScriptableObject
         return false;
     }
 
+    [Header("=== 진행 방식별 Phase 필터 (선택) ===")]
+    [Tooltip("교육 모드에서 진행할 phase 이름들. 비어있으면 전체 진행(= 기존 동작).\n" +
+             "예: 경추ROM은 [시작, 교육, 종료]")]
+    public string[] educationPhases;
+
+    [Tooltip("실측 모드에서 진행할 phase 이름들. 비어있으면 이 시나리오는 실측을 지원하지 않는다.\n" +
+             "예: 경추ROM은 [시작, 실측, 종료]")]
+    public string[] measurementPhases;
+
+    /// <summary>실측 모드로 진입할 수 있는 시나리오인가 (로비·정보패널에서 선택지를 띄울지 판단)</summary>
+    public bool SupportsMeasurementMode => measurementPhases != null && measurementPhases.Length > 0;
+
+    /// <summary>
+    /// 진행 방식에 해당하는 phase 화이트리스트. 비어 있으면(null) 필터하지 않는다.
+    /// ★기존 시나리오는 두 배열이 모두 비어 있어 종전과 동일하게 전체가 진행된다.
+    /// </summary>
+    public string[] GetModePhases(ChunaTraining.ScenarioMode mode)
+    {
+        string[] list = mode == ChunaTraining.ScenarioMode.Measurement ? measurementPhases : educationPhases;
+        return (list != null && list.Length > 0) ? list : null;
+    }
+
+    public bool IsModePhaseAllowed(ChunaTraining.ScenarioMode mode, string phaseName)
+    {
+        string[] list = GetModePhases(mode);
+        if (list == null) return true;
+        foreach (var p in list)
+        {
+            if (p == phaseName) return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Phase별 회전 적정범위 오버라이드
     /// movementType이 rotation인 스텝에서만 적용, 측굴 등은 기본값 유지
