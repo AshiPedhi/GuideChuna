@@ -62,13 +62,15 @@ public class CervicalRomDriver : MonoBehaviour
     [SerializeField] private int randomSeed = 0;
 
     [Header("=== 진행 ===")]
-    [Tooltip("능동 구간을 자동으로 진행시킬 속도 (도/초). 0이면 외부에서 직접 넣는다.")]
-    [SerializeField] private float activeSpeed = 12f;
+    [Tooltip("능동 구간 진행 속도 (도/초). 굴곡 38°면 약 2.5초.")]
+    [SerializeField] private float activeSpeed = 15f;
 
-    [Tooltip("중립으로 돌아오는 속도 (도/초)")]
-    [SerializeField] private float returnSpeed = 20f;
+    [Tooltip("중립으로 돌아오는 속도 (도/초). 갈 때보다 조금 느린 편이 자연스럽다.")]
+    [SerializeField] private float returnSpeed = 12f;
 
-    [Tooltip("각도 변화를 부드럽게 하는 시간 (초). 0이면 즉시 반영.")]
+    [Tooltip("각도 변화를 부드럽게 하는 시간 (초). " +
+             "★속도를 만드는 값이 아니라 방향이 바뀌는 순간의 각을 없애는 값이다. " +
+             "크게 올리면 손 움직임과 머리가 어긋난다.")]
     [SerializeField] private float smoothTime = 0.08f;
 
     [Header("=== 디버그 ===")]
@@ -78,10 +80,11 @@ public class CervicalRomDriver : MonoBehaviour
 
     private float[] gaps;                   // 방향별 여유 구간(도). 시나리오 로드 때 뽑는다.
     private Direction currentDirection = Direction.None;
-    private float targetAngle;          // 목표 각도 (도)
+    private float targetAngle;          // 최종 목표 각도 (도)
+    private float commandedAngle;       // 속도 제한을 거친 중간 목표 (도)
     private float appliedAngle;         // 실제로 얹고 있는 각도 (도)
     private float angleVelocity;        // SmoothDamp용
-    private bool autoAdvance;           // 능동 구간 자동 진행 중인가
+    private float ramifySpeed;          // 지금 적용할 진행 속도 (도/초). 0이면 즉시 추종.
     private float normalizedWeightSum;
 
     /// <summary>현재 얹고 있는 각도(도).</summary>
@@ -160,8 +163,8 @@ public class CervicalRomDriver : MonoBehaviour
     public void BeginActive(Direction direction)
     {
         currentDirection = direction;
-        autoAdvance = true;
         targetAngle = ActiveTargetAngle;
+        ramifySpeed = activeSpeed;       // ★즉시 대입하면 안 된다. 속도로 밀어야 부드럽다.
 
         if (showDebugLogs)
         {
@@ -178,7 +181,8 @@ public class CervicalRomDriver : MonoBehaviour
     {
         if (currentDirection == Direction.None) return;
 
-        autoAdvance = false;
+        // 압박은 시술자 손을 즉시 따라가야 한다. 속도 제한을 걸면 손과 머리가 어긋난다.
+        ramifySpeed = 0f;
         targetAngle = Mathf.Lerp(ActiveTargetAngle, NormalAngle, Mathf.Clamp01(progress01));
     }
 
@@ -186,15 +190,15 @@ public class CervicalRomDriver : MonoBehaviour
     public void SetAngle(Direction direction, float degrees)
     {
         currentDirection = direction;
-        autoAdvance = false;
+        ramifySpeed = 0f;
         targetAngle = Mathf.Max(0f, degrees);
     }
 
-    /// <summary>중립으로 되돌린다.</summary>
+    /// <summary>중립으로 되돌린다. returnSpeed로 천천히 내려온다.</summary>
     public void ReturnToNeutral()
     {
-        autoAdvance = false;
         targetAngle = 0f;
+        ramifySpeed = returnSpeed;
     }
 
     private void LateUpdate()
@@ -202,23 +206,31 @@ public class CervicalRomDriver : MonoBehaviour
         // Animator가 포즈를 쓴 다음에 덧얹어야 한다. Update에서 하면 애니메이션이 덮어쓴다.
         if (currentDirection == Direction.None) return;
 
-        if (autoAdvance && activeSpeed > 0f)
+        // 1단계 — 속도 제한. 능동·복귀는 도/초로 밀고, 압박은 손을 즉시 따라간다.
+        if (ramifySpeed > 0f)
         {
-            targetAngle = Mathf.MoveTowards(targetAngle, ActiveTargetAngle, activeSpeed * Time.deltaTime);
-        }
-
-        if (smoothTime > 0f)
-        {
-            appliedAngle = Mathf.SmoothDamp(appliedAngle, targetAngle, ref angleVelocity, smoothTime);
+            commandedAngle = Mathf.MoveTowards(commandedAngle, targetAngle, ramifySpeed * Time.deltaTime);
         }
         else
         {
-            appliedAngle = targetAngle;
+            commandedAngle = targetAngle;
         }
 
-        if (targetAngle <= 0f && appliedAngle < 0.05f)
+        // 2단계 — 감쇠. 방향이 바뀌는 순간의 각을 없애는 용도지 속도를 만드는 용도가 아니다.
+        if (smoothTime > 0f)
+        {
+            appliedAngle = Mathf.SmoothDamp(appliedAngle, commandedAngle, ref angleVelocity, smoothTime);
+        }
+        else
+        {
+            appliedAngle = commandedAngle;
+        }
+
+        if (targetAngle <= 0f && commandedAngle <= 0f && appliedAngle < 0.05f)
         {
             appliedAngle = 0f;
+            commandedAngle = 0f;
+            angleVelocity = 0f;
             currentDirection = Direction.None;
             return;
         }
