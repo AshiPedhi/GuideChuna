@@ -172,6 +172,17 @@ public class ScenarioGuideUIController : MonoBehaviour
                 canProgress = isCurrentlyHolding;
             }
 
+            // ★접촉 게이트가 걸린 단계에서는 손이 닿아 있는 동안에만 게이지가 찬다 (2026-08-24).
+            //   이 게이지는 자기 타이머로 도는데, 실제 진행은 AutoPlay가 접촉 게이트로 따로 센다.
+            //   묶어 두지 않으면 손을 안 댔는데 게이지만 혼자 차서 '완료'까지 뜨고,
+            //   정작 단계는 안 넘어간다. 사용자가 '타이머가 혼자 돈다'고 한 게 이것이다.
+            if (canProgress && pathEvaluator != null && IsContactGatedSubStep(out bool needsBothHands))
+            {
+                canProgress = needsBothHands
+                    ? pathEvaluator.IsLeftHandTouchingPatient && pathEvaluator.IsRightHandTouchingPatient
+                    : pathEvaluator.IsLeftHandTouchingPatient;
+            }
+
             if (canProgress)
             {
                 elapsedTime += Time.deltaTime;
@@ -335,6 +346,23 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// <summary>
     /// 진행 완료
     /// </summary>
+    /// <summary>
+    /// 지금 substep이 접촉 게이트가 걸린 단계인가. bothHands면 양손을 다 요구한다.
+    /// </summary>
+    private bool IsContactGatedSubStep(out bool needsBothHands)
+    {
+        needsBothHands = false;
+
+        SubStepData sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
+        if (sub == null) return false;
+        if (sub.conditionType != "PassiveStretch") return false;
+
+        string p = sub.conditionParams;
+        needsBothHands = !string.IsNullOrEmpty(p) &&
+                         p.IndexOf("bothHands", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        return true;
+    }
+
     private void CompleteProgress()
     {
         isProgressActive = false;

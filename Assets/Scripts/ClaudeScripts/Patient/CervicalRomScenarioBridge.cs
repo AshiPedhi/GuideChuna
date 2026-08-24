@@ -19,6 +19,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [SerializeField] private ScenarioManager scenarioManager;
     [SerializeField] private CervicalRomDriver driver;
     [SerializeField] private ChunaPathEvaluator evaluator;
+    [Tooltip("엄지·검지 파지 판정기. 있으면 접촉 게이트를 이쪽으로 본다.")]
+    [SerializeField] private CervicalGripJudge gripJudge;
 
     [Header("=== 대상 시나리오 ===")]
     [Tooltip("이 이름의 시나리오에서만 동작한다. 다른 술기에는 개입하지 않는다.")]
@@ -47,6 +49,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (scenarioManager == null) scenarioManager = FindFirstObjectByType<ScenarioManager>();
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (evaluator == null) evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+        if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
 
         if (driver == null)
         {
@@ -94,6 +97,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             lastStepKey = key;
             stepEnteredTime = Time.time;
+            ApplyGripPair(step.stepName);
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
 
@@ -207,10 +211,35 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         driver.SetOverpressure(overpressureProgress);
     }
 
+    /// <summary>
+    /// 파지가 성립했는가. 엄지·검지 판정기가 있으면 그쪽을 본다 —
+    /// 손바닥 접촉이 아니라 두 접촉점을 서로 다른 손이 하나씩 집었는지가 기준이다.
+    /// </summary>
     private bool BothHandsTouching()
     {
+        if (gripJudge != null) return gripJudge.IsGripped;
         if (evaluator == null) return true;   // 판정기가 없으면 게이트를 걸지 않는다
         return evaluator.IsLeftHandTouchingPatient && evaluator.IsRightHandTouchingPatient;
+    }
+
+    /// <summary>단계에 맞는 접촉점 쌍으로 전환한다. 시상면만 이마·뒤통수다.</summary>
+    private void ApplyGripPair(string stepName)
+    {
+        if (gripJudge == null) return;
+
+        CervicalGripJudge.GripPair pair;
+        if (stepName == "파지" || stepName.StartsWith("굴곡", System.StringComparison.Ordinal)
+                               || stepName.StartsWith("신전", System.StringComparison.Ordinal)
+                               || stepName == "시상면평가")
+            pair = CervicalGripJudge.GripPair.Sagittal;
+        else if (DirectionOf(stepName) != CervicalRomDriver.Direction.None
+                 || stepName == "관상면파지" || stepName == "횡단면파지"
+                 || stepName == "관상면평가" || stepName == "횡단면평가")
+            pair = CervicalGripJudge.GripPair.Lateral;
+        else
+            pair = CervicalGripJudge.GripPair.None;
+
+        if (gripJudge.CurrentPair != pair) gripJudge.SetPair(pair);
     }
 
     private bool IsTargetScenario()
