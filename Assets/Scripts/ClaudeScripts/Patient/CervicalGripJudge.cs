@@ -169,10 +169,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         temporalRight = MakePoint(temporalRight, head, "접촉점_우측두");
 
         int tips = 0;
-        tips += MakeTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
-        tips += MakeTip("b_l_index_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
-        tips += MakeTip("b_r_thumb_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
-        tips += MakeTip("b_r_index_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
+        tips += MakeTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
+        tips += MakeTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
+        tips += MakeTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
+        tips += MakeTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
 
         ChunaLogger.Log($"[GripJudge] 접촉점 4개 · 손끝 콜라이더 {tips}개 준비했습니다.\n" +
                         "접촉점은 전부 머리뼈 원점에 있으니 씬에서 이마·뒤통수·좌우 측두로 옮기세요. " +
@@ -195,10 +195,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
         // 손끝은 이미 만들어 두었으면 건드리지 않는다. 없을 때만 채운다.
         int tips = 0;
-        tips += EnsureTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
-        tips += EnsureTip("b_l_index_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
-        tips += EnsureTip("b_r_thumb_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
-        tips += EnsureTip("b_r_index_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
+        tips += EnsureTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
+        tips += EnsureTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
+        tips += EnsureTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
+        tips += EnsureTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
 
         ChunaLogger.Log($"[GripJudge] 수리 완료 — 접촉점 {fixedCount}건 고침, 손끝 {tips}개 확인. 배치는 그대로 두었습니다.");
     }
@@ -263,12 +263,12 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     }
 
     /// <summary>손끝에 표식과 트리거가 없을 때만 넣는다. 이미 있으면 그대로 둔다.</summary>
-    private int EnsureTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
+    private int EnsureTip(GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
-        Transform bone = FindTipUnderPlayerHand(side, boneName);
+        Transform bone = FindTipUnderPlayerHand(side, finger);
         if (bone == null)
         {
-            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
+            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {side} {finger}");
             return 0;
         }
 
@@ -277,7 +277,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         {
             tip = bone.gameObject.AddComponent<GripFingerTip>();
             tip.Configure(side, finger);
-            ChunaLogger.Log($"  {boneName}: 표식을 넣었습니다.");
+            ChunaLogger.Log($"  {bone.name}: {side} {finger} 표식을 넣었습니다.");
         }
 
         Collider col = bone.GetComponent<Collider>();
@@ -286,12 +286,12 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             SphereCollider sc = bone.gameObject.AddComponent<SphereCollider>();
             sc.isTrigger = true;
             sc.radius = 0.012f;
-            ChunaLogger.Log($"  {boneName}: 콜라이더를 넣었습니다.");
+            ChunaLogger.Log($"  {bone.name}: 콜라이더를 넣었습니다.");
         }
         else if (!col.isTrigger)
         {
             col.isTrigger = true;
-            ChunaLogger.Log($"  {boneName}: Is Trigger를 켰습니다.");
+            ChunaLogger.Log($"  {bone.name}: Is Trigger를 켰습니다.");
         }
 
         return 1;
@@ -321,12 +321,12 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         return go.AddComponent<GripContactPoint>();
     }
 
-    private int MakeTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
+    private int MakeTip(GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
-        Transform bone = FindTipUnderPlayerHand(side, boneName);
+        Transform bone = FindTipUnderPlayerHand(side, finger);
         if (bone == null)
         {
-            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
+            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {side} {finger}");
             return 0;
         }
 
@@ -348,7 +348,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     ///   2026-08-24 실측: 그래서 왼손 2개에만 표식이 붙고 오른손은 하나도 안 붙었다.
     ///   판정기가 들고 있는 손(playerLeftHand / playerRightHand) 아래에서만 찾는다.
     /// </summary>
-    private static Transform FindTipUnderPlayerHand(GripFingerTip.Side side, string boneName)
+    private static Transform FindTipUnderPlayerHand(GripFingerTip.Side side, GripFingerTip.Finger finger)
     {
         ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (evaluator == null) return null;
@@ -364,10 +364,38 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             return null;
         }
 
-        Transform found = FindDeep(hand.transform, boneName);
+        // ★뼈 이름의 좌우 접두(b_l_ / b_r_)로 가르면 안 된다.
+        //   이 프로젝트의 오른손 리그도 뼈 이름이 b_l_* 이다(2026-08-24 실측:
+        //   HANDR1/Model/l_handMeshNode/b_l_wrist. b_r_wrist는 씬 전체에 1곳뿐).
+        //   좌우는 어느 손 루트 아래인지로만 가르고, 이름은 손가락 종류만 본다.
+        string keyword = finger == GripFingerTip.Finger.Thumb ? "thumb" : "index";
+
+        Transform found = FindTip(hand.transform, keyword, "_null")   // 끝마디 우선
+                       ?? FindTip(hand.transform, keyword, "3");      // 없으면 마지막 관절
+
         if (found == null)
-            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {boneName}을 찾지 못했습니다.");
+        {
+            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {side} {finger} 끝을 찾지 못했습니다.");
+        }
         return found;
+    }
+
+    /// <summary>손 루트 아래에서 이름에 keyword가 들어가고 suffix로 끝나는 뼈를 찾는다.</summary>
+    private static Transform FindTip(Transform root, string keyword, string suffix)
+    {
+        string n = root.name;
+        if (n.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0 &&
+            n.EndsWith(suffix, System.StringComparison.Ordinal))
+        {
+            return root;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform f = FindTip(root.GetChild(i), keyword, suffix);
+            if (f != null) return f;
+        }
+        return null;
     }
 
     private static Transform FindDeep(Transform root, string name)
