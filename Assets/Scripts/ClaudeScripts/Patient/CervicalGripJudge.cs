@@ -145,6 +145,124 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
                         "showSpheres를 켜면 보입니다.");
     }
 
+    /// <summary>
+    /// ★배치는 건드리지 않는다. 이미 잡아 둔 위치·회전·크기를 그대로 두고
+    ///   콜라이더 종류와 설정만 고친다. 다시 배치하게 만들지 않기 위한 메뉴다.
+    /// </summary>
+    [ContextMenu("콜라이더 점검·수리 (배치는 그대로)")]
+    private void RepairColliders()
+    {
+        int fixedCount = 0;
+        foreach (GripContactPoint p in new[] { forehead, occiput, temporalLeft, temporalRight })
+        {
+            if (p == null) continue;
+            fixedCount += RepairPoint(p);
+        }
+
+        // 손끝은 이미 만들어 두었으면 건드리지 않는다. 없을 때만 채운다.
+        int tips = 0;
+        tips += EnsureTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
+        tips += EnsureTip("b_l_index_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
+        tips += EnsureTip("b_r_thumb_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
+        tips += EnsureTip("b_r_index_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
+
+        ChunaLogger.Log($"[GripJudge] 수리 완료 — 접촉점 {fixedCount}건 고침, 손끝 {tips}개 확인. 배치는 그대로 두었습니다.");
+    }
+
+    private int RepairPoint(GripContactPoint p)
+    {
+        int changed = 0;
+        GameObject go = p.gameObject;
+
+        // ★c8의 X축 -1 스케일 아래에서는 BoxCollider가 무효다. 캡슐로 갈아끼운다.
+        //   크기는 트랜스폼 스케일이 들고 있으므로 위치·회전·스케일은 건드리지 않는다.
+        BoxCollider box = go.GetComponent<BoxCollider>();
+        if (box != null)
+        {
+            Vector3 size = box.size;
+            Vector3 center = box.center;
+            DestroyImmediate(box);
+
+            CapsuleCollider cap = go.AddComponent<CapsuleCollider>();
+            cap.isTrigger = true;
+            cap.center = center;
+            cap.radius = Mathf.Max(size.x, size.z) * 0.5f;
+            cap.height = size.y;
+            cap.direction = 1;   // Y축
+            changed++;
+            ChunaLogger.Log($"  {go.name}: BoxCollider → CapsuleCollider (음수 스케일에서 박스는 무효)");
+        }
+
+        Collider col = go.GetComponent<Collider>();
+        if (col == null)
+        {
+            CapsuleCollider cap = go.AddComponent<CapsuleCollider>();
+            cap.isTrigger = true;
+            changed++;
+            ChunaLogger.Log($"  {go.name}: 콜라이더가 없어 캡슐을 넣었습니다.");
+        }
+        else if (!col.isTrigger)
+        {
+            col.isTrigger = true;
+            changed++;
+            ChunaLogger.Log($"  {go.name}: Is Trigger를 켰습니다.");
+        }
+
+        Rigidbody rb = go.GetComponent<Rigidbody>();
+        if (rb == null)
+        {
+            rb = go.AddComponent<Rigidbody>();
+            rb.isKinematic = true;
+            rb.useGravity = false;
+            changed++;
+            ChunaLogger.Log($"  {go.name}: 트리거가 뜨도록 kinematic Rigidbody를 넣었습니다.");
+        }
+        else if (!rb.isKinematic)
+        {
+            rb.isKinematic = true;
+            rb.useGravity = false;
+            changed++;
+            ChunaLogger.Log($"  {go.name}: Rigidbody를 kinematic으로 바꿨습니다.");
+        }
+
+        return changed;
+    }
+
+    /// <summary>손끝에 표식과 트리거가 없을 때만 넣는다. 이미 있으면 그대로 둔다.</summary>
+    private int EnsureTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
+    {
+        Transform bone = FindDeepInScene(boneName);
+        if (bone == null)
+        {
+            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
+            return 0;
+        }
+
+        GripFingerTip tip = bone.GetComponent<GripFingerTip>();
+        if (tip == null)
+        {
+            tip = bone.gameObject.AddComponent<GripFingerTip>();
+            tip.Configure(side, finger);
+            ChunaLogger.Log($"  {boneName}: 표식을 넣었습니다.");
+        }
+
+        Collider col = bone.GetComponent<Collider>();
+        if (col == null)
+        {
+            SphereCollider sc = bone.gameObject.AddComponent<SphereCollider>();
+            sc.isTrigger = true;
+            sc.radius = 0.012f;
+            ChunaLogger.Log($"  {boneName}: 콜라이더를 넣었습니다.");
+        }
+        else if (!col.isTrigger)
+        {
+            col.isTrigger = true;
+            ChunaLogger.Log($"  {boneName}: Is Trigger를 켰습니다.");
+        }
+
+        return 1;
+    }
+
     private GripContactPoint MakePoint(GripContactPoint existing, Transform parent, string name)
     {
         if (existing != null) return existing;
