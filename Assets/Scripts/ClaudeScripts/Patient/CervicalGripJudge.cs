@@ -370,8 +370,12 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         //   좌우는 어느 손 루트 아래인지로만 가르고, 이름은 손가락 종류만 본다.
         string keyword = finger == GripFingerTip.Finger.Thumb ? "thumb" : "index";
 
-        Transform found = FindTip(hand.transform, keyword, "_null")   // 끝마디 우선
-                       ?? FindTip(hand.transform, keyword, "3");      // 없으면 마지막 관절
+        // ★실제로 도는 손은 OpenXR 리그다 — XRHand_ThumbTip / XRHand_IndexTip.
+        //   b_l_* / b_r_* 는 비활성인 구형 OculusHand 리그의 이름이라 거기 붙이면
+        //   화면의 손과 무관한 곳에서 판정이 난다(2026-08-24).
+        Transform found = FindTip(hand.transform, keyword, "Tip")     // OpenXR 리그
+                       ?? FindTip(hand.transform, keyword, "_null")   // 구형 리그 끝마디
+                       ?? FindTip(hand.transform, keyword, "3");      // 구형 리그 마지막 관절
 
         if (found == null)
         {
