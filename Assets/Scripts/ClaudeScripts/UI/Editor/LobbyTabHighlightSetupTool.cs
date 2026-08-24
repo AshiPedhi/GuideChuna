@@ -27,7 +27,7 @@ public static class LobbyTabHighlightSetupTool
 {
     private const string LobbyScenePath = "Assets/Scenes/lobby.unity";
 
-    [MenuItem("GuideChuna/로비 탭 활성색 적용")]
+    [MenuItem("GuideChuna/시나리오·로비/로비 탭 활성색 적용")]
     public static void Apply()
     {
         if (!TryGetTabs(out var toggles, out var browser)) return;
@@ -98,7 +98,7 @@ public static class LobbyTabHighlightSetupTool
         Debug.Log(sb.ToString());
     }
 
-    [MenuItem("GuideChuna/로비 탭 활성색 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/시나리오·로비/로비 탭 활성색 점검 (읽기 전용)")]
     public static void Audit()
     {
         if (!TryGetTabs(out var toggles, out _)) return;

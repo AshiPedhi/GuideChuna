@@ -28,7 +28,7 @@ public class CranialDiagnosisSetupTool : EditorWindow
     private string status = "";
     private string newRigScenarioName = "두개골PJ교정";
 
-    [MenuItem("GuideChuna/두개골 진단 파지점 설정")]
+    [MenuItem("GuideChuna/두개골/진단 파지점 설정")]
     public static void Open()
     {
         var w = GetWindow<CranialDiagnosisSetupTool>(true, "두개골 진단 파지점 설정");

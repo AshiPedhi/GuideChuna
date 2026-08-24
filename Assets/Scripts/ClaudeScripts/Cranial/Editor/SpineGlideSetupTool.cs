@@ -41,7 +41,7 @@ public class SpineGlideSetupTool : EditorWindow
     /// <summary>두 횡돌기 파지점 사이 간격(m). 두상골이 '거의 맞붙는' 폭이라 기본 4cm.</summary>
     private float gripSpread = 0.04f;
 
-    [MenuItem("GuideChuna/척추 쓸어내리기 구간 만들기")]
+    [MenuItem("GuideChuna/두개골/척추 쓸어내리기 구간 만들기")]
     public static void Open()
     {
         var w = GetWindow<SpineGlideSetupTool>(true, "척추 쓸어내리기 구간");

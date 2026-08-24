@@ -20,7 +20,7 @@ public static class ShoulderBraceGuideSetupTool
     private const string MaterialPath = "Assets/Materials/ShoulderBraceGuide.mat";
     private const string GuideName = "어깨 견착 가이드";
 
-    [MenuItem("GuideChuna/견착 가이드 배치 (이마)")]
+    [MenuItem("GuideChuna/두개골/견착 가이드 배치 (이마)")]
     public static void PlaceGuides()
     {
         var stabilizers = Object.FindObjectsByType<CranialPostureStabilizer>(
@@ -79,7 +79,7 @@ public static class ShoulderBraceGuideSetupTool
             "자세한 목록은 콘솔을 보세요.", "확인");
     }
 
-    [MenuItem("GuideChuna/견착 가이드 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/두개골/견착 가이드 점검 (읽기 전용)")]
     public static void AuditGuides()
     {
         var stabilizers = Object.FindObjectsByType<CranialPostureStabilizer>(

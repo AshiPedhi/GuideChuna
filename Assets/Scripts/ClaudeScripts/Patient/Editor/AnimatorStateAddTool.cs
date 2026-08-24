@@ -20,7 +20,7 @@ public class AnimatorStateAddTool : EditorWindow
     private string status = "";
     private Vector2 scroll;
 
-    [MenuItem("GuideChuna/애니 컨트롤러에 클립 추가 (State 생성)")]
+    [MenuItem("GuideChuna/환자·리그/애니 컨트롤러에 클립 추가 (State 생성)")]
     public static void Open()
     {
         var w = GetWindow<AnimatorStateAddTool>(true, "컨트롤러에 클립 추가");

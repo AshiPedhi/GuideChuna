@@ -41,7 +41,7 @@ public class GripPointVisibilityTool : EditorWindow
     private Vector2 scroll;
     private string status = "";
 
-    [MenuItem("GuideChuna/파지점 표시 정리 (렌더러만 끄기)")]
+    [MenuItem("GuideChuna/표시물·색/파지점 표시 정리 (렌더러만 끄기)")]
     public static void Open()
     {
         var w = GetWindow<GripPointVisibilityTool>(true, "파지점 표시 정리");

@@ -57,7 +57,7 @@ public class SkullBoneColorTool : EditorWindow
     private string status = "";
     private Vector2 scroll;
 
-    [MenuItem("GuideChuna/두개골 부위별 색상")]
+    [MenuItem("GuideChuna/두개골/부위별 색상")]
     private static void Open()
     {
         var w = GetWindow<SkullBoneColorTool>("두개골 부위별 색상");

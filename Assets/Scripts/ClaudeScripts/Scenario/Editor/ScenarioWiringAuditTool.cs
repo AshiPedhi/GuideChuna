@@ -26,7 +26,7 @@ public static class ScenarioWiringAuditTool
     private const string CsvFolder = "Assets/Resources/Scenarios";
     private const string NarrationRoot = "Assets/Resources/Narrations";
 
-    [MenuItem("GuideChuna/시나리오 배선 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/시나리오·로비/시나리오 배선 점검 (읽기 전용)")]
     private static void Audit()
     {
         var sb = new StringBuilder();

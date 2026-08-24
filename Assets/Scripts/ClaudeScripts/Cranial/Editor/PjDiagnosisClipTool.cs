@@ -27,7 +27,7 @@ public static class PjDiagnosisClipTool
     private const string ClipA = "OM교정";
     private const string ClipB = "OM교정 좌우반전";
 
-    [MenuItem("GuideChuna/PJ 진단 가이드 클립을 OM교정 기반으로 교체")]
+    [MenuItem("GuideChuna/두개골/PJ 진단 가이드 클립을 OM교정 기반으로 교체")]
     public static void Apply()
     {
         CranialAdjustmentController rig = null;

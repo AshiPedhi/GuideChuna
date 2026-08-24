@@ -29,7 +29,7 @@ public class ForceArrowAuditTool : EditorWindow
     /// <summary>통짜로 바꿀 때의 단면 모양. 박스형은 화살촉 두께가 자루와 같아 위아래에 단차가 없다.</summary>
     private bool boxedShape = true;
 
-    [MenuItem("GuideChuna/화살표 그룹 점검 · 이름 정리")]
+    [MenuItem("GuideChuna/화살표/그룹 점검 · 이름 정리")]
     public static void Open()
     {
         var w = GetWindow<ForceArrowAuditTool>(true, "화살표 그룹 점검");
@@ -338,7 +338,7 @@ public class ForceArrowAuditTool : EditorWindow
         Scan();
     }
 
-    [MenuItem("GuideChuna/화살표 ② 통짜 실선으로 교체 — 박스형 (권장)")]
+    [MenuItem("GuideChuna/화살표/② 통짜 실선으로 교체 — 박스형 (권장)")]
     private static void ConvertBoxMenu()
     {
         string r = DoConvert(false, true);
@@ -346,7 +346,7 @@ public class ForceArrowAuditTool : EditorWindow
         EditorUtility.DisplayDialog("② 통짜 실선(박스형)으로 교체", r, "확인");
     }
 
-    [MenuItem("GuideChuna/화살표 ② 통짜 실선으로 교체 — 원통형")]
+    [MenuItem("GuideChuna/화살표/② 통짜 실선으로 교체 — 원통형")]
     private static void ConvertRoundMenu()
     {
         string r = DoConvert(false, false);
@@ -354,7 +354,7 @@ public class ForceArrowAuditTool : EditorWindow
         EditorUtility.DisplayDialog("② 통짜 실선(원통형)으로 교체", r, "확인");
     }
 
-    [MenuItem("GuideChuna/화살표 ②를 되돌리기 (조각으로)")]
+    [MenuItem("GuideChuna/화살표/②를 되돌리기 (조각으로)")]
     private static void RevertMenu()
     {
         string r = DoConvert(true, false);
@@ -456,7 +456,7 @@ public class ForceArrowAuditTool : EditorWindow
     //
     // ★"눌렀는데 된 건지 모르겠다"를 없애기 위한 것. 눈으로 판단하지 말고 이걸 돌린다.
 
-    [MenuItem("GuideChuna/화살표 상태 진단 (지금 어떤 상태인지)")]
+    [MenuItem("GuideChuna/화살표/상태 진단 (지금 어떤 상태인지)")]
     private static void DiagnoseMenu()
     {
         string r = Diagnose();

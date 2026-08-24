@@ -65,7 +65,7 @@ public static class SkeletonFocusSetupTool
     /// ★이미 뼈를 배정해 둔 줄은 <b>그대로 보존</b>한다 — 다시 실행해도 작업이 날아가지 않는다.
     /// 시작·종료 안내(stepNo 0)는 만들지 않는다.
     /// </summary>
-    [MenuItem("GuideChuna/골격 포커스 — 시나리오·국면 줄 만들기 (CSV 기준)")]
+    [MenuItem("GuideChuna/표시물·색/골격 포커스 — 시나리오·국면 줄 만들기 (CSV 기준)")]
     private static void BuildEntriesFromCsv()
     {
         var focus = Object.FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
@@ -190,7 +190,7 @@ public static class SkeletonFocusSetupTool
     /// 앞의 우측 줄만 계속 적용되고 <b>좌측 측두골·관골이 영영 안 나왔다</b>.
     /// 자세 줄은 만들어진 순서가 곧 진행 순서(ⓐ→ⓑ)라 순서대로 번호를 주면 맞는다.
     /// </summary>
-    [MenuItem("GuideChuna/골격 포커스 — 중복 자세 번호 정리")]
+    [MenuItem("GuideChuna/표시물·색/골격 포커스 — 중복 자세 번호 정리")]
     private static void FixDuplicatePoseNumbers()
     {
         var focus = Object.FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);
@@ -256,7 +256,7 @@ public static class SkeletonFocusSetupTool
         EditorUtility.DisplayDialog("골격 포커스", msg, "확인");
     }
 
-    [MenuItem("GuideChuna/골격 부위 목록 보기")]
+    [MenuItem("GuideChuna/표시물·색/골격 부위 목록 보기")]
     private static void ListParts()
     {
         var roots = FindRoots();
@@ -284,7 +284,7 @@ public static class SkeletonFocusSetupTool
     /// 줄 자체는 'CSV 기준 줄 만들기'가 만든다 — 여기서는 만들지 않는다.
     /// 골격 프리팹을 교체해 참조가 끊겼을 때 다시 채우는 용도이기도 하다.
     /// </summary>
-    [MenuItem("GuideChuna/골격 포커스 — 빈 줄에 뼈 자동 배정")]
+    [MenuItem("GuideChuna/표시물·색/골격 포커스 — 빈 줄에 뼈 자동 배정")]
     private static void FillEmptyRows()
     {
         var focus = Object.FindFirstObjectByType<SkeletonFocusController>(FindObjectsInactive.Include);

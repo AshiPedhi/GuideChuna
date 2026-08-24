@@ -39,7 +39,7 @@ public class BackColliderSetupTool : EditorWindow
     private Transform oppositeBone;       // 반대쪽 어깨 본
     private bool mirrorShoulderX = true;  // 복제 시 localPosition.x 반전 여부
 
-    [MenuItem("GuideChuna/환자 접촉 충돌체 설정 (등·반대쪽 어깨)")]
+    [MenuItem("GuideChuna/환자·리그/환자 접촉 충돌체 설정 (등·반대쪽 어깨)")]
     public static void Open()
     {
         var w = GetWindow<BackColliderSetupTool>(true, "환자 접촉 충돌체 설정");

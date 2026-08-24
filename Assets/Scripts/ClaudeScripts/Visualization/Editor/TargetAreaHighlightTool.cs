@@ -39,7 +39,7 @@ public class TargetAreaHighlightTool : EditorWindow
     private string report = "";
     private Vector2 scroll;
 
-    [MenuItem("GuideChuna/타겟 부위 하이라이트 만들기 (뼈 일부 추출)")]
+    [MenuItem("GuideChuna/표시물·색/타겟 부위 하이라이트 만들기 (뼈 일부 추출)")]
     public static void Open()
     {
         var w = GetWindow<TargetAreaHighlightTool>(true, "타겟 부위 하이라이트");

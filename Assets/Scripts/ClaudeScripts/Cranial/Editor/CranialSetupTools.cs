@@ -34,7 +34,7 @@ public static class CranialSetupTools
         "양반다리", "양손깍지", "기대기",
     };
 
-    [MenuItem("GuideChuna/환자 애니 루트 설정 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/환자·리그/환자 애니 루트 설정 점검 (읽기 전용)")]
     public static void AuditClipRootSettings()
     {
         var sb = new StringBuilder("[환자 애니 루트 설정 점검]\n");
@@ -58,7 +58,7 @@ public static class CranialSetupTools
         Debug.Log(sb.ToString());
     }
 
-    [MenuItem("GuideChuna/환자 애니 루트 설정 통일 적용")]
+    [MenuItem("GuideChuna/환자·리그/환자 애니 루트 설정 통일 적용")]
     public static void UnifyClipRootSettings()
     {
         var clips = FindPatientClips();
@@ -127,7 +127,7 @@ public static class CranialSetupTools
     private const float PJ_INHALE = 6f;
     private const float PJ_EXHALE = 6f;
 
-    [MenuItem("GuideChuna/두개골 PJ 호흡 설정 (1회 · 들숨 6초 · 날숨 6초 · 날숨부터)")]
+    [MenuItem("GuideChuna/두개골/PJ 호흡 설정 (1회 · 들숨 6초 · 날숨 6초 · 날숨부터)")]
     public static void ApplyPjBreathing()
     {
         var rigs = Object.FindObjectsByType<CranialAdjustmentController>(
@@ -180,7 +180,7 @@ public static class CranialSetupTools
     private const string CLIP_POSE_A = "PM 진단 좌";
     private const string CLIP_POSE_B = "PM 진단 우";
 
-    [MenuItem("GuideChuna/두개골 진단 자세별 가이드손 클립 배선 (PM·PJ)")]
+    [MenuItem("GuideChuna/두개골/진단 자세별 가이드손 클립 배선 (PM·PJ)")]
     public static void ApplyDiagnosisGuideClips()
     {
         var rigs = Object.FindObjectsByType<CranialAdjustmentController>(
@@ -224,7 +224,7 @@ public static class CranialSetupTools
         Debug.Log(sb.ToString());
     }
 
-    [MenuItem("GuideChuna/두개골 진단 자세·가이드손 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/두개골/진단 자세·가이드손 점검 (읽기 전용)")]
     public static void AuditDiagnosisGuideClips()
     {
         var sb = new StringBuilder("[두개골 진단 단계 구성]\n");
@@ -253,7 +253,7 @@ public static class CranialSetupTools
         Debug.Log(sb.ToString());
     }
 
-    [MenuItem("GuideChuna/두개골 리그 호흡 설정 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/두개골/리그 호흡 설정 점검 (읽기 전용)")]
     public static void AuditBreathing()
     {
         var rigs = Object.FindObjectsByType<CranialAdjustmentController>(

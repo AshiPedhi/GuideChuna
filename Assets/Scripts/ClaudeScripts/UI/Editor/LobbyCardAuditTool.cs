@@ -34,7 +34,7 @@ public static class LobbyCardAuditTool
         "제1늑골_앙와위", "제2늑골_상방변위", "경추ROM측정",
     };
 
-    [MenuItem("GuideChuna/로비 카드 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/시나리오·로비/로비 카드 점검 (읽기 전용)")]
     public static void Audit()
     {
         if (!TryGetCards(out var cards)) return;
@@ -86,7 +86,7 @@ public static class LobbyCardAuditTool
     ///   Ctrl+D는 프리팹 연결과 오버라이드를 모두 보존하므로 복제는 사람이 하는 편이 낫다.
     ///   이 메뉴는 그 다음의 실수하기 쉬운 부분(인덱스 숫자·라벨)만 처리한다.
     /// </summary>
-    [MenuItem("GuideChuna/로비 카드 - 선택한 카드를 idx 8 (흉추 굴곡변위)로 설정")]
+    [MenuItem("GuideChuna/시나리오·로비/로비 카드 — 선택한 카드를 idx 8 (흉추 굴곡변위)로 설정")]
     public static void ConfigureSelectedAsFlexionCard()
     {
         const int NewIndex = 8;   // 복와위_하부흉추_굴곡변위

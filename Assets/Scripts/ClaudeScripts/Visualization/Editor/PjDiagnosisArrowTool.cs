@@ -53,7 +53,7 @@ public static class PjDiagnosisArrowTool
     private const string PhaseReassess  = "재평가";
     private const string StepReassess   = "재평가";
 
-    [MenuItem("GuideChuna/PJ 진단·재평가 화살표 배선 (좌우 자세별)")]
+    [MenuItem("GuideChuna/화살표/PJ 진단·재평가 배선 (좌우 자세별)")]
     public static void Wire()
     {
         if (!TryGetRig(out CranialAdjustmentController rig)) return;
@@ -148,7 +148,7 @@ public static class PjDiagnosisArrowTool
         Debug.Log(log.ToString());
     }
 
-    [MenuItem("GuideChuna/PJ 화살표 배선 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/화살표/PJ 배선 점검 (읽기 전용)")]
     public static void Audit()
     {
         if (!TryGetRig(out CranialAdjustmentController rig)) return;

@@ -36,7 +36,7 @@ public static class ForceArrowSetupTool
     private const int ArcRadialSeg = 8;       // 호 단면 분할
     private const float RunnerScale = 0.055f; // 호를 따라 달리는 쐐기 크기
 
-    [MenuItem("GuideChuna/힘의 방향 화살표 만들기 (선택한 오브젝트 자식으로)")]
+    [MenuItem("GuideChuna/화살표/만들기 — 기본 (선택한 오브젝트 자식으로)")]
     private static void CreateArrow()
     {
         Transform parent = Selection.activeTransform;
@@ -72,7 +72,7 @@ public static class ForceArrowSetupTool
                   "씬에서 회전시켜 '손이 미는 방향'으로 맞추세요(화살표는 로컬 +Z를 가리킵니다).");
     }
 
-    [MenuItem("GuideChuna/힘의 방향 화살표 (직선·흐름) 만들기 (선택한 오브젝트 자식으로)")]
+    [MenuItem("GuideChuna/화살표/만들기 — 직선·흐름")]
     private static void CreateFlowArrow()
     {
         Transform parent = Selection.activeTransform;
@@ -140,7 +140,7 @@ public static class ForceArrowSetupTool
         return arrow;
     }
 
-    [MenuItem("GuideChuna/힘의 방향 화살표 (회전) 만들기 (선택한 오브젝트 자식으로)")]
+    [MenuItem("GuideChuna/화살표/만들기 — 회전")]
     private static void CreateArcArrow()
     {
         Transform parent = Selection.activeTransform;
@@ -226,7 +226,7 @@ public static class ForceArrowSetupTool
         return arc;
     }
 
-    [MenuItem("GuideChuna/힘의 방향 화살표 그룹 만들기 (선택한 오브젝트 자식으로)")]
+    [MenuItem("GuideChuna/화살표/만들기 — 그룹")]
     private static void CreateGroup()
     {
         Transform parent = Selection.activeTransform;
@@ -261,7 +261,7 @@ public static class ForceArrowSetupTool
     ///        ⓑ 신전(왼손)·내회전(오른손) : 전환 → 호흡2
     ///        그래서 같은 화살표 묶음을 단계 이름만 다른 그룹 여러 개가 공유한다.
     /// </summary>
-    [MenuItem("GuideChuna/힘의 방향 화살표 기본 배치 (PM·PJ)")]
+    [MenuItem("GuideChuna/화살표/기본 배치 (PM·PJ)")]
     private static void PlaceForPmPj()
     {
         var rigs = new List<CranialAdjustmentController>();
@@ -361,7 +361,7 @@ public static class ForceArrowSetupTool
     ///   주동수(족방수) <b>후방 → 전방</b>   · 보조수(두방수) <b>두방 → 족방</b>
     ///   두 손이 서로 다른 방향으로 동시에 민다 — 둘 다 띄워야 역할 차이가 보인다.
     /// </summary>
-    [MenuItem("GuideChuna/힘의 방향 화살표 기본 배치 (늑골·흉추)")]
+    [MenuItem("GuideChuna/화살표/기본 배치 (늑골·흉추)")]
     private static void PlaceForRibThoracic()
     {
         var log = new System.Text.StringBuilder();
@@ -521,7 +521,7 @@ public static class ForceArrowSetupTool
     /// ★색은 씬에 직렬화돼 있어 코드 기본값을 바꿔도 <b>이미 배치된 화살표에는 안 먹는다</b>.
     /// 새로 만든 것만 초록이고 옛것은 주황으로 남아 뒤섞이므로, 한 번에 맞추는 버튼을 둔다.
     /// </summary>
-    [MenuItem("GuideChuna/힘의 방향 화살표 색 통일 (시술자 초록)")]
+    [MenuItem("GuideChuna/화살표/색 통일 (시술자 초록)")]
     private static void UnifyArrowColors()
     {
         Color practitioner = new Color(0.149f, 1f, 0.318f, 1f);   // #26FF51
@@ -676,7 +676,7 @@ public static class ForceArrowSetupTool
         so.ApplyModifiedProperties();
     }
 
-    [MenuItem("GuideChuna/힘의 방향 화살표 점검")]
+    [MenuItem("GuideChuna/화살표/점검 (읽기 전용)")]
     private static void Audit()
     {
         var groups = new List<ForceArrowGroup>();
@@ -1030,7 +1030,7 @@ public static class ForceArrowSetupTool
     /// <summary>화살표 공용 머티리얼(없으면 만든다). 씬을 고치는 도구가 쓴다.</summary>
     public static Material ArrowMaterial() => LoadOrCreateMaterial();
 
-    [MenuItem("GuideChuna/화살표 ① 메시 다시 굽기 (안팎 뒤집힘 수정)")]
+    [MenuItem("GuideChuna/화살표/① 메시 다시 굽기 (안팎 뒤집힘 수정)")]
     private static void RebakeMeshAssetsMenu()
     {
         string log = RebakeMeshAssets();

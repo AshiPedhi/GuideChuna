@@ -21,7 +21,7 @@ public static class TransparentBuildFixTool
 {
     private const string CollectionPath = "Assets/Resources/BuildShaderVariants.shadervariants";
 
-    [MenuItem("GuideChuna/빌드 반투명 문제 수정 (셰이더 배리언트 등록)")]
+    [MenuItem("GuideChuna/빌드/반투명 문제 수정 (셰이더 배리언트 등록)")]
     public static void Fix()
     {
         Shader standard = Shader.Find("Standard");

@@ -24,7 +24,7 @@ public static class RomClipAngleMeasurer
         "CC_Base_Head",
     };
 
-    [MenuItem("GuideChuna/경추 ROM 클립 각도 측정")]
+    [MenuItem("GuideChuna/환자·리그/경추 ROM 클립 각도 측정")]
     public static void Measure()
     {
         GameObject patient = FindPatient();

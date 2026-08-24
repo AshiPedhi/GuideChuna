@@ -25,7 +25,7 @@ public class GripPointColorTool : EditorWindow
     private Vector2 scroll;
     private string status = "";
 
-    [MenuItem("GuideChuna/파지점 색상 일괄 적용")]
+    [MenuItem("GuideChuna/표시물·색/파지점 색상 일괄 적용")]
     public static void Open()
     {
         var w = GetWindow<GripPointColorTool>(true, "파지점 색상 일괄 적용");

@@ -29,7 +29,7 @@ public static class BreathLevelBarSetupTool
     private static readonly float[] TickLevels = { -1f, 0f, 1f, 2f };
     private static readonly string[] TickLabels = { "완전히 내쉬기", "기준", "들숨", "크게" };
 
-    [MenuItem("GuideChuna/호흡 바 게이지 만들기")]
+    [MenuItem("GuideChuna/두개골/호흡 바 게이지 만들기")]
     private static void Create()
     {
         var hud = Object.FindFirstObjectByType<BreathingSyncHUD>(FindObjectsInactive.Include);

@@ -40,7 +40,7 @@ public static class Rib2PressArrowTool
     // 복제 원본 — 제1늑골의 족방 압박 화살표(같은 성격, 현재 스타일 적용됨)
     private const string SourceArrowName = "힘의 방향 (왼손 족방 압박)";
 
-    [MenuItem("GuideChuna/제2늑골 족방 압박 화살표 만들기")]
+    [MenuItem("GuideChuna/화살표/제2늑골 족방 압박 만들기")]
     public static void Create()
     {
         CranialAdjustmentController rig = FindRig("제2늑골");

@@ -25,7 +25,7 @@ using UnityEngine;
 /// </summary>
 public static class HandRoleColorTool
 {
-    [MenuItem("GuideChuna/주동수·보조수 색 일괄 적용")]
+    [MenuItem("GuideChuna/표시물·색/주동수·보조수 색 일괄 적용")]
     public static void Apply()
     {
         var log = new StringBuilder();
@@ -87,7 +87,7 @@ public static class HandRoleColorTool
         Debug.Log(log.ToString());
     }
 
-    [MenuItem("GuideChuna/주동수·보조수 색 점검 (읽기 전용)")]
+    [MenuItem("GuideChuna/표시물·색/주동수·보조수 색 점검 (읽기 전용)")]
     public static void Audit()
     {
         var sb = new StringBuilder();

@@ -23,7 +23,7 @@ public class PatientMoveRootSetupTool : EditorWindow
     private Vector2 scroll;
     private string status = "";
 
-    [MenuItem("GuideChuna/환자 이동 홀더 만들기 (애니 위치 충돌 해결)")]
+    [MenuItem("GuideChuna/환자·리그/환자 이동 홀더 만들기 (애니 위치 충돌 해결)")]
     public static void Open()
     {
         var w = GetWindow<PatientMoveRootSetupTool>(true, "환자 이동 홀더");
