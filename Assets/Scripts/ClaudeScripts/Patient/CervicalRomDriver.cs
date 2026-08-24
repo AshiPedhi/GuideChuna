@@ -45,8 +45,21 @@ public class CervicalRomDriver : MonoBehaviour
     [Tooltip("측굴 정상 각도 (좌우 공통)")] [SerializeField] private float lateralNormal = 45f;
     [Tooltip("회전 정상 각도 (좌우 공통)")] [SerializeField] private float rotationNormal = 90f;
 
-    [Tooltip("압박으로 더 미는 양. 능동은 정상각에서 이만큼 못 미친 지점까지 간다.")]
+    [Header("=== 압박 여유 구간 ===")]
+    [Tooltip("압박으로 더 미는 양. 능동은 정상각에서 이만큼 못 미친 지점까지 간다.\n" +
+             "randomizePerLoad를 켜면 이 값 대신 아래 범위에서 방향마다 따로 뽑는다.")]
     [SerializeField] private float overpressureAngle = 7f;
+
+    [Tooltip("시나리오를 불러올 때마다 여유 구간을 방향별로 다시 뽑는다.\n" +
+             "매번 같은 지점에서 멈추면 끝느낌을 느끼는 게 아니라 위치를 외우게 된다.\n" +
+             "방향마다 값이 다르므로 좌우 비대칭도 자연스럽게 생긴다.")]
+    [SerializeField] private bool randomizePerLoad = true;
+
+    [Tooltip("여유 구간을 뽑을 범위 (도). x=최소, y=최대")]
+    [SerializeField] private Vector2 overpressureRange = new Vector2(5f, 15f);
+
+    [Tooltip("0이 아니면 그 값을 시드로 써서 매번 같은 값이 나온다. 재현이 필요할 때만 쓴다.")]
+    [SerializeField] private int randomSeed = 0;
 
     [Header("=== 진행 ===")]
     [Tooltip("능동 구간을 자동으로 진행시킬 속도 (도/초). 0이면 외부에서 직접 넣는다.")]
@@ -61,6 +74,9 @@ public class CervicalRomDriver : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
 
+    private const int DirectionCount = 7;   // None 포함. Direction을 인덱스로 쓴다.
+
+    private float[] gaps;                   // 방향별 여유 구간(도). 시나리오 로드 때 뽑는다.
     private Direction currentDirection = Direction.None;
     private float targetAngle;          // 목표 각도 (도)
     private float appliedAngle;         // 실제로 얹고 있는 각도 (도)
@@ -74,8 +90,11 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>현재 방향의 정상 각도(도).</summary>
     public float NormalAngle => NormalAngleOf(currentDirection);
 
-    /// <summary>능동 구간의 끝점. 정상각에서 압박량만큼 못 미친 각도.</summary>
-    public float ActiveTargetAngle => Mathf.Max(0f, NormalAngle - overpressureAngle);
+    /// <summary>능동 구간의 끝점. 정상각에서 이번 판의 여유 구간만큼 못 미친 각도.</summary>
+    public float ActiveTargetAngle => Mathf.Max(0f, NormalAngle - GapOf(currentDirection));
+
+    /// <summary>이번 판에 뽑힌 여유 구간(도). 방향마다 다르다.</summary>
+    public float CurrentGap => GapOf(currentDirection);
 
     /// <summary>능동 끝점에 도달했는가. 압박 단계로 넘어가도 되는 시점이다.</summary>
     public bool ActiveReached => currentDirection != Direction.None &&
@@ -88,6 +107,53 @@ public class CervicalRomDriver : MonoBehaviour
     {
         AutoFindBones();
         NormalizeWeights();
+        RandomizeGaps();
+    }
+
+    /// <summary>
+    /// 여유 구간을 방향별로 다시 뽑는다. 시나리오를 불러올 때 한 번 부르면 된다.
+    /// randomizePerLoad가 꺼져 있으면 고정값(overpressureAngle)으로 채운다.
+    /// </summary>
+    public void RandomizeGaps()
+    {
+        if (gaps == null || gaps.Length != DirectionCount) gaps = new float[DirectionCount];
+
+        if (!randomizePerLoad)
+        {
+            for (int i = 0; i < gaps.Length; i++) gaps[i] = overpressureAngle;
+            return;
+        }
+
+        float min = Mathf.Min(overpressureRange.x, overpressureRange.y);
+        float max = Mathf.Max(overpressureRange.x, overpressureRange.y);
+
+        // 시드를 주면 재현된다. 0이면 매번 다르게 뽑는다.
+        Random.State previous = default;
+        bool seeded = randomSeed != 0;
+        if (seeded)
+        {
+            previous = Random.state;
+            Random.InitState(randomSeed);
+        }
+
+        for (int i = 0; i < gaps.Length; i++) gaps[i] = Random.Range(min, max);
+
+        if (seeded) Random.state = previous;
+
+        if (showDebugLogs)
+        {
+            ChunaLogger.Log($"<color=cyan>[CervicalROM] 여유 구간 재추첨 ({min:F0}~{max:F0}°) — " +
+                            $"굴곡 {gaps[(int)Direction.Flexion]:F1}° · 신전 {gaps[(int)Direction.Extension]:F1}° · " +
+                            $"우측굴 {gaps[(int)Direction.LateralRight]:F1}° · 좌측굴 {gaps[(int)Direction.LateralLeft]:F1}° · " +
+                            $"우회전 {gaps[(int)Direction.RotationRight]:F1}° · 좌회전 {gaps[(int)Direction.RotationLeft]:F1}°</color>");
+        }
+    }
+
+    private float GapOf(Direction d)
+    {
+        if (d == Direction.None) return 0f;
+        if (gaps == null || (int)d >= gaps.Length) return overpressureAngle;
+        return gaps[(int)d];
     }
 
     /// <summary>방향을 정하고 능동 구간을 시작한다. 자동으로 능동 끝점까지 간다.</summary>
@@ -100,7 +166,7 @@ public class CervicalRomDriver : MonoBehaviour
         if (showDebugLogs)
         {
             ChunaLogger.Log($"<color=cyan>[CervicalROM] 능동 시작: {direction} → " +
-                            $"{ActiveTargetAngle:F0}° (정상 {NormalAngle:F0}°)</color>");
+                            $"{ActiveTargetAngle:F0}° (정상 {NormalAngle:F0}°, 여유 {CurrentGap:F1}°)</color>");
         }
     }
 
@@ -273,5 +339,14 @@ public class CervicalRomDriver : MonoBehaviour
 
     [ContextMenu("테스트 — 중립 복귀")]
     private void TestNeutral() => ReturnToNeutral();
+
+    [ContextMenu("테스트 — 여유 구간 다시 뽑기")]
+    private void TestRandomize()
+    {
+        bool prev = showDebugLogs;
+        showDebugLogs = true;
+        RandomizeGaps();
+        showDebugLogs = prev;
+    }
 #endif
 }
