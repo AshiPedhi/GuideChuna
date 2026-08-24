@@ -58,6 +58,25 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
     public GripPair CurrentPair => currentPair;
 
+    /// <summary>
+    /// 지금 잡고 있는 손끝 4개의 중점(월드). 압박 구간에서 손이 얼마나 밀었는지 재는 기준이다.
+    /// 손끝을 아직 못 찾았으면 false.
+    /// </summary>
+    public bool TryGetGripMidpoint(out Vector3 midpoint)
+    {
+        midpoint = Vector3.zero;
+        int n = 0;
+        foreach (Transform t in new[] { leftThumbTip, leftIndexTip, rightThumbTip, rightIndexTip })
+        {
+            if (t == null) continue;
+            midpoint += t.position;
+            n++;
+        }
+        if (n == 0) return false;
+        midpoint /= n;
+        return true;
+    }
+
     private GripContactPoint PairA => currentPair == GripPair.Sagittal ? forehead
                                     : currentPair == GripPair.Lateral ? temporalLeft : null;
     private GripContactPoint PairB => currentPair == GripPair.Sagittal ? occiput
@@ -138,6 +157,16 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     {
         Transform bone = FindTipUnderPlayerHand(side, finger, quiet: true);
         if (bone == null) return 0;
+
+        // 찾은 손끝을 보관한다. 압박 구간에서 중점을 내는 데 쓴다.
+        if (side == GripFingerTip.Side.Left)
+        {
+            if (finger == GripFingerTip.Finger.Thumb) leftThumbTip = bone; else leftIndexTip = bone;
+        }
+        else
+        {
+            if (finger == GripFingerTip.Finger.Thumb) rightThumbTip = bone; else rightIndexTip = bone;
+        }
 
         GripFingerTip tip = bone.GetComponent<GripFingerTip>();
         if (tip == null)

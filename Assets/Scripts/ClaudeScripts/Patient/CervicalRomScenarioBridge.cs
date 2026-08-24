@@ -9,9 +9,9 @@ using UnityEngine;
 ///
 /// ★손을 떼면 멈춘다. "환자 움직임을 손이 따라간다"는 규약이 여기서 성립한다.
 ///
-/// 압박 진행률은 지금 <b>접촉 유지 시간</b>으로 낸다. 임시다 —
-/// 원래는 시술자 손의 상대 회전각이 소스여야 하는데, 그러려면 손 녹화나
-/// 총 회전각 상수가 필요하고 아직 정해지지 않았다.
+/// 압박은 <b>손이 실제로 민 각도</b>로 들어간다. 목이 도는 중심을 기준으로
+/// 손끝 중점이 회전축 둘레로 돈 각을 재서, 남은 여유 구간에 대비시킨다.
+/// 손이 멈추면 머리도 멈추고, 손을 떼면 그 자리에서 멈춘다.
 /// </summary>
 public class CervicalRomScenarioBridge : MonoBehaviour
 {
@@ -42,6 +42,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float stepEnteredTime;
     private bool warnedNotTarget;
     private float overpressureProgress;
+    private bool overpressureStarted;      // 압박 시작 시점의 손 위치를 잡았는가
+    private Vector3 overpressureStartArm;  // 그때의 회전 중심→손 벡터
     private bool active;
 
     private void Awake()
@@ -184,6 +186,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (subStepNo == 2)
         {
             overpressureProgress = 0f;
+            overpressureStarted = false;   // 손 기준점을 이 단계에서 다시 잡는다
             Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 {driver.NormalAngle:F0}° 까지");
         }
         else if (subStepNo >= 3)
@@ -193,11 +196,43 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// ★압박은 <b>손이 실제로 민 만큼</b> 들어간다. 시간으로 채우지 않는다.
+    ///   목이 도는 중심을 기준으로 손끝 중점이 회전축 둘레로 몇 도 돌았는지 재고,
+    ///   그 각을 남은 여유 구간에 대비시켜 진행률을 만든다. 손이 멈추면 머리도 멈춘다.
+    ///   손끝을 못 찾은 경우에만 예전 시간 방식으로 물러난다.
+    /// </summary>
     private void AdvanceOverpressure(string stepName, int subStepNo)
     {
         if (subStepNo != 2 || !stepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
-        if (!BothHandsTouching()) return;   // 손을 대고 있는 동안에만 밀린다
+        if (!BothHandsTouching()) return;   // 파지가 풀리면 그 자리에서 멈춘다
 
+        Transform pivot = driver.Pivot;
+        Vector3 axis = driver.CurrentWorldAxis;
+
+        if (gripJudge != null && pivot != null && axis != Vector3.zero &&
+            gripJudge.TryGetGripMidpoint(out Vector3 hand))
+        {
+            Vector3 arm = Vector3.ProjectOnPlane(hand - pivot.position, axis);
+            if (arm.sqrMagnitude < 1e-6f) return;
+
+            if (!overpressureStarted)
+            {
+                overpressureStarted = true;
+                overpressureStartArm = arm;
+                return;
+            }
+
+            float swept = Vector3.SignedAngle(overpressureStartArm, arm, axis);
+            float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
+
+            // 되돌아가는 방향(음수)은 0으로 본다. 민 만큼만 인정한다.
+            overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, swept) / gap);
+            driver.SetOverpressure(overpressureProgress);
+            return;
+        }
+
+        // 손끝을 못 찾았을 때만 시간으로 민다(임시).
         if (overpressureRampSeconds > 0f)
         {
             overpressureProgress = Mathf.Clamp01(
@@ -207,7 +242,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             overpressureProgress = 1f;
         }
-
         driver.SetOverpressure(overpressureProgress);
     }
 

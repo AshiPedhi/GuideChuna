@@ -100,6 +100,15 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>이번 판에 뽑힌 여유 구간(도). 방향마다 다르다.</summary>
     public float CurrentGap => GapOf(currentDirection);
 
+    /// <summary>현재 방향의 회전축(월드). 압박을 손 움직임으로 구동할 때 쓴다.</summary>
+    public Vector3 CurrentWorldAxis =>
+        torso != null && currentDirection != Direction.None
+            ? torso.TransformDirection(AxisOf(currentDirection))
+            : Vector3.zero;
+
+    /// <summary>목이 도는 중심. 손이 돌린 각을 재는 기준점이다.</summary>
+    public Transform Pivot => neckChain != null && neckChain.Length > 0 ? neckChain[0] : torso;
+
     /// <summary>능동 끝점에 도달했는가. 압박 단계로 넘어가도 되는 시점이다.</summary>
     public bool ActiveReached => currentDirection != Direction.None &&
                                  appliedAngle >= ActiveTargetAngle - 0.5f;
