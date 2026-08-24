@@ -129,10 +129,16 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             return;
         }
 
-        forehead = MakePoint(forehead, head, "접촉점_이마");
-        occiput = MakePoint(occiput, head, "접촉점_뒤통수");
-        temporalLeft = MakePoint(temporalLeft, head, "접촉점_좌측두");
-        temporalRight = MakePoint(temporalRight, head, "접촉점_우측두");
+        // ★뼈 밑에 직접 두지 않는다. 상위에 미러(음수) 스케일이 있어 BoxCollider가 무효가 된다.
+        //   스케일이 깨끗한 홀더를 씬 루트에 두고 머리뼈를 따라가게 한다.
+        Transform holder = GetOrCreateHolder(head);
+
+        forehead = MakePoint(forehead, holder, "접촉점_이마");
+        occiput = MakePoint(occiput, holder, "접촉점_뒤통수");
+        temporalLeft = MakePoint(temporalLeft, holder, "접촉점_좌측두");
+        temporalRight = MakePoint(temporalRight, holder, "접촉점_우측두");
+
+        MoveUnderHolder(holder, forehead, occiput, temporalLeft, temporalRight);
 
         int tips = 0;
         tips += MakeTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
@@ -143,6 +149,38 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         ChunaLogger.Log($"[GripJudge] 접촉점 4개 · 손끝 콜라이더 {tips}개 준비했습니다.\n" +
                         "접촉점은 전부 머리뼈 원점에 있으니 씬에서 이마·뒤통수·좌우 측두로 옮기세요. " +
                         "showSpheres를 켜면 보입니다.");
+    }
+
+    /// <summary>머리뼈를 따라가는 스케일 1짜리 홀더. 음수 스케일을 물려받지 않는다.</summary>
+    private Transform GetOrCreateHolder(Transform head)
+    {
+        BoneFollower[] existing = Object.FindObjectsByType<BoneFollower>(FindObjectsSortMode.None);
+        foreach (BoneFollower f in existing)
+            if (f.name == "접촉점 홀더") return f.transform;
+
+        GameObject go = new GameObject("접촉점 홀더");
+        go.transform.SetParent(null, true);          // 씬 루트 — 어떤 스케일도 물려받지 않는다
+        go.transform.localScale = Vector3.one;
+        go.AddComponent<BoneFollower>().SetTarget(head);
+        return go.transform;
+    }
+
+    /// <summary>이미 뼈 밑에 만들어 둔 접촉점을 홀더로 옮긴다. 월드 위치는 그대로 둔다.</summary>
+    private void MoveUnderHolder(Transform holder, params GripContactPoint[] points)
+    {
+        foreach (GripContactPoint p in points)
+        {
+            if (p == null || p.transform.parent == holder) continue;
+
+            Vector3 worldPos = p.transform.position;
+            Quaternion worldRot = p.transform.rotation;
+            p.transform.SetParent(holder, true);
+            p.transform.SetPositionAndRotation(worldPos, worldRot);
+            p.transform.localScale = new Vector3(
+                Mathf.Abs(p.transform.localScale.x),
+                Mathf.Abs(p.transform.localScale.y),
+                Mathf.Abs(p.transform.localScale.z));
+        }
     }
 
     private GripContactPoint MakePoint(GripContactPoint existing, Transform parent, string name)

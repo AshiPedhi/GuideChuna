@@ -28,9 +28,26 @@ public class GripContactPoint : MonoBehaviour
 
         Collider col = GetComponent<Collider>();
         if (col == null)
+        {
             ChunaLogger.LogWarning($"[GripContactPoint] {name}에 콜라이더가 없습니다.");
-        else if (!col.isTrigger)
-            ChunaLogger.LogWarning($"[GripContactPoint] {name}의 콜라이더가 트리거가 아닙니다 — Is Trigger를 켜세요.");
+            return;
+        }
+
+        // 경고만 띄우면 사람이 4곳을 손으로 켜야 한다. 우리가 만든 오브젝트이므로 켜 준다.
+        if (!col.isTrigger)
+        {
+            col.isTrigger = true;
+            ChunaLogger.Log($"[GripContactPoint] {name}의 Is Trigger가 꺼져 있어 켰습니다.");
+        }
+
+        // ★음수 스케일이 걸린 부모 밑에서는 BoxCollider가 무효가 된다.
+        //   c9 리그 상위에 미러 스케일이 있어 이마·뒤통수가 여기에 걸렸다(2026-08-24).
+        Vector3 s = transform.lossyScale;
+        if (s.x < 0f || s.y < 0f || s.z < 0f)
+        {
+            ChunaLogger.LogError($"[GripContactPoint] {name}의 월드 스케일이 음수다 {s} — " +
+                                 "콜라이더가 동작하지 않는다. BoneFollower 홀더 밑으로 옮겨야 한다.");
+        }
     }
 
     private void OnDisable() => inside.Clear();
