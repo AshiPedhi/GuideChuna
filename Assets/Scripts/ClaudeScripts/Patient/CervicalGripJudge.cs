@@ -1,14 +1,14 @@
 using UnityEngine;
 
 /// <summary>
-/// 경추 ROM의 파지 판정. 손바닥이 아니라 <b>엄지·검지 끝</b>으로 집는 것을 본다.
+/// 경추 ROM의 파지 판정. 엄지·검지 콜라이더가 접촉점 콜라이더에 닿았는지만 본다.
 ///
-/// 접촉점은 하나가 아니라 <b>쌍</b>이다. 면마다 잡는 곳이 다르기 때문이다.
+/// 접촉점은 쌍이다. 면마다 잡는 곳이 다르다.
 ///   시상면(굴곡·신전)   이마 · 뒤통수
-///   관상면·횡단면       좌 측두부 · 우 측두부
+///   관상면·횡단면       좌 측두 · 우 측두
 ///
-/// ★어느 손이 어디를 잡는지는 따지지 않는다. 두 접촉점이 <b>서로 다른 손</b>에 각각
-///   잡히면 성립이다(시술자가 좌우 어느 쪽에 서든 되게).
+/// ★어느 손이 어디를 잡는지는 따지지 않는다. 두 점을 <b>서로 다른 손</b>이 하나씩
+///   집으면 성립이다.
 /// </summary>
 public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactSource
 {
@@ -19,70 +19,49 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         Lateral,    // 좌 측두 · 우 측두
     }
 
-    [Header("=== 접촉점 (비우면 만들기 메뉴로 생성) ===")]
-    [SerializeField] private Transform forehead;
-    [SerializeField] private Transform occiput;
-    [SerializeField] private Transform temporalLeft;
-    [SerializeField] private Transform temporalRight;
-
-    [Header("=== 손가락 끝 (비우면 이름으로 자동 탐색) ===")]
-    [SerializeField] private Transform leftThumbTip;
-    [SerializeField] private Transform leftIndexTip;
-    [SerializeField] private Transform rightThumbTip;
-    [SerializeField] private Transform rightIndexTip;
+    [Header("=== 접촉점 (씬에서 직접 위치를 잡는다) ===")]
+    [SerializeField] private GripContactPoint forehead;
+    [SerializeField] private GripContactPoint occiput;
+    [SerializeField] private GripContactPoint temporalLeft;
+    [SerializeField] private GripContactPoint temporalRight;
 
     [Header("=== 판정 ===")]
-    [Tooltip("접촉점 반경(m). 손가락 끝이 이 안에 들어오면 닿은 것으로 본다.")]
-    [SerializeField] private float grabRadius = 0.05f;
-
-    [Tooltip("켜면 엄지와 검지가 <b>둘 다</b> 반경 안에 있어야 한다. 끄면 둘 중 하나로 인정.")]
+    [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.")]
     [SerializeField] private bool requireBothFingers = true;
 
-    [Header("=== 배치 (머리 중심에서의 거리, m) ===")]
-    [Tooltip("이마까지")] [SerializeField] private float frontOffset = 0.09f;
-    [Tooltip("뒤통수까지")] [SerializeField] private float backOffset = 0.10f;
-    [Tooltip("측두부까지 (좌우 공통)")] [SerializeField] private float sideOffset = 0.08f;
-
     [Header("=== 표시 ===")]
-    [Tooltip("접촉점 구체를 보이게 할지. 기본은 꺼 둔다 — 판정만 하고 눈에는 안 띄게 한다. " +
-             "접촉점 위치를 맞출 때만 잠깐 켜면 된다.")]
+    [Tooltip("접촉점 구체를 보이게 할지. 위치를 잡을 때만 켜면 된다.")]
     [SerializeField] private bool showSpheres = false;
-    [SerializeField] private Color idleColor = new Color(1f, 0.45f, 0.45f, 0.55f);
-    [SerializeField] private Color grippedColor = new Color(0.3f, 1f, 0.45f, 0.75f);
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
 
     private GripPair currentPair = GripPair.None;
-    private int retriesLeft = 5;
-    private Renderer aRenderer, bRenderer;
-    private MaterialPropertyBlock block;
 
     /// <summary>두 접촉점이 서로 다른 손에 각각 잡혔는가.</summary>
     public bool IsGripped { get; private set; }
 
-    /// <summary>지금 보고 있는 쌍.</summary>
+    /// <summary>쌍이 정해진 동안에만 판정을 가져간다. None이면 기존 판정이 그대로 돈다.</summary>
+    public bool IsActive => currentPair != GripPair.None;
+
     public GripPair CurrentPair => currentPair;
 
-    /// <summary>
-    /// 쌍이 정해져 있는 동안에만 판정을 가져간다.
-    /// None이면 기존 콜라이더 판정이 그대로 돌아 다른 술기에 영향이 없다.
-    /// </summary>
-    public bool IsActive => currentPair != GripPair.None;
+    private GripContactPoint PairA => currentPair == GripPair.Sagittal ? forehead
+                                    : currentPair == GripPair.Lateral ? temporalLeft : null;
+    private GripContactPoint PairB => currentPair == GripPair.Sagittal ? occiput
+                                    : currentPair == GripPair.Lateral ? temporalRight : null;
 
     private void Awake()
     {
-        AutoFindFingerTips();
-        block = new MaterialPropertyBlock();
         SetPair(GripPair.None);
 
-        // ★판정 경로에 직접 꽂는다. 이걸 안 하면 AutoPlay 게이트·진행 게이지·표시구가
-        //   전부 옛 손바닥 판정을 따라가고, 이 컴포넌트는 아무 영향도 못 준다.
+        // 판정 경로에 직접 꽂는다. 이걸 안 하면 AutoPlay 게이트·게이지·표시구가
+        // 전부 기존 손바닥 판정을 따라간다.
         ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (evaluator != null)
         {
             evaluator.SetExternalContactSource(this);
-            ChunaLogger.Log("<color=cyan>[GripJudge] 접촉 판정을 가져왔다 — 엄지·검지로 두 지점을 집어야 인정한다.</color>");
+            ChunaLogger.Log("<color=cyan>[GripJudge] 접촉 판정을 가져왔다 — 엄지·검지가 두 점에 닿아야 인정한다.</color>");
         }
         else
         {
@@ -90,44 +69,31 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         }
     }
 
-    /// <summary>어느 쌍을 볼지 정한다. 해당 접촉점만 켜진다.</summary>
+    /// <summary>어느 쌍을 볼지 정한다. 쓰는 쌍만 켜고, 그 쌍은 렌더러를 끈다.</summary>
     public void SetPair(GripPair pair)
     {
         currentPair = pair;
         IsGripped = false;
 
-        Show(forehead, pair == GripPair.Sagittal);
-        Show(occiput, pair == GripPair.Sagittal);
-        Show(temporalLeft, pair == GripPair.Lateral);
-        Show(temporalRight, pair == GripPair.Lateral);
+        Apply(forehead, pair == GripPair.Sagittal);
+        Apply(occiput, pair == GripPair.Sagittal);
+        Apply(temporalLeft, pair == GripPair.Lateral);
+        Apply(temporalRight, pair == GripPair.Lateral);
 
-        aRenderer = PairA != null ? PairA.GetComponentInChildren<Renderer>() : null;
-        bRenderer = PairB != null ? PairB.GetComponentInChildren<Renderer>() : null;
-
-        if (showDebugLogs)
-            ChunaLogger.Log($"<color=cyan>[GripJudge] 접촉점 전환: {pair}</color>");
+        if (showDebugLogs) ChunaLogger.Log($"<color=cyan>[GripJudge] 접촉점 전환: {pair}</color>");
     }
-
-    private Transform PairA => currentPair == GripPair.Sagittal ? forehead
-                             : currentPair == GripPair.Lateral ? temporalLeft : null;
-    private Transform PairB => currentPair == GripPair.Sagittal ? occiput
-                             : currentPair == GripPair.Lateral ? temporalRight : null;
 
     private void Update()
     {
-        if (currentPair == GripPair.None || PairA == null || PairB == null)
+        GripContactPoint a = PairA, b = PairB;
+        if (a == null || b == null)
         {
             IsGripped = false;
             return;
         }
 
-        bool leftOnA = HandOn(PairA, leftThumbTip, leftIndexTip);
-        bool leftOnB = HandOn(PairB, leftThumbTip, leftIndexTip);
-        bool rightOnA = HandOn(PairA, rightThumbTip, rightIndexTip);
-        bool rightOnB = HandOn(PairB, rightThumbTip, rightIndexTip);
-
-        // ★손 좌우를 따지지 않는다. 서로 다른 손이 두 점을 하나씩 잡으면 성립.
-        bool gripped = (leftOnA && rightOnB) || (rightOnA && leftOnB);
+        // 서로 다른 손이 두 점을 하나씩 집으면 성립.
+        bool gripped = (a.LeftGripping && b.RightGripping) || (a.RightGripping && b.LeftGripping);
 
         if (gripped != IsGripped)
         {
@@ -135,166 +101,97 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             if (showDebugLogs)
             {
                 ChunaLogger.Log($"<color={(gripped ? "green" : "yellow")}>[GripJudge] {currentPair} 파지 " +
-                                $"{(gripped ? "성립" : "해제")} — A(왼{leftOnA}/오{rightOnA}) B(왼{leftOnB}/오{rightOnB})</color>");
+                                $"{(gripped ? "성립" : "해제")} — " +
+                                $"A(왼{a.LeftGripping}/오{a.RightGripping}) B(왼{b.LeftGripping}/오{b.RightGripping})</color>");
             }
         }
-
-        Tint(aRenderer, leftOnA || rightOnA);
-        Tint(bRenderer, leftOnB || rightOnB);
     }
 
-    private bool HandOn(Transform target, Transform thumb, Transform index)
+    private void Apply(GripContactPoint p, bool inUse)
     {
-        if (target == null) return false;
+        if (p == null) return;
 
-        bool thumbIn = thumb != null &&
-                       (thumb.position - target.position).sqrMagnitude <= grabRadius * grabRadius;
-        bool indexIn = index != null &&
-                       (index.position - target.position).sqrMagnitude <= grabRadius * grabRadius;
-
-        return requireBothFingers ? (thumbIn && indexIn) : (thumbIn || indexIn);
-    }
-
-    /// <summary>
-    /// 쓰는 쌍만 켠다.
-    ///   · 지금 판정하지 않는 접촉점 → <b>오브젝트째 끈다</b>(SetActive false).
-    ///   · 판정하는 접촉점 → 오브젝트는 켜 두고 <b>렌더러만 끈다</b>.
-    ///     위치를 읽어야 판정이 되지만 눈에는 안 보이게 한다(시선 분산 방지).
-    ///     showSpheres를 켜면 위치를 맞출 때 볼 수 있다.
-    /// </summary>
-    private void Show(Transform t, bool inUse)
-    {
-        if (t == null) return;
-
-        if (t.gameObject.activeSelf != inUse) t.gameObject.SetActive(inUse);
+        if (p.gameObject.activeSelf != inUse) p.gameObject.SetActive(inUse);
         if (!inUse) return;
 
-        foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true))
-            r.enabled = showSpheres;
-    }
-
-    private void Tint(Renderer r, bool on)
-    {
-        if (r == null || !showSpheres) return;
-        block.Clear();
-        block.SetColor("_Color", on ? grippedColor : idleColor);
-        r.SetPropertyBlock(block);
-    }
-
-    /// <summary>Meta 손 리그의 엄지·검지 끝을 이름으로 찾는다.</summary>
-    private void AutoFindFingerTips()
-    {
-        if (leftThumbTip != null && leftIndexTip != null &&
-            rightThumbTip != null && rightIndexTip != null) return;
-
-        foreach (Transform t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
-        {
-            string n = t.name;
-            if (n.Length < 6 || n[0] != 'b') continue;   // Meta 손뼈는 b_l_ / b_r_ 로 시작한다
-
-            bool isLeft = n.StartsWith("b_l_", System.StringComparison.Ordinal);
-            bool isRight = n.StartsWith("b_r_", System.StringComparison.Ordinal);
-            if (!isLeft && !isRight) continue;
-
-            // ★끝마디(_null)를 우선한다. thumb3는 마지막 관절이라 손끝보다 안쪽이다.
-            //   순회 순서를 믿을 수 없으므로 _null이 나오면 덮어쓴다.
-            bool isTipNull = n.EndsWith("_null", System.StringComparison.Ordinal);
-
-            if (n.Contains("thumb"))
-            {
-                if (!isTipNull && !n.EndsWith("thumb3", System.StringComparison.Ordinal)) continue;
-                if (isLeft && (leftThumbTip == null || isTipNull)) leftThumbTip = t;
-                if (isRight && (rightThumbTip == null || isTipNull)) rightThumbTip = t;
-            }
-            else if (n.Contains("index"))
-            {
-                if (!isTipNull && !n.EndsWith("index3", System.StringComparison.Ordinal)) continue;
-                if (isLeft && (leftIndexTip == null || isTipNull)) leftIndexTip = t;
-                if (isRight && (rightIndexTip == null || isTipNull)) rightIndexTip = t;
-            }
-        }
-
-        if (leftThumbTip == null || leftIndexTip == null || rightThumbTip == null || rightIndexTip == null)
-        {
-            if (retriesLeft > 0)
-            {
-                retriesLeft--;
-                Invoke(nameof(AutoFindFingerTips), 1f);   // 손 리그가 늦게 생기는 경우가 있다
-                return;
-            }
-            ChunaLogger.LogWarning("[GripJudge] 엄지·검지 끝을 다 찾지 못했습니다 — " +
-                $"왼엄지{(leftThumbTip != null)} 왼검지{(leftIndexTip != null)} " +
-                $"오엄지{(rightThumbTip != null)} 오검지{(rightIndexTip != null)}. " +
-                "인스펙터에서 직접 지정하세요.");
-            return;
-        }
-
-        if (showDebugLogs)
-        {
-            ChunaLogger.Log($"<color=cyan>[GripJudge] 손끝 찾음 — {leftThumbTip.name} · {leftIndexTip.name} · " +
-                            $"{rightThumbTip.name} · {rightIndexTip.name}</color>");
-        }
+        p.RequireBothFingers = requireBothFingers;
+        foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true)) r.enabled = showSpheres;
     }
 
 #if UNITY_EDITOR
-    [ContextMenu("접촉점 4개 배치 (눈·목 위치로 실측)")]
-    private void CreateTargets()
+    [ContextMenu("접촉점·손끝 콜라이더 만들기")]
+    private void CreateColliders()
     {
         Transform head = FindDeep(transform.root, "CC_Base_Head");
-        Transform neck = FindDeep(transform.root, "CC_Base_NeckTwist01");
-        Transform eyeL = FindDeep(transform.root, "CC_Base_L_Eye");
-        Transform eyeR = FindDeep(transform.root, "CC_Base_R_Eye");
-
-        if (head == null || neck == null || (eyeL == null && eyeR == null))
+        if (head == null)
         {
-            ChunaLogger.LogWarning("[GripJudge] 머리·목·눈 뼈를 찾지 못했습니다 — " +
-                $"Head{(head != null)} Neck{(neck != null)} Eye{(eyeL != null || eyeR != null)}");
+            ChunaLogger.LogWarning("[GripJudge] CC_Base_Head를 찾지 못했습니다.");
             return;
         }
 
-        // ★축을 추측하지 않는다. 리그마다 로컬 축 규약이 달라 앞뒤가 뒤집히기 때문이다
-        //   (2026-08-24: 추측으로 넣었다가 이마·뒤통수가 뒤바뀌어 양손이 한쪽에서만 잡혔다).
-        //   위 = 목에서 머리로, 앞 = 머리에서 눈으로. 둘 다 해부학적으로 확정된 방향이다.
-        Vector3 headPos = head.position;
-        Vector3 eyePos = eyeL != null && eyeR != null ? (eyeL.position + eyeR.position) * 0.5f
-                       : (eyeL != null ? eyeL.position : eyeR.position);
+        forehead = MakePoint(forehead, head, "접촉점_이마");
+        occiput = MakePoint(occiput, head, "접촉점_뒤통수");
+        temporalLeft = MakePoint(temporalLeft, head, "접촉점_좌측두");
+        temporalRight = MakePoint(temporalRight, head, "접촉점_우측두");
 
-        Vector3 up = (headPos - neck.position).normalized;
-        Vector3 forward = (eyePos - headPos);
-        forward = (forward - Vector3.Project(forward, up)).normalized;   // 위 성분을 뺀 순수 전방
-        Vector3 right = Vector3.Cross(up, forward).normalized;
+        int tips = 0;
+        tips += MakeTip("b_l_thumb_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
+        tips += MakeTip("b_l_index_null", GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
+        tips += MakeTip("b_r_thumb_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
+        tips += MakeTip("b_r_index_null", GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
 
-        float eyeHeight = Vector3.Dot(eyePos - headPos, up);
-
-        forehead = Place(forehead, head, "접촉점_이마",
-                         headPos + forward * frontOffset + up * (eyeHeight + 0.04f));
-        occiput = Place(occiput, head, "접촉점_뒤통수",
-                        headPos - forward * backOffset + up * (eyeHeight + 0.01f));
-        temporalLeft = Place(temporalLeft, head, "접촉점_좌측두",
-                             headPos - right * sideOffset + up * (eyeHeight + 0.02f));
-        temporalRight = Place(temporalRight, head, "접촉점_우측두",
-                              headPos + right * sideOffset + up * (eyeHeight + 0.02f));
-
-        ChunaLogger.Log($"<color=cyan>[GripJudge] 접촉점 배치 완료 — 앞={forward} 위={up} 우={right}\n" +
-                        $"  이마 {forehead.position} · 뒤통수 {occiput.position}\n" +
-                        $"  좌측두 {temporalLeft.position} · 우측두 {temporalRight.position}\n" +
-                        $"  showSpheres를 켜서 눈으로 확인하고 필요하면 옮기세요.</color>");
+        ChunaLogger.Log($"[GripJudge] 접촉점 4개 · 손끝 콜라이더 {tips}개 준비했습니다.\n" +
+                        "접촉점은 전부 머리뼈 원점에 있으니 씬에서 이마·뒤통수·좌우 측두로 옮기세요. " +
+                        "showSpheres를 켜면 보입니다.");
     }
 
-    private Transform Place(Transform existing, Transform parent, string name, Vector3 worldPos)
+    private GripContactPoint MakePoint(GripContactPoint existing, Transform parent, string name)
     {
-        Transform t = existing;
-        if (t == null)
+        if (existing != null) return existing;
+
+        GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        go.transform.localScale = Vector3.one * 0.06f;
+
+        SphereCollider col = go.GetComponent<SphereCollider>();
+        col.isTrigger = true;
+
+        // 트리거는 한쪽에 Rigidbody가 있어야 뜬다. 손이 아니라 이쪽에 붙인다 —
+        // Meta 손 리그에 Rigidbody를 넣으면 상호작용 SDK와 얽힌다.
+        Rigidbody rb = go.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
+
+        return go.AddComponent<GripContactPoint>();
+    }
+
+    private int MakeTip(string boneName, GripFingerTip.Side side, GripFingerTip.Finger finger)
+    {
+        Transform bone = FindDeepInScene(boneName);
+        if (bone == null)
         {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            Object.DestroyImmediate(go.GetComponent<Collider>());   // 판정은 거리로 한다
-            t = go.transform;
-            t.SetParent(parent, false);
+            ChunaLogger.LogWarning($"[GripJudge] 손끝 뼈를 찾지 못했습니다: {boneName}");
+            return 0;
         }
-        t.position = worldPos;
-        t.localScale = Vector3.one * (grabRadius * 2f);
-        return t;
+
+        GripFingerTip tip = bone.GetComponent<GripFingerTip>();
+        if (tip == null) tip = bone.gameObject.AddComponent<GripFingerTip>();
+        tip.Configure(side, finger);
+
+        SphereCollider col = bone.GetComponent<SphereCollider>();
+        if (col == null) col = bone.gameObject.AddComponent<SphereCollider>();
+        col.isTrigger = true;
+        col.radius = 0.012f;
+
+        return 1;
+    }
+
+    private static Transform FindDeepInScene(string name)
+    {
+        foreach (Transform t in Object.FindObjectsByType<Transform>(FindObjectsSortMode.None))
+            if (t.name == name) return t;
+        return null;
     }
 
     private static Transform FindDeep(Transform root, string name)
