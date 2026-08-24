@@ -258,8 +258,10 @@ public class CervicalRomDriver : MonoBehaviour
     {
         switch (d)
         {
-            case Direction.Flexion:        return Vector3.right;      // x +
-            case Direction.Extension:      return Vector3.left;       // x −
+            // ★부호는 Play에서 눈으로 확인해 뒤집었다(2026-08-24). 클립 실측의 축 부호를
+            //   그대로 옮겼더니 굴곡·신전이 반대로 나왔다. 측굴·회전은 그대로 맞았다.
+            case Direction.Flexion:        return Vector3.left;       // x −
+            case Direction.Extension:      return Vector3.right;      // x +
             case Direction.LateralRight:   return Vector3.back;       // z −
             case Direction.LateralLeft:    return Vector3.forward;    // z +
             case Direction.RotationRight:  return Vector3.up;         // y +
@@ -325,14 +327,23 @@ public class CervicalRomDriver : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    [ContextMenu("테스트 — 굴곡 능동")]
+    [ContextMenu("테스트 — 1 굴곡 능동")]
     private void TestFlexion() => BeginActive(Direction.Flexion);
 
-    [ContextMenu("테스트 — 신전 능동")]
+    [ContextMenu("테스트 — 2 신전 능동")]
     private void TestExtension() => BeginActive(Direction.Extension);
 
-    [ContextMenu("테스트 — 우회전 능동")]
+    [ContextMenu("테스트 — 3 우측굴 능동")]
+    private void TestLateralRight() => BeginActive(Direction.LateralRight);
+
+    [ContextMenu("테스트 — 4 좌측굴 능동")]
+    private void TestLateralLeft() => BeginActive(Direction.LateralLeft);
+
+    [ContextMenu("테스트 — 5 우회전 능동")]
     private void TestRotationRight() => BeginActive(Direction.RotationRight);
+
+    [ContextMenu("테스트 — 6 좌회전 능동")]
+    private void TestRotationLeft() => BeginActive(Direction.RotationLeft);
 
     [ContextMenu("테스트 — 압박 100%")]
     private void TestOverpressure() => SetOverpressure(1f);
