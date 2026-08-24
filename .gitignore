@@ -110,3 +110,6 @@ Recording_BurstDebugInformation_DoNotShip/
 /[Aa]ssets/[Rr]esults/*_summary.csv.meta
 /[Aa]ssets/[Rr]esults/*_timeline.csv
 /[Aa]ssets/[Rr]esults/*_timeline.csv.meta
+
+# Claude Code — 개인 설정은 제외, 팀 공유용 Skill은 포함
+.claude/settings.local.json
