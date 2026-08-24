@@ -137,7 +137,21 @@ def main():
     ap.add_argument("--only", default="", help="쉼표로 구분한 클립명만")
     ap.add_argument("--voice", default=DEFAULT_VOICE)
     ap.add_argument("--text-column", default="textInstruction")
+    ap.add_argument("--map", default="", help="'이름|문구' 형식 파일. 상급·평가처럼 CSV 지시문을 "
+                                             "그대로 쓰면 안 되는 경우에 쓴다. 이 파일에 있는 것만 만든다.")
     args = ap.parse_args()
+
+    mapping = {}
+    if args.map:
+        if not os.path.exists(args.map):
+            sys.exit(f"map 파일 없음: {args.map}")
+        for raw in io.open(args.map, encoding="utf-8"):
+            line = raw.strip()
+            if not line or line.startswith("#") or "|" not in line:
+                continue
+            k, v = line.split("|", 1)
+            mapping[k.strip()] = v.strip()
+        print(f"map 파일 {os.path.basename(args.map)} — {len(mapping)}개\n")
 
     rows = read_rows(args.scenario)
     folder = narration_folder(args.scenario)
@@ -161,7 +175,7 @@ def main():
 
     plan = []
     for level in levels:
-        source = steps if level in FLAT_LEVELS else clips
+        source = mapping if mapping else (steps if level in FLAT_LEVELS else clips)
         for name, text in sorted(source.items()):
             if only and name not in only:
                 continue
