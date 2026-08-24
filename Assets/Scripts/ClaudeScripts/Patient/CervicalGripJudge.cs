@@ -39,8 +39,7 @@ public class CervicalGripJudge : MonoBehaviour
     [SerializeField] private bool requireBothFingers = true;
 
     [Header("=== 표시 ===")]
-    [Tooltip("접촉점 구체를 보이게 할지. 기본은 꺼 둔다 — 판정만 하고 눈에는 안 띄게 한다.
-" +
+    [Tooltip("접촉점 구체를 보이게 할지. 기본은 꺼 둔다 — 판정만 하고 눈에는 안 띄게 한다. " +
              "접촉점 위치를 맞출 때만 잠깐 켜면 된다.")]
     [SerializeField] private bool showSpheres = false;
     [SerializeField] private Color idleColor = new Color(1f, 0.45f, 0.45f, 0.55f);
