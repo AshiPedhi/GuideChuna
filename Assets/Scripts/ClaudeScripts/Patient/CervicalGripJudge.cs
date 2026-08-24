@@ -47,6 +47,7 @@ public class CervicalGripJudge : MonoBehaviour
     [SerializeField] private bool showDebugLogs = false;
 
     private GripPair currentPair = GripPair.None;
+    private int retriesLeft = 5;
     private Renderer aRenderer, bRenderer;
     private MaterialPropertyBlock block;
 
@@ -128,9 +129,15 @@ public class CervicalGripJudge : MonoBehaviour
         return requireBothFingers ? (thumbIn && indexIn) : (thumbIn || indexIn);
     }
 
-    private static void Show(Transform t, bool on)
+    /// <summary>
+    /// ★오브젝트를 끄지 않고 <b>렌더러만</b> 끈다.
+    ///   접촉점은 판정 소스라 오브젝트를 끄면 위치를 못 읽는다(프로젝트 규칙, 08-13).
+    /// </summary>
+    private void Show(Transform t, bool on)
     {
-        if (t != null && t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
+        if (t == null) return;
+        foreach (Renderer r in t.GetComponentsInChildren<Renderer>(true))
+            r.enabled = on && showSpheres;
     }
 
     private void Tint(Renderer r, bool on)
@@ -156,26 +163,43 @@ public class CervicalGripJudge : MonoBehaviour
             bool isRight = n.StartsWith("b_r_", System.StringComparison.Ordinal);
             if (!isLeft && !isRight) continue;
 
-            if (n.EndsWith("thumb_null", System.StringComparison.Ordinal) ||
-                n.EndsWith("thumb3", System.StringComparison.Ordinal))
+            // ★끝마디(_null)를 우선한다. thumb3는 마지막 관절이라 손끝보다 안쪽이다.
+            //   순회 순서를 믿을 수 없으므로 _null이 나오면 덮어쓴다.
+            bool isTipNull = n.EndsWith("_null", System.StringComparison.Ordinal);
+
+            if (n.Contains("thumb"))
             {
-                if (isLeft && leftThumbTip == null) leftThumbTip = t;
-                if (isRight && rightThumbTip == null) rightThumbTip = t;
+                if (!isTipNull && !n.EndsWith("thumb3", System.StringComparison.Ordinal)) continue;
+                if (isLeft && (leftThumbTip == null || isTipNull)) leftThumbTip = t;
+                if (isRight && (rightThumbTip == null || isTipNull)) rightThumbTip = t;
             }
-            else if (n.EndsWith("index_null", System.StringComparison.Ordinal) ||
-                     n.EndsWith("index3", System.StringComparison.Ordinal))
+            else if (n.Contains("index"))
             {
-                if (isLeft && leftIndexTip == null) leftIndexTip = t;
-                if (isRight && rightIndexTip == null) rightIndexTip = t;
+                if (!isTipNull && !n.EndsWith("index3", System.StringComparison.Ordinal)) continue;
+                if (isLeft && (leftIndexTip == null || isTipNull)) leftIndexTip = t;
+                if (isRight && (rightIndexTip == null || isTipNull)) rightIndexTip = t;
             }
         }
 
         if (leftThumbTip == null || leftIndexTip == null || rightThumbTip == null || rightIndexTip == null)
         {
+            if (retriesLeft > 0)
+            {
+                retriesLeft--;
+                Invoke(nameof(AutoFindFingerTips), 1f);   // 손 리그가 늦게 생기는 경우가 있다
+                return;
+            }
             ChunaLogger.LogWarning("[GripJudge] 엄지·검지 끝을 다 찾지 못했습니다 — " +
                 $"왼엄지{(leftThumbTip != null)} 왼검지{(leftIndexTip != null)} " +
                 $"오엄지{(rightThumbTip != null)} 오검지{(rightIndexTip != null)}. " +
                 "인스펙터에서 직접 지정하세요.");
+            return;
+        }
+
+        if (showDebugLogs)
+        {
+            ChunaLogger.Log($"<color=cyan>[GripJudge] 손끝 찾음 — {leftThumbTip.name} · {leftIndexTip.name} · " +
+                            $"{rightThumbTip.name} · {rightIndexTip.name}</color>");
         }
     }
 
