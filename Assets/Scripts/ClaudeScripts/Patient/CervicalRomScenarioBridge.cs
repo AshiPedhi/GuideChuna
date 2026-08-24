@@ -33,6 +33,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [SerializeField] private bool showDebugLogs = true;
 
     private string lastStepKey;
+    private bool warnedNotTarget;
     private float overpressureProgress;
     private bool active;
 
@@ -46,7 +47,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             ChunaLogger.LogWarning("[ROM Bridge] CervicalRomDriver를 찾지 못했습니다. 환자에 붙였는지 확인하세요.");
             enabled = false;
+            return;
         }
+
+        // ★시작할 때 상태를 남긴다. 조용히 아무것도 안 하는 상태를 구분할 수 없으면
+        //   '컴포넌트를 안 붙였다'와 '붙였는데 대상이 아니다'가 똑같아 보인다.
+        ChunaLogger.Log($"<color=cyan>[ROM Bridge] 시작 — 대상 시나리오 '{scenarioName}' · " +
+                        $"드라이버 {(driver != null ? driver.name : "없음")} · " +
+                        $"판정기 {(evaluator != null ? "있음" : "없음(접촉 게이트 없이 진행)")} · " +
+                        $"시나리오매니저 {(scenarioManager != null ? "있음" : "★없음")}</color>");
     }
 
     private void Update()
@@ -60,9 +69,20 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (!IsTargetScenario())
         {
             if (active) { active = false; driver.Paused = false; }
+            if (!warnedNotTarget)
+            {
+                warnedNotTarget = true;
+                ScenarioData data = scenarioManager.CurrentScenario;
+                ChunaLogger.Log($"<color=yellow>[ROM Bridge] 대상 시나리오가 아니라 개입하지 않는다 — " +
+                                $"현재 '{(data != null ? data.scenarioName : "(없음)")}' vs 설정 '{scenarioName}'</color>");
+            }
             return;
         }
-        active = true;
+        if (!active)
+        {
+            active = true;
+            Log($"대상 시나리오 진입 — 여기서부터 목 각도를 굴린다");
+        }
 
         string key = $"{step.stepName}#{sub.subStepNo}";
         if (key != lastStepKey)
