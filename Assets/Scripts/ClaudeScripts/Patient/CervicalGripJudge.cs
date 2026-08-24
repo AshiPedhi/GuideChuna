@@ -34,6 +34,9 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [SerializeField] private Transform rightIndexTip;
 
     [Header("=== 판정 ===")]
+    [Tooltip("손끝 콜라이더 반경(m).")]
+    [SerializeField] private float fingerTipRadius = 0.012f;
+
     [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.")]
     [SerializeField] private bool requireBothFingers = true;
 
@@ -99,6 +102,69 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     private void OnDisable()
     {
         SetHeadColliderEnabled(true);   // 꺼둔 채로 남기지 않는다
+    }
+
+    /// <summary>
+    /// ★손끝 표식은 런타임에 붙인다.
+    ///   OpenXR 손 리그(XRHand_*)는 Play에서 만들어지므로 에디터 메뉴로는 붙일 수 없다.
+    ///   에디터에서 붙이면 구형 OculusHand(b_l_*)만 잡히고, Play에서 붙이면 Play가
+    ///   끝날 때 사라진다(2026-08-24). 그래서 매번 시작할 때 스스로 붙인다.
+    /// </summary>
+    private System.Collections.IEnumerator Start()
+    {
+        for (int attempt = 0; attempt < 30; attempt++)
+        {
+            int ready = 0;
+            ready += AttachTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Thumb);
+            ready += AttachTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Index);
+            ready += AttachTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
+            ready += AttachTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
+
+            if (ready == 4)
+            {
+                ChunaLogger.Log("<color=cyan>[GripJudge] 손끝 표식 4개 준비 완료.</color>");
+                yield break;
+            }
+            yield return new WaitForSeconds(0.5f);   // 손 리그가 생길 때까지 기다린다
+        }
+
+        ChunaLogger.LogWarning("[GripJudge] 손끝 표식을 다 붙이지 못했습니다 — " +
+                               "인스펙터의 leftThumbTip / leftIndexTip / rightThumbTip / rightIndexTip에 " +
+                               "손끝 트랜스폼을 직접 넣어 주세요.");
+    }
+
+    /// <summary>손끝 뼈에 표식과 트리거 콜라이더를 붙인다. 이미 있으면 그대로 둔다.</summary>
+    private int AttachTip(GripFingerTip.Side side, GripFingerTip.Finger finger)
+    {
+        Transform bone = FindTipUnderPlayerHand(side, finger, quiet: true);
+        if (bone == null) return 0;
+
+        GripFingerTip tip = bone.GetComponent<GripFingerTip>();
+        if (tip == null)
+        {
+            tip = bone.gameObject.AddComponent<GripFingerTip>();
+            tip.Configure(side, finger);
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[GripJudge] {bone.name} ← {side} {finger} 표식</color>");
+        }
+        else
+        {
+            tip.Configure(side, finger);
+        }
+
+        Collider col = bone.GetComponent<Collider>();
+        if (col == null)
+        {
+            SphereCollider sc = bone.gameObject.AddComponent<SphereCollider>();
+            sc.isTrigger = true;
+            sc.radius = fingerTipRadius;
+        }
+        else if (!col.isTrigger)
+        {
+            col.isTrigger = true;
+        }
+
+        return 1;
     }
 
     private void Update()
@@ -356,7 +422,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     ///   2026-08-24 실측: 그래서 왼손 2개에만 표식이 붙고 오른손은 하나도 안 붙었다.
     ///   판정기가 들고 있는 손(playerLeftHand / playerRightHand) 아래에서만 찾는다.
     /// </summary>
-    private Transform FindTipUnderPlayerHand(GripFingerTip.Side side, GripFingerTip.Finger finger)
+    private Transform FindTipUnderPlayerHand(GripFingerTip.Side side, GripFingerTip.Finger finger, bool quiet = false)
     {
         // ★인스펙터에 넣어 두면 그것만 쓴다. 이름 규칙이 리그마다 달라
         //   자동 탐색으로 헤매느니 직접 지정하는 쪽이 확실하다.
@@ -376,7 +442,8 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         Component hand = info != null ? info.GetValue(evaluator) as Component : null;
         if (hand == null)
         {
-            ChunaLogger.LogWarning($"[GripJudge] ChunaPathEvaluator의 {field}가 비어 있습니다 — 인스펙터에 손끝을 직접 넣어 주세요.");
+            if (!quiet)
+                ChunaLogger.LogWarning($"[GripJudge] ChunaPathEvaluator의 {field}가 비어 있습니다 — 인스펙터에 손끝을 직접 넣어 주세요.");
             return null;
         }
 
@@ -393,7 +460,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
                        ?? FindTip(hand.transform, keyword, "_null")   // 구형 리그 끝마디
                        ?? FindTip(hand.transform, keyword, "3");      // 구형 리그 마지막 관절
 
-        if (found == null)
+        if (found == null && !quiet)
         {
             ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 {side} {finger} 끝을 찾지 못했습니다 — " +
                                    $"인스펙터의 '{(side == GripFingerTip.Side.Left ? "left" : "right")}" +
