@@ -10,7 +10,7 @@ using UnityEngine;
 /// ★어느 손이 어디를 잡는지는 따지지 않는다. 두 접촉점이 <b>서로 다른 손</b>에 각각
 ///   잡히면 성립이다(시술자가 좌우 어느 쪽에 서든 되게).
 /// </summary>
-public class CervicalGripJudge : MonoBehaviour
+public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactSource
 {
     public enum GripPair
     {
@@ -59,11 +59,30 @@ public class CervicalGripJudge : MonoBehaviour
     /// <summary>지금 보고 있는 쌍.</summary>
     public GripPair CurrentPair => currentPair;
 
+    /// <summary>
+    /// 쌍이 정해져 있는 동안에만 판정을 가져간다.
+    /// None이면 기존 콜라이더 판정이 그대로 돌아 다른 술기에 영향이 없다.
+    /// </summary>
+    public bool IsActive => currentPair != GripPair.None;
+
     private void Awake()
     {
         AutoFindFingerTips();
         block = new MaterialPropertyBlock();
         SetPair(GripPair.None);
+
+        // ★판정 경로에 직접 꽂는다. 이걸 안 하면 AutoPlay 게이트·진행 게이지·표시구가
+        //   전부 옛 손바닥 판정을 따라가고, 이 컴포넌트는 아무 영향도 못 준다.
+        ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+        if (evaluator != null)
+        {
+            evaluator.SetExternalContactSource(this);
+            ChunaLogger.Log("<color=cyan>[GripJudge] 접촉 판정을 가져왔다 — 엄지·검지로 두 지점을 집어야 인정한다.</color>");
+        }
+        else
+        {
+            ChunaLogger.LogWarning("[GripJudge] ChunaPathEvaluator를 찾지 못해 판정을 넘겨받지 못했습니다.");
+        }
     }
 
     /// <summary>어느 쌍을 볼지 정한다. 해당 접촉점만 켜진다.</summary>

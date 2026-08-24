@@ -913,6 +913,25 @@ public class ChunaPathEvaluator : MonoBehaviour
     internal bool IsRightHandTouchingPatient => isRightHandTouchingPatient;
     internal float CurrentAnimationRatio { get => currentAnimationRatio; set => currentAnimationRatio = value; }
 
+    /// <summary>
+    /// ★외부 접촉 판정기. 등록되면 콜라이더 기반 접촉 판정을 <b>대체</b>한다.
+    ///   경추 ROM처럼 손바닥 접촉이 아니라 엄지·검지로 두 지점을 집는 술기용이다.
+    ///   여기를 거치지 않으면 AutoPlay 게이트·진행 게이지·표시구가 전부 옛 판정을 따라간다
+    ///   (2026-08-24: 새 판정기를 만들어 놓고 이 경로에 꽂지 않아 아무것도 안 바뀌었다).
+    /// </summary>
+    public interface IHandContactSource
+    {
+        bool IsActive { get; }
+        bool IsGripped { get; }
+    }
+
+    private IHandContactSource externalContact;
+
+    public void SetExternalContactSource(IHandContactSource source) => externalContact = source;
+
+    /// <summary>외부 판정기가 지금 판정을 가져갔는가.</summary>
+    private bool ExternalContactActive => externalContact != null && externalContact.IsActive;
+
     internal void SetLeftHandTouchState(bool touching, bool onPrimary)
     {
         isLeftHandTouchingPatient = touching;
@@ -1074,6 +1093,18 @@ public class ChunaPathEvaluator : MonoBehaviour
             // PassiveStretch: 보조수(왼손) 접촉 중일 때만 애니메이션 재생
             // 게이팅 없는 경우 항상 true로 무시
             UpdateCollisionDetection();
+
+            // ★외부 판정기가 있으면 콜라이더 판정을 덮어쓴다.
+            //   엄지·검지가 두 접촉점을 각각 집었을 때만 접촉으로 본다.
+            if (ExternalContactActive)
+            {
+                bool gripped = externalContact.IsGripped;
+                isLeftHandTouchingPatient = gripped;
+                isRightHandTouchingPatient = gripped;
+                isLeftOnPrimary = gripped;
+                isRightOnPrimary = gripped;
+            }
+
             // bothHands: 양손 파지 단계 — 양손이 각각 대상 부위에 닿아야 인정.
             // touchOnce: 어느 손으로 터치해도 열린다(래치는 AutoPlayHandler가 담당).
             // 그 외 기존 게이팅(경추ROM 등)은 종전대로 왼손(보조수)만 인정.
@@ -1526,6 +1557,14 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>접촉 게이트 구간에서 터치 대상 부위를 반투명 구체로 표시.</summary>
     private void UpdateContactTargetIndicator(bool gateActive, bool satisfied)
     {
+        // ★외부 판정기가 판정을 가져갔으면 이 표시구는 틀린 자리를 가리킨다(머리 콜라이더 전체).
+        //   그쪽이 자기 접촉점을 따로 관리하므로 여기서는 띄우지 않는다.
+        if (ExternalContactActive)
+        {
+            HideContactTargetIndicator();
+            return;
+        }
+
         if (!showContactTargetIndicator || !gateActive || HideContactHintsForDifficulty())
         {
             HideContactTargetIndicator();
