@@ -925,6 +925,20 @@ public class ChunaPathEvaluator : MonoBehaviour
         bool IsGripped { get; }
     }
 
+    /// <summary>
+    /// AutoPlay가 도는 중이면 그 진행률(0~1)을 준다.
+    /// ★진행 게이지가 자기 타이머를 굴리지 않고 이 값을 그리게 하려는 것이다.
+    ///   타이머가 둘이면 조건이 조금만 달라도 화면과 실제가 어긋난다(2026-08-24에 두 번).
+    /// </summary>
+    public bool TryGetAutoPlayProgress(out float progress01)
+    {
+        progress01 = 0f;
+        if (autoPlayHandler == null || !autoPlayHandler.IsAutoPlayMode) return false;
+
+        progress01 = Mathf.Clamp01(autoPlayHandler.AutoPlayProgress);
+        return true;
+    }
+
     private IHandContactSource externalContact;
 
     public void SetExternalContactSource(IHandContactSource source) => externalContact = source;

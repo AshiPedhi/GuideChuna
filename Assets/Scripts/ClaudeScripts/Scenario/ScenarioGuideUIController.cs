@@ -165,36 +165,24 @@ public class ScenarioGuideUIController : MonoBehaviour
         // 진행 원형 표시가 활성화된 경우 시간 업데이트
         if (isProgressActive && currentDuration > 0)
         {
-            // ★게이지가 무엇에 묶여야 하는지는 단계 종류로 갈린다 (2026-08-24).
-            //   이 게이지는 자기 타이머로 도는데 실제 진행은 AutoPlay가 따로 센다.
-            //   엉뚱한 것에 묶으면 게이지와 진행이 어긋난다 — 안 댔는데 차거나,
-            //   대고 있는데 안 차거나. 둘 다 실제로 겪었다.
-            bool canProgress;
-
             if (pathEvaluator == null) pathEvaluator = FindFirstObjectByType<ChunaPathEvaluator>();
 
-            if (IsContactGatedSubStep(out bool needsBothHands))
+            // ★AutoPlay가 도는 단계에서는 게이지가 자기 시간을 세지 않는다 (2026-08-24).
+            //   실제 진행률을 그대로 그린다. 타이머가 둘이면 조건이 조금만 달라도
+            //   화면과 실제가 어긋난다 — 안 댔는데 차거나, 대고 있는데 안 차거나.
+            //   둘 다 실제로 겪었고 원인이 매번 달랐다.
+            if (pathEvaluator != null && pathEvaluator.TryGetAutoPlayProgress(out float autoPlay01))
             {
-                // 접촉 게이트 단계(PassiveStretch) — 손이 닿아 있는 동안에만 찬다.
-                canProgress = pathEvaluator != null &&
-                              (needsBothHands
-                                  ? pathEvaluator.IsLeftHandTouchingPatient && pathEvaluator.IsRightHandTouchingPatient
-                                  : pathEvaluator.IsLeftHandTouchingPatient);
+                elapsedTime = currentDuration * autoPlay01;
             }
-            else if (requireHoldForProgress && pathEvaluator != null && HasHandTrackingSubStep())
+            else if (requireHoldForProgress && pathEvaluator != null && isCurrentlyHolding)
             {
-                // 손 자세 홀드 단계 — 홀드 중일 때만 찬다.
-                //   ★손 녹화가 없는 단계에까지 이 조건을 걸면 isCurrentlyHolding이
-                //     영영 false라 게이지가 아예 안 돈다.
-                canProgress = isCurrentlyHolding;
+                // 홀드 타이머가 도는 구간 — 홀드 중일 때만 찬다.
+                elapsedTime += Time.deltaTime;
             }
-            else
+            else if (!requireHoldForProgress || pathEvaluator == null)
             {
-                canProgress = true;
-            }
-
-            if (canProgress)
-            {
+                // AutoPlay도 홀드도 없는 단계(안내 등) — 그냥 시간으로 센다.
                 elapsedTime += Time.deltaTime;
             }
 
@@ -356,30 +344,6 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// <summary>
     /// 진행 완료
     /// </summary>
-    /// <summary>지금 substep이 손 녹화(HandPose)를 쓰는 단계인가.</summary>
-    private bool HasHandTrackingSubStep()
-    {
-        SubStepData sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
-        return sub != null && sub.HasHandTracking();
-    }
-
-    /// <summary>
-    /// 지금 substep이 접촉 게이트가 걸린 단계인가. bothHands면 양손을 다 요구한다.
-    /// </summary>
-    private bool IsContactGatedSubStep(out bool needsBothHands)
-    {
-        needsBothHands = false;
-
-        SubStepData sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
-        if (sub == null) return false;
-        if (sub.conditionType != "PassiveStretch") return false;
-
-        string p = sub.conditionParams;
-        needsBothHands = !string.IsNullOrEmpty(p) &&
-                         p.IndexOf("bothHands", System.StringComparison.OrdinalIgnoreCase) >= 0;
-        return true;
-    }
-
     private void CompleteProgress()
     {
         isProgressActive = false;
