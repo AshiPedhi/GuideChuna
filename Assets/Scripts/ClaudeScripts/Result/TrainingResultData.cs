@@ -555,11 +555,20 @@ public class TrainingResultData
 
         const float asymmetryWarn = 10f;   // 좌우 차가 이만큼 넘으면 짚어 준다(도)
 
+        // ★비례 폰트라 공백 패딩으로는 칸이 안 맞는다(한글은 글자마다 폭이 다르다).
+        //   TMP의 <pos=x%> 로 컬럼 위치를 고정한다. 이 문자열은 화면 표시 전용이라
+        //   태그를 써도 서버 전송(BuildSummaryText)에는 영향이 없다.
+        const string C1 = "<pos=20%>";   // 방향
+        const string C2 = "<pos=40%>";   // 능동
+        const string C3 = "<pos=55%>";   // 압박
+        const string C4 = "<pos=70%>";   // 최대
+        const string C5 = "<pos=85%>";   // 부족
+
         var sb = new StringBuilder();
         sb.AppendLine(data.isCompleted ? "경추 ROM 측정 완료" : "경추 ROM 측정 중도 종료 (미완료)");
         sb.AppendLine();
-        sb.AppendLine("면       방향     능동    압박    최대    부족");
-        sb.AppendLine("──────────────────────────────────────────────");
+        sb.AppendLine($"면{C1}방향{C2}능동{C3}압박{C4}최대{C5}부족");
+        sb.AppendLine("<size=60%>────────────────────────────────────────────────────────────</size>");
 
         string lastPlane = null;
         foreach (var m in data.romMeasurements)
@@ -567,8 +576,8 @@ public class TrainingResultData
             if (m == null) continue;
             string plane = m.planeName == lastPlane ? "" : m.planeName;
             lastPlane = m.planeName;
-            sb.AppendLine($"{plane,-8}{m.directionName,-8}{m.activeAngle,5:F0}°{m.passiveAngle,7:F0}°" +
-                          $"{m.maxAngle,7:F0}°{m.DeficitAngle,7:F0}°");
+            sb.AppendLine($"{plane}{C1}{m.directionName}{C2}{m.activeAngle:F0}°" +
+                          $"{C3}{m.passiveAngle:F0}°{C4}{m.maxAngle:F0}°{C5}{m.DeficitAngle:F0}°");
         }
 
         // 좌우 비대칭 — 관상면·횡단면만. 시상면은 굴곡·신전이라 대칭 개념이 없다.

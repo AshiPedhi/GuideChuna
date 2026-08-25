@@ -72,19 +72,25 @@ public class PracticeSettingsController : MonoBehaviour
     /// <summary>현실 모드에서 가상 환자를 어떻게 다룰지.</summary>
     public enum RealityPatientMode
     {
-        /// <summary>반투명하게. ★피부 셰이더가 불투명이라 옷만 사라지고 살은 남는다.</summary>
+        /// <summary>알파로 반투명. ★피부 셰이더가 불투명이라 옷만 사라지고 살은 남는다(=알몸).</summary>
         Translucent,
-        /// <summary>통째로 숨긴다. 패스쓰루면 앞에 진짜 사람이 있으므로 이쪽이 맞다.</summary>
+        /// <summary>통째로 숨긴다.</summary>
         Hidden,
+        // ※새 값은 반드시 끝에 붙일 것 — 씬에 int로 직렬화된다.
+        /// <summary>xray 셰이더로 반투명. 살은 비치고 옷은 불투명하게 남는다.</summary>
+        Xray,
     }
 
-    [Tooltip("현실 모드에서 가상 환자를 어떻게 할지.\n" +
-             "★반투명 — 피부(RL_Amplify_SkinShader)는 불투명 셰이더라 알파가 안 먹고,\n" +
-             "  옷(빌트인 Standard)만 사라진다. 그래서 알몸처럼 보인다(2026-08-25 실측).\n" +
-             "  피부 셰이더를 알파 블렌드로 바꾸는 건 안 한다 — 환자 머티리얼을 건드렸다가\n" +
-             "  분홍색·마젠타 사고가 두 번 났다.\n" +
-             "숨김 — 패스쓰루면 앞에 진짜 사람이 있으므로 가상 환자가 필요 없다. 이쪽이 기본이다.")]
-    [SerializeField] private RealityPatientMode realityPatientMode = RealityPatientMode.Hidden;
+    [Tooltip("현실 모드에서 가상 환자를 어떻게 할지.\n\n" +
+             "Xray(기본) — CranialHeadXray가 쓰는 방식. 커스텀 셰이더로 갈아끼우면서\n" +
+             "  _DiffuseMap을 복사해 피부색을 유지하고, 옷은 제외해 불투명하게 남긴다.\n" +
+             "  살은 비치고 옷은 그대로라 알몸으로 안 보인다.\n\n" +
+             "Translucent — 알파만 낮추는 예전 방식. ★피부(RL_Amplify_SkinShader)는\n" +
+             "  불투명 전용이라 알파가 안 먹고, 옷(빌트인 Standard)만 사라져 알몸처럼 보인다\n" +
+             "  (2026-08-25 실측). 피부 셰이더를 알파 블렌드로 바꾸는 건 안 한다 —\n" +
+             "  환자 머티리얼을 건드렸다가 분홍색·마젠타 사고가 두 번 났다.\n\n" +
+             "Hidden — 통째로 숨김. 패스쓰루로 진짜 환자를 앞에 두고 할 때 쓴다.")]
+    [SerializeField] private RealityPatientMode realityPatientMode = RealityPatientMode.Xray;
 
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
@@ -708,9 +714,13 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (isOn)
         {
-            // ★숨김 모드면 알파를 아예 건드리지 않는다.
-            //   피부 셰이더가 불투명이라 반투명은 '옷만 사라짐'으로 끝난다.
-            if (realityPatientMode == RealityPatientMode.Hidden)
+            // ★Xray·숨김 모드면 알파를 아예 건드리지 않는다.
+            //   피부 셰이더가 불투명이라 알파 방식은 '옷만 사라짐'으로 끝난다.
+            if (realityPatientMode == RealityPatientMode.Xray)
+            {
+                SetPatientXray(true);
+            }
+            else if (realityPatientMode == RealityPatientMode.Hidden)
             {
                 SetPatientBodyVisible(false);
             }
@@ -730,7 +740,9 @@ public class PracticeSettingsController : MonoBehaviour
         }
         else
         {
-            // 현실 모드 해제 — 숨겼던 몸을 되돌린다. (숨김 모드가 아니었어도 무해하다)
+            // 현실 모드 해제 — 걸어 둔 걸 전부 되돌린다. 어느 모드였든 무해하다.
+            // ★xray를 켠 채로 두면 임시 머티리얼이 씬에 굳는다(07-27 분홍 피부 사고의 유력 원인).
+            SetPatientXray(false);
             SetPatientBodyVisible(true);
 
             if (isPatientModelVisible)
@@ -750,6 +762,38 @@ public class PracticeSettingsController : MonoBehaviour
             }
         }
     }
+    /// <summary>
+    /// xray 반투명을 켜고 끈다. <see cref="CranialHeadXray"/>가 하는 일을 그대로 쓴다 —
+    /// 커스텀 셰이더로 갈아끼우면서 <c>_DiffuseMap</c>을 복사해 피부색을 유지하고,
+    /// 옷(Shirt/Jeans/Boots)은 제외해 불투명하게 남긴다. 그래서 알몸으로 안 보인다.
+    ///
+    /// ★끌 때 반드시 <c>Deactivate()</c>가 불려야 한다. 켠 채로 씬을 저장하면
+    ///   임시 머티리얼이 굳는다(07-27 분홍 피부 사고의 유력 원인).
+    /// </summary>
+    private void SetPatientXray(bool on)
+    {
+        if (headXray == null) headXray = FindFirstObjectByType<CranialHeadXray>(FindObjectsInactive.Include);
+        if (headXray == null)
+        {
+            if (on)
+            {
+                ChunaLogger.LogWarning("[PracticeSettings] CranialHeadXray를 찾지 못해 xray 반투명을 쓸 수 없습니다. " +
+                                       "환자를 숨기는 것으로 대신합니다.");
+                SetPatientBodyVisible(false);
+            }
+            return;
+        }
+
+        if (on == headXray.IsXrayActive) return;
+
+        if (on) headXray.Activate();
+        else headXray.Deactivate();
+
+        ChunaLogger.Log($"[PracticeSettings] 환자 xray 반투명 {(on ? "켬" : "끔")} — 살은 비치고 옷은 남는다");
+    }
+
+    private CranialHeadXray headXray;
+
     /// <summary>
     /// 환자 <b>몸</b>(피부·옷·눈·치아)을 켜고 끈다. 훈련 표시물과 골격은 건드리지 않는다.
     ///
