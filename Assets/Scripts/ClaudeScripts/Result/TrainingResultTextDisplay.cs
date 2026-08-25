@@ -94,9 +94,19 @@ public class TrainingResultTextDisplay : MonoBehaviour
             return;
         }
 
-        string text = data.isOfficialEvaluation
-            ? TrainingResultData.BuildSummaryText(data)
-            : TrainingResultData.BuildPracticeSummaryText(data);
+        // ★경추 ROM은 점수·유사도가 전부 0이라(판정 경로가 PassiveStretch) 기존 포맷이 무의미하다.
+        //   측정한 각도가 곧 결과이므로 전용 포맷으로 바꿔 보여준다.
+        string text;
+        if (data.romMeasurements != null && data.romMeasurements.Count > 0)
+        {
+            text = TrainingResultData.BuildRomSummaryText(data);
+        }
+        else
+        {
+            text = data.isOfficialEvaluation
+                ? TrainingResultData.BuildSummaryText(data)
+                : TrainingResultData.BuildPracticeSummaryText(data);
+        }
         SetText(text);
     }
 

@@ -696,6 +696,47 @@ public class TrainingResultTracker : MonoBehaviour
     }
 
     /// <summary>
+    /// 경추 ROM 드라이버가 방향별로 남긴 측정값을 결과에 옮긴다.
+    /// 드라이버가 없거나(다른 술기) 잰 방향이 하나도 없으면 아무것도 담지 않는다 —
+    /// 그러면 결과 화면이 종전 포맷을 그대로 쓴다.
+    /// </summary>
+    private void CollectRomMeasurements()
+    {
+        CervicalRomDriver driver = FindFirstObjectByType<CervicalRomDriver>();
+        if (driver == null || resultData == null) return;
+
+        resultData.romMeasurements.Clear();
+
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.Extension, "시상면", "신전");
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
+        AddRomMeasurement(driver, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
+
+        if (resultData.romMeasurements.Count > 0 && showDebugLogs)
+        {
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] 경추 ROM 측정값 {resultData.romMeasurements.Count}방향 수집</color>");
+        }
+    }
+
+    private void AddRomMeasurement(CervicalRomDriver driver, CervicalRomDriver.Direction d,
+                                   string planeName, string directionName)
+    {
+        CervicalRomDriver.Measurement m = driver.GetMeasurement(d);
+        if (!m.recorded) return;   // 그 방향을 아직 안 쟀다(중도 종료 등)
+
+        resultData.romMeasurements.Add(new TrainingResultData.RomMeasurement
+        {
+            planeName = planeName,
+            directionName = directionName,
+            maxAngle = m.maxAngle,
+            activeAngle = m.active,
+            passiveAngle = m.passive,
+        });
+    }
+
+    /// <summary>
     /// 훈련 종료
     /// </summary>
     /// <param name="completed">정상 완주 여부. false면 중도 종료(미완료)로 기록 — 정식 점수와 분리됨.</param>
@@ -712,6 +753,10 @@ public class TrainingResultTracker : MonoBehaviour
             bool skipped = elapsed >= skipTimeThreshold;
             RecordSubStepCompletion(!skipped, skipped);
         }
+
+        // ★경추 ROM 측정값 수집. 이 술기는 채점 지표가 없어(PassiveStretch는 0점)
+        //   드라이버가 방향별로 남겨 둔 각도가 곧 결과다. 드라이버가 없으면 아무 일도 없다.
+        CollectRomMeasurements();
 
         // 최종 통계 계산
         resultData.FinalizeResult();

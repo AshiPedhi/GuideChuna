@@ -210,6 +210,25 @@ public class TrainingResultData
 
     // ========== 종합 결과 ==========
 
+    /// <summary>
+    /// 경추 ROM 한 방향의 측정 결과.
+    /// ★이 술기는 채점 지표가 없다 — 판정 경로가 PassiveStretch라 점수·유사도가 전부 0이다.
+    ///   그래서 각도 자체를 결과로 보여준다.
+    /// </summary>
+    [Serializable]
+    public class RomMeasurement
+    {
+        public string planeName;      // 시상면 · 관상면 · 횡단면
+        public string directionName;  // 굴곡 · 신전 · 좌측굴 …
+        public float maxAngle;     // 임상 최대각
+        public float activeAngle;     // 환자가 스스로 도달한 각
+        public float passiveAngle;    // 시술자가 밀어 도달한 각
+        public float DeficitAngle => Mathf.Max(0f, maxAngle - passiveAngle);
+    }
+
+    [Tooltip("경추 ROM 측정값. 비어 있으면 이 시나리오가 아니다.")]
+    public List<RomMeasurement> romMeasurements = new List<RomMeasurement>();
+
     [Header("=== 기본 정보 ===")]
     public string sessionId;                       // 세션 ID
     public string userName;                        // 사용자 이름
@@ -522,6 +541,67 @@ public class TrainingResultData
     }
 
     /// <summary>
+    /// <summary>
+    /// 경추 ROM 결과. 점수·유사도 대신 <b>측정한 각도</b>를 보여준다.
+    /// 이 술기는 판정 경로가 PassiveStretch라 점수가 전부 0이라 그대로 쓰면 의미가 없다.
+    ///
+    /// 면마다 읽는 법이 다르다 —
+    ///   관상면·횡단면은 <b>좌우 비대칭</b>이 임상 소견이고,
+    ///   시상면은 굴곡 45°·신전 90°로 최대값이 달라 좌우 개념이 성립하지 않는다.
+    /// </summary>
+    public static string BuildRomSummaryText(TrainingResultData data)
+    {
+        if (data == null || data.romMeasurements == null || data.romMeasurements.Count == 0) return "";
+
+        const float asymmetryWarn = 10f;   // 좌우 차가 이만큼 넘으면 짚어 준다(도)
+
+        var sb = new StringBuilder();
+        sb.AppendLine(data.isCompleted ? "경추 ROM 측정 완료" : "경추 ROM 측정 중도 종료 (미완료)");
+        sb.AppendLine();
+        sb.AppendLine("면       방향     능동    압박    최대    부족");
+        sb.AppendLine("──────────────────────────────────────────────");
+
+        string lastPlane = null;
+        foreach (var m in data.romMeasurements)
+        {
+            if (m == null) continue;
+            string plane = m.planeName == lastPlane ? "" : m.planeName;
+            lastPlane = m.planeName;
+            sb.AppendLine($"{plane,-8}{m.directionName,-8}{m.activeAngle,5:F0}°{m.passiveAngle,7:F0}°" +
+                          $"{m.maxAngle,7:F0}°{m.DeficitAngle,7:F0}°");
+        }
+
+        // 좌우 비대칭 — 관상면·횡단면만. 시상면은 굴곡·신전이라 대칭 개념이 없다.
+        AppendRomAsymmetry(sb, data, "좌측굴", "우측굴", "관상면", asymmetryWarn);
+        AppendRomAsymmetry(sb, data, "좌회전", "우회전", "횡단면", asymmetryWarn);
+
+        sb.AppendLine();
+        sb.AppendLine($"수행 시간 {FormatTime(data.totalTime)}");
+        sb.Append("※ 능동 = 환자가 스스로 간 각 · 압박 = 시술자가 밀어 간 각 · 부족 = 최대각까지 남은 각");
+        return sb.ToString().TrimEnd();
+    }
+
+    private static void AppendRomAsymmetry(StringBuilder sb, TrainingResultData data,
+                                           string leftName, string rightName, string planeName, float warnAt)
+    {
+        RomMeasurement left = null, right = null;
+        foreach (var m in data.romMeasurements)
+        {
+            if (m == null) continue;
+            if (m.directionName == leftName) left = m;
+            else if (m.directionName == rightName) right = m;
+        }
+        if (left == null || right == null) return;
+
+        float diff = Mathf.Abs(left.passiveAngle - right.passiveAngle);
+        string limited = left.passiveAngle < right.passiveAngle ? leftName : rightName;
+
+        sb.AppendLine();
+        sb.Append(diff >= warnAt
+            ? $"⚠ {planeName} 좌우 차 {diff:F0}° — {limited} 제한"
+            : $"{planeName} 좌우 차 {diff:F0}°");
+    }
+
     /// 실습모드용 종합 요약. phase별 한 줄 분석 + 종합 통계 + 잘한·더 연습할 단계.
     /// 평가모드는 BuildSummaryText(step별 상세)를 쓰고, 실습모드는 이걸 사용.
     /// </summary>

@@ -220,6 +220,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         advancedKey = key;
         Log($"{stepName} {subStepNo} 진행 — {reason}");
 
+        // ★측정값을 남긴다. 방향이 바뀌면 각도가 사라지는데, 경추ROM은 채점 지표가 없어
+        //   (PassiveStretch는 0점) 이 각도가 곧 결과다. 목표에 못 닿고 타임아웃으로
+        //   넘어갔어도 그때 도달한 각이 그 판의 측정값이다.
+        if (!isOverpressure) driver.RecordActiveReached();
+        else if (subStepNo == 2) driver.RecordPassiveReached();
+
         // ★AutoPlay가 돌고 있으면 그쪽을 끝내 준다. 직접 NextSubStep을 부르면 안 된다.
         //   경추ROM의 동작 substep은 애니도 duration도 없어 AutoPlay가 스스로 못 끝난다.
         //   그대로 두면 다음 substep의 나레이션이 WaitForAutoPlayComplete()에서 무한 대기하고,
@@ -248,7 +254,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             {
                 driver.BeginActive(dir);
                 Log($"능동 시작 {stepName} → {driver.ActiveTargetAngle:F0}° "
-                    + $"(정상 {driver.NormalAngle:F0}° · 기능장애 {driver.CurrentDysfunction:F1}°)");
+                    + $"(최대 {driver.MaxAngle:F0}° · 기능장애 {driver.CurrentDysfunction:F1}°)");
             }
             return;
         }
@@ -262,8 +268,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             sweptSmoothed = 0f;
             sweptVelocity = 0f;
             Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 압박 한계 {driver.PassiveLimitAngle:F0}° 까지 " +
-                $"(밀 양 {driver.CurrentPassiveGain:F1}° · 정상 {driver.NormalAngle:F0}° · "
-                + $"예상 부족각 {driver.NormalAngle - driver.PassiveLimitAngle:F1}° · 소스 {overpressureSource})");
+                $"(밀 양 {driver.CurrentPassiveGain:F1}° · 최대 {driver.MaxAngle:F0}° · "
+                + $"예상 부족각 {driver.MaxAngle - driver.PassiveLimitAngle:F1}° · 소스 {overpressureSource})");
         }
         else if (subStepNo >= 3)
         {
@@ -400,7 +406,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             $"    ②손쌍회전 {Deg(pairAngle)} (두 손 간격 {pairSpan:F2}m, 시작 대비 {Drift(pairSpan, pairStartSpan, pairStarted)})" +
             $"{(usingPair ? "  ← 사용" : "")}\n" +
             $"    여유 {gap:F1}° · 진행 {overpressureProgress * 100f:F0}% · " +
-            $"머리 {driver.CurrentAngle:F1}° → 압박한계 {driver.PassiveLimitAngle:F0}° (정상 {driver.NormalAngle:F0}°) · " +
+            $"머리 {driver.CurrentAngle:F1}° → 압박한계 {driver.PassiveLimitAngle:F0}° (최대 {driver.MaxAngle:F0}°) · " +
             $"축 {(axis == Vector3.zero ? "★없음(방향 None)" : axis.ToString("F2"))} · " +
             $"중심 {(pivot != null ? pivot.name : "★없음")}</color>");
     }

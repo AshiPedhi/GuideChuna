@@ -12,10 +12,10 @@ using UnityEngine;
 ///   수직인 평면이 그 면이고, 압박 각도를 재는 평면과 정확히 같다. 그래서 재는 것과
 ///   보여 주는 것이 어긋날 수 없다.
 ///
-/// 눈금은 0°(중립)에서 정상각까지 그린다. 채움은 세 구간이다 —
+/// 눈금은 0°(중립)에서 최대각까지 그린다. 채움은 세 구간이다 —
 ///   0 → 능동 한계      환자가 스스로 간 데까지
 ///   능동 → 압박 한계    시술자가 밀어서 더 간 데까지
-///   압박 → 정상각      부족각. 이게 기록할 값이다.
+///   압박 → 최대각      부족각. 이게 기록할 값이다.
 ///
 /// 렌더링은 이 프로젝트 관례를 따른다 — <b>Sprites/Default</b>. 알파 블렌드가 셰이더에
 /// 고정돼 있어 맞출 상태가 없고, UI가 늘 쓰므로 빌드에서 스트립되지 않는다
@@ -76,6 +76,16 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "목에 걸친 지금 모습이 보기 좋다고 하셔서 기본 0이다.")]
     [SerializeField] private float transverseNormalOffset = 0f;
 
+    [Tooltip("시술자가 선 쪽의 <b>반대편</b>에 면을 놓는다. 위 오프셋의 부호를 자동으로 정한다.\n" +
+             "★그 면 단계에 들어갈 때 한 번 정하고 고정한다 — 매 프레임 보면 시술자가\n" +
+             "  정중선 근처에서 움직일 때 면이 좌우로 깜빡인다.\n" +
+             "끄면 위에 적은 부호를 그대로 쓴다.")]
+    [SerializeField] private bool autoSideByViewer = true;
+
+    [Tooltip("정중선에 이만큼 가까우면 좌우를 판단하지 않고 수동 부호를 쓴다 (m).\n" +
+             "딱 가운데에 서 있을 때 아무 쪽이나 뽑히는 걸 막는다.")]
+    [SerializeField] private float sideDeadZone = 0.08f;
+
     [Tooltip("판의 불투명도. 이미지처럼 옅게 깔린다.")]
     [Range(0f, 1f)] [SerializeField] private float planeAlpha = 0.18f;
 
@@ -112,7 +122,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [SerializeField] private Color activeFillColor = new Color(0.29f, 0.56f, 0.89f, 0.55f);
     [Tooltip("압박 구간 — 시술자가 밀어서 더 간 데까지")]
     [SerializeField] private Color pressFillColor = new Color(0.95f, 0.55f, 0.18f, 0.60f);
-    [Tooltip("부족각 — 정상각까지 남은 만큼. 결과로 읽을 값이다.")]
+    [Tooltip("부족각 — 최대각까지 남은 만큼. 결과로 읽을 값이다.")]
     [SerializeField] private Color deficitFillColor = new Color(0.55f, 0.55f, 0.58f, 0.30f);
 
     [Tooltip("채움 부채꼴의 바깥 반지름 (m). 눈금 안쪽에 깔린다.")]
@@ -125,6 +135,14 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Tooltip("현재 각도를 가리키는 바늘 색")]
     [SerializeField] private Color needleColor = new Color(0.10f, 0.10f, 0.12f, 0.95f);
     [Tooltip("지침 굵기 (m)")] [SerializeField] private float needleWidth = 0.0055f;
+
+    [Tooltip("지침 색을 면 색에서 뽑는다. 면마다 같은 계열의 <b>진한 원색</b>이 된다.\n" +
+             "면 색의 색상(H)만 가져오고 채도·명도는 아래 값으로 올린다.\n" +
+             "끄면 위의 needleColor를 그대로 쓴다.")]
+    [SerializeField] private bool needleFromPlaneColor = true;
+
+    [Tooltip("지침 색의 채도(x)·명도(y). 채도를 올리고 명도를 조금 낮추면 원색이 진해진다.")]
+    [SerializeField] private Vector2 needleSaturationValue = new Vector2(1f, 0.78f);
 
     [Header("=== 숫자 ===")]
     [Tooltip("눈금 숫자 크기")] [SerializeField] private float tickLabelSize = 0.030f;
@@ -152,11 +170,17 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     // ── 마지막으로 그린 상태. 바뀌었을 때만 다시 만든다. ─────────────────
     private CervicalRomDriver.Direction builtDirection = CervicalRomDriver.Direction.None;
-    private float builtNormal = -1f;
+    private float builtMax = -1f;
     private float lastDrawnAngle = float.NaN;
     private float lastDrawnActive = float.NaN;
     private float lastDrawnPassive = float.NaN;
     private int lastReadoutDegrees = int.MinValue;
+
+    // ── 좌우 자동 배치. 그 면에 들어갈 때 한 번 정하고 고정한다. ─────────
+    private int sagittalSide;            // −1 / +1, 0 = 아직 안 정함
+    private int coronalSide;
+    private PlaneGroup lastGroup;
+    private bool hasLastGroup;
 
     private void Awake()
     {
@@ -207,6 +231,17 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (zeroDir.sqrMagnitude < 1e-6f) { SetVisible(false); return; }
         zeroDir.Normalize();
 
+        // ★면이 바뀌면 좌우를 다시 정한다. 같은 면 안에서는(굴곡→굴곡압박→신전…)
+        //   처음 정한 쪽을 끝까지 지킨다 — 중간에 면이 반대로 넘어가면 더 헷갈린다.
+        PlaneGroup group = PlaneGroupOf(dir);
+        if (!hasLastGroup || group != lastGroup)
+        {
+            hasLastGroup = true;
+            lastGroup = group;
+            sagittalSide = 0;
+            coronalSide = 0;
+        }
+
         // 면 안의 두 기저. root를 이 자세로 두면 이하 계산이 전부 로컬로 끝난다.
         // ★면수직 오프셋은 회전축과 나란한 평행이동이라 각도에 영향이 없다.
         //   각도기를 머리 밖으로 빼도 지침이 가리키는 값은 그대로다.
@@ -214,12 +249,12 @@ public class CervicalRomPlaneGauge : MonoBehaviour
                                     Quaternion.LookRotation(axis, zeroDir));
         SetVisible(true);
 
-        float normal = driver.NormalAngle;
-        if (dir != builtDirection || !Mathf.Approximately(normal, builtNormal))
+        float maxAngle = driver.MaxAngle;
+        if (dir != builtDirection || !Mathf.Approximately(maxAngle, builtMax))
         {
-            BuildStatic(dir, normal);
+            BuildStatic(dir, maxAngle);
             builtDirection = dir;
-            builtNormal = normal;
+            builtMax = maxAngle;
         }
 
         float angle = driver.CurrentAngle;
@@ -230,13 +265,13 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (Changed(angle, lastDrawnAngle) || Changed(activeLimit, lastDrawnActive)
                                            || Changed(passiveLimit, lastDrawnPassive))
         {
-            BuildDynamic(angle, activeLimit, passiveLimit, normal);
+            BuildDynamic(angle, activeLimit, passiveLimit, maxAngle);
             lastDrawnAngle = angle;
             lastDrawnActive = activeLimit;
             lastDrawnPassive = passiveLimit;
         }
 
-        UpdateReadout(angle, normal);
+        UpdateReadout(angle, maxAngle);
     }
 
     private static bool Changed(float now, float before)
@@ -258,17 +293,82 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         Transform t = driver.Torso;
         if (t == null) return Vector3.zero;
 
+        switch (PlaneGroupOf(d))
+        {
+            case PlaneGroup.Sagittal:   // 환자 좌우. 시술자가 선 쪽의 반대편으로 뺀다.
+                return t.right * SideSigned(t.right, sagittalNormalOffset, ref sagittalSide);
+            case PlaneGroup.Coronal:    // 환자 앞뒤. 후면에 서면 앞쪽으로 나간다.
+                return t.forward * SideSigned(t.forward, coronalNormalOffset, ref coronalSide);
+            default:
+                return t.up * transverseNormalOffset;        // 위아래는 자동 판단 대상이 아니다
+        }
+    }
+
+    /// <summary>
+    /// 시술자가 선 쪽의 <b>반대편</b> 부호를 붙인다.
+    /// ★한 번 정하면 그 면을 벗어날 때까지 고정한다. 매 프레임 보면 정중선 근처에서 깜빡인다.
+    /// </summary>
+    private float SideSigned(Vector3 anatomicalAxis, float magnitude, ref int latched)
+    {
+        if (!autoSideByViewer) return magnitude;
+
+        if (latched == 0)
+        {
+            int viewer = ViewerSide(anatomicalAxis);
+            if (viewer == 0) return magnitude;   // 정중선 근처 — 판단 보류, 수동 부호를 쓴다
+            latched = -viewer;                   // 반대편
+            if (showDebugLogs)
+            {
+                ChunaLogger.Log($"<color=cyan>[ROM 각도기] 시술자가 {(viewer > 0 ? "+" : "−")}쪽에 있어 " +
+                                $"면을 {(latched > 0 ? "+" : "−")}쪽에 놓는다</color>");
+            }
+        }
+        return Mathf.Abs(magnitude) * latched;
+    }
+
+    /// <summary>보는 사람이 그 축의 어느 쪽에 있는가. 정중선 근처면 0(판단 보류).</summary>
+    private int ViewerSide(Vector3 anatomicalAxis)
+    {
+        Camera cam = Camera.main;
+        if (cam == null || driver.Torso == null) return 0;
+
+        float d = Vector3.Dot(cam.transform.position - driver.Torso.position, anatomicalAxis);
+        if (Mathf.Abs(d) < sideDeadZone) return 0;
+        return d > 0f ? 1 : -1;
+    }
+
+    private enum PlaneGroup { Sagittal, Coronal, Transverse }
+
+    private static PlaneGroup PlaneGroupOf(CervicalRomDriver.Direction d)
+    {
         switch (d)
         {
             case CervicalRomDriver.Direction.Flexion:
             case CervicalRomDriver.Direction.Extension:
-                return t.right * sagittalNormalOffset;       // 환자 좌우 — 시술자는 우측에 선다
+                return PlaneGroup.Sagittal;
             case CervicalRomDriver.Direction.LateralLeft:
             case CervicalRomDriver.Direction.LateralRight:
-                return t.forward * coronalNormalOffset;      // 환자 앞뒤
+                return PlaneGroup.Coronal;
             default:
-                return t.up * transverseNormalOffset;        // 위아래
+                return PlaneGroup.Transverse;
         }
+    }
+
+    /// <summary>
+    /// 지침 색. 면 색과 같은 계열의 진한 원색으로 뽑는다 —
+    /// 면 색의 색상(H)만 가져오고 채도·명도를 올려 판 위에서 또렷하게 만든다.
+    /// (판은 알파 0.18로 옅게 깔리므로 같은 색이라도 겹쳐 보이지 않는다)
+    /// </summary>
+    private Color NeedleColorOf(CervicalRomDriver.Direction d)
+    {
+        if (!needleFromPlaneColor) return needleColor;
+
+        Color.RGBToHSV(PlaneColorOf(d), out float h, out _, out _);
+        Color c = Color.HSVToRGB(h,
+                                 Mathf.Clamp01(needleSaturationValue.x),
+                                 Mathf.Clamp01(needleSaturationValue.y));
+        c.a = needleColor.a;
+        return c;
     }
 
     private Color PlaneColorOf(CervicalRomDriver.Direction d)
@@ -315,8 +415,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         return new Vector3(-Mathf.Sin(r), Mathf.Cos(r), 0f);
     }
 
-    /// <summary>판·눈금. 방향이나 정상각이 바뀔 때만 다시 만든다.</summary>
-    private void BuildStatic(CervicalRomDriver.Direction dir, float normal)
+    /// <summary>판·눈금. 방향이나 최대각이 바뀔 때만 다시 만든다.</summary>
+    private void BuildStatic(CervicalRomDriver.Direction dir, float maxAngle)
     {
         verts.Clear(); colors.Clear(); tris.Clear();
 
@@ -343,41 +443,41 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Color tick = plane; tick.a = 0.95f;
         Color micro = plane; micro.a = 0.55f;   // 미세눈금은 옅게 — 촘촘해서 진하면 띠로 뭉친다
-        Color normalMark = new Color(0.10f, 0.10f, 0.12f, 0.95f);
+        Color maxMark = new Color(0.10f, 0.10f, 0.12f, 0.95f);
 
         // 미세 → 보조 → 주 순으로 겹쳐 그린다. 굵은 눈금이 위에 온다.
         if (microStep > 0f)
         {
-            for (float a = 0f; a <= normal + 0.001f; a += microStep)
+            for (float a = 0f; a <= maxAngle + 0.001f; a += microStep)
             {
                 if (OnStep(a, minorStep) || OnStep(a, majorStep)) continue;
                 AddTick(a, microTickLength, tickWidth * 0.7f, micro);
             }
         }
-        for (float a = 0f; a <= normal + 0.001f; a += minorStep)
+        for (float a = 0f; a <= maxAngle + 0.001f; a += minorStep)
         {
             if (OnStep(a, majorStep)) continue;
             AddTick(a, minorTickLength, tickWidth, tick);
         }
-        for (float a = 0f; a <= normal + 0.001f; a += majorStep)
+        for (float a = 0f; a <= maxAngle + 0.001f; a += majorStep)
         {
             AddTick(a, majorTickLength, tickWidth * 1.35f, tick);
         }
-        // 정상각은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 굵게 긋는다.
-        AddTick(normal, majorTickLength * 1.3f, tickWidth * 1.8f, normalMark);
+        // 최대각은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 굵게 긋는다.
+        AddTick(maxAngle, majorTickLength * 1.3f, tickWidth * 1.8f, maxMark);
 
         Upload(staticMesh, staticFilter);
-        BuildTickLabels(normal, plane);
+        BuildTickLabels(maxAngle, plane);
 
         if (showDebugLogs)
         {
-            ChunaLogger.Log($"<color=cyan>[ROM 각도기] {PlaneNameOf(dir)} — {dir} · 0~{normal:F0}° · " +
+            ChunaLogger.Log($"<color=cyan>[ROM 각도기] {PlaneNameOf(dir)} — {dir} · 0~{maxAngle:F0}° · " +
                             $"주눈금 {majorStep:F0}° · 반지름 {scaleRadius:F2}m</color>");
         }
     }
 
     /// <summary>채움 세 구간 + 지침. 각도가 변하면 다시 만든다.</summary>
-    private void BuildDynamic(float angle, float activeLimit, float passiveLimit, float normal)
+    private void BuildDynamic(float angle, float activeLimit, float passiveLimit, float maxAngle)
     {
         verts.Clear(); colors.Clear(); tris.Clear();
 
@@ -389,20 +489,20 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             AddSector(activeLimit, Mathf.Min(angle, passiveLimit), fillRadius, pressFillColor);
         }
 
-        // 부족각 — 압박 한계에서 정상각까지. 이게 결과로 읽을 값이다.
+        // 부족각 — 압박 한계에서 최대각까지. 이게 결과로 읽을 값이다.
         bool revealDeficit = showDeficitFromStart || angle >= passiveLimit - 0.5f;
-        if (revealDeficit && normal > passiveLimit + 0.05f)
+        if (revealDeficit && maxAngle > passiveLimit + 0.05f)
         {
-            AddSector(passiveLimit, normal, fillRadius, deficitFillColor);
+            AddSector(passiveLimit, maxAngle, fillRadius, deficitFillColor);
         }
 
-        AddTick(angle, scaleRadius, needleWidth, needleColor, fromCenter: true);
+        AddTick(angle, scaleRadius, needleWidth, NeedleColorOf(builtDirection), fromCenter: true);
 
         Upload(dynamicMesh, dynamicFilter);
     }
 
     /// <summary>지침 끝의 현재 각도 숫자. 정수가 바뀔 때만 문자열을 새로 만든다.</summary>
-    private void UpdateReadout(float angle, float normal)
+    private void UpdateReadout(float angle, float maxAngle)
     {
         if (readout == null) return;
 
@@ -411,7 +511,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         {
             lastReadoutDegrees = degrees;
             // ★문자열 생성은 정수가 바뀔 때만. 매 프레임 만들면 VR에서 GC가 튄다.
-            readout.text = $"{degrees}°\n<size=55%>정상 {normal:F0}°</size>";
+            readout.text = $"{degrees}°\n<size=55%>최대 {maxAngle:F0}°</size>";
         }
 
         Vector3 local = Dir(angle) * (scaleRadius + labelOffset + 0.02f);
@@ -524,12 +624,12 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         return text;
     }
 
-    /// <summary>주눈금 숫자. 정상각이 바뀔 때만 다시 만든다(굴곡 45° vs 회전 90°).</summary>
-    private void BuildTickLabels(float normal, Color color)
+    /// <summary>주눈금 숫자. 최대각이 바뀔 때만 다시 만든다(굴곡 45° vs 회전 90°).</summary>
+    private void BuildTickLabels(float maxAngle, Color color)
     {
-        int needed = Mathf.FloorToInt(normal / majorStep) + 1;
-        bool normalOnMajor = Mathf.Abs(normal % majorStep) < 0.001f;
-        if (!normalOnMajor) needed++;   // 정상각 숫자를 따로 붙인다
+        int needed = Mathf.FloorToInt(maxAngle / majorStep) + 1;
+        bool maxOnMajor = Mathf.Abs(maxAngle % majorStep) < 0.001f;
+        if (!maxOnMajor) needed++;   // 최대각 숫자를 따로 붙인다
 
         while (tickLabels.Count < needed)
         {
@@ -538,13 +638,13 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Color labelColor = color; labelColor.a = 1f;
         int index = 0;
-        for (float a = 0f; a <= normal + 0.001f; a += majorStep, index++)
+        for (float a = 0f; a <= maxAngle + 0.001f; a += majorStep, index++)
         {
             PlaceTickLabel(index, a, labelColor, bold: false);
         }
-        if (!normalOnMajor)
+        if (!maxOnMajor)
         {
-            PlaceTickLabel(index, normal, new Color(0.10f, 0.10f, 0.12f, 1f), bold: true);
+            PlaceTickLabel(index, maxAngle, new Color(0.10f, 0.10f, 0.12f, 1f), bold: true);
             index++;
         }
         for (int i = index; i < tickLabels.Count; i++) tickLabels[i].gameObject.SetActive(false);

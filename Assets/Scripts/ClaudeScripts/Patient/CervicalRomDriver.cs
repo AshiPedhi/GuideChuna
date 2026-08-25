@@ -12,8 +12,8 @@ using UnityEngine;
 /// 시작 자세(앉은 자세·팔)는 기존 대기 클립이 그대로 잡아 준다.
 ///
 /// 진행은 두 구간으로 나뉜다.
-///  · 능동  환자가 스스로 가는 데까지. 정상각에서 <see cref="dysfunctionAngle"/>만큼 못 미친다.
-///  · 압박  시술자가 손으로 더 미는 구간. 능동 끝점부터 정상각까지.
+///  · 능동  환자가 스스로 가는 데까지. 최대각에서 <see cref="dysfunctionAngle"/>만큼 못 미친다.
+///  · 압박  시술자가 손으로 더 미는 구간. 능동 끝점부터 최대각까지.
 /// </summary>
 public class CervicalRomDriver : MonoBehaviour
 {
@@ -40,23 +40,23 @@ public class CervicalRomDriver : MonoBehaviour
     [SerializeField] private float[] boneWeights = { 0.30f, 0.25f, 0.45f };
 
     [Header("=== 각도 (임상 기준) ===")]
-    [Tooltip("굴곡 정상 각도")] [SerializeField] private float flexionNormal = 45f;
-    [Tooltip("신전 정상 각도")] [SerializeField] private float extensionNormal = 90f;
-    [Tooltip("측굴 정상 각도 (좌우 공통)")] [SerializeField] private float lateralNormal = 45f;
-    [Tooltip("회전 정상 각도 (좌우 공통)")] [SerializeField] private float rotationNormal = 90f;
+    [Tooltip("굴곡 최대 각도")] [SerializeField] private float flexionMax = 45f;
+    [Tooltip("신전 최대 각도")] [SerializeField] private float extensionMax = 90f;
+    [Tooltip("측굴 최대 각도 (좌우 공통)")] [SerializeField] private float lateralMax = 45f;
+    [Tooltip("회전 최대 각도 (좌우 공통)")] [SerializeField] private float rotationMax = 90f;
 
     [Header("=== 환자의 제한 (측정 대상) ===")]
     // ★2026-08-25 재설계. 예전에는 '여유 구간' 하나로 능동 끝점과 압박 끝점을 동시에 정해서,
-    //   압박을 끝까지 밀면 머리가 <b>언제나 정상각에 정확히 도달</b>했다.
-    //   그러면 DeficitAngle이 항상 0이라 누구를 측정해도 '정상'이 나온다 — 측정 술기인데
+    //   압박을 끝까지 밀면 머리가 <b>언제나 최대각에 정확히 도달</b>했다.
+    //   그러면 DeficitAngle이 항상 0이라 누구를 측정해도 '최대'이 나온다 — 측정 술기인데
     //   측정값에 변별력이 없었다. 그래서 두 값을 분리했다.
     //
-    //     정상각 ─────────────────────────────────────────
-    //     능동 한계 = 정상각 − 기능장애      환자가 스스로 가는 데까지
+    //     최대각 ─────────────────────────────────────────
+    //     능동 한계 = 최대각 − 기능장애      환자가 스스로 가는 데까지
     //     압박 한계 = 능동 한계 + 압박 여유   밀어서 더 가는 데까지 (여기서 멈춘다)
-    //     부족각   = 정상각 − 압박 한계      ★이게 기록할 값이다
+    //     부족각   = 최대각 − 압박 한계      ★이게 기록할 값이다
 
-    [Tooltip("정상각 대비 능동으로 못 가는 각(도). 기능장애의 정도다.\n" +
+    [Tooltip("최대각 대비 능동으로 못 가는 각(도). 기능장애의 정도다.\n" +
              "randomizePerLoad를 켜면 이 값 대신 아래 범위에서 방향마다 따로 뽑는다.")]
     [SerializeField] private float dysfunctionAngle = 15f;
 
@@ -109,18 +109,18 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>현재 얹고 있는 각도(도).</summary>
     public float CurrentAngle => appliedAngle;
 
-    /// <summary>현재 방향의 정상 각도(도).</summary>
-    public float NormalAngle => NormalAngleOf(currentDirection);
+    /// <summary>현재 방향의 최대 각도(도).</summary>
+    public float MaxAngle => MaxAngleOf(currentDirection);
 
-    /// <summary>능동 구간의 끝점. 정상각에서 이번 판의 기능장애만큼 못 미친 각도.</summary>
-    public float ActiveTargetAngle => Mathf.Max(0f, NormalAngle - DysfunctionOf(currentDirection));
+    /// <summary>능동 구간의 끝점. 최대각에서 이번 판의 기능장애만큼 못 미친 각도.</summary>
+    public float ActiveTargetAngle => Mathf.Max(0f, MaxAngle - DysfunctionOf(currentDirection));
 
     /// <summary>
     /// 압박으로 갈 수 있는 끝점. ★손이 더 밀어도 머리는 여기서 멈춘다 — 그게 끝느낌이다.
-    /// 정상각을 넘지는 않는다.
+    /// 최대각을 넘지는 않는다.
     /// </summary>
     public float PassiveLimitAngle =>
-        Mathf.Min(NormalAngle, ActiveTargetAngle + PassiveGainOf(currentDirection));
+        Mathf.Min(MaxAngle, ActiveTargetAngle + PassiveGainOf(currentDirection));
 
     /// <summary>이번 판에 뽑힌 기능장애(도). 방향마다 다르다.</summary>
     public float CurrentDysfunction => DysfunctionOf(currentDirection);
@@ -150,8 +150,60 @@ public class CervicalRomDriver : MonoBehaviour
     public bool ActiveReached => currentDirection != Direction.None &&
                                  appliedAngle >= ActiveTargetAngle - 0.5f;
 
-    /// <summary>정상각 대비 부족한 각도. 평가 단계에서 기록할 값이다.</summary>
-    public float DeficitAngle => Mathf.Max(0f, NormalAngle - appliedAngle);
+    /// <summary>최대각 대비 부족한 각도. 평가 단계에서 기록할 값이다.</summary>
+    public float DeficitAngle => Mathf.Max(0f, MaxAngle - appliedAngle);
+
+    // ── 측정 결과 ─────────────────────────────────────────────────────────
+    // ★방향이 바뀌면 appliedAngle은 사라진다. 결과 화면과 CSV가 읽을 값을
+    //   방향별로 따로 남겨야 한다. 경추ROM은 채점 지표가 없어(PassiveStretch는 0점)
+    //   이 각도가 곧 결과다.
+
+    /// <summary>한 방향의 측정 결과.</summary>
+    public struct Measurement
+    {
+        public bool recorded;
+        public float maxAngle;    // 임상 최대각
+        public float active;    // 환자가 스스로 도달한 각
+        public float passive;   // 시술자가 밀어 도달한 각
+        public float Deficit => Mathf.Max(0f, maxAngle - passive);
+    }
+
+    private Measurement[] measurements;
+
+    /// <summary>능동 끝점에 도달한 순간의 각을 남긴다. 브리지가 부른다.</summary>
+    public void RecordActiveReached() => Record(active: appliedAngle, passive: float.NaN);
+
+    /// <summary>압박이 끝난 순간의 각을 남긴다. 목표에 못 닿고 넘어갔어도 그 값이 곧 측정값이다.</summary>
+    public void RecordPassiveReached() => Record(active: float.NaN, passive: appliedAngle);
+
+    private void Record(float active, float passive)
+    {
+        if (currentDirection == Direction.None) return;
+        if (measurements == null || measurements.Length != DirectionCount)
+            measurements = new Measurement[DirectionCount];
+
+        int i = (int)currentDirection;
+        Measurement m = measurements[i];
+        m.recorded = true;
+        m.maxAngle = MaxAngle;
+        if (!float.IsNaN(active)) m.active = active;
+        if (!float.IsNaN(passive)) m.passive = passive;
+        measurements[i] = m;
+
+        if (showDebugLogs)
+        {
+            ChunaLogger.Log($"<color=cyan>[CervicalROM] {currentDirection} 기록 — " +
+                            $"능동 {m.active:F1}° · 압박 {m.passive:F1}° · 최대 {m.maxAngle:F0}° · 부족 {m.Deficit:F1}°</color>");
+        }
+    }
+
+    /// <summary>그 방향의 측정 결과. 아직 안 쟀으면 recorded=false.</summary>
+    public Measurement GetMeasurement(Direction d)
+    {
+        if (measurements == null || d == Direction.None || (int)d >= measurements.Length)
+            return default;
+        return measurements[(int)d];
+    }
 
     /// <summary>
     /// 켜면 각도 진행이 멈춘다. 손이 환자에게서 떨어졌을 때 쓴다 —
@@ -223,10 +275,10 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>추첨 결과를 한 방향씩 사람이 읽을 수 있게 적는다.</summary>
     private string Summary(Direction d, string label)
     {
-        float normal = NormalAngleOf(d);
-        float active = Mathf.Max(0f, normal - DysfunctionOf(d));
-        float passive = Mathf.Min(normal, active + PassiveGainOf(d));
-        return $"    {label} 정상 {normal:F0}° · 능동 {active:F0}° · 압박 {passive:F0}° · 부족 {normal - passive:F1}°\n";
+        float maxAngle = MaxAngleOf(d);
+        float active = Mathf.Max(0f, maxAngle - DysfunctionOf(d));
+        float passive = Mathf.Min(maxAngle, active + PassiveGainOf(d));
+        return $"    {label} 최대 {maxAngle:F0}° · 능동 {active:F0}° · 압박 {passive:F0}° · 부족 {maxAngle - passive:F1}°\n";
     }
 
     private float DysfunctionOf(Direction d)
@@ -275,17 +327,17 @@ public class CervicalRomDriver : MonoBehaviour
         if (showDebugLogs)
         {
             ChunaLogger.Log($"<color=cyan>[CervicalROM] 능동 시작: {direction} → " +
-                            $"{ActiveTargetAngle:F0}° (정상 {NormalAngle:F0}°, 기능장애 {CurrentDysfunction:F1}°, "
+                            $"{ActiveTargetAngle:F0}° (최대 {MaxAngle:F0}°, 기능장애 {CurrentDysfunction:F1}°, "
                           + $"압박 한계 {PassiveLimitAngle:F0}°)</color>");
         }
     }
 
     /// <summary>
-    /// 압박 구간. 0이면 능동 끝점, 1이면 <b>압박 한계</b>다(정상각이 아니다).
+    /// 압박 구간. 0이면 능동 끝점, 1이면 <b>압박 한계</b>다(최대각이 아니다).
     /// 시술자 손의 진행률을 그대로 넣으면 된다.
     ///
     /// ★손이 더 밀어도 압박 한계에서 멈춘다 — 그 저항이 끝느낌이고,
-    ///   정상각까지 남는 각이 곧 부족각이다. 예전처럼 정상각까지 가면
+    ///   최대각까지 남는 각이 곧 부족각이다. 예전처럼 최대각까지 가면
     ///   누구를 측정해도 부족각 0이 나와 측정이 무의미해진다.
     /// </summary>
     public void SetOverpressure(float progress01)
@@ -403,16 +455,16 @@ public class CervicalRomDriver : MonoBehaviour
         }
     }
 
-    private float NormalAngleOf(Direction d)
+    private float MaxAngleOf(Direction d)
     {
         switch (d)
         {
-            case Direction.Flexion:       return flexionNormal;
-            case Direction.Extension:     return extensionNormal;
+            case Direction.Flexion:       return flexionMax;
+            case Direction.Extension:     return extensionMax;
             case Direction.LateralRight:
-            case Direction.LateralLeft:   return lateralNormal;
+            case Direction.LateralLeft:   return lateralMax;
             case Direction.RotationRight:
-            case Direction.RotationLeft:  return rotationNormal;
+            case Direction.RotationLeft:  return rotationMax;
             default:                      return 0f;
         }
     }
