@@ -61,21 +61,90 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     /// <summary>
     /// 지금 잡고 있는 손끝 4개의 중점(월드). 압박 구간에서 손이 얼마나 밀었는지 재는 기준이다.
     /// 손끝을 아직 못 찾았으면 false.
+    /// ★매 프레임 도는 경로다. 배열을 새로 만들지 않는다(VR 프레임 예산).
     /// </summary>
     public bool TryGetGripMidpoint(out Vector3 midpoint)
     {
         midpoint = Vector3.zero;
         int n = 0;
-        foreach (Transform t in new[] { leftThumbTip, leftIndexTip, rightThumbTip, rightIndexTip })
-        {
-            if (t == null) continue;
-            midpoint += t.position;
-            n++;
-        }
+        if (leftThumbTip != null) { midpoint += leftThumbTip.position; n++; }
+        if (leftIndexTip != null) { midpoint += leftIndexTip.position; n++; }
+        if (rightThumbTip != null) { midpoint += rightThumbTip.position; n++; }
+        if (rightIndexTip != null) { midpoint += rightIndexTip.position; n++; }
         if (n == 0) return false;
         midpoint /= n;
         return true;
     }
+
+    /// <summary>한 손이 잡고 있는 지점(엄지·검지 중점, 월드).</summary>
+    public bool TryGetHandCluster(GripFingerTip.Side side, out Vector3 cluster)
+    {
+        Transform thumb = side == GripFingerTip.Side.Left ? leftThumbTip : rightThumbTip;
+        Transform index = side == GripFingerTip.Side.Left ? leftIndexTip : rightIndexTip;
+
+        cluster = Vector3.zero;
+        int n = 0;
+        if (thumb != null) { cluster += thumb.position; n++; }
+        if (index != null) { cluster += index.position; n++; }
+        if (n == 0) return false;
+        cluster /= n;
+        return true;
+    }
+
+    /// <summary>
+    /// 접촉점 A를 잡은 손 → 접촉점 B를 잡은 손 벡터(월드).
+    ///
+    /// ★<b>이 벡터는 머리와 같이 돈다.</b> 손을 옮기지 않고 손목만 틀어도 각이 잡히므로,
+    ///   중점의 이동 거리로 재는 방식이 못 잡는 동작을 잡는다.
+    /// ★좌우 손이 바뀌어도 부호가 뒤집히지 않는다 — 손이 아니라 <b>접촉점 순서</b>로 방향을 잡는다.
+    ///   (왼손→오른손으로 잡으면 시술자가 손을 반대로 대는 순간 압박이 음수가 된다.)
+    /// </summary>
+    public bool TryGetContactPairVector(out Vector3 pairVector)
+    {
+        pairVector = Vector3.zero;
+
+        GripContactPoint a = PairA, b = PairB;
+        if (a == null || b == null) return false;
+
+        GripFingerTip.Side aSide, bSide;
+        if (a.LeftGripping && b.RightGripping)
+        {
+            aSide = GripFingerTip.Side.Left; bSide = GripFingerTip.Side.Right;
+        }
+        else if (a.RightGripping && b.LeftGripping)
+        {
+            aSide = GripFingerTip.Side.Right; bSide = GripFingerTip.Side.Left;
+        }
+        else
+        {
+            return false;   // 아직 두 점을 서로 다른 손으로 잡지 않았다
+        }
+
+        if (!TryGetHandCluster(aSide, out Vector3 pa)) return false;
+        if (!TryGetHandCluster(bSide, out Vector3 pb)) return false;
+
+        pairVector = pb - pa;
+        return pairVector.sqrMagnitude > 1e-6f;
+    }
+
+    /// <summary>진단용 — 두 접촉점을 각각 어느 손이 집고 있는지. 로그에 그대로 쓴다.</summary>
+    public bool TryGetGripState(out bool aLeft, out bool aRight, out bool bLeft, out bool bRight)
+    {
+        aLeft = aRight = bLeft = bRight = false;
+
+        GripContactPoint a = PairA, b = PairB;
+        if (a == null || b == null) return false;
+
+        aLeft = a.LeftGripping; aRight = a.RightGripping;
+        bLeft = b.LeftGripping; bRight = b.RightGripping;
+        return true;
+    }
+
+    /// <summary>진단용 — 지금 쌍의 접촉점 이름.</summary>
+    public string PairAName => PairA != null ? PairA.name : "(없음)";
+
+    /// <summary>진단용 — 지금 쌍의 접촉점 이름.</summary>
+    public string PairBName => PairB != null ? PairB.name : "(없음)";
 
     private GripContactPoint PairA => currentPair == GripPair.Sagittal ? forehead
                                     : currentPair == GripPair.Lateral ? temporalLeft : null;

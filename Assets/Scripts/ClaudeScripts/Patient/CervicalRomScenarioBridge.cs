@@ -26,9 +26,24 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("이 이름의 시나리오에서만 동작한다. 다른 술기에는 개입하지 않는다.")]
     [SerializeField] private string scenarioName = "경추ROM측정";
 
+    /// <summary>압박 진행률을 어느 각으로 뽑을지.</summary>
+    public enum OverpressureSource
+    {
+        /// <summary>두 손을 잇는 벡터가 돈 각. ★손목만 틀어도 잡힌다.</summary>
+        HandPairRotation,
+        /// <summary>손끝 중점이 회전 중심 둘레로 돈 각. 손을 실제로 옮겨야 잡힌다.</summary>
+        HandMidpointArc,
+    }
+
     [Header("=== 압박 ===")]
+    [Tooltip("압박 진행률의 소스.\n" +
+             "손쌍회전 — 두 손을 잇는 벡터가 돈 각. 손목만 틀어도 잡힌다.\n" +
+             "중점호   — 손끝 중점이 목 밑동 둘레로 돈 각. 손을 실제로 옮겨야 잡힌다.\n" +
+             "★둘 다 매 프레임 재서 로그에 같이 찍는다. Play 중에 바꿔 가며 비교하면 된다.")]
+    [SerializeField] private OverpressureSource overpressureSource = OverpressureSource.HandPairRotation;
+
     [Tooltip("압박 유지 substep에서 0 → 1까지 가는 데 걸리는 시간(초).\n" +
-             "손의 회전각을 소스로 바꾸기 전까지 쓰는 임시값이다.")]
+             "★손끝을 하나도 못 찾았을 때만 쓰는 폴백이다.")]
     [SerializeField] private float overpressureRampSeconds = 3f;
 
     [Tooltip("목표에 못 닿아도 이 시간이 지나면 넘긴다(초). 세션이 영영 멈추는 걸 막는 안전장치다.")]
@@ -37,14 +52,29 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
+    [Tooltip("압박 구간에서 파지 상태·두 방식의 회전각·진행률을 주기적으로 찍는다.\n" +
+             "'밀어도 반응이 없다'가 파지 때문인지 각도 때문인지 여기서 갈린다.\n" +
+             "원인을 잡고 나면 끈다.")]
+    [SerializeField] private bool logOverpressure = true;
+
+    [Tooltip("진단 로그 간격(초). 0이면 매 프레임 — 프레임을 잡아먹으니 임시로만 쓴다.")]
+    [SerializeField] private float overpressureLogInterval = 0.25f;
+
     private string lastStepKey;
     private string advancedKey;      // 같은 substep을 두 번 넘기지 않게
     private float stepEnteredTime;
     private bool warnedNotTarget;
     private float overpressureProgress;
-    private bool overpressureStarted;      // 압박 시작 시점의 손 위치를 잡았는가
-    private Vector3 overpressureStartArm;  // 그때의 회전 중심→손 벡터
     private bool active;
+
+    // ── 압박 기준점. 두 방식을 각각 따로 잡는다. ──
+    private bool arcStarted;             // ①중점호 기준을 잡았는가
+    private Vector3 arcStartArm;         // 그때의 회전 중심→손끝중점 벡터
+    private float arcRadius;             // 그 벡터의 길이(m). 짧으면 각이 튄다.
+    private bool pairStarted;            // ②손쌍회전 기준을 잡았는가
+    private Vector3 pairStartVector;     // 그때의 A손→B손 벡터
+    private float pairSpan;              // 두 손 사이 거리(m)
+    private float lastPressLogTime = -99f;
 
     private void Awake()
     {
@@ -186,8 +216,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (subStepNo == 2)
         {
             overpressureProgress = 0f;
-            overpressureStarted = false;   // 손 기준점을 이 단계에서 다시 잡는다
-            Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 {driver.NormalAngle:F0}° 까지");
+            arcStarted = false;    // 손 기준점을 이 단계에서 다시 잡는다
+            pairStarted = false;
+            Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 {driver.NormalAngle:F0}° 까지 " +
+                $"(여유 {driver.CurrentGap:F1}° · 소스 {overpressureSource})");
         }
         else if (subStepNo >= 3)
         {
@@ -205,45 +237,105 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private void AdvanceOverpressure(string stepName, int subStepNo)
     {
         if (subStepNo != 2 || !stepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
-        if (!BothHandsTouching()) return;   // 파지가 풀리면 그 자리에서 멈춘다
 
         Transform pivot = driver.Pivot;
         Vector3 axis = driver.CurrentWorldAxis;
 
-        if (gripJudge != null && pivot != null && axis != Vector3.zero &&
-            gripJudge.TryGetGripMidpoint(out Vector3 hand))
+        if (!BothHandsTouching())
         {
-            Vector3 arm = Vector3.ProjectOnPlane(hand - pivot.position, axis);
-            if (arm.sqrMagnitude < 1e-6f) return;
-
-            if (!overpressureStarted)
-            {
-                overpressureStarted = true;
-                overpressureStartArm = arm;
-                return;
-            }
-
-            float swept = Vector3.SignedAngle(overpressureStartArm, arm, axis);
-            float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
-
-            // 되돌아가는 방향(음수)은 0으로 본다. 민 만큼만 인정한다.
-            overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, swept) / gap);
-            driver.SetOverpressure(overpressureProgress);
+            // 파지가 풀리면 그 자리에서 멈춘다. 왜 멈췄는지는 로그에 남긴다.
+            DiagnoseOverpressure("파지 안 잡힘 — 진행도 회전도 멈춰 있다", float.NaN, float.NaN, axis, pivot);
             return;
         }
 
-        // 손끝을 못 찾았을 때만 시간으로 민다(임시).
-        if (overpressureRampSeconds > 0f)
+        // ── 두 방식을 매 프레임 같이 잰다. 하나로 굴리고 둘 다 로그에 남긴다. ──
+        float arcAngle = float.NaN;    // ①중점호
+        float pairAngle = float.NaN;   // ②손쌍회전
+        bool haveGeometry = gripJudge != null && pivot != null && axis != Vector3.zero;
+
+        if (haveGeometry && gripJudge.TryGetGripMidpoint(out Vector3 hand))
         {
-            overpressureProgress = Mathf.Clamp01(
-                overpressureProgress + Time.deltaTime / overpressureRampSeconds);
+            Vector3 arm = Vector3.ProjectOnPlane(hand - pivot.position, axis);
+            if (arm.sqrMagnitude > 1e-6f)
+            {
+                arcRadius = arm.magnitude;
+                if (!arcStarted) { arcStarted = true; arcStartArm = arm; }
+                else arcAngle = Vector3.SignedAngle(arcStartArm, arm, axis);
+            }
         }
-        else
+
+        if (haveGeometry && gripJudge.TryGetContactPairVector(out Vector3 pair))
         {
-            overpressureProgress = 1f;
+            Vector3 flat = Vector3.ProjectOnPlane(pair, axis);
+            if (flat.sqrMagnitude > 1e-6f)
+            {
+                pairSpan = flat.magnitude;
+                if (!pairStarted) { pairStarted = true; pairStartVector = flat; }
+                else pairAngle = Vector3.SignedAngle(pairStartVector, flat, axis);
+            }
         }
+
+        float swept = overpressureSource == OverpressureSource.HandPairRotation ? pairAngle : arcAngle;
+
+        if (float.IsNaN(swept))
+        {
+            // 손끝을 하나도 못 찾은 경우에만 예전 시간 방식으로 물러난다.
+            if (!arcStarted && !pairStarted) AdvanceOverpressureByTime();
+            DiagnoseOverpressure("기준 잡는 중", arcAngle, pairAngle, axis, pivot);
+            return;
+        }
+
+        float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
+
+        // 되돌아가는 방향(음수)은 0으로 본다. 민 만큼만 인정한다.
+        overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, swept) / gap);
+        driver.SetOverpressure(overpressureProgress);
+
+        DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
+    }
+
+    /// <summary>손끝을 하나도 못 찾았을 때의 폴백. 시간으로 민다.</summary>
+    private void AdvanceOverpressureByTime()
+    {
+        overpressureProgress = overpressureRampSeconds > 0f
+            ? Mathf.Clamp01(overpressureProgress + Time.deltaTime / overpressureRampSeconds)
+            : 1f;
         driver.SetOverpressure(overpressureProgress);
     }
+
+    /// <summary>
+    /// ★압박이 왜 안 도는지 가르는 로그. 한 줄에 관문 네 개를 다 담는다 —
+    ///   파지 / 두 방식의 회전각 / 여유 구간 대비 진행률 / 축·중심이 잡혔는지.
+    /// 원인을 잡고 나면 <see cref="logOverpressure"/>를 끈다.
+    /// </summary>
+    private void DiagnoseOverpressure(string note, float arcAngle, float pairAngle, Vector3 axis, Transform pivot)
+    {
+        if (!logOverpressure) return;
+        if (Time.time - lastPressLogTime < overpressureLogInterval) return;
+        lastPressLogTime = Time.time;
+
+        string grip = "판정기 없음";
+        if (gripJudge != null && gripJudge.TryGetGripState(out bool aL, out bool aR, out bool bL, out bool bR))
+        {
+            grip = $"{gripJudge.PairAName}(왼{Mark(aL)}/오{Mark(aR)}) {gripJudge.PairBName}(왼{Mark(bL)}/오{Mark(bR)})";
+        }
+
+        float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
+        bool usingPair = overpressureSource == OverpressureSource.HandPairRotation;
+
+        ChunaLogger.Log(
+            $"<color=cyan>[ROM 압박] {(note ?? "진행 중")} — 파지 {(BothHandsTouching() ? "O" : "X")}  {grip}\n" +
+            $"    ①중점호 {Deg(arcAngle)} (반지름 {arcRadius:F2}m){(usingPair ? "" : "  ← 사용")}\n" +
+            $"    ②손쌍회전 {Deg(pairAngle)} (두 손 간격 {pairSpan:F2}m){(usingPair ? "  ← 사용" : "")}\n" +
+            $"    여유 {gap:F1}° · 진행 {overpressureProgress * 100f:F0}% · " +
+            $"머리 {driver.CurrentAngle:F1}° → {driver.NormalAngle:F0}° · " +
+            $"축 {(axis == Vector3.zero ? "★없음(방향 None)" : axis.ToString("F2"))} · " +
+            $"중심 {(pivot != null ? pivot.name : "★없음")}</color>");
+    }
+
+    private static string Mark(bool on) => on ? "O" : "·";
+
+    private static string Deg(float degrees) => float.IsNaN(degrees) ? "  ——  " : $"{degrees,6:F1}°";
 
     /// <summary>
     /// 파지가 성립했는가. 엄지·검지 판정기가 있으면 그쪽을 본다 —

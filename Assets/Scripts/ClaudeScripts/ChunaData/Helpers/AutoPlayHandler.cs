@@ -42,6 +42,29 @@ public class AutoPlayHandler
     /// <param name="requireBothHands">true면 양손이 각각 닿아야 게이트가 열린다.</param>
     public void StartAutoPlay(float duration, bool gated = false, bool latchGate = false, bool requireBothHands = false)
     {
+        // ★애니메이션도 없고 duration도 없으면 AutoPlay가 끝날 근거가 아예 없다.
+        //   duration 0의 뜻이 "애니메이션이 끝나면 종료"인데, 그 애니메이션이 없는 조합이다.
+        //
+        //   예전에는 그대로 켜져서 진행률이 영영 0에 머물렀고(UpdateAutoPlay의
+        //   `autoPlayDuration > 0 ? ... : 0f`), IsAutoPlayMode가 안 꺼지는 바람에
+        //   ScenarioConditionManager.WaitForAutoPlayComplete()가 무한 대기해
+        //   나레이션이 끝나도 다음 substep으로 넘어가지 못했다
+        //   (2026-08-25 경추ROM 굴곡압박에서 Editor.log로 실측).
+        //
+        //   실측상 이 조합을 쓰는 건 경추ROM 하나뿐이고(PassiveStretch 19행 전부 클립 없음,
+        //   나머지 12개 시나리오는 PassiveStretch에 전부 클립이 있다),
+        //   그쪽은 CervicalRomScenarioBridge가 목표 도달로 직접 단계를 넘기므로
+        //   AutoPlay가 관여할 일이 없다.
+        if (duration <= 0f && string.IsNullOrEmpty(owner.InternalAnimationStateName))
+        {
+            Reset();
+            ChunaLogger.LogWarning(
+                "<color=orange>[AutoPlay] 애니메이션도 duration도 없어 시작하지 않는다 — " +
+                "끝날 근거가 없어 켜 두면 다음 단계가 영영 안 넘어간다. " +
+                "동작을 다른 컴포넌트가 구동하는 단계라면 정상이다.</color>");
+            return;
+        }
+
         isAutoPlayMode = true;
         autoPlayStartTime = Time.time;
         autoPlayProgress = 0f;
