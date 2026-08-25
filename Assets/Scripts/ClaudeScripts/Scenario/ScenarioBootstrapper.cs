@@ -21,8 +21,20 @@ public class ScenarioBootstrapper : MonoBehaviour
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLog = true;
 
+    /// <summary>
+    /// 이번 씬에서 선택된 시나리오. <b>Awake(-100)에서 정해지므로</b> 다른 컴포넌트의
+    /// Awake/Start에서 바로 읽을 수 있다.
+    ///
+    /// ★<see cref="ScenarioManager.CurrentScenario"/>는 사용자가 실습/평가 모드를 고르고
+    ///   진입한 <b>뒤에야</b> 채워진다. 그걸 기다리는 코드는 그만큼 늦게 동작한다
+    ///   (정보패널 고정 배치가 뒤늦게 튀던 원인 — 2026-08-25).
+    /// </summary>
+    public static ScenarioConfig SelectedConfig { get; private set; }
+
     private void Awake()
     {
+        SelectedConfig = null;   // 씬을 다시 로드했는데 앞 씬 값이 남아 있으면 안 된다
+
         int selectedIndex = forceDefaultIndex
             ? defaultScenarioIndex
             : PlayerPrefs.GetInt(PrefsKeys.SelectedScenario, defaultScenarioIndex);
@@ -45,6 +57,9 @@ public class ScenarioBootstrapper : MonoBehaviour
             ChunaLogger.LogError($"[ScenarioBootstrapper] scenarioConfigs[{selectedIndex}]가 null입니다!");
             return;
         }
+
+        // ★다른 컴포넌트가 자기 Awake/Start에서 곧바로 읽을 수 있게 여기서 공개한다.
+        SelectedConfig = config;
 
         if (showDebugLog)
         {

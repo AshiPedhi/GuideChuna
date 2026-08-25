@@ -100,7 +100,18 @@ public class ScenarioUIPositioner : MonoBehaviour
             }
         }
 
+        // ★고정 배치는 여기서 바로 건다. ScenarioBootstrapper가 Awake(-100)에서 시나리오를
+        //   정하므로 이 시점에 이미 알 수 있다. 예전엔 ScenarioManager가 채워지길 기다리느라
+        //   정보패널이 헤드셋 기준으로 한 번 떴다가 <b>모드를 고르고 진입한 뒤에야</b>
+        //   고정 자리로 튀었다.
+        if (fixedPlacements != null && fixedPlacements.Length > 0)
+        {
+            fixedAppliedEarly = ApplyFixedPlacementsAll() > 0;
+        }
     }
+
+    /// <summary>Awake에서 이미 고정 배치를 걸었는가. 걸었으면 기다리는 코루틴이 필요 없다.</summary>
+    private bool fixedAppliedEarly;
 
     void Start()
     {
@@ -109,7 +120,8 @@ public class ScenarioUIPositioner : MonoBehaviour
         //   벗어나면 대상 루프에 닿기도 전에 return false 한다. 에디터에서 헤드셋 없이
         //   바로 Play로 들어가면 카메라 높이가 그 범위를 벗어나 고정 배치까지 통째로
         //   건너뛰어졌다(2026-08-25 사용자 확인). 고정 배치는 헤드셋이 필요 없다.
-        if (fixedPlacements != null && fixedPlacements.Length > 0)
+        // Awake에서 이미 걸렸으면 기다릴 게 없다. 부트스트래퍼가 없는 예외 상황에서만 코루틴이 돈다.
+        if (!fixedAppliedEarly && fixedPlacements != null && fixedPlacements.Length > 0)
         {
             StartCoroutine(ApplyFixedWhenScenarioKnown());
         }
@@ -327,6 +339,13 @@ public class ScenarioUIPositioner : MonoBehaviour
                     uiTarget.rotation = Quaternion.LookRotation(lookDirection);
             }
         }
+
+        // ★고정 대상을 다시 못박는다.
+        //   고정 대상이 uiTargets의 <b>자식</b>일 수 있다(실제 배선이 그렇다 —
+        //   uiTargets=UI Group, 고정 대상=그 아래 정보패널Root). 부모를 헤드셋 쪽으로
+        //   돌리면 자식의 월드 회전이 같이 돌아가서, 위치·크기는 남고 각도만 시선을 따라갔다.
+        //   같은 오브젝트일 때만 건너뛰는 걸로는 이 경우를 못 막는다.
+        ApplyFixedPlacementsAll();
         return true;
     }
 
@@ -362,11 +381,18 @@ public class ScenarioUIPositioner : MonoBehaviour
     }
 
     /// <summary>
-    /// 지금 돌고 있는 시나리오 이름. 아직 안 잡혔으면 빈 문자열.
-    /// ★배치 코루틴이 시나리오 로드보다 먼저 끝날 수 있어 매번 다시 읽는다(캐시하지 않는다).
+    /// 이번 씬의 시나리오 이름. 아직 안 잡혔으면 빈 문자열.
+    ///
+    /// ★<b>부트스트래퍼를 먼저 본다.</b> 그쪽은 Awake(-100)에서 이미 정하는데,
+    ///   <see cref="ScenarioManager.CurrentScenario"/>는 사용자가 실습/평가 모드를 고르고
+    ///   진입한 뒤에야 채워진다. 후자를 기다렸더니 정보패널이 헤드셋 기준으로 한 번 떴다가
+    ///   모드를 고른 뒤에야 고정 자리로 튀었다(2026-08-25 사용자 확인).
     /// </summary>
     private string CurrentScenarioName()
     {
+        ScenarioConfig config = ScenarioBootstrapper.SelectedConfig;
+        if (config != null && !string.IsNullOrEmpty(config.scenarioName)) return config.scenarioName;
+
         if (scenarioManager == null) scenarioManager = FindFirstObjectByType<ScenarioManager>();
         ScenarioData data = scenarioManager != null ? scenarioManager.CurrentScenario : null;
         return data != null ? data.scenarioName : string.Empty;

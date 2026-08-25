@@ -63,6 +63,29 @@ public class PracticeSettingsController : MonoBehaviour
     [SerializeField] private bool keepSkeletonOpaque = true;
 
 
+    [Tooltip("현실 모드를 켜고 끌 때 높이 관계를 로그로 찍는다.\n" +
+             "★'패스쓰루로 바꾸면 모델이 위로 날아간다'를 추적하려고 넣었다 —\n" +
+             "  씬 값만으로는 방향이 안 맞아(계산으론 반대로 가라앉아야 한다) 런타임 실측이 필요하다.\n" +
+             "원인을 잡고 나면 끈다.")]
+    [SerializeField] private bool logRealityGeometry = true;
+
+    /// <summary>현실 모드에서 가상 환자를 어떻게 다룰지.</summary>
+    public enum RealityPatientMode
+    {
+        /// <summary>반투명하게. ★피부 셰이더가 불투명이라 옷만 사라지고 살은 남는다.</summary>
+        Translucent,
+        /// <summary>통째로 숨긴다. 패스쓰루면 앞에 진짜 사람이 있으므로 이쪽이 맞다.</summary>
+        Hidden,
+    }
+
+    [Tooltip("현실 모드에서 가상 환자를 어떻게 할지.\n" +
+             "★반투명 — 피부(RL_Amplify_SkinShader)는 불투명 셰이더라 알파가 안 먹고,\n" +
+             "  옷(빌트인 Standard)만 사라진다. 그래서 알몸처럼 보인다(2026-08-25 실측).\n" +
+             "  피부 셰이더를 알파 블렌드로 바꾸는 건 안 한다 — 환자 머티리얼을 건드렸다가\n" +
+             "  분홍색·마젠타 사고가 두 번 났다.\n" +
+             "숨김 — 패스쓰루면 앞에 진짜 사람이 있으므로 가상 환자가 필요 없다. 이쪽이 기본이다.")]
+    [SerializeField] private RealityPatientMode realityPatientMode = RealityPatientMode.Hidden;
+
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
     [Tooltip("씬 시작 시 패스쓰루 ON 상태로 진입 (HandRecord 등 패스스루 전용 씬용)")]
@@ -640,6 +663,8 @@ public class PracticeSettingsController : MonoBehaviour
     {
         ChunaLogger.Log($"[PracticeSettings] 현실 모드: {isOn}");
 
+        LogRealityGeometry(isOn ? "현실 모드 ON" : "현실 모드 OFF");
+
         isRealityModeOn = isOn;
 
         if (passthroughLayer != null)
@@ -683,9 +708,15 @@ public class PracticeSettingsController : MonoBehaviour
 
         if (isOn)
         {
-            // 환자 모델을 반투명하게
-            if (isPatientModelVisible)
+            // ★숨김 모드면 알파를 아예 건드리지 않는다.
+            //   피부 셰이더가 불투명이라 반투명은 '옷만 사라짐'으로 끝난다.
+            if (realityPatientMode == RealityPatientMode.Hidden)
             {
+                SetPatientBodyVisible(false);
+            }
+            else if (isPatientModelVisible)
+            {
+                // 환자 모델을 반투명하게
                 SetModelTransparency(patientRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
                 SetMeshTransparency(patientMeshRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
             }
@@ -699,7 +730,9 @@ public class PracticeSettingsController : MonoBehaviour
         }
         else
         {
-            // 현실 모드 해제 시
+            // 현실 모드 해제 — 숨겼던 몸을 되돌린다. (숨김 모드가 아니었어도 무해하다)
+            SetPatientBodyVisible(true);
+
             if (isPatientModelVisible)
             {
                 // 골격이 표시되어 있으면 골격 모드 알파값으로, 아니면 일반 알파값으로
@@ -717,6 +750,117 @@ public class PracticeSettingsController : MonoBehaviour
             }
         }
     }
+    /// <summary>
+    /// 환자 <b>몸</b>(피부·옷·눈·치아)을 켜고 끈다. 훈련 표시물과 골격은 건드리지 않는다.
+    ///
+    /// ★반투명 제외 목록(<see cref="IsTransparencyExcluded"/>)을 그대로 쓰면 안 된다.
+    ///   그건 눈·각막·치아를 <b>알파 조절에서</b> 빼는 목록이라, 숨김에 쓰면 몸만 사라지고
+    ///   눈알과 이빨이 허공에 남는다. 숨김에서 빼야 하는 건 훈련 표시물과 골격뿐이다.
+    /// </summary>
+    private void SetPatientBodyVisible(bool visible)
+    {
+        int changed = 0;
+        changed += ToggleRenderers(patientRenderers, visible);
+        changed += ToggleRenderers(patientMeshRenderers, visible);
+
+        if (changed > 0)
+        {
+            ChunaLogger.Log($"[PracticeSettings] 환자 몸 {(visible ? "표시" : "숨김")} — 렌더러 {changed}개 " +
+                            "(훈련 표시물·골격은 그대로)");
+        }
+    }
+
+    private int ToggleRenderers<T>(T[] renderers, bool visible) where T : Renderer
+    {
+        if (renderers == null) return 0;
+
+        int changed = 0;
+        foreach (var r in renderers)
+        {
+            if (r == null || IsTrainingProp(r) || IsSkeletonPart(r)) continue;
+            if (r.enabled == visible) continue;
+            r.enabled = visible;
+            changed++;
+        }
+        return changed;
+    }
+
+    /// <summary>훈련 표시물인가(파지점·화살표·하이라이트·접촉 표시구). 환자 본 아래에 붙어 있어 렌더러 배열에 섞인다.</summary>
+    private static bool IsTrainingProp(Renderer renderer)
+    {
+        if (renderer == null) return false;
+        if (renderer.GetComponentInParent<CranialAdjustmentController>(true) != null) return true;
+        if (renderer.GetComponentInParent<GripPointTarget>(true) != null) return true;
+        if (renderer.GetComponentInParent<ForceArrowBase>(true) != null) return true;
+        if (renderer.GetComponentInParent<TargetAreaHighlight>(true) != null) return true;
+        return renderer.gameObject.name.StartsWith("ContactTarget_", System.StringComparison.Ordinal);
+    }
+
+    /// <summary>골격 모델의 일부인가. 골격은 따로 켜고 끄므로 여기서 건드리지 않는다.</summary>
+    private static bool IsSkeletonPart(Renderer renderer)
+    {
+        if (renderer == null) return false;
+        for (Transform t = renderer.transform; t != null; t = t.parent)
+            if (t.name.IndexOf("skeletal_system", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// ★현실 모드에서 "모델이 위로 날아간다"를 가르는 실측 로그.
+    ///
+    /// 씬 값만으로는 방향이 안 맞는다 — seated 프리셋의 카메라 Y만 1.157이고
+    /// 나머지 5개는 0.16이라 1m 이상치가 있는데(ROM은 seated를 쓴다),
+    /// 그 값대로면 환자가 바닥 <b>아래로</b> 가라앉아야 한다. 실제 보고는 반대다.
+    /// 그래서 런타임에 실제 좌표를 찍어 어느 전제가 틀렸는지 본다.
+    ///
+    /// FloorLevel 트래킹이면 <b>리그 루트의 Y가 곧 실제 바닥</b>이다.
+    /// 그 값과 환자 Y의 차이가 사람이 보는 높이 관계다.
+    /// </summary>
+    private void LogRealityGeometry(string note)
+    {
+        if (!logRealityGeometry) return;
+
+        Camera cam = Camera.main;
+        Transform rig = null;
+        GameObject rigGo = GameObject.Find("OVRCameraRig");
+        if (rigGo != null) rig = rigGo.transform;
+        else if (cam != null) rig = cam.transform.root;   // 리그를 못 찾으면 카메라의 최상위로 대신 본다
+
+        Transform patient = patientModel != null ? patientModel.transform : null;
+        if (patient == null)
+        {
+            GameObject tagged = GameObject.FindWithTag("Patient");
+            if (tagged != null) patient = tagged.transform;
+        }
+
+        string camLine = cam != null
+            ? $"카메라(눈) {cam.transform.position.y:F3}m"
+            : "카메라 없음";
+        string rigLine = rig != null
+            ? $"리그 루트 {rig.position.y:F3}m ('{rig.name}')"
+            : "리그 없음";
+        string patientLine = patient != null
+            ? $"환자 {patient.position.y:F3}m ('{patient.name}')"
+            : "환자 없음";
+
+        string relation = "";
+        if (rig != null && patient != null)
+        {
+            float floorY = rig.position.y;                     // FloorLevel이면 여기가 실제 바닥
+            float above = patient.position.y - floorY;
+            relation = $"\n    → 실제 바닥(리그 루트) 기준 환자 높이 {above:+0.000;-0.000}m " +
+                       $"({(above > 0.05f ? "바닥 위" : above < -0.05f ? "★바닥 아래(파묻힘)" : "바닥 근처")})";
+        }
+        if (cam != null && rig != null)
+        {
+            relation += $"\n    → 헤드셋이 리그 루트보다 {cam.transform.position.y - rig.position.y:F3}m 위 " +
+                        "(FloorLevel이면 이 값이 사람 눈높이여야 한다. 0에 가까우면 EyeLevel로 돌고 있는 것)";
+        }
+
+        ChunaLogger.Log($"<color=cyan>[현실모드 진단] {note}\n    {camLine} · {rigLine} · {patientLine}{relation}</color>");
+    }
+
     #endregion
 
     #region 투명도 제어

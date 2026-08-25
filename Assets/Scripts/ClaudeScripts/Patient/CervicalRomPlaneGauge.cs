@@ -102,6 +102,24 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "★손끝 중점이 회전 중심에서 약 0.21m다(실측). 그보다 밖에 둬야 손에 안 가린다.")]
     [SerializeField] private float scaleRadius = 0.34f;
 
+    [Tooltip("눈금을 그릴 범위 (도). 방향의 최대각과 무관하게 이만큼 그린다.\n" +
+             "★굴곡은 최대각이 45°지만 눈금은 90°까지 깔고 45°에 굵은 마지노선을 긋는다 —\n" +
+             "  각도기처럼 눈금이 먼저 있고 그 위에 기준선이 표시되는 게 읽기 쉽다.")]
+    [SerializeField] private float scaleSpan = 90f;
+
+    [Header("=== 십자선 ===")]
+    [Tooltip("회전 중심을 지나는 십자선을 긋는다. 0°/90°/180°/270° 네 방향.")]
+    [SerializeField] private bool showCrosshair = true;
+
+    [Tooltip("십자선 팔 길이 (m). 0이면 눈금 반지름을 쓴다.")]
+    [SerializeField] private float crosshairLength = 0f;
+
+    [Tooltip("십자선 굵기 (m)")]
+    [SerializeField] private float crosshairWidth = 0.0030f;
+
+    [Tooltip("십자선 불투명도. 눈금보다 옅게 깔아야 방해가 안 된다.")]
+    [Range(0f, 1f)] [SerializeField] private float crosshairAlpha = 0.45f;
+
     [Tooltip("주눈금 간격 (도). 숫자가 붙는다.")]
     [SerializeField] private float majorStep = 10f;
 
@@ -141,14 +159,35 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "끄면 위의 needleColor를 그대로 쓴다.")]
     [SerializeField] private bool needleFromPlaneColor = true;
 
-    [Tooltip("지침 색의 채도(x)·명도(y). 채도를 올리고 명도를 조금 낮추면 원색이 진해진다.")]
-    [SerializeField] private Vector2 needleSaturationValue = new Vector2(1f, 0.78f);
+    [Tooltip("지침 색의 채도(x)·명도(y). 둘 다 1.0이면 가장 선명한 원색이 된다.\n" +
+             "★명도를 낮추면 진해지는 게 아니라 <b>탁해진다</b>(검정이 섞인다).\n" +
+             "  0.60으로 내렸다가 되돌렸다 — 선명함은 채도 1.0 · 명도 1.0에서 나온다.")]
+    [SerializeField] private Vector2 needleSaturationValue = new Vector2(1f, 1f);
 
     [Header("=== 숫자 ===")]
     [Tooltip("눈금 숫자 크기")] [SerializeField] private float tickLabelSize = 0.030f;
     [Tooltip("현재 각도 숫자 크기")] [SerializeField] private float readoutSize = 0.055f;
-    [Tooltip("숫자를 눈금에서 얼마나 바깥에 둘지 (m)")]
-    [SerializeField] private float labelOffset = 0.038f;
+    [Tooltip("숫자를 눈금에서 얼마나 바깥에 둘지 (m). 작을수록 눈금에 붙는다.")]
+    [SerializeField] private float labelOffset = 0.016f;
+
+    [Tooltip("눈금 위 최대각 자리에 숫자를 붙일지. 끄면 굵은 눈금만 남는다.\n" +
+             "★켜 둔다 — 굴곡 45°는 10° 간격 눈금 사이에 떨어져서, 끄면 최대각 숫자가\n" +
+             "  화면 어디에도 안 나온다. 지침 위 부제를 뺀 자리를 이게 대신한다.")]
+    [SerializeField] private bool showMaxAngleLabel = true;
+
+    [Tooltip("현재각 숫자를 눈금에서 얼마나 바깥에 둘지 (m).\n" +
+             "★눈금 숫자(labelOffset)보다 확실히 커야 겹치지 않는다.")]
+    [SerializeField] private float readoutOffset = 0.085f;
+
+    [Tooltip("현재각 글씨 색")]
+    [SerializeField] private Color readoutColor = Color.white;
+
+    [Tooltip("현재각 숫자 뒤에 깔 원형 배경. 0이면 안 그린다.\n" +
+             "흰 글씨가 밝은 배경 위에서 안 읽히는 걸 막는다. 반지름(m).")]
+    [SerializeField] private float readoutBackdropRadius = 0.055f;
+
+    [Tooltip("원형 배경 색")]
+    [SerializeField] private Color readoutBackdropColor = new Color(0.09f, 0.10f, 0.13f, 0.78f);
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
@@ -162,6 +201,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private Material sharedMaterial;
     private readonly List<TextMeshPro> tickLabels = new List<TextMeshPro>();
     private TextMeshPro readout;
+    private Transform readoutBackdrop;
+    private Mesh backdropMesh;
+    private Material backdropMaterial;
 
     // ── 메시 버퍼. 매 프레임 새로 만들지 않는다(VR 프레임 예산). ──────────
     private readonly List<Vector3> verts = new List<Vector3>(512);
@@ -202,6 +244,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (backdropMesh != null) Destroy(backdropMesh);
+        if (backdropMaterial != null) Destroy(backdropMaterial);
         if (staticMesh != null) Destroy(staticMesh);
         if (dynamicMesh != null) Destroy(dynamicMesh);
         if (sharedMaterial != null) Destroy(sharedMaterial);
@@ -271,7 +315,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             lastDrawnPassive = passiveLimit;
         }
 
-        UpdateReadout(angle, maxAngle);
+        UpdateReadout(angle);
     }
 
     private static bool Changed(float now, float before)
@@ -445,29 +489,41 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         Color micro = plane; micro.a = 0.55f;   // 미세눈금은 옅게 — 촘촘해서 진하면 띠로 뭉친다
         Color maxMark = new Color(0.10f, 0.10f, 0.12f, 0.95f);
 
+        // ★십자선을 제일 밑에 깐다. 회전 중심이 어디인지가 한눈에 보여야 각도가 읽힌다.
+        if (showCrosshair)
+        {
+            Color cross = plane; cross.a = crosshairAlpha;
+            float arm = crosshairLength > 0f ? crosshairLength : scaleRadius;
+            for (int q = 0; q < 4; q++) AddArm(q * 90f, arm, crosshairWidth, cross);
+        }
+
+        // ★눈금은 방향의 최대각과 무관하게 scaleSpan(기본 90°)까지 깐다.
+        //   각도기처럼 눈금이 먼저 있고 그 위에 마지노선이 그어지는 게 읽기 쉽다.
+        float span = Mathf.Max(maxAngle, scaleSpan);
+
         // 미세 → 보조 → 주 순으로 겹쳐 그린다. 굵은 눈금이 위에 온다.
         if (microStep > 0f)
         {
-            for (float a = 0f; a <= maxAngle + 0.001f; a += microStep)
+            for (float a = 0f; a <= span + 0.001f; a += microStep)
             {
                 if (OnStep(a, minorStep) || OnStep(a, majorStep)) continue;
                 AddTick(a, microTickLength, tickWidth * 0.7f, micro);
             }
         }
-        for (float a = 0f; a <= maxAngle + 0.001f; a += minorStep)
+        for (float a = 0f; a <= span + 0.001f; a += minorStep)
         {
             if (OnStep(a, majorStep)) continue;
             AddTick(a, minorTickLength, tickWidth, tick);
         }
-        for (float a = 0f; a <= maxAngle + 0.001f; a += majorStep)
+        for (float a = 0f; a <= span + 0.001f; a += majorStep)
         {
             AddTick(a, majorTickLength, tickWidth * 1.35f, tick);
         }
-        // 최대각은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 굵게 긋는다.
-        AddTick(maxAngle, majorTickLength * 1.3f, tickWidth * 1.8f, maxMark);
+        // 최대각(마지노선)은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 굵게 긋는다.
+        AddTick(maxAngle, majorTickLength * 1.5f, tickWidth * 2.0f, maxMark);
 
         Upload(staticMesh, staticFilter);
-        BuildTickLabels(maxAngle, plane);
+        BuildTickLabels(span, maxAngle, plane);
 
         if (showDebugLogs)
         {
@@ -502,7 +558,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     }
 
     /// <summary>지침 끝의 현재 각도 숫자. 정수가 바뀔 때만 문자열을 새로 만든다.</summary>
-    private void UpdateReadout(float angle, float maxAngle)
+    private void UpdateReadout(float angle)
     {
         if (readout == null) return;
 
@@ -511,12 +567,28 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         {
             lastReadoutDegrees = degrees;
             // ★문자열 생성은 정수가 바뀔 때만. 매 프레임 만들면 VR에서 GC가 튄다.
-            readout.text = $"{degrees}°\n<size=55%>최대 {maxAngle:F0}°</size>";
+            // 최대각은 눈금 위에 이미 있으므로 여기엔 현재각만 쓴다.
+            readout.text = $"{degrees}°";
         }
 
-        Vector3 local = Dir(angle) * (scaleRadius + labelOffset + 0.02f);
+        // ★눈금 숫자보다 확실히 바깥에 둔다. 가까우면 눈금 라벨과 겹친다.
+        Vector3 local = Dir(angle) * (scaleRadius + readoutOffset);
         readout.transform.localPosition = local;
         FaceCamera(readout.transform);
+
+        // 원형 배경은 글씨와 같은 자세로, 카메라에서 조금 더 먼 쪽에 둔다.
+        if (readoutBackdrop != null)
+        {
+            bool show = readoutBackdropRadius > 0f;
+            if (readoutBackdrop.gameObject.activeSelf != show) readoutBackdrop.gameObject.SetActive(show);
+            if (show)
+            {
+                readoutBackdrop.localRotation = readout.transform.localRotation;
+                // readout의 로컬 +z가 카메라 반대쪽이다(FaceCamera가 그렇게 잡는다).
+                readoutBackdrop.localPosition = local + readout.transform.localRotation * (Vector3.forward * 0.004f);
+                readoutBackdrop.localScale = Vector3.one * readoutBackdropRadius;
+            }
+        }
     }
 
     // ── 메시 조립 ─────────────────────────────────────────────────────────
@@ -538,6 +610,15 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         Vector3 outer = dir * scaleRadius;
         Vector3 inner = fromCenter ? Vector3.zero : dir * (scaleRadius - length);
         AddQuad(inner - side, outer - side, outer + side, inner + side, color);
+    }
+
+    /// <summary>회전 중심에서 뻗는 팔. 십자선을 그리는 데 쓴다.</summary>
+    private void AddArm(float degrees, float length, float width, Color color)
+    {
+        Vector3 dir = Dir(degrees);
+        Vector3 side = new Vector3(dir.y, -dir.x, 0f) * (width * 0.5f);
+        Vector3 tip = dir * length;
+        AddQuad(-side, tip - side, tip + side, side, color);
     }
 
     /// <summary>부채꼴. 1도마다 한 조각씩 이어 붙인다.</summary>
@@ -593,7 +674,11 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         dynamicMesh.MarkDynamic();
         dynamicFilter = CreateLayer("채움·지침", root);
 
+        // ★배경을 먼저 만든다. 같은 렌더 큐면 나중에 그려진 쪽이 위로 오므로,
+        //   글씨보다 앞서 만들어 두고 큐도 한 단계 낮춘다.
+        readoutBackdrop = CreateReadoutBackdrop(root);
         readout = CreateLabel("현재각도", root, readoutSize);
+        readout.color = readoutColor;
     }
 
     private MeshFilter CreateLayer(string name, Transform parent)
@@ -607,6 +692,46 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         renderer.receiveShadows = false;
         renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
         return filter;
+    }
+
+    /// <summary>
+    /// 현재각 숫자 뒤에 깔 원판. 반지름 1의 원을 만들어 두고 스케일로 크기를 준다.
+    /// 글씨와 같은 자세로 돌리되 카메라에서 조금 더 먼 쪽에 놓는다.
+    /// </summary>
+    private Transform CreateReadoutBackdrop(Transform parent)
+    {
+        var go = new GameObject("현재각도_배경");
+        go.transform.SetParent(parent, false);
+
+        const int segments = 32;
+        var v = new List<Vector3>(segments + 2) { Vector3.zero };
+        var c = new List<Color>(segments + 2) { readoutBackdropColor };
+        var t = new List<int>(segments * 3);
+        for (int i = 0; i <= segments; i++)
+        {
+            float r = i * Mathf.PI * 2f / segments;
+            v.Add(new Vector3(Mathf.Cos(r), Mathf.Sin(r), 0f));
+            c.Add(readoutBackdropColor);
+        }
+        for (int i = 1; i <= segments; i++) { t.Add(0); t.Add(i); t.Add(i + 1); }
+
+        var mesh = new Mesh { name = "각도기_현재각배경" };
+        mesh.SetVertices(v);
+        mesh.SetColors(c);
+        mesh.SetTriangles(t, 0, false);
+        mesh.RecalculateBounds();
+
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var renderer = go.AddComponent<MeshRenderer>();
+        // 글씨보다 먼저 그려지게 큐를 한 단계 낮춘다(같은 큐면 겹칠 때 순서가 안 정해진다).
+        renderer.sharedMaterial = new Material(sharedMaterial) { name = "GaugeReadoutBackdropMat", renderQueue = 2995 };
+        renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+
+        backdropMesh = mesh;
+        backdropMaterial = renderer.sharedMaterial;
+        return go.transform;
     }
 
     private TextMeshPro CreateLabel(string name, Transform parent, float size)
@@ -624,12 +749,16 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         return text;
     }
 
-    /// <summary>주눈금 숫자. 최대각이 바뀔 때만 다시 만든다(굴곡 45° vs 회전 90°).</summary>
-    private void BuildTickLabels(float maxAngle, Color color)
+    /// <summary>
+    /// 주눈금 숫자. 눈금 범위(span) 전체에 붙이고, 그 위에 최대각만 굵게 덧붙인다.
+    /// span과 최대각이 둘 다 바뀔 수 있어 둘 다 받는다(굴곡 45° vs 회전 90°).
+    /// </summary>
+    private void BuildTickLabels(float span, float maxAngle, Color color)
     {
-        int needed = Mathf.FloorToInt(maxAngle / majorStep) + 1;
+        int needed = Mathf.FloorToInt(span / majorStep) + 1;
         bool maxOnMajor = Mathf.Abs(maxAngle % majorStep) < 0.001f;
-        if (!maxOnMajor) needed++;   // 최대각 숫자를 따로 붙인다
+        bool addMaxLabel = showMaxAngleLabel && !maxOnMajor;
+        if (addMaxLabel) needed++;   // 최대각 숫자를 따로 붙인다
 
         while (tickLabels.Count < needed)
         {
@@ -638,11 +767,13 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Color labelColor = color; labelColor.a = 1f;
         int index = 0;
-        for (float a = 0f; a <= maxAngle + 0.001f; a += majorStep, index++)
+        for (float a = 0f; a <= span + 0.001f; a += majorStep, index++)
         {
-            PlaceTickLabel(index, a, labelColor, bold: false);
+            // 최대각과 겹치는 눈금만 굵게. 표시를 끄면 전부 보통 숫자다.
+            bool isMax = showMaxAngleLabel && Mathf.Abs(a - maxAngle) < 0.001f;
+            PlaceTickLabel(index, a, isMax ? new Color(0.10f, 0.10f, 0.12f, 1f) : labelColor, bold: isMax);
         }
-        if (!maxOnMajor)
+        if (addMaxLabel)
         {
             PlaceTickLabel(index, maxAngle, new Color(0.10f, 0.10f, 0.12f, 1f), bold: true);
             index++;
