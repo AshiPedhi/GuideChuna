@@ -12,7 +12,7 @@ using UnityEngine;
 /// 시작 자세(앉은 자세·팔)는 기존 대기 클립이 그대로 잡아 준다.
 ///
 /// 진행은 두 구간으로 나뉜다.
-///  · 능동  환자가 스스로 가는 데까지. 정상각에서 <see cref="overpressureAngle"/>만큼 못 미친다.
+///  · 능동  환자가 스스로 가는 데까지. 정상각에서 <see cref="dysfunctionAngle"/>만큼 못 미친다.
 ///  · 압박  시술자가 손으로 더 미는 구간. 능동 끝점부터 정상각까지.
 /// </summary>
 public class CervicalRomDriver : MonoBehaviour
@@ -45,18 +45,35 @@ public class CervicalRomDriver : MonoBehaviour
     [Tooltip("측굴 정상 각도 (좌우 공통)")] [SerializeField] private float lateralNormal = 45f;
     [Tooltip("회전 정상 각도 (좌우 공통)")] [SerializeField] private float rotationNormal = 90f;
 
-    [Header("=== 압박 여유 구간 ===")]
-    [Tooltip("압박으로 더 미는 양. 능동은 정상각에서 이만큼 못 미친 지점까지 간다.\n" +
-             "randomizePerLoad를 켜면 이 값 대신 아래 범위에서 방향마다 따로 뽑는다.")]
-    [SerializeField] private float overpressureAngle = 7f;
+    [Header("=== 환자의 제한 (측정 대상) ===")]
+    // ★2026-08-25 재설계. 예전에는 '여유 구간' 하나로 능동 끝점과 압박 끝점을 동시에 정해서,
+    //   압박을 끝까지 밀면 머리가 <b>언제나 정상각에 정확히 도달</b>했다.
+    //   그러면 DeficitAngle이 항상 0이라 누구를 측정해도 '정상'이 나온다 — 측정 술기인데
+    //   측정값에 변별력이 없었다. 그래서 두 값을 분리했다.
+    //
+    //     정상각 ─────────────────────────────────────────
+    //     능동 한계 = 정상각 − 기능장애      환자가 스스로 가는 데까지
+    //     압박 한계 = 능동 한계 + 압박 여유   밀어서 더 가는 데까지 (여기서 멈춘다)
+    //     부족각   = 정상각 − 압박 한계      ★이게 기록할 값이다
 
-    [Tooltip("시나리오를 불러올 때마다 여유 구간을 방향별로 다시 뽑는다.\n" +
+    [Tooltip("정상각 대비 능동으로 못 가는 각(도). 기능장애의 정도다.\n" +
+             "randomizePerLoad를 켜면 이 값 대신 아래 범위에서 방향마다 따로 뽑는다.")]
+    [SerializeField] private float dysfunctionAngle = 15f;
+
+    [Tooltip("능동 한계에서 압박으로 더 갈 수 있는 각(도). 사람마다 다른 끝느낌 한계다.\n" +
+             "★손이 이보다 더 밀어도 머리는 여기서 멈춘다 — 그 저항이 끝느낌이다.")]
+    [SerializeField] private float passiveGainAngle = 7f;
+
+    [Tooltip("시나리오를 불러올 때마다 두 값을 방향별로 다시 뽑는다.\n" +
              "매번 같은 지점에서 멈추면 끝느낌을 느끼는 게 아니라 위치를 외우게 된다.\n" +
              "방향마다 값이 다르므로 좌우 비대칭도 자연스럽게 생긴다.")]
     [SerializeField] private bool randomizePerLoad = true;
 
-    [Tooltip("여유 구간을 뽑을 범위 (도). x=최소, y=최대")]
-    [SerializeField] private Vector2 overpressureRange = new Vector2(5f, 15f);
+    [Tooltip("기능장애를 뽑을 범위 (도). x=최소, y=최대")]
+    [SerializeField] private Vector2 dysfunctionRange = new Vector2(10f, 25f);
+
+    [Tooltip("압박 여유를 뽑을 범위 (도). x=최소, y=최대")]
+    [SerializeField] private Vector2 passiveGainRange = new Vector2(5f, 10f);
 
     [Tooltip("0이 아니면 그 값을 시드로 써서 매번 같은 값이 나온다. 재현이 필요할 때만 쓴다.")]
     [SerializeField] private int randomSeed = 0;
@@ -78,7 +95,8 @@ public class CervicalRomDriver : MonoBehaviour
 
     private const int DirectionCount = 7;   // None 포함. Direction을 인덱스로 쓴다.
 
-    private float[] gaps;                   // 방향별 여유 구간(도). 시나리오 로드 때 뽑는다.
+    private float[] dysfunctions;           // 방향별 기능장애(도). 시나리오 로드 때 뽑는다.
+    private float[] passiveGains;           // 방향별 압박 여유(도). 같이 뽑는다.
     private Direction currentDirection = Direction.None;
     private Direction pendingDirection = Direction.None;   // 중립 복귀를 기다리는 다음 방향
     private float targetAngle;          // 최종 목표 각도 (도)
@@ -94,11 +112,24 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>현재 방향의 정상 각도(도).</summary>
     public float NormalAngle => NormalAngleOf(currentDirection);
 
-    /// <summary>능동 구간의 끝점. 정상각에서 이번 판의 여유 구간만큼 못 미친 각도.</summary>
-    public float ActiveTargetAngle => Mathf.Max(0f, NormalAngle - GapOf(currentDirection));
+    /// <summary>능동 구간의 끝점. 정상각에서 이번 판의 기능장애만큼 못 미친 각도.</summary>
+    public float ActiveTargetAngle => Mathf.Max(0f, NormalAngle - DysfunctionOf(currentDirection));
 
-    /// <summary>이번 판에 뽑힌 여유 구간(도). 방향마다 다르다.</summary>
-    public float CurrentGap => GapOf(currentDirection);
+    /// <summary>
+    /// 압박으로 갈 수 있는 끝점. ★손이 더 밀어도 머리는 여기서 멈춘다 — 그게 끝느낌이다.
+    /// 정상각을 넘지는 않는다.
+    /// </summary>
+    public float PassiveLimitAngle =>
+        Mathf.Min(NormalAngle, ActiveTargetAngle + PassiveGainOf(currentDirection));
+
+    /// <summary>이번 판에 뽑힌 기능장애(도). 방향마다 다르다.</summary>
+    public float CurrentDysfunction => DysfunctionOf(currentDirection);
+
+    /// <summary>
+    /// 이번 판에 뽑힌 압박 여유(도). ★시술자가 밀어야 하는 양이자 머리가 더 가는 양이다.
+    /// 압박 진행률의 분모로 쓴다.
+    /// </summary>
+    public float CurrentPassiveGain => Mathf.Max(0.1f, PassiveLimitAngle - ActiveTargetAngle);
 
     /// <summary>현재 방향의 회전축(월드). 압박을 손 움직임으로 구동할 때 쓴다.</summary>
     public Vector3 CurrentWorldAxis =>
@@ -132,20 +163,22 @@ public class CervicalRomDriver : MonoBehaviour
 
     /// <summary>
     /// 여유 구간을 방향별로 다시 뽑는다. 시나리오를 불러올 때 한 번 부르면 된다.
-    /// randomizePerLoad가 꺼져 있으면 고정값(overpressureAngle)으로 채운다.
+    /// randomizePerLoad가 꺼져 있으면 고정값(dysfunctionAngle · passiveGainAngle)으로 채운다.
     /// </summary>
     public void RandomizeGaps()
     {
-        if (gaps == null || gaps.Length != DirectionCount) gaps = new float[DirectionCount];
+        if (dysfunctions == null || dysfunctions.Length != DirectionCount) dysfunctions = new float[DirectionCount];
+        if (passiveGains == null || passiveGains.Length != DirectionCount) passiveGains = new float[DirectionCount];
 
         if (!randomizePerLoad)
         {
-            for (int i = 0; i < gaps.Length; i++) gaps[i] = overpressureAngle;
+            for (int i = 0; i < dysfunctions.Length; i++)
+            {
+                dysfunctions[i] = dysfunctionAngle;
+                passiveGains[i] = passiveGainAngle;
+            }
             return;
         }
-
-        float min = Mathf.Min(overpressureRange.x, overpressureRange.y);
-        float max = Mathf.Max(overpressureRange.x, overpressureRange.y);
 
         // 시드를 주면 재현된다. 0이면 매번 다르게 뽑는다.
         Random.State previous = default;
@@ -156,24 +189,52 @@ public class CervicalRomDriver : MonoBehaviour
             Random.InitState(randomSeed);
         }
 
-        for (int i = 0; i < gaps.Length; i++) gaps[i] = Random.Range(min, max);
+        for (int i = 0; i < dysfunctions.Length; i++)
+        {
+            dysfunctions[i] = RandomIn(dysfunctionRange);
+            passiveGains[i] = RandomIn(passiveGainRange);
+        }
 
         if (seeded) Random.state = previous;
 
         if (showDebugLogs)
         {
-            ChunaLogger.Log($"<color=cyan>[CervicalROM] 여유 구간 재추첨 ({min:F0}~{max:F0}°) — " +
-                            $"굴곡 {gaps[(int)Direction.Flexion]:F1}° · 신전 {gaps[(int)Direction.Extension]:F1}° · " +
-                            $"우측굴 {gaps[(int)Direction.LateralRight]:F1}° · 좌측굴 {gaps[(int)Direction.LateralLeft]:F1}° · " +
-                            $"우회전 {gaps[(int)Direction.RotationRight]:F1}° · 좌회전 {gaps[(int)Direction.RotationLeft]:F1}°</color>");
+            ChunaLogger.Log("<color=cyan>[CervicalROM] 환자 제한 재추첨 — " +
+                            $"기능장애 {dysfunctionRange.x:F0}~{dysfunctionRange.y:F0}° · " +
+                            $"압박 여유 {passiveGainRange.x:F0}~{passiveGainRange.y:F0}°\n" +
+                            Summary(Direction.Flexion, "굴곡") + Summary(Direction.Extension, "신전") +
+                            Summary(Direction.LateralRight, "우측굴") + Summary(Direction.LateralLeft, "좌측굴") +
+                            Summary(Direction.RotationRight, "우회전") + Summary(Direction.RotationLeft, "좌회전") +
+                            "</color>");
         }
     }
 
-    private float GapOf(Direction d)
+    private static float RandomIn(Vector2 range)
+    {
+        return Random.Range(Mathf.Min(range.x, range.y), Mathf.Max(range.x, range.y));
+    }
+
+    /// <summary>추첨 결과를 한 방향씩 사람이 읽을 수 있게 적는다.</summary>
+    private string Summary(Direction d, string label)
+    {
+        float normal = NormalAngleOf(d);
+        float active = Mathf.Max(0f, normal - DysfunctionOf(d));
+        float passive = Mathf.Min(normal, active + PassiveGainOf(d));
+        return $"    {label} 정상 {normal:F0}° · 능동 {active:F0}° · 압박 {passive:F0}° · 부족 {normal - passive:F1}°\n";
+    }
+
+    private float DysfunctionOf(Direction d)
     {
         if (d == Direction.None) return 0f;
-        if (gaps == null || (int)d >= gaps.Length) return overpressureAngle;
-        return gaps[(int)d];
+        if (dysfunctions == null || (int)d >= dysfunctions.Length) return dysfunctionAngle;
+        return dysfunctions[(int)d];
+    }
+
+    private float PassiveGainOf(Direction d)
+    {
+        if (d == Direction.None) return 0f;
+        if (passiveGains == null || (int)d >= passiveGains.Length) return passiveGainAngle;
+        return passiveGains[(int)d];
     }
 
     /// <summary>
@@ -208,13 +269,18 @@ public class CervicalRomDriver : MonoBehaviour
         if (showDebugLogs)
         {
             ChunaLogger.Log($"<color=cyan>[CervicalROM] 능동 시작: {direction} → " +
-                            $"{ActiveTargetAngle:F0}° (정상 {NormalAngle:F0}°, 여유 {CurrentGap:F1}°)</color>");
+                            $"{ActiveTargetAngle:F0}° (정상 {NormalAngle:F0}°, 기능장애 {CurrentDysfunction:F1}°, "
+                          + $"압박 한계 {PassiveLimitAngle:F0}°)</color>");
         }
     }
 
     /// <summary>
-    /// 압박 구간. 0이면 능동 끝점, 1이면 정상각이다.
+    /// 압박 구간. 0이면 능동 끝점, 1이면 <b>압박 한계</b>다(정상각이 아니다).
     /// 시술자 손의 진행률을 그대로 넣으면 된다.
+    ///
+    /// ★손이 더 밀어도 압박 한계에서 멈춘다 — 그 저항이 끝느낌이고,
+    ///   정상각까지 남는 각이 곧 부족각이다. 예전처럼 정상각까지 가면
+    ///   누구를 측정해도 부족각 0이 나와 측정이 무의미해진다.
     /// </summary>
     public void SetOverpressure(float progress01)
     {
@@ -222,7 +288,7 @@ public class CervicalRomDriver : MonoBehaviour
 
         // 압박은 시술자 손을 즉시 따라가야 한다. 속도 제한을 걸면 손과 머리가 어긋난다.
         ramifySpeed = 0f;
-        targetAngle = Mathf.Lerp(ActiveTargetAngle, NormalAngle, Mathf.Clamp01(progress01));
+        targetAngle = Mathf.Lerp(ActiveTargetAngle, PassiveLimitAngle, Mathf.Clamp01(progress01));
     }
 
     /// <summary>각도를 직접 지정한다(도).</summary>

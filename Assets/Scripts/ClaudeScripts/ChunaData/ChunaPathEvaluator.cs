@@ -1724,6 +1724,25 @@ public class ChunaPathEvaluator : MonoBehaviour
     }
 
     /// <summary>
+    /// ★AutoPlay를 <b>바깥에서</b> 끝낸다.
+    ///
+    /// 애니메이션도 duration도 없는 AutoPlay는 스스로 끝나지 못한다
+    /// (duration 0의 뜻이 "애니메이션이 끝나면 종료"인데 그 애니메이션이 없다).
+    /// 그런 단계는 동작을 구동하는 쪽이 "목표에 닿았다"고 알려 줘야 끝난다 —
+    /// 경추ROM이 그렇고, <see cref="CervicalRomScenarioBridge"/>가 이걸 부른다.
+    ///
+    /// 부르고 나면 기존 파이프라인이 알아서 다음 substep으로 넘긴다
+    /// (OnAutoPlayCompleted → ScenarioManager, 그리고 ConditionManager의 AutoPlay 대기 해제).
+    /// ★부르는 쪽이 NextSubStep을 <b>따로 부르면 안 된다.</b> 두 번 넘어간다.
+    /// </summary>
+    public void CompleteAutoPlayExternally()
+    {
+        if (!autoPlayHandler.IsAutoPlayMode) return;
+        ChunaLogger.Log("<color=green>[AutoPlay] 바깥에서 완료 처리 — 목표 도달</color>");
+        HandleAutoPlayComplete();
+    }
+
+    /// <summary>
     /// 손이 환자에게 닿았는지 확인
     /// </summary>
     public bool IsAnyHandTouchingPatient()

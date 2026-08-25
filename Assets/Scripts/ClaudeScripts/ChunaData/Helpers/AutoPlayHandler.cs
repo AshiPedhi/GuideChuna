@@ -42,27 +42,21 @@ public class AutoPlayHandler
     /// <param name="requireBothHands">true면 양손이 각각 닿아야 게이트가 열린다.</param>
     public void StartAutoPlay(float duration, bool gated = false, bool latchGate = false, bool requireBothHands = false)
     {
-        // ★애니메이션도 없고 duration도 없으면 AutoPlay가 끝날 근거가 아예 없다.
-        //   duration 0의 뜻이 "애니메이션이 끝나면 종료"인데, 그 애니메이션이 없는 조합이다.
+        // ★애니메이션도 없고 duration도 없으면 AutoPlay가 <b>스스로</b> 끝날 근거가 없다.
+        //   duration 0의 뜻이 "애니메이션이 끝나면 종료"인데 그 애니메이션이 없는 조합이다.
+        //   이때는 바깥에서 CompleteAutoPlay를 불러 줘야 한다
+        //   (경추ROM: CervicalRomScenarioBridge가 목표 도달 시 끝낸다).
         //
-        //   예전에는 그대로 켜져서 진행률이 영영 0에 머물렀고(UpdateAutoPlay의
-        //   `autoPlayDuration > 0 ? ... : 0f`), IsAutoPlayMode가 안 꺼지는 바람에
-        //   ScenarioConditionManager.WaitForAutoPlayComplete()가 무한 대기해
-        //   나레이션이 끝나도 다음 substep으로 넘어가지 못했다
-        //   (2026-08-25 경추ROM 굴곡압박에서 Editor.log로 실측).
-        //
-        //   실측상 이 조합을 쓰는 건 경추ROM 하나뿐이고(PassiveStretch 19행 전부 클립 없음,
-        //   나머지 12개 시나리오는 PassiveStretch에 전부 클립이 있다),
-        //   그쪽은 CervicalRomScenarioBridge가 목표 도달로 직접 단계를 넘기므로
-        //   AutoPlay가 관여할 일이 없다.
+        //   ★여기서 AutoPlay를 '안 켜는' 것으로 고치면 안 된다 — 2026-08-25에 그렇게 했다가
+        //     두 가지가 터졌다. PassiveStretch는 AutoPlay가 켜져 있다는 사실 자체를
+        //     '단계를 붙잡는 장치'로 쓰고 있어서(WaitForAutoPlayComplete) 전 과정이
+        //     즉시 통과해 버렸고, isEvaluating만 켜진 채 세션이 없어
+        //     RecordMetricsSnapshot이 매 프레임 NRE를 냈다(한 세션에 440건).
         if (duration <= 0f && string.IsNullOrEmpty(owner.InternalAnimationStateName))
         {
-            Reset();
             ChunaLogger.LogWarning(
-                "<color=orange>[AutoPlay] 애니메이션도 duration도 없어 시작하지 않는다 — " +
-                "끝날 근거가 없어 켜 두면 다음 단계가 영영 안 넘어간다. " +
-                "동작을 다른 컴포넌트가 구동하는 단계라면 정상이다.</color>");
-            return;
+                "<color=orange>[AutoPlay] 애니메이션도 duration도 없다 — 스스로 끝나지 못한다. " +
+                "바깥에서 CompleteAutoPlayExternally()를 불러 끝내야 단계가 넘어간다.</color>");
         }
 
         isAutoPlayMode = true;

@@ -37,14 +37,32 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
     [Header("=== 압박 ===")]
     [Tooltip("압박 진행률의 소스.\n" +
-             "손쌍회전 — 두 손을 잇는 벡터가 돈 각. 손목만 틀어도 잡힌다.\n" +
-             "중점호   — 손끝 중점이 목 밑동 둘레로 돈 각. 손을 실제로 옮겨야 잡힌다.\n" +
-             "★둘 다 매 프레임 재서 로그에 같이 찍는다. Play 중에 바꿔 가며 비교하면 된다.")]
-    [SerializeField] private OverpressureSource overpressureSource = OverpressureSource.HandPairRotation;
+             "중점호   — 손끝 중점이 목 밑동 둘레로 돈 각. 지렛대 약 0.21m.\n" +
+             "손쌍회전 — 두 손을 잇는 벡터가 돈 각. 지렛대가 두 손 간격(약 0.11m)뿐이다.\n" +
+             "★2026-08-25 실측으로 중점호를 기본으로 했다. 손쌍회전은 지렛대가 절반이라\n" +
+             "  손 트래킹 1cm 지터가 5.2°로 증폭된다 — 여유 구간이 7.5~13°인데 그 태반이다.\n" +
+             "  실제 로그에서도 손쌍회전은 ±5°로 요동쳤고 중점호는 ±3° 안에 머물렀다.\n" +
+             "둘 다 매 프레임 재서 로그에 같이 찍는다. Play 중에 바꿔 가며 비교하면 된다.")]
+    [SerializeField] private OverpressureSource overpressureSource = OverpressureSource.HandMidpointArc;
 
     [Tooltip("압박 유지 substep에서 0 → 1까지 가는 데 걸리는 시간(초).\n" +
              "★손끝을 하나도 못 찾았을 때만 쓰는 폴백이다.")]
     [SerializeField] private float overpressureRampSeconds = 3f;
+
+    [Tooltip("압박 각도의 지터를 걸러내는 시간(초). 0이면 끈다.\n" +
+             "손 트래킹이 떨리면 여유 구간(7~13°)에 비해 무시 못 할 각이 실려 게이지가 튄다.")]
+    [SerializeField] private float overpressureSmoothTime = 0.15f;
+
+    [Tooltip("중립 복귀(x.3)에서는 파지를 요구하지 않는다.\n" +
+             "환자가 스스로 원위치로 돌아오는 구간이라 시술자가 손을 대고 있을 이유가 없다.")]
+    [SerializeField] private bool releaseGripOnReturn = true;
+
+    [Tooltip("파지 미끄러짐 허용치(m). 0이면 검사하지 않는다.\n" +
+             "★머리는 강체다 — 양손이 제대로 잡고 있으면 '두 손 간격'과 '회전 중심까지의 반지름'이\n" +
+             "  압박 내내 보존된다. 제자리에서 손목만 틀면 손이 머리 위를 미끄러지므로 둘이 깨진다.\n" +
+             "  이 값을 넘으면 진행을 인정하지 않는다(되돌리지는 않고 그 자리에서 멈춘다).\n" +
+             "실측 참고: 정상적으로 밀 때 반지름은 0.21→0.23m(2cm), 두 손 간격은 0.10→0.11m로 움직였다.")]
+    [SerializeField] private float gripSlipTolerance = 0.04f;
 
     [Tooltip("목표에 못 닿아도 이 시간이 지나면 넘긴다(초). 세션이 영영 멈추는 걸 막는 안전장치다.")]
     [SerializeField] private float stallTimeoutSeconds = 30f;
@@ -71,9 +89,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private bool arcStarted;             // ①중점호 기준을 잡았는가
     private Vector3 arcStartArm;         // 그때의 회전 중심→손끝중점 벡터
     private float arcRadius;             // 그 벡터의 길이(m). 짧으면 각이 튄다.
+    private float arcStartRadius;        // 압박 시작 시점의 반지름. 강체 구속 검사 기준.
+    private float pairStartSpan;         // 압박 시작 시점의 두 손 간격. 같은 용도.
     private bool pairStarted;            // ②손쌍회전 기준을 잡았는가
     private Vector3 pairStartVector;     // 그때의 A손→B손 벡터
     private float pairSpan;              // 두 손 사이 거리(m)
+    private float sweptSmoothed;         // 지터를 거른 회전각
+    private float sweptVelocity;         // SmoothDamp용
     private float lastPressLogTime = -99f;
 
     private void Awake()
@@ -136,7 +158,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         AdvanceOverpressure(step.stepName, sub.subStepNo);
 
         // 손을 떼면 그 자리에서 멈춘다.
-        driver.Paused = !BothHandsTouching();
+        // ★단 중립 복귀(x.3)는 예외 — 환자가 스스로 돌아오는 구간이라 파지를 요구하지 않는다.
+        driver.Paused = !IsReturningSubStep(step.stepName, sub.subStepNo) && !BothHandsTouching();
 
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
@@ -151,13 +174,18 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (advancedKey == key) return;
         if (DirectionOf(stepName) == CervicalRomDriver.Direction.None) return;
 
+        // ★x.1은 지시(나레이션) substep이다. 능동이든 압박이든 여기서는 판정하지 않는다 —
+        //   나레이션이 끝나면 기존 파이프라인이 넘긴다.
+        //   압박 x.1을 아래 '복귀' 가지로 흘려보냈다가 머리가 중립이라는 이유로
+        //   지시가 통째로 건너뛰어졌다(2026-08-25 실측: "굴곡압박 1 진행 — 중립 복귀 완료").
+        if (subStepNo < 2) return;
+
         bool isOverpressure = stepName.EndsWith("압박", System.StringComparison.Ordinal);
         bool done;
         string reason;
 
         if (!isOverpressure)
         {
-            if (subStepNo < 2) return;
             done = driver.ActiveReached;
             reason = $"능동 끝점 도달 {driver.CurrentAngle:F0}°";
         }
@@ -191,6 +219,18 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         advancedKey = key;
         Log($"{stepName} {subStepNo} 진행 — {reason}");
+
+        // ★AutoPlay가 돌고 있으면 그쪽을 끝내 준다. 직접 NextSubStep을 부르면 안 된다.
+        //   경추ROM의 동작 substep은 애니도 duration도 없어 AutoPlay가 스스로 못 끝난다.
+        //   그대로 두면 다음 substep의 나레이션이 WaitForAutoPlayComplete()에서 무한 대기하고,
+        //   여기서 NextSubStep까지 부르면 파이프라인 진행과 겹쳐 두 번 넘어간다.
+        //   완료 처리만 하면 기존 경로(OnAutoPlayCompleted · ConditionManager)가 알아서 넘긴다.
+        if (evaluator != null && evaluator.IsAutoPlayMode)
+        {
+            evaluator.CompleteAutoPlayExternally();
+            return;
+        }
+
         scenarioManager.NextSubStep();
     }
 
@@ -207,7 +247,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             if (subStepNo >= 2)
             {
                 driver.BeginActive(dir);
-                Log($"능동 시작 {stepName} → {driver.ActiveTargetAngle:F0}° (여유 {driver.CurrentGap:F1}°)");
+                Log($"능동 시작 {stepName} → {driver.ActiveTargetAngle:F0}° "
+                    + $"(정상 {driver.NormalAngle:F0}° · 기능장애 {driver.CurrentDysfunction:F1}°)");
             }
             return;
         }
@@ -218,8 +259,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             overpressureProgress = 0f;
             arcStarted = false;    // 손 기준점을 이 단계에서 다시 잡는다
             pairStarted = false;
-            Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 {driver.NormalAngle:F0}° 까지 " +
-                $"(여유 {driver.CurrentGap:F1}° · 소스 {overpressureSource})");
+            sweptSmoothed = 0f;
+            sweptVelocity = 0f;
+            Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 압박 한계 {driver.PassiveLimitAngle:F0}° 까지 " +
+                $"(밀 양 {driver.CurrentPassiveGain:F1}° · 정상 {driver.NormalAngle:F0}° · "
+                + $"예상 부족각 {driver.NormalAngle - driver.PassiveLimitAngle:F1}° · 소스 {overpressureSource})");
         }
         else if (subStepNo >= 3)
         {
@@ -259,7 +303,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             if (arm.sqrMagnitude > 1e-6f)
             {
                 arcRadius = arm.magnitude;
-                if (!arcStarted) { arcStarted = true; arcStartArm = arm; }
+                if (!arcStarted) { arcStarted = true; arcStartArm = arm; arcStartRadius = arcRadius; }
                 else arcAngle = Vector3.SignedAngle(arcStartArm, arm, axis);
             }
         }
@@ -270,7 +314,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             if (flat.sqrMagnitude > 1e-6f)
             {
                 pairSpan = flat.magnitude;
-                if (!pairStarted) { pairStarted = true; pairStartVector = flat; }
+                if (!pairStarted) { pairStarted = true; pairStartVector = flat; pairStartSpan = pairSpan; }
                 else pairAngle = Vector3.SignedAngle(pairStartVector, flat, axis);
             }
         }
@@ -285,10 +329,36 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             return;
         }
 
-        float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
+        // ★강체 구속 — 머리를 제대로 잡고 돌리면 두 손 간격과 반지름이 보존된다.
+        //   제자리에서 손목만 틀면 손이 머리 위를 미끄러져 둘 다 깨진다.
+        //   깨진 동안에는 진행을 인정하지 않는다. 되돌리지는 않고 그 자리에서 멈춘다 —
+        //   잠깐 미끄러졌다고 밀어 둔 각을 날리면 오히려 더 답답하다.
+        if (gripSlipTolerance > 0f)
+        {
+            float radiusDrift = arcStarted ? Mathf.Abs(arcRadius - arcStartRadius) : 0f;
+            float spanDrift = pairStarted ? Mathf.Abs(pairSpan - pairStartSpan) : 0f;
+
+            if (radiusDrift > gripSlipTolerance || spanDrift > gripSlipTolerance)
+            {
+                DiagnoseOverpressure(
+                    $"파지가 미끄러졌다 — 반지름 {radiusDrift * 100f:F1}cm · 두 손 간격 {spanDrift * 100f:F1}cm 변함 " +
+                    $"(허용 {gripSlipTolerance * 100f:F0}cm). 머리를 잡고 돌리는 게 아니라 손이 머리 위를 미끄러지고 있다.",
+                    arcAngle, pairAngle, axis, pivot);
+                return;
+            }
+        }
+
+        // ★지터를 걸러낸다. 여유 구간이 7~13°라 손 떨림 몇 도가 그대로 게이지에 실린다.
+        sweptSmoothed = overpressureSmoothTime > 0f
+            ? Mathf.SmoothDamp(sweptSmoothed, swept, ref sweptVelocity, overpressureSmoothTime)
+            : swept;
+
+        float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
 
         // 되돌아가는 방향(음수)은 0으로 본다. 민 만큼만 인정한다.
-        overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, swept) / gap);
+        // ★진행률은 기준점 대비 절대값이라, 손을 되돌리면 머리도 능동 끝점으로 되돌아온다.
+        //   시술자가 힘을 빼면 머리가 따라 돌아오는 게 맞으므로 의도된 동작이다.
+        overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, sweptSmoothed) / gap);
         driver.SetOverpressure(overpressureProgress);
 
         DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
@@ -320,22 +390,37 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             grip = $"{gripJudge.PairAName}(왼{Mark(aL)}/오{Mark(aR)}) {gripJudge.PairBName}(왼{Mark(bL)}/오{Mark(bR)})";
         }
 
-        float gap = Mathf.Max(0.1f, driver.NormalAngle - driver.ActiveTargetAngle);
+        float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
         bool usingPair = overpressureSource == OverpressureSource.HandPairRotation;
 
         ChunaLogger.Log(
             $"<color=cyan>[ROM 압박] {(note ?? "진행 중")} — 파지 {(BothHandsTouching() ? "O" : "X")}  {grip}\n" +
-            $"    ①중점호 {Deg(arcAngle)} (반지름 {arcRadius:F2}m){(usingPair ? "" : "  ← 사용")}\n" +
-            $"    ②손쌍회전 {Deg(pairAngle)} (두 손 간격 {pairSpan:F2}m){(usingPair ? "  ← 사용" : "")}\n" +
+            $"    ①중점호 {Deg(arcAngle)} (반지름 {arcRadius:F2}m, 시작 대비 {Drift(arcRadius, arcStartRadius, arcStarted)})" +
+            $"{(usingPair ? "" : "  ← 사용")}\n" +
+            $"    ②손쌍회전 {Deg(pairAngle)} (두 손 간격 {pairSpan:F2}m, 시작 대비 {Drift(pairSpan, pairStartSpan, pairStarted)})" +
+            $"{(usingPair ? "  ← 사용" : "")}\n" +
             $"    여유 {gap:F1}° · 진행 {overpressureProgress * 100f:F0}% · " +
-            $"머리 {driver.CurrentAngle:F1}° → {driver.NormalAngle:F0}° · " +
+            $"머리 {driver.CurrentAngle:F1}° → 압박한계 {driver.PassiveLimitAngle:F0}° (정상 {driver.NormalAngle:F0}°) · " +
             $"축 {(axis == Vector3.zero ? "★없음(방향 None)" : axis.ToString("F2"))} · " +
             $"중심 {(pivot != null ? pivot.name : "★없음")}</color>");
+    }
+
+    /// <summary>중립 복귀 substep인가. 여기서는 파지를 요구하지 않는다.</summary>
+    private bool IsReturningSubStep(string stepName, int subStepNo)
+    {
+        return releaseGripOnReturn
+               && subStepNo >= 3
+               && !string.IsNullOrEmpty(stepName)
+               && stepName.EndsWith("압박", System.StringComparison.Ordinal);
     }
 
     private static string Mark(bool on) => on ? "O" : "·";
 
     private static string Deg(float degrees) => float.IsNaN(degrees) ? "  ——  " : $"{degrees,6:F1}°";
+
+    /// <summary>강체 구속 검사용 — 시작 대비 얼마나 변했는지(cm).</summary>
+    private static string Drift(float now, float start, bool started)
+        => started ? $"{(now - start) * 100f:+0.0;-0.0;0.0}cm" : "——";
 
     /// <summary>
     /// 파지가 성립했는가. 엄지·검지 판정기가 있으면 그쪽을 본다 —
