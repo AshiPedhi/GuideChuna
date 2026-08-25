@@ -140,6 +140,12 @@ public class CervicalRomDriver : MonoBehaviour
     /// <summary>목이 도는 중심. 손이 돌린 각을 재는 기준점이다.</summary>
     public Transform Pivot => neckChain != null && neckChain.Length > 0 ? neckChain[0] : torso;
 
+    /// <summary>지금 재고 있는 방향. 각도기가 어느 면을 띄울지 여기서 정한다.</summary>
+    public Direction CurrentDirection => currentDirection;
+
+    /// <summary>기준 몸통. 각도기가 0° 방향을 잡는 데 쓴다.</summary>
+    public Transform Torso => torso;
+
     /// <summary>능동 끝점에 도달했는가. 압박 단계로 넘어가도 되는 시점이다.</summary>
     public bool ActiveReached => currentDirection != Direction.None &&
                                  appliedAngle >= ActiveTargetAngle - 0.5f;
