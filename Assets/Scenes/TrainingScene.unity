@@ -156851,15 +156851,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 0
+      value: 40
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -156867,11 +156867,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -19
       objectReference: {fileID: 0}
     - target: {fileID: 1399643648098774758, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_Layer
@@ -202433,7 +202433,7 @@ MonoBehaviour:
   evaluator: {fileID: 0}
   gripJudge: {fileID: 0}
   scenarioName: "\uACBD\uCD94ROM\uCE21\uC815"
-  overpressureSource: 0
+  overpressureSource: 1
   overpressureRampSeconds: 3
   overpressureSmoothTime: 0.15
   gripSlipTolerance: 0.04
@@ -202442,16 +202442,15 @@ MonoBehaviour:
   guideToggleDebounce: 0.25
   stallButtonSeconds: 20
   stallTimeoutSeconds: 0
-  progressRoot: {fileID: 1602648283}
+  progressRoot: {fileID: 483442387}
   sidePointLeft: {fileID: 1925348194}
   sidePointRight: {fileID: 2042824688}
   frontPoint: {fileID: 1593552313}
   placeOppositeToViewer: 1
   progressSideDeadZone: 0.08
-  sideGripStepName: "\uD30C\uC9C0"
+  sideGripStepName: "\uC2DC\uC0C1\uBA74 \uD30C\uC9C0"
   frontGripStepNames:
-  - "\uAD00\uC0C1\uBA74\uD30C\uC9C0"
-  - "\uD6A1\uB2E8\uBA74\uD30C\uC9C0"
+  - "\uAD00\uC0C1\uBA74 \uD30C\uC9C0"
   showDebugLogs: 1
   logOverpressure: 1
   overpressureLogInterval: 0.25
@@ -240735,9 +240734,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1593552312}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.99965733, y: -0, z: -0, w: 0.026177017}
-  m_LocalPosition: {x: 0, y: -0.2, z: 0.8}
-  m_LocalScale: {x: 0.090909086, y: 0.09090908, z: 0.09090908}
+  m_LocalRotation: {x: -0.7071068, y: -5.184075e-10, z: -0.0000000021241533, w: -0.7071068}
+  m_LocalPosition: {x: 0, y: -0.22, z: 0.8000002}
+  m_LocalScale: {x: 0.09090908, y: 0.09090906, z: 0.09090906}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 543450652859335547}
@@ -294866,13 +294865,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1925348193}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.99965733, y: -0, z: -0, w: 0.026177017}
-  m_LocalPosition: {x: -0.35, y: 0.1, z: 0.8}
-  m_LocalScale: {x: 0.090909086, y: 0.09090908, z: 0.09090908}
+  m_LocalRotation: {x: -0.50000006, y: 0.5, z: 0.50000006, w: -0.5}
+  m_LocalPosition: {x: -0.35, y: 0.10000017, z: 0.8000002}
+  m_LocalScale: {x: 0.09090909, y: 0.09090906, z: 0.09090907}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 543450652859335547}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: -90, z: 0}
 --- !u!1001 &1926170683
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -300267,7 +300266,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: e208a326390d40c29827ca69221756ec, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
   defaultScenarioIndex: 12
-  forceDefaultIndex: 1
+  forceDefaultIndex: 0
   showDebugLog: 1
 --- !u!4 &1964066469
 Transform:
@@ -311274,13 +311273,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2042824687}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.99965733, y: -0, z: -0, w: 0.026177017}
-  m_LocalPosition: {x: 0.35, y: 0.1, z: 0.8}
-  m_LocalScale: {x: 0.090909086, y: 0.09090908, z: 0.09090908}
+  m_LocalRotation: {x: -0.50000006, y: -0.5, z: -0.50000006, w: -0.5}
+  m_LocalPosition: {x: 0.34999996, y: 0.10000017, z: 0.8000002}
+  m_LocalScale: {x: 0.09090909, y: 0.09090906, z: 0.09090907}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 543450652859335547}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 90, z: 0}
 --- !u!1 &2042885708
 GameObject:
   m_ObjectHideFlags: 0
@@ -400558,9 +400557,9 @@ MonoBehaviour:
   driver: {fileID: 5866666021072361730}
   font: {fileID: 11400000, guid: 561f4e50cf36d5a498aa8dd400160e55, type: 2}
   showPlane: 1
-  autoFitPlane: 1
+  autoFitPlane: 0
   planeMargin: 0.1
-  planeSize: {x: 0.75, y: 0.75}
+  planeSize: {x: 1.1, y: 1.1}
   planeLift: 0.18
   sagittalNormalOffset: 0.3
   coronalNormalOffset: 0.32
@@ -400593,8 +400592,8 @@ MonoBehaviour:
   needleWidth: 0.005
   needleFromPlaneColor: 1
   needleSaturationValue: {x: 1, y: 0.78}
-  tickLabelSize: 0.15
-  readoutSize: 0.4
+  tickLabelSize: 0.2
+  readoutSize: 0.45
   labelOffset: 0.015
   labelsFaceViewer: 0
   autoFlipLabels: 1

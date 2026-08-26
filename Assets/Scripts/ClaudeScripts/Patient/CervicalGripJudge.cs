@@ -514,6 +514,11 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         return 1;
     }
 
+#endif
+
+    // ★런타임에서도 쓰인다 — AttachTip이 부른다.
+    //   여태 #if UNITY_EDITOR 안에 있어서 빌드할 때만 CS0103으로 터졌다.
+    //   에디터에서는 멀쩡히 돌아 안 보였다(2026-08-26). UnityEditor API는 안 쓴다.
     /// <summary>
     /// ★이름으로 씬 전체를 뒤지면 안 된다. 손 리그가 여러 벌이라 같은 이름이 52개까지 나오고
     ///   (OVR 손·가이드 손·녹화 손), 그중 아무거나 잡으면 실제 트래킹되는 손이 아닐 수 있다.
@@ -596,5 +601,4 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         }
         return null;
     }
-#endif
 }

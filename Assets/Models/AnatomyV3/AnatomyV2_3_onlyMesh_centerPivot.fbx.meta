@@ -1,0 +1,540 @@
+fileFormatVersion: 2
+guid: 2373c9e83946f044d96ca1099753b63a
+ModelImporter:
+  serializedVersion: 21202
+  internalIDToNameTable: []
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Costal_cartilage
+    second: {fileID: 2100000, guid: 59a936a9e1b0e8841889baaee63a6dab, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: Eye_surface
+    second: {fileID: 2100000, guid: 28922191202e3e94a967269198e1a8a7, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: MMSS_lambert5
+    second: {fileID: 2100000, guid: 694712a0d93a33448ae9d13c99043ca0, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: adrenal_glands
+    second: {fileID: 2100000, guid: 5c5c82188525dff4a9662c6005695e05, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: arm
+    second: {fileID: 2100000, guid: d2650afba52cb8041b89297245549f56, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: bladder
+    second: {fileID: 2100000, guid: 5d43114f6d1428043b9b3b46d8eb369d, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: body_skin
+    second: {fileID: 2100000, guid: fbeca8ffffd63b64aacb8e5429e2d072, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: brain
+    second: {fileID: 2100000, guid: 8f25b7df55633ca48899ff8cd7d2af74, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: bronchi_01
+    second: {fileID: 2100000, guid: 3d6c15fece42d42498ccfa1c7b629858, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: bronchi_03z
+    second: {fileID: 2100000, guid: 1e0b6fefafece6d488f58af7913104a5, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: calcaneum_
+    second: {fileID: 2100000, guid: 3f7464138d6d8734bae2d3d6226f8491, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: cartilage
+    second: {fileID: 2100000, guid: 25a2274ab3420674db7ebcc9f1015a7f, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: cartilage_02
+    second: {fileID: 2100000, guid: 6b999bc0745e8e645910da82c489d3a6, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: clavicle
+    second: {fileID: 2100000, guid: 4584b8ce0a9cfad4c9e774a910d03e80, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: colon
+    second: {fileID: 2100000, guid: bd575a90303414b448e83dad69e33781, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: corpus_cavernosum
+    second: {fileID: 2100000, guid: 050bf87997dc8f44fbee5e0d546ee027, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: costal_cartilage
+    second: {fileID: 2100000, guid: 2567b8e2382d7e5449696ab78e189746, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: cricoid cartilage
+    second: {fileID: 2100000, guid: fb858fe0075d34a4fb72c17e15617103, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: ductus
+    second: {fileID: 2100000, guid: 2b26b3ab69d7fa446920b0439f685139, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: ejaculatory_duct
+    second: {fileID: 2100000, guid: 10ed6f980cd11444a97cab54cf3a0a9f, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: elbow
+    second: {fileID: 2100000, guid: 44ca1d2704b3b214b9e3fae29843959b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: epidydimus
+    second: {fileID: 2100000, guid: fc653c0bcb085194b81ab831ca3408a3, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: epiglottis
+    second: {fileID: 2100000, guid: 8ff1b0e1942f08f45833ed1ea27148d9, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: esophagus
+    second: {fileID: 2100000, guid: f6ffa9f81f5c5ab488b9686dba78b07d, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: eye1
+    second: {fileID: 2100000, guid: 665a541b368fdcc4f802fc0e2f84d57e, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: eye2
+    second: {fileID: 2100000, guid: 8bee405b33f3a2147b0ed1e0e796be16, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: eye3
+    second: {fileID: 2100000, guid: 337c404748e872c498645589b273e0ba, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: eyebrows
+    second: {fileID: 2100000, guid: aa8de1bc6ca70d54597c375e1f9163a5, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: face
+    second: {fileID: 2100000, guid: 27057335b945bb24d95e1cbcb5ad22f4, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: femiur
+    second: {fileID: 2100000, guid: 2fa2954bed6db484787a4ee64453685c, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: femur
+    second: {fileID: 2100000, guid: 27e696d03f81ba746a102a8815a49c4f, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: foot
+    second: {fileID: 2100000, guid: 987ef24ef0cfe264bb18b75e0eefdd01, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: gallbladder
+    second: {fileID: 2100000, guid: 1f257d6b2aac8bb4e9ed086b5d8ecbf6, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: glans_ penis_top
+    second: {fileID: 2100000, guid: 23b3b52667255ac49bd935ff8a25eefb, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: glans_penis
+    second: {fileID: 2100000, guid: a423c1ba4603c5644a1f91c5206b171c, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: head_skin
+    second: {fileID: 2100000, guid: 58b7d37f9d0ba3e43b6b8fb997442b4c, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: heart
+    second: {fileID: 2100000, guid: dfc3a9ee13f6c5f46a107f701441b8fc, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: hepatic
+    second: {fileID: 2100000, guid: c30c9637af20e9241811cdb7495d5905, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: hepatic left
+    second: {fileID: 2100000, guid: f8e247a32fdea5a4fae8450869a7f72e, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: hepatic_right
+    second: {fileID: 2100000, guid: 9e4dc03884a1d6046af9579df729621b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: humerus
+    second: {fileID: 2100000, guid: 74b704e3709f0654c8708966876d6a61, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: hyoid_bone
+    second: {fileID: 2100000, guid: 3b1ceb376ced9184aa6978e90af10d4e, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: ilium
+    second: {fileID: 2100000, guid: 791c38403d24a6243be70481419919bc, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: kidneys
+    second: {fileID: 2100000, guid: 32bd8af0315a833489f222d9188ab9c7, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: kidneys_tube
+    second: {fileID: 2100000, guid: 3d6069b2d14f72b4ca66c7ffd7dccb72, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: knee
+    second: {fileID: 2100000, guid: 34c41de2e6a3a7a46a63082757d3b6d8, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: larynx
+    second: {fileID: 2100000, guid: 5156b811f55947c48ab6b76625ed045c, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: legs_skin
+    second: {fileID: 2100000, guid: b026baf5c3c89ef4f9e43b12a758654a, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: liver ligament
+    second: {fileID: 2100000, guid: 549fccbb5407d0647b1f70a5d6b216eb, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: liver_left
+    second: {fileID: 2100000, guid: 4d332c1318bd1064187bd3c25fdbd9f9, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: liver_right
+    second: {fileID: 2100000, guid: c262207e33ae6e7418bfa766088a0915, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: lowerleg
+    second: {fileID: 2100000, guid: 6e76ea7ccd614cb4996ca3e574264583, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: lumbar_spine
+    second: {fileID: 2100000, guid: a1b46712f828e9f429e962c506d63f59, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: lung
+    second: {fileID: 2100000, guid: fb68583728653bb4297335c2d8b85f7b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: lymphatic_system
+    second: {fileID: 2100000, guid: 4205f471132251442bcc106a61413ef8, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: male_boxers_cage
+    second: {fileID: 2100000, guid: 84be7d032b0ba68459240c48b5d25300, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: metacarpal_bones
+    second: {fileID: 2100000, guid: fc5465d7799d86145a1ef8f7f2e1a9e2, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: nerves
+    second: {fileID: 2100000, guid: 1e1a36109ceb9354eaa82ad5b15b3747, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: nose
+    second: {fileID: 2100000, guid: 0b84fffbaae512e4086c6bb9ed3ce4a7, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: pancreas
+    second: {fileID: 2100000, guid: 32fb3f5b876c81d4ab898b904b653706, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: pancreas_duct
+    second: {fileID: 2100000, guid: 9b2b7d37420ff3442972e6473a497c41, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: prostate
+    second: {fileID: 2100000, guid: 3ba599ea3bc001b4daf1f52d98aea889, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: sacrum
+    second: {fileID: 2100000, guid: fb09e5d92ef745545b7e9025317c1e95, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: scapula
+    second: {fileID: 2100000, guid: 503544633eb49564fb3b7b1f01ea440c, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: seminal_vesicle
+    second: {fileID: 2100000, guid: b5a60219bcee7c0479bfb95d4e787797, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: shoulder
+    second: {fileID: 2100000, guid: 77f9d568f9518c84fba1307934113dce, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: small_intestine
+    second: {fileID: 2100000, guid: ffd2b9f61cfd9d24cb3e137c48554b2b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: spleen
+    second: {fileID: 2100000, guid: 7741e06ff86a15f4fbd0dca31dbdeb62, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: spleen_lligament
+    second: {fileID: 2100000, guid: faa81bae3cceb5445915de7d3395571b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: sternum
+    second: {fileID: 2100000, guid: dd1163629f9d95e4696bc5675189bbda, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: stomach
+    second: {fileID: 2100000, guid: babfa2ee0890f2a4b98b37b9b2e68543, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: stomach_pharynx
+    second: {fileID: 2100000, guid: 0d147ece9e151cb46b2d2ea10e4289ff, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: teeth
+    second: {fileID: 2100000, guid: fcdbec9ce2693da40a991cb002f11f57, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: testicle
+    second: {fileID: 2100000, guid: 32a53b654883f5f4f99efe2de64490c2, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: thorax
+    second: {fileID: 2100000, guid: 9a6390aeac8c21f4aaf92444f2b52a92, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: thymus
+    second: {fileID: 2100000, guid: 13bc3f783480edd4db9b5b75bf1a2dca, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: thyroid
+    second: {fileID: 2100000, guid: 69d8cde20d7b99748aba15459e36c4b4, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: thyroid_cartilage
+    second: {fileID: 2100000, guid: acdf584493f409140b4dfc423c988ea1, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: toes
+    second: {fileID: 2100000, guid: 7357a7aaea6cdb649bfc6b09fe4a8611, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: toroso
+    second: {fileID: 2100000, guid: 8996b628b13379140b8a40a2076f3114, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: transverse muscle
+    second: {fileID: 2100000, guid: ca8285f627b720e4c8a74b75fdcc0d5f, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: upleg
+    second: {fileID: 2100000, guid: e70cf717cda447f4ebc689220e117383, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: vascular_system_01
+    second: {fileID: 2100000, guid: e549c616b462d2842ae79c912064efcc, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: vascular_system_02
+    second: {fileID: 2100000, guid: 69855662b3cc2fb468c68a231b9afc87, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: vascular_system_03
+    second: {fileID: 2100000, guid: 9d7a6316fd9459048a4d83613367288d, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: vascular_system_05
+    second: {fileID: 2100000, guid: f96366728ea7b0048baef83521f0fd8b, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: wrist
+    second: {fileID: 2100000, guid: 1b3bad57d3b0d9f45866685f14499d88, type: 2}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  animations:
+    legacyGenerateAnimations: 4
+    bakeSimulation: 0
+    resampleCurves: 1
+    optimizeGameObjects: 0
+    removeConstantScaleCurves: 1
+    motionNodeName: 
+    rigImportErrors: 
+    rigImportWarnings: 
+    animationImportErrors: 
+    animationImportWarnings: 
+    animationRetargetingWarnings: 
+    animationDoRetargetingWarnings: 0
+    importAnimatedCustomProperties: 0
+    importConstraints: 0
+    animationCompression: 1
+    animationRotationError: 0.5
+    animationPositionError: 0.5
+    animationScaleError: 0.5
+    animationWrapMode: 0
+    extraExposedTransformPaths: []
+    extraUserProperties: []
+    clipAnimations: []
+    isReadable: 1
+  meshes:
+    lODScreenPercentages: []
+    globalScale: 1
+    meshCompression: 0
+    addColliders: 0
+    useSRGBMaterialColor: 1
+    sortHierarchyByName: 1
+    importVisibility: 1
+    importBlendShapes: 1
+    importCameras: 1
+    importLights: 1
+    nodeNameCollisionStrategy: 1
+    fileIdsGeneration: 2
+    swapUVChannels: 0
+    generateSecondaryUV: 0
+    useFileUnits: 1
+    keepQuads: 0
+    weldVertices: 1
+    bakeAxisConversion: 0
+    preserveHierarchy: 0
+    skinWeightsMode: 0
+    maxBonesPerVertex: 4
+    minBoneWeight: 0.001
+    optimizeBones: 1
+    meshOptimizationFlags: -1
+    indexFormat: 0
+    secondaryUVAngleDistortion: 8
+    secondaryUVAreaDistortion: 15.000001
+    secondaryUVHardAngle: 88
+    secondaryUVMarginMethod: 1
+    secondaryUVMinLightmapResolution: 40
+    secondaryUVMinObjectScale: 1
+    secondaryUVPackMargin: 4
+    useFileScale: 1
+  tangentSpace:
+    normalSmoothAngle: 60
+    normalImportMode: 0
+    tangentImportMode: 3
+    normalCalculationMode: 4
+    legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
+    blendShapeNormalImportMode: 1
+    normalSmoothingSource: 0
+  referencedClips: []
+  importAnimation: 1
+  humanDescription:
+    serializedVersion: 3
+    human: []
+    skeleton: []
+    armTwist: 0.5
+    foreArmTwist: 0.5
+    upperLegTwist: 0.5
+    legTwist: 0.5
+    armStretch: 0.05
+    legStretch: 0.05
+    feetSpacing: 0
+    globalScale: 1
+    rootMotionBoneName: 
+    hasTranslationDoF: 0
+    hasExtraRoot: 0
+    skeletonHasParents: 1
+  lastHumanDescriptionAvatarSource: {instanceID: 0}
+  autoGenerateAvatarMappingIfUnspecified: 1
+  animationType: 2
+  humanoidOversampling: 1
+  avatarSetup: 0
+  addHumanoidExtraRootOnlyWhenUsingAvatar: 1
+  additionalBone: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
