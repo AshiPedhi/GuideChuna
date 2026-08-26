@@ -21,6 +21,13 @@ using UnityEngine;
 /// 고정돼 있어 맞출 상태가 없고, UI가 늘 쓰므로 빌드에서 스트립되지 않는다
 /// (커스텀 셰이더가 빌드에서 죽은 xray 전례, Standard Fade가 조용히 불투명해진 전례를 피한다).
 /// </summary>
+/// <remarks>
+/// ★<see cref="ExecuteAlways"/> — Play 없이 씬 뷰에서도 그린다. 값을 만지고 결과를
+///   바로 보려면 이게 있어야 한다. 대신 생성물에는 전부 <c>HideFlags.DontSave</c>를
+///   걸어 <b>씬에 절대 직렬화되지 않게</b> 한다. 안 걸면 각도기 조각 수백 개가
+///   씬 파일에 굳어 버린다(이 프로젝트는 그런 사고 이력이 있다).
+/// </remarks>
+[ExecuteAlways]
 [RequireComponent(typeof(Transform))]
 public class CervicalRomPlaneGauge : MonoBehaviour
 {
@@ -170,6 +177,48 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Tooltip("숫자를 눈금에서 얼마나 바깥에 둘지 (m). 작을수록 눈금에 붙는다.")]
     [SerializeField] private float labelOffset = 0.016f;
 
+    [Tooltip("★이 체크는 <b>끄는 것이 기본</b>이다.\n" +
+             "\n" +
+             "【끔(권장)】 숫자가 면 위에 누운 채로 <b>Y축 180°만</b> 돌아 읽는 방향을 맞춘다.\n" +
+             "  기울지 않으므로 눈금과 나란한 상태가 유지된다. 어느 쪽으로 돌릴지는\n" +
+             "  아래 autoFlipLabels가 정한다.\n" +
+             "\n" +
+             "【켬】 숫자가 헤드셋을 <b>매 프레임 계속 따라 돈다</b>(X·Z도 같이 기운다).\n" +
+             "  읽기는 쉬운데 머리를 조금만 움직여도 숫자가 꿈틀거린다.\n" +
+             "\n" +
+             "★이름이 '사용자를 향한다'로 읽히지만 실제 뜻은 '계속 따라 돈다'이다 —\n" +
+             "  요청받은 'Y축 180°만'은 <b>끈 상태</b>의 동작이다(2026-08-26).")]
+    [SerializeField] private bool labelsFaceViewer = false;
+
+    [Tooltip("숫자를 고정할 때 <b>Y축으로만</b> 180° 돌려 보는 사람 쪽을 향하게 한다.\n" +
+             "★면의 뒷면에서 보면 글씨가 좌우로 뒤집혀 읽힌다. X·Z는 건드리지 않으므로\n" +
+             "  눈금과 나란한 상태는 그대로 유지된다(2026-08-26 사용자 지시).\n" +
+             "면에 들어갈 때 한 번 정하고 고정한다 — 매 프레임 보면 글씨가 깜빡 뒤집힌다.")]
+    [SerializeField] private bool autoFlipLabels = true;
+
+    [Tooltip("숫자에 더할 Y 회전(도). 자동 판정이 반대로 나오면 180을 넣는다.")]
+    [SerializeField] private float labelYawOffset = 0f;
+
+    [Tooltip("글씨 뒤집기가 깜빡이지 않게 두는 여유 (m).\n" +
+             "면에 딱 붙어 설 때만 의미가 있다. 크게 주면 면을 넘어가도 늦게 뒤집힌다.")]
+    [SerializeField] private float flipHysteresis = 0.05f;
+
+    [Tooltip("★횡단면(좌우 회전)에서만 숫자를 <b>호의 접선 방향</b>으로 돌린다.\n" +
+             "면 위에 눕는 것은 그대로다 — 세우지 않는다.\n" +
+             "각 숫자의 글씨 방향이 <b>중심에서 그 숫자로 가는 선과 수직</b>이 되게 놓는다.\n" +
+             "각도기 눈금 숫자가 호를 따라 도는 그 모양이다.\n" +
+             "시상면·관상면은 전부 같은 방향으로 눕는다(종전대로).")]
+    [SerializeField] private bool transverseLabelsAlongArc = true;
+
+    [Tooltip("최대각 마지노선의 색. ★면이 바뀌어도 <b>늘 같은 색</b>이다 —\n" +
+             "  '여기가 최대'는 면과 무관한 기준선이라, 면 색을 따라가면 기준선으로 안 읽힌다\n" +
+             "  (2026-08-26 사용자 지시). 지침처럼 진한 원색으로 둔다.")]
+    [SerializeField] private Color maxAngleMarkColor = new Color(0.10f, 0.80f, 0.25f, 1f);
+
+    [Tooltip("최대각 마지노선 굵기 (m). ★지침과 같은 꼴로 <b>중심에서 눈금까지</b> 긋는다 —\n" +
+             "  짧은 눈금으로는 '여기가 최대'라는 기준선으로 안 읽힌다(2026-08-26 사용자 지시).")]
+    [SerializeField] private float maxAngleMarkWidth = 0.0045f;
+
     [Tooltip("눈금 위 최대각 자리에 숫자를 붙일지. 끄면 굵은 눈금만 남는다.\n" +
              "★켜 둔다 — 굴곡 45°는 10° 간격 눈금 사이에 떨어져서, 끄면 최대각 숫자가\n" +
              "  화면 어디에도 안 나온다. 지침 위 부제를 뺀 자리를 이게 대신한다.")]
@@ -189,8 +238,25 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Tooltip("원형 배경 색")]
     [SerializeField] private Color readoutBackdropColor = new Color(0.09f, 0.10f, 0.13f, 0.78f);
 
+    [Header("=== 에디터 프리뷰 (Play 없이 보기) ===")]
+    [Tooltip("켜면 Play하지 않아도 씬 뷰에 각도기가 그려진다. 값을 만지면 바로 반영된다.\n" +
+             "★Play 중에는 이 설정과 무관하게 항상 실제 드라이버 값을 그린다.")]
+    [SerializeField] private bool previewInEditor = true;
+
+    [Tooltip("프리뷰로 띄울 방향. 면·색·좌우 배치가 여기 따라 바뀐다.")]
+    [SerializeField] private CervicalRomDriver.Direction previewDirection = CervicalRomDriver.Direction.Flexion;
+
+    [Tooltip("프리뷰 지침이 가리킬 각(도). 최대각을 넘으면 최대각으로 잘린다.\n" +
+             "능동 한계·압박 한계는 드라이버 인스펙터의 기본값(추첨 전)으로 그린다.")]
+    [SerializeField] private float previewAngle = 30f;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
+
+    // ── 겹침 순서. 같은 투명 큐라 sortingOrder가 유일하게 확실한 수단이다. ──
+    private const int OrderPlane = 0;      // 면 판 · 눈금 · 채움 · 지침
+    private const int OrderBackdrop = 1;   // 현재각 숫자 뒤 원판
+    private const int OrderLabel = 2;      // 눈금 숫자 · 현재각 숫자
 
     // ── 생성물 ────────────────────────────────────────────────────────────
     private Transform root;              // 면과 함께 도는 부모. 회전 중심에 붙는다.
@@ -219,37 +285,117 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private int lastReadoutDegrees = int.MinValue;
 
     // ── 좌우 자동 배치. 그 면에 들어갈 때 한 번 정하고 고정한다. ─────────
+    private bool labelFlip;              // 글씨를 반대편으로 돌려야 하는가
     private int sagittalSide;            // −1 / +1, 0 = 아직 안 정함
     private int coronalSide;
     private PlaneGroup lastGroup;
     private bool hasLastGroup;
 
+    /// <summary>
+    /// 에디터에서 프리뷰로 그리는 중인가. Play 중에는 언제나 false다 —
+    /// 실제 측정값을 프리뷰 값으로 덮어쓰면 재는 것과 보여 주는 것이 어긋난다.
+    /// </summary>
+    private bool UsePreview => !Application.isPlaying && previewInEditor;
+
     private void Awake()
+    {
+        EnsureDriver();
+    }
+
+    /// <summary>
+    /// 드라이버를 잡는다. ★에디터에서는 <b>컴포넌트를 끄지 않는다</b> —
+    /// 한 번 꺼지면 사람이 다시 켜기 전까지 프리뷰가 영영 안 뜬다.
+    /// </summary>
+    private bool EnsureDriver()
     {
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (driver == null)
         {
-            ChunaLogger.LogWarning("[ROM 각도기] CervicalRomDriver를 찾지 못했습니다. 각도기를 끕니다.");
-            enabled = false;
-            return;
+            if (Application.isPlaying)
+            {
+                ChunaLogger.LogWarning("[ROM 각도기] CervicalRomDriver를 찾지 못했습니다. 각도기를 끕니다.");
+                enabled = false;
+            }
+            return false;
         }
-        if (font == null)
+        if (Application.isPlaying && font == null)
         {
             ChunaLogger.LogWarning("[ROM 각도기] 폰트가 비어 있습니다 — TMP 기본 폰트라 한글이 깨집니다. " +
                                    "인스펙터의 font에 Assets/_NJS/Noto_Sans_KR/NotoSansKR-Bold 를 넣으세요.");
         }
-        BuildHierarchy();
-        SetVisible(false);
+        return true;
     }
 
-    private void OnDestroy()
+    /// <summary>
+    /// 생성물이 없으면 만든다. ★Awake가 아니라 여기서 만드는 이유 —
+    /// 에디터는 스크립트를 다시 컴파일할 때마다 도메인을 갈아엎는다.
+    /// 그때 생성물은 DontSave라 사라지는데 Awake는 다시 불리지 않는다.
+    /// </summary>
+    private void EnsureBuilt()
     {
-        if (backdropMesh != null) Destroy(backdropMesh);
-        if (backdropMaterial != null) Destroy(backdropMaterial);
-        if (staticMesh != null) Destroy(staticMesh);
-        if (dynamicMesh != null) Destroy(dynamicMesh);
-        if (sharedMaterial != null) Destroy(sharedMaterial);
+        if (root == null) BuildHierarchy();
     }
+
+    private void OnDestroy() => Teardown();
+
+    private void OnDisable()
+    {
+#if UNITY_EDITOR
+        UnityEditor.SceneView.duringSceneGui -= OnSceneGui;
+#endif
+        // ★에디터에서 컴포넌트를 끄면 생성물도 같이 치운다. 안 그러면
+        //   씬에 주인 없는 각도기가 남아 사람이 지울 수도 없다(DontSave라 저장은 안 된다).
+        if (!Application.isPlaying) Teardown();
+    }
+
+    private void Teardown()
+    {
+        if (root != null) SafeDestroy(root.gameObject);
+        root = null;
+        staticFilter = null;
+        dynamicFilter = null;
+        readout = null;
+        readoutBackdrop = null;
+        tickLabels.Clear();
+
+        SafeDestroy(backdropMesh);
+        SafeDestroy(backdropMaterial);
+        SafeDestroy(staticMesh);
+        SafeDestroy(dynamicMesh);
+        SafeDestroy(sharedMaterial);
+        backdropMesh = null; backdropMaterial = null;
+        staticMesh = null; dynamicMesh = null; sharedMaterial = null;
+
+        builtDirection = CervicalRomDriver.Direction.None;
+        builtMax = -1f;
+        lastDrawnAngle = float.NaN;
+        lastDrawnActive = float.NaN;
+        lastDrawnPassive = float.NaN;
+        lastReadoutDegrees = int.MinValue;
+        hasLastGroup = false;
+    }
+
+    /// <summary>에디터에서는 Destroy가 다음 프레임까지 안 죽는다. 즉시 지운다.</summary>
+    private static void SafeDestroy(Object target)
+    {
+        if (target == null) return;
+        if (Application.isPlaying) Destroy(target);
+        else DestroyImmediate(target);
+    }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// 인스펙터 값이 바뀌면 다시 그린다. ★에디터는 스스로 프레임을 돌리지 않으므로
+    /// 플레이어 루프를 한 번 태워 줘야 LateUpdate가 불린다.
+    /// </summary>
+    private void OnValidate()
+    {
+        builtDirection = CervicalRomDriver.Direction.None;   // 판·눈금을 다시 만들게 한다
+        lastDrawnAngle = float.NaN;
+        lastReadoutDegrees = int.MinValue;
+        if (!Application.isPlaying) UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+    }
+#endif
 
     /// <summary>
     /// ★LateUpdate에서 그린다. 드라이버가 목뼈에 각도를 얹은 <b>뒤</b>라야
@@ -257,14 +403,18 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// </summary>
     private void LateUpdate()
     {
-        CervicalRomDriver.Direction dir = driver.CurrentDirection;
+        if (!EnsureDriver()) return;
+        EnsureBuilt();
+
+        bool preview = UsePreview;
+        CervicalRomDriver.Direction dir = preview ? previewDirection : driver.CurrentDirection;
         if (dir == CervicalRomDriver.Direction.None || driver.Pivot == null || driver.Torso == null)
         {
             SetVisible(false);
             return;
         }
 
-        Vector3 axis = driver.CurrentWorldAxis;
+        Vector3 axis = preview ? driver.WorldAxisFor(dir) : driver.CurrentWorldAxis;
         if (axis.sqrMagnitude < 1e-6f) { SetVisible(false); return; }
         axis.Normalize();
 
@@ -292,8 +442,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         root.SetPositionAndRotation(driver.Pivot.position + NormalOffsetOf(dir),
                                     Quaternion.LookRotation(axis, zeroDir));
         SetVisible(true);
+        UpdateLabelYaw();
 
-        float maxAngle = driver.MaxAngle;
+        float maxAngle = preview ? driver.MaxAngleFor(dir) : driver.MaxAngle;
         if (dir != builtDirection || !Mathf.Approximately(maxAngle, builtMax))
         {
             BuildStatic(dir, maxAngle);
@@ -301,9 +452,21 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             builtMax = maxAngle;
         }
 
-        float angle = driver.CurrentAngle;
-        float activeLimit = driver.ActiveTargetAngle;
-        float passiveLimit = driver.PassiveLimitAngle;
+        // ★프리뷰의 능동·압박 한계는 인스펙터 기본값으로 그린다. 추첨값을 쓰면
+        //   에디터에서 볼 때마다 칸이 달라져 눈금을 맞출 수가 없다.
+        float angle, activeLimit, passiveLimit;
+        if (preview)
+        {
+            angle = Mathf.Clamp(previewAngle, 0f, maxAngle);
+            activeLimit = Mathf.Max(0f, maxAngle - driver.NominalDysfunction);
+            passiveLimit = Mathf.Min(maxAngle, activeLimit + driver.NominalPassiveGain);
+        }
+        else
+        {
+            angle = driver.CurrentAngle;
+            activeLimit = driver.ActiveTargetAngle;
+            passiveLimit = driver.PassiveLimitAngle;
+        }
 
         // 0.25° 미만 변화는 무시한다. 눈에 안 보이는데 메시만 다시 만든다.
         if (Changed(angle, lastDrawnAngle) || Changed(activeLimit, lastDrawnActive)
@@ -487,7 +650,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Color tick = plane; tick.a = 0.95f;
         Color micro = plane; micro.a = 0.55f;   // 미세눈금은 옅게 — 촘촘해서 진하면 띠로 뭉친다
-        Color maxMark = new Color(0.10f, 0.10f, 0.12f, 0.95f);
+        Color maxMark = maxAngleMarkColor;
 
         // ★십자선을 제일 밑에 깐다. 회전 중심이 어디인지가 한눈에 보여야 각도가 읽힌다.
         if (showCrosshair)
@@ -519,8 +682,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         {
             AddTick(a, majorTickLength, tickWidth * 1.35f, tick);
         }
-        // 최대각(마지노선)은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 굵게 긋는다.
-        AddTick(maxAngle, majorTickLength * 1.5f, tickWidth * 2.0f, maxMark);
+        // 최대각(마지노선)은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 긋는다.
+        // ★지침과 같은 꼴 — 중심에서 눈금 반지름까지 통짜 직선이다(fromCenter).
+        AddTick(maxAngle, scaleRadius, maxAngleMarkWidth, maxMark, fromCenter: true);
 
         Upload(staticMesh, staticFilter);
         BuildTickLabels(span, maxAngle, plane);
@@ -562,6 +726,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         if (readout == null) return;
 
+        // ★유지 남은 초는 여기 안 쓴다 — ProgressCircle이 그린다(2026-08-26 사용자 지시).
+        //   같은 값을 두 군데 띄우면 시선만 갈린다.
         int degrees = Mathf.RoundToInt(angle);
         if (degrees != lastReadoutDegrees)
         {
@@ -583,9 +749,10 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             if (readoutBackdrop.gameObject.activeSelf != show) readoutBackdrop.gameObject.SetActive(show);
             if (show)
             {
-                readoutBackdrop.localRotation = readout.transform.localRotation;
+                readoutBackdrop.rotation = readout.transform.rotation;
                 // readout의 로컬 +z가 카메라 반대쪽이다(FaceCamera가 그렇게 잡는다).
-                readoutBackdrop.localPosition = local + readout.transform.localRotation * (Vector3.forward * 0.004f);
+                // ★밀지 않는다. 카메라가 반대편에 있으면 4mm 민 배경이 글씨를 덮는다.
+                readoutBackdrop.localPosition = local;
                 readoutBackdrop.localScale = Vector3.one * readoutBackdropRadius;
             }
         }
@@ -665,13 +832,16 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         root = new GameObject("경추ROM_각도기").transform;
         root.SetParent(transform, false);
+        Ephemeral(root.gameObject);
 
         staticMesh = new Mesh { name = "각도기_판눈금" };
         staticMesh.MarkDynamic();
+        Ephemeral(staticMesh);
         staticFilter = CreateLayer("판·눈금", root);
 
         dynamicMesh = new Mesh { name = "각도기_채움지침" };
         dynamicMesh.MarkDynamic();
+        Ephemeral(dynamicMesh);
         dynamicFilter = CreateLayer("채움·지침", root);
 
         // ★배경을 먼저 만든다. 같은 렌더 큐면 나중에 그려진 쪽이 위로 오므로,
@@ -681,13 +851,24 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         readout.color = readoutColor;
     }
 
+    /// <summary>
+    /// 이 오브젝트·에셋은 <b>씬에 저장되지 않는다</b>. 각도기 생성물은 매번 다시 만들면
+    /// 되는 것들이라, 씬에 굳으면 이득 없이 파일만 오염된다.
+    /// </summary>
+    private static void Ephemeral(Object target)
+    {
+        if (target != null) target.hideFlags = HideFlags.DontSave;
+    }
+
     private MeshFilter CreateLayer(string name, Transform parent)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
+        Ephemeral(go);
         var filter = go.AddComponent<MeshFilter>();
         var renderer = go.AddComponent<MeshRenderer>();
         renderer.sharedMaterial = sharedMaterial;
+        renderer.sortingOrder = OrderPlane;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
@@ -702,6 +883,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         var go = new GameObject("현재각도_배경");
         go.transform.SetParent(parent, false);
+        Ephemeral(go);
 
         const int segments = 32;
         var v = new List<Vector3>(segments + 2) { Vector3.zero };
@@ -724,11 +906,17 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         go.AddComponent<MeshFilter>().sharedMesh = mesh;
         var renderer = go.AddComponent<MeshRenderer>();
         // 글씨보다 먼저 그려지게 큐를 한 단계 낮춘다(같은 큐면 겹칠 때 순서가 안 정해진다).
-        renderer.sharedMaterial = new Material(sharedMaterial) { name = "GaugeReadoutBackdropMat", renderQueue = 2995 };
+        // ★큐를 낮춰 '먼저 그리기'로는 안 된다 — 그러면 같은 큐의 면 판이 나중에 그려져
+        //   배경을 덮는다. 실제로 면마다 배경이 보였다 안 보였다 했다(2026-08-26 사용자 지적).
+        //   순서는 sortingOrder로 못박는다: 판·눈금 < 배경 < 글씨.
+        renderer.sharedMaterial = new Material(sharedMaterial) { name = "GaugeReadoutBackdropMat" };
+        renderer.sortingOrder = OrderBackdrop;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
         renderer.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
 
+        Ephemeral(mesh);
+        Ephemeral(renderer.sharedMaterial);
         backdropMesh = mesh;
         backdropMaterial = renderer.sharedMaterial;
         return go.transform;
@@ -738,8 +926,11 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
+        Ephemeral(go);
         var text = go.AddComponent<TextMeshPro>();
         if (font != null) text.font = font;
+        var tmpRenderer = go.GetComponent<MeshRenderer>();
+        if (tmpRenderer != null) tmpRenderer.sortingOrder = OrderLabel;
         text.fontStyle = FontStyles.Bold;
         text.alignment = TextAlignmentOptions.Center;
         text.fontSize = size * 100f;   // TMP는 월드 단위가 아니라 폰트 크기로 잡는다
@@ -753,6 +944,12 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// 주눈금 숫자. 눈금 범위(span) 전체에 붙이고, 그 위에 최대각만 굵게 덧붙인다.
     /// span과 최대각이 둘 다 바뀔 수 있어 둘 다 받는다(굴곡 45° vs 회전 90°).
     /// </summary>
+    /// <summary>최대각 숫자 색. 마지노선과 같은 색으로 묶어 읽는다.</summary>
+    private Color MaxLabelColor
+    {
+        get { Color c = maxAngleMarkColor; c.a = 1f; return c; }
+    }
+
     private void BuildTickLabels(float span, float maxAngle, Color color)
     {
         int needed = Mathf.FloorToInt(span / majorStep) + 1;
@@ -771,11 +968,11 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         {
             // 최대각과 겹치는 눈금만 굵게. 표시를 끄면 전부 보통 숫자다.
             bool isMax = showMaxAngleLabel && Mathf.Abs(a - maxAngle) < 0.001f;
-            PlaceTickLabel(index, a, isMax ? new Color(0.10f, 0.10f, 0.12f, 1f) : labelColor, bold: isMax);
+            PlaceTickLabel(index, a, isMax ? MaxLabelColor : labelColor, bold: isMax);
         }
         if (addMaxLabel)
         {
-            PlaceTickLabel(index, maxAngle, new Color(0.10f, 0.10f, 0.12f, 1f), bold: true);
+            PlaceTickLabel(index, maxAngle, MaxLabelColor, bold: true);
             index++;
         }
         for (int i = index; i < tickLabels.Count; i++) tickLabels[i].gameObject.SetActive(false);
@@ -792,11 +989,81 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     }
 
     /// <summary>숫자는 늘 보는 사람 쪽을 향한다. 면에 눕히면 옆에서 읽을 수 없다.</summary>
-    private static void FaceCamera(Transform t)
+    /// <summary>
+    /// 글씨를 Y축으로만 뒤집을지 정한다. ★면에 들어갈 때 한 번 정하고 고정한다 —
+    /// 매 프레임 보면 시술자가 면 근처를 오갈 때 글씨가 깜빡 뒤집힌다.
+    /// </summary>
+    private void UpdateLabelYaw()
     {
-        Camera cam = Camera.main;
+        if (!autoFlipLabels) { labelFlip = false; return; }
+
+        Camera cam = ViewerCamera();
+        if (cam == null) return;   // 못 정하면 직전 값을 그대로 쓴다
+
+        // ★매 프레임 다시 본다. 면 단위로 고정하면 안 된다 —
+        //   굴곡과 신전은 같은 시상면인데 회전축 부호가 반대라(AxisOf: 굴곡 −X / 신전 +X)
+        //   root.forward가 정반대를 가리킨다. 한 번 정해 물려주면 둘 중 하나는
+        //   반드시 뒤집힌다(2026-08-26 사용자 지적 — 180을 넣어도 같이 뒤집힐 뿐이었다).
+        float d = Vector3.Dot(root.forward, cam.transform.position - root.position);
+
+        // 다만 면에 딱 붙어 설 때 깜빡이지 않게 히스테리시스를 준다.
+        // 지금 상태를 뒤집으려면 반대쪽으로 이만큼은 넘어가야 한다.
+        if (labelFlip) { if (d > flipHysteresis) labelFlip = false; }
+        else           { if (d < -flipHysteresis) labelFlip = true; }
+    }
+
+    private void FaceCamera(Transform t)
+    {
+        if (!labelsFaceViewer)
+        {
+            // ★횡단면만 따로 — 숫자를 호를 따라 돌린다(면 위에 눕는 건 그대로).
+            //   글씨의 위쪽을 <b>중심에서 바깥으로 뻗는 반지름 방향</b>으로 잡으면,
+            //   글씨가 읽히는 방향(오른쪽)이 자동으로 그 반지름과 수직 = 호의 접선이 된다.
+            //   시상면·관상면은 전부 같은 방향으로 눕는 게 읽기 좋아 손대지 않는다.
+            if (transverseLabelsAlongArc && PlaneGroupOf(builtDirection) == PlaneGroup.Transverse)
+            {
+                Vector3 radial = Vector3.ProjectOnPlane(t.position - root.position, root.forward);
+                if (radial.sqrMagnitude > 1e-8f)
+                {
+                    Vector3 arcFacing = labelFlip ? -root.forward : root.forward;
+                    t.rotation = Quaternion.LookRotation(arcFacing, radial.normalized);
+                    if (labelYawOffset != 0f) t.rotation *= Quaternion.Euler(0f, labelYawOffset, 0f);
+                    return;
+                }
+            }
+
+            // ★월드에서 직접 자세를 만든다. localRotation으로 Y를 돌리면 <b>부모(root)의 Y축</b>으로
+            //   도는데, root의 Y는 면 안쪽 0° 방향이지 글씨의 위쪽이 아니다 —
+            //   그래서 엉뚱한 축으로 돌아 뒤집힘이 안 풀렸다(2026-08-26, 세 번 헛돌았다).
+            //
+            //   위쪽(up)은 면 안쪽 방향으로 <b>그대로 두고</b>, 앞쪽(글씨가 읽히는 쪽)만
+            //   보는 사람 편으로 잡는다. up이 안 바뀌므로 결과가 정확히 'Y축 180°만 돌린 것'이 된다.
+            Vector3 up = root.up;                                   // 면 안쪽 위 — 기울지 않게 고정
+            Vector3 facing = labelFlip ? -root.forward : root.forward;
+            t.rotation = Quaternion.LookRotation(facing, up);
+            if (labelYawOffset != 0f) t.rotation *= Quaternion.Euler(0f, labelYawOffset, 0f);
+            return;
+        }
+
+        Camera cam = ViewerCamera();
         if (cam == null) return;
         t.rotation = Quaternion.LookRotation(t.position - cam.transform.position, cam.transform.up);
+    }
+
+    /// <summary>
+    /// 글씨가 향할 카메라. ★에디터에서는 <b>씬 뷰 카메라</b>다 —
+    /// Camera.main을 쓰면 사람이 보는 각도와 어긋나 숫자가 옆을 본다.
+    /// </summary>
+    private static Camera ViewerCamera()
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying)
+        {
+            UnityEditor.SceneView sv = UnityEditor.SceneView.lastActiveSceneView;
+            if (sv != null && sv.camera != null) return sv.camera;
+        }
+#endif
+        return Camera.main;
     }
 
     private void SetVisible(bool visible)
@@ -818,7 +1085,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             ChunaLogger.LogWarning("[ROM 각도기] Sprites/Default를 찾지 못했습니다. 각도기가 안 보일 수 있습니다.");
             shader = Shader.Find("Standard");
         }
-        return new Material(shader) { name = "CervicalRomGaugeMat", renderQueue = 3000 };
+        var mat = new Material(shader) { name = "CervicalRomGaugeMat", renderQueue = 3000 };
+        Ephemeral(mat);
+        return mat;
     }
 
     private void LateUpdateLabels()
@@ -829,7 +1098,26 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         }
     }
 
-    private void OnEnable() => lastReadoutDegrees = int.MinValue;
+    private void OnEnable()
+    {
+        lastReadoutDegrees = int.MinValue;
+#if UNITY_EDITOR
+        // ★씬 뷰가 다시 그려질 때마다 플레이어 루프를 한 번 태운다. 이게 없으면
+        //   에디터에서 시점을 돌려도 LateUpdate가 안 불려 숫자가 옆을 본 채 굳는다.
+        UnityEditor.SceneView.duringSceneGui -= OnSceneGui;
+        UnityEditor.SceneView.duringSceneGui += OnSceneGui;
+#endif
+    }
+
+#if UNITY_EDITOR
+    private void OnSceneGui(UnityEditor.SceneView view)
+    {
+        if (!Application.isPlaying && previewInEditor && isActiveAndEnabled)
+        {
+            UnityEditor.EditorApplication.QueuePlayerLoopUpdate();
+        }
+    }
+#endif
 
     private void Update()
     {

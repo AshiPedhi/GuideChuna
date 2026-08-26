@@ -79,6 +79,11 @@ public class PracticeSettingsController : MonoBehaviour
         // ※새 값은 반드시 끝에 붙일 것 — 씬에 int로 직렬화된다.
         /// <summary>xray 셰이더로 반투명. 살은 비치고 옷은 불투명하게 남는다.</summary>
         Xray,
+        /// <summary>
+        /// 아무것도 하지 않는다 — 환자도 추나 베드도 <b>불투명 그대로</b> 둔다.
+        /// 패스스루 위에 가상 환자가 실물처럼 겹쳐 보이는 모드다.
+        /// </summary>
+        Opaque,
     }
 
     [Tooltip("현실 모드에서 가상 환자를 어떻게 할지.\n\n" +
@@ -724,6 +729,12 @@ public class PracticeSettingsController : MonoBehaviour
             {
                 SetPatientBodyVisible(false);
             }
+            else if (realityPatientMode == RealityPatientMode.Opaque)
+            {
+                // ★아무것도 하지 않는다. 패스스루 위에 환자·추나 베드가 실물처럼 겹쳐 보인다.
+                //   추나 베드는 이 컨트롤러가 원래 손대지 않으므로 저절로 불투명하게 남는다.
+                ChunaLogger.Log("[PracticeSettings] 현실 모드 — 환자·베드를 불투명 그대로 둡니다");
+            }
             else if (isPatientModelVisible)
             {
                 // 환자 모델을 반투명하게
@@ -732,7 +743,9 @@ public class PracticeSettingsController : MonoBehaviour
             }
 
             // 골격 모델도 표시되어 있다면 반투명하게
-            if (skeletonModel != null && skeletonModel.activeSelf)
+            // ★불투명 모드에서는 골격도 건드리지 않는다 — "그대로"의 범위에 골격도 든다.
+            if (realityPatientMode != RealityPatientMode.Opaque
+                && skeletonModel != null && skeletonModel.activeSelf)
             {
                 SetModelTransparency(skeletonRenderers, realityModeAlpha, "골격 모델 (현실 모드)");
                 SetMeshTransparency(skeletonMeshRenderers, realityModeAlpha, "골격 모델 (현실 모드)");

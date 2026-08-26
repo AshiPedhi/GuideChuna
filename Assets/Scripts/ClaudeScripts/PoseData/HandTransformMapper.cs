@@ -270,18 +270,31 @@ public class HandTransformMapper : MonoBehaviour
     /// <summary>
     /// 렌더러 표시/숨김 제어
     /// </summary>
+    // ★렌더러 목록을 한 번만 모은다. 예전에는 부를 때마다 GetComponentsInChildren로
+    //   배열 두 개를 새로 만들었는데, 매 프레임 부르는 호출부가 생기면서
+    //   그 할당이 그대로 VR 프레임 예산에 얹혔다(2026-08-26).
+    //   런타임에 손 메시가 늘거나 줄지 않으므로 캐시가 안전하다.
+    private Renderer[] cachedRenderers;
+
+    /// <summary>
+    /// 손 메시의 표시 여부. ★GameObject를 끄지 않고 <b>렌더러만</b> 끈다 —
+    /// 그래서 안 보이는 동안에도 자세는 계속 갱신된다.
+    /// 매 프레임 불러도 되게 캐시해 뒀다.
+    /// </summary>
     public void SetVisible(bool visible)
     {
-        SkinnedMeshRenderer[] renderers = GetComponentsInChildren<SkinnedMeshRenderer>(true);
-        foreach (var renderer in renderers)
+        if (cachedRenderers == null)
         {
-            renderer.enabled = visible;
+            var skinned = GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            var meshes = GetComponentsInChildren<MeshRenderer>(true);
+            cachedRenderers = new Renderer[skinned.Length + meshes.Length];
+            for (int i = 0; i < skinned.Length; i++) cachedRenderers[i] = skinned[i];
+            for (int i = 0; i < meshes.Length; i++) cachedRenderers[skinned.Length + i] = meshes[i];
         }
 
-        MeshRenderer[] meshRenderers = GetComponentsInChildren<MeshRenderer>(true);
-        foreach (var renderer in meshRenderers)
+        for (int i = 0; i < cachedRenderers.Length; i++)
         {
-            renderer.enabled = visible;
+            if (cachedRenderers[i] != null) cachedRenderers[i].enabled = visible;
         }
     }
 

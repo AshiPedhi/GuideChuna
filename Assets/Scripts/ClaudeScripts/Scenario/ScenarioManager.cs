@@ -1019,10 +1019,24 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         //   예전엔 무조건 재생해서, 녹화가 없는 단계에서는 <b>직전에 로드된 남의 녹화</b>가 그대로 떴다.
         //   (제2늑골 '팔 외전'에서 진단 녹화의 왼손 가이드가 남아 있던 원인 — 사용자 지적.
         //    같은 함정이 08-03에도 판정 쪽에서 나왔다: 파일이 없으면 직전 녹화가 남아 오판정.)
+        // ★conditionParams에 guideHold가 있으면 <b>재생하지 않고</b> 마지막 프레임에 고정한다.
+        //   정적인 파지 자세를 녹화한 경우다(경추ROM 이마·뒤통수 / 측두부).
+        //   녹화가 동작이 아니라 자세라, 재생하면 같은 자세가 흘러갈 뿐이고
+        //   끝나면 그 자리에 멈춰 환자가 움직여도 안 따라간다. 고정은 매 프레임 다시 얹는다.
+        bool holdGuide = !string.IsNullOrEmpty(subStep.conditionParams)
+                         && subStep.conditionParams.ToLower().Contains("guidehold");
+
         if (!string.IsNullOrEmpty(subStep.handTrackingFileName))
-            chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+        {
+            if (holdGuide)
+                chunaPathEvaluator.StartGuideHandStaticHoldInternal(1f);
+            else
+                chunaPathEvaluator.StartGuideHandPlaybackInternal(0f, 1f, false);
+        }
         else
+        {
             chunaPathEvaluator.HideGuideHandKeepHeldInternal();
+        }
 
         // AutoPlay 완료 시 SubStep 완료 처리
         chunaPathEvaluator.OnAutoPlayCompleted -= OnAutoPlayCompletedHandler;

@@ -69,6 +69,13 @@ CSV(`Assets/Resources/Scenarios/*.csv`) + `ScenarioConfig`(`Assets/Resources/Sce
 - **새 `conditionType`을 만들지 않는다.** 방향 판정은 이미 있고 부위 중립적이다.
 - ★**모르는 `conditionType`은 에러가 아니라 조용히 파지 조건이 된다.** 오타를 못 잡는다.
 - ★**`PassiveStretch` 행에 `voiceInstruction`이 있으면 접촉 게이트가 죽는다.** 지시(voice)와 동작(condition)을 다른 substep으로 쪼갠다.
+  - **2026-08-26 정정**: 이제 `conditionParams`에 **`voiceGate`** 를 넣으면 한 substep에 합칠 수 있다.
+    `ScenarioConditionManager`에 "나레이션 먼저 → 접촉 게이팅 AutoPlay 대기" 분기를 신설했다.
+    ★**토큰이 없으면 종전 그대로 게이트가 죽는다** — 기본 동작은 안 바꿨다.
+    이유: 13개 술기가 이 코드를 공유하고, 실제로 `흉쇄유돌근.csv`의 `스트레칭 4.1`이 이 조합을 쓰고 있어서
+    기본값을 바꾸면 그 술기가 갑자기 접촉을 요구하게 된다(그 행은 지금도 게이트가 죽어 있는 상태다).
+    범인은 `ScenarioConditionManager`의 나레이션 분기다 — `HasNarration()`이면 `switch`에 **도달하지 못하고**
+    `HandleNarrationThenDuration`으로 빠진다. 그래서 게이트를 걸 기회가 아예 없었다.
 - ★**손 녹화 파일이 없으면 판정이 조용히 죽고 직전 녹화가 남아 오판정한다.**
 - ★**나레이션이 없으면 에러 없이 무음이다.** 상급·평가는 `stepName` 클립만 보고, 없으면 그 단계가 통째로 조용하다.
 - 시나리오 인덱스는 중간 삽입으로 밀려 있다. **옛 기록의 idx는 틀리니 매번 실측한다.**

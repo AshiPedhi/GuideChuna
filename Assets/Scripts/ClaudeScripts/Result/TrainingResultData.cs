@@ -565,9 +565,9 @@ public class TrainingResultData
         const string C5 = "<pos=85%>";   // 부족
 
         var sb = new StringBuilder();
-        sb.AppendLine(data.isCompleted ? "경추 ROM 측정 완료" : "경추 ROM 측정 중도 종료 (미완료)");
+        sb.AppendLine(data.isCompleted ? "경추ROM 진단 내역" : "경추ROM 진단 내역 (중도 종료)");
         sb.AppendLine();
-        sb.AppendLine($"면{C1}방향{C2}능동{C3}압박{C4}최대{C5}부족");
+        sb.AppendLine($"구분{C1}방향{C2}능동{C3}압박{C4}최대{C5}부족");
         sb.AppendLine("<size=60%>────────────────────────────────────────────────────────────</size>");
 
         string lastPlane = null;

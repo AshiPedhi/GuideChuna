@@ -53,10 +53,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "손 트래킹이 떨리면 여유 구간(7~13°)에 비해 무시 못 할 각이 실려 게이지가 튄다.")]
     [SerializeField] private float overpressureSmoothTime = 0.15f;
 
-    [Tooltip("중립 복귀(x.3)에서는 파지를 요구하지 않는다.\n" +
-             "환자가 스스로 원위치로 돌아오는 구간이라 시술자가 손을 대고 있을 이유가 없다.")]
-    [SerializeField] private bool releaseGripOnReturn = true;
-
     [Tooltip("파지 미끄러짐 허용치(m). 0이면 검사하지 않는다.\n" +
              "★머리는 강체다 — 양손이 제대로 잡고 있으면 '두 손 간격'과 '회전 중심까지의 반지름'이\n" +
              "  압박 내내 보존된다. 제자리에서 손목만 틀면 손이 머리 위를 미끄러지므로 둘이 깨진다.\n" +
@@ -64,8 +60,56 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "실측 참고: 정상적으로 밀 때 반지름은 0.21→0.23m(2cm), 두 손 간격은 0.10→0.11m로 움직였다.")]
     [SerializeField] private float gripSlipTolerance = 0.04f;
 
-    [Tooltip("목표에 못 닿아도 이 시간이 지나면 넘긴다(초). 세션이 영영 멈추는 걸 막는 안전장치다.")]
-    [SerializeField] private float stallTimeoutSeconds = 30f;
+    [Tooltip("압박 한계에 닿은 뒤 그 자리에서 버텨야 하는 시간(초).\n" +
+             "★끝느낌은 '닿는 순간'이 아니라 '버티는 동안' 읽는 것이다. 닿자마자 넘기면\n" +
+             "  스치듯 지나가도 통과된다. 손이 물러나면 타이머는 0으로 되돌아간다.")]
+    [SerializeField] private float overpressureHoldSeconds = 3f;
+
+    [Tooltip("이 진행률 이상이면 '압박 한계에 닿았다'로 보고 유지 타이머를 센다.\n" +
+             "1.0으로 두면 손 지터 한 번에 타이머가 끊긴다.")]
+    [Range(0.8f, 1f)] [SerializeField] private float overpressureHoldThreshold = 0.97f;
+
+    [Tooltip("가이드손을 켜고 끌 때 접촉 상태를 이만큼 붙잡는다(초).\n" +
+             "★손 트래킹이 한 프레임 튀어도 가이드손이 파르르 떨지 않게 한다. 0이면 끈다.")]
+    [SerializeField] private float guideToggleDebounce = 0.25f;
+
+    [Tooltip("목표에 못 닿은 채 이 시간이 지나면 '다음' 버튼을 띄운다(초).\n" +
+             "★자동으로 넘기지는 않는다 — 넘길지 말지는 사람이 정한다.")]
+    [SerializeField] private float stallButtonSeconds = 20f;
+
+    [Tooltip("목표에 못 닿아도 이 시간이 지나면 <b>자동으로</b> 넘긴다(초).\n" +
+             "★0이면 자동 진행하지 않는다(기본값). 위의 '다음' 버튼으로만 넘어간다.")]
+    [SerializeField] private float stallTimeoutSeconds = 0f;
+
+    [Header("=== 진행 UI 자동 배치 ===")]
+    // ★두 번만 옮긴다.
+    //   ① 시상면 파지(시술자가 환자 <b>측면</b>에 선다) → 좌·우 포인트 중 한쪽으로. 최초 1회.
+    //   ② 관상면·횡단면 파지(다시 <b>정면</b>을 본다)   → 정면 포인트로.
+    //   둘 다 사람이 중간에 손으로 옮겨 놨더라도 <b>무시하고</b> 그 포인트로 데려간다.
+    [Tooltip("옮길 UI 루트. 보통 '진행Root'. 비우면 이 기능이 꺼진다.")]
+    [SerializeField] private Transform progressRoot;
+
+    [Tooltip("환자 좌측 포인트. 시상면(굴곡·신전)에서 시술자가 환자 우측에 서면 여기로 간다.")]
+    [SerializeField] private Transform sidePointLeft;
+
+    [Tooltip("환자 우측 포인트. 시술자가 환자 좌측에 서면 여기로 간다.")]
+    [SerializeField] private Transform sidePointRight;
+
+    [Tooltip("정면 포인트. 측굴·회전으로 넘어갈 때 여기로 돌아온다.")]
+    [SerializeField] private Transform frontPoint;
+
+    [Tooltip("시술자가 선 쪽의 <b>반대편</b> 포인트로 간다. 화면이 시술자 몸에 가리지 않게 하는 것이다.\n" +
+             "★반대로 나오면 이 체크를 끈다. 각도기의 autoSideByViewer와 같은 규약이다.")]
+    [SerializeField] private bool placeOppositeToViewer = true;
+
+    [Tooltip("정중선에 이만큼 가까우면 좌우를 판단하지 않고 좌측 포인트를 쓴다 (m).")]
+    [SerializeField] private float progressSideDeadZone = 0.08f;
+
+    [Tooltip("측면 배치를 트리거할 단계 이름(시상면 파지).")]
+    [SerializeField] private string sideGripStepName = "시상면 파지";
+
+    [Tooltip("정면 복귀를 트리거할 단계 이름들.")]
+    [SerializeField] private string[] frontGripStepNames = { "관상면 파지", "횡단면 파지" };
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -81,8 +125,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private string lastStepKey;
     private string advancedKey;      // 같은 substep을 두 번 넘기지 않게
     private float stepEnteredTime;
+    private float leftTouchHold, rightTouchHold;   // 접촉 디바운스 잔여시간(초)
+    private bool loggedHideLeft, loggedHideRight;  // 상태가 바뀔 때만 로그
+    private bool lastWasGripStep;    // 직전 단계가 파지였는가(벗어날 때 재생을 끝내려고)
+    private bool stallButtonShown;   // 이 substep에서 다음 버튼을 이미 띄웠는가
     private bool warnedNotTarget;
     private float overpressureProgress;
+    private ScenarioGuideUIController guideUI;   // ProgressCircle을 직접 그리기 위해 잡아 둔다
+    private bool sideProgressPlaced;       // 측면 배치를 이미 했는가(최초 1회 규약)
+    private float overpressureHeldTime;    // 압박 한계에서 버틴 시간(초). 목표는 overpressureHoldSeconds.
     private bool active;
 
     // ── 압박 기준점. 두 방식을 각각 따로 잡는다. ──
@@ -130,7 +181,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         if (!IsTargetScenario())
         {
-            if (active) { active = false; driver.Paused = false; }
+            if (active)
+            {
+                active = false;
+                driver.Paused = false;
+                // ★술기를 벗어날 때만 가이드 손을 머리뼈에서 뗀다. 안 떼면 다음 술기까지
+                //   손이 환자 머리에 매달려 따라다닌다.
+                evaluator?.ReleaseGuideHandHoldInternal();
+            }
             if (!warnedNotTarget)
             {
                 warnedNotTarget = true;
@@ -149,17 +207,30 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         string key = $"{step.stepName}#{sub.subStepNo}";
         if (key != lastStepKey)
         {
+            // ★파지를 벗어나는 순간 재생을 마지막 프레임으로 땡겨 끝낸다.
+            //   그래야 위치를 쓰는 코드가 사라지고 머리뼈 자식으로서 고개를 따라간다.
+            if (lastWasGripStep && !IsGripStep(step.stepName))
+            {
+                evaluator?.ForceFinishGuideHoldInternal();
+            }
+            lastWasGripStep = IsGripStep(step.stepName);
+
             lastStepKey = key;
             stepEnteredTime = Time.time;
+            stallButtonShown = false;
             ApplyGripPair(step.stepName);
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
 
         AdvanceOverpressure(step.stepName, sub.subStepNo);
+        DriveProgressCircle(step.stepName, sub);
+        SuppressGuideForTouchedHands(step.stepName, sub.subStepNo);
 
         // 손을 떼면 그 자리에서 멈춘다.
-        // ★단 중립 복귀(x.3)는 예외 — 환자가 스스로 돌아오는 구간이라 파지를 요구하지 않는다.
-        driver.Paused = !IsReturningSubStep(step.stepName, sub.subStepNo) && !BothHandsTouching();
+        // ★중립 복귀(x.3)도 예외가 아니다 — 예전엔 복귀만 파지를 면제했는데,
+        //   사용자 지시로 복귀도 파지를 유지해야 움직이도록 바꿨다(2026-08-26).
+        //   시술자가 손을 댄 채로 따라 내려오는 게 실제 술기다.
+        driver.Paused = !BothHandsTouching();
 
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
@@ -191,8 +262,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
         else if (subStepNo == 2)
         {
-            done = overpressureProgress >= 1f;
-            reason = $"압박 완료 {driver.CurrentAngle:F0}° (부족각 {driver.DeficitAngle:F1}°)";
+            // ★압박 한계에 닿았다고 바로 넘기지 않는다 — 그 자리에서 버텨야 끝느낌을 읽는다.
+            //   손이 도로 물러나면 타이머는 0으로 되돌아간다(AdvanceOverpressure에서 관리).
+            done = overpressureHeldTime >= overpressureHoldSeconds;
+            reason = $"압박 유지 완료 {driver.CurrentAngle:F0}° " +
+                     $"({overpressureHoldSeconds:F0}초 유지 · 부족각 {driver.DeficitAngle:F1}°)";
         }
         else
         {
@@ -200,10 +274,28 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             reason = "중립 복귀 완료";
         }
 
-        // 안전장치 — 무언가 막혀도 세션이 영영 멈추지 않게 한다.
+        // ★막혔을 때 <b>자동으로 넘기지 않는다</b>. '다음' 버튼을 띄우고 사람이 정한다
+        //   (2026-08-26 사용자 지시: "자동진행이 아니라 다음 버튼이 활성화 되야 한다").
+        //   공용 20초 폴백(ScenarioConditionManager.progressTimeout)은 <b>PassiveStretch에서는 안 돈다</b> —
+        //   그 경로가 currentCondition=null·StopConditionCheck()로 조건 폴링을 아예 꺼 버리기 때문이다.
+        //   그래서 여기서 직접 띄운다.
         if (!done)
         {
-            if (stepEnteredTime > 0f && Time.time - stepEnteredTime > stallTimeoutSeconds)
+            if (!stallButtonShown && stepEnteredTime > 0f
+                && Time.time - stepEnteredTime > stallButtonSeconds)
+            {
+                stallButtonShown = true;
+                ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
+                                       $"{stallButtonSeconds:F0}초 동안 목표에 못 닿았다 — '다음' 버튼을 띄운다. " +
+                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {driver.ActiveTargetAngle:F0}°</color>");
+                if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+                guideUI?.ClearExternalProgress();
+                guideUI?.EnableStartToggle();
+            }
+
+            // stallTimeoutSeconds가 0 이하면 자동 진행은 아예 하지 않는다(기본값).
+            if (stallTimeoutSeconds > 0f && stepEnteredTime > 0f
+                && Time.time - stepEnteredTime > stallTimeoutSeconds)
             {
                 ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
                                        $"{stallTimeoutSeconds:F0}초 동안 목표에 못 닿아 넘긴다. " +
@@ -240,8 +332,195 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         scenarioManager.NextSubStep();
     }
 
+    /// <summary>
+    /// ProgressCircle을 ROM 전용 타이머로 직접 그린다.
+    ///
+    /// ★기본 규칙으로는 둘 다 안 뜬다 —
+    ///   파지 유지: 손 녹화(handTrackingFileName)를 걸어 둔 순간 <c>HasHandTracking()</c>에 걸려 숨겨진다.
+    ///   압박 유지: duration이 0이라 애초에 안 뜬다(duration을 주면 AutoPlay가 판정과 무관하게 밀어 버린다).
+    ///   그래서 값을 바깥에서 밀어넣는다. 다른 술기는 이 경로를 타지 않는다.
+    /// </summary>
+    private void DriveProgressCircle(string stepName, SubStepData sub)
+    {
+        if (guideUI == null)
+        {
+            guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+            if (guideUI == null) return;
+        }
+
+        bool isOverpressure = !string.IsNullOrEmpty(stepName)
+                              && stepName.EndsWith("압박", System.StringComparison.Ordinal);
+
+        // ① 압박 종단점 유지 — 한계에 닿아 버티는 동안만 센다. 손이 물러나면 0으로 되돌아간다.
+        if (isOverpressure && sub.subStepNo == 2 && overpressureHoldSeconds > 0f)
+        {
+            guideUI.SetExternalProgress(overpressureHoldSeconds - overpressureHeldTime, overpressureHoldSeconds);
+            return;
+        }
+
+        // ② 파지 유지 — 양손 접촉 게이트가 열려 있는 동안만 찬다.
+        //    AutoPlay 진행률이 곧 게이트가 열려 있던 시간이라 그대로 쓴다.
+        // ★파지는 substep 1에서 안내와 유지가 같이 돈다(voiceGate). subStepNo를 보지 않는다.
+        if (!isOverpressure && sub.duration > 0
+            && IsGripStep(stepName) && evaluator != null
+            && evaluator.TryGetAutoPlayProgress(out float autoPlay01))
+        {
+            guideUI.SetExternalProgress(sub.duration * (1f - autoPlay01), sub.duration);
+            return;
+        }
+
+        guideUI.ClearExternalProgress();
+    }
+
+    /// <summary>
+    /// 시술자가 이미 손을 댄 쪽의 가이드 손을 끈다. 떼면 다시 켜진다.
+    ///
+    /// ★이걸 부르는 곳이 여태 <b>두개골 컨트롤러뿐</b>이었다. 경추ROM에는 아무도 없어서
+    ///   손을 대도 가이드가 그대로 겹쳐 보였다(2026-08-26 사용자 지적).
+    /// ★파지점 두 개(A·B)에 어느 손이 닿았는지로 본다 — 한 손이 둘 중 아무 곳에나 닿으면
+    ///   그 손은 '제자리에 갖다 댄' 것으로 친다.
+    /// </summary>
+    private void SuppressGuideForTouchedHands(string stepName, int subStepNo)
+    {
+        if (evaluator == null) return;
+
+        // ★가이드 손을 감추는 구간 = <b>평가 설명 단계</b>(시상면평가·관상면평가·횡단면평가).
+        //   중립 복귀에서는 계속 보여야 한다 — 손을 대고 따라 내려오는 구간이기 때문이다.
+        //   (2026-08-26: 처음에 중립 복귀로 잘못 걸었다가 사용자 정정.)
+        bool returning = !string.IsNullOrEmpty(stepName)
+                         && stepName.EndsWith("평가", System.StringComparison.Ordinal);
+
+        bool leftTouching, rightTouching;
+        if (returning)
+        {
+            leftTouching = rightTouching = true;   // 숨김 쪽으로 몰아넣는다
+            leftTouchHold = rightTouchHold = guideToggleDebounce;
+        }
+        else if (gripJudge != null && gripJudge.TryGetGripState(out bool aLeft, out bool aRight,
+                                                                out bool bLeft, out bool bRight))
+        {
+            leftTouching = aLeft || bLeft;
+            rightTouching = aRight || bRight;
+        }
+        else
+        {
+            leftTouching = evaluator.IsLeftHandTouchingPatient;
+            rightTouching = evaluator.IsRightHandTouchingPatient;
+        }
+
+        // ★깜빡임 방지 — 접촉 판정이 한 프레임 튀어도 바로 켜고 끄지 않는다.
+        //   붙었다 떨어졌다 하는 트래킹 특성상 그냥 두면 가이드손이 파르르 떤다.
+        leftTouchHold = leftTouching ? guideToggleDebounce : Mathf.Max(0f, leftTouchHold - Time.deltaTime);
+        rightTouchHold = rightTouching ? guideToggleDebounce : Mathf.Max(0f, rightTouchHold - Time.deltaTime);
+
+        bool hideLeft = leftTouchHold > 0f;
+        bool hideRight = rightTouchHold > 0f;
+
+        evaluator.SuppressGuideHandInternal(true, hideLeft);
+        evaluator.SuppressGuideHandInternal(false, hideRight);
+
+        // ★표시의 <b>주인은 여기 하나</b>다. 예전에는 평가기·시나리오매니저·고정 코루틴이
+        //   제각각 켜고 꺼서 순서에 따라 결과가 달라졌다(2026-08-26 "on/off가 원활하지 않다").
+        //   붙여 놓은 동안에는 접촉 상태만 보고 매 프레임 못박는다.
+        //   SetVisible은 렌더러를 캐시하므로 매 프레임 불러도 싸다.
+        evaluator.ForceGuideHandVisible(true, !hideLeft);
+        evaluator.ForceGuideHandVisible(false, !hideRight);
+
+        if (showDebugLogs && (hideLeft != loggedHideLeft || hideRight != loggedHideRight))
+        {
+            loggedHideLeft = hideLeft; loggedHideRight = hideRight;
+            string why = returning ? "숨김(평가 설명)" : "숨김(접촉)";
+            Log($"가이드손 — 왼손 {(hideLeft ? why : "표시")} · 오른손 {(hideRight ? why : "표시")}");
+        }
+    }
+
+    /// <summary>파지 단계인가. 이름이 '파지'로 끝나면 파지로 본다(시상면·관상면·횡단면 파지).</summary>
+    private bool IsGripStep(string stepName)
+        => !string.IsNullOrEmpty(stepName) && stepName.EndsWith("파지", System.StringComparison.Ordinal);
+
+    /// <summary>
+    /// 진행 UI를 파지 단계에 맞춰 옮긴다.
+    ///
+    /// ★사람이 손으로 옮겨 놨더라도 무시하고 포인트로 데려간다 — "그 자리에 있어야 보인다"가
+    ///   목적이라 직전 조정을 존중하면 목적을 못 이룬다(2026-08-26 사용자 지시).
+    /// ★측면 배치는 <b>최초 1회</b>다. 매번 다시 보면 시술자가 정중선 근처에서 움직일 때
+    ///   화면이 좌우로 깜빡인다. 각도기의 면 배치와 같은 이유·같은 규약이다.
+    /// </summary>
+    private void PlaceProgressUI(string stepName, int subStepNo)
+    {
+        if (string.IsNullOrEmpty(stepName) || subStepNo != 1) return;
+
+        // ★조용히 넘어가지 않는다. 슬롯이 비어 있는 것과 조건이 안 맞는 것이
+        //   똑같이 '아무 일도 안 일어남'으로 보여 원인을 못 찾는다(2026-08-26).
+        bool isSideGrip = stepName == sideGripStepName;
+        bool isFrontGrip = false;
+        for (int i = 0; frontGripStepNames != null && i < frontGripStepNames.Length; i++)
+            if (stepName == frontGripStepNames[i]) { isFrontGrip = true; break; }
+
+        if (!isSideGrip && !isFrontGrip) return;   // 옮길 단계가 아니다 — 정상
+
+        if (progressRoot == null)
+        {
+            ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] '{stepName}'에서 진행 UI를 옮기려 했지만 " +
+                                   "progressRoot 슬롯이 비어 있다 — 인스펙터에서 '진행Root'를 넣어야 한다.</color>");
+            return;
+        }
+
+        // ── ② 정면 복귀 — 측굴·회전으로 넘어가는 파지 ──
+        for (int i = 0; frontGripStepNames != null && i < frontGripStepNames.Length; i++)
+        {
+            if (stepName != frontGripStepNames[i]) continue;
+            if (frontPoint == null)
+            {
+                Log("진행 UI 정면 포인트가 비어 있어 옮기지 않는다");
+                return;
+            }
+            progressRoot.SetPositionAndRotation(frontPoint.position, frontPoint.rotation);
+            sideProgressPlaced = false;   // 다음 시상면이 오면 다시 한 번 옮길 수 있게
+            Log($"진행 UI → 정면 포인트 ('{stepName}')");
+            return;
+        }
+
+        // ── ① 측면 배치 — 시상면 파지. 최초 1회만. ──
+        if (stepName != sideGripStepName || sideProgressPlaced) return;
+
+        Transform torso = driver.Torso;
+        if (torso == null) return;
+
+        Transform target = ChooseSidePoint(torso);
+        if (target == null)
+        {
+            Log("진행 UI 좌·우 포인트가 비어 있어 옮기지 않는다");
+            return;
+        }
+
+        progressRoot.SetPositionAndRotation(target.position, target.rotation);
+        sideProgressPlaced = true;
+        Log($"진행 UI → 측면 포인트 '{target.name}' (최초 1회)");
+    }
+
+    /// <summary>시술자가 선 쪽을 보고 좌·우 포인트 중 하나를 고른다.</summary>
+    private Transform ChooseSidePoint(Transform torso)
+    {
+        if (sidePointLeft == null || sidePointRight == null)
+            return sidePointLeft != null ? sidePointLeft : sidePointRight;
+
+        Camera cam = Camera.main;
+        if (cam == null) return sidePointLeft;
+
+        // 환자 몸통의 좌우축에 시술자 위치를 투영한다. 양수면 환자 우측에 서 있다.
+        float side = Vector3.Dot(cam.transform.position - torso.position, torso.right);
+        if (Mathf.Abs(side) < progressSideDeadZone) return sidePointLeft;   // 정중선 근처 — 아무 쪽이나 뽑히지 않게 고정
+
+        bool viewerOnPatientRight = side > 0f;
+        bool useLeft = placeOppositeToViewer ? viewerOnPatientRight : !viewerOnPatientRight;
+        return useLeft ? sidePointLeft : sidePointRight;
+    }
+
     private void OnSubStepEntered(string stepName, int subStepNo)
     {
+        PlaceProgressUI(stepName, subStepNo);
+
         CervicalRomDriver.Direction dir = DirectionOf(stepName);
         if (dir == CervicalRomDriver.Direction.None) return;
 
@@ -263,6 +542,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (subStepNo == 2)
         {
             overpressureProgress = 0f;
+            overpressureHeldTime = 0f;
+            driver.HoldElapsed = 0f;
+            driver.HoldTarget = overpressureHoldSeconds;
             arcStarted = false;    // 손 기준점을 이 단계에서 다시 잡는다
             pairStarted = false;
             sweptSmoothed = 0f;
@@ -273,6 +555,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
         else if (subStepNo >= 3)
         {
+            // 복귀로 넘어가면 유지 타이머는 화면에서 치운다.
+            overpressureHeldTime = 0f;
+            driver.HoldElapsed = 0f;
+            driver.HoldTarget = 0f;
             driver.ReturnToNeutral();
             Log($"중립 복귀 {stepName} (부족각 {driver.DeficitAngle:F1}°)");
         }
@@ -367,6 +653,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, sweptSmoothed) / gap);
         driver.SetOverpressure(overpressureProgress);
 
+        AccumulateOverpressureHold();
+
         DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
     }
 
@@ -411,13 +699,28 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             $"중심 {(pivot != null ? pivot.name : "★없음")}</color>");
     }
 
-    /// <summary>중립 복귀 substep인가. 여기서는 파지를 요구하지 않는다.</summary>
-    private bool IsReturningSubStep(string stepName, int subStepNo)
+    /// <summary>
+    /// 압박 한계에서 버틴 시간을 센다. 손이 물러나 진행률이 문턱 아래로 내려가면 0으로 되돌린다.
+    /// ★값을 드라이버에 실어 둔다 — 각도기가 브리지를 몰라도 타이머를 그릴 수 있다.
+    /// </summary>
+    private void AccumulateOverpressureHold()
     {
-        return releaseGripOnReturn
-               && subStepNo >= 3
-               && !string.IsNullOrEmpty(stepName)
-               && stepName.EndsWith("압박", System.StringComparison.Ordinal);
+        if (overpressureProgress >= overpressureHoldThreshold)
+        {
+            overpressureHeldTime += Time.deltaTime;
+        }
+        else if (overpressureHeldTime > 0f)
+        {
+            if (showDebugLogs)
+            {
+                ChunaLogger.Log($"<color=yellow>[ROM Bridge] 압박 유지 끊김 — {overpressureHeldTime:F1}초에서 " +
+                                $"진행률이 {overpressureProgress:P0}로 내려갔다. 타이머를 되돌린다.</color>");
+            }
+            overpressureHeldTime = 0f;
+        }
+
+        driver.HoldElapsed = overpressureHeldTime;
+        driver.HoldTarget = overpressureHoldSeconds;
     }
 
     private static string Mark(bool on) => on ? "O" : "·";
@@ -444,13 +747,17 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     {
         if (gripJudge == null) return;
 
+        // ★'시상면 파지'는 이름으로 판별한다. 예전엔 그냥 '파지'였는데, 실측 phase에도
+        //   같은 이름의 다른 단계가 있어 2026-08-26에 면 이름을 붙여 통일했다.
         CervicalGripJudge.GripPair pair;
-        if (stepName == "파지" || stepName.StartsWith("굴곡", System.StringComparison.Ordinal)
+        if (stepName == "시상면 파지" || stepName == "파지"   // '파지'는 옛 이름 — 남은 CSV 호환용
+                               || stepName.StartsWith("굴곡", System.StringComparison.Ordinal)
                                || stepName.StartsWith("신전", System.StringComparison.Ordinal)
                                || stepName == "시상면평가")
             pair = CervicalGripJudge.GripPair.Sagittal;
         else if (DirectionOf(stepName) != CervicalRomDriver.Direction.None
-                 || stepName == "관상면파지" || stepName == "횡단면파지"
+                 || stepName == "관상면 파지" || stepName == "횡단면 파지"
+                 || stepName == "관상면파지" || stepName == "횡단면파지"   // 옛 이름 호환
                  || stepName == "관상면평가" || stepName == "횡단면평가")
             pair = CervicalGripJudge.GripPair.Lateral;
         else

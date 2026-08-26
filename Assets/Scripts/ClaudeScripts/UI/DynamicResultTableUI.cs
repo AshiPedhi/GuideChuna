@@ -168,9 +168,9 @@ public class DynamicResultTableUI : BaseUIPanel
     {
         if (scenario == null) return;
 
-        // 시나리오 이름 표시
+        // 시나리오 이름 표시 (표시 전용 이름으로 갈아 끼운다 — 식별자는 그대로다)
         if (scenarioNameText != null)
-            scenarioNameText.text = scenario.scenarioName;
+            scenarioNameText.text = DisplayScenarioName(scenario.scenarioName);
 
         // 테이블 구조 생성
         BuildTableStructure(scenario);
@@ -590,7 +590,26 @@ public class DynamicResultTableUI : BaseUIPanel
     public void SetScenarioName(string name)
     {
         if (scenarioNameText != null)
-            scenarioNameText.text = name;
+            scenarioNameText.text = DisplayScenarioName(name);
+    }
+
+    /// <summary>
+    /// 화면에 띄울 시나리오 이름. ★<b>표시 전용</b>이다 — 내부 식별자는 바꾸지 않는다.
+    ///
+    /// CSV의 scenarioName은 단순한 이름이 아니라 <b>키</b>다. 씬에 직렬화된
+    /// <c>CervicalRomScenarioBridge.scenarioName</c>·<c>ScenarioUIPositioner.fixedPlacements[].scenarioName</c>,
+    /// ScenarioConfig, 나레이션 폴더 이름이 전부 이 문자열로 맞춰져 있다.
+    /// 실제로 바꾸면 브리지가 "대상 시나리오가 아니다"라며 손을 떼고
+    /// 정보패널 고정 배치도 풀린다. 그래서 보이는 이름만 갈아 끼운다.
+    /// </summary>
+    private static string DisplayScenarioName(string internalName)
+    {
+        if (string.IsNullOrEmpty(internalName)) return internalName;
+        switch (internalName)
+        {
+            case "경추ROM측정": return "ROM진단";
+            default:            return internalName;
+        }
     }
 
     /// <summary>

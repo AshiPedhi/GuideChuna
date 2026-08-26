@@ -122,12 +122,25 @@ def check(scenario, clips, hands, known):
             notes.append(f"{level} stepName 클립 없음 {len(miss)}개 → 그 단계 무음: {', '.join(miss)}")
 
     # 3 PassiveStretch + voice
+    # ★2026-08-26부터 conditionParams에 voiceGate가 있으면 <b>결함이 아니다</b>.
+    #   ScenarioConditionManager에 '나레이션 먼저 → 접촉 게이팅 AutoPlay 대기' 분기를 넣었다.
+    #   토큰이 없으면 종전대로 나레이션 경로로 빠져 게이트가 죽으므로 규칙은 그대로 둔다.
     bad = [f"{r['stepName']} {r['stepNo']}.{r['subStepNo']}" for r in rows
            if (r.get("conditionType") or "").strip() == "PassiveStretch"
-           and (r.get("voiceInstruction") or "").strip()]
+           and (r.get("voiceInstruction") or "").strip()
+           and "voicegate" not in (r.get("conditionParams") or "").lower()]
     if bad:
         issues.append(("[없음]", f"PassiveStretch + voiceInstruction 동시 {len(bad)}행 "
-                                 f"→ 접촉 게이트가 죽는다: {', '.join(bad)}"))
+                                 f"→ 접촉 게이트가 죽는다(고치려면 conditionParams에 voiceGate): "
+                                 f"{', '.join(bad)}"))
+
+    gated = [f"{r['stepName']} {r['stepNo']}.{r['subStepNo']}" for r in rows
+             if (r.get("conditionType") or "").strip() == "PassiveStretch"
+             and (r.get("voiceInstruction") or "").strip()
+             and "voicegate" in (r.get("conditionParams") or "").lower()]
+    if gated:
+        notes.append(f"PassiveStretch + voice를 voiceGate로 병합한 행 {len(gated)}개 "
+                     f"(안내 중에도 게이트 유지): {', '.join(gated)}")
 
     # 4 모르는 conditionType
     if known:

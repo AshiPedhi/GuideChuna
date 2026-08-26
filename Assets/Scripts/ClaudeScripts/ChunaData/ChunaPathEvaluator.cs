@@ -135,6 +135,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     [SerializeField] private bool showGuideHands = true;
     [SerializeField] private Color guideHandColor = new Color(0.5f, 1f, 0.4f, 0.5f);  // ★ 연두색
 
+    [Tooltip("정적 고정 가이드(conditionParams=guideHold)를 매달 뼈.\n" +
+             "★손이 두개골에 닿는 술기라 머리뼈다. 비우면 아래 이름으로 환자 리그에서 찾는다.\n" +
+             "녹화 기준(referenceTransform=HandGuideAxis)은 가슴(CC_Base_Spine02) 밑이라\n" +
+             "고개가 돌아도 안 움직인다 — 그래서 매다는 곳만 따로 잡는다.")]
+    [SerializeField] private Transform guideHoldAnchor;
+
+    [Tooltip("위 슬롯이 비었을 때 찾을 뼈 이름.")]
+    [SerializeField] private string guideHoldAnchorBoneName = "CC_Base_Head";
+
     [Header("=== 가이드 손 접촉 시 투명도 ===")]
     [Tooltip("사용자 손이 환자에 접촉 시 가이드 손 투명도 조절")]
     [SerializeField] private bool fadeOnTouch = true;
@@ -709,6 +718,13 @@ public class ChunaPathEvaluator : MonoBehaviour
     // ===== 손별 숨김 (시술자가 그 손을 제자리에 갖다 대면 그 손 가이드만 사라진다) =====
     private bool guideSuppressLeft, guideSuppressRight;
 
+    /// <summary>
+    /// 정적 고정(guideHold)이 살아 있는가. ★살아 있는 동안에는 손 녹화가 없는 substep으로
+    /// 넘어가도 <b>끄지 않는다</b> — 파지에서 잡은 가이드를 그 면이 끝날 때까지 들고 간다.
+    /// 다음 파지가 새 고정을 시작하면 그때 교체된다(2026-08-26 사용자 지시: 면 단위 유지).
+    /// </summary>
+    private bool guideStaticHoldActive;
+
     /// <summary>재생 루프·정지 표시가 이 손을 다시 켜지 못하게 막는가.</summary>
     internal bool IsGuideHandSuppressed(bool isLeft) => isLeft ? guideSuppressLeft : guideSuppressRight;
 
@@ -744,6 +760,21 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>손별 숨김 플래그만 푼다(단계가 바뀔 때 한쪽 손만 숨은 채 남는 것 방지).
     /// ★가이드손 전체가 숨김 상태(<see cref="guideHiddenByContact"/>)면 <b>되살리지 않는다</b> —
     /// 안 그러면 "손 녹화가 없는 단계라 숨겼는데 곧바로 다시 켜지는" 충돌이 난다(2026-08-13).</summary>
+    /// <summary>
+    /// 그 손의 표시를 <b>바깥에서 못박는다</b>. 술기가 표시의 주인일 때 쓴다.
+    /// ★평가기 내부의 여러 숨김 경로와 다투지 않도록, 판단은 부르는 쪽이 하고
+    ///   여기서는 시키는 대로만 한다(2026-08-26 — 가이드손 on/off가 깜빡이던 원인이
+    ///   서로 다른 세 곳이 같은 손을 켜고 끄던 것이었다).
+    /// </summary>
+    internal void ForceGuideHandVisible(bool isLeft, bool visible)
+    {
+        if (!showGuideHands || guideSuppressedForStep) return;
+        HandTransformMapper h = isLeft ? leftGuideHand : rightGuideHand;
+        if (h == null) return;
+        if (visible && !GuideHandHasData(isLeft)) return;   // 그 손 녹화가 없으면 빈 손이 뜬다
+        h.SetVisible(visible);
+    }
+
     internal void ClearGuideHandSuppression()
     {
         guideSuppressLeft = false;
@@ -812,6 +843,10 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>접촉 중 숨김 — <b>어느 클립의 끝난 자세인지는 기억한다</b>(접촉이 풀리면 그대로 되살린다).</summary>
     internal void HideGuideHandKeepHeldInternal()
     {
+        // ★면 단위 유지 — 파지에서 건 정적 고정은 손 녹화가 없는 substep(굴곡·압박·복귀)에서도
+        //   살려 둔다. 여기서 끄면 파지 단계를 벗어나는 순간 가이드가 사라진다.
+        if (guideStaticHoldActive) return;
+
         if (guideHiddenByContact) return;
 
         if (guideHandCoroutine != null)
@@ -3146,6 +3181,141 @@ public class ChunaPathEvaluator : MonoBehaviour
             ChunaLogger.Log("[ChunaPathEvaluator] 가이드 핸드 재생 시작");
     }
 
+    /// <summary>
+    /// 가이드 손을 <b>한 자세에 고정</b>한다. 정적인 파지 자세를 녹화한 경우용이다.
+    ///
+    /// ★재생이 아니다. 프레임을 넘기지 않고 그 자세를 계속 다시 얹는다 —
+    ///   그래야 환자가 움직여도 가이드가 그 부위에 붙어 있는다.
+    ///   손을 대면 그 손 가이드가 사라지고, 떼면 다시 나타난다(손별 숨김을 매 프레임 다시 본다).
+    /// </summary>
+    /// <param name="holdRatio">붙잡을 지점. 1이면 마지막 프레임이다.</param>
+    /// <summary>
+    /// 머리뼈에 붙여 둔 가이드 손을 <b>원래 부모로 되돌린다</b>. 술기를 벗어날 때만 부른다.
+    /// ★<see cref="StopGuideHandPlayback"/>에서 부르면 안 된다 — 그 함수는 평가 시작·종료·
+    ///   피벗 설정 등 6곳에서 불려서, 다음 단계로 넘어가는 것만으로 계층이 끊긴다.
+    /// </summary>
+    /// <summary>
+    /// 파지 단계가 끝날 때 부른다. 재생이 중간이어도 <b>마지막 프레임으로 땡겨 끝낸다</b>.
+    /// ★이걸 해야 그 뒤로 위치를 쓰는 코드가 없어지고, 머리뼈 자식으로서 고개를 따라간다.
+    ///   접촉 중에는 렌더러만 꺼질 뿐 재생은 계속 가므로, 대개 여기 올 때쯤 거의 끝나 있다.
+    /// </summary>
+    internal void ForceFinishGuideHoldInternal()
+    {
+        if (!guideStaticHoldActive) return;
+
+        bool wasPlaying = guideHandCoroutine != null;
+        if (wasPlaying)
+        {
+            StopCoroutine(guideHandCoroutine);
+            guideHandCoroutine = null;
+        }
+
+        guidePlaybackController.ApplyLastFrame(loadedFrames, leftGuideHand, rightGuideHand);
+        MarkGuideHeld();
+
+        ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 파지 종료 — 가이드 손을 마지막 프레임으로 맞췄다" +
+                        $"{(wasPlaying ? " (재생 중이던 것을 끊음)" : "")}. " +
+                        "이제부터 위치를 쓰지 않고 머리를 따라간다.</color>");
+    }
+
+    internal void ReleaseGuideHandHoldInternal()
+    {
+        if (!guideStaticHoldActive) return;
+        guideStaticHoldActive = false;
+        GuideHandPlaybackController.DetachFromHead(leftGuideHand, rightGuideHand);
+        ChunaLogger.Log("<color=cyan>[ChunaPathEvaluator] 가이드 손을 머리뼈에서 뗐다(술기 종료).</color>");
+    }
+
+    internal void StartGuideHandStaticHoldInternal(float holdRatio = 1f, string clipName = null)
+    {
+        if (!showGuideHands || guideSuppressedForStep) return;
+        if (loadedFrames == null || loadedFrames.Count == 0) return;
+
+        StopGuideHandPlayback();
+
+        guidePlayingClip = clipName;
+        guideHeldEndRatio = holdRatio;
+
+        // ★순서가 전부다 (2026-08-26 사용자 지시).
+        //   ① 머리뼈의 자식으로 붙인다
+        //   ② 녹화를 <b>1회</b> 재생한다 — 이 동안은 재생 루틴이 월드 위치를 쓰므로 그 자리에 있다
+        //   ③ 재생이 끝나면 쓰는 쪽이 사라진다 → 그때부터 계층이 손을 끌고 간다
+        //   붙이기만 하고 재생을 안 하면 시연이 없고, 재생만 하고 안 붙이면 안 따라간다.
+        //   ★guideStaticHoldActive를 <b>재생 시작 전에</b> 세운다 — 재생이 3초보다 길면
+        //     파지 substep이 먼저 끝나는데, 그때 다른 코드가 가이드를 꺼 버리기 때문이다.
+        guideStaticHoldActive = true;   // ★StopGuideHandPlayback 뒤에 세운다(그쪽에서 내리므로)
+
+        bool attached = guidePlaybackController.AttachHandsToHead(
+            loadedFrames, leftGuideHand, rightGuideHand, ResolveGuideHoldAnchor());
+
+        IEnumerator routine = guidePlaybackController.PlaybackRoutine(
+            loadedFrames, leftGuideHand, rightGuideHand,
+            0f, 1f,
+            guidePlaybackSpeed, false, loopDelaySeconds,
+            guideHandColor, showDebugLogs);
+
+        guideHandCoroutine = StartCoroutine(PlayThenHold(routine, false));
+
+        ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 가이드 손 — 머리뼈에 붙였다(={attached}) 후 " +
+                        $"1회 재생 시작. 재생이 끝나면 그 뒤로는 위치를 쓰지 않는다.</color>");
+    }
+
+    /// <summary>
+    /// 정적 고정 가이드를 매달 뼈. ★손은 두개골에 닿으므로 머리뼈다.
+    /// 녹화 기준(HandGuideAxis)은 가슴이라 고개를 따라가지 않는다 — 그래서 따로 잡는다.
+    /// </summary>
+    private Transform ResolveGuideHoldAnchor()
+    {
+        if (guideHoldAnchor != null) return guideHoldAnchor;
+
+        // ★씬 루트에서 통째로 찾으면 안 된다 — 환자 아바타가 둘(c9 / c9 (1))이라
+        //   꺼져 있는 쪽의 CC_Base_Head를 먼저 잡을 수 있다. 그 뼈는 누구도 돌리지 않으니
+        //   가이드 손이 영영 고개를 안 따라간다(2026-08-26).
+        //   그래서 녹화 기준(HandGuideAxis)에서 <b>한 단계씩 위로 올라가며</b> 찾는다.
+        //   가장 가까운 조상 밑에서 나온 것이 곧 같은 골격의 머리뼈다.
+        Transform start = referenceTransform != null ? referenceTransform : transform;
+        for (Transform t = start; t != null; t = t.parent)
+        {
+            guideHoldAnchor = FindDeepChild(t, guideHoldAnchorBoneName);
+            if (guideHoldAnchor != null) break;
+        }
+
+        if (guideHoldAnchor == null)
+        {
+            ChunaLogger.LogWarning($"[ChunaPathEvaluator] 가이드 고정용 뼈 '{guideHoldAnchorBoneName}'를 " +
+                                   $"'{start.name}'의 조상 어디에서도 못 찾았습니다. " +
+                                   "가이드 손이 고개를 따라가지 않습니다.");
+        }
+        else
+        {
+            // ★showDebugLogs와 무관하게 항상 찍는다. 아바타가 둘이라 '어느 쪽 뼈를 잡았나'가
+            //   손이 따라오냐 마냐를 그대로 가른다 — 이게 안 보이면 진단이 시작도 안 된다.
+            ChunaLogger.Log($"<color=cyan>[ChunaPathEvaluator] 가이드 고정용 뼈 = {PathOf(guideHoldAnchor)}</color>");
+        }
+        return guideHoldAnchor;
+    }
+
+    /// <summary>진단용 전체 경로. 아바타가 둘이라 '어느 쪽 뼈인지'가 중요하다.</summary>
+    private static string PathOf(Transform t)
+    {
+        if (t == null) return "(없음)";
+        string path = t.name;
+        for (Transform p = t.parent; p != null; p = p.parent) path = p.name + "/" + path;
+        return path;
+    }
+
+    private static Transform FindDeepChild(Transform root, string name)
+    {
+        if (root == null || string.IsNullOrEmpty(name)) return null;
+        if (root.name == name) return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform found = FindDeepChild(root.GetChild(i), name);
+            if (found != null) return found;
+        }
+        return null;
+    }
+
     /// <summary>재생이 끝나면 <b>마지막 자세 그대로 남긴다</b>(숨기지 않는다).
     /// ★중첩 StartCoroutine을 쓰지 않고 직접 돌린다 — 그래야 StopCoroutine 한 번으로 확실히 멈춘다.</summary>
     private IEnumerator PlayThenHold(IEnumerator routine, bool loop)
@@ -3157,6 +3327,14 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // 마지막 프레임은 재생 코루틴이 이미 그려 둔 상태다 — 지우지 않고 '유지 중'으로만 표시한다.
         MarkGuideHeld();
+
+        // ★여기서부터가 핵심이다 — 재생이 끝났으니 위치를 쓰는 코드가 하나도 없다.
+        //   손 모양은 마지막 프레임 그대로 남고, 위치는 부모(머리뼈)가 끌고 간다.
+        if (guideStaticHoldActive)
+        {
+            ChunaLogger.Log("<color=cyan>[ChunaPathEvaluator] 가이드 손 1회 재생 완료 — " +
+                            "이제부터 위치를 쓰지 않는다. 손 모양은 유지되고 머리를 따라간다.</color>");
+        }
     }
 
     private void ShowGuideHandFirstFrame()
@@ -3164,6 +3342,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         // ★이 단계가 가이드손을 쓰지 않기로 하고 숨겨 뒀으면 다시 그리지 않는다(2026-08-13).
         //   평가가 시작될 때마다 첫 프레임을 그려서, 손 녹화가 없는 단계에서 숨겨 둔 가이드손이
         //   환자를 터치하는 순간 되살아났다(사용자: "머리 터치하니까 다시 생기고 안 사라진다").
+        // ★머리뼈에 붙여 놓은 동안에는 위치를 다시 쓰지 않는다 — 손 모양만 유지하고
+        //   위치는 부모(머리뼈)가 정한다. 여기서 첫 프레임을 그리면 그 자리에 다시 못박혀
+        //   고개를 따라가지 못한다(2026-08-26 사용자 지적).
+        if (guideStaticHoldActive) return;
+
         if (guideHiddenByContact) return;
         if (guideSuppressedForStep) return;   // noGuide 단계 — 평가가 시작돼도 첫 프레임을 그리지 않는다
 
@@ -3188,7 +3371,10 @@ public class ChunaPathEvaluator : MonoBehaviour
             guideHandCoroutine = null;
         }
 
-        // 완전 정지 = 유지 상태도 버린다(다음에 같은 클립이 오면 처음부터 다시 재생한다).
+        // ★여기서 머리뼈에서 떼면 안 된다 — 이 함수는 평가 시작·종료·리셋·피벗 설정 등
+        //   <b>6곳</b>에서 불린다. 파지가 끝나고 다음 단계로 가면 그중 하나가 돌면서
+        //   계층이 끊기고, 손이 그 자리에 남아 "고개를 안 따라온다"가 된다(2026-08-26).
+        //   붙여 둔 것을 푸는 건 술기가 끝날 때뿐이다 → ReleaseGuideHandHoldInternal().
         guideHeldClip = null;
         guidePlayingClip = null;
         guideHiddenByContact = false;

@@ -346,6 +346,20 @@ public class ScenarioConditionManager : MonoBehaviour
                 HandleNarrationThenHandPose(subStep, conditionKey);
                 return;
             }
+
+            // ★PassiveStretch + 나레이션을 한 substep으로 합친다 — 단 <b>토큰으로 옵트인</b>할 때만.
+            //   종전에는 여기서 아래 HandleNarrationThenDuration으로 빠져 접촉 게이트가 통째로 죽었다
+            //   ("PassiveStretch 행에 voice가 있으면 게이트가 죽는다"의 정체가 이 분기다).
+            //   기본값을 바꾸지 않는 이유 — 13개 술기가 이 코드를 공유하고, 실제로
+            //   흉쇄유돌근.csv의 '스트레칭' 행 1건이 이 조합을 쓰고 있다. 기본 동작을 바꾸면
+            //   그 술기가 갑자기 접촉을 요구하게 된다. 그래서 원하는 단계만 토큰으로 켠다.
+            if (conditionType == "PassiveStretch" && HasParam(subStep, "voicegate"))
+            {
+                ChunaLogger.Log("<color=cyan>[ConditionManager] 나레이션 + PassiveStretch 병합(voiceGate) - " +
+                                "나레이션 먼저 재생 후 접촉 게이팅 AutoPlay 대기</color>");
+                HandleNarrationThenPassiveStretch(subStep);
+                return;
+            }
             else
             {
                 // 나레이션 + Duration 또는 나레이션만 있는 경우
@@ -519,6 +533,63 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 나레이션 + HandPose 병합 조건 처리
     /// 나레이션 재생 완료 후 HandPose 조건 체크 시작 (충돌체/가이드핸드 활성화 + 20초 타이머)
     /// </summary>
+    /// <summary>conditionParams에 그 토큰이 있는가. 대소문자를 가리지 않는다.</summary>
+    private static bool HasParam(SubStepData subStep, string lowerToken)
+        => subStep != null && !string.IsNullOrEmpty(subStep.conditionParams)
+           && subStep.conditionParams.ToLower().Contains(lowerToken);
+
+    /// <summary>
+    /// 나레이션을 먼저 들려준 뒤 <b>접촉 게이팅 AutoPlay</b> 완료를 기다린다.
+    /// 안내와 동작을 한 substep에 담을 수 있게 해 준다(경추ROM 파지 — 안내가 떠 있는 동안 유지 타이머가 돈다).
+    /// ★AutoPlay 자체는 ScenarioManager.HandlePassiveStretch가 substep 진입 때 이미 시작해 둔다.
+    ///   여기서는 '언제 넘길지'만 정한다 — 그래서 나레이션 중에도 손을 대고 있으면 타이머가 찬다.
+    /// </summary>
+    private void HandleNarrationThenPassiveStretch(SubStepData subStep)
+    {
+        string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        if (clip == null)
+        {
+            // 무음이어도 게이트는 살려 둔다. 여기서 물러나면 '나레이션이 없으면 접촉 판정도 사라진다'가 된다.
+            ChunaLogger.LogWarning($"[ConditionManager] 나레이션 클립 없음: {clipName}. 접촉 게이팅만 진행합니다.");
+            StartCoroutine(WaitForAutoPlayThenProgress(subStep));
+            return;
+        }
+
+        narrationCoroutine = StartCoroutine(PlayNarrationThenPassiveStretch(clip, clipName, subStep));
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + PassiveStretch: 나레이션 먼저 ({clip.length:F1}초)</color>");
+    }
+
+    private IEnumerator PlayNarrationThenPassiveStretch(AudioClip clip, string clipName, SubStepData subStep)
+    {
+        currentNarrationClip = clip;
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource == null)
+        {
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            StartCoroutine(WaitForAutoPlayThenProgress(subStep));
+            yield break;
+        }
+
+        targetSource.clip = clip;
+        targetSource.Play();
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
+
+        yield return new WaitForSeconds(clip.length);
+
+        ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 완료: {clipName} → 접촉 게이팅 AutoPlay 대기</color>");
+        currentNarrationClip = null;
+
+        StartCoroutine(WaitForAutoPlayThenProgress(subStep));
+    }
+
     private void HandleNarrationThenHandPose(SubStepData subStep, string conditionKey)
     {
         // 나레이션 클립 로드

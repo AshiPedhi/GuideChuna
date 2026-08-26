@@ -132,19 +132,78 @@ public class CervicalRomDriver : MonoBehaviour
     public float CurrentPassiveGain => Mathf.Max(0.1f, PassiveLimitAngle - ActiveTargetAngle);
 
     /// <summary>현재 방향의 회전축(월드). 압박을 손 움직임으로 구동할 때 쓴다.</summary>
-    public Vector3 CurrentWorldAxis =>
-        torso != null && currentDirection != Direction.None
-            ? torso.TransformDirection(AxisOf(currentDirection))
-            : Vector3.zero;
+    public Vector3 CurrentWorldAxis => WorldAxisFor(currentDirection);
 
-    /// <summary>목이 도는 중심. 손이 돌린 각을 재는 기준점이다.</summary>
-    public Transform Pivot => neckChain != null && neckChain.Length > 0 ? neckChain[0] : torso;
+    // ── 에디터 프리뷰용 읽기 전용 접근자 ─────────────────────────────────
+    // ★각도기가 Play 없이 그리려면 '지금 재고 있는 방향'이 아니라 <b>임의의 방향</b>의
+    //   최대각·회전축을 물어볼 수 있어야 한다. 셋 다 상태를 바꾸지 않는다 —
+    //   에디터에서 드라이버 필드를 건드리면 씬이 더럽혀지고, 저장 사고로 이어진다.
+
+    /// <summary>그 방향의 임상 최대각(도). currentDirection과 무관하다.</summary>
+    public float MaxAngleFor(Direction d) => MaxAngleOf(d);
+
+    /// <summary>그 방향의 회전축(월드). currentDirection과 무관하다.</summary>
+    public Vector3 WorldAxisFor(Direction d) =>
+        ResolvedTorso != null && d != Direction.None
+            ? ResolvedTorso.TransformDirection(AxisOf(d)) : Vector3.zero;
+
+    // ── 에디터 프리뷰용 뼈 해석 ────────────────────────────────────────────
+    // ★씬에는 torso·neckChain이 전부 비어 있고 Awake에서 이름으로 찾아 채운다.
+    //   그런데 에디터에서는 Awake가 돌지 않으므로 둘 다 null이고, 각도기가
+    //   "중심도 몸통도 없다"며 스스로 숨었다 — Play 없이 각도기가 안 보이던 원인이다(2026-08-26).
+    // ★직렬화 필드에 <b>쓰지 않는다</b>. 에디터에서 [SerializeField]에 대입하면
+    //   씬이 더러워지고, 모르는 새 저장되면 배선이 굳는다.
+    [System.NonSerialized] private Transform previewTorso;
+    [System.NonSerialized] private Transform previewNeckRoot;
+
+    /// <summary>몸통. 비어 있으면(에디터) 이름으로 찾아 임시로 들고 있는다.</summary>
+    private Transform ResolvedTorso
+    {
+        get
+        {
+            if (torso != null) return torso;
+            if (previewTorso == null) previewTorso = FindDeep(transform, "CC_Base_Spine02");
+            return previewTorso;
+        }
+    }
+
+    /// <summary>목 사슬의 첫 뼈. 위와 같은 이유로 에디터에서는 이름으로 찾는다.</summary>
+    private Transform ResolvedNeckRoot
+    {
+        get
+        {
+            if (neckChain != null && neckChain.Length > 0 && neckChain[0] != null) return neckChain[0];
+            if (previewNeckRoot == null) previewNeckRoot = FindDeep(transform, "CC_Base_NeckTwist01");
+            return previewNeckRoot;
+        }
+    }
+
+    /// <summary>인스펙터에 적힌 기능장애 기본값(도). 추첨 전 값이라 프리뷰용이다.</summary>
+    public float NominalDysfunction => dysfunctionAngle;
+
+    /// <summary>인스펙터에 적힌 압박 여유 기본값(도). 추첨 전 값이라 프리뷰용이다.</summary>
+    public float NominalPassiveGain => passiveGainAngle;
+
+    // ── 압박 유지 타이머 ──────────────────────────────────────────────────
+    // ★브리지가 채우고 각도기가 읽는다. 여기 실어 두면 각도기가 브리지를 몰라도 된다
+    //   (각도기는 이미 드라이버를 참조하고 있다). 드라이버는 이 값을 쓰지 않는다.
+
+    /// <summary>압박 한계에서 버틴 시간(초).</summary>
+    public float HoldElapsed { get; set; }
+
+    /// <summary>버텨야 하는 시간(초). 0이면 유지 구간이 아니라 표시하지 않는다.</summary>
+    public float HoldTarget { get; set; }
+
+    /// <summary>목이 도는 중심. 손이 돌린 각을 재는 기준점이다.
+    /// ★에디터에서는 배선이 비어 있으므로 이름으로 찾아 쓴다(각도기 프리뷰용).</summary>
+    public Transform Pivot => ResolvedNeckRoot != null ? ResolvedNeckRoot : ResolvedTorso;
 
     /// <summary>지금 재고 있는 방향. 각도기가 어느 면을 띄울지 여기서 정한다.</summary>
     public Direction CurrentDirection => currentDirection;
 
-    /// <summary>기준 몸통. 각도기가 0° 방향을 잡는 데 쓴다.</summary>
-    public Transform Torso => torso;
+    /// <summary>기준 몸통. 각도기가 0° 방향을 잡는 데 쓴다.
+    /// ★에디터에서는 배선이 비어 있으므로 이름으로 찾아 쓴다(각도기 프리뷰용).</summary>
+    public Transform Torso => ResolvedTorso;
 
     /// <summary>능동 끝점에 도달했는가. 압박 단계로 넘어가도 되는 시점이다.</summary>
     public bool ActiveReached => currentDirection != Direction.None &&

@@ -259,6 +259,10 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         if (progressCircleObject == null) return;
 
+        // substep이 바뀌면 외부 구동은 놓는다. 계속 잡고 있으면 다음 단계에서
+        // SetExternalProgress가 오브젝트를 다시 켜지 못한다.
+        externalProgressActive = false;
+
         // 가이드 스텝에서는 항상 ProgressCircle 숨김 (duration이 있어도 무시)
         if (scenarioManager != null && scenarioManager.CurrentStep != null && scenarioManager.CurrentStep.IsGuideStep())
         {
@@ -374,6 +378,47 @@ public class ScenarioGuideUIController : MonoBehaviour
         ChunaLogger.Log($"[GuideUI] ProgressCircle 숨김");
     }
 
+    // ── 외부 구동 진행 표시 ────────────────────────────────────────────────
+    // ★substep의 duration을 그대로 세는 내부 타이머로는 못 그리는 게 있다 —
+    //   "손이 조건을 만족하는 동안에만 차고, 놓치면 0으로 되돌아가는" 타이머다
+    //   (경추ROM 압박 종단점 유지, 파지 유지). duration>0·나레이션 없음·손녹화 없음이라는
+    //   HandleProgressCircleVisibility의 세 조건에도 걸린다.
+    //   그래서 값을 <b>바깥에서 밀어넣는</b> 경로를 따로 연다. 내부 타이머는 건드리지 않는다.
+
+    /// <summary>외부에서 진행 표시를 잡고 있는가. 잡고 있는 동안 내부 타이머 갱신을 막는다.</summary>
+    private bool externalProgressActive;
+
+    /// <summary>
+    /// 진행 표시를 바깥에서 직접 그린다. 매 프레임 불러도 된다.
+    /// </summary>
+    /// <param name="remainingSeconds">남은 시간(초). 숫자로 표시된다.</param>
+    /// <param name="totalSeconds">전체 시간(초). 0 이하면 링을 채우지 않는다.</param>
+    public void SetExternalProgress(float remainingSeconds, float totalSeconds)
+    {
+        if (progressCircleObject == null) return;
+
+        if (!externalProgressActive)
+        {
+            externalProgressActive = true;
+            isProgressActive = false;        // 내부 타이머를 재운다
+            progressCircleObject.SetActive(true);
+            if (completeText != null) completeText.gameObject.SetActive(false);
+            if (completeIcon != null) completeIcon.SetActive(false);
+            if (durationText != null) durationText.gameObject.SetActive(true);
+        }
+
+        float ratio = totalSeconds > 0f ? Mathf.Clamp01(remainingSeconds / totalSeconds) : 0f;
+        UpdateProgressCircle(Mathf.Max(0f, remainingSeconds), ratio);
+    }
+
+    /// <summary>외부 구동 진행 표시를 놓는다. 다음 substep부터 내부 규칙이 다시 적용된다.</summary>
+    public void ClearExternalProgress()
+    {
+        if (!externalProgressActive) return;
+        externalProgressActive = false;
+        HideProgressCircle();
+    }
+
     /// <summary>
     /// Step 이름 업데이트
     /// - 가이드 스텝(stepNo == 0)은 stepName만 표시
@@ -452,6 +497,10 @@ public class ScenarioGuideUIController : MonoBehaviour
             case "준비": return "자세를 준비하세요.";
             case "자세준비": return "자세를 준비하세요.";
             case "파지": return "파지하세요.";
+            // 경추ROM은 면 이름을 붙여 통일했다(2026-08-26). 없으면 default로 빠져 화면이 빈다.
+            case "시상면 파지": return "파지하세요.";
+            case "관상면 파지": return "파지하세요.";
+            case "횡단면 파지": return "파지하세요.";
             case "견착": return "견착하세요.";
             case "교정": return "교정하세요.";
             case "교정·호흡": return "호흡에 맞춰 교정하세요.";
