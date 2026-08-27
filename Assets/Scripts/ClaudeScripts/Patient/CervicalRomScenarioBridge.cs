@@ -22,6 +22,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("엄지·검지 파지 판정기. 있으면 접촉 게이트를 이쪽으로 본다.")]
     [SerializeField] private CervicalGripJudge gripJudge;
 
+    [Tooltip("면 각도기. 압박 유지 단계에서 방향 화살표를 켜는 데 쓴다. 비우면 자동 탐색한다.")]
+    [SerializeField] private CervicalRomPlaneGauge planeGauge;
+
     [Header("=== 대상 시나리오 ===")]
     [Tooltip("이 이름의 시나리오에서만 동작한다. 다른 술기에는 개입하지 않는다.")]
     [SerializeField] private string scenarioName = "경추ROM측정";
@@ -155,6 +158,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (evaluator == null) evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
+        if (planeGauge == null) planeGauge = FindFirstObjectByType<CervicalRomPlaneGauge>(FindObjectsInactive.Include);
 
         if (driver == null)
         {
@@ -188,6 +192,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 // ★술기를 벗어날 때만 가이드 손을 머리뼈에서 뗀다. 안 떼면 다음 술기까지
                 //   손이 환자 머리에 매달려 따라다닌다.
                 evaluator?.ReleaseGuideHandHoldInternal();
+                planeGauge?.SetPressGuide(false);   // 화살표를 켠 채 나가면 다음 술기까지 남는다
             }
             if (!warnedNotTarget)
             {
@@ -528,6 +533,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         if (!isOverpressure)
         {
+            planeGauge?.SetPressGuide(false);   // 능동·지시 단계에는 화살표가 없다
             // 능동 — 지시(x.1) 다음 동작(x.2)에서 움직이기 시작한다.
             if (subStepNo >= 2)
             {
@@ -547,6 +553,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             driver.HoldTarget = overpressureHoldSeconds;
             arcStarted = false;    // 손 기준점을 이 단계에서 다시 잡는다
             pairStarted = false;
+            // ★밀기 시작하는 지금부터 방향 화살표를 켠다. 능동 구간에는 안 뜬다 —
+            //   능동은 환자가 스스로 가는 구간이라 시술자에게 줄 지시가 없다.
+            planeGauge?.SetPressGuide(true);
             sweptSmoothed = 0f;
             sweptVelocity = 0f;
             Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 압박 한계 {driver.PassiveLimitAngle:F0}° 까지 " +
@@ -559,6 +568,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             overpressureHeldTime = 0f;
             driver.HoldElapsed = 0f;
             driver.HoldTarget = 0f;
+            planeGauge?.SetPressGuide(false);   // 복귀는 밀라는 구간이 아니다
             driver.ReturnToNeutral();
             Log($"중립 복귀 {stepName} (부족각 {driver.DeficitAngle:F1}°)");
         }

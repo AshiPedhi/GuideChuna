@@ -109,6 +109,15 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "★손끝 중점이 회전 중심에서 약 0.21m다(실측). 그보다 밖에 둬야 손에 안 가린다.")]
     [SerializeField] private float scaleRadius = 0.34f;
 
+    [Tooltip("★<b>횡단면(좌·우 회전)에서만</b> 눈금 반지름에 곱하는 배수. 1이면 위 값 그대로.\n" +
+             "횡단면은 회전축이 세로라 판이 <b>머리를 가로질러 눕는다</b> — 뒤에서 내려다보면\n" +
+             "머리가 눈금을 덮는다(2026-08-27 사용자 지적). 시상면·관상면은 판이 세로로 서서\n" +
+             "옆에서 보이므로 이 문제가 없어 손대지 않는다.\n" +
+             "기본 1.5 = 반지름 0.34m → 0.51m(계산값). 채움 부채꼴도 같은 배수로 커져 비율이 유지된다.\n" +
+             "판·눈금숫자·현재각은 반지름에서 파생되므로 자동으로 따라 커진다.\n" +
+             "※반지름 대신 판을 머리 위로 <b>띄우고</b> 싶으면 위쪽 transverseNormalOffset을 쓴다.")]
+    [SerializeField] private float transverseRadiusScale = 1.5f;
+
     [Tooltip("눈금을 그릴 범위 (도). 방향의 최대각과 무관하게 이만큼 그린다.\n" +
              "★굴곡은 최대각이 45°지만 눈금은 90°까지 깔고 45°에 굵은 마지노선을 긋는다 —\n" +
              "  각도기처럼 눈금이 먼저 있고 그 위에 기준선이 표시되는 게 읽기 쉽다.")]
@@ -170,6 +179,45 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "★명도를 낮추면 진해지는 게 아니라 <b>탁해진다</b>(검정이 섞인다).\n" +
              "  0.60으로 내렸다가 되돌렸다 — 선명함은 채도 1.0 · 명도 1.0에서 나온다.")]
     [SerializeField] private Vector2 needleSaturationValue = new Vector2(1f, 1f);
+
+    [Header("=== 압박 방향 화살표 ===")]
+    [Tooltip("★압박 유지 단계에서 <b>어느 쪽으로 더 돌려야 하는지</b>를 호 화살표로 보여준다.\n" +
+             "굴곡·신전·측굴·회전 여섯 방향 전부에 자동으로 붙는다 — 눈금·지침과 같은 면 기저를\n" +
+             "쓰므로 방향이 어긋날 수가 없다(씬에 화살표를 따로 배치하지 않는 이유다).\n" +
+             "★능동 구간에는 안 뜬다. 능동은 환자가 스스로 가는 구간이라 시술자에게 줄 지시가 없다.")]
+    [SerializeField] private bool showPressArrow = true;
+
+    [Tooltip("호의 길이 (도). 지침에서 진행 방향으로 이만큼 뻗는다.")]
+    [SerializeField] private float pressArrowSpanDeg = 24f;
+
+    [Tooltip("호를 그릴 반지름 (눈금 반지름 대비 배수).\n" +
+             "★채움 부채꼴과 눈금 사이의 <b>빈 띠</b>에 앉힌다 — 겹치면 둘 다 읽기 어렵다.\n" +
+             "씬 값 기준 계산: 채움이 0.28/0.36 = 0.78배까지, 주눈금 안쪽 끝이\n" +
+             "1 − 0.036/0.36 = 0.90배부터다. 그 사이 한가운데가 0.84.\n" +
+             "★눈금 길이나 채움 반지름을 바꿨으면 이 값도 같이 봐야 한다.")]
+    [Range(0.2f, 1.3f)] [SerializeField] private float pressArrowRadiusScale = 0.84f;
+
+    [Tooltip("호의 굵기 (m)")] [SerializeField] private float pressArrowWidth = 0.010f;
+    [Tooltip("화살촉 길이 (도)")] [SerializeField] private float pressArrowHeadDeg = 9f;
+    [Tooltip("화살촉 폭 (m). 호보다 확실히 넓어야 촉으로 읽힌다.")]
+    [SerializeField] private float pressArrowHeadWidth = 0.032f;
+
+    [Tooltip("호 색을 면 색에서 뽑는다(지침과 같은 규칙). 끄면 아래 색을 쓴다.")]
+    [SerializeField] private bool pressArrowFromPlaneColor = true;
+    [SerializeField] private Color pressArrowColor = new Color(0.95f, 0.35f, 0.15f, 0.95f);
+
+    [Tooltip("한 방향으로 쓸어가는 폭 (도). 0이면 제자리에 선다.\n" +
+             "★왕복시키지 않는다 — 왔다갔다 하면 '반대로도 민다'로 읽혀 방향이 흐려진다\n" +
+             "  (2026-08-17에 힘의 방향 화살표에서 같은 지적을 받았다).")]
+    [SerializeField] private float pressArrowSweepDeg = 10f;
+
+    [Tooltip("초당 쓸어가는 횟수")] [SerializeField] private float pressArrowSweepPerSecond = 0.8f;
+
+    [Tooltip("쓸어간 뒤 시작으로 되돌아가는 순간을 감추려고 양 끝에서 밝기를 죽인다.\n" +
+             "그 구간의 비율(0~0.5). 0이면 밝기 변화 없이 그냥 되돌아간다.")]
+    [Range(0f, 0.5f)] [SerializeField] private float pressArrowFadeEnds = 0.18f;
+
+    [Range(0f, 1f)] [SerializeField] private float pressArrowMinAlpha = 0.25f;
 
     [Header("=== 숫자 ===")]
     [Tooltip("눈금 숫자 크기")] [SerializeField] private float tickLabelSize = 0.030f;
@@ -249,6 +297,10 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Tooltip("프리뷰 지침이 가리킬 각(도). 최대각을 넘으면 최대각으로 잘린다.\n" +
              "능동 한계·압박 한계는 드라이버 인스펙터의 기본값(추첨 전)으로 그린다.")]
     [SerializeField] private float previewAngle = 30f;
+
+    [Tooltip("프리뷰에서 압박 방향 화살표를 같이 띄운다. Play 없이 호 크기·색을 맞추려고 둔 것이다.\n" +
+             "★Play 중에는 이 값과 무관하다 — 브리지가 압박 유지 substep에서만 켠다.")]
+    [SerializeField] private bool previewPressArrow = true;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = false;
@@ -468,9 +520,15 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             passiveLimit = driver.PassiveLimitAngle;
         }
 
+        // ★프리뷰에서는 인스펙터 체크로 화살표를 켠다. Play에서는 브리지가 켠다.
+        if (preview) pressGuideOn = previewPressArrow;
+
         // 0.25° 미만 변화는 무시한다. 눈에 안 보이는데 메시만 다시 만든다.
-        if (Changed(angle, lastDrawnAngle) || Changed(activeLimit, lastDrawnActive)
-                                           || Changed(passiveLimit, lastDrawnPassive))
+        // ★단, 압박 화살표가 켜져 있으면 매 프레임 다시 만든다 — 호가 쓸려 가야 하기 때문이다.
+        //   메시는 리스트를 재사용해 다시 채우므로 프레임마다 새로 할당하지 않는다.
+        if (PressArrowAnimating
+            || Changed(angle, lastDrawnAngle) || Changed(activeLimit, lastDrawnActive)
+                                              || Changed(passiveLimit, lastDrawnPassive))
         {
             BuildDynamic(angle, activeLimit, passiveLimit, maxAngle);
             lastDrawnAngle = angle;
@@ -545,6 +603,47 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     }
 
     private enum PlaneGroup { Sagittal, Coronal, Transverse }
+
+    /// <summary>
+    /// 지금 그려진 면의 반지름 배수. <see cref="BuildStatic"/>에서 한 번 정하고 그 뒤로는 읽기만 한다.
+    /// ★<see cref="builtDirection"/>을 직접 보면 안 된다 — 그건 BuildStatic이 <b>끝난 뒤</b>에 대입된다.
+    /// 기본 1이라 아직 한 번도 안 그린 상태에서도 예전과 똑같이 나온다.
+    /// </summary>
+    private float curRadiusFactor = 1f;
+
+    /// <summary>지금 면에 적용된 눈금 반지름. 판·눈금숫자·현재각 위치가 전부 여기서 파생된다.</summary>
+    private float CurScaleRadius => scaleRadius * curRadiusFactor;
+
+    /// <summary>지금 면에 적용된 채움 부채꼴 반지름. 눈금과 같은 배수로 커져 비율이 유지된다.</summary>
+    private float CurFillRadius => fillRadius * curRadiusFactor;
+
+    /// <summary>
+    /// 지금이 압박 유지 구간인가. <see cref="CervicalRomScenarioBridge"/>가 켜고 끈다.
+    /// ★각도기가 스스로 알아낼 방법이 없다 — 드라이버는 능동이든 압박이든 그냥 각도만 들고 있다.
+    /// </summary>
+    private bool pressGuideOn;
+
+    /// <summary>호가 지금 쓸려 가고 있는가. 켜져 있으면 메시를 매 프레임 다시 만들어야 한다.</summary>
+    private bool PressArrowAnimating => showPressArrow && pressGuideOn
+                                        && pressArrowSweepDeg > 0.01f && pressArrowSweepPerSecond > 0.01f;
+
+    /// <summary>
+    /// 압박 방향 화살표를 켜고 끈다. 압박 유지 substep에 들어갈 때 켜고, 복귀·다른 단계에서 끈다.
+    /// ★능동 구간에서 켜면 안 된다 — 환자가 스스로 가는 구간이라 시술자에게 줄 지시가 없다.
+    /// </summary>
+    public void SetPressGuide(bool on)
+    {
+        if (pressGuideOn == on) return;
+        pressGuideOn = on;
+        lastDrawnAngle = float.NaN;   // 켜지든 꺼지든 다음 프레임에 다시 그리게 한다
+    }
+
+    /// <summary>면별 반지름 배수. 횡단면만 따로 키운다(머리에 가려서).</summary>
+    private float RadiusFactorOf(CervicalRomDriver.Direction d)
+    {
+        if (PlaneGroupOf(d) != PlaneGroup.Transverse) return 1f;
+        return Mathf.Max(0.01f, transverseRadiusScale);
+    }
 
     private static PlaneGroup PlaneGroupOf(CervicalRomDriver.Direction d)
     {
@@ -627,6 +726,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         verts.Clear(); colors.Clear(); tris.Clear();
 
+        // ★제일 먼저 정한다. 아래 전부가 CurScaleRadius·CurFillRadius를 읽는다.
+        curRadiusFactor = RadiusFactorOf(dir);
+
         Color plane = PlaneColorOf(dir);
 
         if (showPlane)
@@ -637,15 +739,20 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             float hx, hy;
             if (autoFitPlane)
             {
-                hx = hy = scaleRadius + labelOffset + planeMargin;
+                hx = hy = CurScaleRadius + labelOffset + planeMargin;
             }
             else
             {
-                hx = planeSize.x * 0.5f;
-                hy = planeSize.y * 0.5f;
+                // ★손으로 잡은 크기도 면 배수를 따라간다. 안 그러면 횡단면에서 눈금만 커지고
+                //   판은 그대로라 숫자와 현재각이 판 밖으로 삐져나간다
+                //   (씬은 autoFitPlane이 꺼져 있고 planeSize가 1.1m — 반지름을 1.5배 하면 넘친다).
+                hx = planeSize.x * 0.5f * curRadiusFactor;
+                hy = planeSize.y * 0.5f * curRadiusFactor;
             }
-            AddQuad(new Vector3(-hx, planeLift - hy, 0f), new Vector3(hx, planeLift - hy, 0f),
-                    new Vector3(hx, planeLift + hy, 0f), new Vector3(-hx, planeLift + hy, 0f), fill);
+            // 세로 치우침도 같은 배수로. 판 안에서 눈금이 앉는 자리가 그대로 유지된다.
+            float lift = planeLift * curRadiusFactor;
+            AddQuad(new Vector3(-hx, lift - hy, 0f), new Vector3(hx, lift - hy, 0f),
+                    new Vector3(hx, lift + hy, 0f), new Vector3(-hx, lift + hy, 0f), fill);
         }
 
         Color tick = plane; tick.a = 0.95f;
@@ -656,7 +763,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (showCrosshair)
         {
             Color cross = plane; cross.a = crosshairAlpha;
-            float arm = crosshairLength > 0f ? crosshairLength : scaleRadius;
+            float arm = crosshairLength > 0f ? crosshairLength : CurScaleRadius;
             for (int q = 0; q < 4; q++) AddArm(q * 90f, arm, crosshairWidth, cross);
         }
 
@@ -684,7 +791,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         }
         // 최대각(마지노선)은 눈금 사이에 안 떨어질 수 있다(예: 45°와 10° 간격). 따로 긋는다.
         // ★지침과 같은 꼴 — 중심에서 눈금 반지름까지 통짜 직선이다(fromCenter).
-        AddTick(maxAngle, scaleRadius, maxAngleMarkWidth, maxMark, fromCenter: true);
+        AddTick(maxAngle, CurScaleRadius, maxAngleMarkWidth, maxMark, fromCenter: true);
 
         Upload(staticMesh, staticFilter);
         BuildTickLabels(span, maxAngle, plane);
@@ -692,7 +799,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (showDebugLogs)
         {
             ChunaLogger.Log($"<color=cyan>[ROM 각도기] {PlaneNameOf(dir)} — {dir} · 0~{maxAngle:F0}° · " +
-                            $"주눈금 {majorStep:F0}° · 반지름 {scaleRadius:F2}m</color>");
+                            $"주눈금 {majorStep:F0}° · 반지름 {CurScaleRadius:F2}m</color>");
         }
     }
 
@@ -702,23 +809,102 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         verts.Clear(); colors.Clear(); tris.Clear();
 
         // 채움은 겹치지 않게 구간을 나눠 그린다. 안쪽부터 바깥으로 읽힌다.
-        AddSector(0f, Mathf.Min(angle, activeLimit), fillRadius, activeFillColor);
+        AddSector(0f, Mathf.Min(angle, activeLimit), CurFillRadius, activeFillColor);
 
         if (angle > activeLimit)
         {
-            AddSector(activeLimit, Mathf.Min(angle, passiveLimit), fillRadius, pressFillColor);
+            AddSector(activeLimit, Mathf.Min(angle, passiveLimit), CurFillRadius, pressFillColor);
         }
 
         // 부족각 — 압박 한계에서 최대각까지. 이게 결과로 읽을 값이다.
         bool revealDeficit = showDeficitFromStart || angle >= passiveLimit - 0.5f;
         if (revealDeficit && maxAngle > passiveLimit + 0.05f)
         {
-            AddSector(passiveLimit, maxAngle, fillRadius, deficitFillColor);
+            AddSector(passiveLimit, maxAngle, CurFillRadius, deficitFillColor);
         }
 
-        AddTick(angle, scaleRadius, needleWidth, NeedleColorOf(builtDirection), fromCenter: true);
+        AddTick(angle, CurScaleRadius, needleWidth, NeedleColorOf(builtDirection), fromCenter: true);
+
+        // 압박 방향 화살표는 지침 위에 얹는다 — 지침이 '지금 어디'고 화살표가 '어느 쪽으로 더'다.
+        AddPressArrow(angle, maxAngle);
 
         Upload(dynamicMesh, dynamicFilter);
+    }
+
+    /// <summary>
+    /// 압박 방향 화살표 — 지침에서 <b>진행 방향으로</b> 뻗는 호 + 화살촉.
+    ///
+    /// ★목표 지점을 가리키지 않는다. 지침을 따라다니며 "이 방향으로 더"만 말한다.
+    ///   압박 한계(<c>passiveLimit</c>)를 가리키면 <b>끝느낌의 정답을 미리 알려주는 셈</b>이라
+    ///   측정이 무의미해진다 — 끝느낌은 손으로 찾아야 하는 것이다.
+    ///   눈금이 깔린 범위 밖으로는 안 나간다.
+    ///
+    /// ★한 방향으로만 쓸어간다. 왕복하면 '반대로도 민다'로 읽혀 방향이 흐려진다.
+    ///   되돌아가는 순간은 양 끝 밝기를 죽여 감춘다(힘의 방향 화살표에서 쓰던 것과 같은 수법).
+    /// </summary>
+    private void AddPressArrow(float angle, float maxAngle)
+    {
+        if (!showPressArrow || !pressGuideOn) return;
+        if (pressArrowSpanDeg <= 0.1f) return;
+
+        float limit = Mathf.Max(maxAngle, scaleSpan);          // 눈금이 깔린 데까지만
+        float radius = CurScaleRadius * pressArrowRadiusScale;
+
+        // 한 방향 쓸기: 0 → 1을 반복하며 그만큼 앞으로 밀어 놓는다.
+        float phase = 0f, fade = 1f;
+        if (pressArrowSweepDeg > 0.01f && pressArrowSweepPerSecond > 0.01f)
+        {
+            phase = Mathf.Repeat(Time.time * pressArrowSweepPerSecond, 1f);
+            if (pressArrowFadeEnds > 0.001f)
+            {
+                // 시작·끝 구간에서만 밝기를 올렸다 내린다. 가운데는 1로 평평하다.
+                float e = pressArrowFadeEnds;
+                fade = Mathf.Clamp01(Mathf.Min(phase, 1f - phase) / e);
+            }
+        }
+
+        float start = angle + phase * pressArrowSweepDeg;
+        float end = Mathf.Min(start + pressArrowSpanDeg, limit);
+        if (end - start < pressArrowHeadDeg + 0.5f) return;    // 자리가 없으면 아예 안 그린다
+
+        Color c = pressArrowFromPlaneColor ? NeedleColorOf(builtDirection) : pressArrowColor;
+        c.a *= Mathf.Lerp(pressArrowMinAlpha, 1f, fade);
+
+        float headBase = end - pressArrowHeadDeg;
+        AddArcBand(start, headBase, radius, pressArrowWidth, c);
+        AddArcHead(headBase, end, radius, pressArrowHeadWidth, c);
+    }
+
+    /// <summary>호를 따라가는 띠. 1~2도마다 한 조각씩 이어 붙인다.</summary>
+    private void AddArcBand(float fromDeg, float toDeg, float radius, float width, Color color)
+    {
+        float sweep = toDeg - fromDeg;
+        if (sweep < 0.05f || width <= 0f) return;
+
+        int steps = Mathf.Max(1, Mathf.CeilToInt(sweep * 0.5f));
+        float step = sweep / steps;
+        float rIn = Mathf.Max(0f, radius - width * 0.5f);
+        float rOut = radius + width * 0.5f;
+
+        for (int i = 0; i < steps; i++)
+        {
+            Vector3 d0 = Dir(fromDeg + step * i);
+            Vector3 d1 = Dir(fromDeg + step * (i + 1));
+            AddQuad(d0 * rIn, d1 * rIn, d1 * rOut, d0 * rOut, color);
+        }
+    }
+
+    /// <summary>화살촉. 밑변은 호를 가로지르고 꼭짓점은 진행 방향 끝에 놓인다.</summary>
+    private void AddArcHead(float baseDeg, float tipDeg, float radius, float width, Color color)
+    {
+        Vector3 baseDir = Dir(baseDeg);
+        Vector3 tip = Dir(tipDeg) * radius;
+        Vector3 left = baseDir * (radius - width * 0.5f);
+        Vector3 right = baseDir * (radius + width * 0.5f);
+
+        // 삼각형 하나. AddQuad에 꼭짓점을 겹쳐 넣으면 퇴화 삼각형이 하나 붙지만
+        // Sprites/Default는 Cull Off라 문제되지 않고, 전용 AddTri를 새로 만들 이유가 없다.
+        AddQuad(left, tip, tip, right, color);
     }
 
     /// <summary>지침 끝의 현재 각도 숫자. 정수가 바뀔 때만 문자열을 새로 만든다.</summary>
@@ -738,7 +924,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         }
 
         // ★눈금 숫자보다 확실히 바깥에 둔다. 가까우면 눈금 라벨과 겹친다.
-        Vector3 local = Dir(angle) * (scaleRadius + readoutOffset);
+        Vector3 local = Dir(angle) * (CurScaleRadius + readoutOffset);
         readout.transform.localPosition = local;
         FaceCamera(readout.transform);
 
@@ -774,8 +960,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         Vector3 dir = Dir(degrees);
         Vector3 side = new Vector3(dir.y, -dir.x, 0f) * (width * 0.5f);
-        Vector3 outer = dir * scaleRadius;
-        Vector3 inner = fromCenter ? Vector3.zero : dir * (scaleRadius - length);
+        float r = CurScaleRadius;
+        Vector3 outer = dir * r;
+        Vector3 inner = fromCenter ? Vector3.zero : dir * (r - length);
         AddQuad(inner - side, outer - side, outer + side, inner + side, color);
     }
 
@@ -985,7 +1172,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         label.gameObject.SetActive(true);
         label.text = bold ? $"<b>{degrees:F0}°</b>" : $"{degrees:F0}";
         label.color = color;
-        label.transform.localPosition = Dir(degrees) * (scaleRadius + labelOffset);
+        label.transform.localPosition = Dir(degrees) * (CurScaleRadius + labelOffset);
     }
 
     /// <summary>숫자는 늘 보는 사람 쪽을 향한다. 면에 눕히면 옆에서 읽을 수 없다.</summary>

@@ -156851,15 +156851,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 40
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -156867,11 +156867,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 20
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -19
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1399643648098774758, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_Layer
@@ -202432,6 +202432,7 @@ MonoBehaviour:
   driver: {fileID: 0}
   evaluator: {fileID: 0}
   gripJudge: {fileID: 0}
+  planeGauge: {fileID: 0}
   scenarioName: "\uACBD\uCD94ROM\uCE21\uC815"
   overpressureSource: 1
   overpressureRampSeconds: 3
@@ -400559,7 +400560,7 @@ MonoBehaviour:
   showPlane: 1
   autoFitPlane: 0
   planeMargin: 0.1
-  planeSize: {x: 1.1, y: 1.1}
+  planeSize: {x: 0.95, y: 0.95}
   planeLift: 0.18
   sagittalNormalOffset: 0.3
   coronalNormalOffset: 0.32
@@ -400571,6 +400572,7 @@ MonoBehaviour:
   coronalColor: {r: 0.96, g: 0.63, b: 0.36, a: 1}
   transverseColor: {r: 0.48, g: 0.78, b: 0.48, a: 1}
   scaleRadius: 0.36
+  transverseRadiusScale: 1.5
   scaleSpan: 90
   showCrosshair: 1
   crosshairLength: 0
@@ -400592,6 +400594,18 @@ MonoBehaviour:
   needleWidth: 0.005
   needleFromPlaneColor: 1
   needleSaturationValue: {x: 1, y: 0.78}
+  showPressArrow: 1
+  pressArrowSpanDeg: 24
+  pressArrowRadiusScale: 0.84
+  pressArrowWidth: 0.01
+  pressArrowHeadDeg: 9
+  pressArrowHeadWidth: 0.032
+  pressArrowFromPlaneColor: 1
+  pressArrowColor: {r: 0.95, g: 0.35, b: 0.15, a: 0.95}
+  pressArrowSweepDeg: 10
+  pressArrowSweepPerSecond: 0.8
+  pressArrowFadeEnds: 0.18
+  pressArrowMinAlpha: 0.25
   tickLabelSize: 0.2
   readoutSize: 0.45
   labelOffset: 0.015
@@ -400609,7 +400623,8 @@ MonoBehaviour:
   readoutBackdropColor: {r: 0.09, g: 0.1, b: 0.13, a: 0.78}
   previewInEditor: 1
   previewDirection: 5
-  previewAngle: 30
+  previewAngle: 90
+  previewPressArrow: 1
   showDebugLogs: 0
 --- !u!4 &5867595424231922552
 Transform:
