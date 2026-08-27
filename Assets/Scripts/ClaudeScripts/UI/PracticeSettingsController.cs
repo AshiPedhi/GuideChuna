@@ -797,12 +797,19 @@ public class PracticeSettingsController : MonoBehaviour
             return;
         }
 
-        if (on == headXray.IsXrayActive) return;
+        // ★Activate/Deactivate를 직접 부르지 않고 '외부 잠금' API를 쓴다(2026-08-27).
+        //   그냥 켜면 시나리오가 **다음 단계로 넘어가는 순간 되돌려 놓는다** —
+        //   경추ROM은 conditionType이 PassiveStretch라 CranialHeadXray의 xray 사용 목록에 없어서
+        //   restoreEachSubStep이 매 단계 Deactivate()를 불렀다. 현실 모드는 사용자가 고른 표시
+        //   설정이므로 시나리오 단계가 뒤집으면 안 된다.
+        //   ★IsXrayActive로 조기 반환하면 안 된다 — 손 근접으로 이미 켜져 있는 경우 잠금이 안 걸린다.
+        if (on == headXray.IsXrayActive && on == headXray.IsExternalHold) return;
 
-        if (on) headXray.Activate();
-        else headXray.Deactivate();
+        if (on) headXray.ActivateExternalHold();
+        else headXray.ReleaseExternalHold();
 
-        ChunaLogger.Log($"[PracticeSettings] 환자 xray 반투명 {(on ? "켬" : "끔")} — 살은 비치고 옷은 남는다");
+        ChunaLogger.Log($"[PracticeSettings] 환자 xray 반투명 {(on ? "켬" : "끔")} — 살은 비치고 옷은 남는다" +
+                        (on ? " (현실 모드 잠금 — 시나리오가 못 끈다)" : ""));
     }
 
     private CranialHeadXray headXray;

@@ -141,8 +141,42 @@ public class CranialHeadXray : MonoBehaviour
     private bool armed;    // 근접 감지 허용 여부
     private float rearmAt; // 이 시각 전까지는 근접 감지 보류(단계 전환 원복이 보이도록)
 
+    /// <summary>
+    /// ★현실 모드(패스스루) 같은 <b>바깥</b>에서 켠 xray인가. 켜져 있으면 시나리오가 이걸 못 끈다.
+    ///
+    /// 2026-08-27에 신설했다. 증상: 현실 모드를 켜면 환자가 반투명해졌다가 <b>다음 단계로 넘어가는
+    /// 순간 불투명으로 돌아왔다.</b> 원인은 <see cref="PracticeSettingsController"/>가
+    /// <see cref="Activate"/>를 직접 부르는데 이 컴포넌트는 그게 "바깥에서 켠 것"인지 몰랐다는 것 —
+    /// 경추ROM은 <c>PassiveStretch</c>라 <see cref="activeOnConditionTypes"/>에 없어
+    /// <c>wantsXray=false</c>가 되고, <see cref="restoreEachSubStep"/>이 매 단계 <see cref="Deactivate"/>를 불렀다.
+    ///
+    /// ★현실 모드는 <b>사용자가 직접 켠 표시 설정</b>이므로 난이도 게이트(<see cref="hideInGuidelessLevels"/>)
+    /// 보다도 우선한다. 평가 모드에서 현실 모드를 켰다면 그건 그렇게 보겠다고 고른 것이다.
+    /// </summary>
+    private bool externalHold;
+
     /// <summary>현재 반투명(xray)이 켜져 있는지. 에디터 세이프티가 저장 직전 판단에 사용.</summary>
     public bool IsXrayActive => active;
+
+    /// <summary>바깥(현실 모드)이 xray를 잡고 있는지.</summary>
+    public bool IsExternalHold => externalHold;
+
+    /// <summary>
+    /// 바깥에서 xray를 켜고 <b>시나리오가 못 끄게 잠근다</b>. 현실 모드 토글이 쓴다.
+    /// ★이미 켜져 있어도(손 근접으로 먼저 켜진 경우) 잠금은 걸어야 하므로 <see cref="Activate"/>보다 먼저 세운다.
+    /// </summary>
+    public void ActivateExternalHold()
+    {
+        externalHold = true;
+        Activate();   // 이미 active면 내부에서 no-op
+    }
+
+    /// <summary>바깥 잠금을 풀고 xray를 끈다. ★켠 채로 두면 임시 머티리얼이 씬에 굳는다(07-27 분홍 피부 사고).</summary>
+    public void ReleaseExternalHold()
+    {
+        externalHold = false;
+        Deactivate();
+    }
 
     private void Awake()
     {
@@ -175,6 +209,8 @@ public class CranialHeadXray : MonoBehaviour
         var ev = ScenarioEventSystem.Instance;
         ev.OnSubStepStarted -= HandleSubStepStarted;
         ev.OnScenarioCompleted -= HandleScenarioEnd;
+        // ★컴포넌트가 꺼지면 잠금도 함께 푼다. 임시 머티리얼을 남기면 씬에 굳는다(07-27 분홍 피부 사고).
+        externalHold = false;
         Deactivate();
     }
 
@@ -220,7 +256,8 @@ public class CranialHeadXray : MonoBehaviour
 
         // ★ xray를 **안 쓰는** 단계(진단3·재평가·종료 등)로 넘어갈 때만 환자 모델을 원복한다.
         //   xray 단계끼리 연속될 때는 그대로 유지 — 매 단계 껐다 켜면 깜빡이고 골격 관찰이 끊긴다.
-        if (restoreEachSubStep && active && !wantsXray && !keepThrough)
+        //   ★externalHold(현실 모드)면 끄지 않는다 — 시나리오 단계는 표시 설정을 뒤집을 권한이 없다.
+        if (restoreEachSubStep && active && !wantsXray && !keepThrough && !externalHold)
         {
             Deactivate();
             rearmAt = Time.time + Mathf.Max(0f, rearmDelaySeconds);   // 손이 아직 머리에 있어도 곧바로 재점등되지 않게
@@ -234,7 +271,8 @@ public class CranialHeadXray : MonoBehaviour
 
     private void HandleScenarioEnd(ScenarioData _)
     {
-        Deactivate();   // 시나리오 끝나면 래치 해제 + 불투명 복원
+        // ★현실 모드가 잡고 있으면 시나리오가 끝나도 유지한다. 끄는 건 현실 모드 토글의 몫.
+        if (!externalHold) Deactivate();   // 시나리오 끝나면 래치 해제 + 불투명 복원
         forceOnThisSubStep = false;
         armed = (activeOnConditionTypes == null || activeOnConditionTypes.Length == 0);
     }
@@ -256,7 +294,8 @@ public class CranialHeadXray : MonoBehaviour
     {
         // ★시나리오 종료 시 armed가 '항상 허용'으로 되돌아가므로 여기서도 한 번 막는다
         //   (안 그러면 손 근접만으로 다시 켜진다).
-        if (GuidesHidden())
+        // ★단, 현실 모드가 잡고 있으면 난이도보다 우선한다(사용자가 직접 켠 표시 설정).
+        if (GuidesHidden() && !externalHold)
         {
             if (active) Deactivate();
             return;
