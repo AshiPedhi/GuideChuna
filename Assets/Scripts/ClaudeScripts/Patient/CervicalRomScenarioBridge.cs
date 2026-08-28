@@ -25,6 +25,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("면 각도기. 압박 유지 단계에서 방향 화살표를 켜는 데 쓴다. 비우면 자동 탐색한다.")]
     [SerializeField] private CervicalRomPlaneGauge planeGauge;
 
+    [Tooltip("표준자세 체크리스트. 없으면 자세정렬 단계를 게이트하지 않는다.")]
+    [SerializeField] private PostureChecklistUI postureChecklist;
+
     [Header("=== 대상 시나리오 ===")]
     [Tooltip("이 이름의 시나리오에서만 동작한다. 다른 술기에는 개입하지 않는다.")]
     [SerializeField] private string scenarioName = "경추ROM측정";
@@ -111,8 +114,24 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("측면 배치를 트리거할 단계 이름(시상면 파지).")]
     [SerializeField] private string sideGripStepName = "시상면 파지";
 
+    [Tooltip("표준자세 체크리스트를 띄울 단계 이름.")]
+    [SerializeField] private string postureStepName = "자세정렬";
+
     [Tooltip("정면 복귀를 트리거할 단계 이름들.")]
     [SerializeField] private string[] frontGripStepNames = { "관상면 파지", "횡단면 파지" };
+
+    [Header("=== 단계 효과음 (2026-08-28 신규) ===")]
+    [Tooltip("파지 성립·단계 완료를 소리로 가른다. ★신규 필드라 씬 값이 없어 코드 기본값이 먹는다.")]
+    [SerializeField] private bool playStepCues = true;
+    [Tooltip("유지 타이머가 도는 동안 1초마다 틱. 마지막 1초는 높은 소리.")]
+    [SerializeField] private bool playHoldTick = true;
+    [SerializeField, Range(0f, 1f)] private float stepCueVolume = 0.7f;
+    [SerializeField, Range(0f, 1f)] private float holdTickVolume = 0.5f;
+    [Tooltip("비우면 Resources/Audio/StepComplete를 쓴다.")]
+    [SerializeField] private AudioClip gripCueClip;
+    [SerializeField] private AudioClip stepDoneClip;
+    [SerializeField] private AudioClip holdTickClip;
+    [SerializeField] private AudioClip holdTickLastClip;
 
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
@@ -131,6 +150,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float leftTouchHold, rightTouchHold;   // 접촉 디바운스 잔여시간(초)
     private bool loggedHideLeft, loggedHideRight;  // 상태가 바뀔 때만 로그
     private bool lastWasGripStep;    // 직전 단계가 파지였는가(벗어날 때 재생을 끝내려고)
+    private bool postureGateHeld;    // 체크리스트 때문에 드라이버를 세워 두고 있는가
+    private string gaugePrimedKey;   // 이 파지 단계에서 각도기를 이미 띄웠는가
+    private bool gripCuePlayed;      // 이 파지 단계에서 파지음을 이미 울렸는가
+    private int lastTickSecond = -1; // 유지 타이머 틱 — 초가 바뀔 때만 운다
+    private AudioSource cueSource;
+    private AudioClip defaultCueClip;
     private bool stallButtonShown;   // 이 substep에서 다음 버튼을 이미 띄웠는가
     private bool warnedNotTarget;
     private float overpressureProgress;
@@ -159,6 +184,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (evaluator == null) evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
         if (planeGauge == null) planeGauge = FindFirstObjectByType<CervicalRomPlaneGauge>(FindObjectsInactive.Include);
+        if (postureChecklist == null) postureChecklist = FindFirstObjectByType<PostureChecklistUI>(FindObjectsInactive.Include);
+
+        EnsureRomCompanions();
 
         if (driver == null)
         {
@@ -193,6 +221,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 //   손이 환자 머리에 매달려 따라다닌다.
                 evaluator?.ReleaseGuideHandHoldInternal();
                 planeGauge?.SetPressGuide(false);   // 화살표를 켠 채 나가면 다음 술기까지 남는다
+                planeGauge?.ClearSticky();          // 각도기도 같이 접는다
+                driver.ClearPrimedDirection();
             }
             if (!warnedNotTarget)
             {
@@ -220,12 +250,21 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             }
             lastWasGripStep = IsGripStep(step.stepName);
 
+            // ★자세정렬 단계에서만 표준자세 체크리스트를 띄운다(2026-08-27 회의 결정).
+            //   세 줄을 전부 체크해야 다음으로 넘어간다 — 게이팅은 UpdatePostureGate가 한다.
+            UpdatePostureGate(step.stepName);
+
             lastStepKey = key;
             stepEnteredTime = Time.time;
             stallButtonShown = false;
             ApplyGripPair(step.stepName);
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
+
+        // ★파지가 성립하는 <b>순간</b> 각도기를 띄운다(2026-08-27 회의 결정).
+        //   여기는 매 프레임 도는 자리다 — 처음엔 단계 진입 블록에 넣었다가
+        //   "진입 시점엔 아직 손을 안 잡았다"는 이유로 영영 안 불렸다(2026-08-28 Play 지적).
+        UpdateGaugeOnGrip(step.stepName);
 
         AdvanceOverpressure(step.stepName, sub.subStepNo);
         DriveProgressCircle(step.stepName, sub);
@@ -316,6 +355,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         advancedKey = key;
         Log($"{stepName} {subStepNo} 진행 — {reason}");
+        PlayStepCue(stepDoneClip, $"{stepName} {subStepNo} 완료");
 
         // ★측정값을 남긴다. 방향이 바뀌면 각도가 사라지는데, 경추ROM은 채점 지표가 없어
         //   (PassiveStretch는 0점) 이 각도가 곧 결과다. 목표에 못 닿고 타임아웃으로
@@ -359,7 +399,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ① 압박 종단점 유지 — 한계에 닿아 버티는 동안만 센다. 손이 물러나면 0으로 되돌아간다.
         if (isOverpressure && sub.subStepNo == 2 && overpressureHoldSeconds > 0f)
         {
-            guideUI.SetExternalProgress(overpressureHoldSeconds - overpressureHeldTime, overpressureHoldSeconds);
+            float remain = overpressureHoldSeconds - overpressureHeldTime;
+            guideUI.SetExternalProgress(remain, overpressureHoldSeconds);
+            PlayHoldTick(remain);
             return;
         }
 
@@ -370,11 +412,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             && IsGripStep(stepName) && evaluator != null
             && evaluator.TryGetAutoPlayProgress(out float autoPlay01))
         {
-            guideUI.SetExternalProgress(sub.duration * (1f - autoPlay01), sub.duration);
+            float remain = sub.duration * (1f - autoPlay01);
+            guideUI.SetExternalProgress(remain, sub.duration);
+            PlayHoldTick(remain);
             return;
         }
 
         guideUI.ClearExternalProgress();
+        lastTickSecond = -1;   // 타이머가 없는 구간에서는 카운터를 비운다
     }
 
     /// <summary>
@@ -439,9 +484,159 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 파지 단계에서 양손이 접촉하는 순간 각도기를 띄운다. 한 단계에 한 번만 부른다.
+    /// ★방향만 잡고 움직이지 않는다 — 동작은 다음 단계의 BeginActive가 시작한다.
+    /// </summary>
+    private void UpdateGaugeOnGrip(string stepName)
+    {
+        if (!IsGripStep(stepName)) { gaugePrimedKey = null; gripCuePlayed = false; return; }
+
+        CervicalRomDriver.Direction d = FirstDirectionAfterGrip(stepName);
+        if (d == CervicalRomDriver.Direction.None) return;
+
+        // ★각도기는 파지 단계에 들어가는 <b>즉시</b> 띄운다(2026-08-28 사용자 지적).
+        //   IsGripped(엄지·검지가 접촉점 구체에 정확히 닿음)를 기다리게 해 놨더니
+        //   손을 대도 각도기가 안 떴다. 판정은 진행용이고, 표시는 기다릴 이유가 없다.
+        if (gaugePrimedKey != stepName)
+        {
+            gaugePrimedKey = stepName;
+            driver.PrepareDirection(d);
+        }
+
+        // 소리는 실제로 잡혔을 때만 — 그건 판정이 맞다.
+        if (!gripCuePlayed && BothHandsTouching())
+        {
+            gripCuePlayed = true;
+            PlayStepCue(gripCueClip != null ? gripCueClip : Resources.Load<AudioClip>("Audio/RomGrip"),
+                        "파지 성립");
+        }
+    }
+
+    /// <summary>남은 초가 바뀌는 순간에만 한 번 운다. 마지막 1초는 다른 소리.</summary>
+    private void PlayHoldTick(float remaining)
+    {
+        if (!playHoldTick) { lastTickSecond = -1; return; }
+
+        int sec = Mathf.CeilToInt(remaining);
+        if (sec == lastTickSecond) return;
+        lastTickSecond = sec;
+        if (sec <= 0) return;   // 0초 = 완료 — 완료음이 담당한다
+
+        AudioClip clip = sec <= 1 && holdTickLastClip != null ? holdTickLastClip : holdTickClip;
+        if (clip == null) clip = Resources.Load<AudioClip>(sec <= 1 ? "Audio/RomTickLast" : "Audio/RomTick");
+        if (clip == null) return;
+
+        EnsureCueSource();
+        cueSource.PlayOneShot(clip, holdTickVolume);
+    }
+
+    private void EnsureCueSource()
+    {
+        if (cueSource != null) return;
+        cueSource = gameObject.GetComponent<AudioSource>();
+        if (cueSource == null)
+        {
+            cueSource = gameObject.AddComponent<AudioSource>();
+            cueSource.playOnAwake = false;
+            cueSource.spatialBlend = 0f;   // 2D — 손이 시야를 벗어나도 들려야 한다
+        }
+    }
+
+    /// <summary>
+    /// 단계 구분을 소리로도 가른다(2026-08-28 사용자 지시).
+    /// ★유지 타이머 틱은 두개골에서 쓰던 공용 <see cref="HoldTickAudio"/>를 그대로 쓴다 —
+    ///   Resources/Audio/TimerTick·TimerTickLast가 이미 있고 소리가 통일된다.
+    /// </summary>
+    private void PlayStepCue(AudioClip clip, string reason)
+    {
+        if (!playStepCues) return;
+
+        AudioClip use = clip;
+        if (use == null)
+        {
+            if (defaultCueClip == null) defaultCueClip = Resources.Load<AudioClip>("Audio/RomStepDone");
+            use = defaultCueClip;
+        }
+        if (use == null) return;
+
+        EnsureCueSource();
+        cueSource.PlayOneShot(use, stepCueVolume);
+        Log($"효과음 — {reason}");
+    }
+
+    /// <summary>
+    /// 경추ROM에 필요한 컴포넌트를 런타임에 붙인다. ★씬에서 사람이 배치할 게 없어야 한다.
+    ///
+    /// 씬에 직렬화하지 않으므로 씬 파일이 바뀌지 않고, 이미 있으면 그대로 쓴다.
+    /// ★실측 측정기는 <b>꺼진 채로</b> 붙인다 — 켜는 건 실측모드에 들어갈 때 실측 브리지가 한다.
+    ///   켜 두면 교육모드에서 실측 리드아웃과 각도기가 같이 떠 화면이 겹친다.
+    /// </summary>
+    private void EnsureRomCompanions()
+    {
+        if (postureChecklist == null)
+        {
+            postureChecklist = gameObject.AddComponent<PostureChecklistUI>();
+            Log("표준자세 체크리스트를 붙였다(런타임).");
+        }
+
+        var measure = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
+        if (measure == null)
+        {
+            measure = gameObject.AddComponent<CervicalRomRealityMeasure>();
+            measure.enabled = false;   // 실측모드에 들어갈 때 켜진다
+            Log("실측 측정기를 붙였다(런타임, 꺼진 상태).");
+        }
+
+        if (FindFirstObjectByType<CervicalRomMeasurementBridge>(FindObjectsInactive.Include) == null)
+        {
+            gameObject.AddComponent<CervicalRomMeasurementBridge>();
+            Log("실측 브리지를 붙였다(런타임).");
+        }
+
+        // 실습모드에서 손 측정각을 머리 위에 띄우는 검증용 프로브(A-12). 판정에는 관여하지 않는다.
+        if (FindFirstObjectByType<CervicalRomHandAngleProbe>(FindObjectsInactive.Include) == null)
+        {
+            gameObject.AddComponent<CervicalRomHandAngleProbe>();
+            Log("손각도 프로브를 붙였다(런타임).");
+        }
+    }
+
+    /// <summary>
+    /// 표준자세 체크리스트를 켜고, 다 체크되기 전에는 진행을 막는다.
+    ///
+    /// ★막는 방법은 드라이버 일시정지다 — AutoPlay·나레이션 파이프라인을 건드리지 않는다.
+    ///   체크리스트가 씬에 없으면 아무것도 하지 않는다(없다고 진행이 막히면 원인을 못 찾는다).
+    /// </summary>
+    private void UpdatePostureGate(string stepName)
+    {
+        if (postureChecklist == null) return;
+
+        bool onPostureStep = stepName == postureStepName;
+        postureChecklist.SetVisible(onPostureStep);
+
+        if (onPostureStep && !postureChecklist.AllChecked) driver.Paused = true;
+        else if (postureGateHeld) driver.Paused = false;
+
+        postureGateHeld = onPostureStep && !postureChecklist.AllChecked;
+    }
+
     /// <summary>파지 단계인가. 이름이 '파지'로 끝나면 파지로 본다(시상면·관상면·횡단면 파지).</summary>
     private bool IsGripStep(string stepName)
         => !string.IsNullOrEmpty(stepName) && stepName.EndsWith("파지", System.StringComparison.Ordinal);
+
+    /// <summary>
+    /// 그 파지 다음에 오는 첫 동작 방향. 각도기를 미리 띄우는 데만 쓴다.
+    /// ★면이 정해지면 방향도 정해진다 — 시상면은 굴곡부터, 관상·횡단은 우측부터다.
+    /// </summary>
+    private static CervicalRomDriver.Direction FirstDirectionAfterGrip(string stepName)
+    {
+        if (string.IsNullOrEmpty(stepName)) return CervicalRomDriver.Direction.None;
+        if (stepName.StartsWith("시상면")) return CervicalRomDriver.Direction.Flexion;
+        if (stepName.StartsWith("관상면")) return CervicalRomDriver.Direction.LateralRight;
+        if (stepName.StartsWith("횡단면")) return CervicalRomDriver.Direction.RotationRight;
+        return CervicalRomDriver.Direction.None;
+    }
 
     /// <summary>
     /// 진행 UI를 파지 단계에 맞춰 옮긴다.

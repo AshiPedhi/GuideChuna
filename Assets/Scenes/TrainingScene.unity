@@ -202409,6 +202409,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1350302613}
   - component: {fileID: 1350302612}
+  - component: {fileID: 1350302614}
   m_Layer: 0
   m_Name: CervicalRomScenarioBridge
   m_TagString: Untagged
@@ -202433,6 +202434,7 @@ MonoBehaviour:
   evaluator: {fileID: 0}
   gripJudge: {fileID: 0}
   planeGauge: {fileID: 0}
+  postureChecklist: {fileID: 0}
   scenarioName: "\uACBD\uCD94ROM\uCE21\uC815"
   overpressureSource: 1
   overpressureRampSeconds: 3
@@ -202450,8 +202452,17 @@ MonoBehaviour:
   placeOppositeToViewer: 1
   progressSideDeadZone: 0.08
   sideGripStepName: "\uC2DC\uC0C1\uBA74 \uD30C\uC9C0"
+  postureStepName: "\uC790\uC138\uC815\uB82C"
   frontGripStepNames:
   - "\uAD00\uC0C1\uBA74 \uD30C\uC9C0"
+  playStepCues: 1
+  playHoldTick: 1
+  stepCueVolume: 0.7
+  holdTickVolume: 0.5
+  gripCueClip: {fileID: 0}
+  stepDoneClip: {fileID: 0}
+  holdTickClip: {fileID: 0}
+  holdTickLastClip: {fileID: 0}
   showDebugLogs: 1
   logOverpressure: 1
   overpressureLogInterval: 0.25
@@ -202470,6 +202481,56 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1350302614
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1350302611}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ae0632e527f67af4587a650b597f946f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CervicalRomRealityMeasure
+  gripJudge: {fileID: 0}
+  leftHandOverride: {fileID: 0}
+  rightHandOverride: {fileID: 0}
+  direction: 1
+  holdSeconds: 1.5
+  holdSpeedThreshold: 0.03
+  advanceOnHold: 1
+  minAngleToMark: 5
+  minPerpRatio: 0.34
+  slipTolerance: 0.15
+  smoothing: 0.08
+  showReadout: 1
+  showAxes: 1
+  showProgress: 1
+  showGauge: 1
+  gaugeHalfSpan: 90
+  gaugeRadius: 0.3
+  majorStep: 10
+  minorStep: 5
+  microStep: 1
+  majorTickLength: 0.055
+  minorTickLength: 0.035
+  microTickLength: 0.018
+  tickWidth: 0.0035
+  gaugeLabelSize: 0.035
+  gaugeLabelOffset: 0.028
+  tickColor: {r: 0.85, g: 0.9, b: 1, a: 0.95}
+  microColor: {r: 0.6, g: 0.68, b: 0.8, a: 0.55}
+  zeroLineColor: {r: 1, g: 1, b: 1, a: 0.85}
+  needleColor: {r: 1, g: 0.85, b: 0.2, a: 1}
+  activeMarkColor: {r: 0.35, g: 0.85, b: 1, a: 1}
+  passiveMarkColor: {r: 1, g: 0.45, b: 0.35, a: 1}
+  font: {fileID: 0}
+  readoutSize: 0.05
+  pivotRise: 0.1
+  axisLength: 0.18
+  showDebugLogs: 1
+  useKeyboard: 1
 --- !u!1 &1351441085
 GameObject:
   m_ObjectHideFlags: 0
@@ -300266,8 +300327,9 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 358cfbb104314934979cc0a8abf3187d, type: 2}
   - {fileID: 11400000, guid: e208a326390d40c29827ca69221756ec, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
+  - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
   defaultScenarioIndex: 12
-  forceDefaultIndex: 0
+  forceDefaultIndex: 1
   showDebugLog: 1
 --- !u!4 &1964066469
 Transform:
@@ -400541,6 +400603,7 @@ MonoBehaviour:
   rightIndexTip: {fileID: 159818317}
   fingerTipRadius: 0.012
   requireBothFingers: 1
+  ignoreAssignedTips: 0
   showSpheres: 0
   showDebugLogs: 1
 --- !u!114 &5866666021072361732
@@ -400574,6 +400637,17 @@ MonoBehaviour:
   scaleRadius: 0.36
   transverseRadiusScale: 1.5
   scaleSpan: 90
+  mirrorScale: 1
+  showReachedMarks: 1
+  reachedMarkLength: 0.075
+  reachedMarkWidth: 0.006
+  showReachedLabels: 1
+  previewReachedMarks: 1
+  reachedLabelOffset: 0.05
+  reachedLabelSize: 0.2
+  reachedDiscRadius: 0.03
+  activeReachedColor: {r: 0.35, g: 0.85, b: 1, a: 1}
+  passiveReachedColor: {r: 1, g: 0.45, b: 0.35, a: 1}
   showCrosshair: 1
   crosshairLength: 0
   crosshairWidth: 0.003

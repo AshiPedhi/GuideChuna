@@ -428,8 +428,14 @@ public class ScenarioManager : MonoBehaviour
         var second = scenario.phases[1];
         if (second.steps == null || second.steps.Count == 0) return;
 
+        // ★이름이 '가이드'인 것만 지운다(2026-08-28).
+        //   여긴 "시작 버튼 다음에 또 시작 버튼이 나오는" 중복을 없애려는 자리다.
+        //   그런데 stepNo만 보고 지우면, 토글 대기가 필요해서 stepNo 0으로 만든
+        //   <b>작업 단계까지 통째로 사라진다</b> — 경추ROM '자세정렬'(표준자세 체크리스트)이
+        //   그렇게 없어져 시작하자마자 굴곡으로 넘어갔다.
+        //   실측 결과 전 시나리오의 stepNo 0 행은 전부 이름이 '가이드'라 기존 동작은 그대로다.
         bool secondHasWork = second.steps.Any(s => !s.IsGuideStep());
-        if (secondHasWork && second.steps[0].IsGuideStep())
+        if (secondHasWork && second.steps[0].IsGuideStep() && second.steps[0].stepName == "가이드")
         {
             var removed = second.steps[0];
             second.steps.RemoveAt(0);

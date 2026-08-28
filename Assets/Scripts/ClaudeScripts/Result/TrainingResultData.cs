@@ -558,26 +558,41 @@ public class TrainingResultData
         // ★비례 폰트라 공백 패딩으로는 칸이 안 맞는다(한글은 글자마다 폭이 다르다).
         //   TMP의 <pos=x%> 로 컬럼 위치를 고정한다. 이 문자열은 화면 표시 전용이라
         //   태그를 써도 서버 전송(BuildSummaryText)에는 영향이 없다.
-        const string C1 = "<pos=20%>";   // 방향
-        const string C2 = "<pos=40%>";   // 능동
-        const string C3 = "<pos=55%>";   // 압박
-        const string C4 = "<pos=70%>";   // 최대
-        const string C5 = "<pos=85%>";   // 부족
+        // ★2026-08-27 회의 결정 — 면 구분(시상·관상·횡단)을 빼고 방향 이름만 쓴다.
+        //   열 순서도 [참고치] → 능동 → 수동 → 차이값이다. 용어는 압박→수동, 최대→참고치.
+        //   차이값 = 참고치 − 수동(부족각)이다. 능동과 수동의 차가 아니다(사용자 확인).
+        const string C1 = "<pos=26%>";   // 참고치
+        const string C2 = "<pos=45%>";   // 능동
+        const string C3 = "<pos=64%>";   // 수동
+        const string C4 = "<pos=83%>";   // 차이값
 
         var sb = new StringBuilder();
         sb.AppendLine(data.isCompleted ? "경추ROM 진단 내역" : "경추ROM 진단 내역 (중도 종료)");
         sb.AppendLine();
-        sb.AppendLine($"구분{C1}방향{C2}능동{C3}압박{C4}최대{C5}부족");
+        sb.AppendLine($"방향{C1}참고치{C2}능동{C3}수동{C4}차이값");
         sb.AppendLine("<size=60%>────────────────────────────────────────────────────────────</size>");
 
-        string lastPlane = null;
+        // ★좌우 대칭 항목은 <b>둘 중 더 못 간 쪽만</b> 하이라이트한다(2026-08-28 사용자 지시).
+        //   양쪽 다 칠하면 어느 쪽이 문제인지 안 보인다. 시상면은 좌우 개념이 없어 그대로 칠한다.
+        string worseLateral = WorseSideName(data, "좌측굴", "우측굴");
+        string worseRotation = WorseSideName(data, "좌회전", "우회전");
+
         foreach (var m in data.romMeasurements)
         {
             if (m == null) continue;
-            string plane = m.planeName == lastPlane ? "" : m.planeName;
-            lastPlane = m.planeName;
-            sb.AppendLine($"{plane}{C1}{m.directionName}{C2}{m.activeAngle:F0}°" +
-                          $"{C3}{m.passiveAngle:F0}°{C4}{m.maxAngle:F0}°{C5}{m.DeficitAngle:F0}°");
+
+            bool paired = m.directionName == "좌측굴" || m.directionName == "우측굴"
+                       || m.directionName == "좌회전" || m.directionName == "우회전";
+            bool highlight = m.DeficitAngle >= 0.5f
+                && (!paired || m.directionName == worseLateral || m.directionName == worseRotation);
+
+            // ★부족각은 눈에 띄어야 한다 — 치료 후 되돌려야 할 각이 이 값이다.
+            string deficit = highlight
+                ? $"<mark=#ffd54f40><b>{m.DeficitAngle:F0}°</b></mark>"
+                : $"{m.DeficitAngle:F0}°";
+
+            sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{m.activeAngle:F0}°" +
+                          $"{C3}{m.passiveAngle:F0}°{C4}{deficit}");
         }
 
         // 좌우 비대칭 — 관상면·횡단면만. 시상면은 굴곡·신전이라 대칭 개념이 없다.
@@ -586,8 +601,24 @@ public class TrainingResultData
 
         sb.AppendLine();
         sb.AppendLine($"수행 시간 {FormatTime(data.totalTime)}");
-        sb.Append("※ 능동 = 환자가 스스로 간 각 · 압박 = 시술자가 밀어 간 각 · 부족 = 최대각까지 남은 각");
+        sb.Append("※ 참고치 = 정상 기준각(굴곡 45° · 신전 90° · 측굴 45° · 회전 90°) · " +
+                  "능동 = 환자가 스스로 간 각 · 수동 = 시술자가 밀어 간 각 · 차이값 = 참고치까지 남은 각");
         return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>좌우 쌍에서 더 못 간 쪽의 이름. 둘 중 하나라도 없으면 빈 문자열.</summary>
+    private static string WorseSideName(TrainingResultData data, string leftName, string rightName)
+    {
+        RomMeasurement left = null, right = null;
+        foreach (var m in data.romMeasurements)
+        {
+            if (m == null) continue;
+            if (m.directionName == leftName) left = m;
+            else if (m.directionName == rightName) right = m;
+        }
+        if (left == null || right == null) return "";
+        if (Mathf.Abs(left.passiveAngle - right.passiveAngle) < 0.5f) return "";
+        return left.passiveAngle < right.passiveAngle ? leftName : rightName;
     }
 
     private static void AppendRomAsymmetry(StringBuilder sb, TrainingResultData data,
@@ -602,13 +633,26 @@ public class TrainingResultData
         }
         if (left == null || right == null) return;
 
+        // ★2026-08-27 회의 결정 — 좌우 "차"가 아니라 <b>덜 간 쪽</b>을 짚는다.
+        //   차이값만 보면 어느 쪽이 문제인지 한 번 더 따져야 한다. 그쪽을 개선해야 하므로
+        //   문제측을 이름으로 박아 준다.
         float diff = Mathf.Abs(left.passiveAngle - right.passiveAngle);
-        string limited = left.passiveAngle < right.passiveAngle ? leftName : rightName;
+        bool leftLess = left.passiveAngle < right.passiveAngle;
+        string limited = leftLess ? leftName : rightName;
+        float lessAngle = leftLess ? left.passiveAngle : right.passiveAngle;
+        float moreAngle = leftLess ? right.passiveAngle : left.passiveAngle;
 
         sb.AppendLine();
+        if (diff < 0.5f)
+        {
+            sb.Append($"{leftName}·{rightName} 좌우 대칭 ({lessAngle:F0}°)");
+            return;
+        }
+
+        string line = $"{limited}이(가) {diff:F0}° 덜 감 ({lessAngle:F0}° / {moreAngle:F0}°)";
         sb.Append(diff >= warnAt
-            ? $"⚠ {planeName} 좌우 차 {diff:F0}° — {limited} 제한"
-            : $"{planeName} 좌우 차 {diff:F0}°");
+            ? $"<mark=#ff6b6b40>⚠ <b>{line}</b></mark>"
+            : line);
     }
 
     /// 실습모드용 종합 요약. phase별 한 줄 분석 + 종합 통계 + 잘한·더 연습할 단계.

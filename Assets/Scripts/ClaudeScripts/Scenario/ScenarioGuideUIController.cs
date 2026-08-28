@@ -52,6 +52,14 @@ public class ScenarioGuideUIController : MonoBehaviour
     [Header("=== 설명 텍스트 ===")]
     [SerializeField] private TextMeshProUGUI descriptionText;
 
+    /// <summary>
+    /// 표준자세 체크리스트가 진행 패널 안에 붙을 수 있게 여는 접근자들.
+    /// ★이 토글을 <b>복제하지 않는다</b>(2026-08-28) — 화살표 아이콘이 붙은 '다음' 버튼이라
+    ///   복제하면 체크박스가 아니라 버튼이 3개 생긴다. 체크가 끝날 때까지 <b>잠그는</b> 용도로만 쓴다.
+    /// </summary>
+    public Toggle NextToggle => startToggle;
+    public TextMeshProUGUI DescriptionLabel => descriptionText;
+
     [Header("=== 진행 원형 표시 (Duration) ===")]
     [Tooltip("ProgressCircle 프리팹 루트 GameObject")]
     [SerializeField] private GameObject progressCircleObject;

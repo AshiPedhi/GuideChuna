@@ -98,6 +98,9 @@ public class CervicalRomDriver : MonoBehaviour
     private float[] dysfunctions;           // 방향별 기능장애(도). 시나리오 로드 때 뽑는다.
     private float[] passiveGains;           // 방향별 압박 여유(도). 같이 뽑는다.
     private Direction currentDirection = Direction.None;
+
+    /// <summary>파지로 방향만 미리 잡아 둔 상태. 중립이어도 방향을 유지한다.</summary>
+    private bool directionPrimed;
     private Direction pendingDirection = Direction.None;   // 중립 복귀를 기다리는 다음 방향
     private float targetAngle;          // 최종 목표 각도 (도)
     private float commandedAngle;       // 속도 제한을 거친 중간 목표 (도)
@@ -257,6 +260,14 @@ public class CervicalRomDriver : MonoBehaviour
     }
 
     /// <summary>그 방향의 측정 결과. 아직 안 쟀으면 recorded=false.</summary>
+    /// <summary>브리지가 술기를 벗어날 때 부른다. 미리 잡아 둔 방향을 놓는다.</summary>
+    public void ClearPrimedDirection()
+    {
+        if (!directionPrimed) return;
+        directionPrimed = false;
+        if (appliedAngle < 0.05f) currentDirection = Direction.None;
+    }
+
     public Measurement GetMeasurement(Direction d)
     {
         if (measurements == null || d == Direction.None || (int)d >= measurements.Length)
@@ -376,10 +387,34 @@ public class CervicalRomDriver : MonoBehaviour
         StartActiveInternal(direction);
     }
 
+    /// <summary>
+    /// 각도기가 뜨도록 <b>방향만</b> 잡는다. 움직이지 않는다.
+    ///
+    /// ★2026-08-27 회의 결정 — "파지하는 순간 각도가 딱 나와야 한다".
+    ///   여태는 BeginActive가 불려야 방향이 정해져서, 각도기가 <b>동작이 시작된 뒤</b>에 떴다.
+    /// ★앞 방향의 각이 남아 있으면 건드리지 않는다. 중립 복귀가 먼저다.
+    /// </summary>
+    public void PrepareDirection(Direction direction)
+    {
+        if (direction == Direction.None) return;
+        if (currentDirection == direction && directionPrimed) return;
+        if (appliedAngle > 0.5f) return;
+
+        currentDirection = direction;
+        pendingDirection = Direction.None;
+        directionPrimed = true;
+        targetAngle = 0f;
+        commandedAngle = 0f;
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[CervicalROM] 파지 — {direction} 각도기 준비(움직이지 않는다)</color>");
+    }
+
     private void StartActiveInternal(Direction direction)
     {
         currentDirection = direction;
         pendingDirection = Direction.None;
+        directionPrimed = false;   // 실제 동작이 시작됐다 — 이제 중립에 닿으면 방향을 놓는다
         targetAngle = ActiveTargetAngle;
         ramifySpeed = activeSpeed;       // ★즉시 대입하면 안 된다. 속도로 밀어야 부드럽다.
 
@@ -460,7 +495,12 @@ public class CervicalRomDriver : MonoBehaviour
             appliedAngle = 0f;
             commandedAngle = 0f;
             angleVelocity = 0f;
-            currentDirection = Direction.None;
+
+            // ★파지로 미리 잡아 둔 방향은 여기서 지우지 않는다(2026-08-28).
+            //   PrepareDirection이 만드는 상태가 정확히 '중립'이라, 방향을 잡자마자
+            //   다음 프레임에 여기서 None으로 지워져 각도기가 뜰 틈이 없었다.
+            //   실제 동작이 시작되면(StartActiveInternal) 이 표식은 풀린다.
+            if (!directionPrimed) currentDirection = Direction.None;
 
             // 중립에 닿았다. 기다리던 다음 방향이 있으면 여기서 이어 간다.
             if (pendingDirection != Direction.None) StartActiveInternal(pendingDirection);

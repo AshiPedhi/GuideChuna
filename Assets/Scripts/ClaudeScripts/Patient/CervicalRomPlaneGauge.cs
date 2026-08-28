@@ -123,6 +123,30 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "  각도기처럼 눈금이 먼저 있고 그 위에 기준선이 표시되는 게 읽기 쉽다.")]
     [SerializeField] private float scaleSpan = 90f;
 
+    [Tooltip("눈금을 반대쪽까지 채워 180°로 깐다(0°가 한가운데).\n" +
+             "★신규 필드라 씬 값이 없다 — 코드 기본값이 그대로 먹는다.")]
+    [SerializeField] private bool mirrorScale = true;
+
+    [Header("=== 능동·수동 도달 마킹 (한 번 찍히면 유지) ===")]
+    [SerializeField] private bool showReachedMarks = true;
+    [SerializeField] private float reachedMarkLength = 0.075f;
+    [SerializeField] private float reachedMarkWidth = 0.006f;
+
+    [Tooltip("도달각 숫자를 현재각처럼 원 안에 남긴다.")]
+    [SerializeField] private bool showReachedLabels = true;
+
+    [Tooltip("에디터 프리뷰에서도 마킹을 그린다. Play 없이 크기·자리를 맞출 때 쓴다.\n" +
+             "★프리뷰에는 측정값이 없으므로 기능장애·압박여유 기본값으로 대신 그린다.")]
+    [SerializeField] private bool previewReachedMarks = true;
+    [Tooltip("눈금 바깥 이만큼에 둔다. 현재각(readoutOffset)보다 안쪽이어야 한다 — 눈금과 현재각 사이가 사용자 지시다(2026-08-28).")]
+    [SerializeField] private float reachedLabelOffset = 0.038f;
+    [SerializeField] private float reachedLabelSize = 0.042f;
+    [SerializeField] private float reachedDiscRadius = 0.05f;
+    [Tooltip("환자가 스스로 간 각.")]
+    [SerializeField] private Color activeReachedColor = new Color(0.35f, 0.85f, 1f, 1f);
+    [Tooltip("시술자가 밀어 간 각(끝 느낌).")]
+    [SerializeField] private Color passiveReachedColor = new Color(1f, 0.45f, 0.35f, 1f);
+
     [Header("=== 십자선 ===")]
     [Tooltip("회전 중심을 지나는 십자선을 긋는다. 0°/90°/180°/270° 네 방향.")]
     [SerializeField] private bool showCrosshair = true;
@@ -320,8 +344,16 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private readonly List<TextMeshPro> tickLabels = new List<TextMeshPro>();
     private TextMeshPro readout;
     private Transform readoutBackdrop;
-    private Mesh backdropMesh;
-    private Material backdropMaterial;
+
+    // 능동·수동 도달 마킹 — 현재각과 같은 꼴(원 + 각도 숫자)로 남긴다.
+    private TextMeshPro activeMarkLabel, passiveMarkLabel;
+    private Transform activeMarkDisc, passiveMarkDisc;
+    private TextMeshPro oppActiveLabel, oppPassiveLabel;      // 같은 면의 반대 방향
+    private Transform oppActiveDisc, oppPassiveDisc;
+
+    // 원 배경들은 만들 때마다 여기 담아 두고 한꺼번에 치운다.
+    private readonly List<Mesh> discMeshes = new List<Mesh>(4);
+    private readonly List<Material> discMaterials = new List<Material>(4);
 
     // ── 메시 버퍼. 매 프레임 새로 만들지 않는다(VR 프레임 예산). ──────────
     private readonly List<Vector3> verts = new List<Vector3>(512);
@@ -334,6 +366,20 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private float lastDrawnAngle = float.NaN;
     private float lastDrawnActive = float.NaN;
     private float lastDrawnPassive = float.NaN;
+    private float lastDrawnReachedActive = float.NaN;
+    private float lastDrawnReachedPassive = float.NaN;
+    private float lastDrawnOppActive = float.NaN;
+    private float lastDrawnOppPassive = float.NaN;
+
+    /// <summary>마지막으로 그린 방향. 드라이버가 None이 돼도 이걸로 계속 그린다.</summary>
+    private CervicalRomDriver.Direction stickyDirection = CervicalRomDriver.Direction.None;
+
+    /// <summary>술기를 벗어날 때 브리지가 부른다. 다음 술기까지 각도기가 남지 않게.</summary>
+    public void ClearSticky()
+    {
+        stickyDirection = CervicalRomDriver.Direction.None;
+        SetVisible(false);
+    }
     private int lastReadoutDegrees = int.MinValue;
 
     // ── 좌우 자동 배치. 그 면에 들어갈 때 한 번 정하고 고정한다. ─────────
@@ -360,6 +406,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// </summary>
     private bool EnsureDriver()
     {
+        // ★폰트가 비어 있으면 TMP 기본값(라틴)이라 한글 라벨이 네모가 된다.
+        if (font == null && Application.isPlaying) font = KoreanFontResolver.Resolve();
+
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (driver == null)
         {
@@ -410,12 +459,14 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         readoutBackdrop = null;
         tickLabels.Clear();
 
-        SafeDestroy(backdropMesh);
-        SafeDestroy(backdropMaterial);
+        for (int i = 0; i < discMeshes.Count; i++) SafeDestroy(discMeshes[i]);
+        for (int i = 0; i < discMaterials.Count; i++) SafeDestroy(discMaterials[i]);
+        discMeshes.Clear(); discMaterials.Clear();
         SafeDestroy(staticMesh);
         SafeDestroy(dynamicMesh);
         SafeDestroy(sharedMaterial);
-        backdropMesh = null; backdropMaterial = null;
+        activeMarkLabel = passiveMarkLabel = oppActiveLabel = oppPassiveLabel = null;
+        activeMarkDisc = passiveMarkDisc = oppActiveDisc = oppPassiveDisc = null;
         staticMesh = null; dynamicMesh = null; sharedMaterial = null;
 
         builtDirection = CervicalRomDriver.Direction.None;
@@ -460,6 +511,12 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         bool preview = UsePreview;
         CervicalRomDriver.Direction dir = preview ? previewDirection : driver.CurrentDirection;
+
+        // ★한 번 띄운 각도기는 <b>면이 바뀌기 전까지 끄지 않는다</b>(2026-08-28 사용자 지시).
+        //   드라이버가 방향을 놓는 순간(지시 substep·복귀 직후)마다 깜빡이던 것을 막는다.
+        if (!preview && dir == CervicalRomDriver.Direction.None) dir = stickyDirection;
+        if (!preview && dir != CervicalRomDriver.Direction.None) stickyDirection = dir;
+
         if (dir == CervicalRomDriver.Direction.None || driver.Pivot == null || driver.Torso == null)
         {
             SetVisible(false);
@@ -526,7 +583,18 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         // 0.25° 미만 변화는 무시한다. 눈에 안 보이는데 메시만 다시 만든다.
         // ★단, 압박 화살표가 켜져 있으면 매 프레임 다시 만든다 — 호가 쓸려 가야 하기 때문이다.
         //   메시는 리스트를 재사용해 다시 채우므로 프레임마다 새로 할당하지 않는다.
-        if (PressArrowAnimating
+        // ★도달 마킹이 새로 찍히면 각도가 안 변해도 다시 그려야 한다.
+        //   안 그러면 기록된 순간에는 안 보이고 다음에 움직일 때 뒤늦게 나타난다.
+        CervicalRomDriver.Measurement rec = preview || driver == null
+            ? default : driver.GetMeasurement(dir);
+        CervicalRomDriver.Measurement recOpp = preview || driver == null
+            ? default : driver.GetMeasurement(OppositeOf(dir));
+        bool reachedChanged = Changed(rec.active, lastDrawnReachedActive)
+                           || Changed(rec.passive, lastDrawnReachedPassive)
+                           || Changed(recOpp.active, lastDrawnOppActive)
+                           || Changed(recOpp.passive, lastDrawnOppPassive);
+
+        if (PressArrowAnimating || reachedChanged
             || Changed(angle, lastDrawnAngle) || Changed(activeLimit, lastDrawnActive)
                                               || Changed(passiveLimit, lastDrawnPassive))
         {
@@ -534,9 +602,71 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             lastDrawnAngle = angle;
             lastDrawnActive = activeLimit;
             lastDrawnPassive = passiveLimit;
+            lastDrawnReachedActive = rec.active;
+            lastDrawnReachedPassive = rec.passive;
+            lastDrawnOppActive = recOpp.active;
+            lastDrawnOppPassive = recOpp.passive;
         }
 
         UpdateReadout(angle);
+        UpdateReachedLabels(dir, activeLimit, passiveLimit, maxAngle);
+    }
+
+    /// <summary>
+    /// 능동·수동 도달각을 현재각과 같은 꼴(원 + 숫자)로 남긴다.
+    ///
+    /// ★한 번 찍히면 지우지 않는다(2026-08-27 회의 결정). 방향이 바뀌면 그 방향의 값으로 갈린다.
+    /// ★현재각보다 바깥에 둔다 — 같은 자리에 겹치면 둘 다 못 읽는다.
+    /// </summary>
+    private void UpdateReachedLabels(CervicalRomDriver.Direction dir,
+                                     float previewActive, float previewPassive, float previewMax)
+    {
+        if (UsePreview)
+        {
+            bool pv = showReachedLabels && showReachedMarks && previewReachedMarks && driver != null;
+            float oa = pv ? Mathf.Max(0f, previewMax - driver.NominalDysfunction) : 0f;
+            float op = pv ? Mathf.Min(previewMax, oa + driver.NominalPassiveGain) : 0f;
+            PlaceReachedPuck(activeMarkLabel, activeMarkDisc, pv, previewActive);
+            PlaceReachedPuck(passiveMarkLabel, passiveMarkDisc, pv, previewPassive);
+            PlaceReachedPuck(oppActiveLabel, oppActiveDisc, pv, -oa);
+            PlaceReachedPuck(oppPassiveLabel, oppPassiveDisc, pv, -op);
+            return;
+        }
+
+        bool on = showReachedLabels && showReachedMarks && driver != null;
+        CervicalRomDriver.Measurement m = on ? driver.GetMeasurement(dir) : default;
+
+        PlaceReachedPuck(activeMarkLabel, activeMarkDisc, on && m.recorded && m.active > 0.05f, m.active);
+        PlaceReachedPuck(passiveMarkLabel, passiveMarkDisc, on && m.recorded && m.passive > 0.05f, m.passive);
+
+        // 반대 방향(같은 면)은 음수각 자리에 그대로 남긴다.
+        CervicalRomDriver.Direction opp = OppositeOf(dir);
+        CervicalRomDriver.Measurement o = on && opp != CervicalRomDriver.Direction.None
+            ? driver.GetMeasurement(opp) : default;
+        PlaceReachedPuck(oppActiveLabel, oppActiveDisc, on && o.recorded && o.active > 0.05f, -o.active);
+        PlaceReachedPuck(oppPassiveLabel, oppPassiveDisc, on && o.recorded && o.passive > 0.05f, -o.passive);
+    }
+
+    private void PlaceReachedPuck(TextMeshPro label, Transform disc, bool show, float angle)
+    {
+        if (label == null) return;
+        if (label.gameObject.activeSelf != show) label.gameObject.SetActive(show);
+        if (disc != null && disc.gameObject.activeSelf != show) disc.gameObject.SetActive(show);
+        if (!show) return;
+
+        // ★표시는 무조건 양수다. 문자열은 값이 바뀔 때만 만든다.
+        // ★'능'·'수' 한글 접두는 뺀다(2026-08-28 사용자 지시). 능동·수동은 색으로 가른다.
+        string text = $"{Mathf.RoundToInt(Mathf.Abs(angle))}°";
+        if (label.text != text) label.text = text;
+
+        Vector3 local = Dir(angle) * (CurScaleRadius + reachedLabelOffset);
+        label.transform.localPosition = local;
+        FaceCamera(label.transform);
+
+        if (disc == null) return;
+        disc.rotation = label.transform.rotation;
+        disc.localPosition = local;
+        disc.localScale = Vector3.one * reachedDiscRadius;
     }
 
     private static bool Changed(float now, float before)
@@ -771,21 +901,25 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         //   각도기처럼 눈금이 먼저 있고 그 위에 마지노선이 그어지는 게 읽기 쉽다.
         float span = Mathf.Max(maxAngle, scaleSpan);
 
+        // ★반대쪽까지 채워 180°로 깐다(2026-08-28). 굴곡을 재는 중에도 신전 쪽 눈금이
+        //   같이 보여야 실물 각도기처럼 읽힌다. 실습·평가·실측이 같은 표시를 쓴다.
+        float from = mirrorScale ? -span : 0f;
+
         // 미세 → 보조 → 주 순으로 겹쳐 그린다. 굵은 눈금이 위에 온다.
         if (microStep > 0f)
         {
-            for (float a = 0f; a <= span + 0.001f; a += microStep)
+            for (float a = from; a <= span + 0.001f; a += microStep)
             {
                 if (OnStep(a, minorStep) || OnStep(a, majorStep)) continue;
                 AddTick(a, microTickLength, tickWidth * 0.7f, micro);
             }
         }
-        for (float a = 0f; a <= span + 0.001f; a += minorStep)
+        for (float a = from; a <= span + 0.001f; a += minorStep)
         {
             if (OnStep(a, majorStep)) continue;
             AddTick(a, minorTickLength, tickWidth, tick);
         }
-        for (float a = 0f; a <= span + 0.001f; a += majorStep)
+        for (float a = from; a <= span + 0.001f; a += majorStep)
         {
             AddTick(a, majorTickLength, tickWidth * 1.35f, tick);
         }
@@ -823,12 +957,77 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             AddSector(passiveLimit, maxAngle, CurFillRadius, deficitFillColor);
         }
 
+        // ★2026-08-27 회의 결정 — 능동·수동 도달각을 <b>한 번 찍히면 지우지 않는다</b>.
+        //   지침은 '지금'이고 이 마킹은 '거기까지 갔다'는 기록이다. 색으로 가른다.
+        //   목표(activeLimit·passiveLimit)가 아니라 <b>실제로 도달한 각</b>을 그린다.
+        AddReachedMarks(activeLimit, passiveLimit, maxAngle);
+
         AddTick(angle, CurScaleRadius, needleWidth, NeedleColorOf(builtDirection), fromCenter: true);
 
         // 압박 방향 화살표는 지침 위에 얹는다 — 지침이 '지금 어디'고 화살표가 '어느 쪽으로 더'다.
         AddPressArrow(angle, maxAngle);
 
         Upload(dynamicMesh, dynamicFilter);
+    }
+
+    /// <summary>
+    /// 능동·수동 도달 마킹. 기록되면 그 방향을 벗어나기 전까지 계속 남는다.
+    ///
+    /// ★프리뷰에서는 안 그린다 — 에디터에는 측정값이 없다.
+    /// ★지침보다 <b>먼저</b> 그린다. 겹칠 때 지침이 위로 오는 게 읽기 쉽다.
+    /// </summary>
+    private void AddReachedMarks(float previewActive, float previewPassive, float previewMax)
+    {
+        if (!showReachedMarks || driver == null) return;
+
+        // 프리뷰에는 측정값이 없다. 기능장애·압박여유 기본값으로 같은 자리에 그려 준다 —
+        // Play 없이 크기·자리를 맞추려면 실제와 같은 위치에 보여야 한다(2026-08-28 사용자 요청).
+        if (UsePreview)
+        {
+            if (!previewReachedMarks) return;
+            AddTick(previewActive, reachedMarkLength, reachedMarkWidth, activeReachedColor);
+            AddTick(previewPassive, reachedMarkLength, reachedMarkWidth, passiveReachedColor);
+
+            float oa = Mathf.Max(0f, previewMax - driver.NominalDysfunction);
+            float op = Mathf.Min(previewMax, oa + driver.NominalPassiveGain);
+            AddTick(-oa, reachedMarkLength, reachedMarkWidth, activeReachedColor);
+            AddTick(-op, reachedMarkLength, reachedMarkWidth, passiveReachedColor);
+            return;
+        }
+
+        // 같은 면의 두 방향을 모두 그린다(2026-08-28 사용자 지적).
+        // 굴곡을 재고 신전으로 넘어가면 굴곡 마킹이 사라지던 이유가 이것이다 —
+        // 현재 방향의 측정값만 읽고 있었다. 한 번 찍힌 건 안 지운다.
+        // 반대 방향은 음수각으로 찍는다. 180도 눈금의 반대쪽이 그 자리다.
+        AddReachedPair(builtDirection, 1f);
+        AddReachedPair(OppositeOf(builtDirection), -1f);
+    }
+
+    private void AddReachedPair(CervicalRomDriver.Direction d, float sign)
+    {
+        if (d == CervicalRomDriver.Direction.None) return;
+        CervicalRomDriver.Measurement m = driver.GetMeasurement(d);
+        if (!m.recorded) return;
+
+        if (m.active > 0.05f)
+            AddTick(sign * m.active, reachedMarkLength, reachedMarkWidth, activeReachedColor);
+        if (m.passive > 0.05f)
+            AddTick(sign * m.passive, reachedMarkLength, reachedMarkWidth, passiveReachedColor);
+    }
+
+    /// <summary>같은 면의 반대 방향. 180도 눈금에서 0도를 사이에 두고 마주 본다.</summary>
+    private static CervicalRomDriver.Direction OppositeOf(CervicalRomDriver.Direction d)
+    {
+        switch (d)
+        {
+            case CervicalRomDriver.Direction.Flexion:       return CervicalRomDriver.Direction.Extension;
+            case CervicalRomDriver.Direction.Extension:     return CervicalRomDriver.Direction.Flexion;
+            case CervicalRomDriver.Direction.LateralLeft:   return CervicalRomDriver.Direction.LateralRight;
+            case CervicalRomDriver.Direction.LateralRight:  return CervicalRomDriver.Direction.LateralLeft;
+            case CervicalRomDriver.Direction.RotationLeft:  return CervicalRomDriver.Direction.RotationRight;
+            case CervicalRomDriver.Direction.RotationRight: return CervicalRomDriver.Direction.RotationLeft;
+            default:                                        return CervicalRomDriver.Direction.None;
+        }
     }
 
     /// <summary>
@@ -914,7 +1113,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         // ★유지 남은 초는 여기 안 쓴다 — ProgressCircle이 그린다(2026-08-26 사용자 지시).
         //   같은 값을 두 군데 띄우면 시선만 갈린다.
-        int degrees = Mathf.RoundToInt(angle);
+        // ★표시는 무조건 양수다(2026-08-28 사용자 지시). 부호는 <b>위치</b>로만 쓴다 —
+        //   지침이 어느 쪽으로 가는지가 방향이고, 숫자에 −가 붙으면 안 된다.
+        int degrees = Mathf.RoundToInt(Mathf.Abs(angle));
         if (degrees != lastReadoutDegrees)
         {
             lastReadoutDegrees = degrees;
@@ -1036,6 +1237,23 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         readoutBackdrop = CreateReadoutBackdrop(root);
         readout = CreateLabel("현재각도", root, readoutSize);
         readout.color = readoutColor;
+
+        // 도달 마킹도 현재각과 같은 꼴 — 어두운 원 + 숫자. 색으로 능동·수동을 가른다.
+        activeMarkDisc = CreateDisc("능동도달_배경", root, readoutBackdropColor);
+        activeMarkLabel = CreateLabel("능동도달", root, reachedLabelSize);
+        activeMarkLabel.color = activeReachedColor;
+
+        passiveMarkDisc = CreateDisc("수동도달_배경", root, readoutBackdropColor);
+        passiveMarkLabel = CreateLabel("수동도달", root, reachedLabelSize);
+        passiveMarkLabel.color = passiveReachedColor;
+
+        oppActiveDisc = CreateDisc("반대능동_배경", root, readoutBackdropColor);
+        oppActiveLabel = CreateLabel("반대능동", root, reachedLabelSize);
+        oppActiveLabel.color = activeReachedColor;
+
+        oppPassiveDisc = CreateDisc("반대수동_배경", root, readoutBackdropColor);
+        oppPassiveLabel = CreateLabel("반대수동", root, reachedLabelSize);
+        oppPassiveLabel.color = passiveReachedColor;
     }
 
     /// <summary>
@@ -1067,24 +1285,28 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// 글씨와 같은 자세로 돌리되 카메라에서 조금 더 먼 쪽에 놓는다.
     /// </summary>
     private Transform CreateReadoutBackdrop(Transform parent)
+        => CreateDisc("현재각도_배경", parent, readoutBackdropColor);
+
+    /// <summary>원판 하나. 현재각·능동·수동 마킹이 같은 꼴을 쓴다.</summary>
+    private Transform CreateDisc(string name, Transform parent, Color discColor)
     {
-        var go = new GameObject("현재각도_배경");
+        var go = new GameObject(name);
         go.transform.SetParent(parent, false);
         Ephemeral(go);
 
         const int segments = 32;
         var v = new List<Vector3>(segments + 2) { Vector3.zero };
-        var c = new List<Color>(segments + 2) { readoutBackdropColor };
+        var c = new List<Color>(segments + 2) { discColor };
         var t = new List<int>(segments * 3);
         for (int i = 0; i <= segments; i++)
         {
             float r = i * Mathf.PI * 2f / segments;
             v.Add(new Vector3(Mathf.Cos(r), Mathf.Sin(r), 0f));
-            c.Add(readoutBackdropColor);
+            c.Add(discColor);
         }
         for (int i = 1; i <= segments; i++) { t.Add(0); t.Add(i); t.Add(i + 1); }
 
-        var mesh = new Mesh { name = "각도기_현재각배경" };
+        var mesh = new Mesh { name = "각도기_" + name };
         mesh.SetVertices(v);
         mesh.SetColors(c);
         mesh.SetTriangles(t, 0, false);
@@ -1096,7 +1318,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         // ★큐를 낮춰 '먼저 그리기'로는 안 된다 — 그러면 같은 큐의 면 판이 나중에 그려져
         //   배경을 덮는다. 실제로 면마다 배경이 보였다 안 보였다 했다(2026-08-26 사용자 지적).
         //   순서는 sortingOrder로 못박는다: 판·눈금 < 배경 < 글씨.
-        renderer.sharedMaterial = new Material(sharedMaterial) { name = "GaugeReadoutBackdropMat" };
+        renderer.sharedMaterial = new Material(sharedMaterial) { name = "GaugeDiscMat_" + name };
         renderer.sortingOrder = OrderBackdrop;
         renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         renderer.receiveShadows = false;
@@ -1104,8 +1326,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Ephemeral(mesh);
         Ephemeral(renderer.sharedMaterial);
-        backdropMesh = mesh;
-        backdropMaterial = renderer.sharedMaterial;
+        discMeshes.Add(mesh);
+        discMaterials.Add(renderer.sharedMaterial);
         return go.transform;
     }
 
@@ -1139,7 +1361,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     private void BuildTickLabels(float span, float maxAngle, Color color)
     {
-        int needed = Mathf.FloorToInt(span / majorStep) + 1;
+        float from = mirrorScale ? -span : 0f;
+        int needed = Mathf.FloorToInt((span - from) / majorStep) + 1;
         bool maxOnMajor = Mathf.Abs(maxAngle % majorStep) < 0.001f;
         bool addMaxLabel = showMaxAngleLabel && !maxOnMajor;
         if (addMaxLabel) needed++;   // 최대각 숫자를 따로 붙인다
@@ -1151,7 +1374,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
         Color labelColor = color; labelColor.a = 1f;
         int index = 0;
-        for (float a = 0f; a <= span + 0.001f; a += majorStep, index++)
+        for (float a = from; a <= span + 0.001f; a += majorStep, index++)
         {
             // 최대각과 겹치는 눈금만 굵게. 표시를 끄면 전부 보통 숫자다.
             bool isMax = showMaxAngleLabel && Mathf.Abs(a - maxAngle) < 0.001f;
@@ -1170,7 +1393,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (index >= tickLabels.Count) return;
         TextMeshPro label = tickLabels[index];
         label.gameObject.SetActive(true);
-        label.text = bold ? $"<b>{degrees:F0}°</b>" : $"{degrees:F0}";
+        // ★양쪽 다 절댓값으로 적는다 — 각도기지 좌표축이 아니다. 왼쪽에 −30이 뜨면 안 된다.
+        float shown = Mathf.Abs(degrees);
+        label.text = bold ? $"<b>{shown:F0}°</b>" : $"{shown:F0}";
         label.color = color;
         label.transform.localPosition = Dir(degrees) * (CurScaleRadius + labelOffset);
     }

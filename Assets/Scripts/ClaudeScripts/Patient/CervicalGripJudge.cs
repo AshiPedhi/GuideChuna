@@ -40,6 +40,11 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.")]
     [SerializeField] private bool requireBothFingers = true;
 
+    [Tooltip("인스펙터에 배정된 손끝을 무시하고 Play에서 다시 찾는다.\n" +
+             "★배정된 것이 실제 손끝이 아니라 손목·손바닥 쪽 뼈면, 손목만 틀어도 파지 지점이 움직여\n" +
+             "  두 손 사이 직선의 기울기가 흔들린다(2026-08-28 사용자 지적). 그때 켠다.")]
+    [SerializeField] private bool ignoreAssignedTips = false;
+
     [Header("=== 표시 ===")]
     [Tooltip("접촉점 구체를 보이게 할지. 위치를 잡을 때만 켜면 된다.")]
     [SerializeField] private bool showSpheres = false;
@@ -73,6 +78,24 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         if (rightIndexTip != null) { midpoint += rightIndexTip.position; n++; }
         if (n == 0) return false;
         midpoint /= n;
+        return true;
+    }
+
+    /// <summary>
+    /// 엄지·검지 <b>파지 지점</b>(두 끝의 중점, 월드). 각도 측정은 이걸 쓴다.
+    ///
+    /// ★TryGetHandCluster와 달리 <b>둘 다 있어야</b> 준다. 하나만 잡히면 중점이 그 손가락 쪽으로
+    ///   훌쩍 옮겨 가는데, 그게 두 손 사이 직선의 기울기를 통째로 흔든다(2026-08-28 사용자 지적).
+    ///   측정은 조용히 틀린 값보다 없는 값이 낫다.
+    /// </summary>
+    public bool TryGetPinchPoint(GripFingerTip.Side side, out Vector3 pinch)
+    {
+        Transform thumb = side == GripFingerTip.Side.Left ? leftThumbTip : rightThumbTip;
+        Transform index = side == GripFingerTip.Side.Left ? leftIndexTip : rightIndexTip;
+
+        pinch = Vector3.zero;
+        if (thumb == null || index == null) return false;
+        pinch = (thumb.position + index.position) * 0.5f;
         return true;
     }
 
@@ -200,6 +223,12 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     /// </summary>
     private System.Collections.IEnumerator Start()
     {
+        if (ignoreAssignedTips)
+        {
+            leftThumbTip = leftIndexTip = rightThumbTip = rightIndexTip = null;
+            ChunaLogger.Log("<color=cyan>[GripJudge] 인스펙터 손끝 배정을 무시하고 다시 찾는다.</color>");
+        }
+
         for (int attempt = 0; attempt < 30; attempt++)
         {
             int ready = 0;
@@ -210,7 +239,13 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
             if (ready == 4)
             {
-                ChunaLogger.Log("<color=cyan>[GripJudge] 손끝 표식 4개 준비 완료.</color>");
+                // ★무엇을 물었는지 경로째 남긴다. '엄지·검지 끝'이 아니라 손목 쪽 뼈를 물면
+                //   손목만 틀어도 파지 지점이 움직여 각도가 흔들린다 — 그때 여기서 바로 보인다.
+                ChunaLogger.Log("<color=cyan>[GripJudge] 손끝 표식 4개 준비 완료.\n" +
+                                $"  L엄지 {PathOf(leftThumbTip)}\n" +
+                                $"  L검지 {PathOf(leftIndexTip)}\n" +
+                                $"  R엄지 {PathOf(rightThumbTip)}\n" +
+                                $"  R검지 {PathOf(rightIndexTip)}</color>");
                 yield break;
             }
             yield return new WaitForSeconds(0.5f);   // 손 리그가 생길 때까지 기다린다
@@ -571,6 +606,17 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
                                    "손끝 트랜스폼을 직접 넣어 주세요.");
         }
         return found;
+    }
+
+    /// <summary>진단용 — 트랜스폼의 하이어라키 경로.</summary>
+    private static string PathOf(Transform t)
+    {
+        if (t == null) return "(없음)";
+        string s = t.name;
+        Transform p = t.parent;
+        int guard = 0;
+        while (p != null && guard++ < 6) { s = p.name + "/" + s; p = p.parent; }
+        return s;
     }
 
     /// <summary>손 루트 아래에서 이름에 keyword가 들어가고 suffix로 끝나는 뼈를 찾는다.</summary>
