@@ -232,6 +232,13 @@ public class CervicalRomDriver : MonoBehaviour
 
     private Measurement[] measurements;
 
+    /// <summary>
+    /// ★[임시 · A-12 교차검증] 측정값을 남긴 순간. (방향, 능동기록인가)를 넘긴다.
+    /// <see cref="CervicalRomHandAngleProbe"/>가 이 순간의 손 측정각을 같이 찍어 두려고 듣는다.
+    /// 검증이 끝나면 이 줄과 <see cref="Record"/> 안의 발행 1줄만 지우면 된다.
+    /// </summary>
+    public event System.Action<Direction, bool> OnMeasurementRecorded;
+
     /// <summary>능동 끝점에 도달한 순간의 각을 남긴다. 브리지가 부른다.</summary>
     public void RecordActiveReached() => Record(active: appliedAngle, passive: float.NaN);
 
@@ -257,6 +264,9 @@ public class CervicalRomDriver : MonoBehaviour
             ChunaLogger.Log($"<color=cyan>[CervicalROM] {currentDirection} 기록 — " +
                             $"능동 {m.active:F1}° · 압박 {m.passive:F1}° · 최대 {m.maxAngle:F0}° · 부족 {m.Deficit:F1}°</color>");
         }
+
+        // ★[임시 · A-12 교차검증] 듣는 쪽이 없으면 아무 일도 없다.
+        OnMeasurementRecorded?.Invoke(currentDirection, !float.IsNaN(active));
     }
 
     /// <summary>그 방향의 측정 결과. 아직 안 쟀으면 recorded=false.</summary>

@@ -23,7 +23,8 @@ public class CervicalRomHandAngleProbe : MonoBehaviour
     [SerializeField] private bool show = true;
     [Tooltip("머리 위로 이만큼(m).")]
     [SerializeField] private float heightAboveHead = 0.28f;
-    [SerializeField] private float fontSize = 0.05f;
+    [Tooltip("실시간 손 측정각 글씨 크기(m). ★이 컴포넌트는 씬에 없고 런타임에 붙으므로 이 기본값이 그대로 먹는다.")]
+    [SerializeField] private float fontSize = 0.085f;
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private Color measuredColor = new Color(1f, 0.85f, 0.20f);
     [SerializeField] private Color scriptedColor = new Color(0.65f, 0.80f, 1f);
@@ -75,14 +76,54 @@ public class CervicalRomHandAngleProbe : MonoBehaviour
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
         if (font == null) font = KoreanFontResolver.Resolve();
+
+        // ★[임시 · A-12] 지난 판 기록을 지우고, 결과 화면에 부록을 대는 제공자를 꽂는다.
+        //   static이라 씬을 다시 열어도 값이 남는다 — 여기서 지워야 이번 판만 나온다.
+        CervicalRomHandAngleLog.Clear();
+        TrainingResultData.RomAppendixProvider = CervicalRomHandAngleLog.BuildAppendix;
     }
 
-    private void OnDisable() => Teardown();
+    // ★[임시 · A-12] 드라이버가 측정값을 남기는 순간을 듣는다. 그 순간의 손 각을 같이 찍어 둔다.
+    private void OnEnable()
+    {
+        if (driver != null) driver.OnMeasurementRecorded += HandleMeasurementRecorded;
+    }
+
+    private void OnDisable()
+    {
+        if (driver != null) driver.OnMeasurementRecorded -= HandleMeasurementRecorded;
+        Teardown();
+    }
+
     private void OnDestroy() => Teardown();
+
+    /// <summary>
+    /// ★[임시 · A-12] 대본이 능동·수동 끝점을 기록한 <b>그 프레임의</b> 손 측정각을 남긴다.
+    /// 나중에 다시 읽으면 이미 각이 변해 있어 의미가 없다.
+    /// </summary>
+    private void HandleMeasurementRecorded(CervicalRomDriver.Direction dir, bool isActive)
+    {
+        bool ok = TryGetHandAngle(out float measured, out float perp);
+        CervicalRomHandAngleLog.Record(dir, isActive,
+                                       measurable: ok && perp >= minPerpRatio,
+                                       handDegrees: measured,
+                                       scriptedDegrees: driver != null ? driver.CurrentAngle : 0f);
+
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[손각도] {dir} {(isActive ? "능동" : "수동")} 기록 — " +
+                            $"손 {(ok ? measured.ToString("F1") : "--")}° / 대본 {(driver != null ? driver.CurrentAngle : 0f):F1}°</color>");
+    }
 
     private void LateUpdate()
     {
-        if (!show || driver == null) { Teardown(); return; }
+        // ★Awake 때 드라이버가 아직 없었으면 여기서 잡고 그때 구독한다.
+        //   런타임에 붙는 컴포넌트라 순서를 장담할 수 없다.
+        if (driver == null)
+        {
+            driver = FindFirstObjectByType<CervicalRomDriver>();
+            if (driver == null) { Teardown(); return; }
+            driver.OnMeasurementRecorded += HandleMeasurementRecorded;
+        }
 
         CervicalRomDriver.Direction dir = driver.CurrentDirection;
         if (dir == CervicalRomDriver.Direction.None) { Teardown(); return; }
@@ -111,6 +152,10 @@ public class CervicalRomHandAngleProbe : MonoBehaviour
                 ChunaLogger.Log($"<color=cyan>[손각도] {dir} 0점 재설정</color>");
             zeroedFor = dir;
         }
+
+        // ★표시를 꺼도 0점·손 벡터 추적은 계속 돌아야 한다 —
+        //   결과 부록에 남길 값이 이 추적에서 나온다. 끄는 건 화면뿐이다.
+        if (!show) { Teardown(); return; }
 
         Draw(dir);
     }

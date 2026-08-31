@@ -229,6 +229,14 @@ public class TrainingResultData
     [Tooltip("경추 ROM 측정값. 비어 있으면 이 시나리오가 아니다.")]
     public List<RomMeasurement> romMeasurements = new List<RomMeasurement>();
 
+    /// <summary>
+    /// ★[임시 · A-12 교차검증] ROM 결과표 아래에 붙일 부록 제공자.
+    /// <c>CervicalRomHandAngleProbe</c>가 자기를 꽂는다. 꽂힌 게 없으면 아무것도 안 붙는다.
+    /// 검증이 끝나면 이 줄과 <see cref="BuildRomSummaryText"/> 안의 호출 2줄만 지우면 된다.
+    /// ★서버 전송은 <see cref="BuildSummaryText"/>가 따로 만든다 — 여긴 화면 표시 전용이라 영향이 없다.
+    /// </summary>
+    public static Func<string> RomAppendixProvider;
+
     [Header("=== 기본 정보 ===")]
     public string sessionId;                       // 세션 ID
     public string userName;                        // 사용자 이름
@@ -603,6 +611,11 @@ public class TrainingResultData
         sb.AppendLine($"수행 시간 {FormatTime(data.totalTime)}");
         sb.Append("※ 참고치 = 정상 기준각(굴곡 45° · 신전 90° · 측굴 45° · 회전 90°) · " +
                   "능동 = 환자가 스스로 간 각 · 수동 = 시술자가 밀어 간 각 · 차이값 = 참고치까지 남은 각");
+
+        // ★[임시 · A-12 교차검증] 손 측정 부록. 제공자를 지우면 이 두 줄은 그대로 둬도 아무 일도 안 한다.
+        string handAppendix = RomAppendixProvider?.Invoke();
+        if (!string.IsNullOrEmpty(handAppendix)) sb.Append("\n\n").Append(handAppendix);
+
         return sb.ToString().TrimEnd();
     }
 
