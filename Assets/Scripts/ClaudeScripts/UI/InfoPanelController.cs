@@ -46,13 +46,6 @@ public class InfoPanelController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI practiceLabel;
     [SerializeField] private TextMeshProUGUI evaluationLabel;
 
-    [Tooltip("실측 — 패스스루에서 실제 환자를 잰다. measurementPhases가 있는 시나리오에서만 켜진다.\n" +
-             "미배선(비워둠)이면 실측 선택지가 없는 것과 같아 기존 동작 그대로다.")]
-    [SerializeField] private Toggle measurementToggle;
-    [SerializeField] private TextMeshProUGUI measurementLabel;
-    [Tooltip("실측을 지원하지 않는 시나리오에서 통째로 숨길 대상(토글 + 라벨의 부모). 비워도 된다.")]
-    [SerializeField] private GameObject measurementToggleRoot;
-
     [Header("═══ 난이도 선택 ═══")]
     [SerializeField] private Toggle beginnerToggle;
     [SerializeField] private Toggle intermediateToggle;
@@ -167,7 +160,10 @@ public class InfoPanelController : MonoBehaviour
         None,
         Practice,
         Evaluation,
-        Measurement     // ★끝에 추가 — 씬에 int로 직렬화된다
+        // ★2026-08-31 Measurement 제거 — ROM에서는 <b>평가모드가 곧 실측</b>이라 별도 모드가 필요 없다.
+        //   진행 방식(교육/실측)은 ChunaTraining.ScenarioMode가 따로 들고 있고,
+        //   갈림길은 ScenarioConfig.measurementPhases 유무 하나뿐이다.
+        //   ※새 값은 반드시 끝에 붙일 것 — 씬에 int로 직렬화된다.
     }
 
     // 난이도 타입 - ChunaTraining.DifficultyLevel 사용 (중복 제거)
@@ -348,8 +344,6 @@ public class InfoPanelController : MonoBehaviour
         // 모드 토글 초기화
         SetToggleWithoutNotify(practiceToggle, false);
         SetToggleWithoutNotify(evaluationToggle, false);
-        SetToggleWithoutNotify(measurementToggle, false);
-        ApplyMeasurementAvailability();
 
         // 난이도 토글 초기화 (초급자 기본 선택)
         SetToggleWithoutNotify(beginnerToggle, true);
@@ -370,25 +364,6 @@ public class InfoPanelController : MonoBehaviour
         UpdateDifficultyDescriptions();
     }
 
-    /// <summary>
-    /// 실측을 지원하는 시나리오에서만 실측 선택지를 띄운다.
-    /// 판단 기준은 ScenarioConfig.measurementPhases 유무 — 화이트리스트가 없으면 실측으로 진입해도
-    /// 거를 phase가 없어 교육 단계가 그대로 돌아버리므로, 아예 선택하지 못하게 막는다.
-    /// </summary>
-    private void ApplyMeasurementAvailability()
-    {
-        ScenarioConfig config = scenarioManager != null ? scenarioManager.CurrentConfig : null;
-        bool supported = config != null && config.SupportsMeasurementMode;
-
-        if (measurementToggleRoot != null)
-            measurementToggleRoot.SetActive(supported);
-        else if (measurementToggle != null)
-            measurementToggle.gameObject.SetActive(supported);
-
-        if (measurementToggle != null)
-            measurementToggle.interactable = supported;
-    }
-
     private void SetupModeDescriptions()
     {
         if (practiceLabel != null)
@@ -396,9 +371,6 @@ public class InfoPanelController : MonoBehaviour
 
         if (evaluationLabel != null)
             evaluationLabel.text = "학습 내용 테스트";
-
-        if (measurementLabel != null)
-            measurementLabel.text = "실제 환자 가동범위 측정";
 
         if (beginnerDescription != null)
             beginnerDescription.text = "최초 학습자를 위한 레벨입니다";
@@ -464,14 +436,6 @@ public class InfoPanelController : MonoBehaviour
             });
         }
 
-        if (measurementToggle != null)
-        {
-            measurementToggle.onValueChanged.RemoveAllListeners();
-            measurementToggle.onValueChanged.AddListener((isOn) => {
-                if (isOn) OnModeToggleChanged(ModeType.Measurement);
-            });
-        }
-
         // 난이도 토글
         if (beginnerToggle != null)
         {
@@ -507,7 +471,6 @@ public class InfoPanelController : MonoBehaviour
         if (mainMenuToggle != null) mainMenuToggle.onValueChanged.RemoveAllListeners();
         if (practiceToggle != null) practiceToggle.onValueChanged.RemoveAllListeners();
         if (evaluationToggle != null) evaluationToggle.onValueChanged.RemoveAllListeners();
-        if (measurementToggle != null) measurementToggle.onValueChanged.RemoveAllListeners();
         if (beginnerToggle != null) beginnerToggle.onValueChanged.RemoveAllListeners();
         if (intermediateToggle != null) intermediateToggle.onValueChanged.RemoveAllListeners();
         if (advancedToggle != null) advancedToggle.onValueChanged.RemoveAllListeners();
@@ -522,31 +485,56 @@ public class InfoPanelController : MonoBehaviour
 
         // ★ DifficultyManager 동기화: 평가 모드는 난이도 토글 무시하고 Evaluation 강제,
         //    실습 모드는 현재 선택된 난이도 반영 (이전엔 난이도 토글 변경 시에만 set돼서 평가모드가 동작 안 했음)
+        // ★★2026-08-31 모드 재정의 — <b>평가모드가 곧 실측</b>이다. 단, 실측을 지원하는 술기에서만.
+        //   시나리오 이름을 코드에 박지 않는다 — ScenarioConfig가 measurementPhases로
+        //   지원 여부를 이미 들고 있다. 지금 그걸 가진 config는 경추ROM측정 하나뿐이고,
+        //   나머지 12개 술기의 평가모드는 종전대로 교육 진행 + 채점이다.
+        bool useMeasurement = mode == ModeType.Evaluation && ScenarioSupportsMeasurement();
+
         if (DifficultyManager.Instance != null)
         {
             // 진행 방식(교육/실측)은 난이도와 별개 축이다. ★시나리오 로드 전에 정해져야 반영된다.
-            DifficultyManager.Instance.SetMode(mode == ModeType.Measurement
+            DifficultyManager.Instance.SetMode(useMeasurement
                 ? ScenarioMode.Measurement
                 : ScenarioMode.Education);
 
             // ★실측은 훈련이 아니라 측정 도구라 난이도가 무의미하다. 초급으로 고정한다 —
-            //   상급·평가로 두면 나레이션이 'CSV 무시 원칙'에 걸려 절차 안내가 통째로 무음이 된다.
+            //   실측 나레이션이 Beginner·Intermediate에만 있고 Advanced·Evaluation에는 0개라,
+            //   평가 난이도로 두면 절차 안내가 통째로 무음이 된다(2026-08-31 실측).
             DifficultyLevel target =
-                  mode == ModeType.Evaluation  ? DifficultyLevel.Evaluation
-                : mode == ModeType.Measurement ? DifficultyLevel.Beginner
+                  useMeasurement               ? DifficultyLevel.Beginner
+                : mode == ModeType.Evaluation  ? DifficultyLevel.Evaluation
                 : selectedDifficulty;
             DifficultyManager.Instance.SetDifficulty(target);
         }
 
-        // 실측은 실제 환자를 보며 재므로 패스스루를 자동으로 켠다(사용자가 따로 켜지 않아도 되게).
-        if (practiceSettingsController != null)
-            practiceSettingsController.SetRealityMode(mode == ModeType.Measurement);
+        // ★패스스루를 여기서 켜지 않는다. 실측 진입/이탈은 CervicalRomMeasurementBridge가
+        //   한 곳에서 대칭으로 처리한다 — 켠 것은 켠 쪽이 되돌려야 상태가 안 샌다.
 
         UpdateModeSelectionColors();
         OnModeSelected?.Invoke(selectedMode, selectedDifficulty);
 
         // 모드 선택 시 자동으로 시나리오 시작
         StartSimulation();
+    }
+
+    /// <summary>
+    /// 지금 로드된 술기가 실측 진행을 지원하는가. <c>ScenarioConfig.measurementPhases</c>가 근거다.
+    ///
+    /// ★<c>CurrentScenario</c>가 아니라 <c>CurrentConfig</c>를 본다 — 모드 선택은
+    ///   <c>StartSimulation()</c> <b>이전</b>이라 시나리오가 아직 로드되지 않았다.
+    ///   config는 ScenarioBootstrapper가 씬 시작 때 이미 물려 놓는다.
+    /// </summary>
+    private bool ScenarioSupportsMeasurement()
+    {
+        if (scenarioManager == null) scenarioManager = FindFirstObjectByType<ScenarioManager>();
+        ScenarioConfig config = scenarioManager != null ? scenarioManager.CurrentConfig : null;
+        if (config == null)
+        {
+            ChunaLogger.LogWarning("[InfoPanel] ScenarioConfig를 못 찾아 실측 지원 여부를 판단할 수 없습니다 — 교육 진행으로 갑니다.");
+            return false;
+        }
+        return config.SupportsMeasurementMode;
     }
 
     private void OnDifficultyToggleChanged(DifficultyLevel difficulty)
@@ -584,7 +572,6 @@ public class InfoPanelController : MonoBehaviour
         // 모드 토글 (Animator + Color 모두 처리)
         UpdateToggleColor(practiceToggle, null, selectedMode == ModeType.Practice);
         UpdateToggleColor(evaluationToggle, null, selectedMode == ModeType.Evaluation);
-        UpdateToggleColor(measurementToggle, null, selectedMode == ModeType.Measurement);
 
         // 난이도 토글
         UpdateToggleColor(beginnerToggle, null, selectedDifficulty == DifficultyLevel.Beginner);
@@ -1073,7 +1060,6 @@ public class InfoPanelController : MonoBehaviour
         // 모드 선택 토글 리스너 제거
         if (practiceToggle != null) practiceToggle.onValueChanged.RemoveAllListeners();
         if (evaluationToggle != null) evaluationToggle.onValueChanged.RemoveAllListeners();
-        if (measurementToggle != null) measurementToggle.onValueChanged.RemoveAllListeners();
         if (beginnerToggle != null) beginnerToggle.onValueChanged.RemoveAllListeners();
         if (intermediateToggle != null) intermediateToggle.onValueChanged.RemoveAllListeners();
         if (advancedToggle != null) advancedToggle.onValueChanged.RemoveAllListeners();

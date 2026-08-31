@@ -51813,9 +51813,6 @@ MonoBehaviour:
   evaluationToggle: {fileID: 833521288}
   practiceLabel: {fileID: 1893388138}
   evaluationLabel: {fileID: 833521287}
-  measurementToggle: {fileID: 0}
-  measurementLabel: {fileID: 0}
-  measurementToggleRoot: {fileID: 0}
   beginnerToggle: {fileID: 433099466}
   intermediateToggle: {fileID: 708066205}
   advancedToggle: {fileID: 1701091886}
@@ -202501,6 +202498,13 @@ MonoBehaviour:
   holdSpeedThreshold: 0.03
   advanceOnHold: 1
   minAngleToMark: 5
+  minPassiveGain: 3
+  requireGripGate: 1
+  sagittalGripRange: {x: 0.14, y: 0.26}
+  temporalGripRange: {x: 0.11, y: 0.22}
+  pinchWidthRange: {x: 0.01, y: 0.07}
+  releaseHysteresis: 0.25
+  releaseGraceSeconds: 0.35
   minPerpRatio: 0.34
   slipTolerance: 0.15
   smoothing: 0.08
@@ -357877,7 +357881,6 @@ MonoBehaviour:
   - Eyelash
   keepSkeletonOpaque: 1
   logRealityGeometry: 1
-  realityPatientMode: 3
   backgroundObject: {fileID: 4378015526650632203}
   startWithRealityMode: 0
 --- !u!1 &2708639834360691451
@@ -377124,6 +377127,30 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 368232954}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: CloseSettingsPopup
+      objectReference: {fileID: 0}
+    - target: {fileID: 1857692898859725765, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
+      propertyPath: onValueChanged.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: InfoPanelController, Assembly-CSharp
+      objectReference: {fileID: 0}
     - target: {fileID: 2915139621855744224, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
       propertyPath: m_ChildAlignment
       value: 4
@@ -377314,7 +377341,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8046116837390756153, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
       propertyPath: m_Name
-      value: BorderlessButton_IconAndLabel (3)
+      value: "\uC124\uC815\uCC3D \uB2EB\uAE30"
       objectReference: {fileID: 0}
     - target: {fileID: 8046116837390756153, guid: c8e2992a313c49d449f074c59c12f6ad, type: 3}
       propertyPath: m_Layer

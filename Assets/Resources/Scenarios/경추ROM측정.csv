@@ -1,4 +1,4 @@
-﻿scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
+scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
 1,경추ROM측정,시작,가이드,0,1,0,필요시 [설정]으로 환자 위치를 맞추고 [시작]을 누르세요.,시작,,,,,,,,,,,
 1,경추ROM측정,교육,자세정렬,0,1,0,환자를 앉히고 다음의 체크리스트를 확인하여 표준자세로 정렬시킨다.,자세정렬,,,,,,,,,,,
 1,경추ROM측정,교육,시상면 파지,2,1,3,옆면에 서서 이마와 뒤통수를 잡는다.,파지1,ROM 신전굴곡,PassiveStretch,"bothHands,guideHold,voiceGate",,,,,Head,,,
@@ -38,7 +38,6 @@
 1,경추ROM측정,교육,좌회전압박,18,3,0,중립으로 돌아옵니다.,,,PassiveStretch,bothHands,,,,,Head,,,
 1,경추ROM측정,교육,횡단면평가,19,1,0,"좌회전 90도, 우회전 90도를 기준으로 각도 차이와 보상 여부를 기록한다.",평가3,,,,,,,,,,,
 1,경추ROM측정,실측,준비,0,1,0,환자를 앉히고 다음의 체크리스트를 확인하여 표준자세로 정렬시킨다.,실측준비,,,,,,,,,,,
-1,경추ROM측정,실측,기준정렬,2,1,0,양손을 환자의 양쪽 어깨에 대고 잠시 멈추세요. 기준축을 잡습니다.,실측정렬,,,,,,,,,,,
 1,경추ROM측정,실측,시상면 파지,3,1,0,환자 옆에 서서 이마와 뒤통수를 잡고 잠시 멈추세요.,실측파지시상,,,,,,,,,,,
 1,경추ROM측정,실측,굴곡,4,1,0,환자가 스스로 고개를 숙이게 하고 끝에서 멈추세요.,실측굴곡능동,,,,,,,,,,,
 1,경추ROM측정,실측,굴곡,4,2,0,끝 지점에서 조금 더 밀어 끝 느낌을 확인하고 멈추세요.,실측굴곡압박,,,,,,,,,,,

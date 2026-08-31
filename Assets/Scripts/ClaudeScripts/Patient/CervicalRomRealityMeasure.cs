@@ -28,7 +28,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     public enum Stage
     {
         Idle,             // 대기
-        AwaitShoulders,   // 양손을 환자 양 어깨에 - 기준축을 세운다
+        // ★AwaitShoulders 제거(2026-08-31) — 기준축을 파지선에서 세우므로 어깨를 짚는 단계가 필요 없다.
         AwaitNeutral,     // 중립에서 머리를 파지 - 0점을 잡는다
         Active,           // 환자 능동
         Passive,          // 시술자 압박(끝 느낌)
@@ -47,11 +47,28 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [SerializeField] private CervicalRomDriver.Direction direction = CervicalRomDriver.Direction.Flexion;
 
     [Header("=== 캡처 ===")]
-    [Tooltip("양손이 이 속도 아래로 이만큼 머무르면 '정지'로 본다(초).")]
+    [Tooltip("양손이 이 속도 아래로 이만큼 머무르면 '정지'로 본다(초). ★씬에 값(1.5)이 박혀 있다.")]
     [SerializeField] private float holdSeconds = 1.5f;
 
-    [Tooltip("정지로 인정할 손 속도(m/s).")]
+    [Tooltip("★0보다 크면 위 holdSeconds 대신 이 값을 쓴다. 0이면 씬 값을 그대로 쓴다.\n\n" +
+             "2026-08-31 사용자: '압박에서 1.5초 하니까 중간에 그냥 인식해버린다'.\n" +
+             "압박은 밀어 가는 도중에도 손이 잠깐 느려지는 구간이 있어서 1.5초로는 끝점 전에 잡힌다.\n" +
+             "★holdSeconds는 씬에 직렬화돼 있어 코드 기본값이 안 먹는다(규칙 7). " +
+             "이 필드는 신규라 먹으므로 인스펙터를 안 거치고 바꿀 수 있다.")]
+    [SerializeField] private float holdSecondsOverride = 2.5f;
+
+    /// <summary>실제로 쓸 정지 유지 시간.</summary>
+    private float HoldSeconds => holdSecondsOverride > 0f ? holdSecondsOverride : holdSeconds;
+
+    [Tooltip("정지로 인정할 손 속도(m/s). ★씬에 값이 있으니 인스펙터 값이 먹는다.")]
     [SerializeField] private float holdSpeedThreshold = 0.03f;
+
+    [Tooltip("★손 속도 저역통과 시간상수(초). 0이면 생값.\n\n" +
+             "한 프레임 위치 차분을 그대로 속도로 쓰면 트래킹 지터가 그대로 튀어서, " +
+             "가만히 있어도 임계를 넘나들며 정지가 안 잡힌다(2026-08-31 사용자 지적: '감도가 너무 타이트').\n" +
+             "평활을 걸면 임계를 크게 올리지 않고도 잘 잡힌다 — 임계를 올리는 건 " +
+             "'움직이는 중에도 확정되는' 반대쪽 문제를 만든다.")]
+    [SerializeField] private float speedSmoothing = 0.15f;
 
     [Tooltip("정지만으로 다음 단계로 넘어간다. 끄면 키/메뉴로만 넘어간다.")]
     [SerializeField] private bool advanceOnHold = true;
@@ -59,6 +76,42 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [Tooltip("능동·압박 끝점을 정지로 확정할 때, 최소 이만큼은 움직였어야 한다(도).\n" +
              "이게 없으면 중립에서 가만히 있다가 0도로 확정돼 버린다.")]
     [SerializeField] private float minAngleToMark = 5f;
+
+    [Tooltip("★압박은 능동 각보다 이만큼 <b>더</b> 가야 확정한다(도).\n\n" +
+             "이게 없으면 능동 끝점에서 손을 그대로 둔 채 잠깐 멈추기만 해도 " +
+             "압박이 즉시 확정돼 '수동 = 능동, 차이값 0'이 된다. 능동 끝에서 잠깐 멈추는 건 " +
+             "자연스러운 동작이라 거의 매번 밟는다(2026-08-31 실측).\n\n" +
+             "사람이면 기능이 아무리 떨어져도 수동에서는 이만큼은 더 밀린다는 전제다. " +
+             "손 떨림보다는 크고, 실제 끝느낌 여유(설계서상 5~10도)보다는 작게 잡는다.")]
+    [SerializeField] private float minPassiveGain = 3f;
+
+    [Header("=== 파지 게이트 (2026-08-31) ===")]
+    [Tooltip("★끄면 종전대로 '정지 1.5초'만으로 0점을 잡는다. 게이트가 말썽이면 여기부터 끄고 본다.")]
+    [SerializeField] private bool requireGripGate = true;
+
+    [Tooltip("시상면 파지(이마·후두)의 양손 간격 허용 범위(m). 사람 머리 앞뒤 길이 대역이다.")]
+    [SerializeField] private Vector2 sagittalGripRange = new Vector2(0.14f, 0.26f);
+
+    [Tooltip("측두부 파지(관상면·횡단면)의 양손 간격 허용 범위(m). 사람 머리 좌우 폭 대역이다.")]
+    [SerializeField] private Vector2 temporalGripRange = new Vector2(0.11f, 0.22f);
+
+    [Tooltip("★<b>기본 꺼짐</b>. 핀치 폭으로도 막을지.\n\n" +
+             "2026-08-31 실측: 켜 뒀더니 <b>정상적인 앞뒤 파지가 막혔다</b>. " +
+             "이마·후두를 잡으면 엄지와 검지가 머리를 사이에 두고 벌어져 15~20cm가 나온다 — " +
+             "'집는' 파지가 아니라 '감싸는' 파지라서 핀치 폭이라는 신호 자체가 맞지 않았다.\n\n" +
+             "그래서 지금은 <b>표시만</b> 하고 판정에는 안 쓴다. 리드아웃의 실측치를 보고 " +
+             "쓸 만한 대역이 있다고 판단되면 그때 켠다.")]
+    [SerializeField] private bool usePinchGate = false;
+
+    [Tooltip("한 손의 엄지 끝 ↔ 검지 끝 거리 허용 범위(m). usePinchGate가 켜져 있을 때만 판정에 쓴다.")]
+    [SerializeField] private Vector2 pinchWidthRange = new Vector2(0.01f, 0.20f);
+
+    [Tooltip("0점을 잡은 뒤 파지가 이 비율만큼 더 벗어나야 '풀렸다'로 본다.\n" +
+             "★잡을 때와 같은 기준으로 풀면 경계에서 깜빡인다.")]
+    [SerializeField] private float releaseHysteresis = 0.25f;
+
+    [Tooltip("풀림이 이만큼 지속돼야 실제로 해제한다(초). 트래킹이 한 프레임 튀는 것에 안 넘어가려고 둔다.")]
+    [SerializeField] private float releaseGraceSeconds = 0.35f;
 
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
@@ -106,7 +159,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [SerializeField] private Color passiveMarkColor = new Color(1f, 0.45f, 0.35f);
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float readoutSize = 0.05f;
-    [Tooltip("어깨 중점에서 이만큼 올린 곳을 기준점으로 쓴다(표시 전용, 각도에는 영향 없음).")]
+
+    [Tooltip("★글씨 크기 배율(안내문 + 눈금 숫자). <b>신규 필드라 이 코드 기본값이 그대로 먹는다</b> — " +
+             "readoutSize·gaugeLabelSize는 씬에 값이 박혀 있어 코드에서 못 키운다(규칙 7).\n" +
+             "2026-08-31 사용자: '작은데다 가까워서 흐려 글씨가 안 보였다'.")]
+    [SerializeField] private float textScale = 1.8f;
+
+    [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 손과 겹치지 않게 띄운다.")]
+    [SerializeField] private float readoutRise = 0.34f;
+
+    [Tooltip("★안내문이 눈에서 이보다 가까우면 밀어낸다(m). VR은 너무 가까우면 초점이 안 맞아 흐리다.")]
+    [SerializeField] private float readoutMinDistance = 0.55f;
+    [Tooltip("★<b>양손 파지 중점</b>에서 이만큼 올린 곳을 각도기 기준점으로 쓴다(표시 전용, 각도에는 영향 없음).\n" +
+             "음수를 넣으면 파지 위치보다 아래에 뜬다 — 머리에 가려 안 보일 때 쓴다.\n" +
+             "★씬에 값이 직렬화돼 있으므로 코드 기본값이 아니라 인스펙터 값이 먹는다.")]
     [SerializeField] private float pivotRise = 0.10f;
     [SerializeField] private float axisLength = 0.18f;
 
@@ -122,7 +188,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     private Vector3 axRight, axUp, axFwd;   // t0에 세운 십자축 (환자 기준틀)
     private Vector3 pivot;                  // 표시 기준점
-    private float shoulderWidth;
+    private float gripWidth;
 
     private Vector3 v0;                     // 중립 파지 벡터
     private float len0;
@@ -133,6 +199,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     private bool prevValid;
     private float holdTimer;
     private float peakAngle;                // 이 단계에서 본 최대 각 - minAngleToMark 판정용
+    private float passiveBaseAngle;         // 압박 단계의 출발선 = 능동으로 도달한 각(크기)
+    private float releaseTimer;             // 파지가 풀린 채 흐른 시간
+    private float smoothedSpeed;            // 저역통과를 거친 손 속도 - 정지 판정용
+    private string lastWarn;                // 마지막 실패 사유(화면에 띄운다)
+    private float lastWarnTime = -99f;
+    private float lastGripSpan, lastPinchL, lastPinchR;   // 리드아웃 표시용 실측치
 
     // ★active·passive는 <b>부호 있는</b> 각이다. 각도기 지침이 어느 쪽으로 가는지에 쓴다.
     //   기록·표시에 나가는 값은 Mathf.Abs를 거친 크기다.
@@ -165,6 +237,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     private int shownWarn = -1;
     private int shownHold = -99;    // 정지 게이지는 10칸으로 양자화해 그 칸이 바뀔 때만 다시 만든다
     private int shownMask = -1;     // 어느 방향이 끝났는지 비트마스크
+    private int shownWarnSig;
+    private int shownGrip = -1;     // 파지폭·핀치폭을 1mm로 양자화한 표식(0점 전에만 쓴다)
 
     public Stage CurrentStage => stage;
     public bool FrameReady => frameReady;
@@ -174,17 +248,56 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     public bool HasActive(CervicalRomDriver.Direction d) => results[(int)d].hasActive;
     public bool HasPassive(CervicalRomDriver.Direction d) => results[(int)d].hasPassive;
 
+    /// <summary>
+    /// 이 방향의 측정값(도, <b>크기</b>). 하나도 안 쟀으면 false.
+    /// ★결과 화면이 읽는다 — 종전에는 결과 수집기가 교육용 드라이버만 봐서
+    ///   실측 값이 결과창에 아예 안 나왔다(2026-08-31 사용자 지적).
+    /// </summary>
+    public bool TryGetResult(CervicalRomDriver.Direction d, out float activeDeg, out float passiveDeg,
+                             out bool hasActive, out bool hasPassive)
+    {
+        activeDeg = passiveDeg = 0f;
+        hasActive = hasPassive = false;
+
+        int i = (int)d;
+        if (i <= 0 || i >= results.Length) return false;
+
+        Result r = results[i];
+        hasActive = r.hasActive;
+        hasPassive = r.hasPassive;
+        activeDeg = Mathf.Abs(r.active);
+        passiveDeg = Mathf.Abs(r.passive);
+        return hasActive || hasPassive;
+    }
+
+    /// <summary>한 방향이라도 잰 게 있는가.</summary>
+    public bool HasAnyResult
+    {
+        get
+        {
+            for (int i = 1; i < results.Length; i++)
+                if (results[i].hasActive || results[i].hasPassive) return true;
+            return false;
+        }
+    }
+
     /// <summary>브리지가 단계에 맞춰 방향을 지정한다. 0점은 파지가 바뀌므로 다시 잡는다.</summary>
     public void SetDirection(CervicalRomDriver.Direction d, bool keepNeutral = false)
     {
-        if (direction == d && (keepNeutral || !neutralReady)) return;
+        // ★★같은 방향이면 <b>아무것도 하지 않는다</b>(2026-08-31 수정).
+        //   브리지가 이 함수를 <b>매 프레임</b> 부른다(ApplyDirectionFor). 그런데 종전 조건
+        //   `direction == d && (keepNeutral || !neutralReady)`는 <b>중립이 잡혀 있으면 조기 반환을 안 해서</b>,
+        //   방향 단계에 들어간 순간부터 매 프레임 neutralReady를 지우고 holdTimer를 0으로 되돌렸다.
+        //   증상 = "파지는 잡히는데 굴곡 단계에서 게이지가 영영 안 차고 안 넘어간다".
+        //   같은 방향을 다시 지정하는 건 아무 의미가 없으므로 그냥 나간다.
+        if (direction == d) return;
         direction = d;
         if (!keepNeutral)
         {
             neutralReady = false;
             stage = Stage.AwaitNeutral;
         }
-        holdTimer = 0f; peakAngle = 0f;
+        holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
     }
@@ -253,59 +366,165 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [ContextMenu("0 - 처음부터")]
     public void ResetAll()
     {
-        stage = Stage.AwaitShoulders;
+        stage = Stage.AwaitNeutral;
         frameReady = neutralReady = false;
         vNowValid = prevValid = false;
-        holdTimer = 0f; peakAngle = 0f;
+        holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         for (int i = 0; i < results.Length; i++) results[i] = default;
-        Mark("처음부터 - 양손을 환자 양 어깨에 대고 정지하세요.");
+        Mark("처음부터 - 중립에서 머리를 파지하고 정지하세요.");
     }
 
-    [ContextMenu("1 - 어깨 정렬 캡처")]
-    public void CaptureShoulderFrame()
+    /// <summary>
+    /// ★<b>파지선에서 기준축을 세운다.</b> 어깨를 짚는 단계를 없앤 자리다(2026-08-31).
+    ///
+    /// 어깨 정렬이 실제로 주던 정보는 <c>axRight</c> <b>하나뿐</b>이었다 —
+    /// <c>axUp</c>은 원래 <c>Vector3.up</c>(중력)이고 <c>axFwd</c>는 거기서 파생이었다.
+    /// 그런데 그 하나를 <b>파지 자체가 준다</b>. 술기가 면마다 파지를 바꾸기 때문이다.
+    ///
+    ///   시상면 파지(이마·후두) → 손 선 = <b>전후축</b> → axFwd 직접, axRight는 외적
+    ///   관상면·횡단면 파지(양 측두) → 손 선 = <b>좌우축</b> → axRight 직접
+    ///
+    /// 이건 설계서 R1("기준 벡터는 회전축과 수직이어야 한다")을 뒤집어 읽은 것이다.
+    /// 파지를 그 면에 맞게 바꾸는 이유가 원래 이것이었다.
+    ///
+    /// ★한계 — 어깨선은 <b>몸통</b> 기준이고 파지선은 <b>머리</b> 기준이다.
+    ///   중립이라고 잡은 자세에서 머리가 이미 틀어져 있으면 축도 같이 틀어진다.
+    ///   준비 단계의 표준자세 체크리스트가 그 역할을 대신한다.
+    ///   ★틀어져도 <b>조용히 틀리지는 않는다</b> — perpRatio가 떨어져 "못 잽니다"로 드러난다.
+    /// </summary>
+    private bool CaptureFrameFromGrip(Vector3 l, Vector3 r)
     {
-        if (!TryGetHands(out Vector3 l, out Vector3 r))
-        {
-            Warn("손을 못 찾았습니다 - gripJudge가 손끝을 아직 못 붙였거나 씬에 없습니다.");
-            return;
-        }
-
-        Vector3 line = r - l;
         axUp = Vector3.up;                                   // XR 월드는 중력 정렬이다
-        Vector3 ml = Vector3.ProjectOnPlane(line, axUp);
-        if (ml.sqrMagnitude < 1e-6f)
+        Vector3 flat = Vector3.ProjectOnPlane(r - l, axUp);
+        if (flat.sqrMagnitude < 1e-6f)
         {
-            Warn("어깨선이 수직에 가깝습니다 - 양손을 좌우로 벌려 어깨에 대세요.");
-            return;
+            Warn("파지선이 수직에 가깝습니다 - 양손 높이를 비슷하게 맞춰 잡으세요.");
+            return false;
+        }
+        flat.Normalize();
+
+        if (IsSagittalGrip(direction))
+        {
+            axFwd = flat;                                    // 이마·후두 = 전후축
+            axRight = Vector3.Cross(axUp, axFwd).normalized; // Unity: Cross(up, forward) = right
+        }
+        else
+        {
+            axRight = flat;                                  // 양 측두 = 좌우축
+            axFwd = Vector3.Cross(axRight, axUp).normalized; // Unity: Cross(right, up) = forward
         }
 
-        axRight = ml.normalized;
-        axFwd = Vector3.Cross(axRight, axUp).normalized;     // Unity: Cross(right, up) = forward
-        shoulderWidth = line.magnitude;
-        pivot = (l + r) * 0.5f + axUp * pivotRise;
-
+        gripWidth = (r - l).magnitude;
+        pivot = (l + r) * 0.5f + axUp * pivotRise;           // ★각도기는 원래 손 중점 기준이었다
         frameReady = true;
-        neutralReady = false;
-        stage = Stage.AwaitNeutral;
-        holdTimer = 0f;
         frameStamp++;
-        Mark($"기준축 고정 - 어깨폭 {shoulderWidth * 100f:F0}cm. 이제 중립에서 머리를 파지하고 정지하세요.");
+        return true;
+    }
+
+    /// <summary>이 방향을 시상면 파지(이마·후두)로 재는가. 굴곡·신전만 그렇다.</summary>
+    private static bool IsSagittalGrip(CervicalRomDriver.Direction d)
+        => d == CervicalRomDriver.Direction.Flexion || d == CervicalRomDriver.Direction.Extension;
+
+    // ── 파지 게이트 ───────────────────────────────────────────────────────
+    // ★"정지 1.5초"만으로 0점을 잡으면 <b>허공에서 손이 멈춘 것</b>도 파지로 본다.
+    //   실측은 가상 환자도 콜라이더도 없어서 접촉으로 확인할 방법이 없다.
+    //   대신 손 자체가 두 가지를 말해 준다 — 양손 간격과 핀치 폭.
+    //
+    // ★조건을 빡빡하게 만드는 것보다 <b>틀렸을 때 되돌아오는 것</b>이 중요하다.
+    //   그래서 확정 뒤에도 파지가 풀리면 0점을 무효화한다. 잘못 잡았으면 손을 떼고
+    //   다시 잡는 게 자연스러운 동작이고, 그 동작이 그대로 복구 신호가 된다.
+
+    /// <summary>지금 이 방향에 맞는 양손 간격 범위.</summary>
+    private Vector2 GripSpanRange(CervicalRomDriver.Direction d)
+        => IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
+
+    /// <summary>
+    /// 지금 환자 머리를 잡고 있다고 볼 만한가. <paramref name="slack"/>은 해제 판정용 여유(0이면 확정 기준).
+    /// </summary>
+    private bool IsGripPlausible(Vector3 l, Vector3 r, float slack, out string why)
+    {
+        why = null;
+
+        float span = Vector3.Distance(l, r);
+        lastGripSpan = span;
+
+        Vector2 range = GripSpanRange(direction);
+        float pad = (range.y - range.x) * slack;
+        if (span < range.x - pad || span > range.y + pad)
+        {
+            why = $"양손 간격 {span * 100f:F0}cm — {range.x * 100f:F0}~{range.y * 100f:F0}cm 범위 밖";
+            return false;
+        }
+
+        bool okL = TryPinch(GripFingerTip.Side.Left, out float wl);
+        bool okR = TryPinch(GripFingerTip.Side.Right, out float wr);
+        lastPinchL = wl; lastPinchR = wr;
+
+        // ★손끝을 못 읽으면 <b>막지 않는다</b>. 판정기가 없다고 진행이 죽으면 원인을 못 찾는다.
+        if (!okL || !okR) return true;
+
+        // ★핀치는 기본적으로 표시만 한다. 위 usePinchGate 툴팁 참조.
+        if (!usePinchGate) return true;
+
+        float lo = pinchWidthRange.x - (pinchWidthRange.y - pinchWidthRange.x) * slack;
+        float hi = pinchWidthRange.y + (pinchWidthRange.y - pinchWidthRange.x) * slack;
+        if (wl < lo || wl > hi || wr < lo || wr > hi)
+        {
+            why = $"핀치 폭 L{wl * 100f:F1} R{wr * 100f:F1}cm — {pinchWidthRange.x * 100f:F0}~{pinchWidthRange.y * 100f:F0}cm 범위 밖";
+            return false;
+        }
+        return true;
+    }
+
+    private bool TryPinch(GripFingerTip.Side side, out float width)
+    {
+        width = 0f;
+        if (leftHandOverride != null && rightHandOverride != null) return false;   // 직접 주입 모드엔 손가락이 없다
+        return gripJudge != null && gripJudge.TryGetPinchWidth(side, out width);
+    }
+
+    /// <summary>0점을 잡은 뒤 파지가 풀렸으면 무효화하고 '중립 대기'로 되돌린다.</summary>
+    private void UpdateGripRelease(bool has, Vector3 l, Vector3 r)
+    {
+        if (!requireGripGate || !neutralReady) { releaseTimer = 0f; return; }
+
+        bool held = has && IsGripPlausible(l, r, releaseHysteresis, out _);
+        releaseTimer = held ? 0f : releaseTimer + Time.deltaTime;
+        if (releaseTimer < releaseGraceSeconds) return;
+
+        releaseTimer = 0f;
+        neutralReady = false;
+        frameReady = false;
+        stage = Stage.AwaitNeutral;
+        holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
+        frameStamp++;
+        Mark("파지가 풀렸습니다 — 다시 잡고 중립에서 정지하세요. (이 방향의 0점을 무효화했습니다)");
     }
 
     [ContextMenu("2 - 중립(0점) 캡처")]
     public void CaptureNeutral()
     {
-        if (!frameReady) { Warn("어깨 정렬이 먼저입니다."); return; }
         if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
+
+        // ★파지 게이트 — 허공에서 손이 멈춘 것을 0점으로 잡지 않는다.
+        if (requireGripGate && !IsGripPlausible(l, r, 0f, out string why))
+        {
+            Warn($"아직 파지로 안 보입니다 — {why}");
+            holdTimer = 0f;      // 다시 1.5초를 채워야 한다. 같은 자리에서 계속 확정 시도하지 않게.
+            return;
+        }
 
         v0 = r - l;
         len0 = v0.magnitude;
         if (len0 < 0.03f) { Warn($"양손이 너무 붙어 있습니다({len0 * 100f:F0}cm)."); return; }
 
+        // ★기준축을 여기서 세운다. 어깨를 짚는 별도 단계는 없앴다(2026-08-31).
+        if (!CaptureFrameFromGrip(l, r)) return;
+
         vNow = v0; vNowValid = true;
         neutralReady = true;
         stage = Stage.Active;
-        holdTimer = 0f; peakAngle = 0f;
+        holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
 
         TryGetAngle(out _, out float perp, out _);
@@ -325,7 +544,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         results[i].active = signed; results[i].hasActive = true;   // 부호째 담는다 — 지침이 어느 쪽인지
         stage = Stage.Passive;
         holdTimer = 0f; peakAngle = 0f;
-        Mark($"{Label(direction)} 능동 {deg:F1}도 (부호 {signed:+0.0;-0.0}). 이제 끝 느낌까지 압박하세요.");
+
+        // ★압박의 출발선을 여기서 못 박는다. 이게 없으면 손을 그대로 둔 채 1.5초만 지나도
+        //   압박이 확정돼 '수동 = 능동'이 된다.
+        passiveBaseAngle = deg;
+
+        Mark($"{Label(direction)} 능동 {deg:F1}도 (부호 {signed:+0.0;-0.0}). " +
+             $"이제 끝 느낌까지 압박하세요 — {deg + minPassiveGain:F0}도를 넘겨야 잡힙니다.");
     }
 
     [ContextMenu("4 - 압박 끝점")]
@@ -354,7 +579,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         // ★0점은 방향마다 다시 잡는다. 파지가 바뀌면 v0가 통째로 달라진다.
         neutralReady = false;
         stage = Stage.AwaitNeutral;
-        holdTimer = 0f; peakAngle = 0f;
+        holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
     }
@@ -409,8 +634,30 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         else
         {
             vNowValid = false;
+
+            // ★손을 아직 못 읽는 동안에도 안내가 보여야 한다. 안 그러면 바닥(월드 원점)에 뜬다.
+            if (!neutralReady)
+            {
+                Camera cam = Camera.main;
+                pivot = cam != null
+                    ? cam.transform.position + cam.transform.forward * 0.6f + Vector3.down * 0.15f
+                    : Vector3.up * 1.2f;
+            }
         }
 
+        // ★확정 전이어도 실측치를 갱신해 둔다 — 리드아웃에 숫자를 띄워야 임계를 맞출 수 있다.
+        if (has && !neutralReady)
+        {
+            IsGripPlausible(l, r, 0f, out _);
+
+            // ★0점을 잡기 전에는 기준점을 <b>손을 따라</b> 옮긴다.
+            //   안 그러면 pivot이 (0,0,0) = 월드 원점(바닥)이라 안내 문구와 수치가 발밑에 뜬다.
+            //   어깨 단계를 없애면서 생긴 구멍이다 — 예전엔 어깨를 짚는 순간 잡혔다.
+            //   0점을 잡은 뒤에는 고정한다. 각도기가 손을 따라 흔들리면 눈금을 못 읽는다.
+            pivot = (l + r) * 0.5f + Vector3.up * pivotRise;
+        }
+
+        UpdateGripRelease(has, l, r);
         UpdateHold(has, l, r);
         if (useKeyboard) ReadKeys();
         UpdateVisuals();
@@ -426,20 +673,26 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         }
 
         float dt = Mathf.Max(1e-4f, Time.deltaTime);
-        float speed = Mathf.Max((l - prevLeft).magnitude, (r - prevRight).magnitude) / dt;
+        float raw = Mathf.Max((l - prevLeft).magnitude, (r - prevRight).magnitude) / dt;
         prevLeft = l; prevRight = r;
+
+        // ★생 속도는 프레임마다 크게 튄다. 평활을 거쳐야 '멈췄다'가 안정적으로 잡힌다.
+        if (speedSmoothing <= 0f) smoothedSpeed = raw;
+        else
+        {
+            float k = 1f - Mathf.Exp(-dt / Mathf.Max(1e-4f, speedSmoothing));
+            smoothedSpeed = Mathf.Lerp(smoothedSpeed, raw, k);
+        }
+        float speed = smoothedSpeed;
 
         if (neutralReady && TryGetAngle(out float deg, out _, out _))
             peakAngle = Mathf.Max(peakAngle, deg);
 
         holdTimer = speed <= holdSpeedThreshold ? holdTimer + dt : 0f;
-        if (!advanceOnHold || holdTimer < holdSeconds) return;
+        if (!advanceOnHold || holdTimer < HoldSeconds) return;
 
         switch (stage)
         {
-            case Stage.AwaitShoulders:
-                CaptureShoulderFrame();
-                break;
             case Stage.AwaitNeutral:
                 CaptureNeutral();
                 break;
@@ -447,7 +700,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour
                 if (peakAngle >= minAngleToMark) MarkActiveEnd();
                 break;
             case Stage.Passive:
-                if (peakAngle >= minAngleToMark) MarkPassiveEnd();
+                // ★능동 각보다 minPassiveGain 이상 <b>더</b> 가야 확정한다.
+                //   minAngleToMark(중립 대비)만 보면 능동 끝점에서 이미 만족해 즉시 확정된다.
+                if (peakAngle >= passiveBaseAngle + minPassiveGain) MarkPassiveEnd();
                 break;
         }
         holdTimer = 0f;
@@ -455,8 +710,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     private void ReadKeys()
     {
-        if (Input.GetKeyDown(KeyCode.F1)) CaptureShoulderFrame();
-        else if (Input.GetKeyDown(KeyCode.F2)) CaptureNeutral();
+        if (Input.GetKeyDown(KeyCode.F2)) CaptureNeutral();
         else if (Input.GetKeyDown(KeyCode.F3)) MarkActiveEnd();
         else if (Input.GetKeyDown(KeyCode.F4)) MarkPassiveEnd();
         else if (Input.GetKeyDown(KeyCode.F5)) NextDirection();
@@ -508,10 +762,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         int shown = measurable ? Mathf.RoundToInt(deg) : int.MinValue + 1;
         int holdStep = HoldBarSteps();
         int mask = DoneMask();
+
+        // ★파지 수치는 0점을 잡기 <b>전에만</b> 띄운다. 그때만 변화를 감지하면 된다.
+        //   1mm 단위로 양자화해 매 프레임 문자열을 새로 만들지 않는다(VR 프레임 예산).
+        int gripSig = neutralReady ? -1
+            : Mathf.RoundToInt(lastGripSpan * 1000f) * 10000
+            + Mathf.RoundToInt(lastPinchL * 1000f) * 100
+            + Mathf.RoundToInt(lastPinchR * 1000f);
+
+        int warnSig = HasFreshWarn ? (lastWarn != null ? lastWarn.GetHashCode() : 1) : 0;
         if (stage == shownStage && shown == shownAngle && warn == shownWarn
-            && holdStep == shownHold && mask == shownMask) return;
+            && holdStep == shownHold && mask == shownMask && gripSig == shownGrip
+            && warnSig == shownWarnSig) return;
+        shownWarnSig = warnSig;
         shownStage = stage; shownAngle = shown; shownWarn = warn;
-        shownHold = holdStep; shownMask = mask;
+        shownHold = holdStep; shownMask = mask; shownGrip = gripSig;
 
         sb.Clear();
 
@@ -524,11 +789,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
         switch (stage)
         {
-            case Stage.AwaitShoulders:
-                sb.Append("1) 양손을 환자 양 어깨에 - 정지");
-                break;
             case Stage.AwaitNeutral:
-                sb.Append("2) 중립에서 머리를 파지 - 정지");
+                sb.Append("중립에서 머리를 파지 - 정지");
+                // ★실측치를 같이 띄운다. 임계를 맞추려면 실제 숫자를 봐야 한다(2026-08-31).
+                AppendGripNumbers();
                 break;
             default:
                 sb.Append(Label(direction));
@@ -545,10 +809,22 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             sb.Append(res.hasPassive ? $"   수동 {Mathf.Abs(res.passive):F0}도" : "   수동 -");
             if (res.hasActive && res.hasPassive)
                 sb.Append($"   차이 {Mathf.Abs(res.passive) - Mathf.Abs(res.active):F0}도");
+
+            // ★압박이 아직 게인을 못 채웠으면 얼마나 더 가야 하는지 알려준다.
+            //   안 그러면 "멈췄는데 왜 안 넘어가지"로 보인다 — 정지로만 진행하는 구조라 치명적이다.
+            if (stage == Stage.Passive && !res.hasPassive)
+            {
+                float need = passiveBaseAngle + minPassiveGain - peakAngle;
+                if (need > 0.5f)
+                    sb.Append($"   <color=#ffcc55>{need:F0}도 더</color>");
+            }
         }
 
         if (warn == 2) sb.Append($"\n<color=#ff6b6b>파지 미끄러짐 {(slipRatio - 1f) * 100f:+0;-0}%</color>");
         else if (warn == 1) sb.Append($"\n<color=#ffcc55>이 파지로는 못 잽니다 (면 {perp:F2})</color>");
+
+        // ★확정에 실패한 이유를 그대로 띄운다. 몇 초 뒤 사라진다.
+        if (HasFreshWarn) sb.Append($"\n<size=70%><color=#ff8a65>{lastWarn}</color></size>");
 
         if (showProgress)
         {
@@ -560,18 +836,58 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         }
 
         readout.text = sb.ToString();
-        readout.transform.position = pivot + Vector3.up * 0.22f;
+        // ★손 바로 위라 눈에서 40cm쯤 떨어지는데, VR에서 그 거리는 초점이 안 맞아 흐리다.
+        //   최소 거리를 두고 밀어낸다(2026-08-31 사용자: '가까워서 흐린가 글씨가 안 보였다').
+        Vector3 readoutPos = pivot + Vector3.up * readoutRise;
+        Camera rcam = Camera.main;
+        if (rcam != null)
+        {
+            Vector3 toReadout = readoutPos - rcam.transform.position;
+            float dist = toReadout.magnitude;
+            if (dist > 1e-3f && dist < readoutMinDistance)
+                readoutPos = rcam.transform.position + toReadout / dist * readoutMinDistance;
+        }
+        readout.transform.position = readoutPos;
         FaceCamera(readout.transform);
     }
 
     // ---- 진행 표시 ----
 
-    /// <summary>어깨 → 중립 → 능동 → 압박. 지금 어디인지와 뭐가 끝났는지만 본다.</summary>
+    /// <summary>
+    /// 파지 실측치 — 양손 간격과 좌우 핀치 폭. 범위 안이면 초록, 밖이면 주황.
+    /// ★임계값(<see cref="pinchWidthRange"/> 등)이 전부 추정값이라, 실제 숫자가 보여야 맞출 수 있다.
+    /// </summary>
+    private void AppendGripNumbers()
+    {
+        sb.Append("\n<size=65%>");
+
+        // ★손을 못 읽으면 그 사실이 제일 먼저 보여야 한다.
+        //   손 트래킹이 안 붙은 것과 게이트에 걸린 것은 완전히 다른 문제다.
+        if (!vNowValid)
+        {
+            sb.Append("<color=#ff6b6b>손을 못 읽습니다 — 손 트래킹 / GripFingerTip 배선 확인</color></size>");
+            return;
+        }
+
+        Vector2 range = GripSpanRange(direction);
+        bool spanOk = lastGripSpan >= range.x && lastGripSpan <= range.y;
+
+        sb.Append(spanOk ? "<color=#7ad67a>" : "<color=#ffcc55>");
+        sb.Append($"간격 {lastGripSpan * 100f:F0}cm");
+        if (!spanOk) sb.Append($"(허용 {range.x * 100f:F0}~{range.y * 100f:F0})");
+        sb.Append("</color>  ");
+
+        // 핀치는 판정에 안 쓰면 회색으로 — 막고 있는 것처럼 보이면 안 된다.
+        sb.Append(usePinchGate ? "<color=#7ad67a>" : "<color=#909090>");
+        sb.Append($"핀치 {lastPinchL * 100f:F1}/{lastPinchR * 100f:F1}cm");
+        sb.Append(usePinchGate ? "" : "(참고)");
+        sb.Append("</color></size>");
+    }
+
+    /// <summary>중립 → 능동 → 압박. 지금 어디인지와 뭐가 끝났는지만 본다.</summary>
     private void AppendStageChain()
     {
         Result res = results[(int)direction];
-        AppendChainItem("어깨", stage == Stage.AwaitShoulders, frameReady);
-        sb.Append(" ▶ ");
         AppendChainItem("중립", stage == Stage.AwaitNeutral, neutralReady);
         sb.Append(" ▶ ");
         AppendChainItem("능동", stage == Stage.Active, res.hasActive);
@@ -594,10 +910,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     /// </summary>
     private int HoldBarSteps()
     {
-        if (!advanceOnHold || holdSeconds <= 0f) return -1;
+        if (!advanceOnHold || HoldSeconds <= 0f) return -1;
         switch (stage)
         {
-            case Stage.AwaitShoulders:
             case Stage.AwaitNeutral:
                 break;
             case Stage.Active:
@@ -607,7 +922,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             default:
                 return -1;
         }
-        return Mathf.Clamp(Mathf.RoundToInt(holdTimer / holdSeconds * 10f), 0, 10);
+        return Mathf.Clamp(Mathf.RoundToInt(holdTimer / HoldSeconds * 10f), 0, 10);
     }
 
     private void AppendHoldBar(int steps)
@@ -787,7 +1102,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             go.transform.SetParent(root, false);
             var tm = go.AddComponent<TextMeshPro>();
             if (font != null) tm.font = font;
-            tm.fontSize = gaugeLabelSize * 100f;
+            tm.fontSize = gaugeLabelSize * 100f * Mathf.Max(0.1f, textScale);
             tm.transform.localScale = Vector3.one * 0.01f;
             tm.alignment = TextAlignmentOptions.Center;
             tm.textWrappingMode = TextWrappingModes.NoWrap;
@@ -873,7 +1188,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         t.transform.SetParent(root, false);
         readout = t.AddComponent<TextMeshPro>();
         if (font != null) readout.font = font;
-        readout.fontSize = readoutSize * 100f;
+        readout.fontSize = readoutSize * 100f * Mathf.Max(0.1f, textScale);
         readout.transform.localScale = Vector3.one * 0.01f;
         readout.alignment = TextAlignmentOptions.Center;
         readout.fontStyle = FontStyles.Bold;
@@ -969,5 +1284,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         if (showDebugLogs) ChunaLogger.Log($"<color=cyan>[실측ROM] {message}</color>");
     }
 
-    private void Warn(string message) => ChunaLogger.LogWarning($"[실측ROM] {message}");
+    /// <summary>
+    /// ★실패 사유는 <b>화면에도</b> 띄운다. 로그로만 내보내면 헤드셋을 쓴 사람은 못 본다 —
+    /// 2026-08-31에 "게이지는 차는데 안 넘어간다"의 원인을 화면에서 알 수 없었던 이유가 이것이다.
+    /// </summary>
+    private void Warn(string message)
+    {
+        ChunaLogger.LogWarning($"[실측ROM] {message}");
+        lastWarn = message;
+        lastWarnTime = Time.time;
+        shownStage = (Stage)(-1);   // 다음 프레임에 표시를 다시 만들게 한다
+    }
+
+    private const float WarnShowSeconds = 4f;
+    private bool HasFreshWarn => !string.IsNullOrEmpty(lastWarn)
+                                 && Time.time - lastWarnTime < WarnShowSeconds;
 }

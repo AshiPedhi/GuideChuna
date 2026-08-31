@@ -839,11 +839,21 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// <summary>
     /// 시작 토글 활성화 (20초 타임아웃 시 HandPosePlayer에서 호출)
     /// </summary>
-    public void EnableStartToggle()
+    public void EnableStartToggle() => EnableStartToggle("계속하기");
+
+    /// <summary>
+    /// 시작 토글을 <b>가이드 스텝이 아닌 곳에서도</b> 띄운다. 라벨을 골라 쓴다.
+    ///
+    /// ★<see cref="UpdateStartToggleVisibility"/>는 <c>stepNo == 0</c>에서만 토글을 켠다.
+    ///   그래서 사람이 읽고 넘겨야 하는 단계가 stepNo 0이 아니면 넘어갈 수단이 아예 없다 —
+    ///   실측(ROM 평가)의 '결과' 단계가 그랬다(2026-08-31 실측: 완전히 멈춰 있었다).
+    ///   다음 substep이 시작되면 위 함수가 다시 돌며 알아서 걷어간다.
+    /// </summary>
+    public void EnableStartToggle(string label)
     {
         if (startToggleObject == null) return;
 
-        ChunaLogger.Log("<color=yellow>[GuideUI] 시작 토글 강제 활성화 (20초 타임아웃)</color>");
+        ChunaLogger.Log($"<color=yellow>[GuideUI] 시작 토글 강제 활성화 ('{label}')</color>");
 
         // ProgressCircle 숨김
         HideProgressCircle();
@@ -854,7 +864,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         // 토글 텍스트 변경
         if (startToggleText != null)
         {
-            startToggleText.text = "계속하기";
+            startToggleText.text = label;
         }
 
         // 토글 상태 초기화

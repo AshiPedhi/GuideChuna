@@ -339,6 +339,20 @@ public class ScenarioConditionManager : MonoBehaviour
         // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
         if (subStep.HasNarration())
         {
+            // ★★실측(ROM 평가)은 <b>측정기가 넘긴다</b>. 나레이션이 끝났다고 넘어가면 안 된다.
+            //   2026-08-31 실측: 실측 단계 전부가 나레이션 + conditionType 공란이라
+            //   아래 HandleNarrationThenDuration으로 빠졌고, 그게 "나레이션 끝 = 자동 진행"이라
+            //   손을 대지 않아도 23단계가 줄줄이 넘어갔다.
+            //   ★가이드 스텝(준비·시작·종료)은 위쪽 IsGuideStep 분기에서 이미 토글 대기로 빠지므로
+            //     여기 오지 않는다. 영향 범위는 실측 동작 단계뿐이다.
+            //   ★교육모드는 이 분기에 들어오지 않아 13개 술기의 기존 동작이 그대로다.
+            if (IsMeasurementMode())
+            {
+                ChunaLogger.Log("<color=cyan>[ConditionManager] 실측 - 나레이션 재생 후 측정기 대기(자동 진행 안 함)</color>");
+                HandleNarrationThenExternal(subStep);
+                return;
+            }
+
             // ★ HandPose 및 cranial 조건(등록형)은 나레이션 후 등록된 조건 폴링을 시작 (제네릭하게 동작)
             if (conditionType == "HandPose" || conditionType == "cranialTouch" || conditionType == "cranialGrip" || conditionType == "cranialPressure" || conditionType == "cranialDepthBreath" || conditionType == "cranialGlide")
             {
@@ -621,6 +635,61 @@ public class ScenarioConditionManager : MonoBehaviour
     /// 나레이션이 비활성(PlayNarration=false)이면 LoadNarrationClip이 null → HandleDurationOrManual
     /// 로 빠져 CSV duration을 폴백 타이머로 사용한다.
     /// </summary>
+    /// <summary>지금 실측(ROM 평가) 진행인가. DifficultyManager가 없으면 아니라고 본다(안전한 쪽).</summary>
+    private static bool IsMeasurementMode()
+        => ChunaTraining.DifficultyManager.Instance != null
+           && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode;
+
+    /// <summary>
+    /// 나레이션만 재생하고 <b>진행은 바깥에 맡긴다</b>(실측 전용).
+    ///
+    /// ★실측은 사람 대상이라 정해진 끝점이 없다. 무엇이 끝인지는
+    ///   <c>CervicalRomRealityMeasure</c>가 '양손 정지'로 판정하고
+    ///   <c>CervicalRomMeasurementBridge</c>가 그걸 보고 substep을 넘긴다.
+    ///   여기서 시간이나 나레이션 길이로 넘기면 그 판정이 통째로 무의미해진다.
+    /// </summary>
+    private void HandleNarrationThenExternal(SubStepData subStep)
+    {
+        string clipName = subStep.voiceInstruction.Trim();
+        currentVoiceClipName = clipName;
+        AudioClip clip = LoadNarrationClip(clipName);
+
+        currentCondition = null;
+        StopConditionCheck();
+        eventSystem.RequestButtonStateUpdate(false);
+
+        if (clip == null)
+        {
+            // 클립이 없어도 진행을 넘기지 않는다 — 측정기가 넘길 때까지 그대로 기다린다.
+            ChunaLogger.LogWarning($"[ConditionManager] 실측 나레이션 없음: {clipName}. 무음으로 두고 측정기를 기다립니다.");
+            return;
+        }
+
+        narrationCoroutine = StartCoroutine(PlayNarrationThenWait(clip, clipName));
+    }
+
+    /// <summary>나레이션을 끝까지 재생하고 <b>아무것도 하지 않는다</b>. 진행은 측정 브리지가 한다.</summary>
+    private IEnumerator PlayNarrationThenWait(AudioClip clip, string clipName)
+    {
+        currentNarrationClip = clip;
+
+        AudioSource targetSource = narrationAudioSource != null ? narrationAudioSource : audioSource;
+        if (targetSource == null)
+        {
+            ChunaLogger.LogError("[ConditionManager] 나레이션을 재생할 AudioSource가 없습니다!");
+            yield break;
+        }
+
+        targetSource.Stop();
+        targetSource.clip = clip;
+        targetSource.Play();
+
+        yield return new WaitForSeconds(clip.length);
+
+        narrationCoroutine = null;
+        ChunaLogger.Log($"<color=cyan>[ConditionManager] 실측 나레이션 완료 ('{clipName}') - 측정기 대기</color>");
+    }
+
     private void HandleNarrationThenDuration(SubStepData subStep)
     {
         // 나레이션 클립 로드

@@ -707,12 +707,18 @@ public class TrainingResultTracker : MonoBehaviour
 
         resultData.romMeasurements.Clear();
 
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.Extension, "시상면", "신전");
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
-        AddRomMeasurement(driver, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
+        // ★실측(ROM 평가)은 각도를 <b>측정기</b>가 들고 있다. 드라이버는 교육모드에서만 채워진다.
+        //   2026-08-31까지 여기서 드라이버만 봐서, 실측을 끝내도 결과창에 한 줄도 안 나왔다.
+        //   측정기에 잰 게 하나라도 있으면 그쪽을 우선한다.
+        var measure = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
+        bool useMeasure = measure != null && measure.HasAnyResult;
+
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Extension, "시상면", "신전");
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
+        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
 
         if (resultData.romMeasurements.Count > 0 && showDebugLogs)
         {
@@ -720,19 +726,34 @@ public class TrainingResultTracker : MonoBehaviour
         }
     }
 
-    private void AddRomMeasurement(CervicalRomDriver driver, CervicalRomDriver.Direction d,
-                                   string planeName, string directionName)
+    /// <summary>
+    /// 한 방향의 결과를 담는다. 실측이면 측정기에서, 교육이면 드라이버에서 읽는다.
+    /// ★참고치(임상 최대각)는 어느 쪽이든 드라이버가 들고 있다 — 실측에서도 그 값을 쓴다.
+    /// </summary>
+    private void AddRom(CervicalRomDriver driver, CervicalRomRealityMeasure measure, bool useMeasure,
+                        CervicalRomDriver.Direction d, string planeName, string directionName)
     {
-        CervicalRomDriver.Measurement m = driver.GetMeasurement(d);
-        if (!m.recorded) return;   // 그 방향을 아직 안 쟀다(중도 종료 등)
+        float active, passive;
+
+        if (useMeasure)
+        {
+            if (!measure.TryGetResult(d, out active, out passive, out _, out _)) return;
+        }
+        else
+        {
+            CervicalRomDriver.Measurement m = driver.GetMeasurement(d);
+            if (!m.recorded) return;   // 그 방향을 아직 안 쟀다(중도 종료 등)
+            active = m.active;
+            passive = m.passive;
+        }
 
         resultData.romMeasurements.Add(new TrainingResultData.RomMeasurement
         {
             planeName = planeName,
             directionName = directionName,
-            maxAngle = m.maxAngle,
-            activeAngle = m.active,
-            passiveAngle = m.passive,
+            maxAngle = driver.MaxAngleFor(d),
+            activeAngle = active,
+            passiveAngle = passive,
         });
     }
 

@@ -56,6 +56,31 @@ dotnet build Assembly-CSharp.csproj -v q --nologo      # 약 23초, 기존 경�
    08-26에 `CervicalGripJudge.FindTipUnderPlayerHand`가 그랬다(CS0103). 컴파일이 통과해도
    빌드가 통과한 건 아니다.
 
+## 미사용 코드 (2026-08-31 신설)
+
+혼선만 안 나면 **지우지 않는다**(사용자 방침). 대신 안 쓰는 파일은 최상단에 `★[미사용 <날짜>]` 배너를 단다.
+읽는 사람이 "이게 지금 도는 코드"라고 오해하는 것이 유일한 실제 피해다 —
+08-31에 `SettingsPopupController`를 보고 "설정창 닫기는 여기서 처리된다"고 읽었는데, 그 컴포넌트는 씬에 없었다.
+
+- 스캔: `.claude/tools/deadscan.py` (풀경로 python + `PYTHONIOENCODING=utf-8`)
+- ★**판정은 두 조건을 <b>둘 다</b> 봐야 한다.** ①씬·프리팹에 guid 없음 ②다른 `.cs`에서 이름 참조 없음.
+  - ★**씬 검색만 하면 런타임에 `AddComponent`로 붙는 것을 죽었다고 오판한다.**
+    `CervicalRomHandAngleProbe`가 그렇다 — 씬에 없지만 `CervicalRomScenarioBridge`가 런타임에 붙인다.
+  - ★**에디터 전용(`MenuItem`·`CustomEditor`·빌드 후처리)은 원래 참조가 안 잡힌다.** 전부 살아 있는 코드다.
+
+## 모드 정의 (2026-08-31 확정)
+
+- **현실 모드** = 설정의 **패스스루 on/off 스위치일 뿐**이다. 환자·골격 외형은 건드리지 않는다.
+  배경 오브젝트를 끄는 것만 패스스루의 일부로 남긴다(방 모델이 켜져 있으면 패스스루가 무의미하다).
+  추나 베드도 그 방 모델(`배경/patient9_2020_1`) 안에 있어 함께 사라진다.
+- **ROM은 [평가]를 고르면 그게 곧 실측**이다. 별도 '실측' 모드 버튼은 폐지했다(`ModeType.Measurement` 삭제).
+  갈림길은 `ScenarioConfig.measurementPhases` 유무 하나뿐이고, 그걸 가진 건 `경추ROM측정` 하나다.
+  **시나리오 이름을 코드에 박지 않는다.**
+- ★**실측 난이도는 초급 고정이다.** 실측 나레이션이 `Beginner`·`Intermediate`에만 있고
+  `Advanced`·`Evaluation`에는 **0개**라, 평가 난이도로 두면 절차 안내가 통째로 무음이 된다.
+- 실측 진입/이탈은 `CervicalRomMeasurementBridge` **한 곳**에서 대칭으로 처리한다.
+  ★**우리가 켠 것만 우리가 되돌린다** — 켠 쪽과 끄는 쪽이 다르면 상태가 샌다(07-27 xray 사고가 그 형태였다).
+
 ## 이 문서를 고칠 때
 
 - ★**근거 없는 규칙을 적지 않는다.** 규칙마다 언제 무엇을 보고 알았는지 한 줄로 남긴다.

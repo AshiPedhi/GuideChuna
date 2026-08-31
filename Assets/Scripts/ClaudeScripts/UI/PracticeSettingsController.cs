@@ -69,33 +69,6 @@ public class PracticeSettingsController : MonoBehaviour
              "원인을 잡고 나면 끈다.")]
     [SerializeField] private bool logRealityGeometry = true;
 
-    /// <summary>현실 모드에서 가상 환자를 어떻게 다룰지.</summary>
-    public enum RealityPatientMode
-    {
-        /// <summary>알파로 반투명. ★피부 셰이더가 불투명이라 옷만 사라지고 살은 남는다(=알몸).</summary>
-        Translucent,
-        /// <summary>통째로 숨긴다.</summary>
-        Hidden,
-        // ※새 값은 반드시 끝에 붙일 것 — 씬에 int로 직렬화된다.
-        /// <summary>xray 셰이더로 반투명. 살은 비치고 옷은 불투명하게 남는다.</summary>
-        Xray,
-        /// <summary>
-        /// 아무것도 하지 않는다 — 환자도 추나 베드도 <b>불투명 그대로</b> 둔다.
-        /// 패스스루 위에 가상 환자가 실물처럼 겹쳐 보이는 모드다.
-        /// </summary>
-        Opaque,
-    }
-
-    [Tooltip("현실 모드에서 가상 환자를 어떻게 할지.\n\n" +
-             "Xray(기본) — CranialHeadXray가 쓰는 방식. 커스텀 셰이더로 갈아끼우면서\n" +
-             "  _DiffuseMap을 복사해 피부색을 유지하고, 옷은 제외해 불투명하게 남긴다.\n" +
-             "  살은 비치고 옷은 그대로라 알몸으로 안 보인다.\n\n" +
-             "Translucent — 알파만 낮추는 예전 방식. ★피부(RL_Amplify_SkinShader)는\n" +
-             "  불투명 전용이라 알파가 안 먹고, 옷(빌트인 Standard)만 사라져 알몸처럼 보인다\n" +
-             "  (2026-08-25 실측). 피부 셰이더를 알파 블렌드로 바꾸는 건 안 한다 —\n" +
-             "  환자 머티리얼을 건드렸다가 분홍색·마젠타 사고가 두 번 났다.\n\n" +
-             "Hidden — 통째로 숨김. 패스쓰루로 진짜 환자를 앞에 두고 할 때 쓴다.")]
-    [SerializeField] private RealityPatientMode realityPatientMode = RealityPatientMode.Xray;
 
     [Header("═══ 현실 모드 (패스쓰루) ═══")]
     [SerializeField] private GameObject backgroundObject;         // 배경 오브젝트
@@ -659,6 +632,9 @@ public class PracticeSettingsController : MonoBehaviour
     /// 현실 모드(패스쓰루)를 코드에서 켜고 끈다. 토글 UI 상태도 같이 맞춘다.
     /// 실측 모드 진입 시 InfoPanelController가 호출한다 — 사용자가 설정에서 따로 켜지 않아도 되게.
     /// </summary>
+    /// <summary>지금 패스스루가 켜져 있는가. 실측 브리지가 <b>들어오기 전 상태</b>를 기억하는 데 쓴다.</summary>
+    public bool IsRealityModeOn => isRealityModeOn;
+
     public void SetRealityMode(bool isOn)
     {
         if (realityModeToggle != null)
@@ -713,106 +689,17 @@ public class PracticeSettingsController : MonoBehaviour
             ChunaLogger.Log($"[PracticeSettings] 카메라 설정 업데이트");
         }
 
-        // 현실 모드 시 모델 투명도 조정
-        // 환자 모델이 표시되어 있을 때만 투명도 조정
-        bool isPatientModelVisible = patientModelDisplayToggle != null && patientModelDisplayToggle.isOn;
-
-        if (isOn)
-        {
-            // ★Xray·숨김 모드면 알파를 아예 건드리지 않는다.
-            //   피부 셰이더가 불투명이라 알파 방식은 '옷만 사라짐'으로 끝난다.
-            if (realityPatientMode == RealityPatientMode.Xray)
-            {
-                SetPatientXray(true);
-            }
-            else if (realityPatientMode == RealityPatientMode.Hidden)
-            {
-                SetPatientBodyVisible(false);
-            }
-            else if (realityPatientMode == RealityPatientMode.Opaque)
-            {
-                // ★아무것도 하지 않는다. 패스스루 위에 환자·추나 베드가 실물처럼 겹쳐 보인다.
-                //   추나 베드는 이 컨트롤러가 원래 손대지 않으므로 저절로 불투명하게 남는다.
-                ChunaLogger.Log("[PracticeSettings] 현실 모드 — 환자·베드를 불투명 그대로 둡니다");
-            }
-            else if (isPatientModelVisible)
-            {
-                // 환자 모델을 반투명하게
-                SetModelTransparency(patientRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
-                SetMeshTransparency(patientMeshRenderers, realityModeAlpha, "환자 모델 (현실 모드)");
-            }
-
-            // 골격 모델도 표시되어 있다면 반투명하게
-            // ★불투명 모드에서는 골격도 건드리지 않는다 — "그대로"의 범위에 골격도 든다.
-            if (realityPatientMode != RealityPatientMode.Opaque
-                && skeletonModel != null && skeletonModel.activeSelf)
-            {
-                SetModelTransparency(skeletonRenderers, realityModeAlpha, "골격 모델 (현실 모드)");
-                SetMeshTransparency(skeletonMeshRenderers, realityModeAlpha, "골격 모델 (현실 모드)");
-            }
-        }
-        else
-        {
-            // 현실 모드 해제 — 걸어 둔 걸 전부 되돌린다. 어느 모드였든 무해하다.
-            // ★xray를 켠 채로 두면 임시 머티리얼이 씬에 굳는다(07-27 분홍 피부 사고의 유력 원인).
-            SetPatientXray(false);
-            SetPatientBodyVisible(true);
-
-            if (isPatientModelVisible)
-            {
-                // 골격이 표시되어 있으면 골격 모드 알파값으로, 아니면 일반 알파값으로
-                bool skeletonIsOn = skeletonModel != null && skeletonModel.activeSelf;
-                float targetAlpha = skeletonIsOn ? skeletonModeAlpha : normalAlpha;
-                SetModelTransparency(patientRenderers, targetAlpha, "환자 모델 (현실 모드 해제)");
-                SetMeshTransparency(patientMeshRenderers, targetAlpha, "환자 모델 (현실 모드 해제)");
-            }
-
-            // 골격 모델은 일반 상태로 복원
-            if (skeletonModel != null && skeletonModel.activeSelf)
-            {
-                SetModelTransparency(skeletonRenderers, normalAlpha, "골격 모델 (현실 모드 해제)");
-                SetMeshTransparency(skeletonMeshRenderers, normalAlpha, "골격 모델 (현실 모드 해제)");
-            }
-        }
+        // ★★2026-08-31 모드 재정의 — 현실 모드는 <b>패스스루 스위치일 뿐</b>이다.
+        //   환자·골격의 외형(xray·숨김·알파)은 여기서 손대지 않는다. 이유는 두 가지다.
+        //   1) 표시 축이 뒤엉켜 있었다 — 현실 모드가 환자 표시까지 뒤집으니
+        //      '환자 모델 표시' 토글과 서로를 덮어썼다.
+        //   2) 실제 환자를 보며 재는 건 <b>실측 모드</b>의 일이다. 가상 환자를 치우는 것도 그쪽이
+        //      책임진다(CervicalRomMeasurementBridge). 설정 스위치가 할 일이 아니다.
+        //
+        //   ★배경 오브젝트를 끄는 것은 위에 남겨 뒀다 — 그건 패스스루의 일부다.
+        //     방 모델이 켜져 있으면 패스스루를 켜도 가상 방이 보여 아무 의미가 없다.
+        //     추나 베드도 그 방 모델 안에 있어 함께 사라진다.
     }
-    /// <summary>
-    /// xray 반투명을 켜고 끈다. <see cref="CranialHeadXray"/>가 하는 일을 그대로 쓴다 —
-    /// 커스텀 셰이더로 갈아끼우면서 <c>_DiffuseMap</c>을 복사해 피부색을 유지하고,
-    /// 옷(Shirt/Jeans/Boots)은 제외해 불투명하게 남긴다. 그래서 알몸으로 안 보인다.
-    ///
-    /// ★끌 때 반드시 <c>Deactivate()</c>가 불려야 한다. 켠 채로 씬을 저장하면
-    ///   임시 머티리얼이 굳는다(07-27 분홍 피부 사고의 유력 원인).
-    /// </summary>
-    private void SetPatientXray(bool on)
-    {
-        if (headXray == null) headXray = FindFirstObjectByType<CranialHeadXray>(FindObjectsInactive.Include);
-        if (headXray == null)
-        {
-            if (on)
-            {
-                ChunaLogger.LogWarning("[PracticeSettings] CranialHeadXray를 찾지 못해 xray 반투명을 쓸 수 없습니다. " +
-                                       "환자를 숨기는 것으로 대신합니다.");
-                SetPatientBodyVisible(false);
-            }
-            return;
-        }
-
-        // ★Activate/Deactivate를 직접 부르지 않고 '외부 잠금' API를 쓴다(2026-08-27).
-        //   그냥 켜면 시나리오가 **다음 단계로 넘어가는 순간 되돌려 놓는다** —
-        //   경추ROM은 conditionType이 PassiveStretch라 CranialHeadXray의 xray 사용 목록에 없어서
-        //   restoreEachSubStep이 매 단계 Deactivate()를 불렀다. 현실 모드는 사용자가 고른 표시
-        //   설정이므로 시나리오 단계가 뒤집으면 안 된다.
-        //   ★IsXrayActive로 조기 반환하면 안 된다 — 손 근접으로 이미 켜져 있는 경우 잠금이 안 걸린다.
-        if (on == headXray.IsXrayActive && on == headXray.IsExternalHold) return;
-
-        if (on) headXray.ActivateExternalHold();
-        else headXray.ReleaseExternalHold();
-
-        ChunaLogger.Log($"[PracticeSettings] 환자 xray 반투명 {(on ? "켬" : "끔")} — 살은 비치고 옷은 남는다" +
-                        (on ? " (현실 모드 잠금 — 시나리오가 못 끈다)" : ""));
-    }
-
-    private CranialHeadXray headXray;
 
     /// <summary>
     /// 환자 <b>몸</b>(피부·옷·눈·치아)을 켜고 끈다. 훈련 표시물과 골격은 건드리지 않는다.
@@ -821,7 +708,7 @@ public class PracticeSettingsController : MonoBehaviour
     ///   그건 눈·각막·치아를 <b>알파 조절에서</b> 빼는 목록이라, 숨김에 쓰면 몸만 사라지고
     ///   눈알과 이빨이 허공에 남는다. 숨김에서 빼야 하는 건 훈련 표시물과 골격뿐이다.
     /// </summary>
-    private void SetPatientBodyVisible(bool visible)
+    public void SetPatientBodyVisible(bool visible)
     {
         int changed = 0;
         changed += ToggleRenderers(patientRenderers, visible);

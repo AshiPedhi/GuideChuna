@@ -4,19 +4,25 @@ using UnityEngine.UI;
 using TMPro;
 
 /// <summary>
-/// 진단 시작 전 환자 표준자세 체크리스트. 약관 동의처럼 <b>세 줄을 각각 체크</b>해야 넘어간다.
+/// 진단 시작 전 환자 표준자세 체크리스트. <b>한 줄씩 순차로</b> 확인해 나간다.
 ///
-/// ★2026-08-27 회의 결정 — "하나하나 점검하도록. 자기가 클릭할 수 있게 체크포인트처럼."
+/// ★2026-08-31 개편 (사용자 지시) — 체크박스 동시 표시에서 <b>순차 확인</b>으로 바꿨다.
+///   줄이 나타나면 그 줄의 나레이션이 재생되고, [확인]을 누르면 다음 줄이 나타나며
+///   그 줄의 나레이션이 재생된다. 마지막 줄을 확인하면 <b>[다음] 버튼 없이 그대로 넘어간다</b>.
 ///
-/// 진행 패널(Section) 안에 붙는다. 나레이션이 끝나면 지시문을 감추고 체크리스트만 남긴다.
+///   왜 나레이션을 '나타날 때' 재생하는가 — 나레이션 내용이 <b>지시문</b>이기 때문이다.
+///   확인한 뒤에 읽으면 순서가 거꾸로다. 확인은 "그 지시를 수행했다"는 뜻이다.
 ///
-/// ★<b>'다음' 버튼을 복제하지 않는다</b>(2026-08-28). 처음에 그렇게 만들었더니
-///   화살표 아이콘이 그대로 딸려와 체크박스가 아니라 버튼 세 개가 됐고,
-///   두 글자('다음')용으로 잡힌 라벨 칸에 긴 문장을 넣어 패널 밖으로 글자가 새어 나갔다.
-///   네모 상자 + 체크 표시 + 글씨를 <b>직접</b> 만든다.
+/// ★2026-08-27 회의 결정 "하나하나 점검하도록"은 그대로 지킨다 — 오히려 더 강해졌다.
+///   동시에 세 개를 보여 주면 읽지 않고 세 번 누를 수 있지만, 순차면 그럴 수 없다.
 ///
-/// ★진행을 실제로 막는 건 '다음' 토글 잠금이다. 이 단계는 stepNo 0(가이드 스텝)이라
-///   조건 매니저가 나레이션 후 토글 입력을 기다린다 — 다 체크하기 전엔 그 토글을 잠근다.
+/// ★<b>'다음' 토글은 이 단계 내내 잠가 둔다.</b> 진행 경로를 하나로 유지하기 위해서다 —
+///   토글과 브리지가 둘 다 넘길 수 있으면 세 번째 확인 직후에 누른 클릭이
+///   <b>다음 단계</b>에 먹혀 기준 단계를 건너뛴다(2026-08-31에 실제로 밟은 형태다).
+///   전부 확인되면 <c>CervicalRomMeasurementBridge</c>가 <see cref="AllChecked"/>를 보고 넘긴다.
+///
+/// ★'다음' 버튼을 복제하지 않는다(2026-08-28). 화살표 아이콘이 딸려오고
+///   두 글자용 라벨 칸에 긴 문장이 들어가 패널 밖으로 샌다. 상자·글씨를 직접 만든다.
 /// </summary>
 public class PostureChecklistUI : MonoBehaviour
 {
@@ -29,6 +35,16 @@ public class PostureChecklistUI : MonoBehaviour
         "검사하는 동안 어깨가 돌아가지 않게 한다",
     };
 
+    [Tooltip("줄마다 재생할 나레이션 클립 이름. 항목 수와 같게 맞춘다.\n" +
+             "★비워 두면 그 줄은 무음으로 넘어간다(에러는 안 난다).")]
+    [SerializeField]
+    private string[] itemNarrations =
+    {
+        "실측자세1",
+        "실측자세2",
+        "실측자세3",
+    };
+
     [Header("=== 붙일 곳 (비우면 자동 탐색) ===")]
     [SerializeField] private ScenarioGuideUIController guideUI;
 
@@ -36,35 +52,40 @@ public class PostureChecklistUI : MonoBehaviour
     [Tooltip("첫 줄의 세로 위치. 패널 중앙이 0이고 위가 +다.")]
     [SerializeField] private float firstRowY = 46f;
     [SerializeField] private float rowSpacing = 48f;
-    [Tooltip("왼쪽 끝에서 체크 상자까지.")]
+    [Tooltip("왼쪽 끝에서 확인 버튼까지.")]
     [SerializeField] private float rowIndent = 44f;
-    [SerializeField] private float boxSize = 30f;
-    [Tooltip("체크 상자에서 글씨까지의 간격.")]
+    [SerializeField] private Vector2 confirmSize = new Vector2(104f, 36f);
+    [Tooltip("버튼에서 글씨까지의 간격.")]
     [SerializeField] private float labelGap = 18f;
-    [SerializeField] private float labelWidth = 760f;
+    [SerializeField] private float labelWidth = 720f;
     [SerializeField] private float labelHeight = 40f;
     [Tooltip("0이면 지시문과 같은 크기를 쓴다.")]
     [SerializeField] private float labelFontSize = 0f;
+    [Tooltip("확인 버튼 안의 글씨 크기.")]
+    [SerializeField] private float confirmFontSize = 22f;
 
     [Header("=== 색 ===")]
-    [SerializeField] private Color boxColor = new Color(0.16f, 0.17f, 0.21f, 1f);
-    [SerializeField] private Color boxBorderColor = new Color(0.55f, 0.60f, 0.70f, 1f);
-    [SerializeField] private Color checkColor = new Color(0.30f, 0.82f, 0.45f, 1f);
+    [SerializeField] private Color confirmFillColor = new Color(0.20f, 0.45f, 0.75f, 1f);
+    [SerializeField] private Color confirmBorderColor = new Color(0.55f, 0.75f, 1f, 1f);
+    [SerializeField] private Color confirmTextColor = Color.white;
+    [SerializeField] private Color doneMarkColor = new Color(0.30f, 0.82f, 0.45f, 1f);
     [SerializeField] private Color doneTextColor = new Color(0.55f, 0.90f, 0.65f, 1f);
 
     [Header("=== 동작 ===")]
-    [Tooltip("한 번 체크하면 다시 못 끈다. 약관 동의와 같다.")]
-    [SerializeField] private bool checkOnce = true;
     [SerializeField] private bool showDebugLogs = true;
 
+    // --- 상태 ---
     private bool visible;
     private bool built;
     private RectTransform root;
-    private readonly List<Toggle> toggles = new List<Toggle>(4);
-    private readonly List<TextMeshProUGUI> labels = new List<TextMeshProUGUI>(4);
-    private readonly List<Image> checkMarks = new List<Image>(4);
-    private bool[] checkedFlags;
+    private int currentIndex;          // 지금 확인해야 할 줄. items.Length면 전부 끝.
+    private bool sequenceStarted;      // 진입 나레이션이 끝나 첫 줄을 띄웠는가
     private bool warnedNoPanel;
+
+    private readonly List<GameObject> confirmButtons = new List<GameObject>(4);
+    private readonly List<Image> doneMarks = new List<Image>(4);
+    private readonly List<TextMeshProUGUI> labels = new List<TextMeshProUGUI>(4);
+    private readonly List<GameObject> rowObjects = new List<GameObject>(8);
 
     private TextMeshProUGUI descLabel;
     private Color descColorBackup;
@@ -73,16 +94,10 @@ public class PostureChecklistUI : MonoBehaviour
     private bool toggleLocked;
     private ScenarioConditionManager conditionManager;
 
-    /// <summary>세 줄이 전부 체크됐는가.</summary>
-    public bool AllChecked
-    {
-        get
-        {
-            if (checkedFlags == null || checkedFlags.Length == 0) return false;
-            for (int i = 0; i < checkedFlags.Length; i++) if (!checkedFlags[i]) return false;
-            return true;
-        }
-    }
+    private int ItemCount => items != null ? items.Length : 0;
+
+    /// <summary>전부 확인됐는가. 브리지가 이걸 보고 단계를 넘긴다.</summary>
+    public bool AllChecked => ItemCount > 0 && currentIndex >= ItemCount;
 
     public bool IsVisible => visible;
 
@@ -90,7 +105,6 @@ public class PostureChecklistUI : MonoBehaviour
     {
         if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
         if (conditionManager == null) conditionManager = FindFirstObjectByType<ScenarioConditionManager>(FindObjectsInactive.Include);
-        checkedFlags = new bool[items != null ? items.Length : 0];
     }
 
     private void OnDestroy()
@@ -108,11 +122,9 @@ public class PostureChecklistUI : MonoBehaviour
 
     public void ResetChecks()
     {
-        if (checkedFlags == null) return;
-        for (int i = 0; i < checkedFlags.Length; i++) checkedFlags[i] = false;
-        for (int i = 0; i < toggles.Count; i++)
-            if (toggles[i] != null) toggles[i].SetIsOnWithoutNotify(false);
-        RefreshRowVisuals();
+        currentIndex = 0;
+        sequenceStarted = false;
+        RefreshRows();
     }
 
     /// <summary>브리지가 단계에 맞춰 켜고 끈다.</summary>
@@ -128,16 +140,17 @@ public class PostureChecklistUI : MonoBehaviour
             if (root != null) root.gameObject.SetActive(false);
             SetDescriptionHidden(false);
             ApplyToggleLock(false);
+            sequenceStarted = false;
             return;
         }
 
         if (built && showDebugLogs)
-            ChunaLogger.Log("<color=cyan>[표준자세] 체크리스트 표시 — 세 항목을 모두 체크해야 [다음]이 눌린다.</color>");
+            ChunaLogger.Log($"<color=cyan>[표준자세] 순차 확인 시작 — {ItemCount}줄. " +
+                            "마지막 확인 시 [다음] 없이 그대로 진행한다.</color>");
     }
 
     /// <summary>
-    /// 나레이션을 읽는 동안은 지시문, 끝나면 체크리스트.
-    /// 체크 상태가 바뀔 때마다 '다음' 잠금도 갱신한다.
+    /// 진입 나레이션(실측준비)을 읽는 동안은 지시문, 끝나면 체크리스트를 띄우고 첫 줄을 시작한다.
     /// </summary>
     private void Update()
     {
@@ -148,6 +161,15 @@ public class PostureChecklistUI : MonoBehaviour
         if (root != null && root.gameObject.activeSelf == reading)
             root.gameObject.SetActive(!reading);
 
+        // ★진입 나레이션이 끝난 뒤에 첫 줄을 띄운다. 겹쳐 읽으면 둘 다 안 들린다.
+        if (!reading && !sequenceStarted)
+        {
+            sequenceStarted = true;
+            RefreshRows();
+            PlayNarrationFor(0);
+        }
+
+        // ★이 단계 내내 잠가 둔다. 진행은 브리지가 AllChecked를 보고 한다.
         ApplyToggleLock(true);
     }
 
@@ -160,15 +182,25 @@ public class PostureChecklistUI : MonoBehaviour
                                : descColorBackup;
     }
 
-    /// <summary>다 체크하기 전에는 '다음'을 못 누르게 잠근다. 이게 실제 게이트다.</summary>
+    /// <summary>이 단계에서는 '다음'을 아예 못 누르게 한다. 진행 경로를 하나로 둔다.</summary>
     private void ApplyToggleLock(bool active)
     {
         if (nextToggle == null) return;
+        if (toggleLocked == active) return;
+        toggleLocked = active;
+        nextToggle.interactable = !active;
+    }
 
-        bool shouldLock = active && !AllChecked;
-        if (toggleLocked == shouldLock) return;
-        toggleLocked = shouldLock;
-        nextToggle.interactable = !shouldLock;
+    private void PlayNarrationFor(int index)
+    {
+        if (itemNarrations == null || index < 0 || index >= itemNarrations.Length) return;
+        string clip = itemNarrations[index];
+        if (string.IsNullOrWhiteSpace(clip)) return;
+        if (conditionManager == null) return;
+
+        conditionManager.PlayNarration(clip.Trim());
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[표준자세] {index + 1}번 줄 나레이션 '{clip}'</color>");
     }
 
     // ================= 생성 =================
@@ -200,58 +232,74 @@ public class PostureChecklistUI : MonoBehaviour
         root.anchoredPosition = Vector2.zero;
         root.sizeDelta = Vector2.zero;
 
-        int n = items != null ? items.Length : 0;
-        for (int i = 0; i < n; i++) BuildRow(i, desc);
+        for (int i = 0; i < ItemCount; i++) BuildRow(i, desc);
 
         built = true;
-        ChunaLogger.Log($"<color=cyan>[표준자세] 진행 패널에 체크박스 {n}줄을 만들었다.</color>");
-        RefreshRowVisuals();
+        ChunaLogger.Log($"<color=cyan>[표준자세] 순차 확인 {ItemCount}줄을 만들었다.</color>");
+        RefreshRows();
     }
 
     private void BuildRow(int i, TextMeshProUGUI desc)
     {
         float y = firstRowY - rowSpacing * i;
 
-        // --- 체크 상자 (테두리) ---
-        var boxGo = new GameObject($"체크상자{i}", typeof(RectTransform));
-        RectTransform boxRT = boxGo.GetComponent<RectTransform>();
-        boxRT.SetParent(root, false);
-        Anchor(boxRT, new Vector2(rowIndent, y), new Vector2(boxSize, boxSize));
+        // --- 확인 버튼 ---
+        var btnGo = new GameObject($"확인{i}", typeof(RectTransform));
+        RectTransform btnRT = btnGo.GetComponent<RectTransform>();
+        btnRT.SetParent(root, false);
+        Anchor(btnRT, new Vector2(rowIndent, y), confirmSize);
 
-        Image border = boxGo.AddComponent<Image>();
-        border.color = boxBorderColor;
-        border.raycastTarget = true;   // ★여기를 눌러 체크한다
+        Image border = btnGo.AddComponent<Image>();
+        border.color = confirmBorderColor;
+        border.raycastTarget = true;
 
-        // 안쪽 면 — 테두리가 보이도록 살짝 작게
-        var innerGo = new GameObject("면", typeof(RectTransform));
-        RectTransform innerRT = innerGo.GetComponent<RectTransform>();
-        innerRT.SetParent(boxRT, false);
-        innerRT.anchorMin = Vector2.zero;
-        innerRT.anchorMax = Vector2.one;
-        innerRT.offsetMin = new Vector2(2f, 2f);
-        innerRT.offsetMax = new Vector2(-2f, -2f);
-        Image inner = innerGo.AddComponent<Image>();
-        inner.color = boxColor;
-        inner.raycastTarget = false;
+        var fillGo = new GameObject("면", typeof(RectTransform));
+        RectTransform fillRT = fillGo.GetComponent<RectTransform>();
+        fillRT.SetParent(btnRT, false);
+        fillRT.anchorMin = Vector2.zero;
+        fillRT.anchorMax = Vector2.one;
+        fillRT.offsetMin = new Vector2(2f, 2f);
+        fillRT.offsetMax = new Vector2(-2f, -2f);
+        Image fill = fillGo.AddComponent<Image>();
+        fill.color = confirmFillColor;
+        fill.raycastTarget = false;
 
-        // 체크 표시 — 스프라이트 없이 네모를 채운다(체크 아이콘 에셋에 기대지 않는다)
-        var markGo = new GameObject("체크", typeof(RectTransform));
+        var btnTextGo = new GameObject("글씨", typeof(RectTransform));
+        RectTransform btnTextRT = btnTextGo.GetComponent<RectTransform>();
+        btnTextRT.SetParent(btnRT, false);
+        btnTextRT.anchorMin = Vector2.zero;
+        btnTextRT.anchorMax = Vector2.one;
+        btnTextRT.offsetMin = Vector2.zero;
+        btnTextRT.offsetMax = Vector2.zero;
+        var btnText = btnTextGo.AddComponent<TextMeshProUGUI>();
+        btnText.font = desc.font;
+        btnText.fontSize = confirmFontSize;
+        btnText.text = "확인";
+        btnText.color = confirmTextColor;
+        btnText.alignment = TextAlignmentOptions.Center;
+        btnText.raycastTarget = false;
+
+        Button b = btnGo.AddComponent<Button>();
+        b.transition = Selectable.Transition.None;
+        b.targetGraphic = border;
+        int index = i;   // ★클로저 캡처 — 루프 변수를 그대로 쓰면 전부 마지막 값이 된다
+        b.onClick.AddListener(() => OnConfirm(index));
+
+        // --- 완료 표시 (확인 버튼과 같은 자리에 겹쳐 둔다) ---
+        var markGo = new GameObject($"완료{i}", typeof(RectTransform));
         RectTransform markRT = markGo.GetComponent<RectTransform>();
-        markRT.SetParent(boxRT, false);
-        markRT.anchorMin = Vector2.zero;
-        markRT.anchorMax = Vector2.one;
-        markRT.offsetMin = new Vector2(6f, 6f);
-        markRT.offsetMax = new Vector2(-6f, -6f);
+        markRT.SetParent(root, false);
+        Anchor(markRT, new Vector2(rowIndent + (confirmSize.x - confirmSize.y) * 0.5f, y),
+               new Vector2(confirmSize.y, confirmSize.y));
         Image mark = markGo.AddComponent<Image>();
-        mark.color = checkColor;
+        mark.color = doneMarkColor;
         mark.raycastTarget = false;
-        mark.enabled = false;
 
         // --- 글씨 ---
         var labelGo = new GameObject($"항목{i}", typeof(RectTransform));
         RectTransform labelRT = labelGo.GetComponent<RectTransform>();
         labelRT.SetParent(root, false);
-        Anchor(labelRT, new Vector2(rowIndent + boxSize + labelGap, y), new Vector2(labelWidth, labelHeight));
+        Anchor(labelRT, new Vector2(rowIndent + confirmSize.x + labelGap, y), new Vector2(labelWidth, labelHeight));
 
         var label = labelGo.AddComponent<TextMeshProUGUI>();
         label.font = desc.font;
@@ -264,19 +312,10 @@ public class PostureChecklistUI : MonoBehaviour
         label.enableAutoSizing = false;
         label.raycastTarget = false;
 
-        // --- 토글 ---
-        Toggle t = boxGo.AddComponent<Toggle>();
-        t.transition = Selectable.Transition.None;
-        t.targetGraphic = border;
-        t.graphic = mark;
-        t.isOn = false;
-
-        int index = i;   // ★클로저 캡처 — 루프 변수를 그대로 쓰면 전부 마지막 값이 된다
-        t.onValueChanged.AddListener(v => OnToggled(index, v));
-
-        toggles.Add(t);
+        confirmButtons.Add(btnGo);
+        doneMarks.Add(mark);
         labels.Add(label);
-        checkMarks.Add(mark);
+        rowObjects.Add(labelGo);
     }
 
     /// <summary>왼쪽·세로중앙 기준으로 못박는다. 스트레치 앵커를 물려받으면 칸이 늘어난다.</summary>
@@ -289,36 +328,44 @@ public class PostureChecklistUI : MonoBehaviour
         rt.sizeDelta = size;
     }
 
-    private void OnToggled(int index, bool value)
+    private void OnConfirm(int index)
     {
-        if (checkedFlags == null || index >= checkedFlags.Length) return;
+        // ★지금 차례인 줄만 받는다. 뒤 줄은 애초에 숨겨져 있지만, 중복 클릭도 여기서 막힌다.
+        if (index != currentIndex) return;
 
-        // 한 번 체크하면 못 끈다. 되돌리려 하면 다시 켜 준다.
-        if (checkOnce && checkedFlags[index] && !value)
+        currentIndex++;
+        RefreshRows();
+
+        if (AllChecked)
         {
-            if (index < toggles.Count && toggles[index] != null) toggles[index].SetIsOnWithoutNotify(true);
+            if (showDebugLogs)
+                ChunaLogger.Log("<color=cyan>[표준자세] 전부 확인됨 — 브리지가 다음 단계로 넘긴다.</color>");
             return;
         }
 
-        checkedFlags[index] = value;
-        RefreshRowVisuals();
+        PlayNarrationFor(currentIndex);
 
         if (showDebugLogs)
-        {
-            ChunaLogger.Log($"<color=cyan>[표준자세] {index + 1}번 {(value ? "체크" : "해제")} — {items[index]}" +
-                            (AllChecked ? " · <b>전부 확인됨 → [다음] 열림</b>" : "") + "</color>");
-        }
+            ChunaLogger.Log($"<color=cyan>[표준자세] {index + 1}번 확인 — 다음 줄({currentIndex + 1}/{ItemCount})</color>");
     }
 
-    private void RefreshRowVisuals()
+    /// <summary>지난 줄은 완료 표시, 지금 줄은 확인 버튼, 앞으로 올 줄은 통째로 숨김.</summary>
+    private void RefreshRows()
     {
-        if (checkedFlags == null) return;
-        for (int i = 0; i < checkedFlags.Length; i++)
+        for (int i = 0; i < ItemCount; i++)
         {
-            bool on = checkedFlags[i];
-            if (i < checkMarks.Count && checkMarks[i] != null) checkMarks[i].enabled = on;
+            bool done = i < currentIndex;
+            bool current = i == currentIndex && sequenceStarted;
+            bool shown = done || current;
+
+            if (i < confirmButtons.Count && confirmButtons[i] != null)
+                confirmButtons[i].SetActive(current);
+            if (i < doneMarks.Count && doneMarks[i] != null)
+                doneMarks[i].enabled = done;
+            if (i < rowObjects.Count && rowObjects[i] != null)
+                rowObjects[i].SetActive(shown);
             if (i < labels.Count && labels[i] != null)
-                labels[i].color = on ? doneTextColor : descColorBackup;
+                labels[i].color = done ? doneTextColor : descColorBackup;
         }
     }
 }

@@ -99,6 +99,24 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         return true;
     }
 
+    /// <summary>
+    /// 한 손의 <b>핀치 폭</b> — 엄지 끝과 검지 끝 사이 거리(m).
+    ///
+    /// ★실측(ROM 평가)에서 "허공에서 손이 멈춘 것"과 "환자 머리를 잡은 것"을 가르는 데 쓴다.
+    ///   손을 펴고 있으면 8~15cm쯤 벌어지고, 무언가를 집고 있으면 그 두께만큼만 벌어진다.
+    ///   손끝 위치만 보는 판정에는 이 정보가 없어서 정지 시간만으로 확정할 수밖에 없었다.
+    /// </summary>
+    public bool TryGetPinchWidth(GripFingerTip.Side side, out float width)
+    {
+        Transform thumb = side == GripFingerTip.Side.Left ? leftThumbTip : rightThumbTip;
+        Transform index = side == GripFingerTip.Side.Left ? leftIndexTip : rightIndexTip;
+
+        width = 0f;
+        if (thumb == null || index == null) return false;
+        width = Vector3.Distance(thumb.position, index.position);
+        return true;
+    }
+
     /// <summary>한 손이 잡고 있는 지점(엄지·검지 중점, 월드).</summary>
     public bool TryGetHandCluster(GripFingerTip.Side side, out Vector3 cluster)
     {
