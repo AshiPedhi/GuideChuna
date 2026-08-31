@@ -1,3 +1,6 @@
+// ★[미사용 2026-08-31] 씬·프리팹에 배선이 없고, 다른 스크립트에서 부르지도 않는다.
+//   지우지 않고 남겨 둔다 — 읽는 사람이 "이게 지금 도는 코드"라고 오해하지 않도록 이 줄을 단다.
+//   판정 근거와 재확인 방법: .claude/tools/deadscan.py
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
