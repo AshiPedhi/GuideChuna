@@ -224,6 +224,15 @@ public class TrainingResultData
         public float activeAngle;     // 환자가 스스로 도달한 각
         public float passiveAngle;    // 시술자가 밀어 도달한 각
         public float DeficitAngle => Mathf.Max(0f, maxAngle - passiveAngle);
+
+        // ── 진단 계수기 (2026-09-01, 실측 전용) ──────────────────────────
+        // ★각도가 아니라 <b>왜 오래 걸렸는지</b>를 담는다. 화면에는 안 나가고 CSV로만 나간다.
+        //   09-01 실기 테스트에서 신전이 134초였는데 StepTime 하나로는 원인을 못 갈랐다.
+        //   교육모드(드라이버에서 읽는 경우)에는 전부 0이다.
+        public int holdResets;        // 흔들려서 홀드 누적이 0까지 간 횟수
+        public int rejectedFrames;    // 추적이 튀어 버린 프레임 수
+        public int relocks;           // 너무 오래 거절해 새 손 위치를 받아들인 횟수
+        public float lostSeconds;     // 손을 못 읽은 총 시간(초)
     }
 
     [Tooltip("경추 ROM 측정값. 비어 있으면 이 시나리오가 아니다.")]

@@ -38,8 +38,10 @@ public class TrainingResultExporter : MonoBehaviour
         {
             string summaryPath = SaveSummaryCSV(data);
             string timelinePath = SaveTimelineCSV(data);
+            string romPath = SaveRomCSV(data);   // 측정값이 없는 술기면 빈 문자열
 
-            ChunaLogger.Log($"<color=green>[ResultExporter] 결과 저장 완료</color>\n  요약: {summaryPath}\n  시계열: {timelinePath}");
+            ChunaLogger.Log($"<color=green>[ResultExporter] 결과 저장 완료</color>\n  요약: {summaryPath}\n  시계열: {timelinePath}"
+                            + (string.IsNullOrEmpty(romPath) ? "" : $"\n  ROM: {romPath}"));
         }
         catch (Exception e)
         {
@@ -76,6 +78,61 @@ public class TrainingResultExporter : MonoBehaviour
         var sb = new StringBuilder();
         WriteTimelineHeader(sb);
         WriteTimelineRows(sb, data);
+
+        File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+        return path;
+    }
+
+    /// <summary>
+    /// 경추 ROM 측정 각도를 CSV로 저장한다. 측정값이 없으면 파일을 만들지 않고 빈 문자열을 준다.
+    ///
+    /// ★<b>2026-09-01 신설.</b> 그전까지 측정 각도는 <see cref="TrainingResultData.romMeasurements"/>에
+    ///   담겨 결과 <b>화면에만</b> 나가고 어디에도 저장되지 않았다. 09-01 실기 테스트 두 판의
+    ///   각도가 그래서 통째로 사라졌다(logcat도 이미 밀린 뒤였다).
+    ///   ★실측 모드는 그 숫자가 결과물이다. 요약 CSV에는 점수·유사도가 전부 0으로만 남는데,
+    ///   이 술기는 판정 경로가 PassiveStretch라 원래 0이라서 요약만으로는 아무것도 알 수 없다.
+    ///
+    /// 요약 CSV에 열을 붙이지 않고 파일을 따로 뺐다 — 요약은 <b>단계마다 한 줄</b>인데
+    /// 측정값은 <b>방향마다 한 줄</b>이라 축이 다르다. 6방향×4값을 열로 펴면 24열이 붙는다.
+    /// </summary>
+    public string SaveRomCSV(TrainingResultData data)
+    {
+        if (data == null || data.romMeasurements == null || data.romMeasurements.Count == 0)
+            return "";
+
+        string path = GetSavePath(data, "rom");
+        EnsureDirectory(path);
+
+        var sb = new StringBuilder();
+
+        // ★용어는 2026-08-27 회의 결정을 따른다 — 압박→수동, 최대→참고치,
+        //   차이값 = 참고치 − 수동(부족각)이다. 능동과 수동의 차가 아니다.
+        //   면 이름은 화면 표에서는 빼기로 했지만, 데이터 파일에는 남긴다(나중에 묶어 보려면 필요하다).
+        // ★뒤 4열은 진단 계수기다 — 각도가 아니라 "왜 오래 걸렸는지"다.
+        //   계수기를 로그로만 남기면 09-01처럼 logcat이 밀려 통째로 잃는다. 파일에 같이 싣는다.
+        sb.AppendLine("SessionId,UserName,Scenario,StartTime,Plane,Direction,Reference,Active,Passive,Deficit,"
+                    + "HoldResets,RejectedFrames,Relocks,LostSeconds");
+
+        foreach (var m in data.romMeasurements)
+        {
+            if (m == null) continue;
+
+            sb.Append(Escape(data.sessionId)).Append(',');
+            sb.Append(Escape(data.userName)).Append(',');
+            sb.Append(Escape(data.scenarioName)).Append(',');
+            sb.Append(Escape(data.startTime.ToString("yyyy-MM-dd HH:mm:ss", inv))).Append(',');
+            sb.Append(Escape(m.planeName)).Append(',');
+            sb.Append(Escape(m.directionName)).Append(',');
+            sb.Append(m.maxAngle.ToString("F1", inv)).Append(',');
+            sb.Append(m.activeAngle.ToString("F1", inv)).Append(',');
+            sb.Append(m.passiveAngle.ToString("F1", inv)).Append(',');
+            sb.Append(m.DeficitAngle.ToString("F1", inv)).Append(',');
+            sb.Append(m.holdResets.ToString(inv)).Append(',');
+            sb.Append(m.rejectedFrames.ToString(inv)).Append(',');
+            sb.Append(m.relocks.ToString(inv)).Append(',');
+            sb.Append(m.lostSeconds.ToString("F1", inv));
+            sb.AppendLine();
+        }
 
         File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         return path;

@@ -734,10 +734,13 @@ public class TrainingResultTracker : MonoBehaviour
                         CervicalRomDriver.Direction d, string planeName, string directionName)
     {
         float active, passive;
+        int holdResets = 0, rejectedFrames = 0, relocks = 0;
+        float lostSeconds = 0f;
 
         if (useMeasure)
         {
             if (!measure.TryGetResult(d, out active, out passive, out _, out _)) return;
+            measure.GetDiagnostics(d, out holdResets, out rejectedFrames, out relocks, out lostSeconds);
         }
         else
         {
@@ -754,6 +757,10 @@ public class TrainingResultTracker : MonoBehaviour
             maxAngle = driver.MaxAngleFor(d),
             activeAngle = active,
             passiveAngle = passive,
+            holdResets = holdResets,
+            rejectedFrames = rejectedFrames,
+            relocks = relocks,
+            lostSeconds = lostSeconds,
         });
     }
 

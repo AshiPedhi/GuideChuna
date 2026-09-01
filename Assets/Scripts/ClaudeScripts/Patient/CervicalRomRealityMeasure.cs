@@ -50,6 +50,30 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [Tooltip("양손이 이 속도 아래로 이만큼 머무르면 '정지'로 본다(초). ★씬에 값(1.5)이 박혀 있다.")]
     [SerializeField] private float holdSeconds = 1.5f;
 
+    // ── 정지 판정 완화 (2026-09-01) ──────────────────────────────────────
+    // 2026-09-01 사용자: "흔들림 값에 대한 여유가 너무 없어서 살짝만 틀어지거나 움직여도
+    //   초기화돼 버리니까 오래 걸린다. 손이 잠깐 가려지기라도 하면 난리다."
+    //
+    // ★세 군데가 겹쳐 있었다 —
+    //   ① 임계를 한 프레임만 넘어도 holdTimer가 <b>0</b>이 됐다(쌓인 게 통째로 날아감).
+    //   ② 속도가 <b>양손 중 빠른 쪽</b>이라 한 손만 튀어도 전체가 리셋됐다.
+    //   ③ 손을 <b>한 프레임</b> 못 읽으면 즉시 0이었다 — "가려지면 난리"의 정체.
+    // ★임계값(holdSpeedThreshold) 자체는 안 건드린다. 완화만 하면 08-31의
+    //   "밀어 가는 도중에 잡힌다"가 되돌아온다.
+
+    [Tooltip("★임계를 넘는 동안 holdTimer를 0으로 죽이지 않고 <b>깎는다</b>. 초당 이 배수로 줄인다.\n" +
+             "2면 1초 흔들려야 2초어치가 날아간다. 잠깐 흔들려도 누적이 남는다.\n" +
+             "0이면 종전대로 즉시 0으로 떨어진다.")]
+    [SerializeField] private float holdDecayRate = 2f;
+
+    [Tooltip("★히스테리시스. 이미 정지로 쌓고 있는 동안에는 나가는 임계를 " +
+             "holdSpeedThreshold × 이 값으로 둔다. 경계에서 깜빡이는 걸 없앤다.")]
+    [SerializeField] private float holdSpeedExitFactor = 2f;
+
+    [Tooltip("★손을 못 읽는 동안 타이머를 <b>얼리는</b> 시간(초). 이 안에 돌아오면 쌓인 게 그대로 살아 있다.\n" +
+             "가림은 대개 한두 프레임이라 이것만으로 대부분 잡힌다.")]
+    [SerializeField] private float trackingGraceSeconds = 0.35f;
+
     [Tooltip("★0보다 크면 위 holdSeconds 대신 이 값을 쓴다. 0이면 씬 값을 그대로 쓴다.\n\n" +
              "2026-08-31 사용자: '압박에서 1.5초 하니까 중간에 그냥 인식해버린다'.\n" +
              "압박은 밀어 가는 도중에도 손이 잠깐 느려지는 구간이 있어서 1.5초로는 끝점 전에 잡힌다.\n" +
@@ -95,6 +119,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [Tooltip("측두부 파지(관상면·횡단면)의 양손 간격 허용 범위(m). 사람 머리 좌우 폭 대역이다.")]
     [SerializeField] private Vector2 temporalGripRange = new Vector2(0.11f, 0.22f);
 
+    [Tooltip("★양손 간격 <b>하한</b>을 이 값까지 내린다(m). 0 이하면 위 범위를 그대로 쓴다.\n\n" +
+             "2026-08-31 실측: 이마·후두를 감싸 잡으면 엄지·검지 중점이 안쪽으로 들어와 " +
+             "머리 앞뒤 20cm가 <b>12~16cm로 읽힌다</b>. 씬에 박힌 시상면 하한 0.14가 그 대역 한가운데라 " +
+             "정상 파지가 여러 번 거절됐다('한 번에 안 되고 손을 좀 트니까 됐다'의 정체).\n\n" +
+             "★<b>내리기만 한다</b>(Mathf.Min). 측두 하한은 이미 0.11이라 이 값이 그걸 끌어올리지 않는다.\n" +
+             "★위 두 Vector2는 씬에 직렬화돼 있어 코드에서 못 바꾼다(규칙 7). 이 필드는 신규라 먹는다.")]
+    [SerializeField] private float gripSpanMinOverride = 0.12f;
+
     [Tooltip("★<b>기본 꺼짐</b>. 핀치 폭으로도 막을지.\n\n" +
              "2026-08-31 실측: 켜 뒀더니 <b>정상적인 앞뒤 파지가 막혔다</b>. " +
              "이마·후두를 잡으면 엄지와 검지가 머리를 사이에 두고 벌어져 15~20cm가 나온다 — " +
@@ -123,6 +155,26 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     [Tooltip("파지 벡터 저역통과 시간상수(초). 0이면 생값.")]
     [SerializeField] private float smoothing = 0.08f;
+
+    // ── 추적 튐 방지 (2026-09-01) ────────────────────────────────────────
+    // 2026-09-01 사용자: "신전이랑 굴곡할 때 숙여지는 방향 쪽을 지탱하는 손이
+    //   환자 머리에 가려져서 손이 튀어버린다."
+    //
+    // ★손 위치는 XRHand_*Tip <b>Transform</b>에서 온다. Transform은 추적을 놓쳐도
+    //   위치를 계속 내놓기 때문에 "지금 못 믿겠다"는 신호가 이 층에는 없다.
+    //   신뢰도를 붙이려면 OVRHand 배선이나 com.unity.xr.hands가 새로 필요하다(둘 다 지금 없다).
+    //
+    // ★대신 <b>머리가 강체</b>라는 것을 쓴다. 파지 중인 손은 사람이 낼 수 있는 속도가
+    //   뻔한데, 추적이 튈 때는 한 프레임에 그보다 훨씬 멀리 순간이동한다.
+    //   그 프레임을 <b>버린다</b>(손을 못 읽은 것과 같이 취급). 배선도 패키지도 안 늘린다.
+
+    [Tooltip("파지 중인 손이 낼 수 있다고 보는 최대 속도(m/s). 이보다 빨리 뛰면 추적이 튄 것으로 보고 그 프레임을 버린다.\n" +
+             "★0 이하면 이 검사를 끈다.")]
+    [SerializeField] private float maxHandSpeed = 1.2f;
+
+    [Tooltip("★버리기만 하다 영영 못 따라가는 걸 막는다. 이만큼 계속 거절되면 " +
+             "'손이 진짜로 그리 갔다'고 보고 새 위치를 받아들인다(초).")]
+    [SerializeField] private float maxRejectSeconds = 0.5f;
 
     [Header("=== 표시 ===")]
     [SerializeField] private bool showReadout = true;
@@ -160,9 +212,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [SerializeField] private TMP_FontAsset font;
     [SerializeField] private float readoutSize = 0.05f;
 
-    [Tooltip("★글씨 크기 배율(안내문 + 눈금 숫자). <b>신규 필드라 이 코드 기본값이 그대로 먹는다</b> — " +
-             "readoutSize·gaugeLabelSize는 씬에 값이 박혀 있어 코드에서 못 키운다(규칙 7).\n" +
-             "2026-08-31 사용자: '작은데다 가까워서 흐려 글씨가 안 보였다'.")]
+    [Tooltip("★글씨 크기 배율(안내문 + 눈금 숫자).\n" +
+             "2026-08-31 사용자: '작은데다 가까워서 흐려 글씨가 안 보였다'.\n" +
+             "★<b>2026-09-01 정정</b>: 08-31에 '신규 필드라 코드 기본값이 먹는다'고 적었는데, " +
+             "그 뒤 씬을 저장하면서 1.8이 굳었다. 이제는 코드에서 못 바꾼다 — " +
+             "안내문 크기는 아래 readoutScaleOverride로 바꾼다.")]
     [SerializeField] private float textScale = 1.8f;
 
     [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 손과 겹치지 않게 띄운다.")]
@@ -170,6 +224,32 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     [Tooltip("★안내문이 눈에서 이보다 가까우면 밀어낸다(m). VR은 너무 가까우면 초점이 안 맞아 흐리다.")]
     [SerializeField] private float readoutMinDistance = 0.55f;
+
+    // ── 안내문 배치 덮어쓰기 (2026-09-01) ────────────────────────────────
+    // ★위 textScale·readoutRise는 <b>이미 씬에 직렬화됐다</b>(1.8 / 0.34). 163번 줄 툴팁의
+    //   "신규 필드라 코드 기본값이 먹는다"는 08-31 당시엔 맞았지만 그 뒤 씬을 저장하면서
+    //   값이 굳었다 — 지금은 코드에서 못 바꾼다(규칙 7). 그래서 holdSecondsOverride와
+    //   같은 방식으로 덮어쓰기 필드를 따로 둔다.
+    // 2026-09-01 사용자: "실측할 때 환자 머리가 아니라 그거 보려고 고개를 위로 살짝 올려야 해서 불편하다."
+
+    [Tooltip("★켜면 아래 두 값이 textScale·readoutRise를 대신한다. 끄면 씬(인스펙터) 값을 쓴다.")]
+    [SerializeField] private bool overrideReadoutPlacement = true;
+
+    [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 씬 값은 0.34였다.\n" +
+             "★각도기 반지름이 0.30이라 이보다 낮추면 눈금 호와 겹칠 수 있다 — " +
+             "그때는 음수로 내려 각도기 <b>아래</b>로 빼는 편이 낫다.")]
+    [SerializeField] private float readoutRiseOverride = 0.18f;
+
+    [Tooltip("★<b>안내문 전용</b> 글씨 배율. textScale은 눈금 숫자까지 같이 키워서 따로 뒀다.\n" +
+             "씬의 textScale은 1.8이고 readoutSize는 0.05다 → 1.8이면 종전과 같은 크기.")]
+    [SerializeField] private float readoutScaleOverride = 2.6f;
+
+    /// <summary>실제로 쓸 안내문 높이(m).</summary>
+    private float ReadoutRiseNow => overrideReadoutPlacement ? readoutRiseOverride : readoutRise;
+
+    /// <summary>실제로 쓸 안내문 글씨 배율.</summary>
+    private float ReadoutScaleNow => overrideReadoutPlacement ? readoutScaleOverride : textScale;
+
     [Tooltip("★<b>양손 파지 중점</b>에서 이만큼 올린 곳을 각도기 기준점으로 쓴다(표시 전용, 각도에는 영향 없음).\n" +
              "음수를 넣으면 파지 위치보다 아래에 뜬다 — 머리에 가려 안 보일 때 쓴다.\n" +
              "★씬에 값이 직렬화돼 있으므로 코드 기본값이 아니라 인스펙터 값이 먹는다.")]
@@ -198,6 +278,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     private Vector3 prevLeft, prevRight;
     private bool prevValid;
     private float holdTimer;
+
+    // --- 추적 튐 필터 / 유실 유예 (2026-09-01) ---
+    private Vector3 acceptedLeft, acceptedRight;  // 마지막으로 믿기로 한 손 위치
+    private bool acceptedValid;
+    private float rejectSeconds;                  // 연속으로 거절한 시간
+    private float lostSeconds;                    // 손을 못 읽은 채 흐른 시간
+
+    // ★어디서 시간이 나갔는지 가르는 계수기. 방향이 끝날 때 로그로 남긴다 —
+    //   09-01 실측에서 "신전이 134초"였는데 CSV의 StepTime 하나로는 원인을 못 갈랐다.
+    private int rejectedFrames;      // 튐으로 버린 프레임
+    private int trackingRelocks;     // 너무 오래 거절해 새 위치를 받아들인 횟수
+    private int holdResets;          // 흔들려서 홀드가 깎여 0까지 간 횟수
+    private float lostTotal;         // 손을 못 읽은 총 시간(초)
     private float peakAngle;                // 이 단계에서 본 최대 각 - minAngleToMark 판정용
     private float passiveBaseAngle;         // 압박 단계의 출발선 = 능동으로 도달한 각(크기)
     private float releaseTimer;             // 파지가 풀린 채 흐른 시간
@@ -208,8 +301,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     // ★active·passive는 <b>부호 있는</b> 각이다. 각도기 지침이 어느 쪽으로 가는지에 쓴다.
     //   기록·표시에 나가는 값은 Mathf.Abs를 거친 크기다.
-    private struct Result { public float active, passive; public bool hasActive, hasPassive; }
+    private struct Result
+    {
+        public float active, passive;
+        public bool hasActive, hasPassive;
+
+        // ★이 방향에서 시간이 어디로 나갔는지. 방향이 끝나는 순간 계수기를 여기 찍는다.
+        //   결과 CSV까지 실려 나간다 — logcat은 40분이면 밀려서 09-01에 통째로 잃었다.
+        public int holdResets, rejectedFrames, relocks;
+        public float lostSeconds;
+    }
     private readonly Result[] results = new Result[7];
+
+    private float appliedReadoutScale = -1f;   // 안내문에 실제로 얹은 배율
 
     // --- 표시 오브젝트 ---
     private Transform root;
@@ -298,6 +402,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             stage = Stage.AwaitNeutral;
         }
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
+
+        // ★방향이 바뀌면 튐 필터의 기준 위치도 놓아 준다.
+        //   안 놓으면 새 파지 위치를 '튄 것'으로 보고 maxRejectSeconds만큼 거절한다.
+        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
     }
@@ -434,9 +543,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     //   그래서 확정 뒤에도 파지가 풀리면 0점을 무효화한다. 잘못 잡았으면 손을 떼고
     //   다시 잡는 게 자연스러운 동작이고, 그 동작이 그대로 복구 신호가 된다.
 
-    /// <summary>지금 이 방향에 맞는 양손 간격 범위.</summary>
+    /// <summary>지금 이 방향에 맞는 양손 간격 범위. 하한은 <see cref="gripSpanMinOverride"/>까지 내려간다.</summary>
     private Vector2 GripSpanRange(CervicalRomDriver.Direction d)
-        => IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
+    {
+        Vector2 r = IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
+        if (gripSpanMinOverride > 0f) r.x = Mathf.Min(r.x, gripSpanMinOverride);
+        return r;
+    }
 
     /// <summary>
     /// 지금 환자 머리를 잡고 있다고 볼 만한가. <paramref name="slack"/>은 해제 판정용 여유(0이면 확정 기준).
@@ -567,6 +680,52 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         float gain = results[i].hasActive ? deg - Mathf.Abs(results[i].active) : float.NaN;
         Mark($"{Label(direction)} 수동 {deg:F1}도 (부호 {signed:+0.0;-0.0}) · 능동 대비 {gain:F1}도. " +
              "다음 방향으로 넘기거나 재파지 후 0점을 다시 잡으세요.");
+
+        LogTrackingCounters();
+    }
+
+    /// <summary>
+    /// 이 방향에서 시간이 어디로 나갔는지 남긴다.
+    /// ★09-01 실기 테스트에서 신전이 134초였는데, 결과 CSV에는 StepTime 하나뿐이라
+    ///   파지 거절인지·홀드 리셋인지·게인 미달인지 <b>가를 방법이 없었다.</b>
+    /// </summary>
+    private void LogTrackingCounters()
+    {
+        // ★먼저 결과에 찍는다. 로그는 밀려도 이건 CSV로 나간다.
+        int i = (int)direction;
+        results[i].holdResets = holdResets;
+        results[i].rejectedFrames = rejectedFrames;
+        results[i].relocks = trackingRelocks;
+        results[i].lostSeconds = lostTotal;
+
+        if (showDebugLogs)
+        {
+            ChunaLogger.Log($"<color=cyan>[실측/{Label(direction)}] " +
+                            $"홀드 리셋 {holdResets}회 · 튐 버림 {rejectedFrames}프레임 · " +
+                            $"재잠금 {trackingRelocks}회 · 손 유실 {lostTotal:F1}초</color>");
+        }
+
+        holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
+    }
+
+    /// <summary>
+    /// 그 방향의 진단 계수기. 각도가 아니라 <b>왜 오래 걸렸는지</b>를 담는다.
+    /// 아직 안 끝난 방향이면 전부 0이다.
+    /// </summary>
+    public void GetDiagnostics(CervicalRomDriver.Direction d,
+                               out int holdResetCount, out int rejectedFrameCount,
+                               out int relockCount, out float lostTrackingSeconds)
+    {
+        holdResetCount = 0; rejectedFrameCount = 0; relockCount = 0; lostTrackingSeconds = 0f;
+
+        int i = (int)d;
+        if (i <= 0 || i >= results.Length) return;
+
+        Result r = results[i];
+        holdResetCount = r.holdResets;
+        rejectedFrameCount = r.rejectedFrames;
+        relockCount = r.relocks;
+        lostTrackingSeconds = r.lostSeconds;
     }
 
     [ContextMenu("5 - 다음 방향")]
@@ -580,6 +739,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         neutralReady = false;
         stage = Stage.AwaitNeutral;
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
+
+        // ★방향이 바뀌면 튐 필터의 기준 위치도 놓아 준다.
+        //   안 놓으면 새 파지 위치를 '튄 것'으로 보고 maxRejectSeconds만큼 거절한다.
+        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
     }
@@ -615,7 +779,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             return;
         }
 
+        float frameDt = Mathf.Max(1e-4f, Time.deltaTime);
         bool has = TryGetHands(out Vector3 l, out Vector3 r);
+
+        // ★튄 프레임은 버리고 마지막으로 믿은 위치를 그대로 쓴다.
+        //   버린 프레임은 '손을 못 읽은 것'과 같이 취급되어 홀드 유예로 넘어간다.
+        if (has && !AcceptHands(l, r, frameDt))
+        {
+            l = acceptedLeft; r = acceptedRight;
+            has = false;
+        }
 
         if (has)
         {
@@ -666,13 +839,32 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     /// <summary>양손이 멈춰 있으면 단계를 넘긴다. VR에서 버튼 없이 진행하는 유일한 손잡이다.</summary>
     private void UpdateHold(bool has, Vector3 l, Vector3 r)
     {
-        if (!has || !prevValid)
+        float dt = Mathf.Max(1e-4f, Time.deltaTime);
+
+        // ★손을 못 읽는 동안(가림·튐 포함) 타이머를 <b>얼린다</b>. 종전에는 즉시 0이었다.
+        if (!has)
         {
-            prevLeft = l; prevRight = r; prevValid = has; holdTimer = 0f;
+            prevValid = false;
+            lostSeconds += dt;
+            lostTotal += dt;
+            if (lostSeconds > trackingGraceSeconds && holdTimer > 0f)
+            {
+                holdTimer = 0f;
+                holdResets++;
+            }
             return;
         }
 
-        float dt = Mathf.Max(1e-4f, Time.deltaTime);
+        // ★복귀 첫 프레임은 변위를 못 잰다(끊긴 만큼 순간이동한 것처럼 보인다).
+        //   갱신만 하고 넘어간다 — 여기서 재면 그 값이 곧바로 리셋을 부른다.
+        if (!prevValid)
+        {
+            prevLeft = l; prevRight = r; prevValid = true;
+            lostSeconds = 0f;
+            return;
+        }
+        lostSeconds = 0f;
+
         float raw = Mathf.Max((l - prevLeft).magnitude, (r - prevRight).magnitude) / dt;
         prevLeft = l; prevRight = r;
 
@@ -688,7 +880,27 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         if (neutralReady && TryGetAngle(out float deg, out _, out _))
             peakAngle = Mathf.Max(peakAngle, deg);
 
-        holdTimer = speed <= holdSpeedThreshold ? holdTimer + dt : 0f;
+        // ★히스테리시스 — 이미 쌓고 있는 중이면 나가는 임계를 높여 경계 깜빡임을 없앤다.
+        float exitSpeed = holdSpeedThreshold * Mathf.Max(1f, holdSpeedExitFactor);
+        bool still = holdTimer > 0f ? speed <= exitSpeed : speed <= holdSpeedThreshold;
+
+        if (still)
+        {
+            holdTimer += dt;
+        }
+        else if (holdDecayRate > 0f)
+        {
+            // ★0으로 죽이지 않고 깎는다. 잠깐 흔들려도 쌓인 게 남는다.
+            float before = holdTimer;
+            holdTimer = Mathf.Max(0f, holdTimer - dt * holdDecayRate);
+            if (before > 0f && holdTimer <= 0f) holdResets++;
+        }
+        else
+        {
+            if (holdTimer > 0f) holdResets++;
+            holdTimer = 0f;
+        }
+
         if (!advanceOnHold || holdTimer < HoldSeconds) return;
 
         switch (stage)
@@ -743,12 +955,58 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// 추적이 튄 프레임을 걸러낸다. 사람 손이 낼 수 없는 속도로 순간이동했으면
+    /// <b>그 프레임을 통째로 버린다</b> — 가려진 손이 엉뚱한 데로 튀는 걸 이렇게 막는다.
+    /// ★버리기만 하면 손이 진짜로 옮겨갔을 때 영영 못 따라가므로,
+    ///   <see cref="maxRejectSeconds"/>를 넘게 계속 거절되면 새 위치를 받아들인다.
+    /// </summary>
+    /// <returns>이 프레임을 써도 되면 true.</returns>
+    private bool AcceptHands(Vector3 l, Vector3 r, float dt)
+    {
+        if (maxHandSpeed <= 0f) { acceptedLeft = l; acceptedRight = r; acceptedValid = true; return true; }
+
+        if (!acceptedValid)
+        {
+            acceptedLeft = l; acceptedRight = r; acceptedValid = true;
+            rejectSeconds = 0f;
+            return true;
+        }
+
+        float limit = maxHandSpeed * dt;
+        float jump = Mathf.Max((l - acceptedLeft).magnitude, (r - acceptedRight).magnitude);
+
+        if (jump > limit)
+        {
+            rejectSeconds += dt;
+            if (rejectSeconds < maxRejectSeconds)
+            {
+                rejectedFrames++;
+                return false;                     // 버린다. 마지막으로 받아들인 위치를 그대로 쓴다.
+            }
+            // 너무 오래 거절했다 — 손이 진짜로 그리 간 것으로 본다.
+            trackingRelocks++;
+        }
+
+        rejectSeconds = 0f;
+        acceptedLeft = l; acceptedRight = r;
+        return true;
+    }
+
     // ================= 표시 =================
 
     private void UpdateVisuals()
     {
         if (!showReadout && !showAxes && !showGauge) { TearDownVisuals(); return; }
         if (root == null) BuildVisuals();
+
+        // ★배율을 Play 중에 만져도 바로 보이게 다시 얹는다. 값이 바뀐 프레임에만 대입한다 —
+        //   fontSize 대입은 TMP 재빌드를 부르므로 매 프레임 넣으면 안 된다.
+        if (readout != null && !Mathf.Approximately(appliedReadoutScale, ReadoutScaleNow))
+        {
+            appliedReadoutScale = ReadoutScaleNow;
+            readout.fontSize = readoutSize * 100f * Mathf.Max(0.1f, appliedReadoutScale);
+        }
 
         bool slip = IsSlipping(out float slipRatio);
         bool measurable = TryGetAngle(out float deg, out float perp, out _);
@@ -838,7 +1096,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         readout.text = sb.ToString();
         // ★손 바로 위라 눈에서 40cm쯤 떨어지는데, VR에서 그 거리는 초점이 안 맞아 흐리다.
         //   최소 거리를 두고 밀어낸다(2026-08-31 사용자: '가까워서 흐린가 글씨가 안 보였다').
-        Vector3 readoutPos = pivot + Vector3.up * readoutRise;
+        Vector3 readoutPos = pivot + Vector3.up * ReadoutRiseNow;
         Camera rcam = Camera.main;
         if (rcam != null)
         {
@@ -1188,7 +1446,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         t.transform.SetParent(root, false);
         readout = t.AddComponent<TextMeshPro>();
         if (font != null) readout.font = font;
-        readout.fontSize = readoutSize * 100f * Mathf.Max(0.1f, textScale);
+        readout.fontSize = readoutSize * 100f * Mathf.Max(0.1f, ReadoutScaleNow);
         readout.transform.localScale = Vector3.one * 0.01f;
         readout.alignment = TextAlignmentOptions.Center;
         readout.fontStyle = FontStyles.Bold;
