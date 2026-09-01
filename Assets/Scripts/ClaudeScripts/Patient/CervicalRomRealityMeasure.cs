@@ -943,7 +943,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (flipReferenceForward) refFwd = -refFwd;
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
-        refUp = Vector3.Cross(refFwd, refRight).normalized;
+        // ★★수직축은 <b>월드 수직</b>이다. 외적으로 뽑으면 안 된다(2026-09-01).
+        //   Cross(refFwd, refRight)로 뽑고 있었는데, 그 바로 위에서 refFwd를 뒤집으면
+        //   여기가 딸려 −up이 된다 — 09-01 사용자: "횡단면만 뒤집으라니까 왜 시상면
+        //   위아래가 바뀐 거야."
+        //   XR 월드는 중력 정렬이고 환자는 앉아 있다. 파지 경로도 처음부터
+        //   axUp = Vector3.up으로 두고 있었다. 여기만 외적을 쓰고 있었던 게 잘못이다.
+        refUp = Vector3.up;
 
         refReady = true;
         holdTimer = 0f;
