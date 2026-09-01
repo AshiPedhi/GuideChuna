@@ -23,7 +23,7 @@ using TMPro;
 /// 부호 — 기록값은 <b>크기</b>다. 어느 방향인지는 단계가 이미 알고 있어 부호가 필요 없고,
 ///        부호를 쓰면 좌우 손이 바뀌었을 때 뒤집히는 함정이 생긴다. 로그에는 부호를 남긴다.
 /// </summary>
-public class CervicalRomRealityMeasure : MonoBehaviour
+public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 {
     public enum Stage
     {
@@ -503,10 +503,36 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     {
         if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
         if (font == null) font = KoreanFontResolver.Resolve();
+        EnsureGaugeProxy();
         ResetAll();
     }
 
-    private void OnDestroy() => TearDownVisuals();
+    /// <summary>
+    /// 실습 각도기가 읽을 대리 트랜스폼. 표시물(<c>root</c>)과 <b>수명이 다르다</b> —
+    /// 각도기는 리드아웃이 꺼져 있어도 매 프레임 이걸 읽으므로 여기서 따로 만들고 따로 지운다.
+    /// </summary>
+    private void EnsureGaugeProxy()
+    {
+        if (proxyPivot == null)
+        {
+            var go = new GameObject("실측_각도기기준점") { hideFlags = HideFlags.DontSave };
+            go.transform.SetParent(transform, false);
+            proxyPivot = go.transform;
+        }
+        if (proxyTorso == null)
+        {
+            var go = new GameObject("실측_각도기몸통") { hideFlags = HideFlags.DontSave };
+            go.transform.SetParent(transform, false);
+            proxyTorso = go.transform;
+        }
+    }
+
+    private void OnDestroy()
+    {
+        TearDownVisuals();
+        if (proxyPivot != null) Destroy(proxyPivot.gameObject);
+        if (proxyTorso != null) Destroy(proxyTorso.gameObject);
+    }
 
     /// <summary>★꺼지면 표시물을 걷는다. 교육모드에서 실측 리드아웃이 남아 있으면 안 된다.</summary>
     private void OnDisable() => TearDownVisuals();
@@ -665,6 +691,109 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     /// <summary>어깨 기준선이 잡혔는가. 실측 '준비' 단계를 넘길 조건이다.</summary>
     public bool ReferenceReady => refReady;
+
+    // ================= 실습 각도기에 값 대기 (ICervicalRomGaugeSource) =================
+    //
+    // 2026-09-01 사용자: "각도기는 실습용 각도기를 쓰자, 실측용 말고."
+    //
+    // ★자체 반원 각도기(showGauge)는 지우지 않는다(사용자: "일단은 없애지 말아봐").
+    //   usePracticeGauge가 켜져 있으면 그리지만 않는다. 되돌릴 자리가 남아 있어야 한다.
+    // ★각도기는 그리기만 한다. 능동·수동을 정하는 건 이 클래스다 — 종전 그대로다.
+
+    [Header("=== 실습 각도기 사용 (2026-09-01) ===")]
+    [Tooltip("★켜면 실측에서도 CervicalRomPlaneGauge(실습 각도기)를 쓴다.\n" +
+             "자체 반원 각도기는 그리지 않는다(코드는 남는다).")]
+    [SerializeField] private bool usePracticeGauge = true;
+
+    [Tooltip("참고치(임상 최대각)를 읽을 드라이버. 비우면 씬에서 찾는다.\n" +
+             "★실측은 참고치를 스스로 안 갖는다 — 45·90 같은 임상값은 드라이버가 들고 있다.")]
+    [SerializeField] private CervicalRomDriver referenceDriver;
+
+    [Tooltip("각도기를 세울 자리 — 어깨 중점에서 이만큼 올린 곳(m). 목이 도는 자리다.")]
+    [SerializeField] private float gaugePivotRise = 0.12f;
+
+    // ★각도기가 Transform의 position·rotation을 매 프레임 읽는다. 실측은 붙일 본이 없으므로
+    //   대리 오브젝트를 만들어 우리가 얹는다. 씬에 저장되면 안 되므로 DontSave다.
+    private Transform proxyPivot, proxyTorso;
+
+    public bool UsePracticeGauge => usePracticeGauge;
+
+    private CervicalRomDriver RefDriver
+    {
+        get
+        {
+            if (referenceDriver == null) referenceDriver = FindFirstObjectByType<CervicalRomDriver>();
+            return referenceDriver;
+        }
+    }
+
+    CervicalRomDriver.Direction ICervicalRomGaugeSource.CurrentDirection => direction;
+
+    Transform ICervicalRomGaugeSource.Pivot => proxyPivot;
+    Transform ICervicalRomGaugeSource.Torso => proxyTorso;
+
+    Vector3 ICervicalRomGaugeSource.CurrentWorldAxis => AxisFor(direction);
+    Vector3 ICervicalRomGaugeSource.WorldAxisFor(CervicalRomDriver.Direction d) => AxisFor(d);
+
+    float ICervicalRomGaugeSource.MaxAngle
+        => RefDriver != null ? RefDriver.MaxAngleFor(direction) : 0f;
+    float ICervicalRomGaugeSource.MaxAngleFor(CervicalRomDriver.Direction d)
+        => RefDriver != null ? RefDriver.MaxAngleFor(d) : 0f;
+
+    float ICervicalRomGaugeSource.CurrentAngle
+        => TryGetAngle(out float deg, out _, out _) ? deg : 0f;
+
+    // ★실측에는 '목표'가 없다. 기록된 값을 그대로 준다 — 아직이면 0이라 그 구간이 안 그려진다.
+    //   즉 능동을 확정하는 순간 그 자리에 마킹이 생기고, 수동을 확정하면 그다음 구간이 생긴다.
+    float ICervicalRomGaugeSource.ActiveTargetAngle
+        => results[(int)direction].hasActive ? Mathf.Abs(results[(int)direction].active) : 0f;
+
+    float ICervicalRomGaugeSource.PassiveLimitAngle
+    {
+        get
+        {
+            Result r = results[(int)direction];
+            if (r.hasPassive) return Mathf.Abs(r.passive);
+            return r.hasActive ? Mathf.Abs(r.active) : 0f;
+        }
+    }
+
+    // 실측은 기능장애를 추첨하지 않는다. 프리뷰 전용 값이라 0이면 된다.
+    float ICervicalRomGaugeSource.NominalDysfunction => 0f;
+    float ICervicalRomGaugeSource.NominalPassiveGain => 0f;
+
+    CervicalRomDriver.Measurement ICervicalRomGaugeSource.GetMeasurement(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        if (i <= 0 || i >= results.Length) return default;
+
+        Result r = results[i];
+        if (!r.hasActive && !r.hasPassive) return default;
+
+        return new CervicalRomDriver.Measurement
+        {
+            recorded = true,
+            maxAngle = RefDriver != null ? RefDriver.MaxAngleFor(d) : 0f,
+            active = Mathf.Abs(r.active),
+            passive = Mathf.Abs(r.passive),
+        };
+    }
+
+    /// <summary>
+    /// 각도기가 읽을 대리 트랜스폼을 매 프레임 얹는다.
+    /// ★위치는 <b>어깨 중점 위</b>(목이 도는 자리)다. 어깨를 아직 안 잡았으면 손 기준으로 버틴다.
+    /// ★자세는 어깨에서 세운 몸통 기준틀을 쓴다 — 각도기가 0°를 여기서 잡는다.
+    /// </summary>
+    private void UpdateGaugeProxy()
+    {
+        if (proxyPivot == null || proxyTorso == null) return;
+
+        Vector3 up = refReady ? refUp : Vector3.up;
+        Vector3 fwd = refReady ? refFwd : Vector3.forward;
+
+        proxyPivot.position = refReady ? shoulderMid + up * gaugePivotRise : pivot;
+        proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
+    }
 
     /// <summary>
     /// 양손을 환자 양어깨에 올린 상태를 잡아 중심선을 세운다. 세션에 한 번이다.
@@ -937,6 +1066,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour
             //   0점을 잡은 뒤에는 고정한다. 각도기가 손을 따라 흔들리면 눈금을 못 읽는다.
             pivot = (l + r) * 0.5f + Vector3.up * pivotRise;
         }
+
+        EnsureGaugeProxy();
+        UpdateGaugeProxy();
 
         UpdateGripRelease(has, l, r);
         UpdateHold(has, l, r);
@@ -1360,7 +1492,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     private void UpdateGauge()
     {
-        bool on = showGauge && neutralReady && frameReady;
+        // ★실습 각도기를 쓰는 동안에는 자체 반원을 안 그린다(2026-09-01). 코드는 남겨 둔다 —
+        //   되돌릴 자리가 있어야 한다(사용자: "실측 각도기는 일단 없애지 말아봐").
+        bool on = showGauge && !usePracticeGauge && neutralReady && frameReady;
 
         if (gaugeFilter != null && gaugeFilter.gameObject.activeSelf != on)
             gaugeFilter.gameObject.SetActive(on);

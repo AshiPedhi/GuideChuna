@@ -34,6 +34,28 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Header("=== 참조 (비우면 자동 탐색) ===")]
     [SerializeField] private CervicalRomDriver driver;
 
+    // ── 값의 출처 (2026-09-01) ──────────────────────────────────────────
+    // ★실측에서도 이 각도기를 그대로 쓴다(사용자 지시). 실측은 대본이 아니라 사람을 재므로
+    //   읽는 곳이 다르다 — 그래서 출처를 갈아 끼울 수 있게 했다.
+    //   씬 배선(driver)은 그대로 두고 기본 출처로 쓴다. 실측 브리지가 들어올 때만 바꿔 끼운다.
+    //   ★끼운 쪽이 되돌린다 — 실측을 나갈 때 브리지가 driver로 되돌린다(07-27 xray 사고 예방).
+
+    private ICervicalRomGaugeSource externalSource;
+
+    /// <summary>지금 읽고 있는 출처. 실측 브리지가 갈아 끼우지 않았으면 씬에 배선된 드라이버다.</summary>
+    private ICervicalRomGaugeSource Src => externalSource ?? driver;
+
+    /// <summary>출처를 갈아 끼운다. <c>null</c>이면 씬에 배선된 드라이버로 돌아간다.</summary>
+    public void SetSource(ICervicalRomGaugeSource source)
+    {
+        if (ReferenceEquals(externalSource, source)) return;
+        externalSource = source;
+        builtDirection = CervicalRomDriver.Direction.None;   // 다음 프레임에 다시 세운다
+    }
+
+    /// <summary>지금 실측 출처를 쓰고 있는가.</summary>
+    public bool HasExternalSource => externalSource != null;
+
     [Tooltip("눈금 숫자 폰트. Assets/_NJS/Noto_Sans_KR/NotoSansKR-Bold 를 넣는다.\n" +
              "★Resources 밖에 있어 코드가 런타임에 못 찾는다 — 인스펙터에서 직접 할당해야 한다.\n" +
              "비워 두면 TMP 기본 폰트(LiberationSans)가 쓰여 한글이 깨진다.")]
@@ -185,6 +207,21 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     [Tooltip("채움 부채꼴의 바깥 반지름 (m). 눈금 안쪽에 깔린다.")]
     [SerializeField] private float fillRadius = 0.28f;
+
+    [Tooltip("★채움(부채꼴)을 그릴지. <b>실측에서는 끈다</b> — 실제 환자를 가린다(2026-09-01).\n" +
+             "신규 필드라 코드 기본값이 먹는다. 실측 전환은 브리지가 런타임에 끈다.")]
+    [SerializeField] private bool showFill = true;
+
+    /// <summary>실측 전환용. 판·채움을 끄고 눈금·지침·마커·화살표만 남긴다.</summary>
+    public void SetRealityLook(bool on)
+    {
+        bool wantPlane = !on;
+        bool wantFill = !on;
+        if (showPlane == wantPlane && showFill == wantFill) return;
+        showPlane = wantPlane;
+        showFill = wantFill;
+        builtDirection = CervicalRomDriver.Direction.None;   // 판을 지우거나 되살리려면 다시 세워야 한다
+    }
 
     [Tooltip("부족각 구간을 처음부터 보여줄지. 끄면 압박이 끝난 뒤에 드러난다.")]
     [SerializeField] private bool showDeficitFromStart = true;
@@ -510,26 +547,26 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         EnsureBuilt();
 
         bool preview = UsePreview;
-        CervicalRomDriver.Direction dir = preview ? previewDirection : driver.CurrentDirection;
+        CervicalRomDriver.Direction dir = preview ? previewDirection : Src.CurrentDirection;
 
         // ★한 번 띄운 각도기는 <b>면이 바뀌기 전까지 끄지 않는다</b>(2026-08-28 사용자 지시).
         //   드라이버가 방향을 놓는 순간(지시 substep·복귀 직후)마다 깜빡이던 것을 막는다.
         if (!preview && dir == CervicalRomDriver.Direction.None) dir = stickyDirection;
         if (!preview && dir != CervicalRomDriver.Direction.None) stickyDirection = dir;
 
-        if (dir == CervicalRomDriver.Direction.None || driver.Pivot == null || driver.Torso == null)
+        if (dir == CervicalRomDriver.Direction.None || Src.Pivot == null || Src.Torso == null)
         {
             SetVisible(false);
             return;
         }
 
-        Vector3 axis = preview ? driver.WorldAxisFor(dir) : driver.CurrentWorldAxis;
+        Vector3 axis = preview ? Src.WorldAxisFor(dir) : Src.CurrentWorldAxis;
         if (axis.sqrMagnitude < 1e-6f) { SetVisible(false); return; }
         axis.Normalize();
 
         // 0°가 어디를 가리키는가 — 머리에 고정된 기준 방향이다.
         //   굴곡·신전·측굴은 머리 꼭대기(위)가 기울고, 회전은 코끝(앞)이 돈다.
-        Vector3 zeroDir = IsRotation(dir) ? driver.Torso.forward : driver.Torso.up;
+        Vector3 zeroDir = IsRotation(dir) ? Src.Torso.forward : Src.Torso.up;
         zeroDir = Vector3.ProjectOnPlane(zeroDir, axis);
         if (zeroDir.sqrMagnitude < 1e-6f) { SetVisible(false); return; }
         zeroDir.Normalize();
@@ -548,12 +585,12 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         // 면 안의 두 기저. root를 이 자세로 두면 이하 계산이 전부 로컬로 끝난다.
         // ★면수직 오프셋은 회전축과 나란한 평행이동이라 각도에 영향이 없다.
         //   각도기를 머리 밖으로 빼도 지침이 가리키는 값은 그대로다.
-        root.SetPositionAndRotation(driver.Pivot.position + NormalOffsetOf(dir),
+        root.SetPositionAndRotation(Src.Pivot.position + NormalOffsetOf(dir),
                                     Quaternion.LookRotation(axis, zeroDir));
         SetVisible(true);
         UpdateLabelYaw();
 
-        float maxAngle = preview ? driver.MaxAngleFor(dir) : driver.MaxAngle;
+        float maxAngle = preview ? Src.MaxAngleFor(dir) : Src.MaxAngle;
         if (dir != builtDirection || !Mathf.Approximately(maxAngle, builtMax))
         {
             BuildStatic(dir, maxAngle);
@@ -567,14 +604,14 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (preview)
         {
             angle = Mathf.Clamp(previewAngle, 0f, maxAngle);
-            activeLimit = Mathf.Max(0f, maxAngle - driver.NominalDysfunction);
-            passiveLimit = Mathf.Min(maxAngle, activeLimit + driver.NominalPassiveGain);
+            activeLimit = Mathf.Max(0f, maxAngle - Src.NominalDysfunction);
+            passiveLimit = Mathf.Min(maxAngle, activeLimit + Src.NominalPassiveGain);
         }
         else
         {
-            angle = driver.CurrentAngle;
-            activeLimit = driver.ActiveTargetAngle;
-            passiveLimit = driver.PassiveLimitAngle;
+            angle = Src.CurrentAngle;
+            activeLimit = Src.ActiveTargetAngle;
+            passiveLimit = Src.PassiveLimitAngle;
         }
 
         // ★프리뷰에서는 인스펙터 체크로 화살표를 켠다. Play에서는 브리지가 켠다.
@@ -586,9 +623,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         // ★도달 마킹이 새로 찍히면 각도가 안 변해도 다시 그려야 한다.
         //   안 그러면 기록된 순간에는 안 보이고 다음에 움직일 때 뒤늦게 나타난다.
         CervicalRomDriver.Measurement rec = preview || driver == null
-            ? default : driver.GetMeasurement(dir);
+            ? default : Src.GetMeasurement(dir);
         CervicalRomDriver.Measurement recOpp = preview || driver == null
-            ? default : driver.GetMeasurement(OppositeOf(dir));
+            ? default : Src.GetMeasurement(OppositeOf(dir));
         bool reachedChanged = Changed(rec.active, lastDrawnReachedActive)
                            || Changed(rec.passive, lastDrawnReachedPassive)
                            || Changed(recOpp.active, lastDrawnOppActive)
@@ -624,8 +661,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (UsePreview)
         {
             bool pv = showReachedLabels && showReachedMarks && previewReachedMarks && driver != null;
-            float oa = pv ? Mathf.Max(0f, previewMax - driver.NominalDysfunction) : 0f;
-            float op = pv ? Mathf.Min(previewMax, oa + driver.NominalPassiveGain) : 0f;
+            float oa = pv ? Mathf.Max(0f, previewMax - Src.NominalDysfunction) : 0f;
+            float op = pv ? Mathf.Min(previewMax, oa + Src.NominalPassiveGain) : 0f;
             PlaceReachedPuck(activeMarkLabel, activeMarkDisc, pv, previewActive);
             PlaceReachedPuck(passiveMarkLabel, passiveMarkDisc, pv, previewPassive);
             PlaceReachedPuck(oppActiveLabel, oppActiveDisc, pv, -oa);
@@ -634,7 +671,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         }
 
         bool on = showReachedLabels && showReachedMarks && driver != null;
-        CervicalRomDriver.Measurement m = on ? driver.GetMeasurement(dir) : default;
+        CervicalRomDriver.Measurement m = on ? Src.GetMeasurement(dir) : default;
 
         PlaceReachedPuck(activeMarkLabel, activeMarkDisc, on && m.recorded && m.active > 0.05f, m.active);
         PlaceReachedPuck(passiveMarkLabel, passiveMarkDisc, on && m.recorded && m.passive > 0.05f, m.passive);
@@ -642,7 +679,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         // 반대 방향(같은 면)은 음수각 자리에 그대로 남긴다.
         CervicalRomDriver.Direction opp = OppositeOf(dir);
         CervicalRomDriver.Measurement o = on && opp != CervicalRomDriver.Direction.None
-            ? driver.GetMeasurement(opp) : default;
+            ? Src.GetMeasurement(opp) : default;
         PlaceReachedPuck(oppActiveLabel, oppActiveDisc, on && o.recorded && o.active > 0.05f, -o.active);
         PlaceReachedPuck(oppPassiveLabel, oppPassiveDisc, on && o.recorded && o.passive > 0.05f, -o.passive);
     }
@@ -685,7 +722,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// </summary>
     private Vector3 NormalOffsetOf(CervicalRomDriver.Direction d)
     {
-        Transform t = driver.Torso;
+        Transform t = Src.Torso;
         if (t == null) return Vector3.zero;
 
         switch (PlaneGroupOf(d))
@@ -725,9 +762,9 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private int ViewerSide(Vector3 anatomicalAxis)
     {
         Camera cam = Camera.main;
-        if (cam == null || driver.Torso == null) return 0;
+        if (cam == null || Src.Torso == null) return 0;
 
-        float d = Vector3.Dot(cam.transform.position - driver.Torso.position, anatomicalAxis);
+        float d = Vector3.Dot(cam.transform.position - Src.Torso.position, anatomicalAxis);
         if (Mathf.Abs(d) < sideDeadZone) return 0;
         return d > 0f ? 1 : -1;
     }
@@ -943,18 +980,22 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         verts.Clear(); colors.Clear(); tris.Clear();
 
         // 채움은 겹치지 않게 구간을 나눠 그린다. 안쪽부터 바깥으로 읽힌다.
-        AddSector(0f, Mathf.Min(angle, activeLimit), CurFillRadius, activeFillColor);
-
-        if (angle > activeLimit)
+        // ★실측에서는 통째로 끈다 — 실제 환자를 가린다(2026-09-01).
+        if (showFill)
         {
-            AddSector(activeLimit, Mathf.Min(angle, passiveLimit), CurFillRadius, pressFillColor);
-        }
+            AddSector(0f, Mathf.Min(angle, activeLimit), CurFillRadius, activeFillColor);
 
-        // 부족각 — 압박 한계에서 최대각까지. 이게 결과로 읽을 값이다.
-        bool revealDeficit = showDeficitFromStart || angle >= passiveLimit - 0.5f;
-        if (revealDeficit && maxAngle > passiveLimit + 0.05f)
-        {
-            AddSector(passiveLimit, maxAngle, CurFillRadius, deficitFillColor);
+            if (angle > activeLimit)
+            {
+                AddSector(activeLimit, Mathf.Min(angle, passiveLimit), CurFillRadius, pressFillColor);
+            }
+
+            // 부족각 — 압박 한계에서 최대각까지. 이게 결과로 읽을 값이다.
+            bool revealDeficit = showDeficitFromStart || angle >= passiveLimit - 0.5f;
+            if (revealDeficit && maxAngle > passiveLimit + 0.05f)
+            {
+                AddSector(passiveLimit, maxAngle, CurFillRadius, deficitFillColor);
+            }
         }
 
         // ★2026-08-27 회의 결정 — 능동·수동 도달각을 <b>한 번 찍히면 지우지 않는다</b>.
@@ -988,8 +1029,8 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             AddTick(previewActive, reachedMarkLength, reachedMarkWidth, activeReachedColor);
             AddTick(previewPassive, reachedMarkLength, reachedMarkWidth, passiveReachedColor);
 
-            float oa = Mathf.Max(0f, previewMax - driver.NominalDysfunction);
-            float op = Mathf.Min(previewMax, oa + driver.NominalPassiveGain);
+            float oa = Mathf.Max(0f, previewMax - Src.NominalDysfunction);
+            float op = Mathf.Min(previewMax, oa + Src.NominalPassiveGain);
             AddTick(-oa, reachedMarkLength, reachedMarkWidth, activeReachedColor);
             AddTick(-op, reachedMarkLength, reachedMarkWidth, passiveReachedColor);
             return;
@@ -1006,7 +1047,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     private void AddReachedPair(CervicalRomDriver.Direction d, float sign)
     {
         if (d == CervicalRomDriver.Direction.None) return;
-        CervicalRomDriver.Measurement m = driver.GetMeasurement(d);
+        CervicalRomDriver.Measurement m = Src.GetMeasurement(d);
         if (!m.recorded) return;
 
         if (m.active > 0.05f)

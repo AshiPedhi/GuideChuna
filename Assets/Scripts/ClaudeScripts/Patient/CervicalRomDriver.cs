@@ -15,7 +15,56 @@ using UnityEngine;
 ///  · 능동  환자가 스스로 가는 데까지. 최대각에서 <see cref="dysfunctionAngle"/>만큼 못 미친다.
 ///  · 압박  시술자가 손으로 더 미는 구간. 능동 끝점부터 최대각까지.
 /// </summary>
-public class CervicalRomDriver : MonoBehaviour
+/// <summary>
+/// 각도기(<see cref="CervicalRomPlaneGauge"/>)가 읽는 값들. <b>전부 읽기 전용이다.</b>
+///
+/// ★2026-09-01 신설 — 실측에서도 <b>실습용 각도기를 그대로 쓰기</b> 위해서다(사용자 지시).
+///   그전까지 실측은 자체 반원 각도기를 따로 그렸고, 그래서 압박 방향 화살표·도달 마커 같은
+///   실습 쪽 개선이 실측에 하나도 안 넘어왔다. 08-27 회의는 둘의 디자인이 같다는 전제였는데
+///   실제로는 달랐다.
+///
+/// 각도기가 드라이버에서 읽던 것이 <b>딱 이만큼</b>이라, 인터페이스로 뽑으니
+/// 각도기는 자기가 대본을 보는지 실제 사람을 재는지 몰라도 된다.
+///
+/// ★교육모드는 <see cref="CervicalRomDriver"/>가, 실측은 <c>CervicalRomRealityMeasure</c>가 구현한다.
+///   <c>Pivot</c>·<c>Torso</c>가 Transform인 건 각도기가 회전·위치를 매 프레임 읽기 때문이다 —
+///   실측은 잴 것이 실제 사람이라 붙일 본이 없으므로 대리 오브젝트를 만들어 얹는다.
+/// </summary>
+public interface ICervicalRomGaugeSource
+{
+    /// <summary>지금 재고 있는 방향. 각도기가 어느 면을 띄울지 정한다.</summary>
+    CervicalRomDriver.Direction CurrentDirection { get; }
+
+    /// <summary>회전 중심. 각도기가 여기 선다.</summary>
+    Transform Pivot { get; }
+
+    /// <summary>기준 몸통. 0° 방향과 시야 쪽 판정에 쓴다.</summary>
+    Transform Torso { get; }
+
+    Vector3 CurrentWorldAxis { get; }
+    Vector3 WorldAxisFor(CervicalRomDriver.Direction d);
+
+    /// <summary>참고치(임상 최대각).</summary>
+    float MaxAngle { get; }
+    float MaxAngleFor(CervicalRomDriver.Direction d);
+
+    /// <summary>지금 각(도).</summary>
+    float CurrentAngle { get; }
+
+    /// <summary>능동 구간의 끝. 실측에서는 <b>기록된</b> 능동각이고, 아직이면 0이다.</summary>
+    float ActiveTargetAngle { get; }
+
+    /// <summary>압박 구간의 끝. 실측에서는 <b>기록된</b> 수동각이고, 아직이면 0이다.</summary>
+    float PassiveLimitAngle { get; }
+
+    /// <summary>에디터 프리뷰 전용. 실측은 추첨이 없으므로 0을 준다.</summary>
+    float NominalDysfunction { get; }
+    float NominalPassiveGain { get; }
+
+    CervicalRomDriver.Measurement GetMeasurement(CervicalRomDriver.Direction d);
+}
+
+public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
 {
     public enum Direction
     {

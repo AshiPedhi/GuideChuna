@@ -23,8 +23,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [SerializeField] private CervicalRomRealityMeasure measure;
     [SerializeField] private ChunaPathEvaluator evaluator;
 
-    [Tooltip("표준자세 체크리스트. 없으면 준비 단계를 게이트하지 않는다.")]
+    [Tooltip("표준자세 체크리스트. 실측에서는 안 쓴다(2026-09-01) — 교육모드용으로 남는다.")]
     [SerializeField] private PostureChecklistUI checklist;
+
+    [Tooltip("실습 각도기. 실측에 들어오면 출처를 측정기로 갈아 끼우고, 나갈 때 되돌린다.\n" +
+             "★비우면 자동 탐색. 못 찾으면 각도기 없이 진행한다(경고만 남긴다).")]
+    [SerializeField] private CervicalRomPlaneGauge planeGauge;
 
     [Header("=== 현실 전환 (2026-08-31) ===")]
     [Tooltip("패스스루·환자 표시를 쥔 컨트롤러. 비우면 자동 탐색.")]
@@ -70,6 +74,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         if (measure == null) measure = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
         if (evaluator == null) evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
         if (checklist == null) checklist = FindFirstObjectByType<PostureChecklistUI>(FindObjectsInactive.Include);
+        if (planeGauge == null) planeGauge = FindFirstObjectByType<CervicalRomPlaneGauge>(FindObjectsInactive.Include);
         if (practiceSettings == null) practiceSettings = FindFirstObjectByType<PracticeSettingsController>(FindObjectsInactive.Include);
 
         ChunaLogger.Log($"<color=cyan>[실측Bridge] 시작 — 측정기 {(measure != null ? "있음" : "★없음")} · " +
@@ -90,6 +95,11 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 // ★교육모드로 돌아가면 실측 표시물을 걷는다. 켠 채로 두면 화면이 겹친다.
                 if (measure != null) measure.enabled = false;
                 if (checklist != null) checklist.SetVisible(false);
+
+                // ★끼운 쪽이 되돌린다. 각도기를 실측 출처에 걸어 둔 채 나가면
+                //   교육모드가 대본 각도 대신 실측값을 그린다(07-27 xray 사고와 같은 형태).
+                RestorePlaneGauge();
+
                 ExitRealWorld();
             }
             return;
@@ -118,6 +128,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             resultToggleShown = false;
             measure.ResetAll();
             if (checklist != null) checklist.ResetChecks();
+            ApplyPlaneGauge();
             EnterRealWorld();
             ChunaLogger.Log("<color=cyan>[실측Bridge] 실측모드 진입 — 측정기를 초기화했다.</color>");
         }
@@ -127,6 +138,15 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         string key = $"{name}#{subNo}";
 
         ApplyDirectionFor(name);
+
+        // ★압박 방향 화살표 — 실측 substep은 x.1 능동 / x.2 압박 / x.3 복귀다.
+        //   압박(x.2)에서만 켠다. 교육 브리지가 하는 것과 같은 규칙이다.
+        //   ★실측에 화살표가 더 필요하다 — 정해진 끝점이 없어서 "이 방향으로 더"가 유일한 유도다.
+        if (planeGauge != null && planeGauge.HasExternalSource)
+        {
+            bool pressing = subNo == 2 && DirectionOf(name) != CervicalRomDriver.Direction.None;
+            planeGauge.SetPressGuide(pressing);
+        }
 
         // ★실측에서는 체크리스트를 안 띄운다(2026-09-01 사용자 지시).
         //   준비 단계가 '표준자세 항목 확인'에서 '양어깨를 짚어 중심선 세우기'로 바뀌었다.
@@ -259,6 +279,39 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     {
         CervicalRomDriver.Direction d = DirectionOf(stepName);
         if (d != CervicalRomDriver.Direction.None) measure.SetDirection(d);
+    }
+
+    /// <summary>
+    /// 실습 각도기를 실측 출처로 갈아 끼우고 실측 외형으로 바꾼다.
+    /// ★판·채움을 끈다 — 실제 환자를 가린다. 눈금·지침·도달 마커·압박 방향 화살표는 그대로 온다.
+    ///   실측에 화살표가 더 필요하다는 게 이걸 하는 이유의 절반이다(정해진 끝점이 없어
+    ///   "이 방향으로 더"가 유일한 유도다).
+    /// </summary>
+    private void ApplyPlaneGauge()
+    {
+        if (measure == null || !measure.UsePracticeGauge) return;
+        if (planeGauge == null)
+        {
+            ChunaLogger.LogWarning("[실측Bridge] CervicalRomPlaneGauge를 못 찾았습니다 — 각도기 없이 진행합니다.");
+            return;
+        }
+
+        planeGauge.SetSource(measure);
+        planeGauge.SetRealityLook(true);
+        if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 각도기를 실측 출처로 바꿨다(판·채움 끔).</color>");
+    }
+
+    /// <summary>각도기를 교육모드 상태로 되돌린다.</summary>
+    private void RestorePlaneGauge()
+    {
+        if (planeGauge == null) return;
+        if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 안 건드린다
+
+        planeGauge.SetPressGuide(false);
+        planeGauge.ClearSticky();
+        planeGauge.SetRealityLook(false);
+        planeGauge.SetSource(null);
+        if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 각도기를 교육 출처로 되돌렸다.</color>");
     }
 
     private static CervicalRomDriver.Direction DirectionOf(string stepName)
