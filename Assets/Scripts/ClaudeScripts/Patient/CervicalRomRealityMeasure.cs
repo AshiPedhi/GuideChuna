@@ -907,7 +907,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     public void CaptureShoulders()
     {
         if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
+        CaptureShouldersAt(l, r);
+    }
 
+    /// <summary>
+    /// 어깨 기준을 잡는 실제 계산. 손 위치를 밖에서 넣을 수 있게 갈라 뒀다 —
+    /// ★미리보기가 <b>이 함수를 그대로</b> 타야 실제와 같은 결과가 나온다.
+    ///   2026-09-01에 미리보기가 카메라에서 기준틀을 따로 만들고 있었고, 그것도
+    ///   '마주 본다'로 박혀 있어서 실제(기본 '뒤에 섬')와 결과가 달랐다.
+    ///   사용자: "이거 미리보기랑 실제로 돌릴 때랑 다른데."
+    /// </summary>
+    private void CaptureShouldersAt(Vector3 l, Vector3 r)
+    {
         float span = Vector3.Distance(l, r);
         if (span < shoulderSpanRange.x || span > shoulderSpanRange.y)
         {
@@ -1014,21 +1025,32 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (flat.sqrMagnitude < 1e-6f) flat = Vector3.forward;
         flat.Normalize();
 
-        shoulderMid = eye + flat * previewDistance + Vector3.down * 0.35f;
+        Vector3 mid = eye + flat * previewDistance + Vector3.down * 0.35f;
 
-        // 환자는 시술자를 마주 본다 → 환자 앞 = 시술자 쪽 = −flat
-        Vector3 patientFwd = -flat;
-        refRight = Vector3.Cross(Vector3.up, patientFwd).normalized;   // Cross(up, fwd) = right
-        refUp = Vector3.up;
-        refFwd = Vector3.Cross(refRight, Vector3.up);
+        // ★손을 <b>가짜로 놓고</b> 실제 캡처 함수를 그대로 태운다.
+        //   기준틀을 여기서 직접 만들면 실제와 계산이 갈려 미리보기가 거짓말을 한다.
+        //   시술자가 뒤에 서면 환자는 시술자와 같은 쪽을 보고, 마주 보면 반대를 본다.
+        Vector3 patientFwd = operatorBehindPatient ? flat : -flat;
+        Vector3 patientRight = Vector3.Cross(Vector3.up, patientFwd).normalized;
 
-        shoulderL = shoulderMid - refRight * 0.2f;
-        shoulderR = shoulderMid + refRight * 0.2f;
+        Vector3 shoulderRightPos = mid + patientRight * 0.2f;
+        Vector3 shoulderLeftPos = mid - patientRight * 0.2f;
+
+        // 시술자의 오른손이 어느 어깨에 얹히는가 — 이게 서는 자리의 정의다.
+        Vector3 handRight = operatorBehindPatient ? shoulderRightPos : shoulderLeftPos;
+        Vector3 handLeft = operatorBehindPatient ? shoulderLeftPos : shoulderRightPos;
+
+        refReady = false;                       // 실제 경로가 다시 세우게 놓아 준다
+        CaptureShouldersAt(handLeft, handRight);
+        if (!refReady)
+        {
+            ChunaLogger.LogWarning("[실측 미리보기] 기준틀을 못 세웠습니다 — 어깨 폭/높이 허용범위를 확인하세요.");
+            return;
+        }
 
         // 파지 축도 같은 틀로 맞춘다(각도기가 이걸 읽는다).
         axRight = refRight; axUp = refUp; axFwd = refFwd;
 
-        refReady = true;
         frameReady = true;
         neutralReady = true;
         previewArmed = true;
