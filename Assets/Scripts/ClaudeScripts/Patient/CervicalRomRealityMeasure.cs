@@ -193,9 +193,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "2026-09-01 사용자: 길이를 말한 건 세로 중심선이 아니라 이 수평선이었다.")]
     [SerializeField] private float shoulderLineLength = 0.9f;
 
-    // ★뒤집기 토글은 두지 않는다(2026-09-01 사용자: "뒤집지 말라고 했다").
-    //   09-01에 잠깐 invertReferenceFrame을 넣었다가 뺐다. 뒤집을 일이 아니라
-    //   부호 규약을 CervicalRomDriver.AxisOf에 맞추지 않은 것이 원인이었다(AxisFor 참조).
+    // ── 면별 방향 부호 (2026-09-01) ──────────────────────────────────────
+    // ★"뒤집지 말라"는 <b>단계가 바뀔 때 저절로 뒤집히는 것</b>을 말한 것이다. 그건 없앴다.
+    //   여기 셋은 세션 내내 <b>안 변하는 고정 상수</b>다 — 한 번 맞춰 두면 다시 안 바뀐다.
+    //
+    // ★이 부호는 계산으로 못 정한다. 교육 쪽 CervicalRomDriver.AxisOf의 부호도
+    //   08-24에 Play에서 눈으로 확인해 뒤집어 둔 것이라고 그 코드에 적혀 있다.
+    //   09-01에 내가 이걸 추론으로 맞히려다 세 번 틀렸고 맞던 시상면까지 뒤집었다.
+    //   확정되면 AxisFor의 기본 부호를 그 값으로 굳히고 이 셋은 지운다.
+
+    [Header("=== 면별 방향 부호 (확정용) ===")]
+    [Tooltip("굴곡·신전이 반대로 기울면 켠다.")]
+    [SerializeField] private bool flipSagittal;
+
+    [Tooltip("좌측굴·우측굴이 반대로 기울면 켠다.")]
+    [SerializeField] private bool flipCoronal;
+
+    [Tooltip("좌회전·우회전이 반대로 기울면 켠다.")]
+    [SerializeField] private bool flipTransverse;
 
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
@@ -516,20 +531,23 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //       굴곡 −좌우 / 신전 +좌우 · 우측굴 −전후 / 좌측굴 +전후 · 우회전 +수직 / 좌회전 −수직
         //
         //   기록값은 종전대로 크기(Mathf.Abs)라 이 부호가 측정 결과를 바꾸지 않는다.
-        //   ★2026-09-01 3판째 — 사용자: "3면 다 좌우가 바뀌어 있는데 이거 맞냐."
-        //     세 면이 <b>전부</b> 뒤집혀 있다는 건 어느 한 기저벡터의 부호 문제가 아니다.
-        //     refRight를 뒤집으면 시상·관상만 바뀌고 횡단(axUp)은 그대로라, 셋이 같이 바뀌려면
-        //     짝의 배정 자체가 반대여야 한다. 그래서 세 짝을 통째로 맞바꾼다.
-        //     ★이 부호는 계산으로 못 정한다. 교육 쪽 AxisOf 부호도 08-24에 Play에서
-        //       눈으로 확인해 뒤집어 둔 것이다 — 여기도 같은 방식으로 확정한다.
+        //   ★2026-09-01 — 이 부호는 <b>계산으로 못 정한다.</b> 교육 쪽 AxisOf 부호도 08-24에
+        //     Play에서 눈으로 확인해 뒤집어 둔 것이다. 나는 09-01에 이걸 추론으로 맞히려다
+        //     세 번 틀렸고, 마지막에는 <b>맞던 시상면까지 뒤집었다.</b>
+        //     그래서 면마다 따로 뒤집을 수 있게 두고, 확정되면 여기 기본값을 그 값으로 굳힌다.
+        //     ★이건 단계마다 뒤집는 게 아니다. 세션 내내 안 변하는 <b>고정 상수</b>다.
+        float sag = flipSagittal ? -1f : 1f;
+        float cor = flipCoronal ? -1f : 1f;
+        float tra = flipTransverse ? -1f : 1f;
+
         switch (d)
         {
-            case CervicalRomDriver.Direction.Flexion:        return  axRight;
-            case CervicalRomDriver.Direction.Extension:      return -axRight;
-            case CervicalRomDriver.Direction.LateralRight:   return  axFwd;
-            case CervicalRomDriver.Direction.LateralLeft:    return -axFwd;
-            case CervicalRomDriver.Direction.RotationRight:  return -axUp;
-            case CervicalRomDriver.Direction.RotationLeft:   return  axUp;
+            case CervicalRomDriver.Direction.Flexion:        return -axRight * sag;
+            case CervicalRomDriver.Direction.Extension:      return  axRight * sag;
+            case CervicalRomDriver.Direction.LateralRight:   return  axFwd * cor;
+            case CervicalRomDriver.Direction.LateralLeft:    return -axFwd * cor;
+            case CervicalRomDriver.Direction.RotationRight:  return -axUp * tra;
+            case CervicalRomDriver.Direction.RotationLeft:   return  axUp * tra;
             default:                                         return Vector3.zero;
         }
     }
