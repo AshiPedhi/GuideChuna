@@ -212,12 +212,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("좌회전·우회전이 반대로 기울면 켠다.")]
     [SerializeField] private bool flipTransverse;
 
-    [Tooltip("★<b>횡단면 0°가 환자 뒤를 가리키면</b> 이걸 만진다. 위 셋과는 다른 손잡이다 —\n" +
-             "위 셋은 어느 쪽으로 <b>기우는지</b>(축 부호)이고, 이건 <b>0°가 어디인지</b>(전후 기준)다.\n\n" +
-             "★<b>꺼진 상태가 09-01에 맞춘 방향(앞)이다.</b> 켜면 되돌아간다(뒤).\n" +
-             "2026-09-01 사용자: '사용자 뒤쪽으로 각도가 나와'.\n" +
-             "★이걸 바꾸면 관상면 축도 같이 뒤집혀 좌·우측굴이 서로 바뀐다. flipCoronal로 되돌린다.")]
-    [SerializeField] private bool flipReferenceForward;
+    [Tooltip("★<b>횡단면 0°가 환자 뒤를 가리키면</b> 이것만 켠다. 다른 면은 안 건드린다.\n\n" +
+             "각도기는 <b>회전일 때만</b> 0°로 Torso.forward를 쓴다(나머지는 Torso.up).\n" +
+             "관상면 축은 axFwd를 따로 쓰므로, 여기만 뒤집으면 횡단면 0°만 움직인다.\n\n" +
+             "★기준틀의 전후축(refFwd) 자체를 뒤집으면 안 된다 — 관상면 축이 딸려 와서\n" +
+             "  측굴·회전 네 방향이 같이 깨진다(rom-frame-verify 전수 검증, 2026-09-01).\n" +
+             "  09-01 사용자: '내가 필요한 건 횡단면의 앞뒤 전환인데 왜 다른 단면까지 바뀌냐.'")]
+    [SerializeField] private bool transverseZeroFlip;
+
+    [Tooltip("★시술자가 환자 <b>뒤</b>에 서서 어깨를 짚으면 켠다(기본). 마주 보고 짚으면 끈다.\n\n" +
+             "손 두 개와 헤드셋만으로는 환자의 앞뒤를 알아낼 수가 없다. 서는 자리가 좌우축의\n" +
+             "부호를 정하고, 그 하나가 여섯 방향을 전부 좌우한다.\n" +
+             "★rom-frame-verify 전수 검증 결과 <b>맞는 조합은 서는 자리마다 하나씩</b>이다 —\n" +
+             "  뒤에 서면 r−l, 마주 보면 l−r. 그 외에는 어딘가 반드시 깨진다.")]
+    [SerializeField] private bool operatorBehindPatient = true;
 
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
@@ -832,7 +840,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         => RefDriver != null ? RefDriver.MaxAngleFor(d) : 0f;
 
     float ICervicalRomGaugeSource.CurrentAngle
-        => TryGetAngle(out float deg, out _, out _) ? deg : 0f;
+        => PreviewActive ? previewAngle
+         : TryGetAngle(out float deg, out _, out _) ? deg : 0f;
 
     // ★실측에는 '목표'가 없다. 기록된 값을 그대로 준다 — 아직이면 0이라 그 구간이 안 그려진다.
     //   즉 능동을 확정하는 순간 그 자리에 마킹이 생기고, 수동을 확정하면 그다음 구간이 생긴다.
@@ -882,6 +891,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Vector3 up = refReady ? refUp : Vector3.up;
         Vector3 fwd = refReady ? refFwd : Vector3.forward;
 
+        // ★각도기가 <b>회전일 때만</b> 0°로 이 forward를 쓴다. 여기만 뒤집으면
+        //   횡단면 0°만 움직이고 관상면 축(axFwd)은 안 딸려 온다.
+        if (transverseZeroFlip) fwd = -fwd;
+
         proxyPivot.position = refReady ? shoulderMid + up * gaugePivotRise : pivot;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
     }
@@ -927,7 +940,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   ★시술자가 환자 <b>뒤</b>에 서서 짚으면 다시 반대가 된다. 서는 자리를 바꾸려면
         //     여기를 같이 봐야 한다 — 손 두 개와 헤드셋만으로는 앞뒤를 알아낼 수가 없어서
         //     '마주 본다'를 규약으로 박아 둔다.
-        refRight = (l - r).normalized;
+        // ★서는 자리가 좌우축의 부호를 정한다. 뒤에 서면 시술자 오른손이 환자 오른어깨에 얹혀
+        //   r − l이 곧 환자 오른쪽이고, 마주 보면 반대가 된다(rom-frame-verify 전수 검증).
+        refRight = operatorBehindPatient ? (r - l).normalized : (l - r).normalized;
 
         // ★전후축은 좌우축에서 외적으로 나오지만, 그 결과가 환자 <b>뒤</b>를 가리킨다.
         //   2026-09-01 사용자: "횡단면의 좌우 반대가 아니라 앞뒤가 반대가 돼 버렸네.
@@ -937,10 +952,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //     zeroDir로 Torso.forward를 쓰기 때문이다.
         //   ★전후축을 뒤집으면 관상면 축(axFwd)도 같이 뒤집혀 좌·우측굴이 서로 바뀐다.
         //     그때는 flipCoronal로 되돌린다 — 그러라고 면별로 나눠 뒀다.
-        //   ★기본값이 곧 09-01에 맞춘 방향이다. 체크하면 <b>되돌아간다</b>(= 뒤를 가리킨다).
-        //     한때 반대로 짰다 — 체크를 안 해야 앞을 보는 꼴이라 이름과 동작이 어긋났다.
-        refFwd = -Vector3.Cross(refRight, Vector3.up);
-        if (flipReferenceForward) refFwd = -refFwd;
+        //   ★★전후축은 <b>절대 뒤집지 않는다</b>(2026-09-01, rom-frame-verify 전수 검증).
+        //     16조합을 다 돌려 보니 전부 맞는 건 둘뿐이고 둘 다 refFwd = Cross(refRight, up)였다.
+        //     여기를 뒤집으면 관상면 축(axFwd)이 딸려 <b>측굴·회전 네 방향이 같이 깨진다</b> —
+        //     사용자: "내가 필요한 건 횡단면의 앞뒤 전환인데 왜 다른 단면까지 바뀌는 거냐."
+        //     횡단면 0°만 바꾸려면 아래 transverseZeroFlip을 쓴다(각도기의 Torso.forward만 뒤집는다).
+        refFwd = Vector3.Cross(refRight, Vector3.up);
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
         // ★★수직축은 <b>월드 수직</b>이다. 외적으로 뽑으면 안 된다(2026-09-01).
@@ -960,6 +977,88 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     /// <summary>어깨 기준을 놓는다. 술기를 벗어나거나 다시 잡을 때.</summary>
     public void ClearReference() => refReady = false;
+
+    // ================= 미리보기 (2026-09-01) =================
+    //
+    // 2026-09-01 사용자: "미리보기 만들어서 테스트하게 해 줘. 매번 과정 진행할 때마다 보는 거 힘들어."
+    //
+    // ★부호를 하나 만질 때마다 어깨 짚기 → 파지 → 능동 → 압박을 6방향 도는 건 말이 안 된다.
+    //   여기서 기준틀을 <b>가짜로</b> 세우고 방향만 넘겨 가며 각도기 모양을 바로 본다.
+    //   측정값은 안 건드린다 — 표시만 보는 용도다.
+
+    [Header("=== 미리보기 ===")]
+    [Tooltip("★카메라 앞에 기준틀을 가짜로 세워 각도기를 바로 띄운다. 손도 환자도 필요 없다.\n" +
+             "부호를 고친 뒤 6방향을 눈으로 훑을 때 쓴다. 실제 측정에는 영향이 없다.")]
+    [SerializeField] private bool previewMode;
+
+    [Tooltip("미리보기에서 각도기가 가리킬 각(도).")]
+    [Range(0f, 90f)][SerializeField] private float previewAngle = 30f;
+
+    [Tooltip("미리보기 기준점을 카메라 앞 이만큼에 둔다(m).")]
+    [SerializeField] private float previewDistance = 1.0f;
+
+    private bool previewArmed;
+
+    /// <summary>
+    /// 어깨를 짚은 것처럼 기준틀을 세운다. 카메라가 보는 쪽을 환자 앞으로 삼는다 —
+    /// 즉 <b>시술자가 환자를 마주 본다</b>고 놓는다.
+    /// </summary>
+    [ContextMenu("미리보기 - 기준틀 세우기")]
+    public void PreviewSetupFrame()
+    {
+        Camera cam = Camera.main;
+        Vector3 eye = cam != null ? cam.transform.position : Vector3.up * 1.6f;
+        Vector3 look = cam != null ? cam.transform.forward : Vector3.forward;
+
+        Vector3 flat = Vector3.ProjectOnPlane(look, Vector3.up);
+        if (flat.sqrMagnitude < 1e-6f) flat = Vector3.forward;
+        flat.Normalize();
+
+        shoulderMid = eye + flat * previewDistance + Vector3.down * 0.35f;
+
+        // 환자는 시술자를 마주 본다 → 환자 앞 = 시술자 쪽 = −flat
+        Vector3 patientFwd = -flat;
+        refRight = Vector3.Cross(Vector3.up, patientFwd).normalized;   // Cross(up, fwd) = right
+        refUp = Vector3.up;
+        refFwd = Vector3.Cross(refRight, Vector3.up);
+
+        shoulderL = shoulderMid - refRight * 0.2f;
+        shoulderR = shoulderMid + refRight * 0.2f;
+
+        // 파지 축도 같은 틀로 맞춘다(각도기가 이걸 읽는다).
+        axRight = refRight; axUp = refUp; axFwd = refFwd;
+
+        refReady = true;
+        frameReady = true;
+        neutralReady = true;
+        previewArmed = true;
+        v0 = refFwd; len0 = 0.2f; vNow = v0; vNowValid = true;
+        pivot = shoulderMid + Vector3.up * pivotRise;
+
+        ChunaLogger.Log($"<color=cyan>[실측 미리보기] 기준틀을 세웠다 — " +
+                        $"환자앞 {patientFwd} · 환자오른쪽 {refRight}. " +
+                        $"방향은 '미리보기 - 다음 방향'으로 넘긴다.</color>");
+    }
+
+    [ContextMenu("미리보기 - 다음 방향")]
+    public void PreviewNextDirection()
+    {
+        if (!previewArmed) PreviewSetupFrame();
+        int n = (int)direction;
+        direction = (CervicalRomDriver.Direction)(n >= 6 ? 1 : n + 1);
+        ChunaLogger.Log($"<color=cyan>[실측 미리보기] {Label(direction)}</color>");
+    }
+
+    [ContextMenu("미리보기 - 끄기")]
+    public void PreviewClear()
+    {
+        previewArmed = false;
+        previewMode = false;
+        ResetAll();
+    }
+
+    /// <summary>미리보기 중이면 각도기에 이 각을 물린다.</summary>
+    private bool PreviewActive => previewMode && previewArmed;
 
     [ContextMenu("2 - 중립(0점) 캡처")]
     public void CaptureNeutral()
@@ -1129,6 +1228,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★실측모드가 아니면 아무것도 하지 않는다(2026-08-28 사용자 지적).
         //   브리지가 켜고 끄는 것에만 기대면, 브리지가 없거나 순서가 어긋난 순간
         //   교육모드 화면에 실측 안내와 각도기가 끼어든다. 스스로도 막는다.
+        // ★미리보기는 실측모드가 아니어도 돈다. 부호를 고칠 때마다 술기를 타고 들어가는 건
+        //   말이 안 된다(2026-09-01 사용자 요청). 표시만 하고 측정은 안 한다.
+        if (PreviewActive)
+        {
+            EnsureGaugeProxy();
+            UpdateGaugeProxy();
+            UpdateVisuals();
+            return;
+        }
+
         if (!IsMeasurementMode())
         {
             if (root != null) TearDownVisuals();
