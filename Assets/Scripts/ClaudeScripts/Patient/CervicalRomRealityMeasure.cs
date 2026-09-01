@@ -214,7 +214,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     [Tooltip("★<b>횡단면 0°가 환자 뒤를 가리키면</b> 이걸 만진다. 위 셋과는 다른 손잡이다 —\n" +
              "위 셋은 어느 쪽으로 <b>기우는지</b>(축 부호)이고, 이건 <b>0°가 어디인지</b>(전후 기준)다.\n\n" +
-             "2026-09-01 사용자: '사용자 뒤쪽으로 각도가 나와' → 그래서 기본을 뒤집어 뒀다.\n" +
+             "★<b>꺼진 상태가 09-01에 맞춘 방향(앞)이다.</b> 켜면 되돌아간다(뒤).\n" +
+             "2026-09-01 사용자: '사용자 뒤쪽으로 각도가 나와'.\n" +
              "★이걸 바꾸면 관상면 축도 같이 뒤집혀 좌·우측굴이 서로 바뀐다. flipCoronal로 되돌린다.")]
     [SerializeField] private bool flipReferenceForward;
 
@@ -936,8 +937,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //     zeroDir로 Torso.forward를 쓰기 때문이다.
         //   ★전후축을 뒤집으면 관상면 축(axFwd)도 같이 뒤집혀 좌·우측굴이 서로 바뀐다.
         //     그때는 flipCoronal로 되돌린다 — 그러라고 면별로 나눠 뒀다.
-        refFwd = Vector3.Cross(refRight, Vector3.up);
-        if (!flipReferenceForward) refFwd = -refFwd;
+        //   ★기본값이 곧 09-01에 맞춘 방향이다. 체크하면 <b>되돌아간다</b>(= 뒤를 가리킨다).
+        //     한때 반대로 짰다 — 체크를 안 해야 앞을 보는 꼴이라 이름과 동작이 어긋났다.
+        refFwd = -Vector3.Cross(refRight, Vector3.up);
+        if (flipReferenceForward) refFwd = -refFwd;
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
         refUp = Vector3.Cross(refFwd, refRight).normalized;
