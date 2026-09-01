@@ -258,6 +258,27 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "'손이 진짜로 그리 갔다'고 보고 새 위치를 받아들인다(초).")]
     [SerializeField] private float maxRejectSeconds = 0.5f;
 
+    // ── 한 손 이어가기 (2026-09-01) ──────────────────────────────────────
+    // 2026-09-01 사용자: "신전에서 뒤통수 쪽 손이 많이 가려져서 인식이 안 되거나 하고,
+    //   그러다 보니 위치 어긋남이 생기기도 해. 한 손만 인식돼도 이어서 되게 할 수 있나?"
+    //
+    // ★된다. 그리고 <b>지금은</b> 된다 — 08-31에는 못 했다.
+    //   각은 원래 양손 벡터 V = R − L의 회전으로 잰다. 한 손을 잃으면 V가 없어져
+    //   "각이 얼어붙을 뿐"이라 실효가 없었다.
+    //   ★어깨에서 <b>회전 중심(목)</b>을 잡아 두면서 사정이 달라졌다.
+    //     머리는 강체라 목 둘레로 돈다. 손 한 점도 그 축 둘레의 원 위를 움직이므로,
+    //     <b>그 점 하나의 회전각이 곧 목의 회전각</b>이다. 중심을 알기 때문에 성립한다.
+    //   ★대신 미끄러짐을 못 잡는다 — 양손일 때는 손 사이 거리가 보존되는지로 걸렀는데,
+    //     한 손이면 그 검사가 성립하지 않는다. 그래서 오래는 못 버티게 시간을 끊는다.
+
+    [Tooltip("★한 손만 읽혀도 각을 이어서 낸다. 회전 중심(목)을 알기 때문에 가능하다.\n" +
+             "끄면 양손이 다 읽힐 때만 각이 나온다(종전 동작).")]
+    [SerializeField] private bool singleHandFallback = true;
+
+    [Tooltip("★한 손으로 버티는 최대 시간(초). 이걸 넘으면 각을 안 낸다.\n" +
+             "한 손이면 파지 미끄러짐을 검사할 수가 없어서, 오래 끌면 조용히 틀린 값이 쌓인다.")]
+    [SerializeField] private float singleHandMaxSeconds = 4f;
+
     [Header("=== 표시 ===")]
     [SerializeField] private bool showReadout = true;
     [SerializeField] private bool showAxes = true;
@@ -373,9 +394,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private Vector3 refRight, refUp, refFwd;   // 몸통 기준틀 (표시 전용)
 
     // --- 추적 튐 필터 / 유실 유예 (2026-09-01) ---
+    // ★손마다 따로 본다. 한쪽만 가려지는 게 실제 상황이라, 한 손이 튀었다고
+    //   멀쩡한 다른 손까지 버리면 한 손 이어가기가 성립하지 않는다.
     private Vector3 acceptedLeft, acceptedRight;  // 마지막으로 믿기로 한 손 위치
-    private bool acceptedValid;
-    private float rejectSeconds;                  // 연속으로 거절한 시간
+    private bool acceptedValidL, acceptedValidR;
+    private float rejectSecondsL, rejectSecondsR; // 연속으로 거절한 시간(손별)
+    private bool leftOk, rightOk;                 // 이번 프레임에 믿을 수 있는가
+
+    // 한 손 이어가기용 — 중립에서 회전 중심 → 각 손
+    private Vector3 anglePivot, radL0, radR0;
+    private float singleHandSeconds;
     private float lostSeconds;                    // 손을 못 읽은 채 흐른 시간
     private float holdAnchorAngle;                // 이번 홀드를 시작한 시점의 각
     private bool holdAnchorValid;
@@ -502,7 +530,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★방향이 바뀌면 튐 필터의 기준 위치도 놓아 준다.
         //   안 놓으면 새 파지 위치를 '튄 것'으로 보고 maxRejectSeconds만큼 거절한다.
-        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+        acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
 
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
@@ -516,10 +544,33 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     public bool TryGetAngle(out float degrees, out float perpRatio, out float signed)
     {
         degrees = 0f; perpRatio = 0f; signed = 0f;
-        if (!neutralReady || !vNowValid) return false;
+        if (!neutralReady) return false;
 
         Vector3 axis = AxisFor(direction);
         if (axis.sqrMagnitude < 1e-8f) return false;
+
+        // ★한 손만 읽히면 <b>그 손의 회전</b>으로 잰다(2026-09-01).
+        //   머리는 강체라 목(anglePivot) 둘레로 돈다. 손 한 점도 그 축 둘레의 원 위를
+        //   움직이므로, 그 점의 회전각이 곧 목의 회전각이다 — 중심을 알기 때문에 성립한다.
+        //   ★양손이 다 읽히면 종전대로 파지 벡터를 쓴다. 지렛대가 길어 잡음에 더 강하다.
+        if (!vNowValid || !(leftOk && rightOk))
+        {
+            if (!singleHandFallback || !(leftOk || rightOk)) return false;
+            if (singleHandSeconds > singleHandMaxSeconds) return false;
+
+            Vector3 rad0 = leftOk ? radL0 : radR0;
+            Vector3 radNow = (leftOk ? acceptedLeft : acceptedRight) - anglePivot;
+            if (rad0.sqrMagnitude < 1e-6f) return false;
+
+            Vector3 pa = Vector3.ProjectOnPlane(rad0, axis);
+            Vector3 pb = Vector3.ProjectOnPlane(radNow, axis);
+            if (pa.sqrMagnitude < 1e-8f || pb.sqrMagnitude < 1e-8f) return false;
+
+            perpRatio = pa.magnitude / Mathf.Max(1e-6f, rad0.magnitude);
+            signed = Vector3.SignedAngle(pa, pb, axis);
+            degrees = Mathf.Abs(signed);
+            return true;
+        }
 
         Vector3 a = Vector3.ProjectOnPlane(v0, axis);
         Vector3 b = Vector3.ProjectOnPlane(vNow, axis);
@@ -625,7 +676,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★어깨 기준도 놓는다. 세션마다 다시 잡는다 — 환자가 바뀌면 어깨도 바뀐다.
         refReady = false;
-        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+        acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
 
         Mark(requireReference
@@ -1165,6 +1216,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★기준축을 여기서 세운다. 어깨를 짚는 별도 단계는 없앴다(2026-08-31).
         if (!CaptureFrameFromGrip(l, r)) return;
 
+        // ★한 손 이어가기의 재료 — 회전 중심과, 중립에서 중심 → 각 손.
+        //   중심은 어깨에서 잡은 목 자리다. 어깨를 안 잡았으면 손 중점으로 대신한다
+        //   (그 경우 지렛대가 짧아 한 손 각은 신뢰도가 떨어진다).
+        anglePivot = refReady ? shoulderMid + refUp * gaugePivotRise : (l + r) * 0.5f;
+        radL0 = l - anglePivot;
+        radR0 = r - anglePivot;
+        singleHandSeconds = 0f;
+
         vNow = v0; vNowValid = true;
         neutralReady = true;
         stage = Stage.Active;
@@ -1273,7 +1332,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★방향이 바뀌면 튐 필터의 기준 위치도 놓아 준다.
         //   안 놓으면 새 파지 위치를 '튄 것'으로 보고 maxRejectSeconds만큼 거절한다.
-        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+        acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
 
         frameStamp++;
         Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
@@ -1321,15 +1380,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         }
 
         float frameDt = Mathf.Max(1e-4f, Time.deltaTime);
-        bool has = TryGetHands(out Vector3 l, out Vector3 r);
+        bool read = TryGetHands(out Vector3 l, out Vector3 r);
 
-        // ★튄 프레임은 버리고 마지막으로 믿은 위치를 그대로 쓴다.
-        //   버린 프레임은 '손을 못 읽은 것'과 같이 취급되어 홀드 유예로 넘어간다.
-        if (has && !AcceptHands(l, r, frameDt))
+        // ★손마다 따로 거른다. 한쪽만 가려지는 게 실제 상황이라, 한 손이 튀었다고
+        //   멀쩡한 다른 손까지 버리면 한 손 이어가기가 성립하지 않는다.
+        leftOk = rightOk = false;
+        if (read)
         {
-            l = acceptedLeft; r = acceptedRight;
-            has = false;
+            leftOk = AcceptHand(ref acceptedLeft, ref acceptedValidL, ref rejectSecondsL, l, frameDt);
+            rightOk = AcceptHand(ref acceptedRight, ref acceptedValidR, ref rejectSecondsR, r, frameDt);
         }
+        l = acceptedLeft; r = acceptedRight;
+
+        bool has = leftOk && rightOk;             // 양손이 다 믿을 만한가
+        bool anyHand = leftOk || rightOk;
+
+        // 한 손으로 버틴 시간 — 오래 끌면 미끄러짐을 못 잡아 조용히 틀린 값이 쌓인다.
+        if (has || !anyHand) singleHandSeconds = 0f;
+        else singleHandSeconds += frameDt;
 
         if (has)
         {
@@ -1374,8 +1442,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         EnsureGaugeProxy();
         UpdateGaugeProxy();
 
-        UpdateGripRelease(has, l, r);
-        UpdateHold(has, l, r);
+        // ★한 손만 읽혀도 각이 나오면 진행을 이어 간다(회전 중심을 알기 때문에 가능하다).
+        //   미끄러짐을 못 잡으므로 오래는 안 버틴다.
+        bool singleOk = singleHandFallback && !has && anyHand && neutralReady
+                        && singleHandSeconds <= singleHandMaxSeconds;
+        bool usable = has || singleOk;
+
+        UpdateGripRelease(usable, l, r);
+        UpdateHold(usable, l, r);
         if (useKeyboard) ReadKeys();
         UpdateVisuals();
     }
@@ -1529,34 +1603,30 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     ///   <see cref="maxRejectSeconds"/>를 넘게 계속 거절되면 새 위치를 받아들인다.
     /// </summary>
     /// <returns>이 프레임을 써도 되면 true.</returns>
-    private bool AcceptHands(Vector3 l, Vector3 r, float dt)
+    private bool AcceptHand(ref Vector3 accepted, ref bool valid, ref float rejectSec,
+                            Vector3 p, float dt)
     {
-        if (maxHandSpeed <= 0f) { acceptedLeft = l; acceptedRight = r; acceptedValid = true; return true; }
+        if (maxHandSpeed <= 0f) { accepted = p; valid = true; return true; }
 
-        if (!acceptedValid)
+        if (!valid)
         {
-            acceptedLeft = l; acceptedRight = r; acceptedValid = true;
-            rejectSeconds = 0f;
+            accepted = p; valid = true; rejectSec = 0f;
             return true;
         }
 
-        float limit = maxHandSpeed * dt;
-        float jump = Mathf.Max((l - acceptedLeft).magnitude, (r - acceptedRight).magnitude);
-
-        if (jump > limit)
+        if ((p - accepted).magnitude > maxHandSpeed * dt)
         {
-            rejectSeconds += dt;
-            if (rejectSeconds < maxRejectSeconds)
+            rejectSec += dt;
+            if (rejectSec < maxRejectSeconds)
             {
                 rejectedFrames++;
                 return false;                     // 버린다. 마지막으로 받아들인 위치를 그대로 쓴다.
             }
-            // 너무 오래 거절했다 — 손이 진짜로 그리 간 것으로 본다.
-            trackingRelocks++;
+            trackingRelocks++;                    // 너무 오래 거절했다 — 진짜로 그리 간 것으로 본다.
         }
 
-        rejectSeconds = 0f;
-        acceptedLeft = l; acceptedRight = r;
+        rejectSec = 0f;
+        accepted = p;
         return true;
     }
 
