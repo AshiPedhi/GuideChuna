@@ -177,8 +177,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     [SerializeField] private Color midlineColor = new Color(0.45f, 1f, 0.85f, 0.9f);
 
-    [Tooltip("어깨선(좌우 어깨를 잇는 선)도 같이 그린다.")]
+    [Tooltip("어깨선(좌우 어깨를 잇는 <b>수평선</b>)도 같이 그린다.")]
     [SerializeField] private bool showShoulderLine = true;
+
+    [Tooltip("★어깨선(수평선) 길이(m). 어깨 중점에서 좌우로 절반씩 뻗는다.\n" +
+             "0이면 손을 짚은 자리 그대로다(종전 동작).\n" +
+             "2026-09-01 사용자: 길이를 말한 건 세로 중심선이 아니라 이 수평선이었다.")]
+    [SerializeField] private float shoulderLineLength = 0.9f;
+
+    [Tooltip("★기준틀 좌우를 뒤집는다.\n\n" +
+             "손 두 개와 헤드셋만으로는 환자의 <b>앞</b>이 어느 쪽인지 알아낼 방법이 없다 —\n" +
+             "어깨선은 '좌우'만 알려 주고 그 부호는 시술자가 어느 손을 어느 어깨에 얹었느냐로 정해진다.\n" +
+             "6방향이 <b>한 틀</b>을 공유하므로 어긋나면 전부 같이 어긋난다. 한 번 뒤집으면 끝난다.\n" +
+             "증상: 신전인데 각도기가 앞으로 기운다 / 굴곡인데 뒤로 기운다.")]
+    [SerializeField] private bool invertReferenceFrame;
 
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
@@ -598,6 +610,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             axFwd = Vector3.Cross(axRight, axUp).normalized; // Unity: Cross(right, up) = forward
         }
 
+        // ★★부호를 어깨 기준틀에 맞춘다(2026-09-01).
+        //   flat은 <b>오른손 − 왼손</b>이라, 시술자가 어느 손을 이마에 얹었느냐에 따라 통째로 뒤집힌다.
+        //   기록값은 크기라서 종전에는 문제가 안 됐지만, 각도기가 이 축으로 <b>스윕 방향</b>을
+        //   정하게 되면서 드러났다 — 2026-09-01 사용자: "신전하는데 각도기가 앞으로 기울잖아".
+        //   ★이 클래스 헤더의 "부호는 안 본다"는 이제 각도 기록에만 해당한다.
+        //   어깨선을 한 번 잡아 두었으므로 그것을 기준으로 삼으면 6방향이 <b>한 틀</b>을 공유한다.
+        if (refReady)
+        {
+            if (Vector3.Dot(axRight, refRight) < 0f)
+            {
+                axRight = -axRight;
+                axFwd = -axFwd;      // 오른손 좌표계를 유지한다(up은 그대로 월드 수직이다)
+            }
+        }
+
         gripWidth = (r - l).magnitude;
         pivot = (l + r) * 0.5f + axUp * pivotRise;           // ★각도기는 원래 손 중점 기준이었다
         frameReady = true;
@@ -827,6 +854,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // 어깨선을 좌우축으로 삼고, 월드 수직을 세워 직교틀을 만든다.
         // ★부호는 안 본다 — 그리기만 하므로 좌우가 뒤바뀌어도 중심선은 같은 자리다.
         refRight = (r - l).normalized;
+        if (invertReferenceFrame) refRight = -refRight;      // 앞뒤가 반대로 나오면 여기서 한 번 뒤집는다
         refFwd = Vector3.Cross(refRight, Vector3.up);
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
@@ -1659,7 +1687,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Vector3 half = refUp * (midlineLength * 0.5f);
         SetLine(lineMidline, shoulderMid - half, shoulderMid + half);
 
-        if (showShoulderLine) SetLine(lineShoulder, shoulderL, shoulderR);
+        if (showShoulderLine)
+        {
+            // ★길이를 주면 어깨 중점에서 좌우로 절반씩 뻗는다. 0이면 짚은 자리 그대로다.
+            if (shoulderLineLength > 0f)
+            {
+                Vector3 halfW = refRight * (shoulderLineLength * 0.5f);
+                SetLine(lineShoulder, shoulderMid - halfW, shoulderMid + halfW);
+            }
+            else SetLine(lineShoulder, shoulderL, shoulderR);
+        }
         else SetLine(lineShoulder, shoulderMid, shoulderMid);
 
         if (neutralReady)

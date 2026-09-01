@@ -212,14 +212,26 @@ public class CervicalRomPlaneGauge : MonoBehaviour
              "신규 필드라 코드 기본값이 먹는다. 실측 전환은 브리지가 런타임에 끈다.")]
     [SerializeField] private bool showFill = true;
 
-    /// <summary>실측 전환용. 판·채움을 끄고 눈금·지침·마커·화살표만 남긴다.</summary>
+    /// <summary>지금 실측 외형인가. 판·채움·면수직 오프셋이 전부 꺼진 상태다.</summary>
+    private bool realityLook;
+
+    /// <summary>
+    /// 실측 전환용. 판·채움을 끄고 눈금·지침·마커·화살표만 남긴다.
+    /// ★면수직 오프셋과 시야 자동 뒤집기도 같이 끈다 — 판이 없으면 그 둘은 각도기를
+    ///   옆으로 밀어내고 반대편으로 넘기기만 한다(2026-09-01 사용자 지적).
+    /// </summary>
     public void SetRealityLook(bool on)
     {
-        bool wantPlane = !on;
-        bool wantFill = !on;
-        if (showPlane == wantPlane && showFill == wantFill) return;
-        showPlane = wantPlane;
-        showFill = wantFill;
+        if (realityLook == on) return;
+        realityLook = on;
+
+        showPlane = !on;
+        showFill = !on;
+        autoSideByViewer = !on;
+
+        // 래치를 놓는다 — 안 놓으면 교육으로 돌아갔을 때 실측 중에 물린 쪽이 남는다.
+        sagittalSide = coronalSide = 0;
+
         builtDirection = CervicalRomDriver.Direction.None;   // 판을 지우거나 되살리려면 다시 세워야 한다
     }
 
@@ -724,6 +736,13 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         Transform t = Src.Torso;
         if (t == null) return Vector3.zero;
+
+        // ★실측에서는 밀어내지 않는다(2026-09-01). 이 오프셋은 <b>판을 환자에 관통시켜 놓고</b>
+        //   시술자가 선 반대쪽으로 빼서 보이게 하려는 것인데, 실측은 판이 없다.
+        //   판 없이 30cm를 밀면 각도기만 옆으로 튀어 나가고, 시술자가 조금만 움직여도
+        //   SideSigned가 반대쪽을 물어 <b>통째로 반대편으로 넘어간다</b> —
+        //   2026-09-01 사용자가 본 "각도기가 왜 뒤집어"가 이것이다.
+        if (realityLook) return Vector3.zero;
 
         switch (PlaneGroupOf(d))
         {
