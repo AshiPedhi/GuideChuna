@@ -338,6 +338,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [SerializeField] private float pivotRise = 0.10f;
     [SerializeField] private float axisLength = 0.18f;
 
+    [Tooltip("★축 끝에 '환자 오른쪽·왼쪽·앞·뒤·위'를 글씨로 붙인다.\n" +
+             "선만 그으면 어느 쪽이 환자 오른쪽인지 볼 방법이 없다 — 부호 확인용이다(2026-09-01).")]
+    [SerializeField] private bool showAxisLabels = true;
+
+    [SerializeField] private float axisLabelSize = 0.03f;
+
     [Header("=== 디버그 ===")]
     [SerializeField] private bool showDebugLogs = true;
     [Tooltip("에디터 Play에서 키로 진행한다. VR에서는 정지로 넘어간다.")]
@@ -409,6 +415,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private TextMeshPro readout;
     private LineRenderer lineRight, lineUp, lineFwd, lineNeutral, lineNow;
     private LineRenderer lineMidline, lineShoulder;
+    private TextMeshPro labelRightPos, labelRightNeg, labelFwdPos, labelFwdNeg, labelUpPos;
     private LineRenderer needle, activeMark, passiveMark;
     private Material sharedMaterial;
 
@@ -1066,8 +1073,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         UpdateGaugeProxy();
         AttachPreviewGauge();
 
-        ChunaLogger.Log($"<color=cyan>[실측 미리보기] {Label(direction)} — 기준틀을 세우고 각도기를 물렸다. " +
-                        $"환자앞 {patientFwd} · 환자오른쪽 {refRight}</color>");
+        // ★숫자로도 남긴다. 화면 라벨과 콘솔이 같은 말을 해야 믿을 수 있다.
+        Vector3 gaugeFwd = proxyTorso != null ? proxyTorso.forward : refFwd;
+        ChunaLogger.Log(
+            $"<color=cyan>[실측 미리보기] {Label(direction)} · 시술자 위치 = 환자 " +
+            $"{(operatorBehindPatient ? "뒤" : "마주")}</color>\n" +
+            $"  환자 오른쪽(refRight) = {refRight}\n" +
+            $"  환자 앞  (refFwd)    = {refFwd}\n" +
+            $"  수직     (refUp)     = {refUp}\n" +
+            $"  각도기 0°(회전)      = {gaugeFwd}" +
+            (transverseZeroFlip ? "   ← transverseZeroFlip 켜짐" : "") + "\n" +
+            $"  기준점(어깨 중점)     = {shoulderMid}");
     }
 
     /// <summary>
@@ -1948,6 +1964,55 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         SetLine(lineRight, axisAt, axisAt + axRight * axisLength);
         SetLine(lineUp, axisAt, axisAt + axUp * axisLength);
         SetLine(lineFwd, axisAt, axisAt + axFwd * axisLength);
+
+        UpdateAxisLabels(axisAt);
+    }
+
+    /// <summary>
+    /// 축 끝에 이름을 붙인다. ★선만 그으면 어느 쪽이 환자 오른쪽인지 볼 방법이 없다 —
+    /// 부호가 맞는지 눈으로 확인하려면 이게 있어야 한다(2026-09-01 사용자 요청).
+    /// </summary>
+    private void UpdateAxisLabels(Vector3 at)
+    {
+        if (!showAxisLabels) { HideAxisLabels(); return; }
+
+        float d = axisLength * 1.12f;
+        PlaceAxisLabel(ref labelRightPos, "환자 오른쪽", at + axRight * d, new Color(1f, 0.45f, 0.45f));
+        PlaceAxisLabel(ref labelRightNeg, "환자 왼쪽", at - axRight * d, new Color(1f, 0.45f, 0.45f));
+        PlaceAxisLabel(ref labelFwdPos, "앞", at + axFwd * d, new Color(0.5f, 0.7f, 1f));
+        PlaceAxisLabel(ref labelFwdNeg, "뒤", at - axFwd * d, new Color(0.5f, 0.7f, 1f));
+        PlaceAxisLabel(ref labelUpPos, "위", at + axUp * d, new Color(0.5f, 1f, 0.55f));
+    }
+
+    private void PlaceAxisLabel(ref TextMeshPro tm, string text, Vector3 pos, Color c)
+    {
+        if (tm == null)
+        {
+            var go = new GameObject($"축라벨_{text}") { hideFlags = HideFlags.DontSave };
+            go.transform.SetParent(root, false);
+            tm = go.AddComponent<TextMeshPro>();
+            if (font != null) tm.font = font;
+            tm.fontSize = axisLabelSize * 100f;
+            tm.transform.localScale = Vector3.one * 0.01f;
+            tm.alignment = TextAlignmentOptions.Center;
+            tm.fontStyle = FontStyles.Bold;
+            tm.textWrappingMode = TextWrappingModes.NoWrap;
+            tm.raycastTarget = false;
+            tm.text = text;
+            tm.color = c;
+        }
+        if (!tm.gameObject.activeSelf) tm.gameObject.SetActive(true);
+        tm.transform.position = pos;
+        FaceCamera(tm.transform);
+    }
+
+    private void HideAxisLabels()
+    {
+        if (labelRightPos != null) labelRightPos.gameObject.SetActive(false);
+        if (labelRightNeg != null) labelRightNeg.gameObject.SetActive(false);
+        if (labelFwdPos != null) labelFwdPos.gameObject.SetActive(false);
+        if (labelFwdNeg != null) labelFwdNeg.gameObject.SetActive(false);
+        if (labelUpPos != null) labelUpPos.gameObject.SetActive(false);
     }
 
     /// <summary>
@@ -2090,6 +2155,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         root = null; readout = null; sharedMaterial = null;
         lineRight = lineUp = lineFwd = lineNeutral = lineNow = null;
+        lineMidline = lineShoulder = null;
+        labelRightPos = labelRightNeg = labelFwdPos = labelFwdNeg = labelUpPos = null;
         needle = activeMark = passiveMark = null;
         gaugeMesh = null; gaugeFilter = null;
         gaugeLabels.Clear();
