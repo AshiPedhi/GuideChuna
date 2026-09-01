@@ -876,7 +876,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // 어깨선을 좌우축으로 삼고, 월드 수직을 세워 직교틀을 만든다.
         // ★부호는 안 본다 — 그리기만 하므로 좌우가 뒤바뀌어도 중심선은 같은 자리다.
-        refRight = (r - l).normalized;
+        // ★★환자 기준 오른쪽은 <b>시술자 왼손 → 오른손</b>이 아니라 그 반대다(2026-09-01 실측).
+        //   시술자가 환자를 마주 보고 어깨를 짚으므로, 시술자의 오른손이 환자의 <b>왼</b>어깨에 얹힌다.
+        //   r − l로 두면 기준틀 전체가 좌우 대칭으로 뒤집혀 굴곡·신전이 통째로 바뀐다 —
+        //   09-01 사용자: "굴곡 방향으로 기울이면 각도기는 신전 방향으로 간다",
+        //   "앞뒤가 완전 바뀌었어. 중간에 안 뒤집어지는 건 좋은데 처음 앞뒤는 맞춰야 할 거 아니야."
+        //
+        //   ★이건 <b>한 번</b> 정해지고 끝이다. 단계가 바뀌어도 다시 안 정한다.
+        //   ★시술자가 환자 <b>뒤</b>에 서서 짚으면 다시 반대가 된다. 서는 자리를 바꾸려면
+        //     여기를 같이 봐야 한다 — 손 두 개와 헤드셋만으로는 앞뒤를 알아낼 수가 없어서
+        //     '마주 본다'를 규약으로 박아 둔다.
+        refRight = (l - r).normalized;
         refFwd = Vector3.Cross(refRight, Vector3.up);
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
