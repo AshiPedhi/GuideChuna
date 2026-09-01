@@ -185,12 +185,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "2026-09-01 사용자: 길이를 말한 건 세로 중심선이 아니라 이 수평선이었다.")]
     [SerializeField] private float shoulderLineLength = 0.9f;
 
-    [Tooltip("★기준틀 좌우를 뒤집는다.\n\n" +
-             "손 두 개와 헤드셋만으로는 환자의 <b>앞</b>이 어느 쪽인지 알아낼 방법이 없다 —\n" +
-             "어깨선은 '좌우'만 알려 주고 그 부호는 시술자가 어느 손을 어느 어깨에 얹었느냐로 정해진다.\n" +
-             "6방향이 <b>한 틀</b>을 공유하므로 어긋나면 전부 같이 어긋난다. 한 번 뒤집으면 끝난다.\n" +
-             "증상: 신전인데 각도기가 앞으로 기운다 / 굴곡인데 뒤로 기운다.")]
-    [SerializeField] private bool invertReferenceFrame;
+    // ★뒤집기 토글은 두지 않는다(2026-09-01 사용자: "뒤집지 말라고 했다").
+    //   09-01에 잠깐 invertReferenceFrame을 넣었다가 뺐다. 뒤집을 일이 아니라
+    //   부호 규약을 CervicalRomDriver.AxisOf에 맞추지 않은 것이 원인이었다(AxisFor 참조).
 
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
@@ -498,15 +495,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     private Vector3 AxisFor(CervicalRomDriver.Direction d)
     {
+        // ★★반대 방향은 축 <b>부호가 반대</b>다(2026-09-01 수정).
+        //   종전에는 짝마다 같은 축을 돌려줬다. 크기만 기록할 때는 그래도 됐지만,
+        //   각도기가 이 축으로 <b>어느 쪽으로 기울지</b>를 정하면서 드러났다 —
+        //   굴곡과 신전이 같은 쪽으로 기울어, 신전인데 앞으로 기울고
+        //   앞쪽에 남아야 할 굴곡 마킹이 반대편으로 넘어갔다.
+        //
+        //   ★부호 규약은 CervicalRomDriver.AxisOf 그대로다. 거기 부호는 08-24에
+        //     Play에서 눈으로 확인해 뒤집어 둔 것이라, 여기서 새로 정하면 안 되고 맞춰야 한다.
+        //       굴곡 −좌우 / 신전 +좌우 · 우측굴 −전후 / 좌측굴 +전후 · 우회전 +수직 / 좌회전 −수직
+        //
+        //   기록값은 종전대로 크기(Mathf.Abs)라 이 부호가 측정 결과를 바꾸지 않는다.
         switch (d)
         {
-            // 굴곡·신전 = 좌우축 둘레 / 측굴 = 전후축 둘레 / 회전 = 수직축 둘레
-            case CervicalRomDriver.Direction.Flexion:
-            case CervicalRomDriver.Direction.Extension:      return axRight;
-            case CervicalRomDriver.Direction.LateralLeft:
-            case CervicalRomDriver.Direction.LateralRight:   return axFwd;
-            case CervicalRomDriver.Direction.RotationLeft:
-            case CervicalRomDriver.Direction.RotationRight:  return axUp;
+            case CervicalRomDriver.Direction.Flexion:        return -axRight;
+            case CervicalRomDriver.Direction.Extension:      return  axRight;
+            case CervicalRomDriver.Direction.LateralRight:   return -axFwd;
+            case CervicalRomDriver.Direction.LateralLeft:    return  axFwd;
+            case CervicalRomDriver.Direction.RotationRight:  return  axUp;
+            case CervicalRomDriver.Direction.RotationLeft:   return -axUp;
             default:                                         return Vector3.zero;
         }
     }
@@ -870,7 +877,6 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // 어깨선을 좌우축으로 삼고, 월드 수직을 세워 직교틀을 만든다.
         // ★부호는 안 본다 — 그리기만 하므로 좌우가 뒤바뀌어도 중심선은 같은 자리다.
         refRight = (r - l).normalized;
-        if (invertReferenceFrame) refRight = -refRight;      // 앞뒤가 반대로 나오면 여기서 한 번 뒤집는다
         refFwd = Vector3.Cross(refRight, Vector3.up);
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
