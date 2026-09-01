@@ -212,6 +212,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("좌회전·우회전이 반대로 기울면 켠다.")]
     [SerializeField] private bool flipTransverse;
 
+    [Tooltip("★<b>횡단면 0°가 환자 뒤를 가리키면</b> 이걸 만진다. 위 셋과는 다른 손잡이다 —\n" +
+             "위 셋은 어느 쪽으로 <b>기우는지</b>(축 부호)이고, 이건 <b>0°가 어디인지</b>(전후 기준)다.\n\n" +
+             "2026-09-01 사용자: '사용자 뒤쪽으로 각도가 나와' → 그래서 기본을 뒤집어 뒀다.\n" +
+             "★이걸 바꾸면 관상면 축도 같이 뒤집혀 좌·우측굴이 서로 바뀐다. flipCoronal로 되돌린다.")]
+    [SerializeField] private bool flipReferenceForward;
+
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
              "0.34 = 축과 20도 이내. 감도가 0에 가까워 잡음만 읽힌다.")]
@@ -921,7 +927,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //     여기를 같이 봐야 한다 — 손 두 개와 헤드셋만으로는 앞뒤를 알아낼 수가 없어서
         //     '마주 본다'를 규약으로 박아 둔다.
         refRight = (l - r).normalized;
+
+        // ★전후축은 좌우축에서 외적으로 나오지만, 그 결과가 환자 <b>뒤</b>를 가리킨다.
+        //   2026-09-01 사용자: "횡단면의 좌우 반대가 아니라 앞뒤가 반대가 돼 버렸네.
+        //   사용자 뒤쪽으로 각도가 나와."
+        //   ★이건 축 부호(flipTransverse)와 다른 문제다. 횡단면의 0°는 회전축이 아니라
+        //     몸통의 <b>앞</b> 방향(Torso.forward)이 정한다 — 각도기가 IsRotation일 때만
+        //     zeroDir로 Torso.forward를 쓰기 때문이다.
+        //   ★전후축을 뒤집으면 관상면 축(axFwd)도 같이 뒤집혀 좌·우측굴이 서로 바뀐다.
+        //     그때는 flipCoronal로 되돌린다 — 그러라고 면별로 나눠 뒀다.
         refFwd = Vector3.Cross(refRight, Vector3.up);
+        if (!flipReferenceForward) refFwd = -refFwd;
         if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
         refFwd.Normalize();
         refUp = Vector3.Cross(refFwd, refRight).normalized;
