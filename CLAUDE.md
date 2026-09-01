@@ -52,7 +52,18 @@ dotnet build Assembly-CSharp.csproj -v q --nologo      # 약 23초, 기존 경�
    조용히 죽는다. 08-26에 `파지`→`시상면 파지`로 바꾸면서 `ApplyGripPair`의 정확 일치가 깨져
    파지쌍이 `None`이 되고(접촉 판정 전멸), `ScenarioGuideUIController`의 단계명→지시문 맵이
    `default`로 빠져 화면이 통째로 비는 자리가 걸렸다.
-9. ★**런타임 코드가 `#if UNITY_EDITOR` 안의 함수를 부르면 에디터에서는 멀쩡하고 빌드에서만 터진다.**
+9. ★**방향(축 부호·좌우·앞뒤)은 추론으로 맞히지 않는다. 재는 도구를 먼저 만든다.**
+   09-01에 실측 각도기 부호를 계산으로 맞히려다 **다섯 번 왕복했고 맞던 시상면까지 뒤집었다.**
+   `CervicalRomDriver.AxisOf`에 이미 "부호는 Play에서 눈으로 확인해 뒤집었다(08-24)"가 적혀 있었다.
+   → `rom-frame-verify` 스킬을 먼저 돌린다. 전수 검증이 한 번에 답을 좁힌다.
+   - ★**기저벡터를 서로 외적으로 엮지 않는다.** 하나를 고치면 나머지가 딸려 온다 —
+     `refUp = Cross(refFwd, refRight)`라서 전후축을 뒤집자 위아래가 같이 뒤집혔다.
+     독립으로 정할 수 있는 건 독립으로 둔다(수직축은 그냥 월드 수직이다).
+   - ★**한 값이 두 곳에 쓰이면 손잡이를 나눈다.** `refFwd`가 횡단면 0°와 관상면 축에 동시에
+     쓰여서 "횡단면만 바꾸라니까 왜 다른 면까지 바뀌냐"는 지적을 받았다.
+   - ★**미리보기·테스트는 실제와 같은 함수를 타야 한다.** 따로 계산하면 미리보기가 거짓말을 하고,
+     그건 없느니만 못하다. 09-01에 실제로 밟았다.
+10. ★**런타임 코드가 `#if UNITY_EDITOR` 안의 함수를 부르면 에디터에서는 멀쩡하고 빌드에서만 터진다.**
    08-26에 `CervicalGripJudge.FindTipUnderPlayerHand`가 그랬다(CS0103). 컴파일이 통과해도
    빌드가 통과한 건 아니다.
 
@@ -128,6 +139,7 @@ CSV(`Assets/Resources/Scenarios/*.csv`) + `ScenarioConfig`(`Assets/Resources/Sce
 | Skill | 언제 |
 |---|---|
 | `unity-scene-audit` | 씬 배선 확인, 오브젝트/컴포넌트/참조 조회 (읽기 전용) |
+| `rom-frame-verify` | 경추ROM 실측 각도기 부호 검증 — 축이 뒤집혔다 싶으면 **여기부터** (읽기 전용) |
 | `chuna-scenario-wire` | CSV·Config·나레이션·클립·손녹화 정합 점검 (읽기 전용) |
 | `narration-gen` | CSV에서 나레이션 mp3 생성 (기본 dry-run) |
 
