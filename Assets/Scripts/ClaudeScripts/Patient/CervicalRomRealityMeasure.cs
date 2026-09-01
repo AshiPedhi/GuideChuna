@@ -590,6 +590,36 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// </summary>
     private bool CaptureFrameFromGrip(Vector3 l, Vector3 r)
     {
+        // ★★기준틀은 어깨에서 <b>한 번</b> 세우고 끝이다(2026-09-01 사용자 지시).
+        //   "각도기 위치랑 각도 실시간으로 바꾸지 마. 단면은 한번 생성되면 그걸로 끝인 거야.
+        //    왜 초기화를 시키는 건데."
+        //
+        //   종전에는 방향마다 CaptureNeutral → 여기로 들어와 축을 <b>다시</b> 만들었다.
+        //   파지선은 '오른손 − 왼손'이라 손을 바꿔 잡으면 부호가 통째로 뒤집힌다.
+        //   그래서 굴곡을 재고 신전으로 넘어가는 사이에 축이 뒤집혀,
+        //   ★앞쪽에 남아 있어야 할 굴곡 마킹이 신전 쪽으로 넘어가고
+        //     신전인데 각도기가 앞으로 기울었다.
+        //
+        //   어깨선이 곧 좌우축이고, 거기서 세 축이 전부 나온다 —
+        //   굴곡·신전은 좌우축 둘레, 측굴은 전후축 둘레, 회전은 수직축 둘레다.
+        //   해부학적으로도 파지선보다 어깨선이 낫다(파지선은 좌우축에 <b>가까울</b> 뿐이다).
+        //
+        //   ★0점(v0)은 방향마다 다시 잡는다. 그건 파지가 바뀌면 당연히 달라지는 값이고,
+        //     축과 달리 뒤집힘의 원인이 아니다.
+        if (refReady)
+        {
+            axRight = refRight;
+            axUp = refUp;
+            axFwd = refFwd;
+
+            gripWidth = (r - l).magnitude;
+            pivot = (l + r) * 0.5f + Vector3.up * pivotRise;
+            frameReady = true;
+            // ★frameStamp를 올리지 않는다 — 틀이 안 바뀌었는데 올리면 각도기를 다시 세운다.
+            return true;
+        }
+
+        // 어깨 기준을 안 쓰는 경우(requireReference 꺼짐)만 종전 경로를 탄다.
         axUp = Vector3.up;                                   // XR 월드는 중력 정렬이다
         Vector3 flat = Vector3.ProjectOnPlane(r - l, axUp);
         if (flat.sqrMagnitude < 1e-6f)
@@ -610,20 +640,6 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             axFwd = Vector3.Cross(axRight, axUp).normalized; // Unity: Cross(right, up) = forward
         }
 
-        // ★★부호를 어깨 기준틀에 맞춘다(2026-09-01).
-        //   flat은 <b>오른손 − 왼손</b>이라, 시술자가 어느 손을 이마에 얹었느냐에 따라 통째로 뒤집힌다.
-        //   기록값은 크기라서 종전에는 문제가 안 됐지만, 각도기가 이 축으로 <b>스윕 방향</b>을
-        //   정하게 되면서 드러났다 — 2026-09-01 사용자: "신전하는데 각도기가 앞으로 기울잖아".
-        //   ★이 클래스 헤더의 "부호는 안 본다"는 이제 각도 기록에만 해당한다.
-        //   어깨선을 한 번 잡아 두었으므로 그것을 기준으로 삼으면 6방향이 <b>한 틀</b>을 공유한다.
-        if (refReady)
-        {
-            if (Vector3.Dot(axRight, refRight) < 0f)
-            {
-                axRight = -axRight;
-                axFwd = -axFwd;      // 오른손 좌표계를 유지한다(up은 그대로 월드 수직이다)
-            }
-        }
 
         gripWidth = (r - l).magnitude;
         pivot = (l + r) * 0.5f + axUp * pivotRise;           // ★각도기는 원래 손 중점 기준이었다
