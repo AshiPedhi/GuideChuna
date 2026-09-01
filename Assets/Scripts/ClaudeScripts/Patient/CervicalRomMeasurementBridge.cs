@@ -128,8 +128,10 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         ApplyDirectionFor(name);
 
-        // 준비 단계에서만 체크리스트를 띄운다. 벗어나면 접는다.
-        if (checklist != null) checklist.SetVisible(name == "준비");
+        // ★실측에서는 체크리스트를 안 띄운다(2026-09-01 사용자 지시).
+        //   준비 단계가 '표준자세 항목 확인'에서 '양어깨를 짚어 중심선 세우기'로 바뀌었다.
+        //   ★교육모드의 체크리스트는 그대로다 — 그쪽은 CervicalRomScenarioBridge가 쥔다.
+        if (checklist != null) checklist.SetVisible(false);
 
         if (key == advancedKey) return;
         if (Time.time - lastAdvanceTime < advanceCooldown) return;
@@ -276,12 +278,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     /// <summary>이 substep을 넘겨도 되는가.</summary>
     private bool IsSatisfied(string stepName, int subNo)
     {
-        // ★준비 단계는 표준자세를 <b>한 줄씩 순차로</b> 확인하고, 마지막 [확인]에서 그대로 넘어간다
-        //   (2026-08-31 사용자 지시 — [다음] 버튼 없이).
-        //   ★진행 경로는 하나뿐이다: PostureChecklistUI가 이 단계 내내 '다음' 토글을 잠가 두므로
-        //     사람이 누를 수 있는 건 [확인]뿐이고, 넘기는 건 여기 한 곳이다.
-        //   체크리스트가 없으면 게이트하지 않는다 — 없다고 진행이 막히면 원인을 못 찾는다.
-        if (stepName == "준비") return checklist != null && checklist.AllChecked;
+        // ★준비 단계 = <b>양손을 환자 양어깨에 올려 중심선을 세운다</b>(2026-09-01 사용자 지시).
+        //   종전의 표준자세 체크리스트는 실측에서 뺐다. 어깨선·중심선이 그 역할을 대신한다 —
+        //   체크리스트 3번 항목("검사하는 동안 어깨가 돌아가지 않게 한다")은 말로 확인받는 것보다
+        //   기준선이 떠 있는 편이 실제로 보인다.
+        //   ★교육모드는 그대로 체크리스트를 쓴다.
+        if (stepName == "준비") return measure.ReferenceReady;
 
         // ★결과도 브리지가 넘기지 않는다. 대신 [다음] 토글을 띄워 사람이 읽고 넘기게 한다.
         //   토글은 stepNo 0에서만 자동으로 뜨는데 '결과'는 stepNo 12라 안 뜬다 —

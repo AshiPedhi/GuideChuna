@@ -145,6 +145,41 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     [Tooltip("풀림이 이만큼 지속돼야 실제로 해제한다(초). 트래킹이 한 프레임 튀는 것에 안 넘어가려고 둔다.")]
     [SerializeField] private float releaseGraceSeconds = 0.35f;
 
+    // ── 어깨 기준선 (2026-09-01) ────────────────────────────────────────
+    // 2026-09-01 사용자: "실측모드에서는 체크리스트를 빼고, 대신 환자의 양어깨에 손을 올려
+    //   중심선을 그리는 게 있어야 할 것 같다. 그래야 환자가 몸을 틀었는지 눈으로 볼 때 도움이 된다."
+    //
+    // ★<b>측정에는 안 쓴다.</b> 각도는 종전대로 파지선에서 세운 축으로 잰다.
+    //   어깨는 <b>보이는 기준</b>일 뿐이다 — 축선 3개와 중심선을 여기 고정해 두면
+    //   환자가 몸을 틀었을 때 손 파지가 그 기준에서 어긋나는 게 눈에 보인다.
+    //   ★어깨선으로 축을 세우는 것(몸통 보상 분리)은 별개 문제다. 설계서 미결로 남아 있고,
+    //     어깨선은 굴곡·신전의 회전축과 나란해서 그쪽은 어차피 C7이 따로 필요하다.
+    //
+    // ★08-31에 지운 AwaitShoulders와 <b>목적이 다르다</b>. 그때는 축을 유도하려던 것이라
+    //   파지선으로 되니 필요가 없어졌다. 이번 것은 표시 기준이다.
+
+    [Header("=== 어깨 기준선 (2026-09-01) ===")]
+    [Tooltip("★끄면 어깨를 안 짚고 바로 파지로 간다(종전 동작).")]
+    [SerializeField] private bool requireReference = true;
+
+    [Tooltip("양손을 어깨에 올렸다고 볼 간격(m). 사람 어깨 폭 대역이다.")]
+    [SerializeField] private Vector2 shoulderSpanRange = new Vector2(0.28f, 0.55f);
+
+    [Tooltip("양손 높이 차 허용(m). 어깨는 좌우가 대체로 같은 높이다 —\n" +
+             "머리를 잡은 것과 구분하는 데 이게 제일 잘 듣는다.")]
+    [SerializeField] private float shoulderLevelTolerance = 0.12f;
+
+    [Tooltip("중심선 길이(m). 어깨 중점에서 위아래로 절반씩 뻗는다.")]
+    [SerializeField] private float midlineLength = 0.70f;
+
+    [Tooltip("★중심선을 측정 내내 띄운다(2026-09-01 사용자 선택). 끄면 짚을 때만 잠깐 보인다.")]
+    [SerializeField] private bool midlineAlwaysOn = true;
+
+    [SerializeField] private Color midlineColor = new Color(0.45f, 1f, 0.85f, 0.9f);
+
+    [Tooltip("어깨선(좌우 어깨를 잇는 선)도 같이 그린다.")]
+    [SerializeField] private bool showShoulderLine = true;
+
     [Header("=== 건전성 검사 ===")]
     [Tooltip("파지 벡터의 면 성분이 이 비율보다 작으면 '이 파지로는 못 잰다'로 본다.\n" +
              "0.34 = 축과 20도 이내. 감도가 0에 가까워 잡음만 읽힌다.")]
@@ -279,6 +314,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     private bool prevValid;
     private float holdTimer;
 
+    // --- 어깨 기준선 (2026-09-01) ---
+    private bool refReady;
+    private Vector3 shoulderL, shoulderR, shoulderMid;
+    private Vector3 refRight, refUp, refFwd;   // 몸통 기준틀 (표시 전용)
+
     // --- 추적 튐 필터 / 유실 유예 (2026-09-01) ---
     private Vector3 acceptedLeft, acceptedRight;  // 마지막으로 믿기로 한 손 위치
     private bool acceptedValid;
@@ -319,6 +359,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour
     private Transform root;
     private TextMeshPro readout;
     private LineRenderer lineRight, lineUp, lineFwd, lineNeutral, lineNow;
+    private LineRenderer lineMidline, lineShoulder;
     private LineRenderer needle, activeMark, passiveMark;
     private Material sharedMaterial;
 
@@ -480,7 +521,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         vNowValid = prevValid = false;
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         for (int i = 0; i < results.Length; i++) results[i] = default;
-        Mark("처음부터 - 중립에서 머리를 파지하고 정지하세요.");
+
+        // ★어깨 기준도 놓는다. 세션마다 다시 잡는다 — 환자가 바뀌면 어깨도 바뀐다.
+        refReady = false;
+        acceptedValid = false; rejectSeconds = 0f; lostSeconds = 0f;
+        holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
+
+        Mark(requireReference
+            ? "처음부터 - 양손을 환자 양어깨에 올리고 정지하세요."
+            : "처음부터 - 중립에서 머리를 파지하고 정지하세요.");
     }
 
     /// <summary>
@@ -614,9 +663,68 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         Mark("파지가 풀렸습니다 — 다시 잡고 중립에서 정지하세요. (이 방향의 0점을 무효화했습니다)");
     }
 
+    /// <summary>어깨 기준선이 잡혔는가. 실측 '준비' 단계를 넘길 조건이다.</summary>
+    public bool ReferenceReady => refReady;
+
+    /// <summary>
+    /// 양손을 환자 양어깨에 올린 상태를 잡아 중심선을 세운다. 세션에 한 번이다.
+    /// ★측정에는 안 쓴다 — 축선과 중심선을 그릴 <b>자리</b>를 정할 뿐이다.
+    /// </summary>
+    [ContextMenu("1 - 어깨 기준 잡기")]
+    public void CaptureShoulders()
+    {
+        if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
+
+        float span = Vector3.Distance(l, r);
+        if (span < shoulderSpanRange.x || span > shoulderSpanRange.y)
+        {
+            Warn($"어깨 폭으로 안 보입니다({span * 100f:F0}cm). 양손을 좌우 어깨에 올리세요.");
+            holdTimer = 0f;
+            return;
+        }
+
+        // ★어깨는 좌우가 대체로 같은 높이다. 머리를 잡은 것과 구분하는 데 이게 제일 잘 듣는다.
+        float level = Mathf.Abs(l.y - r.y);
+        if (level > shoulderLevelTolerance)
+        {
+            Warn($"양손 높이가 {level * 100f:F0}cm 차이납니다. 좌우 어깨에 나란히 올리세요.");
+            holdTimer = 0f;
+            return;
+        }
+
+        shoulderL = l; shoulderR = r;
+        shoulderMid = (l + r) * 0.5f;
+
+        // 어깨선을 좌우축으로 삼고, 월드 수직을 세워 직교틀을 만든다.
+        // ★부호는 안 본다 — 그리기만 하므로 좌우가 뒤바뀌어도 중심선은 같은 자리다.
+        refRight = (r - l).normalized;
+        refFwd = Vector3.Cross(refRight, Vector3.up);
+        if (refFwd.sqrMagnitude < 1e-6f) refFwd = Vector3.forward;   // 어깨선이 수직인 병적인 경우
+        refFwd.Normalize();
+        refUp = Vector3.Cross(refFwd, refRight).normalized;
+
+        refReady = true;
+        holdTimer = 0f;
+        frameStamp++;
+
+        Mark($"어깨 기준 고정 - 어깨폭 {span * 100f:F0}cm. 이제 머리를 파지하세요.");
+    }
+
+    /// <summary>어깨 기준을 놓는다. 술기를 벗어나거나 다시 잡을 때.</summary>
+    public void ClearReference() => refReady = false;
+
     [ContextMenu("2 - 중립(0점) 캡처")]
     public void CaptureNeutral()
     {
+        // ★어깨 기준이 먼저다. 순서를 코드로 강제해 두지 않으면 '준비'에서 머리를 잡는 순간
+        //   0점이 먼저 잡혀 어깨 단계가 통째로 건너뛰어진다.
+        if (requireReference && !refReady)
+        {
+            Warn("어깨 기준을 먼저 잡으세요 - 양손을 환자 양어깨에.");
+            holdTimer = 0f;
+            return;
+        }
+
         if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
 
         // ★파지 게이트 — 허공에서 손이 멈춘 것을 0점으로 잡지 않는다.
@@ -906,7 +1014,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         switch (stage)
         {
             case Stage.AwaitNeutral:
-                CaptureNeutral();
+                // ★어깨 기준이 아직이면 그것부터 잡는다. 같은 '정지'가 두 가지를 잡는 셈인데,
+                //   순서가 하나뿐이라 헷갈릴 여지가 없다 — 어깨 → 파지.
+                if (requireReference && !refReady) CaptureShoulders();
+                else CaptureNeutral();
                 break;
             case Stage.Active:
                 if (peakAngle >= minAngleToMark) MarkActiveEnd();
@@ -1013,6 +1124,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         int warn = slip ? 2 : (measurable && perp < minPerpRatio ? 1 : 0);
 
         if (showAxes && frameReady) UpdateAxisLines();
+        // ★중심선은 0점(frameReady)과 무관하다 — 어깨를 짚은 순간부터 측정 내내 떠 있다.
+        UpdateMidline();
         UpdateGauge();
 
         if (!showReadout || readout == null) return;
@@ -1048,7 +1161,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         switch (stage)
         {
             case Stage.AwaitNeutral:
-                sb.Append("중립에서 머리를 파지 - 정지");
+                sb.Append(requireReference && !refReady
+                    ? "양손을 환자 양어깨에 - 정지"
+                    : "중립에서 머리를 파지 - 정지");
                 // ★실측치를 같이 띄운다. 임계를 맞추려면 실제 숫자를 봐야 한다(2026-08-31).
                 AppendGripNumbers();
                 break;
@@ -1382,9 +1497,36 @@ public class CervicalRomRealityMeasure : MonoBehaviour
 
     private void UpdateAxisLines()
     {
-        SetLine(lineRight, pivot, pivot + axRight * axisLength);
-        SetLine(lineUp, pivot, pivot + axUp * axisLength);
-        SetLine(lineFwd, pivot, pivot + axFwd * axisLength);
+        // ★축선 3개는 <b>어깨 중점</b>에 고정한다(2026-09-01 사용자 지시).
+        //   손을 따라다니면 기준이 될 수가 없다 — 환자가 몸을 틀었는지 보려면
+        //   기준이 몸에 붙어 가만히 있어야 한다. 어깨를 안 잡았으면 종전대로 손 기준이다.
+        //   ★그리는 자리만 바뀐다. 각을 재는 축(axRight/axUp/axFwd)은 파지선에서 세운 그대로다.
+        Vector3 axisAt = refReady ? shoulderMid : pivot;
+
+        SetLine(lineRight, axisAt, axisAt + axRight * axisLength);
+        SetLine(lineUp, axisAt, axisAt + axUp * axisLength);
+        SetLine(lineFwd, axisAt, axisAt + axFwd * axisLength);
+    }
+
+    /// <summary>
+    /// 환자 정중선. 어깨 중점에서 위아래로 뻗는다 —
+    /// 환자가 몸을 틀면 파지선이 이 선에서 어긋나는 게 눈에 보인다.
+    /// </summary>
+    private void UpdateMidline()
+    {
+        bool on = refReady && (midlineAlwaysOn || stage == Stage.AwaitNeutral);
+        if (!on)
+        {
+            SetLine(lineMidline, shoulderMid, shoulderMid);
+            SetLine(lineShoulder, shoulderMid, shoulderMid);
+            return;
+        }
+
+        Vector3 half = refUp * (midlineLength * 0.5f);
+        SetLine(lineMidline, shoulderMid - half, shoulderMid + half);
+
+        if (showShoulderLine) SetLine(lineShoulder, shoulderL, shoulderR);
+        else SetLine(lineShoulder, shoulderMid, shoulderMid);
 
         if (neutralReady)
         {
@@ -1416,6 +1558,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour
         root = go.transform;
         sharedMaterial = CreateMaterial();
 
+        lineMidline = CreateLine("중심선", midlineColor);
+        lineShoulder = CreateLine("어깨선", midlineColor * 0.8f);
         lineRight = CreateLine("축_좌우", new Color(1f, 0.35f, 0.35f));
         lineUp = CreateLine("축_수직", new Color(0.4f, 1f, 0.45f));
         lineFwd = CreateLine("축_전후", new Color(0.4f, 0.6f, 1f));
