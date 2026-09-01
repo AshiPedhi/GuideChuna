@@ -1032,20 +1032,49 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         frameReady = true;
         neutralReady = true;
         previewArmed = true;
+        previewMode = true;          // ★체크박스를 따로 켜게 하지 않는다. 눌렀는데 아무 일도 없으면 그게 버그다.
+        if (direction == CervicalRomDriver.Direction.None)
+            direction = CervicalRomDriver.Direction.Flexion;
+
         v0 = refFwd; len0 = 0.2f; vNow = v0; vNowValid = true;
         pivot = shoulderMid + Vector3.up * pivotRise;
 
-        ChunaLogger.Log($"<color=cyan>[실측 미리보기] 기준틀을 세웠다 — " +
-                        $"환자앞 {patientFwd} · 환자오른쪽 {refRight}. " +
-                        $"방향은 '미리보기 - 다음 방향'으로 넘긴다.</color>");
+        enabled = true;              // 브리지가 실측 밖에서 꺼 두므로 켜 준다
+        EnsureGaugeProxy();
+        UpdateGaugeProxy();
+        AttachPreviewGauge();
+
+        ChunaLogger.Log($"<color=cyan>[실측 미리보기] {Label(direction)} — 기준틀을 세우고 각도기를 물렸다. " +
+                        $"환자앞 {patientFwd} · 환자오른쪽 {refRight}</color>");
+    }
+
+    /// <summary>
+    /// ★미리보기의 핵심. 각도기는 <b>씬에 배선된 드라이버</b>를 읽고 있으므로,
+    /// 여기서 출처를 우리로 바꿔 주지 않으면 메뉴를 눌러도 아무것도 안 나온다.
+    /// (2026-09-01 사용자: "눌러도 안 나오잖아" — 이걸 빼먹었다.)
+    /// </summary>
+    private void AttachPreviewGauge()
+    {
+        var gauge = FindFirstObjectByType<CervicalRomPlaneGauge>(FindObjectsInactive.Include);
+        if (gauge == null)
+        {
+            ChunaLogger.LogWarning("[실측 미리보기] CervicalRomPlaneGauge를 씬에서 못 찾았습니다.");
+            return;
+        }
+        gauge.SetSource(this);
+        gauge.SetRealityLook(true);
     }
 
     [ContextMenu("미리보기 - 다음 방향")]
     public void PreviewNextDirection()
     {
-        if (!previewArmed) PreviewSetupFrame();
+        if (!previewArmed) { PreviewSetupFrame(); return; }
+
         int n = (int)direction;
         direction = (CervicalRomDriver.Direction)(n >= 6 ? 1 : n + 1);
+
+        UpdateGaugeProxy();          // 횡단면 0° 뒤집기 같은 값이 바로 반영되게
+        AttachPreviewGauge();
         ChunaLogger.Log($"<color=cyan>[실측 미리보기] {Label(direction)}</color>");
     }
 
@@ -1054,7 +1083,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     {
         previewArmed = false;
         previewMode = false;
+
+        // ★우리가 물린 것만 우리가 되돌린다.
+        var gauge = FindFirstObjectByType<CervicalRomPlaneGauge>(FindObjectsInactive.Include);
+        if (gauge != null && gauge.HasExternalSource)
+        {
+            gauge.SetRealityLook(false);
+            gauge.SetSource(null);
+        }
         ResetAll();
+        ChunaLogger.Log("<color=cyan>[실측 미리보기] 껐다 — 각도기를 교육 출처로 되돌렸다.</color>");
     }
 
     /// <summary>미리보기 중이면 각도기에 이 각을 물린다.</summary>

@@ -439,7 +439,10 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// 에디터에서 프리뷰로 그리는 중인가. Play 중에는 언제나 false다 —
     /// 실제 측정값을 프리뷰 값으로 덮어쓰면 재는 것과 보여 주는 것이 어긋난다.
     /// </summary>
-    private bool UsePreview => !Application.isPlaying && previewInEditor;
+    // ★외부 출처가 물려 있으면 에디터 프리뷰를 쓰지 않는다(2026-09-01).
+    //   실측 미리보기가 Play 없이도 보여야 한다 — 안 그러면 부호 하나 보려고 Play를 눌러야 한다.
+    //   09-01 사용자: "눌러도 안 나오잖아." Edit 모드에서 이 프리뷰가 우리 출처를 가리고 있었다.
+    private bool UsePreview => !Application.isPlaying && previewInEditor && !HasExternalSource;
 
     private void Awake()
     {
