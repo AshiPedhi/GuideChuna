@@ -74,6 +74,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "가림은 대개 한두 프레임이라 이것만으로 대부분 잡힌다.")]
     [SerializeField] private float trackingGraceSeconds = 0.35f;
 
+    [Tooltip("★<b>각이 이만큼 넘게 움직이면 정지가 아니다</b>(도). 홀드를 시작한 시점 대비로 본다.\n\n" +
+             "2026-09-01 사용자: '가는 중에 조금 느리게 가니까 중간에 읽혀버렸다.'\n" +
+             "손 속도만 보면 천천히 지나가는 구간이 '정지'로 읽힌다 — 손은 느린데 각은 계속 가고 있다.\n" +
+             "★게다가 holdDecayRate를 넣으면서 잠깐 빨라져도 누적이 안 죽게 돼, 이 오검출이 더 쉬워졌다.\n" +
+             "  속도와 각을 <b>둘 다</b> 봐야 '느리게 지나가는 것'과 '멈춘 것'이 갈린다.\n" +
+             "0 이하면 이 검사를 끈다(종전 동작).")]
+    [SerializeField] private float holdAngleTolerance = 1.5f;
+
     [Tooltip("★0보다 크면 위 holdSeconds 대신 이 값을 쓴다. 0이면 씬 값을 그대로 쓴다.\n\n" +
              "2026-08-31 사용자: '압박에서 1.5초 하니까 중간에 그냥 인식해버린다'.\n" +
              "압박은 밀어 가는 도중에도 손이 잠깐 느려지는 구간이 있어서 1.5초로는 끝점 전에 잡힌다.\n" +
@@ -333,6 +341,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private bool acceptedValid;
     private float rejectSeconds;                  // 연속으로 거절한 시간
     private float lostSeconds;                    // 손을 못 읽은 채 흐른 시간
+    private float holdAnchorAngle;                // 이번 홀드를 시작한 시점의 각
+    private bool holdAnchorValid;
 
     // ★어디서 시간이 나갔는지 가르는 계수기. 방향이 끝날 때 로그로 남긴다 —
     //   09-01 실측에서 "신전이 134초"였는데 CSV의 StepTime 하나로는 원인을 못 갈랐다.
@@ -506,14 +516,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //       굴곡 −좌우 / 신전 +좌우 · 우측굴 −전후 / 좌측굴 +전후 · 우회전 +수직 / 좌회전 −수직
         //
         //   기록값은 종전대로 크기(Mathf.Abs)라 이 부호가 측정 결과를 바꾸지 않는다.
+        //   ★2026-09-01 3판째 — 사용자: "3면 다 좌우가 바뀌어 있는데 이거 맞냐."
+        //     세 면이 <b>전부</b> 뒤집혀 있다는 건 어느 한 기저벡터의 부호 문제가 아니다.
+        //     refRight를 뒤집으면 시상·관상만 바뀌고 횡단(axUp)은 그대로라, 셋이 같이 바뀌려면
+        //     짝의 배정 자체가 반대여야 한다. 그래서 세 짝을 통째로 맞바꾼다.
+        //     ★이 부호는 계산으로 못 정한다. 교육 쪽 AxisOf 부호도 08-24에 Play에서
+        //       눈으로 확인해 뒤집어 둔 것이다 — 여기도 같은 방식으로 확정한다.
         switch (d)
         {
-            case CervicalRomDriver.Direction.Flexion:        return -axRight;
-            case CervicalRomDriver.Direction.Extension:      return  axRight;
-            case CervicalRomDriver.Direction.LateralRight:   return -axFwd;
-            case CervicalRomDriver.Direction.LateralLeft:    return  axFwd;
-            case CervicalRomDriver.Direction.RotationRight:  return  axUp;
-            case CervicalRomDriver.Direction.RotationLeft:   return -axUp;
+            case CervicalRomDriver.Direction.Flexion:        return  axRight;
+            case CervicalRomDriver.Direction.Extension:      return -axRight;
+            case CervicalRomDriver.Direction.LateralRight:   return  axFwd;
+            case CervicalRomDriver.Direction.LateralLeft:    return -axFwd;
+            case CervicalRomDriver.Direction.RotationRight:  return -axUp;
+            case CervicalRomDriver.Direction.RotationLeft:   return  axUp;
             default:                                         return Vector3.zero;
         }
     }
@@ -1183,6 +1199,26 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★히스테리시스 — 이미 쌓고 있는 중이면 나가는 임계를 높여 경계 깜빡임을 없앤다.
         float exitSpeed = holdSpeedThreshold * Mathf.Max(1f, holdSpeedExitFactor);
         bool still = holdTimer > 0f ? speed <= exitSpeed : speed <= holdSpeedThreshold;
+
+        // ★각도 게이트 — 손이 느려도 각이 계속 가고 있으면 정지가 아니다.
+        //   홀드를 시작한 시점의 각을 기억해 두고, 거기서 벗어나면 처음부터 다시 센다.
+        if (still && holdAngleTolerance > 0f && neutralReady
+            && TryGetAngle(out float nowDeg, out _, out _))
+        {
+            if (holdTimer <= 0f)
+            {
+                holdAnchorAngle = nowDeg;       // 이번 홀드의 기준각
+                holdAnchorValid = true;
+            }
+            else if (holdAnchorValid && Mathf.Abs(nowDeg - holdAnchorAngle) > holdAngleTolerance)
+            {
+                // 아직 가고 있다. 지금 각을 새 기준으로 삼고 다시 센다.
+                holdAnchorAngle = nowDeg;
+                holdTimer = 0f;
+                holdResets++;
+                still = false;
+            }
+        }
 
         if (still)
         {
