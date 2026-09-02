@@ -278,7 +278,32 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private void ApplyDirectionFor(string stepName)
     {
         CervicalRomDriver.Direction d = DirectionOf(stepName);
+
+        // ★★<b>파지 단계에서 방향을 미리 맞춰 둔다</b>(2026-09-02).
+        //   종전에는 파지 단계에서 DirectionOf가 None이라 SetDirection을 아예 안 불렀다.
+        //   그래서 <b>직전 방향이 그대로 남은 채</b> 중립을 잡았고(씬에 direction=6 좌회전이
+        //   직렬화돼 있어 첫 파지는 늘 좌회전 기준이었다), 다음 방향으로 넘어가는 순간
+        //   파지 그룹이 달라 중립이 버려졌다 — <b>방금 잡았는데 또 잡으라고 하는</b> 증상이다.
+        //   2026-09-02 사용자: "이거 왜 파지 하고 파지를 한번 더해? 중립 파지 했잖아."
+        //   ★기준틀(axRight·axFwd)도 파지 그룹으로 갈리므로, 틀린 틀로 잡았다가 버리는 낭비였다.
+        //   파지 단계에서 그 그룹의 <b>첫 방향</b>으로 맞춰 두면 중립이 그대로 이어진다.
+        if (d == CervicalRomDriver.Direction.None) d = GripStepDirection(stepName);
+
         if (d != CervicalRomDriver.Direction.None) measure.SetDirection(d);
+    }
+
+    /// <summary>
+    /// 파지 단계가 준비하는 <b>그룹의 첫 방향</b>. CSV 순서를 따른다.
+    /// ★단계 이름으로 매칭하므로 CSV의 stepName을 바꾸면 여기도 바꾼다(규칙 8).
+    /// </summary>
+    private static CervicalRomDriver.Direction GripStepDirection(string stepName)
+    {
+        switch (stepName)
+        {
+            case "시상면 파지": return CervicalRomDriver.Direction.Flexion;       // 굴곡 → 신전
+            case "관상면 파지": return CervicalRomDriver.Direction.LateralRight;  // 우측굴 → 좌측굴 → 우회전 → 좌회전
+            default:            return CervicalRomDriver.Direction.None;
+        }
     }
 
     /// <summary>

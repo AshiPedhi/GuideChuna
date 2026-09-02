@@ -191,6 +191,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "끄면 종전의 자세한 안내로 돌아간다.")]
     [SerializeField] private bool evaluationGuidance = true;
 
+    [Tooltip("★<b>정방향으로 간 각만</b> 센다. 굴곡을 재는 중에 뒤로 젖히면 각이 안 쌓인다.\n" +
+             "끄면 종전대로 크기만 봐서, 반대로 움직여도 능동·압박이 잡힌다.\n" +
+             "★Play에서 정방향인데 바늘이 거꾸로 가면 부호 규약이 뒤집힌 것이니 이걸 끄고 알릴 것.")]
+    [SerializeField] private bool requireForwardDirection = true;
+
     [Tooltip("압박을 생략했을 때 깎는 점수(1회당).\n" +
              "★폭을 작게 잡았다 — 점수가 낮게 나오면 거부감이 생긴다(2026-09-02 사용자).")]
     [SerializeField] private float passiveSkipPenalty = 5f;
@@ -461,6 +466,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private int trackingRelocks;     // 너무 오래 거절해 새 위치를 받아들인 횟수
     private int holdResets;          // 흔들려서 홀드가 깎여 0까지 간 횟수
     private float lostTotal;         // 손을 못 읽은 총 시간(초)
+    private bool relockedThisFrame;         // 이 프레임에 손이 다시 잡혔는가 - 그 프레임은 속도를 안 잰다
     private float peakAngle;                // 이 단계에서 본 최대 각 - minAngleToMark 판정용
     private float passiveBaseAngle;         // 압박 단계의 출발선 = 능동으로 도달한 각(크기)
     private float releaseTimer;             // 파지가 풀린 채 흐른 시간
@@ -1020,9 +1026,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     float ICervicalRomGaugeSource.MaxAngleFor(CervicalRomDriver.Direction d)
         => RefDriver != null ? RefDriver.MaxAngleFor(d) : 0f;
 
+    // ★★<b>부호째 넘긴다</b>(2026-09-02). 종전에는 크기(|각|)만 넘겼다.
+    //   각도기 바늘이 어느 쪽으로 기우는지는 축 부호(AxisFor)가 정하므로, 크기만 줘도
+    //   굴곡이면 앞·신전이면 뒤로 <b>기울기는 한다</b>. 그런데 크기는 <b>어느 쪽으로 움직이든 커져서</b>,
+    //   굴곡을 재는 중에 뒤로 젖혀도 바늘이 굴곡 쪽으로 나갔다.
+    //   2026-09-02 사용자: "원래 진행해야할 방향의 반대쪽을 넘겨도 각도기는 앞으로 가던데 왜그런거야?"
+    //
+    // ★부호를 그대로 넘겨도 되는 근거: rom-frame-verify가 여섯 방향 모두 <b>+30°가 가야 할 자리</b>로
+    //   간다고 확인했다(2026-09-02 --current). 바늘은 SignedAngle과 같은 축·같은 규약으로 돌므로
+    //   정방향이 곧 양수다. ★이건 <b>계산</b>이다 — Play에서 눈으로 확정할 것.
+    //   틀렸으면 바늘이 정방향에서 거꾸로 간다. 그때는 requireForwardDirection을 끄고 알린다.
     float ICervicalRomGaugeSource.CurrentAngle
         => PreviewActive ? previewAngle
-         : TryGetAngle(out float deg, out _, out _) ? deg : 0f;
+         : TryGetAngle(out _, out _, out float sgn) ? sgn : 0f;
 
     // ★실측에는 '목표'가 없다. 기록된 값을 그대로 준다 — 아직이면 0이라 그 구간이 안 그려진다.
     //   즉 능동을 확정하는 순간 그 자리에 마킹이 생기고, 수동을 확정하면 그다음 구간이 생긴다.
@@ -1368,6 +1384,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     public void MarkActiveEnd()
     {
         if (!neutralReady) { Warn("중립 캡처가 먼저입니다."); return; }
+        // ★★<b>피크가 아니라 지금 각</b>을 적는다(2026-09-02, 되돌림).
+        //   한때 피크로 적었다. 09-02 10:48판에 수동(71.6)이 능동(72.3)보다 작게 남은 걸 보고
+        //   "게이트는 피크, 기록은 현재각"의 어긋남을 없애려 한 것이었다.
+        //   그런데 17:22판에서 <b>좌회전 수동 98.5도</b>(참고치 90)·신전 90.9도가 나왔다 —
+        //   한 번 잘못 돌린 각이 그대로 끝점으로 박힌 것이다.
+        //   사용자: "피크치로 하니까 한번 실수로 돌린 말도 안되는 각이 끝에 찍혀버리잖아."
+        //   ★끝점은 <b>시술자가 멈춰서 끝이라고 정한 자리</b>다. 지나간 최대치가 아니다.
+        //     피크는 게이트(여기까지는 갔다)로만 쓰고, 기록은 확정 순간의 각으로 되돌린다.
         if (!TryGetAngle(out float deg, out _, out float signed)) { Warn("각을 못 읽습니다."); return; }
 
         int i = (int)direction;
@@ -1414,6 +1438,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     public void MarkPassiveEnd()
     {
         if (!neutralReady) { Warn("중립 캡처가 먼저입니다."); return; }
+        // ★능동과 같은 이유로 <b>지금 각</b>을 적는다 — MarkActiveEnd 주석 참조.
         if (!TryGetAngle(out float deg, out _, out float signed)) { Warn("각을 못 읽습니다."); return; }
 
         int i = (int)direction;
@@ -1620,9 +1645,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         leftOk = rightOk = false;
         if (read)
         {
-            leftOk = AcceptHand(ref acceptedLeft, ref acceptedValidL, ref rejectSecondsL, l, frameDt);
-            rightOk = AcceptHand(ref acceptedRight, ref acceptedValidR, ref rejectSecondsR, r, frameDt);
+            leftOk = AcceptHand(ref acceptedLeft, ref acceptedValidL, ref rejectSecondsL, l, frameDt,
+                                out bool reL);
+            rightOk = AcceptHand(ref acceptedRight, ref acceptedValidR, ref rejectSecondsR, r, frameDt,
+                                 out bool reR);
+            relockedThisFrame = reL || reR;
         }
+        else relockedThisFrame = false;
         l = acceptedLeft; r = acceptedRight;
 
         bool has = leftOk && rightOk;             // 양손이 다 믿을 만한가
@@ -1706,6 +1735,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             return;
         }
 
+        // ★★<b>한 손만 다시 잡힌 프레임도 같은 가드를 태운다</b>(2026-09-02).
+        //   양손을 다 놓쳤다 돌아오는 경우(!prevValid)에는 아래 가드가 있었는데,
+        //   <b>한 손만</b> 거절됐다 풀리는 경우에는 그 가드를 안 탔다. 그 프레임의 점프가
+        //   그대로 속도 계산에 들어가 '움직이는 중'으로 읽혀 홀드를 깼다.
+        //   09-02 17:22판 좌회전 홀드 리셋 105회에 이게 섞여 있다.
+        if (relockedThisFrame)
+        {
+            prevLeft = l; prevRight = r; prevValid = true;
+            lostSeconds = 0f;
+            return;
+        }
+
         // ★복귀 첫 프레임은 변위를 못 잰다(끊긴 만큼 순간이동한 것처럼 보인다).
         //   갱신만 하고 넘어간다 — 여기서 재면 그 값이 곧바로 리셋을 부른다.
         if (!prevValid)
@@ -1728,8 +1769,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         }
         float speed = smoothedSpeed;
 
-        if (neutralReady && TryGetAngle(out float deg, out _, out _))
-            peakAngle = Mathf.Max(peakAngle, deg);
+        // ★피크를 <b>부호째</b> 기억한다(2026-09-02). 게이트는 종전부터 이 피크를 봤는데
+        //   기록은 확정 순간에 각을 다시 읽고 있었다 — 그 어긋남이 아래 MarkActiveEnd 주석의 결함이다.
+        // ★이 줄은 튐 필터를 통과한 프레임에서만 돈다. TryGetAngle이 leftOk·rightOk를 요구하고,
+        //   그 둘은 AcceptHand(속도 기반 튐 거르기)가 정한다. 튄 프레임의 각은 여기 오지 않는다.
+        // ★★<b>반대로 간 각은 안 센다</b>(2026-09-02). 종전에는 크기로 봐서, 굴곡을 재는 중에
+        //   뒤로 젖혀도 피크가 쌓이고 능동·압박이 잡혔다. 정방향이 양수라 부호를 그대로 쓰면 걸러진다
+        //   (음수는 0에서 출발한 peakAngle을 영영 못 넘는다).
+        if (neutralReady && TryGetAngle(out float deg, out _, out float sgn))
+        {
+            float advance = requireForwardDirection ? sgn : deg;
+            if (advance > peakAngle) peakAngle = advance;
+        }
 
         // ★히스테리시스 — 이미 쌓고 있는 중이면 나가는 임계를 높여 경계 깜빡임을 없앤다.
         float exitSpeed = holdSpeedThreshold * Mathf.Max(1f, holdSpeedExitFactor);
@@ -1837,8 +1888,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// </summary>
     /// <returns>이 프레임을 써도 되면 true.</returns>
     private bool AcceptHand(ref Vector3 accepted, ref bool valid, ref float rejectSec,
-                            Vector3 p, float dt)
+                            Vector3 p, float dt, out bool relocked)
     {
+        relocked = false;
+
         if (maxHandSpeed <= 0f) { accepted = p; valid = true; return true; }
 
         if (!valid)
@@ -1847,7 +1900,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             return true;
         }
 
-        if ((p - accepted).magnitude > maxHandSpeed * dt)
+        // ★★<b>허용 거리를 경과 시간에 비례시킨다</b>(2026-09-02).
+        //   종전에는 <c>maxHandSpeed * dt</c>, 즉 <b>한 프레임치</b>만 허용했다. 그런데 한 번 거절되면
+        //   기준점이 옛 위치에 얼어붙는데 손은 계속 움직이므로, 그 뒤 프레임도 전부 옛 위치에서
+        //   멀어 <b>계속</b> 거절됐다. 결국 maxRejectSeconds(0.5초)를 다 채워야 풀렸다 —
+        //   <b>한 번의 튐이 0.5초 정지를 불렀다.</b>
+        //   09-02 17:22판 우회전이 그 증거다: 튐 버림 993프레임 · 재잠금 28회 → 993/28 ≈ 35프레임,
+        //   72fps에서 딱 0.5초다. 993번 튄 게 아니라 <b>28번 튀고 그때마다 0.5초를 버린 것</b>이다.
+        //   "사람 손이 낼 수 있는 거리"는 원래 경과 시간에 비례한다. 그대로 재면 된다 —
+        //   진짜 순간이동은 여전히 못 따라잡아 종전처럼 재잠금으로 풀린다.
+        float elapsed = dt + rejectSec;           // 마지막으로 받아들인 뒤 흐른 시간
+
+        if ((p - accepted).magnitude > maxHandSpeed * elapsed)
         {
             rejectSec += dt;
             if (rejectSec < maxRejectSeconds)
@@ -1856,6 +1920,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
                 return false;                     // 버린다. 마지막으로 받아들인 위치를 그대로 쓴다.
             }
             trackingRelocks++;                    // 너무 오래 거절했다 — 진짜로 그리 간 것으로 본다.
+            relocked = true;
+        }
+        else if (rejectSec > 0f)
+        {
+            // 거절하다가 정상 범위로 돌아왔다. 이것도 위치가 건너뛴 것이라 속도를 재면 안 된다.
+            relocked = true;
         }
 
         rejectSec = 0f;
@@ -1879,7 +1949,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         }
 
         bool slip = IsSlipping(out float slipRatio);
-        bool measurable = TryGetAngle(out float deg, out float perp, out _);
+        bool measurable = TryGetAngle(out float deg, out float perp, out float shownSigned);
         int warn = slip ? 2 : (measurable && perp < minPerpRatio ? 1 : 0);
 
         if (showAxes && frameReady) UpdateAxisLines();
@@ -1889,7 +1959,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         if (!showReadout || readout == null) return;
 
-        int shown = measurable ? Mathf.RoundToInt(deg) : int.MinValue + 1;
+        // ★숫자도 부호째 띄운다(2026-09-02). 바늘이 −30을 가리키는데 숫자가 +30이면
+        //   둘이 서로 다른 말을 한다 — 그건 없느니만 못하다.
+        //   반대로 움직이는 동안 음수가 뜨는 게 곧 "지금 반대다"라는 신호가 된다.
+        int shown = measurable
+                    ? Mathf.RoundToInt(requireForwardDirection ? shownSigned : deg)
+                    : int.MinValue + 1;
         int holdStep = HoldBarSteps();
         int mask = DoneMask();
 
