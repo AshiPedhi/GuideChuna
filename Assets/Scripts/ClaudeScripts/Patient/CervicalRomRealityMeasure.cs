@@ -135,6 +135,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "★위 두 Vector2는 씬에 직렬화돼 있어 코드에서 못 바꾼다(규칙 7). 이 필드는 신규라 먹는다.")]
     [SerializeField] private float gripSpanMinOverride = 0.12f;
 
+    // ★새 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+    //   ★일부러 <b>넓게</b> 잡았다. 첫 판은 "얼마나 나오나"를 재는 판이다 —
+    //     좁혀 놓고 시작하면 파지가 안 잡혀 아무것도 못 잰다(08-31에 하한 14cm로 그 일을 겪었다).
+    //     실측 cm가 나오면 그때 좁힌다.
+    [Tooltip("★<b>엄지 단독</b>일 때 쓰는 양손 간격 범위(m).\n" +
+             "기존 범위는 엄지·검지 중점 기준이라 엄지 단독에는 안 맞는다.\n" +
+             "첫 실측용으로 넓게 열어 뒀다 — 실제 cm를 확인한 뒤 좁힌다.")]
+    [SerializeField] private Vector2 thumbOnlySpanRange = new Vector2(0.05f, 0.35f);
+
     [Tooltip("★<b>기본 꺼짐</b>. 핀치 폭으로도 막을지.\n\n" +
              "2026-08-31 실측: 켜 뒀더니 <b>정상적인 앞뒤 파지가 막혔다</b>. " +
              "이마·후두를 잡으면 엄지와 검지가 머리를 사이에 두고 벌어져 15~20cm가 나온다 — " +
@@ -170,8 +179,46 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("★끄면 어깨를 안 짚고 바로 파지로 간다(종전 동작).")]
     [SerializeField] private bool requireReference = true;
 
+    // ── 평가 진행 (2026-09-02) ────────────────────────────────────────────
+    // ★전부 새 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+
+    [Tooltip("★같은 파지를 쓰는 방향끼리는 중립을 <b>다시 안 잡는다</b>.\n" +
+             "시상면(굴곡·신전) 1회 · 측두(측굴 2 + 회전 2) 1회.\n" +
+             "손을 떼면 자동으로 무효화되고 다시 잡게 된다.")]
+    [SerializeField] private bool carryNeutralWithinGrip = true;
+
+    [Tooltip("★평가 문구 — 절차(어디를 어떻게 잡아라)를 화면에 안 띄운다.\n" +
+             "끄면 종전의 자세한 안내로 돌아간다.")]
+    [SerializeField] private bool evaluationGuidance = true;
+
+    [Tooltip("압박을 생략했을 때 깎는 점수(1회당).\n" +
+             "★폭을 작게 잡았다 — 점수가 낮게 나오면 거부감이 생긴다(2026-09-02 사용자).")]
+    [SerializeField] private float passiveSkipPenalty = 5f;
+
+    [Tooltip("파지를 놓쳐 다시 잡았을 때 깎는 점수(1회당).")]
+    [SerializeField] private float gripReleasePenalty = 2f;
+
+    [Tooltip("아무리 깎여도 이 아래로는 안 내려간다.\n" +
+             "★6방향을 전부 생략해도 이 점수는 남는다 — 학습자가 납득할 하한이다.")]
+    [SerializeField] private float minRomScore = 60f;
+
     [Tooltip("양손을 어깨에 올렸다고 볼 간격(m). 사람 어깨 폭 대역이다.")]
     [SerializeField] private Vector2 shoulderSpanRange = new Vector2(0.28f, 0.55f);
+
+    // ★새 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+    //   2026-09-02 사용자: "처음 어깨 중립 잡을때 간격 줄여줘."
+    //   ★어깨선도 <b>같은 점</b>에서 긋는다 — CaptureShoulders가 TryGetHands를 타고,
+    //     그게 TryGetPinchPoint다. 엄지 단독이면 어깨선도 엄지끝↔엄지끝이 된다.
+    //     기존 28~55cm는 엄지·검지 <b>중점</b> 기준이라 그대로 쓰면 안 맞는다.
+    //   ★첫 판은 재는 판이라 하한을 넉넉히 내렸다. 거절 문구가 실제 cm를 찍어 준다.
+    [Tooltip("★<b>엄지 단독</b>일 때 쓰는 어깨 폭 대역(m).\n" +
+             "기존 대역은 엄지·검지 중점 기준이라 엄지 단독에는 안 맞는다.\n" +
+             "실제 cm를 확인한 뒤 좁힌다.")]
+    [SerializeField] private Vector2 thumbOnlyShoulderSpanRange = new Vector2(0.15f, 0.55f);
+
+    /// <summary>지금 쓸 어깨 폭 대역. 엄지 단독이면 전용 대역을 쓴다.</summary>
+    private Vector2 ShoulderSpanRangeNow
+        => (gripJudge != null && gripJudge.IsThumbOnly) ? thumbOnlyShoulderSpanRange : shoulderSpanRange;
 
     [Tooltip("양손 높이 차 허용(m). 어깨는 좌우가 대체로 같은 높이다 —\n" +
              "머리를 잡은 것과 구분하는 데 이게 제일 잘 듣는다.")]
@@ -432,6 +479,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★이 방향에서 시간이 어디로 나갔는지. 방향이 끝나는 순간 계수기를 여기 찍는다.
         //   결과 CSV까지 실려 나간다 — logcat은 40분이면 밀려서 09-01에 통째로 잃었다.
         public int holdResets, rejectedFrames, relocks;
+
+        // ── 평가 계수기 (2026-09-02) ──────────────────────────────────
+        // ★추적 계수기(위)와 성격이 다르다. 위는 <b>기계가 잘 읽었나</b>고,
+        //   이건 <b>사람이 절차를 밟았나</b>다. 감점은 이쪽만 본다.
+        public bool passiveSkipped;   // 압박을 안 하고 중립으로 돌아왔다
+        public int gripReleases;      // 이 방향에서 손을 뗀 횟수
         public float lostSeconds;
     }
     private readonly Result[] results = new Result[7];
@@ -520,11 +573,26 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   증상 = "파지는 잡히는데 굴곡 단계에서 게이지가 영영 안 차고 안 넘어간다".
         //   같은 방향을 다시 지정하는 건 아무 의미가 없으므로 그냥 나간다.
         if (direction == d) return;
+
+        // ★떠나기 전에 계수기를 <b>지금</b> 방향 칸에 넣는다. 안 그러면 다음 방향에 얹힌다.
+        FlushTrackingCounters("방향 전환");
+
+        // ★★<b>같은 파지면 중립을 이어간다</b>(2026-09-02 사용자 지시).
+        //   손을 안 뗀다는 전제다. 실제로 떼면 UpdateGripRelease가 잡아 중립을 무효화하고
+        //   다시 잡게 하므로, 전제가 깨져도 조용히 틀리지 않는다.
+        bool carryNeutral = keepNeutral
+                            || (carryNeutralWithinGrip && neutralReady && SameGripGroup(direction, d));
+
         direction = d;
-        if (!keepNeutral)
+        if (!carryNeutral)
         {
             neutralReady = false;
             stage = Stage.AwaitNeutral;
+        }
+        else
+        {
+            // 중립은 그대로 두고 바로 능동을 잰다.
+            stage = Stage.Active;
         }
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
 
@@ -533,7 +601,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
 
         frameStamp++;
-        Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
+
+        // ★평가 문구 — <b>방법을 알려주지 않는다</b>(2026-09-02 사용자 지시).
+        //   "어디를 잡아라"(GripHintFor)는 술기 그 자체라 평가에서 빼야 한다.
+        //   반면 "파지 후 정지"는 술기가 아니라 <b>앱이 값을 잡는 조건</b>이라 남긴다.
+        if (carryNeutral) Mark($"-> {Label(direction)}");
+        else if (evaluationGuidance) Mark($"-> {Label(direction)} — 파지 후 중립에서 정지");
+        else Mark($"-> {Label(direction)}. {GripHintFor(direction)} 파지 후 중립에서 정지하세요.");
     }
 
     /// <summary>중립 근처로 돌아왔는가 — 복귀 substep을 넘길 조건이다.</summary>
@@ -766,6 +840,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private static bool IsSagittalGrip(CervicalRomDriver.Direction d)
         => d == CervicalRomDriver.Direction.Flexion || d == CervicalRomDriver.Direction.Extension;
 
+    /// <summary>
+    /// 두 방향이 <b>같은 파지</b>를 쓰는가. 같으면 중립을 다시 잡을 이유가 없다.
+    ///
+    /// ★2026-09-02 사용자: "신전 굴곡은 같은 위치 파지니까 중립으로 돌아온 뒤에
+    ///   다시 중립 값 측정할 거 없이 하고, 측굴 우회전도 좌우 포함 4구분에서
+    ///   처음만 중립 파지 하고 그 후에는 손을 안 떼는 전제로 유지해서 자동으로 넘어가게 하자."
+    ///
+    ///   시상면(이마·후두) = 굴곡·신전 2개 / 측두(양 측두) = 측굴 2개 + 회전 2개 = 4개.
+    /// ★중립을 이어가도 <b>되는</b> 근거: CaptureNeutral이 잡는 기준틀(axRight·axFwd)이
+    ///   파지선에서 나오므로, 파지가 같으면 기준틀도 같다. 방향마다 다른 건 축 선택(AxisFor)뿐이다.
+    /// </summary>
+    private static bool SameGripGroup(CervicalRomDriver.Direction a, CervicalRomDriver.Direction b)
+        => a != CervicalRomDriver.Direction.None && b != CervicalRomDriver.Direction.None
+           && IsSagittalGrip(a) == IsSagittalGrip(b);
+
     // ── 파지 게이트 ───────────────────────────────────────────────────────
     // ★"정지 1.5초"만으로 0점을 잡으면 <b>허공에서 손이 멈춘 것</b>도 파지로 본다.
     //   실측은 가상 환자도 콜라이더도 없어서 접촉으로 확인할 방법이 없다.
@@ -778,6 +867,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>지금 이 방향에 맞는 양손 간격 범위. 하한은 <see cref="gripSpanMinOverride"/>까지 내려간다.</summary>
     private Vector2 GripSpanRange(CervicalRomDriver.Direction d)
     {
+        // ★★엄지 단독이면 <b>다른 범위</b>를 쓴다(2026-09-02).
+        //   기존 범위(시상 12~26cm)는 <b>엄지·검지 중점</b> 사이 거리로 실측해 잡은 값이다.
+        //   엄지만 쓰면 각 손의 기준점이 <b>핀치 폭의 절반</b>만큼 옮겨 앉는데,
+        //   이 파지는 감싸는 파지라 엄지-검지가 15~20cm 벌어진다(08-31 실측).
+        //   즉 손마다 7~10cm씩 움직인다 — 기존 범위로는 파지가 <b>영영 안 잡힐 수 있다.</b>
+        //   ★어느 쪽으로 옮겨 앉는지는 <b>추론하지 않는다</b>(규칙 9). 넓게 열어 두고 재서 좁힌다.
+        //   화면의 거절 문구가 실제 cm를 찍어 주므로 그게 곧 자 노릇을 한다.
+        if (gripJudge != null && gripJudge.IsThumbOnly) return thumbOnlySpanRange;
+
         Vector2 r = IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
         if (gripSpanMinOverride > 0f) r.x = Mathf.Min(r.x, gripSpanMinOverride);
         return r;
@@ -843,7 +941,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         stage = Stage.AwaitNeutral;
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
-        Mark("파지가 풀렸습니다 — 다시 잡고 중립에서 정지하세요. (이 방향의 0점을 무효화했습니다)");
+
+        // ★손 뗀 횟수를 <b>센다</b>(2026-09-02 사용자 지시).
+        //   "손을 안 뗀다"는 전제로 중립을 이어가므로, 전제가 깨진 횟수가 곧 감점 근거다.
+        //   ★같은 파지를 이어 쓰는 동안 손을 떼면 그 뒤 방향들도 중립을 다시 잡게 되는데,
+        //     그건 자동으로 그렇게 된다 — neutralReady를 여기서 내렸기 때문이다.
+        int i = (int)direction;
+        if (i > 0 && i < results.Length) results[i].gripReleases++;
+
+        Mark("파지가 풀렸습니다 — 다시 잡고 중립에서 정지하세요.");
     }
 
     /// <summary>어깨 기준선이 잡혔는가. 실측 '준비' 단계를 넘길 조건이다.</summary>
@@ -866,8 +972,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "★실측은 참고치를 스스로 안 갖는다 — 45·90 같은 임상값은 드라이버가 들고 있다.")]
     [SerializeField] private CervicalRomDriver referenceDriver;
 
-    [Tooltip("각도기를 세울 자리 — 어깨 중점에서 이만큼 올린 곳(m). 목이 도는 자리다.")]
+    [Tooltip("★<b>측정용</b> 회전 중심 — 어깨 중점에서 이만큼 올린 곳(m). 목이 도는 자리다.\n" +
+             "한 손만 읽힐 때 그 손의 회전각을 이 점 둘레로 잰다. 표시 위치와는 별개다.")]
     [SerializeField] private float gaugePivotRise = 0.12f;
+
+    // ★★<b>손잡이를 나눈다</b>(2026-09-02). 종전에는 gaugePivotRise 하나가
+    //   ①각도기를 <b>그릴 자리</b>와 ②한 손 이어가기의 <b>회전 중심</b>에 같이 쓰였다.
+    //   그래서 "각도기를 어깨선으로 내려 달라"가 회전 중심까지 끌어내리는 요청이 돼 버린다.
+    //
+    //   2026-09-02 사용자: "각도기는 어깨축 잡은거 기준으로 나와줄래? 횡단면의 경우에
+    //     그 축에서 좀더 올라와 있는 위치에 나와서 어깨선이랑 평행하는 선이 생겨서 지저분해 보이거든."
+    //   → 횡단면 각도기는 <b>수평 원반</b>이라, 어깨선보다 12cm 위에 뜨면 어깨선과 나란한
+    //     선이 하나 더 생긴다. 0으로 두면 어깨선 위에 겹쳐 앉아 그 선이 사라진다.
+    //
+    // ★새로 추가한 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+    //   수직 다이얼(시상면·관상면)이 너무 낮게 앉으면 인스펙터에서 이것만 올린다.
+    [Tooltip("★<b>표시용</b> — 각도기를 어깨선에서 이만큼 올려 그린다(m).\n" +
+             "0이면 어깨축에 그대로 앉는다(횡단면에서 어깨선과 나란한 군더더기 선이 안 생긴다).\n" +
+             "측정용 회전 중심(gaugePivotRise)과는 <b>별개</b>다 — 여기를 만져도 각도값은 안 변한다.")]
+    [SerializeField] private float gaugeDrawRise = 0f;
 
     // ★각도기가 Transform의 position·rotation을 매 프레임 읽는다. 실측은 붙일 본이 없으므로
     //   대리 오브젝트를 만들어 우리가 얹는다. 씬에 저장되면 안 되므로 DontSave다.
@@ -953,7 +1076,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   횡단면 0°만 움직이고 관상면 축(axFwd)은 안 딸려 온다.
         if (transverseZeroFlip) fwd = -fwd;
 
-        proxyPivot.position = refReady ? shoulderMid + up * gaugePivotRise : pivot;
+        // ★그리는 자리는 <b>표시용</b> 손잡이를 쓴다. 측정용 회전 중심(gaugePivotRise)이 아니다.
+        proxyPivot.position = refReady ? shoulderMid + up * gaugeDrawRise : pivot;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
     }
 
@@ -978,9 +1102,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private void CaptureShouldersAt(Vector3 l, Vector3 r)
     {
         float span = Vector3.Distance(l, r);
-        if (span < shoulderSpanRange.x || span > shoulderSpanRange.y)
+        Vector2 shoulderRange = ShoulderSpanRangeNow;
+        if (span < shoulderRange.x || span > shoulderRange.y)
         {
-            Warn($"어깨 폭으로 안 보입니다({span * 100f:F0}cm). 양손을 좌우 어깨에 올리세요.");
+            // ★거절 문구에 기준을 같이 찍는다 — 이게 대역을 좁힐 때 쓸 자다.
+            Warn($"어깨 폭으로 안 보입니다({span * 100f:F0}cm — 기준 " +
+                 $"{shoulderRange.x * 100f:F0}~{shoulderRange.y * 100f:F0}cm). 양손을 좌우 어깨에 올리세요.");
             holdTimer = 0f;
             return;
         }
@@ -1252,8 +1379,35 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   압박이 확정돼 '수동 = 능동'이 된다.
         passiveBaseAngle = deg;
 
-        Mark($"{Label(direction)} 능동 {deg:F1}도 (부호 {signed:+0.0;-0.0}). " +
-             $"이제 끝 느낌까지 압박하세요 — {deg + minPassiveGain:F0}도를 넘겨야 잡힙니다.");
+        // ★평가에서는 <b>다음에 뭘 하라는 말을 안 한다</b>(2026-09-02 사용자 지시).
+        //   "이제 끝 느낌까지 압박하세요 — N도를 넘겨야 잡힙니다"는 절차와 통과 기준을
+        //   통째로 알려주는 문구였다. 잰 값만 남긴다 — 그건 결과지 절차가 아니다.
+        if (evaluationGuidance) Mark($"{Label(direction)} 능동 {deg:F1}도");
+        else Mark($"{Label(direction)} 능동 {deg:F1}도 (부호 {signed:+0.0;-0.0}). " +
+                  $"이제 끝 느낌까지 압박하세요 — {deg + minPassiveGain:F0}도를 넘겨야 잡힙니다.");
+    }
+
+    /// <summary>
+    /// 압박을 <b>안 하고</b> 중립으로 돌아왔다 — 생략으로 기록하고 이 방향을 끝낸다.
+    ///
+    /// ★2026-09-02 사용자: "능동 압박 안내 문구 없이 자율로 수행해야 하는데, 만약 안 하고
+    ///   중립으로 돌아오는 경우에는 그냥 완료시키고 단계 생략한 걸로 감점 하자."
+    /// ★이게 <b>09-01 신전이 막혔던 자리</b>다. 종전에는 압박이 확정돼야만 다음으로 갔기 때문에,
+    ///   능동이 86.8도까지 읽혀 89.8도를 넘길 수 없게 되자 그 방향에서 아무 데도 못 갔다.
+    ///   수동 0.0으로 남은 그 행이 이 함수가 필요하다는 증거다.
+    /// </summary>
+    public void MarkPassiveSkipped()
+    {
+        int i = (int)direction;
+        if (i <= 0 || i >= results.Length) return;
+        if (results[i].hasPassive || results[i].passiveSkipped) return;   // 이미 정해졌다
+
+        results[i].passiveSkipped = true;
+        stage = Stage.Done;
+        holdTimer = 0f;
+
+        Mark($"{Label(direction)} 압박 생략");
+        FlushTrackingCounters("압박 생략");
     }
 
     [ContextMenu("4 - 압박 끝점")]
@@ -1271,31 +1425,107 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Mark($"{Label(direction)} 수동 {deg:F1}도 (부호 {signed:+0.0;-0.0}) · 능동 대비 {gain:F1}도. " +
              "다음 방향으로 넘기거나 재파지 후 0점을 다시 잡으세요.");
 
-        LogTrackingCounters();
+        FlushTrackingCounters("압박 확정");
     }
 
     /// <summary>
-    /// 이 방향에서 시간이 어디로 나갔는지 남긴다.
+    /// 지금 방향에서 시간이 어디로 나갔는지 <b>그 방향 칸에</b> 옮겨 담고 누산기를 비운다.
     /// ★09-01 실기 테스트에서 신전이 134초였는데, 결과 CSV에는 StepTime 하나뿐이라
     ///   파지 거절인지·홀드 리셋인지·게인 미달인지 <b>가를 방법이 없었다.</b>
+    ///
+    /// ★★<b>압박 확정에서만 부르면 안 된다</b>(09-02 수정). 종전에는 <c>MarkPassiveEnd</c>
+    ///   한 곳에서만 불렀다. 그래서 압박을 확정 못 한 채 다음 방향으로 넘어가면
+    ///   ①그 방향 행은 계수기가 통째로 <b>0</b>으로 남고
+    ///   ②비우지도 않아서 그 몫이 <b>다음 방향 행에 얹혔다.</b>
+    ///   09-01 16:38판 신전이 정확히 이 모양이다 — 능동 86.8인데 네 계수기가 전부 0.
+    ///
+    /// ★<b>더한다</b>(대입이 아니다). 압박을 확정한 뒤 재파지해서 더 쓴 시간도 남아야 한다.
+    ///   비우고 더하므로 두 번 불러도 값이 늘지 않는다 — 방향 전환·결과 수집에서 안심하고 부른다.
     /// </summary>
-    private void LogTrackingCounters()
+    private void FlushTrackingCounters(string why)
     {
+        bool any = holdResets > 0 || rejectedFrames > 0 || trackingRelocks > 0 || lostTotal > 0f;
+
         // ★먼저 결과에 찍는다. 로그는 밀려도 이건 CSV로 나간다.
         int i = (int)direction;
-        results[i].holdResets = holdResets;
-        results[i].rejectedFrames = rejectedFrames;
-        results[i].relocks = trackingRelocks;
-        results[i].lostSeconds = lostTotal;
-
-        if (showDebugLogs)
+        if (i > 0 && i < results.Length)
         {
-            ChunaLogger.Log($"<color=cyan>[실측/{Label(direction)}] " +
+            results[i].holdResets += holdResets;
+            results[i].rejectedFrames += rejectedFrames;
+            results[i].relocks += trackingRelocks;
+            results[i].lostSeconds += lostTotal;
+        }
+
+        if (showDebugLogs && any)
+        {
+            ChunaLogger.Log($"<color=cyan>[실측/{Label(direction)}] {why} · " +
                             $"홀드 리셋 {holdResets}회 · 튐 버림 {rejectedFrames}프레임 · " +
                             $"재잠금 {trackingRelocks}회 · 손 유실 {lostTotal:F1}초</color>");
         }
 
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
+    }
+
+    /// <summary>
+    /// 아직 어느 방향 칸에도 안 들어간 계수기를 밀어 넣는다.
+    /// ★결과를 걷기 <b>직전</b>에 부른다 — 마지막 방향은 방향 전환이 안 일어나 흘릴 자리가 없다.
+    /// </summary>
+    public void FlushPendingDiagnostics() => FlushTrackingCounters("결과 수집");
+
+    // ================= 평가 (2026-09-02) =================
+
+    /// <summary>이 방향에서 압박을 생략했는가.</summary>
+    public bool WasPassiveSkipped(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < results.Length && results[i].passiveSkipped;
+    }
+
+    /// <summary>이 방향에서 파지를 놓친 횟수.</summary>
+    public int GripReleasesFor(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < results.Length ? results[i].gripReleases : 0;
+    }
+
+    /// <summary>압박을 생략한 방향 수.</summary>
+    public int PassiveSkipCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 1; i < results.Length; i++) if (results[i].passiveSkipped) n++;
+            return n;
+        }
+    }
+
+    /// <summary>파지를 놓친 총 횟수.</summary>
+    public int GripReleaseCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 1; i < results.Length; i++) n += results[i].gripReleases;
+            return n;
+        }
+    }
+
+    /// <summary>
+    /// ROM 평가 점수. 100에서 <b>절차를 안 밟은 만큼만</b> 깎는다.
+    ///
+    /// ★<b>각도 값 자체는 점수에 안 넣는다.</b> 가동범위는 환자의 상태지 시술자의 실력이 아니다 —
+    ///   환자가 뻣뻣하다고 시술자가 감점되면 그 점수는 아무것도 뜻하지 않는다.
+    /// ★<b>폭을 작게 잡고 하한을 뒀다</b>(2026-09-02 사용자: "점수가 너무 낮게 나오면
+    ///   학생들이 반발하기도 하고 은근 민감한 영역이라 최대한 거부감은 없게 하고 싶어").
+    ///   기본값이면 6방향을 전부 생략해도 100 − 30 = 70점이고, 하한 60 아래로는 안 내려간다.
+    /// </summary>
+    public float RomScore
+    {
+        get
+        {
+            float s = 100f - PassiveSkipCount * passiveSkipPenalty - GripReleaseCount * gripReleasePenalty;
+            return Mathf.Clamp(s, minRomScore, 100f);
+        }
     }
 
     /// <summary>
@@ -1321,6 +1551,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [ContextMenu("5 - 다음 방향")]
     public void NextDirection()
     {
+        // ★떠나기 전에 계수기를 지금 방향 칸에 넣는다(SetDirection과 같은 이유).
+        FlushTrackingCounters("방향 전환");
+
         int n = (int)direction;
         n = n >= 6 ? 1 : n + 1;
         direction = (CervicalRomDriver.Direction)n;

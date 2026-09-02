@@ -358,7 +358,20 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         switch (subNo)
         {
             case 1: return measure.HasActive(d);
-            case 2: return measure.HasPassive(d);
+
+            // ★★압박은 <b>자율</b>이다(2026-09-02 사용자 지시).
+            //   압박을 하면 그 값으로 넘어가고, 안 하고 중립으로 돌아오면 <b>생략</b>으로 넘어간다.
+            //   종전에는 HasPassive만 봐서, 압박이 안 잡히면 그 방향에서 영영 못 나갔다 —
+            //   09-01 신전이 그 자리에서 막혔고 수동 0.0으로 남았다.
+            case 2:
+                if (measure.HasPassive(d)) return true;
+                if (measure.IsBackToNeutral(neutralTolerance))
+                {
+                    measure.MarkPassiveSkipped();
+                    return true;
+                }
+                return false;
+
             case 3: return measure.IsBackToNeutral(neutralTolerance);
             default: return false;
         }

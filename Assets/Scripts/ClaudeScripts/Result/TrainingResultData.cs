@@ -233,10 +233,24 @@ public class TrainingResultData
         public int rejectedFrames;    // 추적이 튀어 버린 프레임 수
         public int relocks;           // 너무 오래 거절해 새 손 위치를 받아들인 횟수
         public float lostSeconds;     // 손을 못 읽은 총 시간(초)
+
+        // ── 평가 계수기 (2026-09-02, 실측 전용) ──────────────────────────
+        // ★위 4개와 성격이 다르다. 위는 <b>기계가 잘 읽었나</b>고 이건 <b>사람이 절차를 밟았나</b>다.
+        //   감점은 이쪽만 본다.
+        public bool passiveSkipped;   // 압박을 안 하고 중립으로 돌아왔다
+        public int gripReleases;      // 이 방향에서 파지를 놓친 횟수
     }
 
     [Tooltip("경추 ROM 측정값. 비어 있으면 이 시나리오가 아니다.")]
     public List<RomMeasurement> romMeasurements = new List<RomMeasurement>();
+
+    // ── ROM 평가 점수 (2026-09-02) ────────────────────────────────────────
+    // ★기존 overallScore와 <b>별개</b>다. 실측은 conditionType이 공란이라 채점 경로를
+    //   아예 안 타서 overallScore가 0으로 남는다. 그 자리를 건드리지 않고 따로 둔다.
+    // ★각도는 점수에 안 들어간다 — 가동범위는 환자 상태지 시술자 실력이 아니다.
+    public float romScore = 100f;
+    public int romPassiveSkips;
+    public int romGripReleases;
 
     /// <summary>
     /// ★[임시 · A-12 교차검증] ROM 결과표 아래에 붙일 부록 제공자.
@@ -598,6 +612,16 @@ public class TrainingResultData
         {
             if (m == null) continue;
 
+            // ★★압박을 생략했으면 <b>수동 0°로 적지 않는다</b>(2026-09-02).
+            //   0으로 적으면 차이값이 참고치 전체가 돼서(신전이면 90°) 가동범위가 전혀 없는 것처럼 읽힌다.
+            //   안 잰 것과 0인 것은 다르다 — 안 잰 것은 안 잰 것으로 적는다.
+            if (m.passiveSkipped)
+            {
+                sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{m.activeAngle:F0}°" +
+                              $"{C3}<color=#b0b0b0>생략</color>{C4}<color=#b0b0b0>-</color>");
+                continue;
+            }
+
             bool paired = m.directionName == "좌측굴" || m.directionName == "우측굴"
                        || m.directionName == "좌회전" || m.directionName == "우회전";
             bool highlight = m.DeficitAngle >= 0.5f
@@ -617,6 +641,20 @@ public class TrainingResultData
         AppendRomAsymmetry(sb, data, "좌회전", "우회전", "횡단면", asymmetryWarn);
 
         sb.AppendLine();
+
+        // ★수행 점수 — 절차를 안 밟은 만큼만 깎는다. 왜 깎였는지를 같이 적는다.
+        //   이유 없이 숫자만 낮으면 납득이 안 된다.
+        sb.Append($"수행 점수 {data.romScore:F0}점");
+        if (data.romPassiveSkips > 0 || data.romGripReleases > 0)
+        {
+            sb.Append("  <size=80%><color=#b0b0b0>(");
+            if (data.romPassiveSkips > 0) sb.Append($"압박 생략 {data.romPassiveSkips}회");
+            if (data.romPassiveSkips > 0 && data.romGripReleases > 0) sb.Append(" · ");
+            if (data.romGripReleases > 0) sb.Append($"파지 놓침 {data.romGripReleases}회");
+            sb.Append(")</color></size>");
+        }
+        sb.AppendLine();
+
         sb.AppendLine($"수행 시간 {FormatTime(data.totalTime)}");
         sb.Append("※ 참고치 = 정상 기준각(굴곡 45° · 신전 90° · 측굴 45° · 회전 90°) · " +
                   "능동 = 환자가 스스로 간 각 · 수동 = 시술자가 밀어 간 각 · 차이값 = 참고치까지 남은 각");
@@ -639,6 +677,8 @@ public class TrainingResultData
             else if (m.directionName == rightName) right = m;
         }
         if (left == null || right == null) return "";
+        // ★생략한 방향은 비교에서 뺀다 — 수동이 0이라 무조건 '덜 간 쪽'이 돼 버린다(2026-09-02).
+        if (left.passiveSkipped || right.passiveSkipped) return "";
         if (Mathf.Abs(left.passiveAngle - right.passiveAngle) < 0.5f) return "";
         return left.passiveAngle < right.passiveAngle ? leftName : rightName;
     }
@@ -654,6 +694,15 @@ public class TrainingResultData
             else if (m.directionName == rightName) right = m;
         }
         if (left == null || right == null) return;
+
+        // ★한쪽이라도 압박을 생략했으면 좌우를 견줄 수 없다 — 수동 0을 '덜 갔다'로 읽으면
+        //   생략한 쪽이 무조건 문제측이 된다(2026-09-02).
+        if (left.passiveSkipped || right.passiveSkipped)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"<color=#b0b0b0>{planeName} 좌우 비교 — 압박을 생략한 방향이 있어 견주지 않았습니다.</color>");
+            return;
+        }
 
         // ★2026-08-27 회의 결정 — 좌우 "차"가 아니라 <b>덜 간 쪽</b>을 짚는다.
         //   차이값만 보면 어느 쪽이 문제인지 한 번 더 따져야 한다. 그쪽을 개선해야 하므로

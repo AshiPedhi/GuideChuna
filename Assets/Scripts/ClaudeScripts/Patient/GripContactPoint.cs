@@ -22,6 +22,9 @@ public class GripContactPoint : MonoBehaviour
     /// <summary>엄지 하나만으로 인정할지. 끄면 엄지와 검지가 둘 다 들어와야 한다.</summary>
     public bool RequireBothFingers { get; set; } = true;
 
+    /// <summary>엄지만 보고 판정한다. 켜지면 <see cref="RequireBothFingers"/>는 안 본다.</summary>
+    public bool ThumbOnly { get; set; } = false;
+
     private void OnEnable()
     {
         inside.Clear();
@@ -88,6 +91,12 @@ public class GripContactPoint : MonoBehaviour
             if (t.FingerKind == GripFingerTip.Finger.Thumb) thumb = true;
             else index = true;
         }
+
+        // ★엄지 단독(2026-09-02) — 검지가 닿았는지는 <b>아예 안 본다</b>.
+        //   `RequireBothFingers = false`(엄지 또는 검지)와 다르다. 그건 <b>검지만</b> 닿아도
+        //   성립시키는데, 검지는 머리 뒤로 넘어가 가려지는 손가락이라 그 성립을 믿을 수 없다.
+        if (ThumbOnly) return thumb;
+
         return RequireBothFingers ? (thumb && index) : (thumb || index);
     }
 }

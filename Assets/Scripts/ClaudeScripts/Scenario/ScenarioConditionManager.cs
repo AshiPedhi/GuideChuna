@@ -336,23 +336,30 @@ public class ScenarioConditionManager : MonoBehaviour
                             $"  나레이션={(subStep.HasNarration() ? $"있음('{subStep.voiceInstruction.Trim()}')" : "없음")}");
         }
 
+        // ★★실측(ROM 평가)은 <b>측정기가 넘긴다</b>. 나레이션이 끝났다고 넘어가면 안 된다.
+        //   2026-08-31 실측: 실측 단계 전부가 나레이션 + conditionType 공란이라
+        //   아래 HandleNarrationThenDuration으로 빠졌고, 그게 "나레이션 끝 = 자동 진행"이라
+        //   손을 대지 않아도 23단계가 줄줄이 넘어갔다.
+        //   ★가이드 스텝(준비·시작·종료)은 위쪽 IsGuideStep 분기에서 이미 토글 대기로 빠지므로
+        //     여기 오지 않는다. 영향 범위는 실측 동작 단계뿐이다.
+        //   ★교육모드는 이 분기에 들어오지 않아 13개 술기의 기존 동작이 그대로다.
+        //
+        // ★★<b>나레이션 유무 밖으로 꺼냈다</b>(2026-09-02). 종전에는 HasNarration() 안에 있어서,
+        //   voiceInstruction이 <b>비면</b> 이 분기를 못 타고 공란 conditionType이
+        //   조용히 파지 조건으로 떨어졌다. 평가 모드에서 안내를 줄이며 문구를 비우려 하자
+        //   그게 드러났다 — 무음으로 두려면 더미 토큰을 24개 만들어야 하는 구조였다.
+        //   실측이면 <b>나레이션이 있든 없든</b> 재생만 하고 측정기를 기다린다.
+        //   (HandleNarrationThenExternal은 클립이 없어도 넘기지 않고 그대로 기다린다.)
+        if (IsMeasurementMode())
+        {
+            ChunaLogger.Log("<color=cyan>[ConditionManager] 실측 - 나레이션 재생 후 측정기 대기(자동 진행 안 함)</color>");
+            HandleNarrationThenExternal(subStep);
+            return;
+        }
+
         // ★ 나레이션이 있으면 먼저 재생 후 동작 진행
         if (subStep.HasNarration())
         {
-            // ★★실측(ROM 평가)은 <b>측정기가 넘긴다</b>. 나레이션이 끝났다고 넘어가면 안 된다.
-            //   2026-08-31 실측: 실측 단계 전부가 나레이션 + conditionType 공란이라
-            //   아래 HandleNarrationThenDuration으로 빠졌고, 그게 "나레이션 끝 = 자동 진행"이라
-            //   손을 대지 않아도 23단계가 줄줄이 넘어갔다.
-            //   ★가이드 스텝(준비·시작·종료)은 위쪽 IsGuideStep 분기에서 이미 토글 대기로 빠지므로
-            //     여기 오지 않는다. 영향 범위는 실측 동작 단계뿐이다.
-            //   ★교육모드는 이 분기에 들어오지 않아 13개 술기의 기존 동작이 그대로다.
-            if (IsMeasurementMode())
-            {
-                ChunaLogger.Log("<color=cyan>[ConditionManager] 실측 - 나레이션 재생 후 측정기 대기(자동 진행 안 함)</color>");
-                HandleNarrationThenExternal(subStep);
-                return;
-            }
-
             // ★ HandPose 및 cranial 조건(등록형)은 나레이션 후 등록된 조건 폴링을 시작 (제네릭하게 동작)
             if (conditionType == "HandPose" || conditionType == "cranialTouch" || conditionType == "cranialGrip" || conditionType == "cranialPressure" || conditionType == "cranialDepthBreath" || conditionType == "cranialGlide")
             {
@@ -650,14 +657,23 @@ public class ScenarioConditionManager : MonoBehaviour
     /// </summary>
     private void HandleNarrationThenExternal(SubStepData subStep)
     {
-        string clipName = subStep.voiceInstruction.Trim();
+        // ★voiceInstruction이 비어 있을 수 있다(평가 모드에서 안내를 뺀 단계).
+        //   그건 결함이 아니라 <b>의도한 무음</b>이므로 경고로 시끄럽게 하지 않는다.
+        string clipName = string.IsNullOrEmpty(subStep.voiceInstruction)
+                          ? string.Empty : subStep.voiceInstruction.Trim();
         currentVoiceClipName = clipName;
-        AudioClip clip = LoadNarrationClip(clipName);
 
         currentCondition = null;
         StopConditionCheck();
         eventSystem.RequestButtonStateUpdate(false);
 
+        if (clipName.Length == 0)
+        {
+            ChunaLogger.Log("<color=cyan>[ConditionManager] 실측 - 안내 없는 단계(의도한 무음). 측정기를 기다립니다.</color>");
+            return;
+        }
+
+        AudioClip clip = LoadNarrationClip(clipName);
         if (clip == null)
         {
             // 클립이 없어도 진행을 넘기지 않는다 — 측정기가 넘길 때까지 그대로 기다린다.

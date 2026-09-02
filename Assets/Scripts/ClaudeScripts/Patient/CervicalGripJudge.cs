@@ -37,13 +37,89 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [Tooltip("손끝 콜라이더 반경(m).")]
     [SerializeField] private float fingerTipRadius = 0.012f;
 
-    [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.")]
+    [Tooltip("끄면 엄지와 검지 중 하나만 닿아도 인정한다.\n" +
+             "★손끝 출처가 '엄지 단독'이면 이 값은 안 본다.")]
     [SerializeField] private bool requireBothFingers = true;
+
+    /// <summary>파지점과 접촉 판정을 어느 손끝으로 볼 것인가.</summary>
+    public enum FingerSource
+    {
+        ThumbAndIndex,   // 엄지·검지 둘 다 (종전)
+        ThumbOnly,       // 엄지만
+    }
+
+    // ★★2026-09-02 사용자: "엄지 검지로 하려고 했는데 엄지는 확실하게 유지가 되거든?
+    //   근데 검지 중지 쪽 머리 뒤쪽으로 넘어가는 애들은 각도따라 안 보이기도 해서
+    //   엄지만으로 판정하는 거 테스트 해봐야겠어."
+    //
+    // ★검지·중지는 <b>머리 뒤로 넘어가는 손가락</b>이라 헤드셋 시야에서 각도에 따라 사라진다.
+    //   가려진 손가락을 <b>보정</b>하는 것보다, 애초에 <b>안 쓰는</b> 것이 깨끗하다.
+    //   엄지는 늘 시술자 쪽(앞)에 있어 가려지지 않는다.
+    //
+    // ★엄지 단독이면 <b>두 곳</b>을 같이 바꿔야 테스트가 성립한다:
+    //     ①파지점(각도를 재는 위치)   ②접촉 판정(파지가 성립했는가)
+    //   ②를 안 바꾸면 가려진 검지가 접촉점에 안 닿아서 <b>파지 자체가 영영 안 잡힌다.</b>
+    [Tooltip("파지점과 접촉 판정을 어느 손끝으로 볼 것인가.\n" +
+             "ThumbOnly = 엄지만 본다. 검지는 아예 안 쓴다 — 머리 뒤로 넘어가 가려지는 손가락이라서다.\n" +
+             "ThumbAndIndex = 종전대로 둘 다 본다(가려지면 성한 쪽으로 이어간다).\n" +
+             "★되돌리려면 이 값 하나만 바꾸면 된다.")]
+    [SerializeField] private FingerSource fingerSource = FingerSource.ThumbOnly;
+
+    private bool ThumbOnly => fingerSource == FingerSource.ThumbOnly;
+
+    /// <summary>지금 엄지만 보고 있는가. 측정기가 파지 간격 기준을 고르는 데 쓴다.</summary>
+    public bool IsThumbOnly => ThumbOnly;
 
     [Tooltip("인스펙터에 배정된 손끝을 무시하고 Play에서 다시 찾는다.\n" +
              "★배정된 것이 실제 손끝이 아니라 손목·손바닥 쪽 뼈면, 손목만 틀어도 파지 지점이 움직여\n" +
              "  두 손 사이 직선의 기울기가 흔들린다(2026-08-28 사용자 지적). 그때 켠다.")]
     [SerializeField] private bool ignoreAssignedTips = false;
+
+    // ── 가려진 손가락 이어가기 (2026-09-02) ──────────────────────────────
+    // 2026-09-01 사용자: "신전에서 뒤통수 쪽 손이 많이 가려져서 인식이 안 되거나 하고,
+    //   그러다 보니 위치 어긋남이 생기기도 해."
+    //
+    // ★<b>튐의 기계적 원인</b>(2026-09-02 실측): 파지점은 (엄지+검지)/2인데,
+    //   종전 검사는 <c>null</c>(=배선이 비었는가)만 봤다. 추적이 끊긴 손가락도 Transform은
+    //   마지막 위치를 계속 내놓기 때문에, <b>가려진 검지의 낡은 위치가 절반의 무게로</b>
+    //   중점에 들어간다. 그래서 파지점이 몇 cm 옆으로 옮겨 앉는다.
+    //
+    // ★신뢰도 신호가 이 층에 없어서 <b>강체 전제</b>로 자체 판별한다.
+    //   파지 중엔 엄지-검지 간격이 거의 일정하다 — 간격이 갑자기 어긋나면 둘 중 하나가 튄 것이고,
+    //   그 프레임에 <b>더 많이 움직인 쪽</b>이 범인이다. 배선도 패키지도 안 늘린다.
+    //   (같은 원리가 이미 CervicalRomRealityMeasure.AcceptHand에서 <b>손</b> 단위로 돌고 있다.
+    //    이건 그걸 <b>손가락</b> 단위로 한 층 내린 것이다.)
+    //
+    // ★★<b>한계 — 솔직히 적어 둔다.</b> 이 판별은 <b>급한 변화</b>만 잡는다.
+    //   두 손가락이 같이 가려져 <b>같이</b> 천천히 미끄러지면 못 가른다.
+    //   그건 진짜 신뢰도 신호만 잡을 수 있다.
+    // ★[나중에] OVRHand 신뢰도를 끼우려면 <see cref="JudgeFingers"/> <b>안에서만</b> 손대면 된다.
+    //   2026-09-02 실측: 씬에 LeftOVRHand·RightOVRHand가 활성으로 있고(OVRHand·OVRSkeleton 배선됨),
+    //   Oculus.VR.dll에 GetFingerConfidence·IsDataHighConfidence가 있다.
+    //   ★다만 씬에 OVRManager가 <b>없어서</b> 이 OpenXR 구성에서 값이 나오는지는 <b>Play 미확인</b>이다.
+    //   확인되기 전에는 이 기하 판별이 단독으로 돈다.
+
+    [Header("=== 가려진 손가락 이어가기 ===")]
+    [Tooltip("한 손가락이 가려져 튀어도 성한 손가락 하나로 파지점을 이어간다.\n" +
+             "끄면 종전대로 — 둘 다 있으면 무조건 중점을 쓴다(튐이 그대로 들어온다).")]
+    [SerializeField] private bool singleFingerFallback = true;
+
+    [Tooltip("파지 중 손가락이 낼 수 있다고 보는 최대 속도(m/s). 이보다 빨리 뛴 손가락은 추적이 튄 것으로 본다.\n" +
+             "★0 이하면 속도 검사를 끈다.")]
+    [SerializeField] private float maxFingerSpeed = 1.2f;
+
+    [Tooltip("엄지-검지 간격이 기준에서 이만큼 벗어나면 한쪽이 튄 것으로 본다(m).\n" +
+             "★너무 좁으면 손을 조금만 고쳐 잡아도 걸리고, 너무 넓으면 튐을 놓친다. 실측으로 정할 값이다.")]
+    [SerializeField] private float fingerGapTolerance = 0.025f;
+
+    [Tooltip("간격 기준이 지금 간격을 따라가는 시간상수(초).\n" +
+             "★짧으면 미끄러지는 것까지 따라가 버려 검사가 죽고, 길면 손을 고쳐 잡았을 때 오래 버벅인다.")]
+    [SerializeField] private float gapFollowSeconds = 0.5f;
+
+    [Tooltip("한 손가락만으로 이어갈 수 있는 최대 시간(초).\n" +
+             "★넘으면 <b>포기하지 않고</b> 지금 두 손가락을 새 기준으로 다시 잡는다 — " +
+             "손을 진짜로 고쳐 잡았을 때 영영 못 따라가는 걸 막는다(AcceptHand의 maxRejectSeconds와 같은 얼개).")]
+    [SerializeField] private float singleFingerMaxSeconds = 4f;
 
     [Header("=== 표시 ===")]
     [Tooltip("접촉점 구체를 보이게 할지. 위치를 잡을 때만 켜면 된다.")]
@@ -72,10 +148,11 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     {
         midpoint = Vector3.zero;
         int n = 0;
+        bool useIndex = !ThumbOnly;   // ★엄지 단독이면 검지는 여기서도 안 섞는다
         if (leftThumbTip != null) { midpoint += leftThumbTip.position; n++; }
-        if (leftIndexTip != null) { midpoint += leftIndexTip.position; n++; }
+        if (useIndex && leftIndexTip != null) { midpoint += leftIndexTip.position; n++; }
         if (rightThumbTip != null) { midpoint += rightThumbTip.position; n++; }
-        if (rightIndexTip != null) { midpoint += rightIndexTip.position; n++; }
+        if (useIndex && rightIndexTip != null) { midpoint += rightIndexTip.position; n++; }
         if (n == 0) return false;
         midpoint /= n;
         return true;
@@ -90,13 +167,246 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     /// </summary>
     public bool TryGetPinchPoint(GripFingerTip.Side side, out Vector3 pinch)
     {
-        Transform thumb = side == GripFingerTip.Side.Left ? leftThumbTip : rightThumbTip;
-        Transform index = side == GripFingerTip.Side.Left ? leftIndexTip : rightIndexTip;
-
         pinch = Vector3.zero;
-        if (thumb == null || index == null) return false;
-        pinch = (thumb.position + index.position) * 0.5f;
+        if (side == GripFingerTip.Side.Left)
+        {
+            UpdateFingerTrack(ref trackL, leftThumbTip, leftIndexTip, "왼");
+            if (!trackL.pinchValid) return false;
+            pinch = trackL.pinch;
+        }
+        else
+        {
+            UpdateFingerTrack(ref trackR, rightThumbTip, rightIndexTip, "오른");
+            if (!trackR.pinchValid) return false;
+            pinch = trackR.pinch;
+        }
         return true;
+    }
+
+    /// <summary>이 손의 엄지·검지가 지금 각각 믿을 만한가. 진단 표시용이다.</summary>
+    public void GetFingerValidity(GripFingerTip.Side side, out bool thumbOk, out bool indexOk)
+    {
+        if (side == GripFingerTip.Side.Left)
+        {
+            UpdateFingerTrack(ref trackL, leftThumbTip, leftIndexTip, "왼");
+            thumbOk = trackL.thumbOk; indexOk = trackL.indexOk;
+        }
+        else
+        {
+            UpdateFingerTrack(ref trackR, rightThumbTip, rightIndexTip, "오른");
+            thumbOk = trackR.thumbOk; indexOk = trackR.indexOk;
+        }
+    }
+
+    /// <summary>진단용 — 한 손가락으로 이어간 총 시간(초)과 기준 재설정 횟수.</summary>
+    public void GetFingerDiagnostics(GripFingerTip.Side side, out float soloTotalSeconds, out int rebaselines)
+    {
+        FingerTrack t = side == GripFingerTip.Side.Left ? trackL : trackR;
+        soloTotalSeconds = t.soloTotal;
+        rebaselines = t.rebaselines;
+    }
+
+    // ================= 손가락 유효성 =================
+
+    /// <summary>
+    /// 한 손의 엄지·검지 추적 상태. ★구조체다 — 매 프레임 도는 경로라 할당을 만들지 않는다.
+    /// </summary>
+    private struct FingerTrack
+    {
+        public int frame;                    // 이 프레임에 이미 계산했는가
+        public bool started;
+        public Vector3 lastThumb, lastIndex;
+
+        public float gapRef;                 // 둘 다 성했을 때의 엄지-검지 간격
+        public bool gapRefValid;
+
+        // ★<b>로컬</b> 오프셋이다. 월드로 들고 있으면 머리가 도는 동안 어긋난다 —
+        //   신전에서 45도를 도는데 3cm 오프셋을 월드로 업고 가면 2cm 넘게 틀어진다.
+        public Vector3 thumbLocalOffset, indexLocalOffset;
+        public bool offsetValid;
+
+        public bool thumbOk, indexOk;
+        public float soloSeconds;            // 지금 한 손가락으로 버틴 시간
+        public float soloTotal;              // 진단용 누적
+        public int rebaselines;              // 기준을 다시 잡은 횟수
+
+        public Vector3 pinch;
+        public bool pinchValid;
+    }
+
+    private FingerTrack trackL, trackR;
+
+    /// <summary>
+    /// 이 손의 파지점을 이 프레임에 한 번 정한다.
+    /// ★<b>프레임 캐시를 쓴다</b> — 한 프레임에 여러 곳(측정기·게이지·압박)이 부르는데,
+    ///   Update에서 계산하면 실행 순서에 따라 한 프레임 낡은 값을 주게 된다.
+    /// </summary>
+    private void UpdateFingerTrack(ref FingerTrack t, Transform thumb, Transform index, string sideName)
+    {
+        if (t.frame == Time.frameCount) return;
+        t.frame = Time.frameCount;
+
+        // ★엄지 단독 — 검지를 아예 안 본다.
+        //   보정도 이어가기도 없다. 가려지지 않는 점 하나를 <b>그대로</b> 쓰는 게 이 모드의 전부다.
+        //   ★손 단위 튐 거르기는 위층(CervicalRomRealityMeasure.AcceptHand)이 이미 하고 있다.
+        //     여기서 한 번 더 거르면 이중으로 버려 진행이 멎을 수 있어, 여기서는 통과시킨다.
+        //     (속도 초과는 thumbOk에 남겨 로그로만 드러낸다.)
+        if (ThumbOnly)
+        {
+            t.indexOk = false;
+            t.gapRefValid = false;
+            t.offsetValid = false;
+
+            if (thumb == null) { t.thumbOk = false; t.pinchValid = false; t.started = false; return; }
+
+            Vector3 pThumb = thumb.position;
+            float dtThumb = Mathf.Max(1e-4f, Time.deltaTime);
+
+            t.thumbOk = !t.started || maxFingerSpeed <= 0f
+                        || (pThumb - t.lastThumb).magnitude / dtThumb <= maxFingerSpeed;
+
+            t.started = true;
+            t.lastThumb = pThumb;
+            t.pinch = pThumb;
+            t.pinchValid = true;
+            return;
+        }
+
+        if (thumb == null || index == null)
+        {
+            // 배선이 비었다 — 종전과 같이 '못 읽음'이다. 한 쪽만 있으면 그거라도 준다.
+            t.thumbOk = thumb != null; t.indexOk = index != null;
+            t.pinchValid = thumb != null || index != null;
+            if (t.pinchValid) t.pinch = thumb != null ? thumb.position : index.position;
+            t.started = false;
+            return;
+        }
+
+        Vector3 pT = thumb.position, pI = index.position;
+        float dt = Mathf.Max(1e-4f, Time.deltaTime);
+
+        if (!t.started)
+        {
+            t.started = true;
+            Rebaseline(ref t, thumb, index, pT, pI, dt, snap: true);
+            return;
+        }
+
+        float vThumb = (pT - t.lastThumb).magnitude / dt;
+        float vIndex = (pI - t.lastIndex).magnitude / dt;
+        t.lastThumb = pT; t.lastIndex = pI;
+
+        JudgeFingers(ref t, pT, pI, vThumb, vIndex, out bool thumbOk, out bool indexOk);
+        t.thumbOk = thumbOk; t.indexOk = indexOk;
+
+        if (thumbOk && indexOk)
+        {
+            if (t.soloSeconds > 0f && showDebugLogs)
+            {
+                ChunaLogger.Log($"<color=#7ad67a>[GripJudge/{sideName}손] 두 손가락 복귀 " +
+                                $"(한 손가락으로 {t.soloSeconds:F1}초 이어감)</color>");
+            }
+            t.soloSeconds = 0f;
+            // ★평소 경로다. 간격 기준은 천천히만 따라간다.
+            Rebaseline(ref t, thumb, index, pT, pI, dt, snap: false);
+            return;
+        }
+
+        // 둘 다 못 믿거나, 이어가기를 껐거나, 업고 갈 오프셋이 아직 없으면 — 못 읽는 것으로 넘긴다.
+        // ★위층(CervicalRomRealityMeasure)이 '손을 못 읽음'으로 받아 홀드 타이머를 <b>얼린다</b>.
+        //   조용히 틀린 값보다 없는 값이 낫다.
+        if (!singleFingerFallback || !t.offsetValid || (!thumbOk && !indexOk))
+        {
+            t.pinchValid = false;
+            return;
+        }
+
+        t.soloSeconds += dt;
+        t.soloTotal += dt;
+
+        // ★<b>포기하지 않고 다시 잡는다.</b> 손을 진짜로 고쳐 잡으면 간격이 영영 달라지는데,
+        //   그때 계속 한 손가락만 쓰면 낡은 오프셋을 무한정 업고 간다.
+        if (t.soloSeconds > singleFingerMaxSeconds)
+        {
+            t.rebaselines++;
+            if (showDebugLogs)
+            {
+                ChunaLogger.Log($"<color=yellow>[GripJudge/{sideName}손] 한 손가락으로 " +
+                                $"{singleFingerMaxSeconds:F1}초를 넘겼다 — 지금 두 손가락을 새 기준으로 다시 잡는다 " +
+                                $"(누적 {t.rebaselines}회)</color>");
+            }
+            t.soloSeconds = 0f;
+            t.thumbOk = t.indexOk = true;
+            // ★여기는 <b>즉시</b> 새 간격을 받는다 — 고쳐 잡았다고 인정하는 자리다.
+            Rebaseline(ref t, thumb, index, pT, pI, dt, snap: true);
+            return;
+        }
+
+        // ★성한 손가락의 <b>로컬</b> 오프셋을 업고 간다.
+        //   그냥 그 손가락 위치를 쓰면 중점→단일로 바뀌는 순간 핀치폭의 절반만큼 계단이 진다.
+        t.pinch = thumbOk ? pT + thumb.rotation * t.thumbLocalOffset
+                          : pI + index.rotation * t.indexLocalOffset;
+        t.pinchValid = true;
+    }
+
+    /// <summary>
+    /// ★<b>유효성 판단은 여기 하나뿐이다.</b> 나중에 OVRHand 신뢰도를 쓰게 되면
+    /// 이 함수 안에서만 조건을 더하면 되고, 부르는 쪽은 손댈 것이 없다.
+    /// </summary>
+    private void JudgeFingers(ref FingerTrack t, Vector3 pT, Vector3 pI,
+                              float vThumb, float vIndex, out bool thumbOk, out bool indexOk)
+    {
+        bool fastThumb = maxFingerSpeed > 0f && vThumb > maxFingerSpeed;
+        bool fastIndex = maxFingerSpeed > 0f && vIndex > maxFingerSpeed;
+
+        thumbOk = !fastThumb;
+        indexOk = !fastIndex;
+
+        if (!thumbOk || !indexOk) return;
+
+        // 속도로는 안 걸렸는데 간격이 어긋났다 — 강체라면 있을 수 없다. 더 움직인 쪽을 범인으로 본다.
+        float gap = Vector3.Distance(pT, pI);
+        if (t.gapRefValid && fingerGapTolerance > 0f
+            && Mathf.Abs(gap - t.gapRef) > fingerGapTolerance)
+        {
+            if (vThumb >= vIndex) thumbOk = false;
+            else indexOk = false;
+        }
+    }
+
+    /// <summary>
+    /// 둘 다 믿을 만한 지금을 기준으로 삼는다 — 간격·오프셋·파지점을 한꺼번에 다시 잡는다.
+    ///
+    /// ★<b>간격 기준만 천천히 따라간다</b>(<paramref name="snap"/>이 false일 때).
+    ///   지금 값으로 매 프레임 덮으면 gapRef가 늘 <b>직전 프레임</b> 값이 돼서,
+    ///   간격 검사가 "프레임 간 변화량" 검사로 쪼그라든다 — 그건 속도 검사가 이미 하는 일이라
+    ///   <b>없느니만 못하다</b>(2026-09-02에 쓰자마자 밟았다).
+    ///   천천히 따라가야 ①손을 진짜 고쳐 잡으면 1초쯤 뒤 새 간격을 받아들이고
+    ///   ②가려져 미끄러지는 것은 기준에서 벌어져 잡힌다.
+    /// </summary>
+    private void Rebaseline(ref FingerTrack t, Transform thumb, Transform index,
+                            Vector3 pT, Vector3 pI, float dt, bool snap)
+    {
+        Vector3 pinch = (pT + pI) * 0.5f;
+        float gap = Vector3.Distance(pT, pI);
+
+        t.lastThumb = pT; t.lastIndex = pI;
+        if (snap || !t.gapRefValid)
+        {
+            t.gapRef = gap;
+        }
+        else
+        {
+            float k = 1f - Mathf.Exp(-dt / Mathf.Max(1e-4f, gapFollowSeconds));
+            t.gapRef = Mathf.Lerp(t.gapRef, gap, k);
+        }
+        t.gapRefValid = true;
+        t.thumbLocalOffset = Quaternion.Inverse(thumb.rotation) * (pinch - pT);
+        t.indexLocalOffset = Quaternion.Inverse(index.rotation) * (pinch - pI);
+        t.offsetValid = true;
+        t.thumbOk = t.indexOk = true;
+        t.pinch = pinch;
+        t.pinchValid = true;
     }
 
     /// <summary>
@@ -113,13 +423,26 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
         width = 0f;
         if (thumb == null || index == null) return false;
+
+        // ★한 손가락이 튄 상태면 폭은 <b>뜻이 없다</b>. 그 값으로 게이트를 걸면 오판정이 된다.
+        GetFingerValidity(side, out bool thumbOk, out bool indexOk);
+        if (!thumbOk || !indexOk) return false;
+
         width = Vector3.Distance(thumb.position, index.position);
         return true;
     }
 
-    /// <summary>한 손이 잡고 있는 지점(엄지·검지 중점, 월드).</summary>
+    /// <summary>
+    /// 한 손이 잡고 있는 지점(엄지·검지 중점, 월드).
+    /// ★파지점과 <b>같은 판별</b>을 탄다(2026-09-02). 압박 판정도 튄 손가락을 물면 같이 틀어진다 —
+    ///   여기만 종전 평균을 쓰면 각도는 성한데 압박만 조용히 어긋난다.
+    /// </summary>
     public bool TryGetHandCluster(GripFingerTip.Side side, out Vector3 cluster)
     {
+        if (TryGetPinchPoint(side, out cluster)) return true;
+
+        // 파지점이 못 나오는 경우(배선이 한쪽만 있거나 둘 다 못 믿을 때)에도
+        // 종전처럼 있는 것만으로 평균을 낸다 — 이 경로는 접촉 판정에도 쓰여서 조용히 죽으면 안 된다.
         Transform thumb = side == GripFingerTip.Side.Left ? leftThumbTip : rightThumbTip;
         Transform index = side == GripFingerTip.Side.Left ? leftIndexTip : rightIndexTip;
 
@@ -194,6 +517,9 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
 
     private void Awake()
     {
+        // ★프레임 캐시의 초기값. 0으로 두면 첫 프레임(frameCount 0)을 '이미 계산했다'고 본다.
+        trackL.frame = trackR.frame = -1;
+
         SetPair(GripPair.None);
 
         // 판정 경로에 직접 꽂는다. 이걸 안 하면 AutoPlay 게이트·게이지·표시구가
@@ -327,6 +653,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             return;
         }
 
+        // ★모드를 매 프레임 밀어 넣는다 — Play 중에 인스펙터에서 fingerSource를 바꿔도 바로 듣게.
+        //   대입 두 개뿐이라 프레임 예산에 영향이 없다.
+        a.ThumbOnly = b.ThumbOnly = ThumbOnly;
+
         // 서로 다른 손이 두 점을 하나씩 집으면 성립.
         bool gripped = (a.LeftGripping && b.RightGripping) || (a.RightGripping && b.LeftGripping);
 
@@ -374,6 +704,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         if (!inUse) return;
 
         p.RequireBothFingers = requireBothFingers;
+        p.ThumbOnly = ThumbOnly;
         foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true)) r.enabled = showSpheres;
     }
 

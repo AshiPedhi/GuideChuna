@@ -110,8 +110,10 @@ public class TrainingResultExporter : MonoBehaviour
         //   면 이름은 화면 표에서는 빼기로 했지만, 데이터 파일에는 남긴다(나중에 묶어 보려면 필요하다).
         // ★뒤 4열은 진단 계수기다 — 각도가 아니라 "왜 오래 걸렸는지"다.
         //   계수기를 로그로만 남기면 09-01처럼 logcat이 밀려 통째로 잃는다. 파일에 같이 싣는다.
+        // ★뒤 2열은 <b>평가</b> 계수기다(2026-09-02). 진단 계수기와 성격이 다르다 —
+        //   기계가 잘 읽었나가 아니라 사람이 절차를 밟았나이고, 감점은 이쪽만 본다.
         sb.AppendLine("SessionId,UserName,Scenario,StartTime,Plane,Direction,Reference,Active,Passive,Deficit,"
-                    + "HoldResets,RejectedFrames,Relocks,LostSeconds");
+                    + "HoldResets,RejectedFrames,Relocks,LostSeconds,PassiveSkipped,GripReleases");
 
         foreach (var m in data.romMeasurements)
         {
@@ -130,7 +132,9 @@ public class TrainingResultExporter : MonoBehaviour
             sb.Append(m.holdResets.ToString(inv)).Append(',');
             sb.Append(m.rejectedFrames.ToString(inv)).Append(',');
             sb.Append(m.relocks.ToString(inv)).Append(',');
-            sb.Append(m.lostSeconds.ToString("F1", inv));
+            sb.Append(m.lostSeconds.ToString("F1", inv)).Append(',');
+            sb.Append(m.passiveSkipped ? "1" : "0").Append(',');
+            sb.Append(m.gripReleases.ToString(inv));
             sb.AppendLine();
         }
 

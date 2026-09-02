@@ -713,6 +713,18 @@ public class TrainingResultTracker : MonoBehaviour
         var measure = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
         bool useMeasure = measure != null && measure.HasAnyResult;
 
+        // ★마지막 방향은 <b>방향 전환이 안 일어나</b> 계수기를 흘릴 자리가 없다. 여기서 밀어 넣는다.
+        //   (측정기 쪽은 비우고 더하는 방식이라 두 번 불려도 값이 늘지 않는다.)
+        if (useMeasure) measure.FlushPendingDiagnostics();
+
+        // ★ROM 평가 점수. 측정기만 이 값을 안다(교육모드 드라이버에는 절차 계수기가 없다).
+        if (useMeasure)
+        {
+            resultData.romScore = measure.RomScore;
+            resultData.romPassiveSkips = measure.PassiveSkipCount;
+            resultData.romGripReleases = measure.GripReleaseCount;
+        }
+
         AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
         AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Extension, "시상면", "신전");
         AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
@@ -736,11 +748,15 @@ public class TrainingResultTracker : MonoBehaviour
         float active, passive;
         int holdResets = 0, rejectedFrames = 0, relocks = 0;
         float lostSeconds = 0f;
+        bool passiveSkipped = false;
+        int gripReleases = 0;
 
         if (useMeasure)
         {
             if (!measure.TryGetResult(d, out active, out passive, out _, out _)) return;
             measure.GetDiagnostics(d, out holdResets, out rejectedFrames, out relocks, out lostSeconds);
+            passiveSkipped = measure.WasPassiveSkipped(d);
+            gripReleases = measure.GripReleasesFor(d);
         }
         else
         {
@@ -761,6 +777,8 @@ public class TrainingResultTracker : MonoBehaviour
             rejectedFrames = rejectedFrames,
             relocks = relocks,
             lostSeconds = lostSeconds,
+            passiveSkipped = passiveSkipped,
+            gripReleases = gripReleases,
         });
     }
 
