@@ -72,10 +72,11 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [SerializeField] private bool followProgressRoot = true;
 
     [Tooltip("헤드셋 앞으로 이만큼 띄운다(m).\n" +
-             "★각도기는 환자 머리(0.5~0.8m)에 붙어 있다. 이보다 <b>멀리</b> 둬야 각도기를 안 가린다\n" +
-             "  (2026-09-03 사용자: '너무 가까우니까 각도기 가려져').\n" +
-             "★멀어진 만큼 작아 보이므로 progressScale로 되돌린다.")]
-    [SerializeField] private float followDistance = 1.15f;
+             "★<b>이게 크기 손잡이다.</b> 캔버스를 키우지 않고 거리로만 조절한다\n" +
+             "  (2026-09-03 사용자: '스케일은 건들지 말아봐').\n" +
+             "★실측으로 좁힌 값 — 0.65는 각도기(환자 머리 0.5~0.8m)를 가렸고,\n" +
+             "  1.15는 스케일 없이는 너무 작았다. 그 사이다.")]
+    [SerializeField] private float followDistance = 0.9f;
 
     [Tooltip("눈높이에서 이만큼 <b>내린다</b>(m). 양수면 내려간다.\n" +
              "★고개를 올리지 않아도 보이게 하는 값이다 — 환자 머리보다 아래에 와야 한다.")]
