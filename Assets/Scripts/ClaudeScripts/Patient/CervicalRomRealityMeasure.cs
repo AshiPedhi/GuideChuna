@@ -842,6 +842,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         refReady = false;
         acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
+        gripAnchorValid = false; angleExcursionSeconds = 0f;
 
         Mark(requireReference
             ? "처음부터 - 양손을 환자 양어깨에 올리고 정지하세요."
@@ -1087,6 +1088,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "측정용 회전 중심(gaugePivotRise)과는 <b>별개</b>다 — 여기를 만져도 각도값은 안 변한다.")]
     [SerializeField] private float gaugeDrawRise = 0f;
 
+    [Tooltip("★각도기를 <b>파지 지점</b>에 그린다(2026-09-03 지시). 끄면 종전대로 어깨 중점에 그린다.\n" +
+             "0점을 잡은 자리에 고정되고, 0점 전에는 손을 따라온다.\n" +
+             "★자리만 바뀐다 — 각도값에는 영향이 없다.\n" +
+             "★신규 필드라 코드 기본값이 먹는다(규칙 7).")]
+    [SerializeField] private bool gaugeAtGrip = true;
+
+    /// <summary>0점을 잡은 순간의 파지 중점(월드). 각도기를 여기에 고정한다.</summary>
+    private Vector3 gripAnchor;
+    private bool gripAnchorValid;
+
     // ★각도기가 Transform의 position·rotation을 매 프레임 읽는다. 실측은 붙일 본이 없으므로
     //   대리 오브젝트를 만들어 우리가 얹는다. 씬에 저장되면 안 되므로 DontSave다.
     private Transform proxyPivot, proxyTorso;
@@ -1182,7 +1193,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (transverseZeroFlip) fwd = -fwd;
 
         // ★그리는 자리는 <b>표시용</b> 손잡이를 쓴다. 측정용 회전 중심(gaugePivotRise)이 아니다.
-        proxyPivot.position = refReady ? shoulderMid + up * gaugeDrawRise : pivot;
+        //
+        // ★★<b>파지 지점에 그린다</b>(2026-09-03 사용자 지시 — "파지 위치에 시선 가기 편한 각도기").
+        //   종전에는 어깨 중점(shoulderMid)에 그렸다. 그런데 시술자가 보고 있는 곳은 <b>환자 머리와 자기 손</b>이다.
+        //   각도기가 어깨 높이에 있으면 눈금을 읽으려고 시선을 아래로 내려야 한다.
+        //   ★자리만 옮기는 것이고 <b>각도값은 안 변한다</b> — 바늘 각은 CurrentAngle이 따로 준다.
+        //   ★0점을 잡을 때의 파지 위치에 <b>고정</b>한다. 손을 따라 흔들리면 눈금을 못 읽는다
+        //     (0점 전에는 손을 따라간다 — 그래야 파지 단계에서 어디에 뜰지 보인다).
+        Vector3 anchor = gaugeAtGrip && gripAnchorValid
+            ? gripAnchor
+            : (refReady ? shoulderMid : pivot);
+
+        proxyPivot.position = anchor + up * gaugeDrawRise;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
     }
 
@@ -1455,6 +1477,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         radL0 = l - anglePivot;
         radR0 = r - anglePivot;
         singleHandSeconds = 0f;
+
+        // ★각도기를 그릴 자리를 여기서 못 박는다. 이 뒤로는 손이 움직여도 안 따라간다 —
+        //   눈금이 흔들리면 읽을 수가 없다(2026-09-03).
+        gripAnchor = (l + r) * 0.5f;
+        gripAnchorValid = true;
 
         vNow = v0; vNowValid = true;
         neutralReady = true;
@@ -1788,6 +1815,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             //   어깨 단계를 없애면서 생긴 구멍이다 — 예전엔 어깨를 짚는 순간 잡혔다.
             //   0점을 잡은 뒤에는 고정한다. 각도기가 손을 따라 흔들리면 눈금을 못 읽는다.
             pivot = (l + r) * 0.5f + Vector3.up * pivotRise;
+
+            // ★파지 단계에서도 각도기가 손을 따라와야 "여기에 뜬다"가 보인다. 0점을 잡으면 고정된다.
+            gripAnchor = (l + r) * 0.5f;
+            gripAnchorValid = true;
         }
 
         EnsureGaugeProxy();
