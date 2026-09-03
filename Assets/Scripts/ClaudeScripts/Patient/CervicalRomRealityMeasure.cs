@@ -105,17 +105,22 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "끄면 종전 값(2.5초 × 1.5도)으로 돌아간다.")]
     [SerializeField] private bool simplifiedGating = true;
 
-    [Tooltip("간소 모드의 정지 유지 시간(초). 종전 2.5초.")]
-    [SerializeField] private float simpleHoldSeconds = 1.2f;
+    [Tooltip("간소 모드의 정지 유지 시간(초). 종전 2.5초.\n" +
+             "★2026-09-03 재조정: 1.2초는 <b>너무 짧았다</b> — '이동하는 중에 주춤하는 사이에 찍혀버려'.\n" +
+             "  1.8초. 늘어짐은 시간이 아니라 아래 유예·감쇠가 막는다.")]
+    [SerializeField] private float simpleHoldSeconds = 1.8f;
 
     [Tooltip("간소 모드의 각도 여유(도). 종전 1.5도.\n" +
-             "★시간보다 <b>각도 여유를 먼저</b> 푼다 — 시간을 줄이면 지나가는 각이 잡힌다.\n" +
-             "  엄지가 접점에서 구르면 2~3도가 그냥 흔들린다. 그보다는 커야 한다.")]
-    [SerializeField] private float simpleHoldAngleTolerance = 3.5f;
+             "★이게 '천천히 지나가는 것'과 '멈춘 것'을 가르는 값이다 — 너무 키우면\n" +
+             "  주춤하는 사이에 찍힌다. 3.5도는 헐거웠다(2026-09-03) → 2.5도.\n" +
+             "  엄지가 구르며 생기는 2~3도 흔들림은 <b>여유가 아니라 아래 유예</b>가 흡수한다.")]
+    [SerializeField] private float simpleHoldAngleTolerance = 2.5f;
 
     [Tooltip("각도 앵커에서 벗어나도 이만큼은 봐준다(초). 한 프레임 튐으로 타이머를 잃지 않게 한다.\n" +
+             "★튐 흡수는 <b>여기가</b> 한다. 여유(각도)를 키우는 것과 역할이 다르다 —\n" +
+             "  여유를 키우면 느리게 지나가는 것도 정지로 읽히지만, 유예는 <b>짧은 것만</b> 봐준다.\n" +
              "0이면 종전처럼 벗어나는 즉시 처리한다.")]
-    [SerializeField] private float holdAngleGraceSeconds = 0.2f;
+    [SerializeField] private float holdAngleGraceSeconds = 0.25f;
 
     /// <summary>실제로 쓸 정지 유지 시간.</summary>
     private float HoldSeconds => simplifiedGating && simpleHoldSeconds > 0f
@@ -1102,7 +1107,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     //   대리 오브젝트를 만들어 우리가 얹는다. 씬에 저장되면 안 되므로 DontSave다.
     private Transform proxyPivot, proxyTorso;
 
-    public bool UsePracticeGauge => usePracticeGauge;
+    // ★★2026-09-03: <b>모드마다 각도기 하나</b>다.
+    //   실습 → 실습 각도기(판·채움 포함) / 실측 → <b>실측 전용 180도 반원</b>.
+    //   09-01에 실측이 실습 각도기를 빌려 쓰도록 바꿨는데, 그러면 실측 각도기가 영영 안 뜬다
+    //   (아래 UpdateGauge의 조건이 !UsePracticeGauge다).
+    //   사용자: "실측용 각도기도 보여주라니까 그것도 안 나왔네."
+    // ★usePracticeGauge는 씬에 1이 굳어 있어 코드로 못 끈다(규칙 7) → 신규 필드로 뒤집는다.
+    [Tooltip("★켜면 실측에서 <b>실측 전용 각도기</b>를 쓴다(기본). 실습 각도기는 접힌다.\n" +
+             "끄면 09-01처럼 실습 각도기를 빌려 쓴다.")]
+    [SerializeField] private bool useRealityGauge = true;
+
+    public bool UsePracticeGauge => usePracticeGauge && !useRealityGauge;
+
+    /// <summary>결과 단계에서 각도기를 접는다. 접는 쪽이 편다.</summary>
+    public void SetGaugeHidden(bool on) => gaugeForceHidden = on;
+    private bool gaugeForceHidden;
 
     private CervicalRomDriver RefDriver
     {
@@ -1482,6 +1501,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   눈금이 흔들리면 읽을 수가 없다(2026-09-03).
         gripAnchor = (l + r) * 0.5f;
         gripAnchorValid = true;
+
+        // ★표시 기준점도 파지 지점으로 데려온다. CaptureShoulders가 여기를 shoulderMid로
+        //   옮겨 놓기 때문에, 그대로 두면 각도기·축선·안내문이 전부 어깨 높이에 그려진다.
+        //   ★pivot은 <b>표시 전용</b>이다(각은 anglePivot이 따로 쓴다) — 옮겨도 값은 안 변한다.
+        pivot = gripAnchor + Vector3.up * pivotRise;
 
         vNow = v0; vNowValid = true;
         neutralReady = true;
@@ -2196,9 +2220,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (!readout.gameObject.activeSelf) readout.gameObject.SetActive(true);
 
         readout.text = ReadoutText;
+
+        // ★★<b>손 옆에 띄운다</b>(2026-09-03). 종전에는 pivot을 썼는데, 어깨를 짚고 나면
+        //   pivot이 shoulderMid로 옮겨간다(CaptureShoulders). 그래서 안내문이 <b>어깨 높이로 내려가</b>
+        //   "손 쪽에 따라오던 정보가 안 보인다"가 됐다. 각도기가 겪던 것과 같은 병이다.
+        //   → 각도기와 같은 앵커(파지 지점)를 쓴다. 0점 전에는 손을 따라오고, 0점 뒤에는 고정된다.
+        Vector3 readoutBase = gripAnchorValid ? gripAnchor : pivot;
+
         // ★손 바로 위라 눈에서 40cm쯤 떨어지는데, VR에서 그 거리는 초점이 안 맞아 흐리다.
         //   최소 거리를 두고 밀어낸다(2026-08-31 사용자: '가까워서 흐린가 글씨가 안 보였다').
-        Vector3 readoutPos = pivot + Vector3.up * ReadoutRiseNow;
+        Vector3 readoutPos = readoutBase + Vector3.up * ReadoutRiseNow;
         Camera rcam = Camera.main;
         if (rcam != null)
         {
@@ -2349,7 +2380,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     {
         // ★실습 각도기를 쓰는 동안에는 자체 반원을 안 그린다(2026-09-01). 코드는 남겨 둔다 —
         //   되돌릴 자리가 있어야 한다(사용자: "실측 각도기는 일단 없애지 말아봐").
-        bool on = showGauge && !usePracticeGauge && neutralReady && frameReady;
+        bool on = showGauge && !UsePracticeGauge && !gaugeForceHidden && neutralReady && frameReady;
 
         if (gaugeFilter != null && gaugeFilter.gameObject.activeSelf != on)
             gaugeFilter.gameObject.SetActive(on);

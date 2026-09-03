@@ -1539,9 +1539,24 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     private void SetVisible(bool visible)
     {
+        if (forceHidden) visible = false;
         if (root == null || root.gameObject.activeSelf == visible) return;
         root.gameObject.SetActive(visible);
     }
+
+    /// <summary>
+    /// 밖에서 각도기를 통째로 접는다. 측정이 다 끝난 자리(실측 '결과')에서 쓴다.
+    /// ★2026-09-03 사용자: "좌회전까지 다 끝나면 각도기 꺼 줘."
+    /// ★<b>접는 쪽이 편다</b> — 실측을 나갈 때 반드시 false로 되돌린다.
+    /// </summary>
+    public void SetForceHidden(bool on)
+    {
+        if (forceHidden == on) return;
+        forceHidden = on;
+        if (on) SetVisible(false);
+    }
+
+    private bool forceHidden;
 
     /// <summary>
     /// ★프로젝트 관례 — Sprites/Default. 알파 블렌드가 셰이더에 고정돼 있어

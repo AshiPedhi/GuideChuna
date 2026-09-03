@@ -141,6 +141,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private Vector3 progressHomePos;
     private Quaternion progressHomeRot;
     private Vector3 progressHomeScale;
+    private bool practiceGaugeHidden;  // 실습 각도기를 우리가 접었는가
     private bool followPlaced;         // 이번 추종에서 한 번은 갖다 놨는가
     private bool followChasing;        // 데드존을 벗어나 쫓는 중인가
     private Vector3 followVelocity;    // SmoothDamp용
@@ -277,7 +278,14 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         // ★결과 단계에서는 측정을 얼린다. 안 그러면 손을 내리는 순간 0점이 풀리고,
         //   거기서 잠깐 멈추면 <b>마지막 방향을 다시 재기 시작한다</b>(09-03 사용자: 좌회전이 계속 다시 측정됨).
-        measure.SetFrozen(name == "결과");
+        bool done = name == "결과";
+        measure.SetFrozen(done);
+
+        // ★다 재고 나면 각도기를 접는다(2026-09-03 사용자 지시).
+        //   결과를 읽는 자리에 눈금과 바늘이 남아 있으면 아직 재는 중으로 보인다.
+        //   ★쓰고 있는 각도기 쪽을 접는다 — 실측 전용이면 측정기, 빌려 쓰는 중이면 실습 각도기.
+        measure.SetGaugeHidden(done);
+        if (planeGauge != null && measure.UsePracticeGauge) planeGauge.SetForceHidden(done);
 
         // ★★준비 단계의 [다음] 토글을 잠근다(2026-09-03).
         //   아래 IsSatisfied가 ReferenceReady로 막고 있었는데도 넘어가던 이유가 여기다 —
@@ -687,10 +695,20 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     /// </summary>
     private void ApplyPlaneGauge()
     {
-        if (measure == null || !measure.UsePracticeGauge) return;
+        if (measure == null) return;
         if (planeGauge == null)
         {
             ChunaLogger.LogWarning("[실측Bridge] CervicalRomPlaneGauge를 못 찾았습니다 — 각도기 없이 진행합니다.");
+            return;
+        }
+
+        // ★실측 전용 각도기를 쓰는 모드면 실습 각도기는 접어 둔다(2026-09-03).
+        //   모드마다 각도기는 하나다 — 둘이 같이 뜨면 같은 자리에 겹친다.
+        if (!measure.UsePracticeGauge)
+        {
+            planeGauge.SetForceHidden(true);
+            practiceGaugeHidden = true;
+            if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 실측 전용 각도기 사용 — 실습 각도기는 접었다.</color>");
             return;
         }
 
@@ -703,8 +721,17 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private void RestorePlaneGauge()
     {
         if (planeGauge == null) return;
-        if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 안 건드린다
 
+        // ★우리가 접었으면 우리가 편다. 출처를 안 끼운 경우(실측 전용 각도기)도 여기서 되돌린다.
+        if (practiceGaugeHidden)
+        {
+            practiceGaugeHidden = false;
+            planeGauge.SetForceHidden(false);
+        }
+
+        if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 나머지는 안 건드린다
+
+        planeGauge.SetForceHidden(false);            // 접은 쪽이 편다
         planeGauge.SetPressGuide(false);
         planeGauge.ClearSticky();
         planeGauge.SetRealityLook(false);
