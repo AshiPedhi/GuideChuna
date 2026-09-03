@@ -392,8 +392,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 씬 값은 0.34였다.\n" +
              "★각도기 반지름이 0.30이라 이보다 낮추면 눈금 호와 겹칠 수 있다 — " +
-             "그때는 음수로 내려 각도기 <b>아래</b>로 빼는 편이 낫다.")]
-    [SerializeField] private float readoutRiseOverride = 0.18f;
+             "그때는 음수로 내려 각도기 <b>아래</b>로 빼는 편이 낫다.\n" +
+             "★2026-09-03 컨펌: '손에 좀 더 가깝게' → 0.18 → 0.10.")]
+    [SerializeField] private float readoutRiseOverride = 0.10f;
 
     [Tooltip("★<b>안내문 전용</b> 글씨 배율. textScale은 눈금 숫자까지 같이 키워서 따로 뒀다.\n" +
              "씬의 textScale은 1.8이고 readoutSize는 0.05다 → 1.8이면 종전과 같은 크기.")]
@@ -415,8 +416,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     //   그래서 <b>신규 필드</b>로 손잡이를 따로 둔다 — 신규 필드라 코드 기본값이 그대로 먹는다.
 
     [Tooltip("★켜면 안내문을 손 위 월드 텍스트로 안 그리고 <b>진행 UI</b>로 보낸다.\n" +
-             "끄면 종전대로 손 위에 뜬다(showReadout이 켜져 있어야 한다).")]
-    [SerializeField] private bool routeReadoutToGuideUI = true;
+             "★기본 꺼짐(2026-09-03 컨펌) — 진행Root에 얹으니 어수선하다는 판단이라\n" +
+             "  종전대로 손 옆에 띄운다. 코드는 남겨 둔다.")]
+    [SerializeField] private bool routeReadoutToGuideUI;
 
     /// <summary>안내문을 진행 UI가 그리는가.</summary>
     public bool RouteReadoutToGuideUI => routeReadoutToGuideUI;

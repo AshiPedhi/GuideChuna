@@ -68,8 +68,13 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [Tooltip("옮길 UI 루트. 비우면 교육 브리지의 슬롯 → 이름('진행Root') 순으로 찾는다.")]
     [SerializeField] private Transform progressRoot;
 
-    [Tooltip("★끄면 진행Root를 안 건드린다(종전 동작 — 고정 포인트에 그대로 있는다).")]
-    [SerializeField] private bool followProgressRoot = true;
+    // ★★2026-09-03 컨펌 결과: <b>진행Root는 기존대로 둔다</b>("너무 어수선하고 비효율적").
+    //   추종·글 밀어넣기 둘 다 기본으로 끈다. 코드는 남겨 둔다 — 다시 켜 보고 싶을 때가 있다.
+    //   실측 정보는 종전대로 <b>손 옆 월드 텍스트</b>로 돌아간다
+    //   (CervicalRomRealityMeasure.routeReadoutToGuideUI = false).
+
+    [Tooltip("★기본 꺼짐(2026-09-03 컨펌) — 진행Root를 안 건드린다. 켜면 헤드셋을 게으르게 따라온다.")]
+    [SerializeField] private bool followProgressRoot;
 
     [Tooltip("헤드셋 앞으로 이만큼 띄운다(m).\n" +
              "★<b>이게 크기 손잡이다.</b> 캔버스를 키우지 않고 거리로만 조절한다\n" +
@@ -116,8 +121,9 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [SerializeField] private float faceSmoothTime = 0.25f;
 
     [Tooltip("실측 정보를 진행 UI의 지시문 칸에 써 넣는다.\n" +
-             "★평가 모드 지시문은 방향 이름 한 단어뿐이라 그 칸이 사실상 비어 있다.")]
-    [SerializeField] private bool pushReadoutToGuideUI = true;
+             "★기본 꺼짐(2026-09-03 컨펌) — 정보는 손 옆 월드 텍스트로 돌아갔다.\n" +
+             "  진행Root에 얹으니 화면이 어수선하다는 판단이다.")]
+    [SerializeField] private bool pushReadoutToGuideUI;
 
     [SerializeField] private bool showDebugLogs = true;
 
