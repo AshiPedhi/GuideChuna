@@ -105,6 +105,14 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [Tooltip("따라가는 부드러움(초). 클수록 천천히 쫓아온다. 0.3~0.5가 눈이 편하다.")]
     [SerializeField] private float followSmoothTime = 0.35f;
 
+    [Tooltip("★<b>바라보는 각</b>은 자리와 따로 맞춘다 — 판은 제자리에 있어도 정면은 늘 사용자 쪽이다.\n" +
+             "이 각(도)보다 어긋나야 돌기 시작한다. 회전은 자리 이동과 달리 잔상을 안 남기므로\n" +
+             "자리 데드존(followDeadZoneDeg)보다 훨씬 좁게 둘 수 있다.")]
+    [Range(0.5f, 15f)] [SerializeField] private float faceDeadZoneDeg = 3f;
+
+    [Tooltip("바라보는 각을 맞추는 부드러움(초).")]
+    [SerializeField] private float faceSmoothTime = 0.25f;
+
     [Tooltip("실측 정보를 진행 UI의 지시문 칸에 써 넣는다.\n" +
              "★평가 모드 지시문은 방향 이름 한 단어뿐이라 그 칸이 사실상 비어 있다.")]
     [SerializeField] private bool pushReadoutToGuideUI = true;
@@ -402,17 +410,30 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         if (!followChasing && (yawErr > followDeadZoneDeg || posErr > followMoveDeadZone))
             followChasing = true;
 
-        if (!followChasing) return;
-
-        root.position = Vector3.SmoothDamp(root.position, target, ref followVelocity,
-                                           Mathf.Max(0.01f, followSmoothTime));
-        root.rotation = UprightLook(root.position, head);
-
-        // 안착하면 멈춘다. 데드존보다 좁게 잡아야 경계에서 붙었다 떨어졌다 하지 않는다.
-        if (yawErr < followSettleDeg && posErr < followMoveDeadZone * 0.4f)
+        if (followChasing)
         {
-            followChasing = false;
-            followVelocity = Vector3.zero;
+            root.position = Vector3.SmoothDamp(root.position, target, ref followVelocity,
+                                               Mathf.Max(0.01f, followSmoothTime));
+
+            // 안착하면 멈춘다. 데드존보다 좁게 잡아야 경계에서 붙었다 떨어졌다 하지 않는다.
+            if (yawErr < followSettleDeg && posErr < followMoveDeadZone * 0.4f)
+            {
+                followChasing = false;
+                followVelocity = Vector3.zero;
+            }
+        }
+
+        // ★★<b>바라보는 각은 자리와 따로 맞춘다</b>(2026-09-03 사용자 지시).
+        //   "사용자를 바라보는 각도로는 맞춰 줘" — 판이 제자리에 서 있더라도 <b>정면은 늘 사용자 쪽</b>이어야 한다.
+        //   자리를 데드존으로 묶어 두면, 시술자가 옆으로 걸었을 때 판만 비스듬히 남아 글씨가 찌그러져 보인다.
+        //   ★자리와 달리 회전은 잔상을 안 만든다 — 판이 이동하지 않고 제자리에서 각만 도는 것이라
+        //     시야에 흐르는 궤적이 남지 않는다. 그래서 데드존을 훨씬 좁게(기본 3도) 둘 수 있다.
+        //   ★그래도 <b>완전히 멈추는 구간</b>은 둔다. 매 프레임 미세하게 돌면 그것도 떨림이다.
+        Quaternion wantRot = UprightLook(root.position, head);
+        if (Quaternion.Angle(root.rotation, wantRot) > faceDeadZoneDeg)
+        {
+            float k = 1f - Mathf.Exp(-Time.deltaTime / Mathf.Max(0.01f, faceSmoothTime));
+            root.rotation = Quaternion.Slerp(root.rotation, wantRot, k);
         }
     }
 
