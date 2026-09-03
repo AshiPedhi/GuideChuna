@@ -89,8 +89,43 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "이 필드는 신규라 먹으므로 인스펙터를 안 거치고 바꿀 수 있다.")]
     [SerializeField] private float holdSecondsOverride = 2.5f;
 
+    // ── 간소 게이팅 (2026-09-03 사용자 지시) ─────────────────────────────
+    // "홀드 시간이 너무 길어서 한 번 튀면 몇 초를 기다려야 해 과정이 안 끝나고 늘어진다.
+    //  사용자는 '이거 왜 안 되지'가 돼 버린다. 조금은 정확도가 밀리더라도 간결하게."
+    //
+    // ★두 가지가 겹쳐서 늘어졌다.
+    //   ①유지 시간 2.5초가 길다.
+    //   ②★<b>각도 앵커에서 벗어나면 타이머를 통째로 0으로 죽인다.</b> 속도 쪽은 holdDecayRate로
+    //     깎기만 하는데 각도 쪽만 0이라, 엄지가 한 번 구르면(신전에서 특히) 2.5초를 처음부터 다시 센다.
+    // ★전부 신규 필드라 씬 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+    //   기존 holdSecondsOverride·holdAngleTolerance는 씬에 굳어 있어 못 건드린다.
+
+    [Header("=== 간소 게이팅 (2026-09-03) ===")]
+    [Tooltip("★켜면 아래 두 값이 holdSecondsOverride·holdAngleTolerance를 대신한다.\n" +
+             "끄면 종전 값(2.5초 × 1.5도)으로 돌아간다.")]
+    [SerializeField] private bool simplifiedGating = true;
+
+    [Tooltip("간소 모드의 정지 유지 시간(초). 종전 2.5초.")]
+    [SerializeField] private float simpleHoldSeconds = 1.2f;
+
+    [Tooltip("간소 모드의 각도 여유(도). 종전 1.5도.\n" +
+             "★시간보다 <b>각도 여유를 먼저</b> 푼다 — 시간을 줄이면 지나가는 각이 잡힌다.\n" +
+             "  엄지가 접점에서 구르면 2~3도가 그냥 흔들린다. 그보다는 커야 한다.")]
+    [SerializeField] private float simpleHoldAngleTolerance = 3.5f;
+
+    [Tooltip("각도 앵커에서 벗어나도 이만큼은 봐준다(초). 한 프레임 튐으로 타이머를 잃지 않게 한다.\n" +
+             "0이면 종전처럼 벗어나는 즉시 처리한다.")]
+    [SerializeField] private float holdAngleGraceSeconds = 0.2f;
+
     /// <summary>실제로 쓸 정지 유지 시간.</summary>
-    private float HoldSeconds => holdSecondsOverride > 0f ? holdSecondsOverride : holdSeconds;
+    private float HoldSeconds => simplifiedGating && simpleHoldSeconds > 0f
+        ? simpleHoldSeconds
+        : (holdSecondsOverride > 0f ? holdSecondsOverride : holdSeconds);
+
+    /// <summary>실제로 쓸 각도 여유(도).</summary>
+    private float HoldAngleToleranceNow => simplifiedGating && simpleHoldAngleTolerance > 0f
+        ? simpleHoldAngleTolerance
+        : holdAngleTolerance;
 
     [Tooltip("정지로 인정할 손 속도(m/s). ★씬에 값이 있으니 인스펙터 값이 먹는다.")]
     [SerializeField] private float holdSpeedThreshold = 0.03f;
@@ -190,6 +225,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("★평가 문구 — 절차(어디를 어떻게 잡아라)를 화면에 안 띄운다.\n" +
              "끄면 종전의 자세한 안내로 돌아간다.")]
     [SerializeField] private bool evaluationGuidance = true;
+
+    [Tooltip("★평가에서 <b>능동·수동·차이 숫자와 '몇 도 더'를 화면에서 숨긴다</b>(2026-09-03 지시).\n" +
+             "★<b>지우는 게 아니다</b> — results에 그대로 쌓이고 _rom.csv·결과지에는 정상으로 나간다.\n" +
+             "  힌트를 줄이자는 것뿐이라, 끄면 종전처럼 다 보인다.\n" +
+             "★신규 필드라 코드 기본값이 먹는다(규칙 7).")]
+    [SerializeField] private bool hideResultNumbers = true;
 
     [Tooltip("★<b>정방향으로 간 각만</b> 센다. 굴곡을 재는 중에 뒤로 젖히면 각이 안 쌓인다.\n" +
              "끄면 종전대로 크기만 봐서, 반대로 움직여도 능동·압박이 잡힌다.\n" +
@@ -510,6 +551,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private float lostTotal;         // 손을 못 읽은 총 시간(초)
     private bool relockedThisFrame;         // 이 프레임에 손이 다시 잡혔는가 - 그 프레임은 속도를 안 잰다
     private float peakAngle;                // 이 단계에서 본 최대 각 - minAngleToMark 판정용
+    private float angleExcursionSeconds;    // 각도 앵커를 벗어나 있은 시간(초). 유예 판정용.
     private float passiveBaseAngle;         // 압박 단계의 출발선 = 능동으로 도달한 각(크기)
     private float releaseTimer;             // 파지가 풀린 채 흐른 시간
     private float smoothedSpeed;            // 저역통과를 거친 손 속도 - 정지 판정용
@@ -1838,21 +1880,34 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★각도 게이트 — 손이 느려도 각이 계속 가고 있으면 정지가 아니다.
         //   홀드를 시작한 시점의 각을 기억해 두고, 거기서 벗어나면 처음부터 다시 센다.
-        if (still && holdAngleTolerance > 0f && neutralReady
+        if (still && HoldAngleToleranceNow > 0f && neutralReady
             && TryGetAngle(out float nowDeg, out _, out _))
         {
             if (holdTimer <= 0f)
             {
                 holdAnchorAngle = nowDeg;       // 이번 홀드의 기준각
                 holdAnchorValid = true;
+                angleExcursionSeconds = 0f;
             }
-            else if (holdAnchorValid && Mathf.Abs(nowDeg - holdAnchorAngle) > holdAngleTolerance)
+            else if (holdAnchorValid && Mathf.Abs(nowDeg - holdAnchorAngle) > HoldAngleToleranceNow)
             {
-                // 아직 가고 있다. 지금 각을 새 기준으로 삼고 다시 센다.
-                holdAnchorAngle = nowDeg;
-                holdTimer = 0f;
-                holdResets++;
-                still = false;
+                // ★한 프레임 튄 것과 진짜로 계속 가는 것을 가른다(2026-09-03).
+                //   종전에는 벗어나는 <b>즉시</b> holdTimer를 0으로 죽였다. 엄지가 접점에서 한 번
+                //   구르면 그것만으로 2~3도가 흔들리는데, 그때마다 유지 시간을 처음부터 다시 셌다.
+                //   사용자: "한 번 튀면 몇 초를 기다려야 해서 과정이 안 끝나고 늘어진다."
+                angleExcursionSeconds += dt;
+
+                if (angleExcursionSeconds >= holdAngleGraceSeconds)
+                {
+                    // 유예를 넘겼다 = 정말로 아직 가고 있다. 지금 각을 새 기준으로 삼는다.
+                    holdAnchorAngle = nowDeg;
+                    angleExcursionSeconds = 0f;
+                    still = false;   // ★0으로 죽이지 않는다 — 아래 holdDecayRate가 깎는다.
+                }
+            }
+            else
+            {
+                angleExcursionSeconds = 0f;   // 여유 안으로 돌아왔다
             }
         }
 
@@ -2060,7 +2115,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
                 break;
         }
 
-        if (neutralReady)
+        // ★평가에서는 능동·수동 숫자를 <b>숨긴다</b>(2026-09-03 사용자 지시 — 힌트 최소화).
+        //   ★삭제가 아니다. results에는 그대로 쌓이고 _rom.csv·결과지에도 그대로 나간다.
+        //     화면에서만 안 보이게 하는 것이다.
+        if (neutralReady && !(evaluationGuidance && hideResultNumbers))
         {
             Result res = results[(int)direction];
             sb.Append('\n');
