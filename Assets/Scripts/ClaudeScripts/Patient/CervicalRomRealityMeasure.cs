@@ -1158,6 +1158,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>실제로 쓸 실측 각도기 반지름.</summary>
     private float GaugeRadiusNow => gaugeRadiusOverride > 0f ? gaugeRadiusOverride : gaugeRadius;
 
+    [Tooltip("★<b>B(실측 전용 각도기)</b>를 파지 위치에서 이만큼 <b>내린다</b>(m). 목 부근이 목표다.\n" +
+             "2026-09-03 사용자: '양손 파지 위치에서 조금 아래 목 부근으로 내려서\n" +
+             "시각적으로는 목축이 기우는 것처럼 보여 주고 싶다.'\n" +
+             "★내려도 <b>각도값은 안 변한다</b> — 그리는 자리만 바뀐다.")]
+    [SerializeField] private float realityGaugeDrop = 0.18f;
+
+    /// <summary>
+    /// B(실측 전용 각도기)를 그릴 중심. 파지 지점에서 목 쪽으로 내린 자리다.
+    /// ★안내문·축선과 <b>다른 자리</b>다 — 그쪽은 파지 지점을 그대로 쓴다.
+    /// </summary>
+    private Vector3 GaugeCenter
+        => (gripAnchorValid ? gripAnchor : pivot) - Vector3.up * realityGaugeDrop;
+
     /// <summary>결과 단계에서 각도기를 접는다. 접는 쪽이 편다.</summary>
     public void SetGaugeHidden(bool on) => gaugeForceHidden = on;
     private bool gaugeForceHidden;
@@ -2449,9 +2462,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (direction != builtDirection || frameStamp != builtStamp) RebuildGauge();
 
         if (TryGetAngle(out _, out _, out float signed))
-            SetLine(needle, pivot, pivot + GaugeDir(signed) * GaugeRadiusNow);
+            SetLine(needle, GaugeCenter, GaugeCenter + GaugeDir(signed) * GaugeRadiusNow);
         else
-            SetLine(needle, pivot, pivot);
+            SetLine(needle, GaugeCenter, GaugeCenter);
 
         Result r = results[(int)direction];
         SetMark(activeMark, r.hasActive, r.active);
@@ -2462,9 +2475,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private void SetMark(LineRenderer lr, bool has, float signedDeg)
     {
         if (lr == null) return;
-        if (!has) { SetLine(lr, pivot, pivot); return; }
+        if (!has) { SetLine(lr, GaugeCenter, GaugeCenter); return; }
         Vector3 d = GaugeDir(signedDeg);
-        SetLine(lr, pivot + d * (GaugeRadiusNow * 0.72f), pivot + d * (GaugeRadiusNow * 1.08f));
+        SetLine(lr, GaugeCenter + d * (GaugeRadiusNow * 0.72f), GaugeCenter + d * (GaugeRadiusNow * 1.08f));
     }
 
     private void RebuildGauge()
@@ -2524,8 +2537,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (side.sqrMagnitude < 1e-10f) return;
         side = side.normalized * (width * 0.5f);
 
-        Vector3 outer = pivot + d * GaugeRadiusNow;
-        Vector3 inner = pivot + d * (GaugeRadiusNow - length);
+        Vector3 outer = GaugeCenter + d * GaugeRadiusNow;
+        Vector3 inner = GaugeCenter + d * (GaugeRadiusNow - length);
 
         int b = gVerts.Count;
         gVerts.Add(inner - side); gVerts.Add(inner + side);
@@ -2561,7 +2574,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             tm.gameObject.SetActive(true);
             tm.text = Mathf.Abs(a) < 0.001f ? "0" : $"{Mathf.Abs(a):F0}";
             tm.color = Mathf.Abs(a) < 0.001f ? zeroLineColor : tickColor;
-            tm.transform.position = pivot + GaugeDir(a) * (GaugeRadiusNow + gaugeLabelOffset);
+            tm.transform.position = GaugeCenter + GaugeDir(a) * (GaugeRadiusNow + gaugeLabelOffset);
         }
         for (int i = index; i < gaugeLabels.Count; i++) gaugeLabels[i].gameObject.SetActive(false);
     }
