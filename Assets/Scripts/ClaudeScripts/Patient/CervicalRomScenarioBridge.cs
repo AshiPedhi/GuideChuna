@@ -95,6 +95,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("옮길 UI 루트. 보통 '진행Root'. 비우면 이 기능이 꺼진다.")]
     [SerializeField] private Transform progressRoot;
 
+    /// <summary>
+    /// 실측 브리지가 같은 루트를 빌려 쓴다 — 이름으로 다시 찾게 하지 않는다(규칙 8).
+    /// </summary>
+    public Transform ProgressRoot => progressRoot;
+
     [Tooltip("환자 좌측 포인트. 시상면(굴곡·신전)에서 시술자가 환자 우측에 서면 여기로 간다.")]
     [SerializeField] private Transform sidePointLeft;
 
@@ -114,8 +119,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     [Tooltip("측면 배치를 트리거할 단계 이름(시상면 파지).")]
     [SerializeField] private string sideGripStepName = "시상면 파지";
 
-    [Tooltip("표준자세 체크리스트를 띄울 단계 이름.")]
-    [SerializeField] private string postureStepName = "자세정렬";
+    // ★postureStepName은 지웠다(2026-09-03). 체크리스트를 CSV substep 3개로 대체하면서
+    //   읽는 곳이 없어졌고, 남겨 두면 "아직 이 이름으로 뭘 한다"로 읽힌다.
+    //   씬에 값이 남아 있어도 아무도 안 읽으니 해가 없다.
 
     [Tooltip("정면 복귀를 트리거할 단계 이름들.")]
     [SerializeField] private string[] frontGripStepNames = { "관상면 파지", "횡단면 파지" };
@@ -574,11 +580,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     /// </summary>
     private void EnsureRomCompanions()
     {
-        if (postureChecklist == null)
-        {
-            postureChecklist = gameObject.AddComponent<PostureChecklistUI>();
-            Log("표준자세 체크리스트를 붙였다(런타임).");
-        }
+        // ★체크리스트는 더 이상 붙이지 않는다(2026-09-03). CSV substep 3개로 대체했다.
+        //   씬에 남아 있는 인스턴스는 UpdatePostureGate가 접는다 — 새로 만들 이유는 없어졌다.
 
         var measure = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
         if (measure == null)
@@ -603,22 +606,31 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     }
 
     /// <summary>
-    /// 표준자세 체크리스트를 켜고, 다 체크되기 전에는 진행을 막는다.
+    /// 자세정렬 단계 처리.
     ///
-    /// ★막는 방법은 드라이버 일시정지다 — AutoPlay·나레이션 파이프라인을 건드리지 않는다.
-    ///   체크리스트가 씬에 없으면 아무것도 하지 않는다(없다고 진행이 막히면 원인을 못 찾는다).
+    /// ★<b>2026-09-03 회의 결정으로 체크리스트를 걷었다.</b> 세 항목을 패널에 그려 [확인]을
+    ///   누르게 하던 것을, CSV substep <b>세 개</b>로 나눠 한 문장씩 읽어 주고
+    ///   <b>나레이션이 끝나면 [다음]이 활성화</b>되는 방식으로 바꿨다.
+    ///   그 동작은 새로 만들 것이 없었다 — 자세정렬은 stepNo가 0이라 가이드 스텝이고,
+    ///   ScenarioConditionManager가 가이드 스텝을 이미 그렇게 처리한다
+    ///   (나레이션 재생 중 버튼 비활성 → 끝나면 토글 대기, HandleNarrationThenManual).
+    ///
+    /// ★그래서 여기 남은 일은 <b>체크리스트를 확실히 접는 것</b>뿐이다.
+    ///   드라이버 일시정지도 걷는다 — 진행을 막는 주체가 이제 토글 하나로 일원화됐다.
+    ///   막는 곳이 둘이면 어느 쪽이 잡고 있는지 알 수 없다(실측 '준비'에서 실제로 밟은 형태다).
+    /// ★<see cref="PostureChecklistUI"/>는 지우지 않고 미사용으로 남긴다(사용자 방침).
     /// </summary>
     private void UpdatePostureGate(string stepName)
     {
-        if (postureChecklist == null) return;
+        if (postureChecklist != null && postureChecklist.IsVisible)
+            postureChecklist.SetVisible(false);
 
-        bool onPostureStep = stepName == postureStepName;
-        postureChecklist.SetVisible(onPostureStep);
-
-        if (onPostureStep && !postureChecklist.AllChecked) driver.Paused = true;
-        else if (postureGateHeld) driver.Paused = false;
-
-        postureGateHeld = onPostureStep && !postureChecklist.AllChecked;
+        // 우리가 세워 뒀던 드라이버를 되돌린다 — 켠 쪽이 끈다.
+        if (postureGateHeld)
+        {
+            driver.Paused = false;
+            postureGateHeld = false;
+        }
     }
 
     /// <summary>파지 단계인가. 이름이 '파지'로 끝나면 파지로 본다(시상면·관상면·횡단면 파지).</summary>
@@ -649,6 +661,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private void PlaceProgressUI(string stepName, int subStepNo)
     {
         if (string.IsNullOrEmpty(stepName) || subStepNo != 1) return;
+
+        // ★실측에서는 손을 뗀다(2026-09-03). 그쪽은 CervicalRomMeasurementBridge가
+        //   진행Root를 <b>매 프레임 손 근처로</b> 옮긴다. 두 곳이 같은 트랜스폼을 밀면
+        //   서로 되돌리며 UI가 떨린다. 실측 단계 이름에도 '시상면 파지'·'관상면 파지'가
+        //   그대로 있어서, 가만두면 여기가 반드시 끼어든다.
+        if (ChunaTraining.DifficultyManager.Instance != null
+            && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode) return;
 
         // ★조용히 넘어가지 않는다. 슬롯이 비어 있는 것과 조건이 안 맞는 것이
         //   똑같이 '아무 일도 안 일어남'으로 보여 원인을 못 찾는다(2026-08-26).

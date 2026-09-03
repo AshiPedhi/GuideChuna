@@ -53,6 +53,42 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [Tooltip("한 substep을 넘긴 뒤 이만큼은 다시 안 넘긴다(초). 연속 진행 방지.")]
     [SerializeField] private float advanceCooldown = 0.6f;
 
+    // ── 진행 UI를 손 근처로 (2026-09-03) ─────────────────────────────────
+    // 2026-09-03 사용자: "정보를 진행Root에 표시하되, 그 값이 지금 정보처럼 손 근처에 따라왔으면 좋겠다.
+    //   지금 자리보다 좀 더 뒤로, 크게, 높이는 살짝 낮춰서 고개를 안 올려도 보이게."
+    //
+    // ★교육 브리지(CervicalRomScenarioBridge)도 같은 진행Root를 옮긴다 — 다만 그쪽은
+    //   실측이면 손을 떼도록 고쳤다(PlaceProgressUI). 두 곳이 같은 트랜스폼을 밀면
+    //   프레임마다 서로 되돌린다.
+    // ★<b>우리가 옮긴 것만 우리가 되돌린다</b> — 진입할 때 원래 자리를 적어 두고 나갈 때 복원한다.
+    //   (07-27 xray 사고가 켠 쪽과 끄는 쪽이 달라서 생긴 형태였다.)
+    // ★전부 신규 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+
+    [Header("=== 진행 UI 손 추종 (2026-09-03) ===")]
+    [Tooltip("옮길 UI 루트. 비우면 교육 브리지의 슬롯 → 이름('진행Root') 순으로 찾는다.")]
+    [SerializeField] private Transform progressRoot;
+
+    [Tooltip("★끄면 진행Root를 안 건드린다(종전 동작 — 고정 포인트에 그대로 있는다).")]
+    [SerializeField] private bool followProgressRoot = true;
+
+    [Tooltip("안내문이 있던 자리에서 <b>시술자 반대쪽으로</b> 이만큼 민다(m).\n" +
+             "★가까우면 VR에서 초점이 안 맞아 흐리다. 뒤로 밀고 대신 크기를 키운다.")]
+    [SerializeField] private float progressBackOffset = 0.25f;
+
+    [Tooltip("안내문이 있던 자리에서 이만큼 <b>내린다</b>(m). 양수면 내려간다.\n" +
+             "★안내문은 파지 중점 위 0.18m에 떠 있었다. 여기서 더 내려야 고개를 안 올린다.")]
+    [SerializeField] private float progressDrop = 0.12f;
+
+    [Tooltip("진행Root를 이 배율로 키운다. 뒤로 민 만큼 작아 보이는 것을 되돌린다.")]
+    [SerializeField] private float progressScale = 1.45f;
+
+    [Tooltip("아무리 가까워도 눈에서 이보다는 떨어뜨린다(m).")]
+    [SerializeField] private float progressMinDistance = 0.65f;
+
+    [Tooltip("실측 정보를 진행 UI의 지시문 칸에 써 넣는다.\n" +
+             "★평가 모드 지시문은 방향 이름 한 단어뿐이라 그 칸이 사실상 비어 있다.")]
+    [SerializeField] private bool pushReadoutToGuideUI = true;
+
     [SerializeField] private bool showDebugLogs = true;
 
     private string advancedKey;      // 이미 넘긴 substep 표식
@@ -62,6 +98,15 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
     private ScenarioGuideUIController guideUI;
     private bool resultToggleShown;
+
+    // 진행 UI — 우리가 옮긴 것만 우리가 되돌린다.
+    private bool progressCaptured;
+    private Vector3 progressHomePos;
+    private Quaternion progressHomeRot;
+    private Vector3 progressHomeScale;
+
+    // 준비 단계 토글 잠금 — 잠근 쪽이 푼다.
+    private bool readyToggleLocked;
 
     // 현실 전환 — 우리가 바꾼 것만 우리가 되돌린다.
     private bool realWorldApplied;
@@ -99,6 +144,8 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 // ★끼운 쪽이 되돌린다. 각도기를 실측 출처에 걸어 둔 채 나가면
                 //   교육모드가 대본 각도 대신 실측값을 그린다(07-27 xray 사고와 같은 형태).
                 RestorePlaneGauge();
+                RestoreProgressRoot();
+                UnlockReadyToggle();
 
                 ExitRealWorld();
             }
@@ -153,6 +200,20 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   ★교육모드의 체크리스트는 그대로다 — 그쪽은 CervicalRomScenarioBridge가 쥔다.
         if (checklist != null) checklist.SetVisible(false);
 
+        // ★진행 UI를 손 근처로 데려오고, 실측 정보를 그 안에 쓴다(2026-09-03).
+        FollowProgressRoot();
+        PushReadout();
+
+        // ★★준비 단계의 [다음] 토글을 잠근다(2026-09-03).
+        //   아래 IsSatisfied가 ReferenceReady로 막고 있었는데도 넘어가던 이유가 여기다 —
+        //   <b>진행 경로가 둘</b>이었다. 실측 '준비' 행의 stepNo가 0이라
+        //   StepData.IsGuideStep()이 참이 되고, ScenarioGuideUIController가
+        //   [다음] 토글을 무조건 띄운다. 그 토글은 아무 조건 없이 NextSubStep()을 부른다.
+        //   교육 '자세정렬'(역시 stepNo 0)에서 이 구멍이 안 보였던 건 PostureChecklistUI가
+        //   토글을 잠가 뒀기 때문이고, 실측은 체크리스트를 안 띄우므로 잠금도 같이 사라졌다.
+        //   ★어깨를 안 짚고 넘어가면 기준틀 없이 재게 되어 <b>조용히 틀린 각</b>이 나온다.
+        UpdateReadyToggleLock(name);
+
         if (key == advancedKey) return;
         if (Time.time - lastAdvanceTime < advanceCooldown) return;
 
@@ -192,8 +253,176 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         ChunaLogger.Log("<color=cyan>[실측Bridge] 결과 단계 — [다음] 토글을 띄웠다.</color>");
     }
 
+    /// <summary>진행 UI 컨트롤러. 없으면 한 번만 찾는다.</summary>
+    private ScenarioGuideUIController GuideUI
+    {
+        get
+        {
+            if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+            return guideUI;
+        }
+    }
+
+    // ── 진행 UI 손 추종 ───────────────────────────────────────────────────
+
+    /// <summary>옮길 진행Root. 인스펙터 → 교육 브리지 슬롯 → 이름 순으로 찾는다.</summary>
+    private Transform ResolveProgressRoot()
+    {
+        if (progressRoot != null) return progressRoot;
+
+        // ★이름으로 찾기보다 교육 브리지의 슬롯을 먼저 본다 — 이름은 바뀌면 조용히 죽는다(규칙 8).
+        var eduBridge = FindFirstObjectByType<CervicalRomScenarioBridge>(FindObjectsInactive.Include);
+        if (eduBridge != null && eduBridge.ProgressRoot != null)
+        {
+            progressRoot = eduBridge.ProgressRoot;
+            return progressRoot;
+        }
+
+        GameObject byName = GameObject.Find("진행Root");
+        if (byName != null)
+        {
+            progressRoot = byName.transform;
+            return progressRoot;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// 진행Root를 안내문이 있던 자리로 데려온다 — 거기서 뒤로·아래로 밀고 키운다.
+    /// ★매 프레임 돈다. 손이 움직이면 같이 움직여야 "손 근처"가 성립한다.
+    /// </summary>
+    private void FollowProgressRoot()
+    {
+        if (!followProgressRoot) return;
+
+        Transform root = ResolveProgressRoot();
+        if (root == null) return;
+
+        // ★원래 자리를 한 번만 적어 둔다. 이걸 안 하면 실측을 한 번 돌 때마다 UI가 떠내려간다.
+        if (!progressCaptured)
+        {
+            progressCaptured = true;
+            progressHomePos = root.position;
+            progressHomeRot = root.rotation;
+            progressHomeScale = root.localScale;
+        }
+
+        Vector3 anchor = measure.ReadoutAnchor;
+        Camera cam = Camera.main;
+
+        if (cam != null)
+        {
+            // ★'뒤로' = 시술자에게서 멀어지는 쪽. 수평 성분만 쓴다 —
+            //   세로까지 섞으면 고개를 든 만큼 UI가 같이 올라가 버린다.
+            Vector3 away = anchor - cam.transform.position;
+            away.y = 0f;
+            if (away.sqrMagnitude > 1e-6f)
+                anchor += away.normalized * progressBackOffset;
+
+            anchor += Vector3.down * progressDrop;
+
+            // 너무 가까우면 초점이 안 맞아 흐리다(08-31 사용자 지적과 같은 사유).
+            Vector3 toRoot = anchor - cam.transform.position;
+            float dist = toRoot.magnitude;
+            if (dist > 1e-3f && dist < progressMinDistance)
+                anchor = cam.transform.position + toRoot / dist * progressMinDistance;
+
+            root.position = anchor;
+            root.rotation = Quaternion.LookRotation(root.position - cam.transform.position, Vector3.up);
+        }
+        else
+        {
+            root.position = anchor + Vector3.down * progressDrop;
+        }
+
+        Vector3 want = progressHomeScale * Mathf.Max(0.01f, progressScale);
+        if ((root.localScale - want).sqrMagnitude > 1e-8f) root.localScale = want;
+    }
+
+    /// <summary>진행Root를 원래 자리·크기로 되돌린다.</summary>
+    private void RestoreProgressRoot()
+    {
+        if (!progressCaptured) return;
+        progressCaptured = false;
+
+        Transform root = progressRoot;
+        if (root == null) return;
+
+        root.SetPositionAndRotation(progressHomePos, progressHomeRot);
+        root.localScale = progressHomeScale;
+
+        // ★지시문 칸도 되돌린다. 안 되돌리면 실측을 나간 뒤에도 마지막 측정값이 남아 있다 —
+        //   모드만 바꾸면 substep 전환이 없어서 아무도 다시 안 써 준다.
+        var label = GuideUI != null ? GuideUI.DescriptionLabel : null;
+        if (label != null && scenarioManager != null && scenarioManager.CurrentSubStep != null)
+            label.text = scenarioManager.CurrentSubStep.textInstruction;
+
+        if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 진행 UI를 원래 자리로 되돌렸다.</color>");
+    }
+
+    /// <summary>측정기가 만든 안내문을 진행 UI의 지시문 칸에 쓴다.</summary>
+    private void PushReadout()
+    {
+        if (!pushReadoutToGuideUI) return;
+        if (measure == null || !measure.RouteReadoutToGuideUI) return;
+
+        var label = GuideUI != null ? GuideUI.DescriptionLabel : null;
+        if (label == null) return;
+
+        string text = measure.ReadoutText;
+        if (string.IsNullOrEmpty(text)) return;
+
+        // ★<b>지금 칸에 뭐가 들어 있는지</b>를 보고 정한다. "내가 마지막에 뭘 넣었나"로 판단하면
+        //   substep이 바뀌는 순간 ScenarioGuideUIController가 CSV 지시문으로 덮어쓰는데
+        //   측정값은 그대로라 다시 안 넣게 되고, 그 단계 내내 CSV 문구가 남는다.
+        // ★같은 문자열이면 대입하지 않는다 — TMP는 대입할 때마다 메시를 다시 만든다(VR 프레임 예산).
+        if (string.Equals(label.text, text, System.StringComparison.Ordinal)) return;
+        label.text = text;
+    }
+
+    // ── 준비 단계 토글 잠금 ───────────────────────────────────────────────
+
+    /// <summary>
+    /// '준비'(양어깨 짚기)를 안 끝냈으면 [다음] 토글을 못 누르게 한다.
+    /// ★잠근 쪽이 푼다 — 다른 단계로 넘어가거나 실측을 나가면 반드시 되돌린다.
+    /// </summary>
+    private void UpdateReadyToggleLock(string stepName)
+    {
+        bool wantLock = stepName == "준비" && measure != null && !measure.ReferenceReady;
+
+        if (!wantLock)
+        {
+            UnlockReadyToggle();
+            return;
+        }
+
+        var toggle = GuideUI != null ? GuideUI.NextToggle : null;
+        if (toggle == null) return;
+
+        if (!readyToggleLocked)
+        {
+            readyToggleLocked = true;
+            if (showDebugLogs)
+                ChunaLogger.Log("<color=cyan>[실측Bridge] 준비 단계 — 어깨 기준선을 잡을 때까지 [다음]을 잠근다.</color>");
+        }
+        toggle.interactable = false;
+    }
+
+    private void UnlockReadyToggle()
+    {
+        if (!readyToggleLocked) return;
+        readyToggleLocked = false;
+
+        var toggle = GuideUI != null ? GuideUI.NextToggle : null;
+        if (toggle != null) toggle.interactable = true;
+        if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 어깨 기준선 성립 — [다음] 잠금을 풀었다.</color>");
+    }
+
     private void OnDisable()
     {
+        RestoreProgressRoot();
+        UnlockReadyToggle();
         ExitRealWorld();
         resultToggleShown = false;
     }

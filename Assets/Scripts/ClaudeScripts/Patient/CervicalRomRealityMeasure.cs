@@ -405,6 +405,34 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>실제로 쓸 안내문 글씨 배율.</summary>
     private float ReadoutScaleNow => overrideReadoutPlacement ? readoutScaleOverride : textScale;
 
+    // ── 안내문을 진행 UI로 보내기 (2026-09-03) ───────────────────────────
+    // 2026-09-03 사용자: "이미 진행 UI가 있는데 손 위에 별도 UI가 뜨는 게 가독성이 떨어진다.
+    //   정보는 진행Root에 띄우되, 그 값이 지금처럼 손 근처에 따라왔으면 좋겠다."
+    // → 글자는 진행Root(ScenarioGuideUIController)가 그리고, 진행Root를 손을 따라 옮기는 것은
+    //   CervicalRomMeasurementBridge가 한다(실측 진입/이탈이 이미 거기서 대칭으로 처리된다).
+    //
+    // ★showReadout은 씬에 1이 직렬화돼 있어 코드 기본값으로는 못 끈다(규칙 7).
+    //   그래서 <b>신규 필드</b>로 손잡이를 따로 둔다 — 신규 필드라 코드 기본값이 그대로 먹는다.
+
+    [Tooltip("★켜면 안내문을 손 위 월드 텍스트로 안 그리고 <b>진행 UI</b>로 보낸다.\n" +
+             "끄면 종전대로 손 위에 뜬다(showReadout이 켜져 있어야 한다).")]
+    [SerializeField] private bool routeReadoutToGuideUI = true;
+
+    /// <summary>안내문을 진행 UI가 그리는가.</summary>
+    public bool RouteReadoutToGuideUI => routeReadoutToGuideUI;
+
+    /// <summary>
+    /// 마지막으로 만든 안내문. 진행 UI로 보낼 때 브리지가 읽는다.
+    /// ★내용이 바뀔 때만 새로 만든다(아래 dedup 조건) — 매 프레임 문자열을 만들지 않는다.
+    /// </summary>
+    public string ReadoutText { get; private set; } = "";
+
+    /// <summary>
+    /// 안내문을 놓던 자리(월드). 진행 UI를 여기에 맞추면 종전과 같은 높이에 온다.
+    /// ★뒤로·아래로 미는 것은 브리지의 오프셋이 한다 — 여기는 종전 자리 그대로 둔다.
+    /// </summary>
+    public Vector3 ReadoutAnchor => pivot + Vector3.up * ReadoutRiseNow;
+
     [Tooltip("★<b>양손 파지 중점</b>에서 이만큼 올린 곳을 각도기 기준점으로 쓴다(표시 전용, 각도에는 영향 없음).\n" +
              "음수를 넣으면 파지 위치보다 아래에 뜬다 — 머리에 가려 안 보일 때 쓴다.\n" +
              "★씬에 값이 직렬화돼 있으므로 코드 기본값이 아니라 인스펙터 값이 먹는다.")]
@@ -1957,7 +1985,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         UpdateMidline();
         UpdateGauge();
 
-        if (!showReadout || readout == null) return;
+        // ★진행 UI로 보내는 동안에도 <b>문자열은 만들어야 한다</b> — 그리는 쪽만 바뀐 것이다.
+        if (!showReadout && !routeReadoutToGuideUI) return;
+        if (readout == null) return;
 
         // ★숫자도 부호째 띄운다(2026-09-02). 바늘이 −30을 가리키는데 숫자가 +30이면
         //   둘이 서로 다른 말을 한다 — 그건 없느니만 못하다.
@@ -2042,7 +2072,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             sb.Append("</size>");
         }
 
-        readout.text = sb.ToString();
+        ReadoutText = sb.ToString();
+
+        // ★진행 UI가 그리면 월드 텍스트는 접는다. 둘 다 켜 두면 같은 글이 두 군데 뜬다 —
+        //   그게 바로 09-03에 지적받은 가독성 문제다.
+        if (routeReadoutToGuideUI)
+        {
+            if (readout.gameObject.activeSelf) readout.gameObject.SetActive(false);
+            return;
+        }
+        if (!showReadout) return;
+        if (!readout.gameObject.activeSelf) readout.gameObject.SetActive(true);
+
+        readout.text = ReadoutText;
         // ★손 바로 위라 눈에서 40cm쯤 떨어지는데, VR에서 그 거리는 초점이 안 맞아 흐리다.
         //   최소 거리를 두고 밀어낸다(2026-08-31 사용자: '가까워서 흐린가 글씨가 안 보였다').
         Vector3 readoutPos = pivot + Vector3.up * ReadoutRiseNow;

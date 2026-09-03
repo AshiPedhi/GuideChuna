@@ -3,6 +3,15 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+/// ★[미사용 2026-09-03] — 회의 결정으로 <b>CSV substep 3개</b>로 대체했다.
+///   경추ROM측정.csv 교육 phase의 '자세정렬'이 한 문장씩 세 줄로 나뉘어 있고,
+///   자세정렬은 stepNo가 0이라 가이드 스텝이므로 ScenarioConditionManager가
+///   "나레이션 재생 중 버튼 비활성 → 끝나면 [다음] 활성"을 이미 해 준다
+///   (OnSubStepStarted → HandleNarrationThenManual).
+///   CervicalRomScenarioBridge.UpdatePostureGate는 이제 이 패널을 접기만 한다.
+///   ★씬에는 컴포넌트가 남아 있을 수 있다 — 붙어 있어도 브리지가 매 프레임 접는다.
+///   지우지 않는 것은 사용자 방침이다. 아래는 대체 전의 설계다.
+///
 /// <summary>
 /// 진단 시작 전 환자 표준자세 체크리스트. <b>한 줄씩 순차로</b> 확인해 나간다.
 ///
