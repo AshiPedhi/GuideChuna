@@ -388,7 +388,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             followPlaced = true;
             followChasing = false;
             followVelocity = Vector3.zero;
-            root.SetPositionAndRotation(target, Quaternion.LookRotation(target - head, Vector3.up));
+            root.SetPositionAndRotation(target, UprightLook(target, head));
             return;
         }
 
@@ -406,7 +406,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         root.position = Vector3.SmoothDamp(root.position, target, ref followVelocity,
                                            Mathf.Max(0.01f, followSmoothTime));
-        root.rotation = Quaternion.LookRotation(root.position - head, Vector3.up);
+        root.rotation = UprightLook(root.position, head);
 
         // 안착하면 멈춘다. 데드존보다 좁게 잡아야 경계에서 붙었다 떨어졌다 하지 않는다.
         if (yawErr < followSettleDeg && posErr < followMoveDeadZone * 0.4f)
@@ -414,6 +414,23 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             followChasing = false;
             followVelocity = Vector3.zero;
         }
+    }
+
+    /// <summary>
+    /// <b>세로축(Y) 회전만</b> 준다. 판은 언제나 똑바로 서고 수평을 유지한다.
+    ///
+    /// ★2026-09-03 사용자: "고개 기울였다고 같이 기울면 안 된다. 평행 유지한 채로."
+    ///   LookRotation에 위아래 성분이 섞인 방향을 넣으면 판이 앞뒤로 눕는다 —
+    ///   진행Root는 눈높이보다 아래(followDrop)에 있으므로 반드시 그렇게 된다.
+    ///   수평 성분만 남기면 기울기(pitch)도 좌우 기울임(roll)도 0이 된다.
+    ///   ScenarioUIPositioner도 같은 규약을 쓴다(lookDirection.y = 0).
+    /// </summary>
+    private static Quaternion UprightLook(Vector3 uiPos, Vector3 headPos)
+    {
+        Vector3 look = uiPos - headPos;
+        look.y = 0f;
+        if (look.sqrMagnitude < 1e-6f) return Quaternion.identity;
+        return Quaternion.LookRotation(look, Vector3.up);
     }
 
     /// <summary>진행Root를 원래 자리·크기로 되돌린다.</summary>
