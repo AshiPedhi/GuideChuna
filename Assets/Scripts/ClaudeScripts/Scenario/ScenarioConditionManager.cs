@@ -76,6 +76,21 @@ public class ScenarioConditionManager : MonoBehaviour
     [SerializeField] private string narrationFolderPath = "Narrations";
     private string narrationScenarioFolder = "";  // 시나리오별 서브폴더 (Bootstrapper에서 주입)
 
+    /// <summary>
+    /// 지금 나레이션이 울리고 있는가 (2026-09-03).
+    /// ★"안내 멘트가 끝난 뒤에 정보를 보여 달라"는 요구를 실측 브리지가 판단하려면 이게 필요하다.
+    ///   코루틴 종료를 기다리는 것보다 AudioSource를 직접 보는 편이 정확하다 —
+    ///   중간에 단계가 넘어가 코루틴이 죽어도 소리는 이미 멈춰 있다.
+    /// </summary>
+    public bool IsNarrationPlaying
+    {
+        get
+        {
+            AudioSource src = narrationAudioSource != null ? narrationAudioSource : audioSource;
+            return src != null && src.isPlaying;
+        }
+    }
+
     [Header("=== UI 참조 ===")]
     [SerializeField] private ScenarioGuideUIController guideUIController;
 

@@ -71,19 +71,39 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [Tooltip("★끄면 진행Root를 안 건드린다(종전 동작 — 고정 포인트에 그대로 있는다).")]
     [SerializeField] private bool followProgressRoot = true;
 
-    [Tooltip("안내문이 있던 자리에서 <b>시술자 반대쪽으로</b> 이만큼 민다(m).\n" +
-             "★가까우면 VR에서 초점이 안 맞아 흐리다. 뒤로 밀고 대신 크기를 키운다.")]
-    [SerializeField] private float progressBackOffset = 0.25f;
+    [Tooltip("헤드셋 앞으로 이만큼 띄운다(m).\n" +
+             "★각도기는 환자 머리(0.5~0.8m)에 붙어 있다. 이보다 <b>멀리</b> 둬야 각도기를 안 가린다\n" +
+             "  (2026-09-03 사용자: '너무 가까우니까 각도기 가려져').\n" +
+             "★멀어진 만큼 작아 보이므로 progressScale로 되돌린다.")]
+    [SerializeField] private float followDistance = 1.15f;
 
-    [Tooltip("안내문이 있던 자리에서 이만큼 <b>내린다</b>(m). 양수면 내려간다.\n" +
-             "★안내문은 파지 중점 위 0.18m에 떠 있었다. 여기서 더 내려야 고개를 안 올린다.")]
-    [SerializeField] private float progressDrop = 0.12f;
+    [Tooltip("눈높이에서 이만큼 <b>내린다</b>(m). 양수면 내려간다.\n" +
+             "★고개를 올리지 않아도 보이게 하는 값이다 — 환자 머리보다 아래에 와야 한다.")]
+    [SerializeField] private float followDrop = 0.30f;
 
-    [Tooltip("진행Root를 이 배율로 키운다. 뒤로 민 만큼 작아 보이는 것을 되돌린다.")]
-    [SerializeField] private float progressScale = 1.45f;
+    [Tooltip("진행Root를 이 배율로 키운다.\n" +
+             "★followDistance를 0.65→1.15로 밀면서 같이 키웠다(1.45→2.3).\n" +
+             "  거리에 비례해 키워야 보이는 크기가 유지된다 — 1.15/0.65 ≈ 1.77배다.")]
+    [SerializeField] private float progressScale = 2.3f;
 
-    [Tooltip("아무리 가까워도 눈에서 이보다는 떨어뜨린다(m).")]
-    [SerializeField] private float progressMinDistance = 0.65f;
+    // ── 게으른 추종 (2026-09-03 사용자 지시) ──────────────────────────────
+    // "헤드셋에 딱 붙어서 따라오면 드드득하고 계속 움직여 잔상이 남고 눈이 피로하다.
+    //  회전에 맞춰 일정 범위를 정하고, 벗어날 때만 부드럽게 따라올 것."
+    // → 데드존 안에서는 <b>완전히 정지</b>한다. 벗어나면 SmoothDamp로 따라가고,
+    //   안착 각까지 들어오면 다시 멈춘다(히스테리시스). 매 프레임 미세하게 움직이지 않는다.
+
+    [Tooltip("헤드셋 정면에서 이 각도(도) 안에 있으면 <b>움직이지 않는다</b>.\n" +
+             "★이게 잔상의 해법이다 — 조금이라도 따라 움직이면 계속 떨린다.")]
+    [Range(5f, 60f)] [SerializeField] private float followDeadZoneDeg = 25f;
+
+    [Tooltip("따라가기 시작하면 이 각도(도) 안에 들어올 때까지 간다. 데드존보다 작아야 한다.")]
+    [Range(1f, 30f)] [SerializeField] private float followSettleDeg = 6f;
+
+    [Tooltip("자리가 이만큼(m) 어긋나도 따라간다. 고개 회전이 아니라 <b>몸이 움직인</b> 경우다.")]
+    [SerializeField] private float followMoveDeadZone = 0.35f;
+
+    [Tooltip("따라가는 부드러움(초). 클수록 천천히 쫓아온다. 0.3~0.5가 눈이 편하다.")]
+    [SerializeField] private float followSmoothTime = 0.35f;
 
     [Tooltip("실측 정보를 진행 UI의 지시문 칸에 써 넣는다.\n" +
              "★평가 모드 지시문은 방향 이름 한 단어뿐이라 그 칸이 사실상 비어 있다.")]
@@ -97,6 +117,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private bool warnedNoMeasure;
 
     private ScenarioGuideUIController guideUI;
+    private ScenarioConditionManager conditionManager;
     private bool resultToggleShown;
 
     // 진행 UI — 우리가 옮긴 것만 우리가 되돌린다.
@@ -104,6 +125,9 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private Vector3 progressHomePos;
     private Quaternion progressHomeRot;
     private Vector3 progressHomeScale;
+    private bool followPlaced;         // 이번 추종에서 한 번은 갖다 놨는가
+    private bool followChasing;        // 데드존을 벗어나 쫓는 중인가
+    private Vector3 followVelocity;    // SmoothDamp용
 
     // 준비 단계 토글 잠금 — 잠근 쪽이 푼다.
     private bool readyToggleLocked;
@@ -208,7 +232,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //     준비 단계에서 읽어야 할 것은 "양어깨에 올려 중심선을 잡으세요"지 각도가 아니다.
         //   ③'결과'도 같다 — 다 잰 뒤에 측정값이 실시간으로 흔들리면 결과가 아니라 진행 중으로 보인다.
         //   → 두 단계에서는 제자리로 돌려놓고 CSV 지시문을 그대로 보여 준다.
+        // ★단계마다 규약이 다르다(2026-09-03 사용자 지시).
+        //   준비 : 자리는 <b>기존 진행Root 그대로</b>. 안내 멘트가 끝나면 파지 현황으로 바꾼다.
+        //   측정 : 헤드셋을 게으르게 따라간다 + 측정 정보.
+        //   결과 : 자리도 글도 원래대로. 측정용 숫자를 띄우지 않는다.
         bool measuringStep = name != "준비" && name != "결과";
+
         if (measuringStep)
         {
             FollowProgressRoot();
@@ -217,6 +246,11 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         else
         {
             RestoreProgressRoot();
+
+            // ★준비 단계 — 멘트가 끝난 뒤에만 파지 현황을 띄운다.
+            //   멘트 중에 숫자로 덮으면 "무엇을 하라는 건지" 읽을 시간이 없다.
+            //   자리는 안 옮긴다 — 토글이 제자리에 있어야 누를 수 있다.
+            if (name == "준비" && !IsNarrationPlaying()) PushReadout();
         }
 
         // ★결과 단계에서는 측정을 얼린다. 안 그러면 손을 내리는 순간 0점이 풀리고,
@@ -308,8 +342,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     }
 
     /// <summary>
-    /// 진행Root를 안내문이 있던 자리로 데려온다 — 거기서 뒤로·아래로 밀고 키운다.
-    /// ★매 프레임 돈다. 손이 움직이면 같이 움직여야 "손 근처"가 성립한다.
+    /// 진행Root를 <b>헤드셋</b> 앞에 게으르게 붙인다.
+    ///
+    /// ★손이 아니라 헤드셋을 따라간다(2026-09-03 사용자 지시). 손을 따라가면
+    ///   [다음] 토글이 손에 붙어 같이 도망가고, 파지 중에는 화면이 환자 머리에 겹친다.
+    /// ★데드존 안에서는 <b>한 프레임도 안 움직인다</b>. 조금씩이라도 따라 움직이면
+    ///   VR에서 잔상이 남아 눈이 피로하다 — 사용자가 "드드득한다"고 한 게 그것이다.
     /// </summary>
     private void FollowProgressRoot()
     {
@@ -330,36 +368,52 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             progressHomeScale = root.localScale;
         }
 
-        Vector3 anchor = measure.ReadoutAnchor;
-        Camera cam = Camera.main;
-
-        if (cam != null)
-        {
-            // ★'뒤로' = 시술자에게서 멀어지는 쪽. 수평 성분만 쓴다 —
-            //   세로까지 섞으면 고개를 든 만큼 UI가 같이 올라가 버린다.
-            Vector3 away = anchor - cam.transform.position;
-            away.y = 0f;
-            if (away.sqrMagnitude > 1e-6f)
-                anchor += away.normalized * progressBackOffset;
-
-            anchor += Vector3.down * progressDrop;
-
-            // 너무 가까우면 초점이 안 맞아 흐리다(08-31 사용자 지적과 같은 사유).
-            Vector3 toRoot = anchor - cam.transform.position;
-            float dist = toRoot.magnitude;
-            if (dist > 1e-3f && dist < progressMinDistance)
-                anchor = cam.transform.position + toRoot / dist * progressMinDistance;
-
-            root.position = anchor;
-            root.rotation = Quaternion.LookRotation(root.position - cam.transform.position, Vector3.up);
-        }
-        else
-        {
-            root.position = anchor + Vector3.down * progressDrop;
-        }
-
         Vector3 want = progressHomeScale * Mathf.Max(0.01f, progressScale);
         if ((root.localScale - want).sqrMagnitude > 1e-8f) root.localScale = want;
+
+        Camera cam = Camera.main;
+        if (cam == null) return;
+
+        Vector3 head = cam.transform.position;
+        Vector3 fwd = cam.transform.forward;
+        fwd.y = 0f;
+        if (fwd.sqrMagnitude < 1e-6f) return;      // 정확히 위/아래를 볼 때 — 그 프레임은 건너뛴다
+        fwd.Normalize();
+
+        Vector3 target = head + fwd * followDistance + Vector3.down * followDrop;
+
+        // ★처음 붙일 때는 그냥 갖다 놓는다. 먼 데서 미끄러져 오면 그게 더 어지럽다.
+        if (!followPlaced)
+        {
+            followPlaced = true;
+            followChasing = false;
+            followVelocity = Vector3.zero;
+            root.SetPositionAndRotation(target, Quaternion.LookRotation(target - head, Vector3.up));
+            return;
+        }
+
+        // 지금 UI가 헤드셋 정면에서 몇 도 벗어나 있나 (수평 성분만 — 고개를 끄덕이는 건 무시한다)
+        Vector3 toUi = root.position - head;
+        toUi.y = 0f;
+        float yawErr = toUi.sqrMagnitude > 1e-6f ? Vector3.Angle(toUi, fwd) : 0f;
+        float posErr = Vector3.Distance(root.position, target);
+
+        // 데드존 밖으로 나가면 쫓기 시작한다. 안에 있으면 <b>아무것도 하지 않는다</b>.
+        if (!followChasing && (yawErr > followDeadZoneDeg || posErr > followMoveDeadZone))
+            followChasing = true;
+
+        if (!followChasing) return;
+
+        root.position = Vector3.SmoothDamp(root.position, target, ref followVelocity,
+                                           Mathf.Max(0.01f, followSmoothTime));
+        root.rotation = Quaternion.LookRotation(root.position - head, Vector3.up);
+
+        // 안착하면 멈춘다. 데드존보다 좁게 잡아야 경계에서 붙었다 떨어졌다 하지 않는다.
+        if (yawErr < followSettleDeg && posErr < followMoveDeadZone * 0.4f)
+        {
+            followChasing = false;
+            followVelocity = Vector3.zero;
+        }
     }
 
     /// <summary>진행Root를 원래 자리·크기로 되돌린다.</summary>
@@ -374,6 +428,9 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         root.localPosition = progressHomePos;
         root.localRotation = progressHomeRot;
         root.localScale = progressHomeScale;
+        followPlaced = false;
+        followChasing = false;
+        followVelocity = Vector3.zero;
 
         // ★지시문 칸도 되돌린다. 안 되돌리면 실측을 나간 뒤에도 마지막 측정값이 남아 있다 —
         //   모드만 바꾸면 substep 전환이 없어서 아무도 다시 안 써 준다.
@@ -382,6 +439,14 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             label.text = scenarioManager.CurrentSubStep.textInstruction;
 
         if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 진행 UI를 원래 자리로 되돌렸다.</color>");
+    }
+
+    /// <summary>안내 멘트가 울리고 있는가. 조건매니저를 못 찾으면 '안 울린다'로 본다.</summary>
+    private bool IsNarrationPlaying()
+    {
+        if (conditionManager == null)
+            conditionManager = FindFirstObjectByType<ScenarioConditionManager>(FindObjectsInactive.Include);
+        return conditionManager != null && conditionManager.IsNarrationPlaying;
     }
 
     /// <summary>측정기가 만든 안내문을 진행 UI의 지시문 칸에 쓴다.</summary>
