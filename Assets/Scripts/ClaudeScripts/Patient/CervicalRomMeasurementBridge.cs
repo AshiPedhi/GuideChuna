@@ -141,7 +141,6 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     private Vector3 progressHomePos;
     private Quaternion progressHomeRot;
     private Vector3 progressHomeScale;
-    private bool practiceGaugeHidden;  // 실습 각도기를 우리가 접었는가
     private bool followPlaced;         // 이번 추종에서 한 번은 갖다 놨는가
     private bool followChasing;        // 데드존을 벗어나 쫓는 중인가
     private Vector3 followVelocity;    // SmoothDamp용
@@ -260,6 +259,13 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   빼는 목록을 늘리는 방식은 새 단계가 생길 때마다 또 샌다 — 넣는 목록으로 뒤집는다.
         bool measuringStep = DirectionOf(name) != CervicalRomDriver.Direction.None
                              || name.EndsWith("파지", System.StringComparison.Ordinal);
+
+        // ★★안내문을 누가 그릴지 <b>런타임에</b> 정한다(2026-09-03).
+        //   종전에는 측정기의 routeReadoutToGuideUI(직렬화 필드)로 갈랐는데, 그게 씬에 1로 굳어
+        //   코드 기본값을 false로 바꿔도 안 먹었다(규칙 7). 그 바람에 손 옆에도 진행Root에도
+        //   안 그려져 화면이 통째로 비었다 — 사용자: "왜 아무것도 안 보이는데."
+        //   런타임 대입은 직렬화를 안 타므로 씬 값에 지지 않는다.
+        measure.ClaimReadout(pushReadoutToGuideUI);
 
         if (measuringStep)
         {
@@ -702,15 +708,10 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             return;
         }
 
-        // ★실측 전용 각도기를 쓰는 모드면 실습 각도기는 접어 둔다(2026-09-03).
-        //   모드마다 각도기는 하나다 — 둘이 같이 뜨면 같은 자리에 겹친다.
-        if (!measure.UsePracticeGauge)
-        {
-            planeGauge.SetForceHidden(true);
-            practiceGaugeHidden = true;
-            if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 실측 전용 각도기 사용 — 실습 각도기는 접었다.</color>");
-            return;
-        }
+        // ★각도기는 <b>둘 다</b> 띄운다(2026-09-03 지시). 실습 각도기도 출처를 측정기로 물려
+        //   같은 값을 가리키게 한다 — 안 물리면 교육 드라이버를 읽어 다른 각을 그린다.
+        //   겹치지 않게 실습 각도기를 위로 올리는 것은 측정기의 practiceGaugeRise가 한다.
+        if (!measure.UsePracticeGauge) return;
 
         planeGauge.SetSource(measure);
         planeGauge.SetRealityLook(true);
@@ -722,14 +723,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     {
         if (planeGauge == null) return;
 
-        // ★우리가 접었으면 우리가 편다. 출처를 안 끼운 경우(실측 전용 각도기)도 여기서 되돌린다.
-        if (practiceGaugeHidden)
-        {
-            practiceGaugeHidden = false;
-            planeGauge.SetForceHidden(false);
-        }
-
-        if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 나머지는 안 건드린다
+        if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 안 건드린다
 
         planeGauge.SetForceHidden(false);            // 접은 쪽이 편다
         planeGauge.SetPressGuide(false);

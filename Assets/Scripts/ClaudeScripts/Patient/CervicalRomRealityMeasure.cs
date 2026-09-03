@@ -461,13 +461,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     // ★showReadout은 씬에 1이 직렬화돼 있어 코드 기본값으로는 못 끈다(규칙 7).
     //   그래서 <b>신규 필드</b>로 손잡이를 따로 둔다 — 신규 필드라 코드 기본값이 그대로 먹는다.
 
-    [Tooltip("★켜면 안내문을 손 위 월드 텍스트로 안 그리고 <b>진행 UI</b>로 보낸다.\n" +
-             "★기본 꺼짐(2026-09-03 컨펌) — 진행Root에 얹으니 어수선하다는 판단이라\n" +
-             "  종전대로 손 옆에 띄운다. 코드는 남겨 둔다.")]
+    // ★★[미사용 2026-09-03] 이 필드는 씬에 <b>1로 굳었다</b>. 코드 기본값을 false로 바꿔도
+    //   씬 값이 이겨서(규칙 7) 안내문이 손 옆에도 진행Root에도 안 그려지는 상태가 됐다 —
+    //   사용자: "왜 아무것도 안 보이는데."
+    //   → 더 이상 읽지 않는다. 판단은 아래 <see cref="ReadoutClaimed"/>(런타임 플래그)가 한다.
+    //     런타임 대입은 직렬화를 타지 않으므로 씬 값에 안 진다.
     [SerializeField] private bool routeReadoutToGuideUI;
 
+    /// <summary>
+    /// 진행 UI가 안내문을 가져갔는가. <b>브리지가 매 프레임 정한다</b>(런타임 전용).
+    /// ★아무도 안 가져가면 종전대로 손 옆 월드 텍스트로 그린다 — 그게 기본이다.
+    /// </summary>
+    public bool ReadoutClaimed { get; private set; }
+
+    /// <summary>진행 UI가 안내문을 가져간다/돌려준다. 가져간 쪽이 돌려준다.</summary>
+    public void ClaimReadout(bool on) => ReadoutClaimed = on;
+
     /// <summary>안내문을 진행 UI가 그리는가.</summary>
-    public bool RouteReadoutToGuideUI => routeReadoutToGuideUI;
+    public bool RouteReadoutToGuideUI => ReadoutClaimed;
 
     // ★측정 동결 (2026-09-03). 결과 단계처럼 "다 쟀다"는 자리에서 켠다.
     //   표시는 그대로 두고 <b>확정과 0점 무효화만</b> 멈춘다 — 값이 덧씌워지는 것을 막는 것이 목적이다.
@@ -1113,11 +1124,27 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     //   (아래 UpdateGauge의 조건이 !UsePracticeGauge다).
     //   사용자: "실측용 각도기도 보여주라니까 그것도 안 나왔네."
     // ★usePracticeGauge는 씬에 1이 굳어 있어 코드로 못 끈다(규칙 7) → 신규 필드로 뒤집는다.
-    [Tooltip("★켜면 실측에서 <b>실측 전용 각도기</b>를 쓴다(기본). 실습 각도기는 접힌다.\n" +
-             "끄면 09-01처럼 실습 각도기를 빌려 쓴다.")]
+    [Tooltip("★실측 전용 180도 반원을 그린다(2026-09-03 지시로 되살림).\n" +
+             "★실습 각도기와 <b>같이</b> 뜬다 — 둘 다 보여 달라는 지시다. 겹치지 않게\n" +
+             "  실습 각도기는 practiceGaugeRise만큼 위로 올려 둔다.")]
     [SerializeField] private bool useRealityGauge = true;
 
-    public bool UsePracticeGauge => usePracticeGauge && !useRealityGauge;
+    // ★실습 각도기 쪽 출처는 계속 우리가 물린다. 그래야 두 각도기가 <b>같은 값</b>을 가리킨다.
+    //   (끄면 실습 각도기가 교육 드라이버를 읽어 실측과 다른 각을 그린다.)
+    public bool UsePracticeGauge => usePracticeGauge;
+
+    [Tooltip("실습 각도기를 파지 지점에서 이만큼 <b>위로</b> 올린다(m).\n" +
+             "★둘을 같이 띄우면 같은 자리에 겹친다 — 실측 각도기는 파지 지점,\n" +
+             "  실습 각도기는 그 위에 둔다.")]
+    [SerializeField] private float practiceGaugeRise = 0.42f;
+
+    [Tooltip("★<b>실측 각도기 반지름 덮어쓰기</b>(m). 0이면 씬의 gaugeRadius를 쓴다.\n" +
+             "gaugeRadius는 씬에 0.3이 굳어 있어 코드로 못 바꾼다(규칙 7) — 그래서 신규 필드를 둔다.\n" +
+             "2026-09-03 사용자: '실측용 각도기 반지름 줄여'.")]
+    [SerializeField] private float gaugeRadiusOverride = 0.20f;
+
+    /// <summary>실제로 쓸 실측 각도기 반지름.</summary>
+    private float GaugeRadiusNow => gaugeRadiusOverride > 0f ? gaugeRadiusOverride : gaugeRadius;
 
     /// <summary>결과 단계에서 각도기를 접는다. 접는 쪽이 편다.</summary>
     public void SetGaugeHidden(bool on) => gaugeForceHidden = on;
@@ -1223,7 +1250,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             ? gripAnchor
             : (refReady ? shoulderMid : pivot);
 
-        proxyPivot.position = anchor + up * gaugeDrawRise;
+        // ★실측 각도기가 파지 지점에 있으므로, 실습 각도기는 그 위로 올려 겹치지 않게 한다.
+        float rise = gaugeDrawRise + (useRealityGauge ? practiceGaugeRise : 0f);
+        proxyPivot.position = anchor + up * rise;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
     }
 
@@ -2118,7 +2147,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         UpdateGauge();
 
         // ★진행 UI로 보내는 동안에도 <b>문자열은 만들어야 한다</b> — 그리는 쪽만 바뀐 것이다.
-        if (!showReadout && !routeReadoutToGuideUI) return;
+        if (!showReadout && !ReadoutClaimed) return;
         if (readout == null) return;
 
         // ★숫자도 부호째 띄운다(2026-09-02). 바늘이 −30을 가리키는데 숫자가 +30이면
@@ -2211,7 +2240,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★진행 UI가 그리면 월드 텍스트는 접는다. 둘 다 켜 두면 같은 글이 두 군데 뜬다 —
         //   그게 바로 09-03에 지적받은 가독성 문제다.
-        if (routeReadoutToGuideUI)
+        if (ReadoutClaimed)
         {
             if (readout.gameObject.activeSelf) readout.gameObject.SetActive(false);
             return;
@@ -2380,7 +2409,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     {
         // ★실습 각도기를 쓰는 동안에는 자체 반원을 안 그린다(2026-09-01). 코드는 남겨 둔다 —
         //   되돌릴 자리가 있어야 한다(사용자: "실측 각도기는 일단 없애지 말아봐").
-        bool on = showGauge && !UsePracticeGauge && !gaugeForceHidden && neutralReady && frameReady;
+        // ★실습 각도기와 <b>같이</b> 뜬다(2026-09-03). 종전에는 !UsePracticeGauge라 실습 각도기를
+        //   빌려 쓰는 동안 실측 각도기가 영영 안 떴다 — "실측용 각도기도 보여주라니까".
+        bool on = showGauge && useRealityGauge && !gaugeForceHidden && neutralReady && frameReady;
 
         if (gaugeFilter != null && gaugeFilter.gameObject.activeSelf != on)
             gaugeFilter.gameObject.SetActive(on);
@@ -2398,7 +2429,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (direction != builtDirection || frameStamp != builtStamp) RebuildGauge();
 
         if (TryGetAngle(out _, out _, out float signed))
-            SetLine(needle, pivot, pivot + GaugeDir(signed) * gaugeRadius);
+            SetLine(needle, pivot, pivot + GaugeDir(signed) * GaugeRadiusNow);
         else
             SetLine(needle, pivot, pivot);
 
@@ -2413,7 +2444,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (lr == null) return;
         if (!has) { SetLine(lr, pivot, pivot); return; }
         Vector3 d = GaugeDir(signedDeg);
-        SetLine(lr, pivot + d * (gaugeRadius * 0.72f), pivot + d * (gaugeRadius * 1.08f));
+        SetLine(lr, pivot + d * (GaugeRadiusNow * 0.72f), pivot + d * (GaugeRadiusNow * 1.08f));
     }
 
     private void RebuildGauge()
@@ -2451,7 +2482,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         }
 
         // 0도 기준선 — 중심에서 눈금까지 통짜로 긋는다. 어디가 중립인지가 제일 중요하다.
-        AddTickQuad(0f, gaugeRadius, tickWidth * 1.6f, zeroLineColor, axis);
+        AddTickQuad(0f, GaugeRadiusNow, tickWidth * 1.6f, zeroLineColor, axis);
 
         gaugeMesh.Clear();
         gaugeMesh.SetVertices(gVerts);
@@ -2473,8 +2504,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (side.sqrMagnitude < 1e-10f) return;
         side = side.normalized * (width * 0.5f);
 
-        Vector3 outer = pivot + d * gaugeRadius;
-        Vector3 inner = pivot + d * (gaugeRadius - length);
+        Vector3 outer = pivot + d * GaugeRadiusNow;
+        Vector3 inner = pivot + d * (GaugeRadiusNow - length);
 
         int b = gVerts.Count;
         gVerts.Add(inner - side); gVerts.Add(inner + side);
@@ -2510,7 +2541,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             tm.gameObject.SetActive(true);
             tm.text = Mathf.Abs(a) < 0.001f ? "0" : $"{Mathf.Abs(a):F0}";
             tm.color = Mathf.Abs(a) < 0.001f ? zeroLineColor : tickColor;
-            tm.transform.position = pivot + GaugeDir(a) * (gaugeRadius + gaugeLabelOffset);
+            tm.transform.position = pivot + GaugeDir(a) * (GaugeRadiusNow + gaugeLabelOffset);
         }
         for (int i = index; i < gaugeLabels.Count; i++) gaugeLabels[i].gameObject.SetActive(false);
     }
