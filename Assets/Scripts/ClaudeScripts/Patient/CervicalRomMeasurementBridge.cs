@@ -146,6 +146,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 RestorePlaneGauge();
                 RestoreProgressRoot();
                 UnlockReadyToggle();
+                if (measure != null) measure.SetFrozen(false);   // 켠 쪽이 끈다
 
                 ExitRealWorld();
             }
@@ -200,9 +201,27 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   ★교육모드의 체크리스트는 그대로다 — 그쪽은 CervicalRomScenarioBridge가 쥔다.
         if (checklist != null) checklist.SetVisible(false);
 
-        // ★진행 UI를 손 근처로 데려오고, 실측 정보를 그 안에 쓴다(2026-09-03).
-        FollowProgressRoot();
-        PushReadout();
+        // ★★진행 UI를 손 근처로 데려오는 것은 <b>재는 단계에서만</b> 한다(2026-09-03 사용자 Play).
+        //   ①'준비'부터 따라오면 [다음] 토글이 손을 따라 움직여 <b>누를 수가 없다</b>.
+        //     버튼이 손에 붙어 같이 도망가는 꼴이다.
+        //   ②측정값이 지시문 칸을 덮어써서 <b>안내문이 뭔지 알 수가 없다</b>.
+        //     준비 단계에서 읽어야 할 것은 "양어깨에 올려 중심선을 잡으세요"지 각도가 아니다.
+        //   ③'결과'도 같다 — 다 잰 뒤에 측정값이 실시간으로 흔들리면 결과가 아니라 진행 중으로 보인다.
+        //   → 두 단계에서는 제자리로 돌려놓고 CSV 지시문을 그대로 보여 준다.
+        bool measuringStep = name != "준비" && name != "결과";
+        if (measuringStep)
+        {
+            FollowProgressRoot();
+            PushReadout();
+        }
+        else
+        {
+            RestoreProgressRoot();
+        }
+
+        // ★결과 단계에서는 측정을 얼린다. 안 그러면 손을 내리는 순간 0점이 풀리고,
+        //   거기서 잠깐 멈추면 <b>마지막 방향을 다시 재기 시작한다</b>(09-03 사용자: 좌회전이 계속 다시 측정됨).
+        measure.SetFrozen(name == "결과");
 
         // ★★준비 단계의 [다음] 토글을 잠근다(2026-09-03).
         //   아래 IsSatisfied가 ReferenceReady로 막고 있었는데도 넘어가던 이유가 여기다 —

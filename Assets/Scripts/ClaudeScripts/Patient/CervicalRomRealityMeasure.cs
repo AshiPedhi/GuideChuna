@@ -421,6 +421,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>안내문을 진행 UI가 그리는가.</summary>
     public bool RouteReadoutToGuideUI => routeReadoutToGuideUI;
 
+    // ★측정 동결 (2026-09-03). 결과 단계처럼 "다 쟀다"는 자리에서 켠다.
+    //   표시는 그대로 두고 <b>확정과 0점 무효화만</b> 멈춘다 — 값이 덧씌워지는 것을 막는 것이 목적이다.
+    private bool frozen;
+
+    /// <summary>측정을 얼리거나 푼다. 켠 쪽이 끈다.</summary>
+    public void SetFrozen(bool on)
+    {
+        if (frozen == on) return;
+        frozen = on;
+        if (showDebugLogs) Debug.Log($"[실측] 측정 {(on ? "동결" : "해제")}");
+    }
+
     /// <summary>
     /// 마지막으로 만든 안내문. 진행 UI로 보낼 때 브리지가 읽는다.
     /// ★내용이 바뀔 때만 새로 만든다(아래 dedup 조건) — 매 프레임 문자열을 만들지 않는다.
@@ -963,6 +975,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>0점을 잡은 뒤 파지가 풀렸으면 무효화하고 '중립 대기'로 되돌린다.</summary>
     private void UpdateGripRelease(bool has, Vector3 l, Vector3 r)
     {
+        // ★얼려 두면 손을 떼도 0점을 무효화하지 않는다. 안 그러면 결과 단계에서 손을 내리는 순간
+        //   AwaitNeutral로 떨어지고, 거기서 잠깐 정지하면 <b>마지막 방향을 다시 재기 시작한다</b>.
+        //   2026-09-03 사용자: "마지막 좌회전은 측정이 끝났는데도 계속 주황글씨로 다시 측정이 되네."
+        if (frozen) { releaseTimer = 0f; return; }
+
         if (!requireGripGate || !neutralReady) { releaseTimer = 0f; return; }
 
         bool held = has && IsGripPlausible(l, r, releaseHysteresis, out _);
@@ -1747,6 +1764,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>양손이 멈춰 있으면 단계를 넘긴다. VR에서 버튼 없이 진행하는 유일한 손잡이다.</summary>
     private void UpdateHold(bool has, Vector3 l, Vector3 r)
     {
+        // ★얼려 두면 확정을 안 한다 — 결과 단계에서 마지막 방향이 다시 측정되는 것을 막는다.
+        if (frozen) { holdTimer = 0f; return; }
+
         float dt = Mathf.Max(1e-4f, Time.deltaTime);
 
         // ★손을 못 읽는 동안(가림·튐 포함) 타이머를 <b>얼린다</b>. 종전에는 즉시 0이었다.
