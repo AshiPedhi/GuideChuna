@@ -81,10 +81,11 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
              "★고개를 올리지 않아도 보이게 하는 값이다 — 환자 머리보다 아래에 와야 한다.")]
     [SerializeField] private float followDrop = 0.30f;
 
-    [Tooltip("진행Root를 이 배율로 키운다.\n" +
-             "★followDistance를 0.65→1.15로 밀면서 같이 키웠다(1.45→2.3).\n" +
-             "  거리에 비례해 키워야 보이는 크기가 유지된다 — 1.15/0.65 ≈ 1.77배다.")]
-    [SerializeField] private float progressScale = 2.3f;
+    [Tooltip("★<b>기본 1 = 크기를 안 건드린다</b>(2026-09-03 사용자 지시: '스케일은 건들지 말아봐').\n" +
+             "1이 아닐 때만 원래 크기에 이 값을 곱한다.\n" +
+             "★멀어서 작아 보이면 <b>여기가 아니라 followDistance</b>를 줄이는 게 맞다 —\n" +
+             "  캔버스를 키우면 글씨·여백 비율이 씬 설정과 어긋난다.")]
+    [SerializeField] private float progressScale = 1f;
 
     // ── 게으른 추종 (2026-09-03 사용자 지시) ──────────────────────────────
     // "헤드셋에 딱 붙어서 따라오면 드드득하고 계속 움직여 잔상이 남고 눈이 피로하다.
@@ -244,7 +245,13 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   준비 : 자리는 <b>기존 진행Root 그대로</b>. 안내 멘트가 끝나면 파지 현황으로 바꾼다.
         //   측정 : 헤드셋을 게으르게 따라간다 + 측정 정보.
         //   결과 : 자리도 글도 원래대로. 측정용 숫자를 띄우지 않는다.
-        bool measuringStep = name != "준비" && name != "결과";
+        // ★★<b>재는 단계를 화이트리스트로 정한다</b>(2026-09-03 재수정).
+        //   종전엔 "준비·결과만 빼고 전부"였는데, 그러면 <b>'가이드'(환자 위치 설정) 단계까지</b>
+        //   추종에 걸려 화면이 따라다니고 측정값이 안내문을 덮었다.
+        //   2026-09-03 사용자: "환자 위치설정하는 거 나올 때도 텍스트 나오게 하라니까?"
+        //   빼는 목록을 늘리는 방식은 새 단계가 생길 때마다 또 샌다 — 넣는 목록으로 뒤집는다.
+        bool measuringStep = DirectionOf(name) != CervicalRomDriver.Direction.None
+                             || name.EndsWith("파지", System.StringComparison.Ordinal);
 
         if (measuringStep)
         {
@@ -376,8 +383,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             progressHomeScale = root.localScale;
         }
 
-        Vector3 want = progressHomeScale * Mathf.Max(0.01f, progressScale);
-        if ((root.localScale - want).sqrMagnitude > 1e-8f) root.localScale = want;
+        // ★1이면 아예 안 건드린다. 씬이 정해 둔 크기가 정답이라는 뜻이다.
+        if (Mathf.Abs(progressScale - 1f) > 0.001f)
+        {
+            Vector3 want = progressHomeScale * Mathf.Max(0.01f, progressScale);
+            if ((root.localScale - want).sqrMagnitude > 1e-8f) root.localScale = want;
+        }
 
         Camera cam = Camera.main;
         if (cam == null) return;
