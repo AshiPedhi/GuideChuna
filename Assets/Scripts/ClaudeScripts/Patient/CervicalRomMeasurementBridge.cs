@@ -300,11 +300,14 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         if (root == null) return;
 
         // ★원래 자리를 한 번만 적어 둔다. 이걸 안 하면 실측을 한 번 돌 때마다 UI가 떠내려간다.
+        // ★<b>로컬</b>로 적는다 — 진행Root는 'UI Group'의 자식이고, 그 부모를 ScenarioUIPositioner가
+        //   헤드셋 기준으로 옮긴다(설정의 위치 초기화로 실측 중에도 다시 옮길 수 있다).
+        //   월드로 적어 두면 부모가 옮겨진 뒤 옛 자리로 되돌아가 부모와 어긋난다.
         if (!progressCaptured)
         {
             progressCaptured = true;
-            progressHomePos = root.position;
-            progressHomeRot = root.rotation;
+            progressHomePos = root.localPosition;
+            progressHomeRot = root.localRotation;
             progressHomeScale = root.localScale;
         }
 
@@ -349,7 +352,8 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         Transform root = progressRoot;
         if (root == null) return;
 
-        root.SetPositionAndRotation(progressHomePos, progressHomeRot);
+        root.localPosition = progressHomePos;
+        root.localRotation = progressHomeRot;
         root.localScale = progressHomeScale;
 
         // ★지시문 칸도 되돌린다. 안 되돌리면 실측을 나간 뒤에도 마지막 측정값이 남아 있다 —

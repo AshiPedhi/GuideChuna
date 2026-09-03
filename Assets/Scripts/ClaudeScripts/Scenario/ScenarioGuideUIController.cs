@@ -121,6 +121,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnPhaseChanged += OnPhaseChanged;
         eventSystem.OnStepChanged += OnStepChanged;
         eventSystem.OnSubStepStarted += OnSubStepStarted;
+        eventSystem.OnButtonStateUpdateRequested += OnButtonStateUpdateRequested;
 
         // ChunaPathEvaluator 홀드 이벤트 구독
         if (pathEvaluator != null)
@@ -136,6 +137,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnPhaseChanged -= OnPhaseChanged;
         eventSystem.OnStepChanged -= OnStepChanged;
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
+        eventSystem.OnButtonStateUpdateRequested -= OnButtonStateUpdateRequested;
 
         // ChunaPathEvaluator 홀드 이벤트 구독 해제
         if (pathEvaluator != null)
@@ -725,6 +727,9 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (shouldShow && startToggle != null)
         {
             startToggle.isOn = false;
+            // ★다시 띄울 때는 잠금을 푼다. 직전 지시 단계에서 나레이션 도중에 넘어갔으면
+            //   '활성' 신호가 안 와서 false가 남아 있다 — 그대로면 다음 가이드에서 못 누른다.
+            startToggle.interactable = true;
         }
 
         // 토글이 표시되면 ProgressCircle 숨김
@@ -732,6 +737,38 @@ public class ScenarioGuideUIController : MonoBehaviour
         {
             HideProgressCircle();
         }
+    }
+
+    /// <summary>
+    /// 나레이션 재생 중에는 [다음] 토글을 못 누르게 한다 (2026-09-03).
+    ///
+    /// ★ScenarioConditionManager는 가이드 스텝에서 "나레이션 재생 중 버튼 비활성 → 끝나면 활성"을
+    ///   RequestButtonStateUpdate로 <b>보내고는 있었다</b>. 그런데 받는 쪽이 ScenarioUIController의
+    ///   nextButton이고, 그 컴포넌트는 <b>씬에 없다</b>(0개). 이 토글은 아무도 안 잠갔다 —
+    ///   나레이션 도중에 눌러도 그대로 넘어갔다. 09-03에 실측했다.
+    ///
+    /// ★범위를 좁힌다 — stepName이 '가이드'(시작/종료)인 스텝은 종전대로 둔다.
+    ///   13개 술기가 이 화면을 공유하는데, 시작 안내를 끝까지 들어야 [시작]이 눌리게 되면
+    ///   전 술기의 진입이 느려진다. 회의가 요구한 건 자세정렬 같은 <b>지시 단계</b>다.
+    ///
+    /// ★false는 나레이션이 있는 substep에서만 받는다. ConditionManager의 "가이드 스텝 - 토글로
+    ///   수동 진행" 분기가 나레이션 없이도 false를 한 번 보내고 true를 영영 안 보낸다 —
+    ///   그대로 받으면 나레이션 없는 지시 단계에서 토글이 영영 잠긴다.
+    /// </summary>
+    private void OnButtonStateUpdateRequested(bool isEnabled)
+    {
+        if (startToggle == null || scenarioManager == null) return;
+
+        StepData step = scenarioManager.CurrentStep;
+        if (step == null || !step.IsGuideStep() || step.stepName == "가이드") return;
+
+        if (!isEnabled)
+        {
+            SubStepData sub = scenarioManager.CurrentSubStep;
+            if (sub == null || !sub.HasNarration()) return;
+        }
+
+        startToggle.interactable = isEnabled;
     }
 
     /// <summary>
@@ -871,6 +908,8 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (startToggle != null)
         {
             startToggle.isOn = false;
+            // ★강제로 띄우는 자리(결과 단계·20초 스톨)는 반드시 눌려야 한다 — 잠금이 남아 있으면 푼다.
+            startToggle.interactable = true;
         }
     }
 
