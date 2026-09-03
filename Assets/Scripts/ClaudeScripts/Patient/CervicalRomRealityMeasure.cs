@@ -859,6 +859,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
         gripAnchorValid = false; angleExcursionSeconds = 0f;
+        fixedGaugeAnchorValid = false;
 
         Mark(requireReference
             ? "처음부터 - 양손을 환자 양어깨에 올리고 정지하세요."
@@ -1135,8 +1136,19 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     [Tooltip("실습 각도기를 파지 지점에서 이만큼 <b>위로</b> 올린다(m).\n" +
              "★둘을 같이 띄우면 같은 자리에 겹친다 — 실측 각도기는 파지 지점,\n" +
-             "  실습 각도기는 그 위에 둔다.")]
+             "  실습 각도기는 그 위에 둔다. 축은 둘이 같다.")]
     [SerializeField] private float practiceGaugeRise = 0.42f;
+
+    [Tooltip("★실습 각도기를 <b>0점을 잡은 자리에 못 박는다</b>(2026-09-03 지시).\n" +
+             "끄면 실측 각도기처럼 0점 전에는 손을 따라온다.\n\n" +
+             "사용자: '얘는 손에 있는 정보 따라서 움직일 필요 없는데.'\n" +
+             "실측 각도기는 지금 재는 값을 보여 주므로 파지에 붙어 있어야 하지만,\n" +
+             "실습 각도기는 눈금판이라 <b>가만히 있어야 읽힌다</b>.")]
+    [SerializeField] private bool practiceGaugeFixed = true;
+
+    /// <summary>0점을 잡은 순간에만 갱신되는 앵커. 실습 각도기를 여기에 못 박는다.</summary>
+    private Vector3 fixedGaugeAnchor;
+    private bool fixedGaugeAnchorValid;
 
     [Tooltip("★<b>실측 각도기 반지름 덮어쓰기</b>(m). 0이면 씬의 gaugeRadius를 쓴다.\n" +
              "gaugeRadius는 씬에 0.3이 굳어 있어 코드로 못 바꾼다(규칙 7) — 그래서 신규 필드를 둔다.\n" +
@@ -1246,11 +1258,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   ★자리만 옮기는 것이고 <b>각도값은 안 변한다</b> — 바늘 각은 CurrentAngle이 따로 준다.
         //   ★0점을 잡을 때의 파지 위치에 <b>고정</b>한다. 손을 따라 흔들리면 눈금을 못 읽는다
         //     (0점 전에는 손을 따라간다 — 그래야 파지 단계에서 어디에 뜰지 보인다).
-        Vector3 anchor = gaugeAtGrip && gripAnchorValid
-            ? gripAnchor
-            : (refReady ? shoulderMid : pivot);
+        // ★실습 각도기는 <b>0점을 잡은 자리에 못 박는다</b>(2026-09-03). 눈금판이라 가만히 있어야 읽힌다.
+        //   실측 각도기(pivot)는 0점 전에 손을 따라오지만, 이쪽은 안 따라온다.
+        Vector3 anchor;
+        if (practiceGaugeFixed && fixedGaugeAnchorValid) anchor = fixedGaugeAnchor;
+        else if (gaugeAtGrip && gripAnchorValid) anchor = gripAnchor;
+        else anchor = refReady ? shoulderMid : pivot;
 
         // ★실측 각도기가 파지 지점에 있으므로, 실습 각도기는 그 위로 올려 겹치지 않게 한다.
+        //   ★축(proxyTorso)은 둘이 같다 — refFwd·refUp을 그대로 쓴다.
         float rise = gaugeDrawRise + (useRealityGauge ? practiceGaugeRise : 0f);
         proxyPivot.position = anchor + up * rise;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
@@ -1530,6 +1546,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   눈금이 흔들리면 읽을 수가 없다(2026-09-03).
         gripAnchor = (l + r) * 0.5f;
         gripAnchorValid = true;
+
+        // ★실습 각도기용 고정 앵커는 <b>여기서만</b> 갱신한다. 0점 전 손 추종에는 안 딸려 간다.
+        fixedGaugeAnchor = gripAnchor;
+        fixedGaugeAnchorValid = true;
 
         // ★표시 기준점도 파지 지점으로 데려온다. CaptureShoulders가 여기를 shoulderMid로
         //   옮겨 놓기 때문에, 그대로 두면 각도기·축선·안내문이 전부 어깨 높이에 그려진다.
