@@ -237,6 +237,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "★신규 필드라 코드 기본값이 먹는다(규칙 7).")]
     [SerializeField] private bool hideResultNumbers = true;
 
+    /// <summary>
+    /// 평가에서 힌트가 되는 표시를 감추는가.
+    /// ★감추는 것: <b>능동·수동·차이 숫자</b>, <b>"N도 더"</b>, <b>절차 사슬(중립 ▶ 능동 ▶ 압박)</b>.
+    /// ★남기는 것: 방향 이름, 현재 각도, 홀드 게이지, 방향 목록.
+    ///   그건 절차를 알려 주는 게 아니라 "지금 먹히고 있나"를 보는 것이다 —
+    ///   정지로만 넘어가는 구조라 이게 없으면 왜 안 넘어가는지 알 수가 없다.
+    /// ★값은 그대로 쌓인다. results·_rom.csv·결과지에는 정상으로 나간다.
+    /// </summary>
+    private bool HideHints => evaluationGuidance && hideResultNumbers;
+
     [Tooltip("★<b>정방향으로 간 각만</b> 센다. 굴곡을 재는 중에 뒤로 젖히면 각이 안 쌓인다.\n" +
              "끄면 종전대로 크기만 봐서, 반대로 움직여도 능동·압박이 잡힌다.\n" +
              "★Play에서 정방향인데 바늘이 거꾸로 가면 부호 규약이 뒤집힌 것이니 이걸 끄고 알릴 것.")]
@@ -2209,7 +2219,11 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         sb.Clear();
 
-        if (showProgress)
+        // ★평가에서는 <b>절차 사슬(중립 ▶ 능동 ▶ 압박)을 숨긴다</b>(2026-09-03 사용자 지시).
+        //   다음에 뭘 해야 하는지를 그대로 알려 주는 줄이라, 평가에서는 힌트다.
+        //   ★홀드 게이지·방향 목록은 남긴다 — 그건 절차가 아니라 <b>지금 먹히고 있나</b>를 보는 것이다.
+        //     정지로만 넘어가는 구조라 게이지가 없으면 왜 안 넘어가는지 알 수가 없다.
+        if (showProgress && !HideHints)
         {
             sb.Append("<size=70%>");
             AppendStageChain();
@@ -2235,7 +2249,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★평가에서는 능동·수동 숫자를 <b>숨긴다</b>(2026-09-03 사용자 지시 — 힌트 최소화).
         //   ★삭제가 아니다. results에는 그대로 쌓이고 _rom.csv·결과지에도 그대로 나간다.
         //     화면에서만 안 보이게 하는 것이다.
-        if (neutralReady && !(evaluationGuidance && hideResultNumbers))
+        if (neutralReady && !HideHints)
         {
             Result res = results[(int)direction];
             sb.Append('\n');
