@@ -846,6 +846,14 @@ public class InfoPanelController : MonoBehaviour
         UpdateAllToggleColors();
     }
 
+    /// <summary>
+    /// 설정·메인으로 팝업 중 하나라도 열려 있는가(2026-09-04).
+    /// ★ROM 실측이 이걸 보고 진행창을 접는다 — 팝업 앞을 가려 버튼이 안 눌렸다.
+    /// </summary>
+    public bool IsAnyPopupOpen
+        => (settingsPopup != null && settingsPopup.activeSelf)
+        || (exitConfirmPopup != null && exitConfirmPopup.activeSelf);
+
     /// <summary>지금 결과 페이지가 떠 있는가.</summary>
     public bool IsResultPageShown => currentContentPage == ContentPage.Result;
 

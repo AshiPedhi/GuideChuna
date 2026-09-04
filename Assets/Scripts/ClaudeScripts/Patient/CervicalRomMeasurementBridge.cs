@@ -233,6 +233,8 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 RestorePlaneGauge();
                 RestoreProgressRoot();
                 UndockProgressRoot();
+        RestorePopupGuard();
+        DestroyRetryButton();
                 UnlockReadyToggle(false);
                 if (measure != null) measure.SetFrozen(false);   // 켠 쪽이 끈다
 
@@ -274,6 +276,15 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         string name = step.stepName;
         int subNo = sub.subStepNo;
+
+        // ★★<b>이 단계에서 잡을 수 있는 것</b>을 매 프레임 알려 준다(2026-09-04).
+        //   이게 없으면 정지가 이어지는 동안 어깨선 → 머리가 <b>연달아</b> 잡힌다 —
+        //   사용자: "다음 버튼으로 안내만 넘어가면 뭐해."
+        //   [다음]을 눌러 <b>단계가 바뀌어야</b> 다음 것을 잡을 수 있다.
+        measure.SetCaptureTarget(
+            name == "준비"     ? CervicalRomRealityMeasure.CaptureTarget.Shoulders :
+            name == "머리위치" ? CervicalRomRealityMeasure.CaptureTarget.Head :
+                                 CervicalRomRealityMeasure.CaptureTarget.Neutral);
         string key = $"{name}#{subNo}";
 
         ApplyDirectionFor(name);
@@ -649,6 +660,8 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     {
         RestoreProgressRoot();
         UndockProgressRoot();
+        RestorePopupGuard();
+        DestroyRetryButton();
         UnlockReadyToggle(false);
         ExitRealWorld();
         resultToggleShown = false;
@@ -800,6 +813,163 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
     /// <summary>간결 표시에서 실습 각도기를 우리가 접었는가. 접은 쪽이 편다.</summary>
     private bool gaugeHiddenByUs;
+
+    // ── 어깨선·머리위치의 수동 진행 (2026-09-04 지시) ────────────────────
+    //
+    // ★잡는 것과 넘기는 것을 가른다. 정지하면 잡되, <b>넘기지는 않는다</b> —
+    //   사용자가 [다음]을 눌러야 넘어간다. 잘못 잡았으면 [다시 측정]으로 놓는다.
+
+    [Tooltip("[다시 측정] 버튼. ★비우면 [다음] 토글 옆에 런타임으로 만든다.\n" +
+             "직접 배치해 여기 꽂으면 그쪽이 우선한다.")]
+    [SerializeField] private UnityEngine.UI.Button retryButton;
+
+    [Tooltip("런타임으로 만들 때 [다음] 토글에서 옆으로 밀 거리(px).")]
+    [SerializeField] private float retryButtonOffsetX = -190f;
+
+    private bool manualButtonsShown;
+    private UnityEngine.UI.Button madeRetryButton;   // 우리가 만든 것 — 우리가 지운다
+
+    /// <summary>
+    /// 잡힌 뒤에만 [다음]과 [다시 측정]을 띄운다. 아직이면 둘 다 안 띄운다 —
+    /// 안 그러면 안 잡힌 채로 넘어간다(09-03에 막았던 구멍이다).
+    /// </summary>
+    private void ShowManualStepButtons(bool captured)
+    {
+        if (!captured)
+        {
+            if (manualButtonsShown)
+            {
+                manualButtonsShown = false;
+                SetRetryVisible(false);
+                if (GuideUI != null) GuideUI.SetStartToggleVisible(false);
+            }
+            return;
+        }
+
+        if (manualButtonsShown) return;
+        manualButtonsShown = true;
+
+        if (GuideUI != null) GuideUI.EnableStartToggle("다음");
+        SetRetryVisible(true);
+        ChunaLogger.Log("<color=cyan>[실측Bridge] 잡혔다 — [다음]·[다시 측정]을 띄웠다.</color>");
+    }
+
+    /// <summary>[다시 측정] 버튼을 보이거나 감춘다. 없으면 [다음] 옆에 만든다.</summary>
+    private void SetRetryVisible(bool on)
+    {
+        if (retryButton == null && on) retryButton = EnsureRetryButton();
+        if (retryButton == null) return;
+        if (retryButton.gameObject.activeSelf != on) retryButton.gameObject.SetActive(on);
+    }
+
+    /// <summary>
+    /// [다음] 토글 옆에 [다시 측정] 버튼을 만든다.
+    /// ★<b>토글을 복제하지 않는다</b>(2026-08-28 전례 — 화살표 아이콘이 붙은 '다음' 버튼이라
+    ///   복제하면 체크박스가 아니라 버튼이 세 개 생긴다). 빈 오브젝트에 Image+Button+글자만 얹는다.
+    /// </summary>
+    private UnityEngine.UI.Button EnsureRetryButton()
+    {
+        if (madeRetryButton != null) return madeRetryButton;
+
+        var toggle = GuideUI != null ? GuideUI.NextToggle : null;
+        if (toggle == null || !(toggle.transform is RectTransform tRect)) return null;
+
+        var go = new GameObject("다시측정버튼", typeof(RectTransform),
+                                typeof(UnityEngine.UI.Image), typeof(UnityEngine.UI.Button));
+        go.hideFlags = HideFlags.DontSave;
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(tRect.parent, false);
+        rt.anchorMin = tRect.anchorMin; rt.anchorMax = tRect.anchorMax;
+        rt.pivot = tRect.pivot;
+        rt.sizeDelta = tRect.sizeDelta;
+        rt.localScale = tRect.localScale;
+        rt.localRotation = tRect.localRotation;
+        rt.anchoredPosition = tRect.anchoredPosition + new Vector2(retryButtonOffsetX, 0f);
+
+        var img = go.GetComponent<UnityEngine.UI.Image>();
+        img.color = new Color(0.25f, 0.32f, 0.40f, 0.95f);
+
+        var label = new GameObject("글자", typeof(RectTransform), typeof(TMPro.TextMeshProUGUI));
+        label.hideFlags = HideFlags.DontSave;
+        var lrt = (RectTransform)label.transform;
+        lrt.SetParent(rt, false);
+        lrt.anchorMin = Vector2.zero; lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero; lrt.offsetMax = Vector2.zero;
+        var tmp = label.GetComponent<TMPro.TextMeshProUGUI>();
+        tmp.text = "다시 측정";
+        tmp.alignment = TMPro.TextAlignmentOptions.Center;
+        tmp.enableAutoSizing = true;
+        tmp.fontSizeMin = 8f; tmp.fontSizeMax = 48f;
+        tmp.color = Color.white;
+        tmp.raycastTarget = false;
+
+        // ★한글 폰트를 반드시 지정한다(2026-09-04 지시 — "무조건 노토산스로 써").
+        //   TMP 기본 폰트에는 한글 글리프가 없어 <b>네모로</b> 나온다.
+        //   KoreanFontResolver가 Resources → 가이드 패널 → 씬 순으로 찾아 준다(프로젝트 공용 경로).
+        TMPro.TMP_FontAsset krFont = KoreanFontResolver.Resolve();
+        if (krFont != null) tmp.font = krFont;
+        else ChunaLogger.LogWarning("[실측Bridge] 한글 폰트를 못 찾아 [다시 측정] 글자가 깨질 수 있습니다.");
+
+        var btn = go.GetComponent<UnityEngine.UI.Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(OnRetryClicked);
+
+        madeRetryButton = btn;
+        ChunaLogger.Log("<color=cyan>[실측Bridge] [다시 측정] 버튼을 [다음] 옆에 만들었다.</color>");
+        return btn;
+    }
+
+    /// <summary>우리가 만든 [다시 측정] 버튼을 치운다. 만든 쪽이 지운다.</summary>
+    private void DestroyRetryButton()
+    {
+        manualButtonsShown = false;
+        if (madeRetryButton == null) return;
+        if (retryButton == madeRetryButton) retryButton = null;
+        Destroy(madeRetryButton.gameObject);
+        madeRetryButton = null;
+    }
+
+    private void OnRetryClicked()
+    {
+        if (measure == null) return;
+        measure.RetryCapture();
+        manualButtonsShown = false;                       // 다시 잡으면 다시 띄운다
+        SetRetryVisible(false);
+        if (GuideUI != null) GuideUI.SetStartToggleVisible(false);
+    }
+
+    // ── 팝업이 열리면 진행Root를 접는다 (2026-09-04 지시, 실측 전용) ──────
+    //
+    // 사용자: "사이드 버튼을 눌러 메인으로/설정 메뉴를 불러올 때 진행Root가 앞에 있어서 안 눌려."
+    // ★<b>실측에서만</b> 한다(사용자 확정). 다른 술기는 종전 그대로다.
+    // ★우리가 접은 것만 우리가 편다.
+    private bool progressHiddenByPopup;
+
+    /// <summary>우리가 접은 진행창을 편다. ★접은 쪽이 편다 — 실측을 나갈 때 반드시 부른다.</summary>
+    private void RestorePopupGuard()
+    {
+        if (!progressHiddenByPopup) return;
+        progressHiddenByPopup = false;
+        Transform root = progressRoot;
+        if (root != null) root.gameObject.SetActive(true);
+    }
+
+    private void TickPopupGuard()
+    {
+        InfoPanelController panel = InfoPanel;
+        if (panel == null) return;
+
+        bool popup = panel.IsAnyPopupOpen;
+        if (popup == progressHiddenByPopup) return;
+
+        Transform root = ResolveProgressRoot();
+        if (root == null) return;
+
+        progressHiddenByPopup = popup;
+        root.gameObject.SetActive(!popup);
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[실측Bridge] 팝업 {(popup ? "열림 — 진행창을 접었다" : "닫힘 — 진행창을 폈다")}</color>");
+    }
 
     // ── 진행Root ↔ 정보패널 결과 페이지 ───────────────────────────────────
 
@@ -1002,7 +1172,27 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   체크리스트 3번 항목("검사하는 동안 어깨가 돌아가지 않게 한다")은 말로 확인받는 것보다
         //   기준선이 떠 있는 편이 실제로 보인다.
         //   ★교육모드는 그대로 체크리스트를 쓴다.
-        if (stepName == "준비") return measure.ReferenceReady;
+        // ★★<b>어깨선·머리위치는 자동으로 안 넘긴다</b>(2026-09-04 지시).
+        //   사용자: "지정되면 자동으로 넘기지 말고 내가 다음 눌러서 넘어가게 해.
+        //            자동으로 넘어가니까 멍때리면 어깨선하고 바로 강체까지 인식해버리더라."
+        //   → 잡히면 [다음] 토글과 [다시 측정] 버튼을 띄우고 <b>사람이 넘긴다.</b>
+        if (stepName == "준비")
+        {
+            ShowManualStepButtons(measure.ReferenceReady);
+            return false;
+        }
+
+        // ★★머리 위치 단계(2026-09-04 순서 변경 — 어깨선 → <b>머리 위치</b> → 시상면 파지).
+        //   양손으로 측두를 짚고 정지하면 머리 중심과 <b>회전 중심(축원점)</b>이 정해진다.
+        //   ★이 단계가 생긴 이유: 종전에는 회전 중심을 '어깨중점 + 12cm'로 <b>박아 뒀는데</b>,
+        //     반경벡터로 각을 내는 새 방식에서는 그 추정이 각을 통째로 스케일시킨다.
+        if (stepName == "머리위치")
+        {
+            ShowManualStepButtons(measure.HeadReady);
+            return false;
+        }
+        manualButtonsShown = false;
+        SetRetryVisible(false);
 
         // ★★<b>결과창은 자동으로 넘어간다</b>(2026-09-04 회의 지시 —
         //   "시나리오가 끝나면 다음 버튼 누르지 않아도 자동으로 결과창이 나오게").

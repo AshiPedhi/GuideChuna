@@ -202516,7 +202516,7 @@ MonoBehaviour:
   usePinchGate: 0
   pinchWidthRange: {x: 0.01, y: 0.07}
   releaseHysteresis: 0.25
-  releaseGraceSeconds: 0.35
+  releaseGraceSeconds: 0.8
   requireReference: 1
   carryNeutralWithinGrip: 1
   evaluationGuidance: 1
@@ -202585,6 +202585,20 @@ MonoBehaviour:
   minimalCrossBothAxes: 0
   showNeckLineCompare: 1
   usesPalmForShoulders: 1
+  useRigidBodyMeasure: 1
+  radiusDriftTolerance: 0.25
+  primaryHandWeight: 0.75
+  showRigidBody: 1
+  rigidTopRise: 0.06
+  rigidWidthScale: 1
+  noseLineLength: 0.22
+  rigidBodyColor: {r: 0.45, g: 0.85, b: 1, a: 0.35}
+  noseLineColor: {r: 1, g: 0.75, b: 0.25, a: 0.95}
+  requireHeadCapture: 1
+  neckDropFromHead: 0.12
+  measureDoneClip: {fileID: 0}
+  measureDoneVolume: 0.9
+  measureDonePause: 1
   axisLength: 0.18
   showAxisLabels: 1
   axisLabelSize: 0.03

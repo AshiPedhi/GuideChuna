@@ -1,4 +1,4 @@
-scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
+﻿scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction,voiceInstruction,handTrackingFileName,conditionType,conditionParams,patientAnimationClip,movementType,videoStartTime,videoEndTime,contactTarget,pivotTarget,pivotPlaneAxis,invertAngle
 1,경추ROM측정,시작,가이드,0,1,0,필요시 [설정]으로 환자 위치를 맞추고 [시작]을 누르세요.,시작,,,,,,,,,,,
 1,경추ROM측정,교육,자세정렬,0,1,0,"환자를 의자에 편하게 앉히고, 허리를 곧게 펴도록 안내해 주세요.",자세점검1,,,,,,,,,,,
 1,경추ROM측정,교육,자세정렬,0,2,0,"가슴을 자연스럽게 펴고, 어깨의 힘은 편안히 빼도록 해 주세요.",자세점검2,,,,,,,,,,,
@@ -40,6 +40,7 @@ scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction
 1,경추ROM측정,교육,좌회전압박,18,3,0,중립으로 돌아옵니다.,,,PassiveStretch,bothHands,,,,,Head,,,
 1,경추ROM측정,교육,횡단면평가,19,1,0,"좌회전 90도, 우회전 90도를 기준으로 각도 차이와 보상 여부를 기록해 주세요.",평가3,,,,,,,,,,,
 1,경추ROM측정,실측,준비,0,1,0,"환자를 앉히신 뒤, 양손을 환자의 양어깨에 올려 중심선을 잡아 주세요.",실측준비,,,,,,,,,,,
+1,경추ROM측정,실측,머리위치,1,1,0,양손으로 환자의 머리 양 측면을 감싸 잡고 잠시 멈춰 주세요.,머리위치,,,,,,,,,,,
 1,경추ROM측정,실측,시상면 파지,3,1,0,시상면 파지,평가시상파지,,,,,,,,,,,
 1,경추ROM측정,실측,굴곡,4,1,0,굴곡,평가굴곡,,,,,,,,,,,
 1,경추ROM측정,실측,굴곡,4,2,0,굴곡,,,,,,,,,,,,
@@ -60,5 +61,5 @@ scenarioNo,scenarioName,phase,stepName,stepNo,subStepNo,duration,textInstruction
 1,경추ROM측정,실측,좌회전,11,1,0,좌회전,평가좌회전,,,,,,,,,,,
 1,경추ROM측정,실측,좌회전,11,2,0,좌회전,,,,,,,,,,,,
 1,경추ROM측정,실측,좌회전,11,3,0,좌회전,,,,,,,,,,,,
-1,경추ROM측정,실측,결과,12,1,0,"측정이 끝났습니다. 결과를 확인하신 뒤 [다음]을 눌러 주세요.",실측결과,,,,,,,,,,,
+1,경추ROM측정,실측,결과,12,1,0,측정이 끝났습니다. 결과를 확인하신 뒤 [다음]을 눌러 주세요.,실측결과,,,,,,,,,,,
 1,경추ROM측정,종료,가이드,0,1,0,실습을 마칩니다. [메인] 버튼을 누르세요.,종료,,,,,,,,,,,

@@ -585,6 +585,156 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "손바닥 본을 못 찾으면 자동으로 종전(파지점)으로 떨어진다.")]
     [SerializeField] private bool usesPalmForShoulders = true;
 
+    // ════════════════════════════════════════════════════════════════════
+    // ★★강체 방식 (2026-09-04 설계 변경)
+    //
+    //   사용자: "강체와 축을 미리 잡아서 고정된 기준을 만들고, 양손으로 실제 환자의 움직임에 따라
+    //            강체를 따라 움직이게 하는 방식으로 변경하면 정밀도는 떨어져도 노이즈는 줄지 않을까."
+    //
+    //   강체는 <b>어깨선에서 파지점보다 살짝 위까지 올라온 기둥</b>이다(사용자 지정).
+    //   둘레는 측정할 때의 파지 간격 정도. 그 기둥이 고정된 축 둘레로 기울고 돈다.
+    //
+    //   ★기둥은 <b>표시물</b>이다. 각은 손의 반경벡터가 정한다(TryGetAngle) —
+    //     기둥을 어디에 얼마나 크게 그리든 값은 안 변한다.
+    //   ★코끝선 = 회전을 눈으로 보는 선. 회전은 머리 중심이 제자리라
+    //     기둥의 <b>기울기</b>로는 안 보인다 — 기둥에 박힌 이 선이 도는 것으로 본다.
+    // ════════════════════════════════════════════════════════════════════
+
+    [Header("=== 강체 방식 (2026-09-04) ===")]
+    [Tooltip("★켜면 손 사이 벡터가 아니라 <b>각 손의 반경벡터</b>로 각을 잰다.\n" +
+             "축에 수직인 성분만 남기므로 노이즈가 줄고, <b>한 손만 남아도</b> 측정된다.\n" +
+             "끄면 09-04 이전 방식(두 손 사이 벡터)으로 돌아간다.")]
+    [SerializeField] private bool useRigidBodyMeasure = true;
+
+    // ── 손값 버리기 · 방향별 가중치 (2026-09-04) ──────────────────────────
+    //
+    // ★★<b>속도 필터로는 못 잡는다</b>(2026-09-04 지적).
+    //   사용자: "신전 상태에서 뒤통수 쪽 손이 노이즈로 밀려서 계속 땅으로 꺼지는데
+    //            각도기가 그걸 따라가더라. 손값이 이상하면 버리라고 했는데 버리는 걸 제대로 못한다."
+    //   기존 AcceptHand는 <b>속도</b>만 본다(maxHandSpeed 1.2m/s). 갑자기 점프하면 잡지만,
+    //   스르르 미끄러져 내려가는 <b>드리프트</b>는 임계 아래라 통과한다. 그게 안 버려진 이유다.
+    //
+    // ★<b>강체 구속으로 잡는다.</b> 머리는 강체이므로 축원점에서 각 손까지의 <b>반경 길이</b>는
+    //   보존돼야 한다. 손이 땅으로 꺼지면 반경이 길어지므로 <b>속도와 무관하게</b> 걸린다.
+    //   양손 간격을 보는 IsSlipping과 같은 원리인데, 그건 경고만 하고 버리지는 않았다.
+
+    [Tooltip("★반경이 중립에서 이 비율 넘게 변하면 <b>그 손을 버린다</b>(0.25 = ±25%).\n" +
+             "머리가 강체라 축원점→손 거리는 보존돼야 한다 — 안 지켜지면 그 손이 틀린 것이다.\n" +
+             "0이면 안 버린다(종전 동작).")]
+    [Range(0f, 1f)][SerializeField] private float radiusDriftTolerance = 0.40f;
+
+    // ★★방향별 손 가중치(2026-09-04 지시).
+    //   사용자: "굴곡은 뒤통수 손, 신전은 이마 쪽 손에 가중치를 두라.
+    //            회전도 우회전이면 오른손, 좌회전이면 왼손으로 가중치를 좀 줄래?"
+    //   ★이유가 방향마다 다르다 — 시상면은 <b>가려지는 쪽</b>을 덜 믿는 것이고,
+    //     회전은 <b>도는 쪽으로 크게 움직이는 손</b>을 더 믿는 것이다.
+    //   ★한 손이 버려지면 남은 손이 100%를 가져간다. 가중치는 둘 다 살아 있을 때만 쓴다.
+    [Tooltip("주로 믿을 손의 몫(0.5면 가중치 없음, 0.75면 3:1).\n" +
+             "굴곡=뒤통수 손 · 신전=이마 손 · 우회전=오른손 · 좌회전=왼손. 측굴은 가중치 없음.")]
+    [Range(0.5f, 1f)][SerializeField] private float primaryHandWeight = 0.75f;
+
+    /// <summary>중립에서 각 손이 이마 쪽인가(양수) 뒤통수 쪽인가(음수). refFwd에 사영한 부호다.</summary>
+    private float faceSideL, faceSideR;
+
+    /// <summary>중립 반경 길이. 강체 구속 검사의 기준이다.</summary>
+    private float radLen0L, radLen0R;
+
+    [Tooltip("강체 기둥을 그린다. 끄면 각만 재고 안 그린다.")]
+    [SerializeField] private bool showRigidBody = true;
+
+    [Tooltip("기둥 꼭대기를 파지점보다 이만큼 <b>더 위로</b> 올린다(m).")]
+    [SerializeField] private float rigidTopRise = 0.06f;
+
+    [Tooltip("기둥 굵기를 파지 간격의 몇 배로 할지. 1이면 간격이 곧 지름이다.")]
+    [SerializeField] private float rigidWidthScale = 1f;
+
+    [Tooltip("코끝선 길이(m). 0이면 안 그린다.")]
+    [SerializeField] private float noseLineLength = 0.22f;
+
+    [SerializeField] private Color rigidBodyColor = new Color(0.45f, 0.85f, 1f, 0.35f);
+    [SerializeField] private Color noseLineColor = new Color(1f, 0.75f, 0.25f, 0.95f);
+
+    // ── 머리 위치 지정 (2026-09-04 순서 변경) ────────────────────────────
+    // 사용자: "최초에 어깨선 설정한 뒤에 다음 단계에서 머리 위치를 지정하고,
+    //          그 다음 굴곡을 위한 시상면 파지로 가야 해."
+    //
+    // ★★<b>축원점 추정을 없애는 것이 목적이다.</b> 종전에는 회전 중심을
+    //   <c>어깨중점 + gaugePivotRise(0.12)</c>로 <b>박아 뒀다</b>. 새 방식은 반경벡터로 각을 내므로
+    //   중심이 틀리면 각이 통째로 스케일된다 — 중심이 낮으면 작게, 높으면 크게 읽힌다.
+    //   사람이 직접 짚어 주면 그 추정이 사라진다.
+    //
+    // ★<b>양손으로 측두를 짚고 정지</b>한다(사용자 확정 A안). 어깨선 잡는 동작과 같아서 배울 게 없다.
+    // ★축원점은 머리 중심에서 <b>목 아래로</b> 내린 자리다(②안). 목이 도는 자리는 머리 중심이 아니다.
+    // ★강체 기둥은 <b>축원점에서 수직으로</b> 선다(사용자: "최초에는 수직으로 뻗어야 해").
+    //   축원점을 머리 중심 바로 아래로 잡으므로 기둥은 <b>구성상</b> 수직이다 — 기울여 만들지 않는다.
+
+    [Tooltip("★머리 위치를 따로 잡는 단계를 쓴다(2026-09-04). 끄면 종전대로 어깨→파지로 바로 간다.")]
+    [SerializeField] private bool requireHeadCapture = true;
+
+    [Tooltip("머리 중심에서 <b>아래로</b> 이만큼 내린 곳이 회전 중심(축원점)이다(m).\n" +
+             "★목이 도는 자리는 머리 중심이 아니라 그 아래다. 값이 크면 반경이 길어져 각이 작게 읽힌다.\n" +
+             "실측으로 맞출 값이다 — 우선 해부학적 어림값으로 둔다.")]
+    [SerializeField] private float neckDropFromHead = 0.12f;
+
+    /// <summary>양손 측두 중점 = 머리 중심(월드). 세션에 한 번 잡는다.</summary>
+    private Vector3 headCenter;
+
+    /// <summary>회전 중심. 머리 중심에서 목 아래로 내린 자리다. 각 계산의 원점이다.</summary>
+    private Vector3 axisOrigin;
+    private bool headReady;
+
+    /// <summary>지금 쓸 회전 중심. 머리를 안 잡았으면 종전 추정으로 떨어진다.</summary>
+    private Vector3 AnglePivotNow => headReady ? axisOrigin : anglePivot;
+
+    /// <summary>
+    /// 양손으로 측두를 짚은 자리에서 머리 중심과 회전 중심을 잡는다.
+    /// ★어깨선이 먼저다 — 기준틀 없이는 축이 없다.
+    /// </summary>
+    [ContextMenu("2 - 머리 위치 잡기")]
+    public void CaptureHead()
+    {
+        if (!refReady) { Warn("어깨 기준선이 먼저입니다."); return; }
+        if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
+
+        float span = Vector3.Distance(l, r);
+        Vector2 range = GripSpanRange(CervicalRomDriver.Direction.LateralRight);   // 측두 파지 대역
+        if (span < range.x || span > range.y)
+        {
+            Warn($"측두 파지로 안 보입니다({span * 100f:F0}cm — 기준 " +
+                 $"{range.x * 100f:F0}~{range.y * 100f:F0}cm). 양손을 머리 양 측면에 대세요.");
+            holdTimer = 0f;
+            return;
+        }
+
+        headCenter = (l + r) * 0.5f;
+        axisOrigin = headCenter - Vector3.up * Mathf.Max(0f, neckDropFromHead);
+        headReady = true;
+        holdTimer = 0f;
+        frameStamp++;
+
+        // ★기둥은 여기서 <b>수직으로</b> 만든다. 축원점이 머리 중심 바로 아래라 구성상 수직이다.
+        rigidBase0 = axisOrigin;
+        rigidTop0 = headCenter + Vector3.up * rigidTopRise;
+        rigidRadius = Mathf.Max(0.02f, span * 0.5f * Mathf.Max(0.1f, rigidWidthScale));
+        rigidReady = true;
+
+        Mark($"머리 위치 고정 - 측두 간격 {span * 100f:F0}cm · 회전 중심은 {neckDropFromHead * 100f:F0}cm 아래. " +
+             "이제 시상면 파지로 가세요.");
+        ChunaLogger.Log($"<color=cyan>[실측] 머리 위치 — 중심 {headCenter} · 축원점 {axisOrigin} " +
+                        $"· 기둥 높이 {(rigidTop0.y - rigidBase0.y) * 100f:F0}cm</color>");
+    }
+
+    /// <summary>머리 위치가 잡혔는가. 브리지가 단계를 넘길 조건으로 읽는다.</summary>
+    public bool HeadReady => headReady;
+
+    /// <summary>중립에서의 기둥 — 밑동(축원점)·꼭대기·반지름. 잡을 때 한 번 정한다.</summary>
+    private Vector3 rigidBase0, rigidTop0;
+    private float rigidRadius;
+    private bool rigidReady;
+
+    private Transform rigidBody;      // 기둥 (DontSave)
+    private LineRenderer noseLine;
+
     // ── 측정 확정 알림 (2026-09-04) ───────────────────────────────────────
     // 사용자: "능동이든 수동이든 측정이 되면 딩동이나 뭐 완료됐다는 소리 좀 내줄래?
     //          게이지만 계속 도니까 이게 측정이 된 건지 아직 안 된 건지 모르겠네.
@@ -879,6 +1029,33 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Vector3 axis = AxisFor(direction);
         if (axis.sqrMagnitude < 1e-8f) return false;
 
+        // ════════════════════════════════════════════════════════════════
+        // ★★<b>강체 방식</b>(2026-09-04 설계 변경). 손 사이 벡터를 안 쓴다.
+        //
+        //   종전: 두 손을 잇는 벡터 하나가 얼마나 돌았나 → 한 손이 떨리면 그 선이 통째로 흔들린다.
+        //         사용자: "노이즈 빈도도 높고 기술 한계로 정밀한 유지가 안 되는 경우가 많았다."
+        //
+        //   새 방식: 축을 어깨선에서 <b>고정</b>하고, 각 손의 <b>반경벡터</b>가 그 축 둘레에서
+        //           중립으로부터 몇 도 돌았는지를 잰다. 손마다 각이 따로 나오고 평균한다.
+        //
+        //   ★<b>사영이 노이즈를 버린다</b>. ProjectOnPlane으로 축 방향 성분이 사라지므로
+        //     그쪽으로 떠는 손 떨림은 각에 <b>들어오지 못한다</b>. 1자유도로 눌러 담는 것이다.
+        //     정밀도는 떨어진다 — 실제 미세 움직임도 같이 버려진다. 그 교환을 택했다.
+        //   ★<b>한 손만 남아도 성립한다</b>. 두 손이 같은 축 둘레를 같은 각만큼 돌기 때문이다.
+        //     종전에는 이게 4초짜리 예외 경로였는데, 이제 <b>본류</b>다.
+        //   ★부호 규약은 AxisFor 그대로다 — 09-01~09-02에 검증한 것을 안 건드린다.
+        // ════════════════════════════════════════════════════════════════
+        if (useRigidBodyMeasure)
+        {
+            // ★값은 <b>프레임당 한 번</b> 계산해 캐시한다(UpdateAngleCache).
+            //   여기서 스무딩을 걸면 한 프레임에 여러 번 불려(안내문·각도기·기둥) 중복으로 먹는다.
+            if (!cachedValid) return false;
+            signed = cachedSigned;
+            perpRatio = cachedPerp;
+            degrees = Mathf.Abs(signed);
+            return true;
+        }
+
         // ★한 손만 읽히면 <b>그 손의 회전</b>으로 잰다(2026-09-01).
         //   머리는 강체라 목(anglePivot) 둘레로 돈다. 손 한 점도 그 축 둘레의 원 위를
         //   움직이므로, 그 점의 회전각이 곧 목의 회전각이다 — 중심을 알기 때문에 성립한다.
@@ -957,6 +1134,256 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         signed = Vector3.SignedAngle(a, b, axis);
         degrees = Mathf.Abs(signed);
         return true;
+    }
+
+    /// <summary>
+    /// 손 하나의 회전각. 축 둘레에서 <b>중립 반경벡터 → 지금 반경벡터</b>가 돈 각이다.
+    /// ★두 손이 같은 축 둘레를 <b>같은 각만큼</b> 돌기 때문에 손 하나로도 성립한다.
+    /// </summary>
+    /// <param name="perp">반경벡터 중 축에 수직인 성분의 비율. 낮으면 이 파지로는 못 잰다.</param>
+    private bool TryHandAngle(Vector3 rad0, Vector3 handNow, Vector3 axis,
+                              out float signed, out float perp)
+    {
+        signed = 0f; perp = 0f;
+
+        Vector3 a = Vector3.ProjectOnPlane(rad0, axis);
+        Vector3 b = Vector3.ProjectOnPlane(handNow - AnglePivotNow, axis);
+        if (a.sqrMagnitude < 1e-8f || b.sqrMagnitude < 1e-8f) return false;
+
+        perp = a.magnitude / Mathf.Max(1e-6f, rad0.magnitude);
+        signed = Vector3.SignedAngle(a, b, axis);
+        return true;
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // ★★각 캐시 — 프레임당 한 번 계산하고, 스무딩과 '믿을 수 없음'을 여기서 정한다.
+    //
+    //   2026-09-04 지적: "오히려 더 확 튀어서 중립 지점으로 왔다갔다 난리였어."
+    //   원인 셋을 여기서 한꺼번에 잡는다.
+    //     ①<b>스무딩이 빠져 있었다</b>. 종전 경로는 vNow를 Lerp로 부드럽게 했는데
+    //       반경 방식은 원값을 그대로 썼다 — 노이즈를 줄이려다 필터를 떼어 놓은 셈이었다.
+    //     ②<b>딱딱한 탈락</b>이 계단을 만들었다. 반경 25%를 넘는 순간 그 손의 몫이
+    //       0.25 → 0으로 뚝 떨어져 값이 뛰었다. → 오차에 따라 <b>서서히</b> 줄인다.
+    //     ③<b>양손이 다 탈락하면 각을 버렸다</b>. 그러면 바늘이 중심으로 접혀
+    //       <b>중립으로 보인다</b> — 그게 "중립을 왔다갔다"의 정체다.
+    //       → 직전 값을 유지하고 '믿을 수 없음'만 표시한다. 단 <b>확정은 막는다.</b>
+    // ════════════════════════════════════════════════════════════════════
+
+    private float cachedSigned, cachedPerp;
+    private bool cachedValid;
+
+    /// <summary>
+    /// 지금 단계에서 <b>무엇을 잡을 수 있는가</b>(2026-09-04). 브리지가 매 프레임 정한다.
+    /// ★이걸 안 두면 정지가 이어지는 동안 어깨선 → 머리가 연달아 잡힌다.
+    /// </summary>
+    public enum CaptureTarget { Auto, Shoulders, Head, Neutral }
+
+    private CaptureTarget captureTarget = CaptureTarget.Auto;
+
+    // ── 중립 복귀 리프레시 · 최소 반경 (2026-09-04) ───────────────────────
+    [Tooltip("중립으로 돌아오면 0점을 조용히 다시 잡는다. 그 허용 각(도). 0이면 안 한다. "
+           + "★안전장치다 — 이 각을 넘으면 안 잡는다. 돌아가 있는 자세를 0으로 굳히면 "
+           + "머리는 돌았는데 화면이 0도라고 말하게 된다(09-04에 실제로 밟았다).")]
+    [SerializeField] private float neutralRefreshTolerance = 5f;
+
+    [Tooltip("측정 평면에서의 반경이 이보다 짧으면 0점을 안 잡는다(m). "
+           + "★잴 수 없는 자리에서 0점이 굳는 것을 막는다 — 09-04 로그의 "
+           + "'파지폭 5cm · 면 성분 0.00'이 그 예다. 회전은 반경의 수평 성분만 남아 특히 짧다.")]
+    [SerializeField] private float minMeasureRadius = 0.045f;
+
+    private float refreshCooldown;
+
+    /// <summary>브리지가 단계에 맞춰 알려 준다. 런타임 전용 — 직렬화를 안 타므로 씬 값에 안 진다.</summary>
+    public void SetCaptureTarget(CaptureTarget t) => captureTarget = t;
+
+    /// <summary>
+    /// 지금 단계에서 <b>더 잡을 게 없는가</b>. 이때는 홀드 게이지를 안 돌린다 —
+    /// 잡을 게 없는데 게이지가 차면 "다음 걸 재고 있다"로 보인다(2026-09-04 지적).
+    /// </summary>
+    private bool NothingToCaptureNow()
+    {
+        switch (captureTarget)
+        {
+            case CaptureTarget.Shoulders: return refReady;
+            case CaptureTarget.Head:      return headReady;
+            default:                      return false;   // 파지 0점은 언제든 다시 잡을 수 있다
+        }
+    }
+
+    /// <summary>홀드 게이지를 화면에 그릴 상황인가. 잡을 게 없으면 게이지 자체를 숨긴다.</summary>
+    public bool HoldGaugeActive => !(stage == Stage.AwaitNeutral && NothingToCaptureNow());
+
+    /// <summary>재는 중에 파지가 풀렸는가. 0점은 유지하되 다시 잡을지는 사람이 정한다.</summary>
+    private bool gripLost;
+
+    /// <summary>지금 각이 <b>직전 값을 붙들고 있는</b> 상태인가. 이때는 확정하지 않는다.</summary>
+    public bool AngleStale { get; private set; }
+
+    /// <summary>진단용 — 이번 프레임에 각 손이 실제로 가진 몫(0~1).</summary>
+    private float shareL, shareR;
+
+    private void UpdateAngleCache(float dt)
+    {
+        if (!useRigidBodyMeasure) { cachedValid = false; AngleStale = false; return; }
+
+        shareL = shareR = 0f;
+
+        Vector3 axis = neutralReady ? AxisFor(direction) : Vector3.zero;
+        if (axis.sqrMagnitude < 1e-8f) { cachedValid = false; AngleStale = false; return; }
+
+        // ════════════════════════════════════════════════════════════
+        // ★★<b>회전은 T라인 방향으로 잰다</b>(2026-09-04).
+        //
+        //   각 오차 = 손 떨림 ÷ 반경이다. 그런데 면마다 유효 반경이 다르다 —
+        //   회전축은 <b>수직</b>이라 반경의 수평 성분만 남고, 그게 측두 간격의 절반(약 7.5cm)뿐이다.
+        //   굴곡·측굴은 축원점에서 위로 12cm 이상이 그대로 반경이 된다.
+        //   → 같은 1cm 떨림이 굴곡 4.8도 / 회전 7.6도로 번역된다. 회전만 나쁜 이유가 이것이다.
+        //   ★파지폭이 5cm로 좁혀지면 수평 반경 2.5cm → 1cm 떨림이 <b>22도</b>가 된다.
+        //     09-04 로그의 '면 성분 0.00'이 그 상태다.
+        //
+        //   T라인(두 엄지를 잇는 선)은 <b>축과 완전히 수직</b>이고 길이가 양손 간격 전체(15cm)다.
+        //   회전에서는 반경 방식보다 2배 이상 유리하다.
+        //   ★한 손만 남으면 T라인이 없다 → 반경 방식으로 떨어진다(그래야 한 손 측정이 산다).
+        // ════════════════════════════════════════════════════════════
+        if (IsRotationDir(direction) && leftOk && rightOk && len0 > 1e-4f)
+        {
+            Vector3 ta = Vector3.ProjectOnPlane(v0, axis);
+            Vector3 tb = Vector3.ProjectOnPlane(acceptedRight - acceptedLeft, axis);
+            if (ta.sqrMagnitude > 1e-8f && tb.sqrMagnitude > 1e-8f)
+            {
+                float rawT = Vector3.SignedAngle(ta, tb, axis);
+                float perpT = ta.magnitude / Mathf.Max(1e-6f, v0.magnitude);
+
+                shareL = shareR = 0.5f;   // T라인은 양손이 함께 만든다 — 몫을 나눌 수 없다
+                if (!cachedValid || smoothing <= 0f) cachedSigned = rawT;
+                else cachedSigned = Mathf.Lerp(cachedSigned, rawT,
+                                               1f - Mathf.Exp(-dt / Mathf.Max(1e-4f, smoothing)));
+                cachedPerp = perpT;
+                cachedValid = true;
+                AngleStale = false;
+                return;
+            }
+        }
+
+        float aL = 0f, pL = 0f, aR = 0f, pR = 0f;
+        float tL = 0f, tR = 0f;                       // 반경 신뢰도 0~1
+
+        if (leftOk && TryHandAngle(radL0, acceptedLeft, axis, out aL, out pL))
+            tL = RadiusTrust(acceptedLeft, radLen0L);
+        if (rightOk && TryHandAngle(radR0, acceptedRight, axis, out aR, out pR))
+            tR = RadiusTrust(acceptedRight, radLen0R);
+
+        // ★방향 가중치 × 반경 신뢰도. 한쪽이 0이면 남은 손이 자동으로 100%가 된다 —
+        //   따로 분기하지 않는다. 분기가 곧 계단이었다.
+        float wL = HandWeight(true) * tL;
+        float wR = HandWeight(false) * tR;
+        float sum = wL + wR;
+
+        if (sum < 1e-4f)
+        {
+            // ★믿을 손이 없다. 그래도 <b>각을 버리지 않는다</b> — 버리면 중립으로 보인다.
+            AngleStale = cachedValid;
+            return;
+        }
+
+        wL /= sum; wR /= sum;
+        shareL = wL; shareR = wR;
+
+        float raw = aL * wL + aR * wR;
+        float perp = pL * wL + pR * wR;
+
+        // ★스무딩 복원. 각은 1차원이라 축끼리 안 섞인다 — 벡터를 부드럽게 하는 것보다 안전하다.
+        if (!cachedValid || smoothing <= 0f) cachedSigned = raw;
+        else cachedSigned = Mathf.Lerp(cachedSigned, raw, 1f - Mathf.Exp(-dt / Mathf.Max(1e-4f, smoothing)));
+
+        cachedPerp = perp;
+        cachedValid = true;
+        AngleStale = false;
+    }
+
+    /// <summary>
+    /// 중립으로 돌아왔으면 0점을 <b>조용히</b> 다시 잡는다(2026-09-04 요청).
+    ///
+    /// 사용자: "중립으로 돌아왔을 때 게이지 안 기다리고 이전 중립점으로 돌아오면
+    ///          초기화해서 0으로 깔끔하게 다시 스타트 할 수 있나?"
+    ///
+    /// ★★<b>각이 이미 0 근처일 때만</b> 한다. 그게 이 기능과 09-04에 밟은 사고를 가르는 선이다 —
+    ///   돌아가 있는 자세에서 다시 잡으면 그 자세가 0도가 되어 <b>측정이 통째로 망가진다.</b>
+    /// ★<b>능동을 이미 잡은 방향에서는 안 한다.</b> 기록된 값의 기준이 바뀌면 안 된다.
+    /// ★게이지를 안 기다린다 — 각이 0 근처라 표시가 안 튄다. 쌓인 드리프트만 사라진다.
+    /// </summary>
+    private void TickNeutralRefresh(float dt, bool has, Vector3 l, Vector3 r)
+    {
+        if (neutralRefreshTolerance <= 0f || !useRigidBodyMeasure) return;
+        if (!neutralReady || frozen || AngleStale || !has) return;
+
+        int i = (int)direction;
+        if (i <= 0 || i >= results.Length || results[i].hasActive) return;   // 재는 중이면 손대지 않는다
+
+        refreshCooldown -= dt;
+        if (refreshCooldown > 0f) return;
+
+        if (Mathf.Abs(cachedSigned) > neutralRefreshTolerance) return;
+        if (RadiusTrust(l, radLen0L) <= 0f || RadiusTrust(r, radLen0R) <= 0f) return;
+        if (!IsGripPlausible(l, r, 0f, out _)) return;
+
+        refreshCooldown = 0.5f;
+
+        radL0 = l - AnglePivotNow;
+        radR0 = r - AnglePivotNow;
+        radLen0L = radL0.magnitude;
+        radLen0R = radR0.magnitude;
+        v0 = r - l; len0 = v0.magnitude;
+        cachedSigned = 0f;
+    }
+
+    /// <summary>
+    /// 반경이 얼마나 믿을 만한가(1 = 그대로, 0 = 버림). ★딱딱한 on/off가 아니라 <b>기울기</b>다.
+    /// 허용치의 절반까지는 온전히 믿고, 거기서 허용치까지 선형으로 0이 된다.
+    /// </summary>
+    private float RadiusTrust(Vector3 handNow, float radLen0)
+    {
+        if (radiusDriftTolerance <= 0f || radLen0 < 1e-4f) return 1f;
+
+        float err = Mathf.Abs((handNow - AnglePivotNow).magnitude - radLen0) / radLen0;
+        float soft = radiusDriftTolerance * 0.5f;
+        if (err <= soft) return 1f;
+        if (err >= radiusDriftTolerance) return 0f;
+        return 1f - (err - soft) / (radiusDriftTolerance - soft);
+    }
+
+    /// <summary>
+    /// 이 손이 <b>강체 구속</b>을 지키고 있는가. 축원점에서의 거리가 중립과 크게 달라지면 틀린 값이다.
+    /// ★속도 필터가 못 잡는 <b>느린 드리프트</b>를 여기서 잡는다(2026-09-04).
+    /// </summary>
+    private bool RadiusHolds(Vector3 handNow, float radLen0)
+    {
+        if (radiusDriftTolerance <= 0f || radLen0 < 1e-4f) return true;
+        float now = (handNow - AnglePivotNow).magnitude;
+        return Mathf.Abs(now - radLen0) / radLen0 <= radiusDriftTolerance;
+    }
+
+    /// <summary>
+    /// 왼손의 몫(0~1). 오른손은 1에서 뺀 값이다.
+    /// ★굴곡=뒤통수 손 · 신전=이마 손 · 우회전=오른손 · 좌회전=왼손 (2026-09-04 지시).
+    ///   측굴은 좌우가 대칭이라 가중치를 안 준다.
+    /// </summary>
+    private float HandWeight(bool forLeft)
+    {
+        float w = Mathf.Clamp(primaryHandWeight, 0.5f, 1f);
+        bool leftIsPrimary;
+
+        switch (direction)
+        {
+            // 시상면 — 어느 손이 이마/뒤통수인지는 중립에서 판정해 뒀다.
+            case CervicalRomDriver.Direction.Flexion:   leftIsPrimary = faceSideL < faceSideR; break;  // 뒤통수 손
+            case CervicalRomDriver.Direction.Extension: leftIsPrimary = faceSideL > faceSideR; break;  // 이마 손
+            case CervicalRomDriver.Direction.RotationRight: leftIsPrimary = false; break;              // 오른손
+            case CervicalRomDriver.Direction.RotationLeft:  leftIsPrimary = true;  break;              // 왼손
+            default: return 0.5f;                                                                      // 측굴 — 대칭
+        }
+        float leftShare = leftIsPrimary ? w : 1f - w;
+        return forLeft ? leftShare : 1f - leftShare;
     }
 
     /// <summary>파지가 미끄러졌는가 - 머리가 강체라 양손 거리는 보존돼야 한다.</summary>
@@ -1053,11 +1480,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★어깨 기준도 놓는다. 세션마다 다시 잡는다 — 환자가 바뀌면 어깨도 바뀐다.
         refReady = false;
+        headReady = false;   // ★머리도 세션마다 다시 잡는다 — 환자가 바뀌면 머리도 바뀐다
         acceptedValidL = acceptedValidR = false; rejectSecondsL = rejectSecondsR = 0f; lostSeconds = 0f;
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
         gripAnchorValid = false; angleExcursionSeconds = 0f;
         fixedGaugeAnchorValid = false;
         neckVec0Valid = false;
+        rigidReady = false;
+        gripLost = false;
 
         // ★★<b>방향도 놓는다</b>(2026-09-04 지적 — "절차 시작할 때 왜 좌회전 상태 대기인 거야").
         //   direction은 씬에 <b>6(좌회전)</b>이 직렬화돼 있다(TrainingScene:202495).
@@ -1251,11 +1681,38 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         if (!requireGripGate || !neutralReady) { releaseTimer = 0f; return; }
 
-        bool held = has && IsGripPlausible(l, r, releaseHysteresis, out _);
+        // ★★<b>간격만 보지 않는다</b>(2026-09-04). 엄지 단독이라 간격 대역이 5~35cm로 넓은데도
+        //   한 손이 순간 튀면 그 대역을 벗어나 "손을 뗐다"로 읽혔다.
+        //   → <b>반경 구속</b>을 같이 본다. 축원점에서 두 손까지의 거리가 유지되고 있으면
+        //     간격이 잠깐 벌어져도 <b>여전히 잡고 있는 것</b>이다. 튐과 진짜 놓음을 이걸로 가른다.
+        bool spanOk = has && IsGripPlausible(l, r, releaseHysteresis, out _);
+        bool radiiOk = useRigidBodyMeasure && has
+                       && RadiusTrust(l, radLen0L) > 0f && RadiusTrust(r, radLen0R) > 0f;
+
+        bool held = spanOk || radiiOk;
         releaseTimer = held ? 0f : releaseTimer + Time.deltaTime;
         if (releaseTimer < releaseGraceSeconds) return;
 
         releaseTimer = 0f;
+
+        // ★★<b>재는 중인 방향에서는 0점을 안 버린다</b>(2026-09-04 지적).
+        //   버리면 AwaitNeutral로 떨어지고, 잠깐 정지하는 순간 CaptureNeutral이 다시 돌아
+        //   <b>지금 자세가 새 0점</b>이 된다 — 머리는 돌아가 있는데 화면은 0도라고 말한다.
+        //   09-04 로그가 그 증거다: 우회전 능동 71.4도 직후 "파지가 풀렸습니다" → "0점 고정" → 압박 생략.
+        //   사용자: "중립 지점으로 왔다갔다 확 튀니까 뭘 기준으로 잡은 건지 모르겠다."
+        //   → 이미 능동을 잡은 방향이면 <b>0점을 유지</b>하고, 다시 잡을지는 사람이 [다시 측정]으로 정한다.
+        int di = (int)direction;
+        bool measuring = di > 0 && di < results.Length && results[di].hasActive;
+
+        if (measuring)
+        {
+            gripLost = true;
+            if (di > 0 && di < results.Length) results[di].gripReleases++;
+            Mark("파지가 풀렸습니다 — 다시 잡으세요. <b>0점은 그대로 둡니다.</b> " +
+                 "0점을 다시 잡으려면 [다시 측정]을 누르세요.");
+            return;
+        }
+
         neutralReady = false;
         frameReady = false;
         stage = Stage.AwaitNeutral;
@@ -1573,7 +2030,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //     '마주 본다'를 규약으로 박아 둔다.
         // ★서는 자리가 좌우축의 부호를 정한다. 뒤에 서면 시술자 오른손이 환자 오른어깨에 얹혀
         //   r − l이 곧 환자 오른쪽이고, 마주 보면 반대가 된다(rom-frame-verify 전수 검증).
-        refRight = operatorBehindPatient ? (r - l).normalized : (l - r).normalized;
+        // ★★<b>어깨선은 바닥과 수평이다</b>(2026-09-04 지시).
+        //   사용자: "어깨선 생성할 때 양손의 기울기 반영하지 말고, 이건 그냥 환자의 위치를
+        //            나타내는 거니까 양손 높이 중앙값 위치에 바닥이랑 수평하게 선을 그어 줘."
+        //   → 좌우축에서 <b>수직 성분을 뺀다</b>. 양손을 조금 높낮이 다르게 짚어도 축이 안 기운다.
+        //   ★이건 그리기만의 문제가 아니다 — refRight가 기준틀의 좌우축이라
+        //     여기를 수평으로 만들면 refFwd(= Cross(refRight, up))도 같이 안정된다.
+        Vector3 span3 = operatorBehindPatient ? (r - l) : (l - r);
+        Vector3 flatSpan = Vector3.ProjectOnPlane(span3, Vector3.up);
+        refRight = (flatSpan.sqrMagnitude > 1e-6f ? flatSpan : span3).normalized;
+
+        // 높이는 양손의 중앙값 — 위에서 (l+r)*0.5로 이미 그렇게 잡혀 있다.
+        shoulderMid.y = (l.y + r.y) * 0.5f;
 
         // ★전후축은 좌우축에서 외적으로 나오지만, 그 결과가 환자 <b>뒤</b>를 가리킨다.
         //   2026-09-01 사용자: "횡단면의 좌우 반대가 아니라 앞뒤가 반대가 돼 버렸네.
@@ -1635,6 +2103,50 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     /// <summary>어깨 기준을 놓는다. 술기를 벗어나거나 다시 잡을 때.</summary>
     public void ClearReference() => refReady = false;
+
+    /// <summary>
+    /// <b>[다시 측정]</b> — 지금 단계에서 잡은 것을 놓고 다시 잡게 한다(2026-09-04 지시).
+    ///
+    /// ★어깨선·머리위치 <b>둘에만</b> 해당한다. 사용자: "이건 어깨선이랑 강체 위치 지정에만
+    ///   해당하는 거야." 파지 0점은 종전대로 언제든 다시 잡힌다.
+    /// ★<b>뒤에서부터</b> 놓는다 — 머리를 잡았으면 머리만, 아직이면 어깨선을.
+    ///   그래야 "방금 잘못 잡은 것"이 풀린다. 둘 다 날리면 처음부터 다시 해야 한다.
+    /// </summary>
+    public void RetryCapture()
+    {
+        // ★재는 중에 파지가 풀렸으면 <b>0점부터</b> 놓아 준다(2026-09-04).
+        //   이때는 어깨선·머리를 다시 잡을 게 아니라 파지 0점을 다시 잡는 상황이다.
+        if (gripLost)
+        {
+            gripLost = false;
+            neutralReady = false;
+            frameReady = false;
+            stage = Stage.AwaitNeutral;
+            holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
+            frameStamp++;
+            Mark("0점을 다시 잡습니다 - 중립에서 머리를 파지하고 정지하세요.");
+            ChunaLogger.Log("<color=cyan>[실측] 다시 측정 — 0점을 놓았다.</color>");
+            return;
+        }
+
+        if (headReady)
+        {
+            headReady = false;
+            rigidReady = false;
+            holdTimer = 0f;
+            Mark("머리 위치를 다시 잡습니다 - 양손으로 머리 양 측면을 대고 정지하세요.");
+            ChunaLogger.Log("<color=cyan>[실측] 다시 측정 — 머리 위치를 놓았다.</color>");
+            return;
+        }
+
+        if (refReady)
+        {
+            refReady = false;
+            holdTimer = 0f;
+            Mark("어깨 기준선을 다시 잡습니다 - 양손을 양어깨에 올리고 정지하세요.");
+            ChunaLogger.Log("<color=cyan>[실측] 다시 측정 — 어깨 기준선을 놓았다.</color>");
+        }
+    }
 
     // ================= 미리보기 (2026-09-01) =================
     //
@@ -1808,9 +2320,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★한 손 이어가기의 재료 — 회전 중심과, 중립에서 중심 → 각 손.
         //   중심은 어깨에서 잡은 목 자리다. 어깨를 안 잡았으면 손 중점으로 대신한다
         //   (그 경우 지렛대가 짧아 한 손 각은 신뢰도가 떨어진다).
+        // ★머리를 잡았으면 그 축원점을 쓴다(2026-09-04). 안 잡았으면 종전 추정으로 떨어진다.
         anglePivot = refReady ? shoulderMid + refUp * gaugePivotRise : (l + r) * 0.5f;
-        radL0 = l - anglePivot;
-        radR0 = r - anglePivot;
+        radL0 = l - AnglePivotNow;
+        radR0 = r - AnglePivotNow;
+        radLen0L = radL0.magnitude;
+        radLen0R = radR0.magnitude;
+
+        // ★손이 이마 쪽인지 뒤통수 쪽인지 <b>중립에서</b> 판정한다. 시상면 가중치가 이걸 쓴다.
+        //   기준점은 머리 중심(없으면 축원점). refFwd가 환자 앞이므로 양수면 이마다.
+        Vector3 headRef = headReady ? headCenter : AnglePivotNow;
+        faceSideL = Vector3.Dot(l - headRef, refFwd);
+        faceSideR = Vector3.Dot(r - headRef, refFwd);
         singleHandSeconds = 0f;
 
         // ★각도기를 그릴 자리를 여기서 못 박는다. 이 뒤로는 손이 움직여도 안 따라간다 —
@@ -1829,6 +2350,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         vNow = v0; vNowValid = true;
         neutralReady = true;
+        gripLost = false;
         stage = Stage.Active;
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
@@ -1836,6 +2358,45 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★비교용 각의 0점 — 중립에서의 (T중심 − S중심). 어깨를 안 잡았으면 못 잰다.
         neckVec0 = gripAnchor - shoulderMid;
         neckVec0Valid = refReady && neckVec0.sqrMagnitude > 1e-6f;
+
+        // ★★강체 기둥을 여기서 확정한다(2026-09-04). 밑동은 어깨선, 꼭대기는 파지점보다 살짝 위,
+        //   굵기는 지금 파지 간격 — 전부 <b>잡는 순간</b>의 값으로 못 박는다.
+        //   이후 기둥은 축 둘레로 돌기만 하고 크기는 안 변한다. 그래야 기준이 된다.
+        // ★기둥은 <b>머리 위치 단계</b>에서 수직으로 세워 뒀다(CaptureHead). 여기서 다시 만들지 않는다 —
+        //   파지 중점으로 만들면 머리가 어깨 앞에 있어 <b>중립부터 기울어진</b> 기둥이 나온다.
+        //   사용자: "강체는 최초에는 수직으로 뻗어야 해."
+        //   ★머리 단계를 안 쓰는 설정이면 종전대로 여기서 만든다(되돌릴 자리를 남긴다).
+        if (!requireHeadCapture && refReady)
+        {
+            rigidBase0 = shoulderMid;
+            rigidTop0 = shoulderMid + Vector3.up * Mathf.Max(0.05f,
+                            (gripAnchor.y + rigidTopRise) - shoulderMid.y);   // ★수직으로 세운다
+            rigidRadius = Mathf.Max(0.02f, len0 * 0.5f * Mathf.Max(0.1f, rigidWidthScale));
+            rigidReady = true;
+        }
+
+        // ★★<b>잴 수 없는 자리에서는 0점을 안 굳힌다</b>(2026-09-04).
+        //   09-04 로그: '파지폭 5cm · 면 성분 0.00'으로 0점이 잡히고 그 방향이 통째로 죽었다.
+        //   각 오차 = 손 떨림 ÷ 반경이라, 측정 평면에서의 반경이 짧으면 1cm 떨림이 20도가 넘는다.
+        //   ★회전이 특히 위험하다 — 축이 수직이라 반경의 <b>수평 성분만</b> 남는다.
+        //   → 반경이 최소치에 못 미치면 <b>0점을 세우지 않고</b> 다시 잡게 한다.
+        Vector3 nAxis = AxisFor(direction);
+        if (minMeasureRadius > 0f && nAxis.sqrMagnitude > 1e-8f)
+        {
+            float rL = Vector3.ProjectOnPlane(radL0, nAxis).magnitude;
+            float rR = Vector3.ProjectOnPlane(radR0, nAxis).magnitude;
+            float rBest = Mathf.Max(rL, rR);
+            if (rBest < minMeasureRadius)
+            {
+                neutralReady = false;
+                frameReady = false;
+                stage = Stage.AwaitNeutral;
+                holdTimer = 0f;
+                Warn($"이 자리로는 {Label(direction)}을(를) 못 잽니다 — 측정 반경 {rBest * 100f:F1}cm " +
+                     $"(최소 {minMeasureRadius * 100f:F1}cm). 양손을 머리 양옆으로 더 벌려 잡으세요.");
+                return;
+            }
+        }
 
         TryGetAngle(out _, out float perp, out _);
         string verdict = perp < minPerpRatio
@@ -2188,9 +2749,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         // ★한 손만 읽혀도 각이 나오면 진행을 이어 간다(회전 중심을 알기 때문에 가능하다).
         //   미끄러짐을 못 잡으므로 오래는 안 버틴다.
+        // ★★강체 방식에서 <b>한 손은 예외가 아니라 정식 경로</b>다(2026-09-04).
+        //   09-04 로그: 왼손이 튀는 동안 우회전이 기록이 안 됐다. 각 계산은 한 손을 받는데
+        //   <b>기록 게이트만 4초로 끊고</b> 있었다 — 반쪽만 바꿔 놓은 상태였다.
+        //   두 손이 같은 축 둘레를 같은 각만큼 도니, 하나만 살아도 값이 성립한다.
         bool singleOk = singleHandFallback && !has && anyHand && neutralReady
-                        && singleHandSeconds <= singleHandMaxSeconds;
+                        && (useRigidBodyMeasure || singleHandSeconds <= singleHandMaxSeconds);
         bool usable = has || singleOk;
+
+        UpdateAngleCache(frameDt);   // ★각은 프레임당 한 번 계산한다(스무딩·신뢰도 포함)
+        TickNeutralRefresh(frameDt, has, l, r);
 
         UpdateGripRelease(usable, l, r);
         UpdateHold(usable, l, r);
@@ -2213,6 +2781,27 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         {
             donePauseLeft -= dt;
             holdTimer = 0f;
+            return;
+        }
+
+        // ★★<b>이 단계에서 잡을 게 없으면 게이지를 안 돌린다</b>(2026-09-04 지적).
+        //   사용자: "난 누르지도 않았고 설정 끝나니까 바로 눈앞에서 머리 중립 게이지 올라가던데."
+        //   어깨선이 잡혀도 stage는 AwaitNeutral 그대로라 홀드 타이머가 계속 돌았다.
+        //   잡는 것은 captureTarget이 막고 있었지만 <b>게이지는 그대로 차올랐고</b>,
+        //   그게 "머리를 재고 있다"로 보였다. 게다가 단계가 넘어가는 순간
+        //   이미 가득 찬 타이머로 <b>즉시</b> 잡혔을 것이다.
+        if (stage == Stage.AwaitNeutral && NothingToCaptureNow())
+        {
+            holdTimer = 0f;
+            return;
+        }
+
+        // ★★<b>직전 값을 붙들고 있는 동안에는 확정하지 않는다</b>(2026-09-04).
+        //   각을 안 버리는 것은 <b>바늘이 중립으로 접히지 않게</b> 하려는 것이지,
+        //   그 값으로 기록하려는 게 아니다. 0으로 죽이지 않고 깎기만 한다.
+        if (AngleStale)
+        {
+            holdTimer = Mathf.Max(0f, holdTimer - dt * holdDecayRate);
             return;
         }
 
@@ -2336,10 +2925,34 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         switch (stage)
         {
             case Stage.AwaitNeutral:
-                // ★어깨 기준이 아직이면 그것부터 잡는다. 같은 '정지'가 두 가지를 잡는 셈인데,
-                //   순서가 하나뿐이라 헷갈릴 여지가 없다 — 어깨 → 파지.
-                if (requireReference && !refReady) CaptureShoulders();
-                else CaptureNeutral();
+                // ★같은 '정지'가 순서대로 세 가지를 잡는다(2026-09-04 순서 변경).
+                //     ①어깨선 → ②머리 위치 → ③파지 0점
+                //   순서가 하나뿐이라 헷갈릴 여지가 없다.
+                // ★★<b>단계마다 잡을 수 있는 것은 하나뿐이다</b>(2026-09-04 재수정).
+                //
+                //   09-04 1차 수정에서 <b>단계 진행</b>만 막고 <b>잡는 것</b>은 안 막았다.
+                //   그러면 정지가 이어지는 동안 같은 자세에서 어깨선 → 머리가 <b>연달아</b> 잡힌다 —
+                //   사용자: "다음 버튼으로 안내만 넘어가면 뭐해."
+                //   → 브리지가 지금 단계에서 <b>무엇을 잡을 수 있는지</b> 알려 주고, 그것만 잡는다.
+                //     [다음]을 눌러 단계가 바뀌어야 다음 것을 잡을 수 있다.
+                switch (captureTarget)
+                {
+                    case CaptureTarget.Shoulders:
+                        if (requireReference && !refReady) CaptureShoulders();
+                        break;
+                    case CaptureTarget.Head:
+                        if (requireHeadCapture && !headReady) CaptureHead();
+                        break;
+                    case CaptureTarget.Neutral:
+                        CaptureNeutral();
+                        break;
+                    default:
+                        // Auto — 브리지가 안 알려 준 경우(에디터 단독 테스트 등)는 종전 순서대로.
+                        if (requireReference && !refReady) CaptureShoulders();
+                        else if (requireHeadCapture && !headReady) CaptureHead();
+                        else CaptureNeutral();
+                        break;
+                }
                 break;
             case Stage.Active:
                 if (peakAngle >= minAngleToMark) MarkActiveEnd();
@@ -2494,6 +3107,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (showAxes && frameReady) UpdateAxisLines();
         // ★중심선은 0점(frameReady)과 무관하다 — 어깨를 짚은 순간부터 측정 내내 떠 있다.
         UpdateMidline();
+        UpdateRigidBody();      // ★강체 기둥 + 코끝선(2026-09-04)
         UpdateGauge();
 
         // ★진행 UI로 보내는 동안에도 <b>문자열은 만들어야 한다</b> — 그리는 쪽만 바뀐 것이다.
@@ -2552,9 +3166,30 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         switch (stage)
         {
             case Stage.AwaitNeutral:
-                sb.Append(requireReference && !refReady
-                    ? "양손을 환자 양어깨에 - 정지"
-                    : "중립에서 머리를 파지 - 정지");
+                // ★★안내문은 <b>지금 단계에서 잡을 수 있는 것</b>을 말한다(2026-09-04 재수정).
+                //   종전에는 '무엇이 잡혔나'를 보고 있어서, 어깨선이 잡히는 순간 글자가
+                //   머리 단계 문구로 바뀌었다 — 단계는 그대로인데 <b>넘어간 것처럼 보였다.</b>
+                //   사용자: "아직도 어깨선 설정하고 바로 머리 중립 체크로 넘어가네."
+                switch (captureTarget)
+                {
+                    case CaptureTarget.Shoulders:
+                        sb.Append(refReady
+                            ? "어깨 기준선 완료 - [다음]을 누르세요"
+                            : "양손을 환자 양어깨에 - 정지");
+                        break;
+                    case CaptureTarget.Head:
+                        sb.Append(headReady
+                            ? "머리 위치 완료 - [다음]을 누르세요"
+                            : "양손으로 머리 양 측면을 - 정지");
+                        break;
+                    default:
+                        sb.Append(requireReference && !refReady
+                            ? "양손을 환자 양어깨에 - 정지"
+                            : requireHeadCapture && !headReady
+                                ? "양손으로 머리 양 측면을 - 정지"
+                                : "중립에서 머리를 파지 - 정지");
+                        break;
+                }
                 // ★실측치를 같이 띄운다. 임계를 맞추려면 실제 숫자를 봐야 한다(2026-08-31).
                 AppendGripNumbers();
                 break;
@@ -2572,9 +3207,28 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
                 //   ★비교값은 측정·채점·CSV에 <b>안 들어간다.</b> 화면에만 뜬다.
                 if (showNeckLineCompare)
                 {
-                    sb.Append("\n<size=60%><color=#8fb8ff>[테스트] T-S선 ");
+                    // ★★좌우 손이 <b>따로</b> 낸 각을 나란히 띄운다(2026-09-04).
+                    //   둘이 크게 다르면 강체 전제나 축원점이 틀린 것이고,
+                    //   거의 같으면 중심 높이만 맞추면 되는 문제다. 그걸 가르는 유일한 자다.
+                    sb.Append("\n<size=60%><color=#8fb8ff>[테스트] ");
+                    Vector3 dbgAxis = AxisFor(direction);
+                    if (dbgAxis.sqrMagnitude > 1e-8f)
+                    {
+                        if (leftOk && TryHandAngle(radL0, acceptedLeft, dbgAxis, out float dL, out _))
+                            sb.Append($"L {dL:F0}");
+                        else sb.Append("L --");
+                        sb.Append(" / ");
+                        if (rightOk && TryHandAngle(radR0, acceptedRight, dbgAxis, out float dR, out _))
+                            sb.Append($"R {dR:F0}");
+                        else sb.Append("R --");
+                        sb.Append("  ");
+                    }
+                    // ★지금 <b>어느 손을 얼마나</b> 쓰고 있는지. 09-04 지적:
+                    //   "왔다갔다 확 튀니까 이게 오른손을 기준으로 잡은 건지 뭔지 모르겠다."
+                    sb.Append($"몫 {shareL * 100f:F0}:{shareR * 100f:F0}  T-S선 ");
                     if (hasCompare) { sb.Append(compareShown); sb.Append('도'); }
                     else sb.Append("--");
+                    if (AngleStale) sb.Append(" <color=#ff8a65>믿을 수 없음</color>");
                     sb.Append("</color></size>");
                 }
                 break;
@@ -2608,7 +3262,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         // ★확정에 실패한 이유를 그대로 띄운다. 몇 초 뒤 사라진다.
         if (HasFreshWarn) sb.Append($"\n<size=70%><color=#ff8a65>{lastWarn}</color></size>");
 
-        if (showProgress)
+        // ★잡을 게 없으면 게이지를 아예 안 그린다(2026-09-04). 빈 게이지가 남아 있어도
+        //   "무언가 재는 중"으로 보인다 — 타이머만 멈추는 것으로는 부족하다.
+        if (showProgress && HoldGaugeActive)
         {
             sb.Append("\n<size=70%>");
             AppendHoldBar(holdStep);
@@ -2983,6 +3639,78 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         for (int i = index; i < gaugeLabels.Count; i++) gaugeLabels[i].gameObject.SetActive(false);
     }
 
+    /// <summary>
+    /// 강체 기둥과 코끝선을 그린다(2026-09-04).
+    ///
+    /// ★기둥은 <b>중립 자세를 축 둘레로 돌린 것</b>이다. 손을 그대로 따라가지 않는다 —
+    ///   그게 이 방식의 핵심이다. 축에서 벗어나는 손 떨림은 여기에 안 실린다.
+    /// ★코끝선은 회전을 보여준다. 회전은 머리 중심이 제자리라 기둥의 기울기로는 안 보인다.
+    /// </summary>
+    private void UpdateRigidBody()
+    {
+        bool on = showRigidBody && rigidReady && neutralReady && frameReady && !gaugeForceHidden;
+
+        if (!on)
+        {
+            if (rigidBody != null && rigidBody.gameObject.activeSelf) rigidBody.gameObject.SetActive(false);
+            if (noseLine != null && noseLine.enabled) noseLine.enabled = false;
+            return;
+        }
+
+        EnsureRigidBody();
+        if (rigidBody == null) return;
+        if (!rigidBody.gameObject.activeSelf) rigidBody.gameObject.SetActive(true);
+
+        // ★단락 평가로 묶으면 out 변수가 '확실히 할당됨'을 못 넘긴다(CS0165) — 호출을 먼저 한다.
+        Vector3 axis = AxisFor(direction);
+        bool angleOk = TryGetAngle(out _, out _, out float signed);
+        bool has = axis.sqrMagnitude > 1e-8f && angleOk;
+        Quaternion turn = has ? Quaternion.AngleAxis(signed, axis.normalized) : Quaternion.identity;
+
+        // 밑동은 축원점에 붙어 있고, 꼭대기만 돈다 — 그게 "축은 고정, 강체만 움직임"이다.
+        Vector3 baseP = rigidBase0;
+        Vector3 topP = baseP + turn * (rigidTop0 - rigidBase0);
+
+        Vector3 mid = (baseP + topP) * 0.5f;
+        float height = Vector3.Distance(baseP, topP);
+        rigidBody.SetPositionAndRotation(mid, Quaternion.FromToRotation(Vector3.up, (topP - baseP).normalized));
+        // Unity 기본 실린더는 높이 2·지름 1이다.
+        rigidBody.localScale = new Vector3(rigidRadius * 2f, height * 0.5f, rigidRadius * 2f);
+
+        if (noseLine == null || noseLineLength <= 0f) return;
+        if (!noseLine.enabled) noseLine.enabled = true;
+
+        // ★코끝은 중립에서 환자 정면을 본다. 같은 회전을 먹여 돌린다.
+        Vector3 nose = turn * refFwd;
+        SetLine(noseLine, topP, topP + nose.normalized * noseLineLength);
+    }
+
+    private void EnsureRigidBody()
+    {
+        if (rigidBody != null) return;
+        if (root == null) return;
+
+        var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        go.name = "강체기둥";
+        go.hideFlags = HideFlags.DontSave;
+        // ★콜라이더는 지운다 — 손과 부딪히면 파지·이동이 엉킨다. 이건 표시물이다.
+        var col = go.GetComponent<Collider>();
+        if (col != null) Destroy(col);
+
+        var mr = go.GetComponent<MeshRenderer>();
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+        Shader sh = Shader.Find("Sprites/Default");
+        if (sh == null) sh = Shader.Find("Standard");
+        mr.material = new Material(sh) { color = rigidBodyColor, renderQueue = 3000 };
+
+        go.transform.SetParent(root, false);
+        rigidBody = go.transform;
+
+        noseLine = CreateLine("코끝선", noseLineColor);
+        noseLine.widthMultiplier = 0.006f;
+    }
+
     private void UpdateAxisLines()
     {
         // ★축선 3개는 <b>어깨 중점</b>에 고정한다(2026-09-01 사용자 지시).
@@ -3274,6 +4002,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         lineMidline = lineShoulder = null;
         labelRightPos = labelRightNeg = labelFwdPos = labelFwdNeg = labelUpPos = null;
         needle = activeMark = passiveMark = testNeedle = null;
+        rigidBody = null; noseLine = null;   // root와 함께 파괴된다
         gaugeMesh = null; gaugeFilter = null;
         gaugeLabels.Clear();
         builtDirection = CervicalRomDriver.Direction.None; builtStamp = -1;
