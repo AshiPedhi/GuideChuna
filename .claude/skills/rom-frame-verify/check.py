@@ -64,7 +64,8 @@ EXPECT = {
 IDX = {'x': 0, 'y': 1, 'z': 2}
 
 
-def build(stance, use_l_minus_r, fwd_neg, pair_swapped, transverse_zero_neg=False):
+def build(stance, use_l_minus_r, fwd_neg, pair_swapped, transverse_zero_neg=False,
+          flip_sag=False, flip_cor=False, flip_tra=False):
     """한 조합의 기준틀과 방향별 축을 만든다."""
     if stance == '마주':          # 시술자 오른손 -> 환자 왼어깨
         l, r = (0.2, 1.3, 0.0), (-0.2, 1.3, 0.0)
@@ -80,14 +81,25 @@ def build(stance, use_l_minus_r, fwd_neg, pair_swapped, transverse_zero_neg=Fals
     ref_up = UP                   # ★언제나 월드 수직. 외적으로 뽑으면 전후축에 딸려 뒤집힌다.
 
     aR, aU, aF = ref_right, ref_up, ref_fwd
+
+    # ★★면별 부호 뒤집기(flipSagittal / flipCoronal / flipTransverse)를 그대로 모델링한다.
+    #   2026-09-04에 이걸 안 봐서 "여섯 방향 전부 OK"라고 <b>틀린 판정</b>을 냈다 —
+    #   씬에는 셋 다 1이 들어 있었는데 검증기는 전부 false로 계산하고 있었다.
+    #   CervicalRomRealityMeasure.AxisFor와 같은 식이다:
+    #     굴곡 −aR*sag / 신전 +aR*sag · 우측굴 +aF*cor / 좌측굴 −aF*cor
+    #     우회전 −aU*tra / 좌회전 +aU*tra
+    sag = neg if flip_sag else (lambda v: v)
+    cor = neg if flip_cor else (lambda v: v)
+    tra = neg if flip_tra else (lambda v: v)
+
     if not pair_swapped:
-        axes = {'굴곡': neg(aR), '신전': aR,
-                '우측굴': aF, '좌측굴': neg(aF),
-                '우회전': neg(aU), '좌회전': aU}
+        axes = {'굴곡': sag(neg(aR)), '신전': sag(aR),
+                '우측굴': cor(aF), '좌측굴': cor(neg(aF)),
+                '우회전': tra(neg(aU)), '좌회전': tra(aU)}
     else:
-        axes = {'굴곡': aR, '신전': neg(aR),
-                '우측굴': neg(aF), '좌측굴': aF,
-                '우회전': aU, '좌회전': neg(aU)}
+        axes = {'굴곡': sag(aR), '신전': sag(neg(aR)),
+                '우측굴': cor(neg(aF)), '좌측굴': cor(aF),
+                '우회전': tra(aU), '좌회전': tra(neg(aU))}
 
     # 각도기의 0도 — 회전이면 Torso.forward, 나머지는 Torso.up.
     # ★Torso.forward는 refFwd와 <별개로> 뒤집을 수 있다. 관상면 축은 axFwd를 쓰므로
@@ -130,9 +142,11 @@ def table():
     print('  횡단면 0°만 바꾸려면 Torso.forward만 뒤집어야 한다 — --current로 확인할 것.')
 
 
-def current(stance='뒤', use_l=False, fwd_neg=False, swapped=False, tz_neg=False):
+def current(stance='뒤', use_l=False, fwd_neg=False, swapped=False, tz_neg=False,
+            flip_sag=False, flip_cor=False, flip_tra=False):
     ref_right, ref_up, ref_fwd, torso_fwd, axes = build(
-        stance, use_l, fwd_neg, swapped, tz_neg)
+        stance, use_l, fwd_neg, swapped, tz_neg, flip_sag, flip_cor, flip_tra)
+    print(f'면 부호 뒤집기: 시상 {flip_sag} · 관상 {flip_cor} · 횡단 {flip_tra}')
     print(f'시술자 위치: 환자 {stance}')
     print(f'  refRight = {label(ref_right)}   (기대: 환자오른쪽)')
     print(f'  refUp    = {label(ref_up)}   (기대: 위)')

@@ -411,6 +411,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [SerializeField] private float minorTickLength = 0.035f;
     [SerializeField] private float microTickLength = 0.018f;
     [SerializeField] private float tickWidth = 0.0035f;
+
     [SerializeField] private float gaugeLabelSize = 0.035f;
     [SerializeField] private float gaugeLabelOffset = 0.028f;
 
@@ -457,6 +458,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [SerializeField] private float readoutScaleOverride = 2.6f;
 
     /// <summary>실제로 쓸 안내문 높이(m).</summary>
+    // ★★2026-09-04 지시 — 안내문(진행 여부 UI)이 <b>손을 따라온다</b>.
+    //   종전 앵커 gripAnchor는 0점을 잡는 순간 고정돼, 신전처럼 손이 크게 움직이는 방향에서
+    //   안내문이 중립 자리에 남아 시야 밖으로 나갔다("신전할 때 아예 안 보여").
+    //   ★신규 필드라 코드 기본값이 그대로 먹는다(규칙 7).
+    [Tooltip("★안내문을 <b>손을 잇는 선의 가운데</b> 위에 띄운다(2026-09-04 지시).\n" +
+             "양손을 잡고 있으면 두 손의 중점, 한 손만 읽히면 그 손을 쓴다.\n" +
+             "끄면 종전대로 0점을 잡은 파지 지점에 고정된다(신전에서 안 보인다).\n" +
+             "위로 띄우는 높이는 readoutRiseOverride다.")]
+    [SerializeField] private bool readoutFollowHands = true;
+
+    /// <summary>안내문이 따라갈 자리. 양손이면 중점, 한 손이면 그 손(월드). 매 프레임 갱신된다.</summary>
+    private Vector3 handMid;
+    private bool handMidValid;
+
     private float ReadoutRiseNow => overrideReadoutPlacement ? readoutRiseOverride : readoutRise;
 
     /// <summary>실제로 쓸 안내문 글씨 배율.</summary>
@@ -518,6 +533,122 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "음수를 넣으면 파지 위치보다 아래에 뜬다 — 머리에 가려 안 보일 때 쓴다.\n" +
              "★씬에 값이 직렬화돼 있으므로 코드 기본값이 아니라 인스펙터 값이 먹는다.")]
     [SerializeField] private float pivotRise = 0.10f;
+    // ════════════════════════════════════════════════════════════════════
+    // ★★간결 표시 (2026-09-04 회의 컨펌) — "표시되는 정보가 너무 많다"
+    //
+    //   윗분들이 원하는 것: 어깨 십자선 하나 + 니들 하나 + 각도 숫자. 그게 전부다.
+    //   눈금·숫자눈금·반원·판·마크·파지선·축이름 전부 뺀다.
+    //
+    //   니들 규칙(사용자 설명 그대로):
+    //     · 원점  = S라인 중심 (양 어깨 중점). T라인 중심과 잇는 선은 <b>안 그린다</b>.
+    //     · 굴곡·신전·측굴 → 0도는 <b>Y 수직</b>. T라인 중심이 속한 평면에서 기운다.
+    //     · 회전            → 0도는 <b>정면</b>(S라인과 수직). 눕혀서 수평면에서 돈다.
+    //   ★이 규칙은 이미 GaugeZero에 그대로 있다(회전이면 axFwd, 아니면 axUp).
+    //     그래서 <b>각 계산은 한 줄도 안 바꾼다</b> — 09-01~09-02에 부호까지 검증한 코드다.
+    //
+    //   십자선은 <b>A안</b>: 지금 재는 방향에 쓰는 2축만 그린다(니들이 도는 평면을 펴는 두 축).
+    //   ★B안(3축 항상)은 나중에 <b>추가만</b> 하면 된다 — 아래 minimalCrossBothAxes를 켜면 된다.
+    //
+    // ★전부 신규 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
+    //   usePracticeGauge·useRealityGauge·showAxisLabels는 씬에 1로 굳어 있어 코드로 못 끈다.
+    //   그래서 <b>이 스위치가 그것들을 덮는다.</b>
+    // ════════════════════════════════════════════════════════════════════
+
+    [Header("=== 간결 표시 (2026-09-04 회의) ===")]
+    [Tooltip("★켜면 각도기 A_2·B를 둘 다 끄고 <b>십자선 + 니들 + 각도</b>만 남긴다.\n" +
+             "끄면 09-03까지의 표시(반원 각도기·눈금)로 돌아간다.")]
+    [SerializeField] private bool minimalDisplay = true;
+
+    [Tooltip("십자선 굵기(m). ★회의 요청: '십자선은 좀 얇았으면'.")]
+    [SerializeField] private float minimalCrossWidth = 0.0022f;
+
+    [Tooltip("니들 굵기(m). 십자선보다 굵어야 어느 쪽이 바늘인지 보인다.")]
+    [SerializeField] private float minimalNeedleWidth = 0.005f;
+
+    [Tooltip("십자선 팔 길이(m). 원점에서 좌우 양쪽으로 이만큼씩.")]
+    [SerializeField] private float minimalCrossLength = 0.18f;
+
+    [Tooltip("니들 길이(m).")]
+    [SerializeField] private float minimalNeedleLength = 0.25f;
+
+    [Tooltip("★B안 — 십자선 3축을 <b>항상</b> 그린다. 끄면(A안) 지금 방향에 쓰는 2축만 그린다.\n" +
+             "2026-09-04: 일단 A안으로 간다. 이걸 켜는 것만으로 B안이 된다.")]
+    [SerializeField] private bool minimalCrossBothAxes;
+
+    [Tooltip("★<b>테스트 표시</b>(2026-09-04) — T중심-S중심 연결선의 각을 본 각 아래에 같이 띄운다.\n" +
+             "본 각은 T라인의 회전각이고, 이건 목축이 기운 각이다. 둘을 비교해 고르려는 것이다.\n" +
+             "★측정·채점·CSV에는 안 들어간다. 화면에만 뜬다 — 정하고 나면 끄면 된다.")]
+    [SerializeField] private bool showNeckLineCompare = true;
+
+    [Tooltip("★<b>어깨를 짚을 때만</b> 손바닥을 쓴다(2026-09-04 회의 지시).\n" +
+             "파지·각도 측정은 종전대로 엄지다 — 여기만 갈린다.\n" +
+             "손바닥 본을 못 찾으면 자동으로 종전(파지점)으로 떨어진다.")]
+    [SerializeField] private bool usesPalmForShoulders = true;
+
+    // ── 측정 확정 알림 (2026-09-04) ───────────────────────────────────────
+    // 사용자: "능동이든 수동이든 측정이 되면 딩동이나 뭐 완료됐다는 소리 좀 내줄래?
+    //          게이지만 계속 도니까 이게 측정이 된 건지 아직 안 된 건지 모르겠네.
+    //          측정됐으면 텀이라도 있든가."
+    //
+    // ★소리와 <b>텀</b>을 같이 준다. 소리만 있으면 놓치고, 텀만 있으면 왜 멈췄는지 모른다.
+    //   텀 동안에는 홀드 게이지가 안 돈다 — "지금은 다음 걸 재는 중이 아니다"가 눈으로 보여야 한다.
+    // ★클립은 이미 있는 것을 쓴다(Assets/Resources/Audio/RomStepDone.wav).
+    //   교육 브리지가 단계 완료음으로 쓰던 그 소리다 — 새로 만들지 않는다.
+
+    [Tooltip("측정(능동·수동)이 확정될 때 낼 소리. 비우면 Resources/Audio/RomStepDone을 쓴다.")]
+    [SerializeField] private AudioClip measureDoneClip;
+
+    [Range(0f, 1f)][SerializeField] private float measureDoneVolume = 0.9f;
+
+    [Tooltip("확정 뒤 이만큼은 <b>다음 측정을 안 센다</b>(초). 0이면 텀 없이 곧장 이어진다.\n" +
+             "★게이지가 계속 도는 것과 확정된 것을 구분하려고 둔다.")]
+    [SerializeField] private float measureDonePause = 1.0f;
+
+    private AudioSource cueSource;
+    private float donePauseLeft;
+
+    /// <summary>확정 직후의 텀. 이 동안에는 홀드를 안 센다.</summary>
+    private bool InDonePause => donePauseLeft > 0f;
+
+    /// <summary>측정 확정을 알린다 — 소리 + 텀. 능동·수동 <b>둘 다</b> 여기를 탄다.</summary>
+    private void PlayMeasureDone(string what)
+    {
+        donePauseLeft = Mathf.Max(0f, measureDonePause);
+
+        if (cueSource == null)
+        {
+            cueSource = GetComponent<AudioSource>();
+            if (cueSource == null)
+            {
+                cueSource = gameObject.AddComponent<AudioSource>();
+                cueSource.playOnAwake = false;
+                cueSource.spatialBlend = 0f;   // 2D — 어디를 보고 있든 들려야 한다
+            }
+        }
+
+        AudioClip clip = measureDoneClip;
+        if (clip == null)
+        {
+            if (fallbackDoneClip == null) fallbackDoneClip = Resources.Load<AudioClip>("Audio/RomStepDone");
+            clip = fallbackDoneClip;
+        }
+        if (clip == null)
+        {
+            // ★조용히 넘어가지 않는다 — 소리가 안 나는 이유를 알 수 있어야 한다.
+            if (!warnedNoDoneClip)
+            {
+                warnedNoDoneClip = true;
+                ChunaLogger.LogWarning("[실측] 확정음 클립이 없습니다 — Resources/Audio/RomStepDone 확인.");
+            }
+            return;
+        }
+        cueSource.PlayOneShot(clip, measureDoneVolume);
+        if (showDebugLogs) ChunaLogger.Log($"<color=cyan>[실측] {what} 확정 — 알림음 + {donePauseLeft:F1}초 텀</color>");
+    }
+
+    private AudioClip fallbackDoneClip;
+    private bool warnedNoDoneClip;
+
     [SerializeField] private float axisLength = 0.18f;
 
     [Tooltip("★축 끝에 '환자 오른쪽·왼쪽·앞·뒤·위'를 글씨로 붙인다.\n" +
@@ -614,6 +745,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private LineRenderer lineMidline, lineShoulder;
     private TextMeshPro labelRightPos, labelRightNeg, labelFwdPos, labelFwdNeg, labelUpPos;
     private LineRenderer needle, activeMark, passiveMark;
+
+    /// <summary>
+    /// 테스트용 두 번째 지침 — <b>T중심-S중심 연결선</b>의 각을 가리킨다(2026-09-04 요청).
+    /// ★본 지침(needle)은 T라인 회전각이다. 둘을 나란히 놓고 눈으로 고르려는 것이다.
+    ///   showNeckLineCompare를 끄면 사라진다. 측정·채점에는 안 들어간다.
+    /// </summary>
+    private LineRenderer testNeedle;
     private Material sharedMaterial;
 
     // --- 각도기 ---
@@ -637,6 +775,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private int shownMask = -1;     // 어느 방향이 끝났는지 비트마스크
     private int shownWarnSig;
     private int shownGrip = -1;     // 파지폭·핀치폭을 1mm로 양자화한 표식(0점 전에만 쓴다)
+    private int shownCompare = int.MinValue;   // 테스트용 T-S선 각(2026-09-04)
+    private bool shownDonePause;               // 확정 텀 표시(2026-09-04)
 
     public Stage CurrentStage => stage;
     public bool FrameReady => frameReady;
@@ -772,6 +912,53 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         return true;
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    // ★비교용 각도 — <b>T-S 중심 연결선</b> (2026-09-04 테스트 요청)
+    //
+    //   지금 재는 각(TryGetAngle)은 <b>T라인의 회전각</b>이다 — 중립 때의 T라인과 지금 T라인을
+    //   측정 평면에 투영해 잰다. S라인은 기준틀을 세우는 데만 쓰이고 각에는 안 들어간다.
+    //   사용자: "T라인의 회전각만 쓰는 거면 테스트용으로 T-S라인의 중심축 연결선 각도도 표시해줘."
+    //
+    //   여기서 재는 것: (T중심 − S중심) 벡터가 중립에서 얼마나 돌았나.
+    //   ★위와 <b>같은 축·같은 투영·같은 부호 규약</b>을 쓴다. 안 그러면 비교가 성립하지 않는다.
+    //
+    // ★예상되는 결과를 미리 적어 둔다(계산이지 실측이 아니다):
+    //   굴곡·신전·측굴 → 목이 기우니 두 값이 <b>비슷하게</b> 나올 것이다.
+    //   좌·우회전     → 목축이 선 채로 머리만 도니 <b>이쪽만 0 근처</b>로 나올 것이다.
+    //   그 차이를 눈으로 보자는 것이 이 표시의 목적이다.
+    // ════════════════════════════════════════════════════════════════════
+
+    /// <summary>중립을 잡은 순간의 (T중심 − S중심). 비교용 각의 0점이다.</summary>
+    private Vector3 neckVec0;
+    private bool neckVec0Valid;
+
+    /// <summary>
+    /// 비교용 각 — T중심과 S중심을 잇는 선이 중립에서 돈 각(도).
+    /// ★측정·채점에는 <b>안 쓴다.</b> 화면에만 띄운다.
+    /// </summary>
+    public bool TryGetNeckLineAngle(out float degrees, out float signed)
+    {
+        degrees = 0f; signed = 0f;
+        if (!neutralReady || !neckVec0Valid || !refReady || !handMidValid) return false;
+
+        // ★★<b>회전에서는 안 낸다</b>(2026-09-04). T중심-S중심 선은 회전축(수직)과 거의 나란하다 —
+        //   머리 중심이 어깨 중심 바로 위이기 때문이다. 수평 투영이 몇 cm뿐이라
+        //   손이 1cm만 흔들려도 각이 수십 도씩 튄다. 비교가 아니라 <b>잡음</b>이다.
+        //   09-04에 이 값이 "회전이 반대로 나온다"로 읽혔다.
+        if (IsRotationDir(direction)) return false;
+
+        Vector3 axis = AxisFor(direction);
+        if (axis.sqrMagnitude < 1e-8f) return false;
+
+        Vector3 a = Vector3.ProjectOnPlane(neckVec0, axis);
+        Vector3 b = Vector3.ProjectOnPlane(handMid - shoulderMid, axis);
+        if (a.sqrMagnitude < 1e-8f || b.sqrMagnitude < 1e-8f) return false;
+
+        signed = Vector3.SignedAngle(a, b, axis);
+        degrees = Mathf.Abs(signed);
+        return true;
+    }
+
     /// <summary>파지가 미끄러졌는가 - 머리가 강체라 양손 거리는 보존돼야 한다.</summary>
     public bool IsSlipping(out float ratio)
     {
@@ -870,6 +1057,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
         gripAnchorValid = false; angleExcursionSeconds = 0f;
         fixedGaugeAnchorValid = false;
+        neckVec0Valid = false;
+
+        // ★★<b>방향도 놓는다</b>(2026-09-04 지적 — "절차 시작할 때 왜 좌회전 상태 대기인 거야").
+        //   direction은 씬에 <b>6(좌회전)</b>이 직렬화돼 있다(TrainingScene:202495).
+        //   코드 기본값은 Flexion이지만 씬 값이 이기고(규칙 7), ResetAll이 여기를 안 건드려서
+        //   실측에 들어오는 순간 <b>늘 좌회전 대기</b>로 시작했다. 방향 목록의 '좌회전'이
+        //   처음부터 주황(▶)으로 켜져 있던 이유가 이것이다.
+        //   ★런타임 대입은 직렬화를 안 타므로 씬 값에 안 진다 — 인스펙터를 고칠 필요가 없다.
+        //   ★첫 파지 단계에서 GripStepDirection이 제 방향을 넣어 준다(2026-09-02 신설).
+        direction = CervicalRomDriver.Direction.None;
 
         Mark(requireReference
             ? "처음부터 - 양손을 환자 양어깨에 올리고 정지하세요."
@@ -1142,7 +1339,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     // ★실습 각도기 쪽 출처는 계속 우리가 물린다. 그래야 두 각도기가 <b>같은 값</b>을 가리킨다.
     //   (끄면 실습 각도기가 교육 드라이버를 읽어 실측과 다른 각을 그린다.)
-    public bool UsePracticeGauge => usePracticeGauge;
+    // ★간결 표시에서는 A_2(실습 각도기를 실측으로 옮긴 것)도 끈다(2026-09-04 회의).
+    //   usePracticeGauge는 씬에 1로 굳어 있어 코드 기본값으로는 못 끈다(규칙 7) → 여기서 덮는다.
+    //   ★브리지가 이 값을 보고 각도기를 끼울지 말지 정하므로, 여기 하나만 막으면 A_2가 안 뜬다.
+    public bool UsePracticeGauge => usePracticeGauge && !minimalDisplay;
 
     [Tooltip("실습 각도기를 파지 지점에서 이만큼 <b>위로</b> 올린다(m).\n" +
              "★둘을 같이 띄우면 같은 자리에 겹친다 — 실측 각도기는 파지 지점,\n" +
@@ -1179,7 +1379,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// ★안내문·축선과 <b>다른 자리</b>다 — 그쪽은 파지 지점을 그대로 쓴다.
     /// </summary>
     private Vector3 GaugeCenter
-        => (gripAnchorValid ? gripAnchor : pivot) - Vector3.up * realityGaugeDrop;
+        => minimalDisplay
+            // ★간결 표시에서는 <b>S라인 중심</b>(양 어깨 중점)이 원점이다 — 십자선과 같은 자리다.
+            //   2026-09-04 회의: 니들도 십자선도 어깨 중심 하나에서 나가야 한다.
+            //   ★어깨를 안 잡았으면 니들 자체를 안 그린다(UpdateGauge의 refReady 조건) —
+            //     파지 자리로 떨어뜨리면 "십자선이 파지 위치에 나온다"가 된다(09-04 지적).
+            ? shoulderMid
+            : (gripAnchorValid ? gripAnchor : pivot) - Vector3.up * realityGaugeDrop;
+
+    /// <summary>간결 표시에서 니들 길이. 종전 모드에서는 각도기 반지름을 쓴다.</summary>
+    private float NeedleLengthNow => minimalDisplay ? minimalNeedleLength : GaugeRadiusNow;
 
     /// <summary>결과 단계에서 각도기를 접는다. 접는 쪽이 편다.</summary>
     public void SetGaugeHidden(bool on) => gaugeForceHidden = on;
@@ -1283,14 +1492,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //     (0점 전에는 손을 따라간다 — 그래야 파지 단계에서 어디에 뜰지 보인다).
         // ★실습 각도기는 <b>0점을 잡은 자리에 못 박는다</b>(2026-09-03). 눈금판이라 가만히 있어야 읽힌다.
         //   실측 각도기(pivot)는 0점 전에 손을 따라오지만, 이쪽은 안 따라온다.
+        // ★★<b>어깨 축 라인으로 되돌린다</b>(2026-09-04 지시).
+        //   09-03에 A_2를 파지 지점으로 옮기고 B와 겹치지 않게 practiceGaugeRise(0.42m)만큼 올렸는데,
+        //   그 0.42m이 <b>횡단면 원반을 한참 위로 띄웠다</b>. 횡단면은 수평 원반이라 위로 뜨면
+        //   어깨선과 나란한 군더더기 선이 생긴다 — 09-02에 이미 지적받아 gaugeDrawRise=0으로 잡았던 병이
+        //   0.42m으로 되살아난 것이다.
+        //   사용자: "A_2가 내가 말한 어깨 축 라인과 동일한 위치로 안 나와. 횡단면이 한참 위에서 나와."
+        //   → 어깨 축(shoulderMid)에 그대로 앉힌다. practiceGaugeRise는 <b>타지 않는다</b>.
+        //   ★겹침 걱정은 없다 — B는 파지 지점에서 realityGaugeDrop만큼 내려가 있고, 여기는 어깨선이다.
         Vector3 anchor;
         if (practiceGaugeFixed && fixedGaugeAnchorValid) anchor = fixedGaugeAnchor;
         else if (gaugeAtGrip && gripAnchorValid) anchor = gripAnchor;
         else anchor = refReady ? shoulderMid : pivot;
 
-        // ★실측 각도기가 파지 지점에 있으므로, 실습 각도기는 그 위로 올려 겹치지 않게 한다.
-        //   ★축(proxyTorso)은 둘이 같다 — refFwd·refUp을 그대로 쓴다.
+        // ★A_2를 어깨 축 라인에 앉히려면 <b>인스펙터에서 practiceGaugeRise를 0</b>으로 둔다.
+        //   (0.42는 B와 겹치지 말라고 넣은 값인데, 그게 횡단면 원반을 한참 위로 띄웠다.)
         float rise = gaugeDrawRise + (useRealityGauge ? practiceGaugeRise : 0f);
+
+        // ★축(proxyTorso)은 세 각도기가 같다 — refFwd·refUp을 그대로 쓴다.
         proxyPivot.position = anchor + up * rise;
         proxyTorso.SetPositionAndRotation(proxyPivot.position, Quaternion.LookRotation(fwd, up));
     }
@@ -1302,7 +1521,9 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [ContextMenu("1 - 어깨 기준 잡기")]
     public void CaptureShoulders()
     {
-        if (!TryGetHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
+        // ★<b>손바닥</b>으로 잡는다(2026-09-04 회의). 자동 경로(UpdateHold)도 이 함수를 타므로
+        //   여기 한 곳만 바꾸면 둘 다 바뀐다. 손바닥을 못 찾으면 종전 파지점으로 떨어진다.
+        if (!TryGetShoulderHands(out Vector3 l, out Vector3 r)) { Warn("손을 못 찾았습니다."); return; }
         CaptureShouldersAt(l, r);
     }
 
@@ -1381,6 +1602,33 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         refReady = true;
         holdTimer = 0f;
         frameStamp++;
+
+        // ★★<b>좌우축이 실제로 어디를 가리키는지 잰다</b>(2026-09-04 신설).
+        //
+        //   09-04에 회전만 반대로 나오는 것을 쫓다가 구조를 알았다 —
+        //     시상면 축 = ±refRight        (좌우축에 <b>딸린다</b>)
+        //     관상면 축 = ±Cross(refRight) (좌우축에 <b>딸린다</b>)
+        //     횡단면 축 = ±월드 수직        (좌우축과 <b>무관하다</b>)
+        //   그래서 좌우축이 뒤집힌 상태면 <b>시상·관상만</b> 뒤집히고 횡단면은 멀쩡하다.
+        //   flip 셋을 다 켜면 횡단면 하나만 <b>과교정</b>되어 회전이 반대로 간다.
+        //
+        //   ★그러니 flip으로 메우기 전에 <b>좌우축이 맞는지</b>를 먼저 재야 한다.
+        //     시술자가 환자 뒤에 서면 환자 오른쪽 ≈ 시술자(헤드셋) 오른쪽이다.
+        //     마주 서면 반대다. 그 둘을 비교하면 지금 설정이 실제와 맞는지 바로 나온다.
+        Camera scam = Camera.main;
+        if (scam != null)
+        {
+            float dot = Vector3.Dot(refRight, scam.transform.right);
+            bool matchesBehind = dot > 0f;
+            bool expected = operatorBehindPatient;
+            ChunaLogger.Log($"<color=cyan>[실측] 좌우축 점검 — refRight·헤드셋오른쪽 = {dot:F2} " +
+                            $"({(matchesBehind ? "시술자가 뒤" : "마주 봄")}로 읽힘 / " +
+                            $"설정은 {(expected ? "뒤" : "마주")})</color>");
+            if (matchesBehind != expected)
+                ChunaLogger.LogWarning("[실측] ★좌우축이 operatorBehindPatient 설정과 <b>반대</b>입니다 — " +
+                                       "시상·관상면이 뒤집히고 횡단면만 멀쩡해집니다. " +
+                                       "flip으로 메우지 말고 이 설정을 먼저 맞추세요.");
+        }
 
         Mark($"어깨 기준 고정 - 어깨폭 {span * 100f:F0}cm. 이제 머리를 파지하세요.");
     }
@@ -1585,6 +1833,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         holdTimer = 0f; peakAngle = 0f; passiveBaseAngle = 0f;
         frameStamp++;
 
+        // ★비교용 각의 0점 — 중립에서의 (T중심 − S중심). 어깨를 안 잡았으면 못 잰다.
+        neckVec0 = gripAnchor - shoulderMid;
+        neckVec0Valid = refReady && neckVec0.sqrMagnitude > 1e-6f;
+
         TryGetAngle(out _, out float perp, out _);
         string verdict = perp < minPerpRatio
             ? $"★이 파지로는 {Label(direction)}을(를) 못 잽니다(면 성분 {perp:F2}). 파지를 바꾸세요."
@@ -1610,6 +1862,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         results[i].active = signed; results[i].hasActive = true;   // 부호째 담는다 — 지침이 어느 쪽인지
         stage = Stage.Passive;
         holdTimer = 0f; peakAngle = 0f;
+        PlayMeasureDone("능동");
 
         // ★압박의 출발선을 여기서 못 박는다. 이게 없으면 손을 그대로 둔 채 1.5초만 지나도
         //   압박이 확정돼 '수동 = 능동'이 된다.
@@ -1657,6 +1910,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         results[i].passive = signed; results[i].hasPassive = true;
         stage = Stage.Done;
         holdTimer = 0f;
+        PlayMeasureDone("수동");
 
         float gain = results[i].hasActive ? deg - Mathf.Abs(results[i].active) : float.NaN;
         Mark($"{Label(direction)} 수동 {deg:F1}도 (부호 {signed:+0.0;-0.0}) · 능동 대비 {gain:F1}도. " +
@@ -1869,6 +2123,18 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         bool has = leftOk && rightOk;             // 양손이 다 믿을 만한가
         bool anyHand = leftOk || rightOk;
 
+        // ★★<b>안내문이 따라올 자리</b>를 매 프레임 잡아 둔다(2026-09-04 지시).
+        //   종전에는 gripAnchor를 썼는데, 그건 <b>0점을 잡은 순간에 얼어붙는다</b>
+        //   (아래 `if (has && !neutralReady)` 안에서만 갱신된다).
+        //   그래서 신전처럼 손이 크게 움직이는 방향에서는 안내문이 중립 자리에 남아 시야 밖으로 나갔다.
+        //   사용자: "신전할 때 아예 안 보여."
+        //   ★양손을 잡고 있으면 <b>두 손을 잇는 선의 가운데</b>, 한 손만 읽히면 그 손을 쓴다.
+        //   사용자: "중립 파지 안 할 때는 오른손 위에 두더라도, 양손 잡을 땐 직선의 가운데 기준으로 살짝 위."
+        if (has) { handMid = (l + r) * 0.5f; handMidValid = true; }
+        else if (rightOk) { handMid = r; handMidValid = true; }
+        else if (leftOk) { handMid = l; handMidValid = true; }
+        else handMidValid = false;
+
         // 한 손으로 버틴 시간 — 오래 끌면 미끄러짐을 못 잡아 조용히 틀린 값이 쌓인다.
         if (has || !anyHand) singleHandSeconds = 0f;
         else singleHandSeconds += frameDt;
@@ -1939,6 +2205,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (frozen) { holdTimer = 0f; return; }
 
         float dt = Mathf.Max(1e-4f, Time.deltaTime);
+
+        // ★★<b>확정 직후의 텀</b>(2026-09-04 요청 — "측정됐으면 텀이라도 있든가").
+        //   이 동안에는 게이지를 안 센다. 소리가 난 뒤 게이지가 곧장 다시 차면
+        //   방금 것이 잡힌 건지 다음 걸 재는 건지 구분이 안 된다.
+        if (donePauseLeft > 0f)
+        {
+            donePauseLeft -= dt;
+            holdTimer = 0f;
+            return;
+        }
 
         // ★손을 못 읽는 동안(가림·튐 포함) 타이머를 <b>얼린다</b>. 종전에는 즉시 0이었다.
         if (!has)
@@ -2092,6 +2368,37 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         => ChunaTraining.DifficultyManager.Instance != null
            && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode;
 
+    /// <summary>
+    /// ★<b>어깨를 짚을 때 쓸 손 위치</b>(2026-09-04 회의 지시).
+    ///
+    /// 어깨 짚기는 <b>손바닥을 얹는</b> 동작인데 종전에는 엄지·검지 파지점을 썼다.
+    /// 엄지 끝은 손바닥에서 8~10cm 떨어져 있어 S라인(어깨선)이 그만큼 어긋난다.
+    /// ★파지·각도 측정은 <b>안 바꾼다</b> — 그쪽은 엄지가 맞다(2026-09-02 확정).
+    ///   여기만 손바닥으로 가른다.
+    /// ★손바닥을 못 찾으면 <b>종전대로</b> 파지점으로 떨어진다. 조용히 죽지 않게 한다.
+    /// </summary>
+    private bool TryGetShoulderHands(out Vector3 left, out Vector3 right)
+    {
+        left = Vector3.zero; right = Vector3.zero;
+
+        if (leftHandOverride != null && rightHandOverride != null)
+        {
+            left = leftHandOverride.position;
+            right = rightHandOverride.position;
+            return true;
+        }
+
+        if (usesPalmForShoulders && gripJudge != null
+            && gripJudge.TryGetPalmPoint(GripFingerTip.Side.Left, out Vector3 pl)
+            && gripJudge.TryGetPalmPoint(GripFingerTip.Side.Right, out Vector3 pr))
+        {
+            left = pl; right = pr;
+            return true;
+        }
+
+        return TryGetHands(out left, out right);
+    }
+
     private bool TryGetHands(out Vector3 left, out Vector3 right)
     {
         left = Vector3.zero;
@@ -2209,13 +2516,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             + Mathf.RoundToInt(lastPinchL * 1000f) * 100
             + Mathf.RoundToInt(lastPinchR * 1000f);
 
+        // ★비교용 각(T-S 중심 연결선). 테스트 표시라 dedup 서명에도 넣어야 갱신된다 —
+        //   안 넣으면 본 각이 안 바뀌는 동안 비교값이 얼어붙어 "안 움직인다"로 오해한다.
+        // ★단락 평가로 묶으면 out 변수가 '확실히 할당됨'을 못 넘긴다(CS0165) — 호출을 먼저 한다.
+        bool compareOk = TryGetNeckLineAngle(out float compareDeg, out float compareSigned);
+        bool hasCompare = showNeckLineCompare && compareOk;
+        int compareShown = hasCompare
+            ? Mathf.RoundToInt(requireForwardDirection ? compareSigned : compareDeg)
+            : int.MinValue + 1;
+
         int warnSig = HasFreshWarn ? (lastWarn != null ? lastWarn.GetHashCode() : 1) : 0;
         if (stage == shownStage && shown == shownAngle && warn == shownWarn
             && holdStep == shownHold && mask == shownMask && gripSig == shownGrip
-            && warnSig == shownWarnSig) return;
+            && warnSig == shownWarnSig && compareShown == shownCompare
+            && InDonePause == shownDonePause) return;
+        shownDonePause = InDonePause;
         shownWarnSig = warnSig;
         shownStage = stage; shownAngle = shown; shownWarn = warn;
         shownHold = holdStep; shownMask = mask; shownGrip = gripSig;
+        shownCompare = compareShown;
 
         sb.Clear();
 
@@ -2243,6 +2562,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
                 sb.Append(Label(direction));
                 sb.Append("  ");
                 if (measurable) { sb.Append(shown); sb.Append('도'); } else sb.Append("--");
+
+                // ★확정 직후에는 그렇게 적는다. 게이지가 멈춘 이유가 보여야 한다(2026-09-04).
+                if (InDonePause) sb.Append("  <color=#7ad67a>✔ 기록됨</color>");
+
+                // ★★<b>테스트용 비교값</b>(2026-09-04 요청). 위는 T라인 회전각,
+                //   아래는 T중심-S중심 연결선의 각이다. 둘을 나란히 놓고 눈으로 고른다.
+                //   ★회전 두 방향에서 아래가 0 근처면 "연결선으로는 회전을 못 잰다"가 확인된 것이다.
+                //   ★비교값은 측정·채점·CSV에 <b>안 들어간다.</b> 화면에만 뜬다.
+                if (showNeckLineCompare)
+                {
+                    sb.Append("\n<size=60%><color=#8fb8ff>[테스트] T-S선 ");
+                    if (hasCompare) { sb.Append(compareShown); sb.Append('도'); }
+                    else sb.Append("--");
+                    sb.Append("</color></size>");
+                }
                 break;
         }
 
@@ -2301,10 +2635,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   pivot이 shoulderMid로 옮겨간다(CaptureShoulders). 그래서 안내문이 <b>어깨 높이로 내려가</b>
         //   "손 쪽에 따라오던 정보가 안 보인다"가 됐다. 각도기가 겪던 것과 같은 병이다.
         //   → 각도기와 같은 앵커(파지 지점)를 쓴다. 0점 전에는 손을 따라오고, 0점 뒤에는 고정된다.
-        Vector3 readoutBase = gripAnchorValid ? gripAnchor : pivot;
+        //   ★2026-09-04 정정: gripAnchor는 <b>0점에서 얼어붙는다</b>. 그 바람에 신전에서 안내문이
+        //     중립 자리에 남아 안 보였다. → 손을 따라오는 handMid를 먼저 쓴다(양손이면 가운데).
+        //
+        Vector3 readoutBase = readoutFollowHands && handMidValid
+            ? handMid
+            : (gripAnchorValid ? gripAnchor : pivot);
 
         // ★손 바로 위라 눈에서 40cm쯤 떨어지는데, VR에서 그 거리는 초점이 안 맞아 흐리다.
         //   최소 거리를 두고 밀어낸다(2026-08-31 사용자: '가까워서 흐린가 글씨가 안 보였다').
+        //
+        // ★★2026-09-04 지적: "난 분명 손을 바라보는데 진행정보텍스트는 저 위쪽으로 가 있어서 안 보인다."
+        //   ★손잡이는 <b>둘 다 이미 있다</b> — 오버라이드 필드를 새로 파지 않고 인스펙터에서 맞춘다.
+        //     readoutRiseOverride : 올리는 높이(m). 0.18은 높다.
+        //     readoutMinDistance  : 이보다 가까우면 시선 방향으로 밀어낸다(m). 0.55는 멀다.
         Vector3 readoutPos = readoutBase + Vector3.up * ReadoutRiseNow;
         Camera rcam = Camera.main;
         if (rcam != null)
@@ -2421,7 +2765,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             if (i > 1) sb.Append(' ');
             var d = (CervicalRomDriver.Direction)i;
 
-            if (d == direction) sb.Append("<color=#ffcc55>▶");
+            // ★주황 ▶는 "<b>지금 재는 중</b>"이라는 뜻이다. 다 재고 나면(결과 단계 = frozen)
+            //   재는 방향이 없으므로 켜 두면 안 된다 —
+            //   2026-09-04 지적: "끝나고도 좌회전 텍스트 주황색으로 활성화 되어 있어."
+            //   마지막으로 잰 방향이 direction에 그대로 남아 ▶ 분기를 계속 타고 있었다.
+            //   frozen이면 완료(●)/미완(○)만 보여 준다.
+            if (d == direction && !frozen) sb.Append("<color=#ffcc55>▶");
             else if (results[i].hasPassive) sb.Append("<color=#7ad67a>●");
             else sb.Append("<color=#808080>○");
 
@@ -2458,27 +2807,66 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   되돌릴 자리가 있어야 한다(사용자: "실측 각도기는 일단 없애지 말아봐").
         // ★실습 각도기와 <b>같이</b> 뜬다(2026-09-03). 종전에는 !UsePracticeGauge라 실습 각도기를
         //   빌려 쓰는 동안 실측 각도기가 영영 안 떴다 — "실측용 각도기도 보여주라니까".
-        bool on = showGauge && useRealityGauge && !gaugeForceHidden && neutralReady && frameReady;
+        // ★간결 표시에서는 <b>니들만</b> 산다(2026-09-04 회의). 반원 메시·눈금 라벨·기록 마크는
+        //   전부 "표시되는 정보가 너무 많다"에 해당한다. useRealityGauge는 씬에 1로 굳어 있어
+        //   코드로 못 끄므로 여기서 덮는다(규칙 7).
+        // ★간결 표시의 니들은 <b>어깨 기준선 위</b>에만 선다 — refReady가 없으면 안 그린다(09-04).
+        bool needleOn = showGauge && !gaugeForceHidden && neutralReady && frameReady
+                        && (minimalDisplay ? refReady : useRealityGauge);
+        bool arcOn = needleOn && !minimalDisplay;
 
-        if (gaugeFilter != null && gaugeFilter.gameObject.activeSelf != on)
-            gaugeFilter.gameObject.SetActive(on);
-        if (needle != null && needle.enabled != on) needle.enabled = on;
-        if (activeMark != null) activeMark.enabled = on;
-        if (passiveMark != null) passiveMark.enabled = on;
+        if (gaugeFilter != null && gaugeFilter.gameObject.activeSelf != arcOn)
+            gaugeFilter.gameObject.SetActive(arcOn);
+        if (needle != null && needle.enabled != needleOn) needle.enabled = needleOn;
+        if (activeMark != null) activeMark.enabled = arcOn;
+        if (passiveMark != null) passiveMark.enabled = arcOn;
 
-        if (!on)
+        if (!arcOn)
         {
             for (int i = 0; i < gaugeLabels.Count; i++)
                 if (gaugeLabels[i] != null) gaugeLabels[i].gameObject.SetActive(false);
+        }
+
+        if (!needleOn)
+        {
+            // ★테스트 지침도 같이 접는다. 안 접으면 직전 프레임 자세로 남아 떠 있다.
+            if (testNeedle != null && testNeedle.enabled) testNeedle.enabled = false;
             return;
         }
 
-        if (direction != builtDirection || frameStamp != builtStamp) RebuildGauge();
+        // ★니들 굵기는 간결 표시에서만 덮는다. 종전 모드는 BuildVisuals에서 정한 값 그대로 둔다.
+        if (minimalDisplay && needle != null
+            && !Mathf.Approximately(needle.widthMultiplier, minimalNeedleWidth))
+            needle.widthMultiplier = minimalNeedleWidth;
+
+        if (arcOn && (direction != builtDirection || frameStamp != builtStamp)) RebuildGauge();
 
         if (TryGetAngle(out _, out _, out float signed))
-            SetLine(needle, GaugeCenter, GaugeCenter + GaugeDir(signed) * GaugeRadiusNow);
+            SetLine(needle, GaugeCenter, GaugeCenter + GaugeDir(signed) * NeedleLengthNow);
         else
             SetLine(needle, GaugeCenter, GaugeCenter);
+
+        // ★★테스트용 두 번째 지침 — <b>T중심-S중심 연결선</b>의 각(2026-09-04 요청).
+        //   같은 원점·같은 축·같은 부호 규약으로 그린다. 안 그러면 비교가 성립하지 않는다.
+        //   ★조금 짧게 그린다 — 두 지침이 겹칠 때 어느 쪽이 어느 쪽인지 보이게.
+        //   ★회전 두 방향에서 이 지침이 <b>0도에 붙어 안 움직이면</b>
+        //     "연결선으로는 회전을 못 잰다"가 눈으로 확인된 것이다.
+        if (testNeedle != null)
+        {
+            // ★단락 평가로 묶으면 out 변수가 '확실히 할당됨'을 못 넘긴다(CS0165) — 호출을 먼저 한다.
+            bool testOk = TryGetNeckLineAngle(out _, out float testSigned);
+            bool showTest = showNeckLineCompare && testOk;
+            if (testNeedle.enabled != showTest) testNeedle.enabled = showTest;
+            if (showTest)
+            {
+                if (minimalDisplay && !Mathf.Approximately(testNeedle.widthMultiplier, minimalNeedleWidth * 0.7f))
+                    testNeedle.widthMultiplier = minimalNeedleWidth * 0.7f;
+                SetLine(testNeedle, GaugeCenter,
+                        GaugeCenter + GaugeDir(testSigned) * (NeedleLengthNow * 0.78f));
+            }
+        }
+
+        if (!arcOn) return;
 
         Result r = results[(int)direction];
         SetMark(activeMark, r.hasActive, r.active);
@@ -2505,13 +2893,15 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Vector3 axis = AxisFor(direction);
         if (axis.sqrMagnitude < 1e-8f) return;
 
+        float tw = tickWidth;
+
         // 미세 → 보조 → 주 순으로 쌓는다. 굵은 눈금이 나중에 와야 위에 보인다.
         if (microStep > 0f)
         {
             for (float a = -half; a <= half + 0.001f; a += microStep)
             {
                 if (OnStep(a, minorStep) || OnStep(a, majorStep)) continue;
-                AddTickQuad(a, microTickLength, tickWidth * 0.7f, microColor, axis);
+                AddTickQuad(a, microTickLength, tw * 0.7f, microColor, axis);
             }
         }
         if (minorStep > 0f)
@@ -2519,17 +2909,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             for (float a = -half; a <= half + 0.001f; a += minorStep)
             {
                 if (OnStep(a, majorStep)) continue;
-                AddTickQuad(a, minorTickLength, tickWidth, tickColor, axis);
+                AddTickQuad(a, minorTickLength, tw, tickColor, axis);
             }
         }
         if (majorStep > 0f)
         {
             for (float a = -half; a <= half + 0.001f; a += majorStep)
-                AddTickQuad(a, majorTickLength, tickWidth * 1.4f, tickColor, axis);
+                AddTickQuad(a, majorTickLength, tw * 1.4f, tickColor, axis);
         }
 
         // 0도 기준선 — 중심에서 눈금까지 통짜로 긋는다. 어디가 중립인지가 제일 중요하다.
-        AddTickQuad(0f, GaugeRadiusNow, tickWidth * 1.6f, zeroLineColor, axis);
+        AddTickQuad(0f, GaugeRadiusNow, tw * 1.6f, zeroLineColor, axis);
 
         gaugeMesh.Clear();
         gaugeMesh.SetVertices(gVerts);
@@ -2601,11 +2991,69 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   ★그리는 자리만 바뀐다. 각을 재는 축(axRight/axUp/axFwd)은 파지선에서 세운 그대로다.
         Vector3 axisAt = refReady ? shoulderMid : pivot;
 
+        if (minimalDisplay)
+        {
+            // ★★<b>어깨 기준선이 없으면 아무것도 안 그린다</b>(2026-09-04 Play 지적).
+            //   "십자선을 파지한 위치에 나오게 하라는 게 아니라 어깨 기준선 위에서 니들로 표시하라고."
+            //   종전에는 refReady가 아니면 pivot(=파지 지점)으로 <b>조용히 떨어졌다</b> —
+            //   기준틀을 파지 자리에 그리는 건 뜻이 없는 그림이라, 차라리 안 그리는 게 맞다.
+            //   ★안 그리는 이유는 안내문이 말해 준다("양손을 환자 양어깨에 - 정지").
+            if (!refReady)
+            {
+                if (lineRight != null) lineRight.enabled = false;
+                if (lineUp != null) lineUp.enabled = false;
+                if (lineFwd != null) lineFwd.enabled = false;
+                HideAxisLabels();
+                return;
+            }
+
+            // ★★간결 표시 십자선(2026-09-04 회의 — A안).
+            //   니들이 도는 <b>평면을 펴는 두 축</b>만 그린다. 나머지 한 축은 니들의 회전축이라
+            //   화면에서는 점으로 보이고, 정보만 늘린다.
+            //     굴곡·신전 (축 = 좌우) → 수직 + 전후
+            //     좌·우측굴 (축 = 전후) → 수직 + 좌우
+            //     좌·우회전 (축 = 수직) → 전후 + 좌우
+            //   ★이 규칙 하나로 세 면이 다 맞는다 — 회전축과 나란한 축을 뺀다.
+            //   ★B안(3축 항상)은 minimalCrossBothAxes를 켜면 된다. 지우는 게 아니라 더하는 것이다.
+            Vector3 spin = AxisFor(direction);
+            bool haveSpin = spin.sqrMagnitude > 1e-8f && !minimalCrossBothAxes;
+
+            SetCrossArm(lineRight, axisAt, axRight, spin, haveSpin);
+            SetCrossArm(lineUp, axisAt, axUp, spin, haveSpin);
+            SetCrossArm(lineFwd, axisAt, axFwd, spin, haveSpin);
+
+            // ★축 이름표는 뺀다 — 회의 요지가 "정보를 줄이자"다.
+            //   showAxisLabels는 씬에 1로 굳어 있어 코드로 못 끈다(규칙 7) → 여기서 덮는다.
+            HideAxisLabels();
+            return;
+        }
+
         SetLine(lineRight, axisAt, axisAt + axRight * axisLength);
         SetLine(lineUp, axisAt, axisAt + axUp * axisLength);
         SetLine(lineFwd, axisAt, axisAt + axFwd * axisLength);
 
         UpdateAxisLabels(axisAt);
+    }
+
+    /// <summary>
+    /// 십자선 팔 하나를 원점 <b>양쪽으로</b> 긋는다. 회전축과 나란한 팔은 접는다(A안).
+    /// </summary>
+    private void SetCrossArm(LineRenderer lr, Vector3 at, Vector3 dir, Vector3 spin, bool dropSpinAxis)
+    {
+        if (lr == null) return;
+
+        // 회전축과 나란하면(|cos| ≈ 1) 그 팔은 안 그린다.
+        if (dropSpinAxis && Mathf.Abs(Vector3.Dot(dir.normalized, spin.normalized)) > 0.9f)
+        {
+            lr.enabled = false;
+            return;
+        }
+
+        if (!lr.enabled) lr.enabled = true;
+        if (!Mathf.Approximately(lr.widthMultiplier, minimalCrossWidth))
+            lr.widthMultiplier = minimalCrossWidth;
+
+        SetLine(lr, at - dir * minimalCrossLength, at + dir * minimalCrossLength);
     }
 
     /// <summary>
@@ -2661,6 +3109,32 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     /// </summary>
     private void UpdateMidline()
     {
+        // ★간결 표시에서는 이 넷을 전부 접는다(2026-09-04 회의 — "정보가 너무 많다").
+        //   중심선·어깨선은 십자선의 수직 팔·좌우 팔과 <b>같은 선</b>이라 중복이고,
+        //   중립파지·현재파지(T라인 두 개)는 회의가 요구한 표시물이 아니다.
+        //   ★midlineAlwaysOn·showShoulderLine은 씬에 1로 굳어 있어 코드로 못 끈다(규칙 7).
+        if (minimalDisplay)
+        {
+            // ★★<b>어깨 기준선은 남긴다</b>(2026-09-04 Play 지적 — "어깨 파지선이 안 뜸").
+            //   09-04에 "십자선의 좌우 팔과 중복"이라고 판단해 접었는데, 그게 틀렸다.
+            //   십자선은 <b>측정 기준틀</b>이고 어깨선은 <b>어디를 짚었나</b>를 보여 주는 것이다 —
+            //   길이도 역할도 다르다. 어깨선이 있어야 십자선이 어디 얹혔는지가 읽힌다.
+            if (refReady && showShoulderLine)
+            {
+                Vector3 halfW = shoulderLineLength > 0f
+                    ? refRight * (shoulderLineLength * 0.5f)
+                    : (shoulderR - shoulderL) * 0.5f;
+                SetLine(lineShoulder, shoulderMid - halfW, shoulderMid + halfW);
+            }
+            else SetLine(lineShoulder, shoulderMid, shoulderMid);
+
+            // 세로 중심선(0.8m)과 파지선 둘은 계속 접는다 — 십자선의 수직 팔과 겹친다.
+            SetLine(lineMidline, shoulderMid, shoulderMid);
+            SetLine(lineNeutral, pivot, pivot);
+            SetLine(lineNow, pivot, pivot);
+            return;
+        }
+
         bool on = refReady && (midlineAlwaysOn || stage == Stage.AwaitNeutral);
         if (!on)
         {
@@ -2723,6 +3197,8 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         lineNow = CreateLine("현재파지", new Color(1f, 0.85f, 0.2f));
 
         needle = CreateLine("지침", needleColor);
+        // ★테스트 지침은 <b>다른 색·더 얇게</b>. 본 지침과 헷갈리면 비교가 안 된다.
+        testNeedle = CreateLine("지침_테스트(T-S선)", new Color(0.56f, 0.72f, 1f, 0.9f));
         needle.widthMultiplier = 0.009f;
         activeMark = CreateLine("능동마크", activeMarkColor);
         activeMark.widthMultiplier = 0.008f;
@@ -2797,7 +3273,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         lineRight = lineUp = lineFwd = lineNeutral = lineNow = null;
         lineMidline = lineShoulder = null;
         labelRightPos = labelRightNeg = labelFwdPos = labelFwdNeg = labelUpPos = null;
-        needle = activeMark = passiveMark = null;
+        needle = activeMark = passiveMark = testNeedle = null;
         gaugeMesh = null; gaugeFilter = null;
         gaugeLabels.Clear();
         builtDirection = CervicalRomDriver.Direction.None; builtStamp = -1;

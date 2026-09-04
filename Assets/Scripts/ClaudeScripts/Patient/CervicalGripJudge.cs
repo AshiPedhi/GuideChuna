@@ -33,6 +33,22 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [SerializeField] private Transform rightThumbTip;
     [SerializeField] private Transform rightIndexTip;
 
+    // ★★손바닥 (2026-09-04 회의 지시 — "어깨를 짚을 때는 엄지 말고 손바닥 기준으로")
+    //
+    //   어깨를 짚는 동작은 <b>손바닥을 어깨에 얹는</b> 것이다. 그런데 지금까지는 어깨 기준선도
+    //   엄지·검지 파지점으로 잡고 있었다(CervicalRomRealityMeasure.TryGetHands).
+    //   엄지 끝은 손바닥에서 8~10cm 떨어져 있어 S라인이 그만큼 어긋난다.
+    //
+    // ★<b>본 이름은 추측하지 않는다</b>(규칙 5·9). 리그마다 다르다 —
+    //   OpenXR은 XRHand_Palm이 있는 리그도 있고 없는 리그도 있으며, 없으면 손목이 제일 가깝다.
+    //   후보를 순서대로 찾고 <b>실제로 물린 본 이름을 로그에 찍는다.</b>
+    //   09-02에 엄지 본(XRHand_ThumbTip)을 이 방법으로 확정했다.
+    [Header("=== 손바닥 (어깨 짚기용, 2026-09-04) ===")]
+    [Tooltip("여기에 넣으면 자동 탐색을 안 한다. 비우면 Palm → Wrist → Middle1 순으로 찾는다.\n" +
+             "★어느 본이 물렸는지는 Play 첫 프레임에 로그로 찍힌다 — 그걸 보고 확정한다.")]
+    [SerializeField] private Transform leftPalm;
+    [SerializeField] private Transform rightPalm;
+
     [Header("=== 판정 ===")]
     [Tooltip("손끝 콜라이더 반경(m).")]
     [SerializeField] private float fingerTipRadius = 0.012f;
@@ -181,6 +197,77 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             pinch = trackR.pinch;
         }
         return true;
+    }
+
+    /// <summary>
+    /// 손바닥 위치(월드). ★<b>어깨를 짚을 때만</b> 쓴다 — 파지·각도 측정은 종전대로 엄지다.
+    /// 2026-09-04 회의: "어깨를 짚을 때는 엄지 말고 손바닥 기준으로 해줘."
+    /// </summary>
+    public bool TryGetPalmPoint(GripFingerTip.Side side, out Vector3 palm)
+    {
+        palm = Vector3.zero;
+        Transform t = ResolvePalm(side);
+        if (t == null) return false;
+        palm = t.position;
+        return true;
+    }
+
+    /// <summary>손바닥 본을 찾는다. 한 번 찾으면 붙들고, 그때 <b>무엇이 물렸는지 로그로 남긴다.</b></summary>
+    private Transform ResolvePalm(GripFingerTip.Side side)
+    {
+        bool left = side == GripFingerTip.Side.Left;
+        Transform assigned = left ? leftPalm : rightPalm;
+        if (assigned != null) return assigned;
+
+        if (left ? palmSearchedL : palmSearchedR) return null;   // 한 번 실패했으면 매 프레임 뒤지지 않는다
+
+        ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
+        string field = left ? "playerLeftHand" : "playerRightHand";
+        System.Reflection.FieldInfo info = evaluator == null ? null : typeof(ChunaPathEvaluator).GetField(
+            field, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Component hand = info != null ? info.GetValue(evaluator) as Component : null;
+
+        if (hand == null)
+        {
+            if (left) palmSearchedL = true; else palmSearchedR = true;
+            ChunaLogger.LogWarning($"[GripJudge] {field}가 비어 있어 손바닥을 못 찾습니다 — " +
+                                   $"인스펙터의 '{(left ? "leftPalm" : "rightPalm")}'에 직접 넣어 주세요.");
+            return null;
+        }
+
+        // ★후보 순서에 근거가 있다. Palm이 있으면 그게 정확하고, 없으면 손목이 손바닥에 제일 가깝다.
+        //   Middle1(중지 밑마디)은 구형 리그에서 손바닥 대용으로 쓰던 자리다(두개골 술기 전례).
+        Transform found = FindBone(hand.transform, "palm")
+                       ?? FindBone(hand.transform, "wrist")
+                       ?? FindBone(hand.transform, "middle1");
+
+        if (found != null)
+        {
+            if (left) leftPalm = found; else rightPalm = found;
+            ChunaLogger.Log($"<color=cyan>[GripJudge] {(left ? "왼" : "오른")}손바닥 = " +
+                            $"{PathOf(found)}</color>");
+        }
+        else
+        {
+            if (left) palmSearchedL = true; else palmSearchedR = true;
+            ChunaLogger.LogWarning($"[GripJudge] {hand.name} 아래에서 손바닥(palm/wrist/middle1)을 못 찾았습니다 — " +
+                                   $"인스펙터의 '{(left ? "leftPalm" : "rightPalm")}'에 직접 넣어 주세요.");
+        }
+        return found;
+    }
+
+    private bool palmSearchedL, palmSearchedR;
+
+    /// <summary>손 루트 아래에서 이름에 keyword가 들어간 첫 본. ★끝마디 접미사를 안 본다.</summary>
+    private static Transform FindBone(Transform root, string keyword)
+    {
+        if (root.name.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0) return root;
+        for (int i = 0; i < root.childCount; i++)
+        {
+            Transform f = FindBone(root.GetChild(i), keyword);
+            if (f != null) return f;
+        }
+        return null;
     }
 
     /// <summary>이 손의 엄지·검지가 지금 각각 믿을 만한가. 진단 표시용이다.</summary>

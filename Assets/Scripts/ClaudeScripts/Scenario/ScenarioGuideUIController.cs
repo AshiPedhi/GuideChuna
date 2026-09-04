@@ -914,6 +914,31 @@ public class ScenarioGuideUIController : MonoBehaviour
     }
 
     /// <summary>
+    /// 시작 토글을 <b>보이거나 감춘다</b>(2026-09-04 지시).
+    ///
+    /// ★잠그는 것(<c>interactable=false</c>)만으로는 부족했다 — 회색 버튼이 그대로 보이고,
+    ///   ScenarioConditionManager가 나레이션 끝에 보내는 '활성' 신호가
+    ///   <see cref="OnButtonStateUpdateRequested"/>를 타고 잠금을 <b>도로 풀어 버린다.</b>
+    ///   실측 '준비'(어깨 중심선)에서 [다음]이 계속 눌리던 이유다.
+    ///
+    /// ★<b>부른 쪽이 되돌린다.</b> 감춘 채로 두면 다음 가이드 단계에서 넘어갈 수단이 사라진다 —
+    ///   다만 스텝이 바뀌면 <see cref="UpdateStartToggleVisibility"/>가 다시 판단하므로
+    ///   그쪽으로도 복구된다.
+    /// </summary>
+    public void SetStartToggleVisible(bool visible)
+    {
+        if (startToggleObject == null) return;
+        if (startToggleObject.activeSelf == visible) return;
+
+        startToggleObject.SetActive(visible);
+        if (visible && startToggle != null)
+        {
+            startToggle.isOn = false;
+            startToggle.interactable = true;
+        }
+    }
+
+    /// <summary>
     /// 시작 토글 상태 초기화 (항상 off로 리셋)
     /// </summary>
     public void ResetStartToggle()

@@ -575,6 +575,22 @@ public class ScenarioManager : MonoBehaviour
         resultTracker.RecordCranialStep(cranialController.ConsumeCranialMetrics());
     }
 
+    /// <summary>
+    /// 밖에서 시나리오를 <b>지금</b> 끝낸다(2026-09-04, 경추ROM 실측용).
+    ///
+    /// ★실측은 CSV의 '결과' 행이 마지막이고, 그 뒤에 공용 '종료 | 가이드'([메인] 버튼) 행이 있다.
+    ///   거기까지 넘어가면 결과 대신 [메인] 버튼이 뜬다 — 2026-09-04 지적.
+    ///   그렇다고 안 넘기면 <b>CompleteScenario가 안 불려 결과가 비어 있다</b>(같은 날 지적).
+    ///   → 넘기지 말고 <b>여기서 끝낸다.</b> FinishTracking이 돌아 표가 채워지고,
+    ///     ScenarioCompleted 이벤트가 나가 정보패널이 결과 페이지를 띄운다.
+    /// ★두 번 불려도 안전하다 — isScenarioCompleted로 막는다.
+    /// </summary>
+    public void CompleteScenarioExternally()
+    {
+        if (isScenarioCompleted) return;
+        CompleteScenario();
+    }
+
     private void CompleteScenario()
     {
         // ✅ 결과 추적 종료 및 데이터 저장

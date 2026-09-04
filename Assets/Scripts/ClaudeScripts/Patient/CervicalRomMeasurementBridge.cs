@@ -76,6 +76,43 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     [Tooltip("★기본 꺼짐(2026-09-03 컨펌) — 진행Root를 안 건드린다. 켜면 헤드셋을 게으르게 따라온다.")]
     [SerializeField] private bool followProgressRoot;
 
+    // ── 진행Root를 정보패널의 '결과' 페이지 안에 넣는다 (2026-09-04 회의) ──
+    //
+    // 사용자: "결과창을 현재 진행창으로 바꿔서, 처음에 모드 선택한 후에 진행창을 띄워서 보여주라는 거였는데."
+    // ★"정보패널 위에 올려라"는 <b>물리적으로 Y축 위</b>가 아니라 <b>그 안에 넣어라</b>였다.
+    //   09-04에 한 번 물리적으로 띄웠다가 지적받고 걷어냈다.
+    //
+    // ★★<b>ROM 실측에서만</b> 한다(사용자 확정). InfoPanelController는 13개 술기가 공유하므로
+    //   그쪽 흐름(모드 선택 → 근골격 페이지)은 <b>한 줄도 안 바꿨다</b> —
+    //   밖에서 부를 수단만 열고, 부르는 것은 여기서만 한다.
+    //
+    // ★진행Root는 <b>월드 Transform</b>이다(RectTransform 아님. 씬 실측: 부모 = 'UI Group').
+    //   결과 페이지는 캔버스 안의 RectTransform이라 스케일 단위가 다르다 →
+    //   부모의 lossyScale을 <b>상쇄</b>해 원래 보이던 크기를 유지한다. 안 하면 글자가 거대해지거나 사라진다.
+    // ★넣은 쪽이 뺀다 — 원래 부모·로컬 TRS를 적어 두고 나갈 때 되돌린다.
+
+    [Tooltip("★진행Root(스텝 안내 + [다음] 버튼)를 정보패널의 <b>결과 페이지 안</b>에 넣는다.\n" +
+             "ROM 실측에서만 돈다. 다른 술기는 종전 그대로다.")]
+    [SerializeField] private bool dockProgressIntoResultPage = true;
+
+    [Tooltip("결과 페이지 기준 로컬 위치. 페이지 한가운데가 0,0,0이다.")]
+    [SerializeField] private Vector3 dockLocalPosition = Vector3.zero;
+
+    [Tooltip("패널 면에서 앞으로 이만큼 뺀다(m). 같은 평면에 두면 깜빡인다.")]
+    [SerializeField] private float dockForwardOffset = 0.05f;
+
+    [Tooltip("페이지를 이 비율까지 채운다. 1이면 딱 맞고, 0.92면 가장자리에 여백이 남는다.\n" +
+             "★배율은 <b>계산</b>한다 — 진행창과 페이지의 실제 크기를 재서 정한다.")]
+    [Range(0.3f, 1f)] [SerializeField] private float dockFillRatio = 0.92f;
+
+    // 우리가 넣었는가 — 넣은 쪽이 뺀다.
+    private bool progressDocked;
+    private Transform dockHomeParent;
+    private Vector3 dockHomeLocalPos;
+    private Quaternion dockHomeLocalRot;
+    private Vector3 dockHomeLocalScale;
+    private InfoPanelController infoPanel;
+
     [Tooltip("헤드셋 앞으로 이만큼 띄운다(m).\n" +
              "★<b>이게 크기 손잡이다.</b> 캔버스를 키우지 않고 거리로만 조절한다\n" +
              "  (2026-09-03 사용자: '스케일은 건들지 말아봐').\n" +
@@ -124,6 +161,16 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
              "★기본 꺼짐(2026-09-03 컨펌) — 정보는 손 옆 월드 텍스트로 돌아갔다.\n" +
              "  진행Root에 얹으니 화면이 어수선하다는 판단이다.")]
     [SerializeField] private bool pushReadoutToGuideUI;
+
+    // ── 결과창 자동 진행 (2026-09-04 회의) ────────────────────────────────
+    // "시나리오가 끝나면 다음 버튼 누르지 않아도 자동으로 결과창이 나오게 했으면 한다."
+    // ★신규 필드라 코드 기본값이 그대로 먹는다(규칙 7).
+
+    [Tooltip("★결과 단계를 [다음] 없이 자동으로 넘긴다(2026-09-04 회의).\n" +
+             "끄면 종전대로 [다음] 토글을 띄워 사람이 누르게 한다.")]
+    [SerializeField] private bool autoAdvanceResult = true;
+
+    private bool resultShown;
 
     [SerializeField] private bool showDebugLogs = true;
 
@@ -185,7 +232,8 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 //   교육모드가 대본 각도 대신 실측값을 그린다(07-27 xray 사고와 같은 형태).
                 RestorePlaneGauge();
                 RestoreProgressRoot();
-                UnlockReadyToggle();
+                UndockProgressRoot();
+                UnlockReadyToggle(false);
                 if (measure != null) measure.SetFrozen(false);   // 켠 쪽이 끈다
 
                 ExitRealWorld();
@@ -217,9 +265,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
             measure.ResetAll();
             if (checklist != null) checklist.ResetChecks();
             ApplyPlaneGauge();
+            DockProgressIntoResultPage();   // ★진행창을 정보패널 결과 페이지 안에(2026-09-04, ROM 한정)
             EnterRealWorld();
             ChunaLogger.Log("<color=cyan>[실측Bridge] 실측모드 진입 — 측정기를 초기화했다.</color>");
         }
+
+        TickDockAssert();
 
         string name = step.stepName;
         int subNo = sub.subStepNo;
@@ -551,7 +602,10 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         if (!wantLock)
         {
-            UnlockReadyToggle();
+            // ★<b>아직 '준비'에 있을 때만</b> 다시 띄운다. 단계가 넘어간 뒤에 띄우면
+            //   가이드 스텝이 아닌 자리에 [다음]이 나타난다 —
+            //   ScenarioGuideUIController가 단계 전환에서 이미 걷어간 것을 우리가 도로 꺼내는 꼴이다.
+            UnlockReadyToggle(stepName == "준비");
             return;
         }
 
@@ -562,25 +616,40 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         {
             readyToggleLocked = true;
             if (showDebugLogs)
-                ChunaLogger.Log("<color=cyan>[실측Bridge] 준비 단계 — 어깨 기준선을 잡을 때까지 [다음]을 잠근다.</color>");
+                ChunaLogger.Log("<color=cyan>[실측Bridge] 준비 단계 — 어깨 기준선을 잡을 때까지 [다음]을 감춘다.</color>");
         }
+
+        // ★★<b>잠그는 것만으로는 안 됐다</b>(2026-09-04 지적 — "다음버튼 안 나오게 하라니까 나오네").
+        //   ①회색이라도 버튼이 그대로 보이고, ②ScenarioConditionManager가 나레이션 끝에
+        //   보내는 '활성' 신호가 ScenarioGuideUIController.OnButtonStateUpdateRequested를 타고
+        //   interactable을 <b>도로 true로 돌려놓는다.</b> 매 프레임 false를 써도 그 프레임 뒤에 뒤집힌다.
+        //   → 아예 감춘다. 감추면 위 신호가 들어와도 화면에 없다.
         toggle.interactable = false;
+        if (GuideUI != null) GuideUI.SetStartToggleVisible(false);
     }
 
-    private void UnlockReadyToggle()
+    /// <param name="restoreVisible">
+    /// 감춘 [다음]을 다시 띄울지. ★<b>아직 '준비' 단계일 때만</b> 참이다 —
+    /// 단계가 넘어간 뒤라면 화면 주인은 ScenarioGuideUIController이므로 건드리지 않는다.
+    /// </param>
+    private void UnlockReadyToggle(bool restoreVisible)
     {
         if (!readyToggleLocked) return;
         readyToggleLocked = false;
 
+        // ★우리가 감춘 것만 우리가 되돌린다(07-27 xray 사고와 같은 형태를 피한다).
         var toggle = GuideUI != null ? GuideUI.NextToggle : null;
         if (toggle != null) toggle.interactable = true;
-        if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 어깨 기준선 성립 — [다음] 잠금을 풀었다.</color>");
+        if (restoreVisible && GuideUI != null) GuideUI.SetStartToggleVisible(true);
+        if (showDebugLogs)
+            ChunaLogger.Log($"<color=cyan>[실측Bridge] [다음] 잠금 해제 (다시 띄움={restoreVisible})</color>");
     }
 
     private void OnDisable()
     {
         RestoreProgressRoot();
-        UnlockReadyToggle();
+        UndockProgressRoot();
+        UnlockReadyToggle(false);
         ExitRealWorld();
         resultToggleShown = false;
     }
@@ -711,17 +780,195 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         // ★각도기는 <b>둘 다</b> 띄운다(2026-09-03 지시). 실습 각도기도 출처를 측정기로 물려
         //   같은 값을 가리키게 한다 — 안 물리면 교육 드라이버를 읽어 다른 각을 그린다.
         //   겹치지 않게 실습 각도기를 위로 올리는 것은 측정기의 practiceGaugeRise가 한다.
-        if (!measure.UsePracticeGauge) return;
+        // ★★<b>안 끼우는 것과 끄는 것은 다르다</b>(2026-09-04 Play 지적 — "각도기가 뜸").
+        //   종전에는 여기서 그냥 return했다. 그러면 각도기를 <b>우리 출처로 안 바꿀</b> 뿐,
+        //   씬의 CervicalRomPlaneGauge는 그대로 살아서 <b>교육 드라이버의 대본 각</b>을 계속 그린다.
+        //   간결 표시에서 A_2가 사라지지 않은 진범이 이것이다.
+        //   → 안 쓸 거면 <b>명시적으로 접는다.</b> 접은 것은 우리가 편다(RestorePlaneGauge).
+        if (!measure.UsePracticeGauge)
+        {
+            planeGauge.SetForceHidden(true);
+            gaugeHiddenByUs = true;
+            if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 간결 표시 — 실습 각도기를 접었다.</color>");
+            return;
+        }
 
         planeGauge.SetSource(measure);
         planeGauge.SetRealityLook(true);
         if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 각도기를 실측 출처로 바꿨다(판·채움 끔).</color>");
     }
 
+    /// <summary>간결 표시에서 실습 각도기를 우리가 접었는가. 접은 쪽이 편다.</summary>
+    private bool gaugeHiddenByUs;
+
+    // ── 진행Root ↔ 정보패널 결과 페이지 ───────────────────────────────────
+
+    private InfoPanelController InfoPanel
+    {
+        get
+        {
+            if (infoPanel == null) infoPanel = FindFirstObjectByType<InfoPanelController>(FindObjectsInactive.Include);
+            return infoPanel;
+        }
+    }
+
+    /// <summary>
+    /// 진행Root를 결과 페이지 <b>자리</b>로 데려가고, 그 페이지를 띄운다(2026-09-04, ROM 실측 한정).
+    ///
+    /// ★★<b>부모를 바꾸지 않는다</b>(2026-09-04 재수정). 처음엔 결과 페이지의 자식으로 넣고
+    ///   lossyScale을 상쇄해 크기를 맞추려 했는데, 결과가 "구석탱이에 작게 보이지도 않게" 였다.
+    ///   진행Root는 <b>월드 Transform</b>이고 결과 페이지는 <b>캔버스 안 RectTransform</b>이다 —
+    ///   캔버스 안에 월드 UI 트리를 끼우면 앵커·피벗·중첩 캔버스가 겹쳐 자리도 크기도 무너진다.
+    ///   계산으로 이길 수 있는 종류가 아니다.
+    ///
+    /// → <b>자리만 맞춘다.</b> 결과 페이지가 화면에서 차지하는 그 자리에 진행Root를 겹쳐 놓는다.
+    ///   보기에는 "패널 안에 들어가 있는" 것과 같고, 스케일은 <b>한 번도 안 건드린다</b>
+    ///   (2026-09-03 사용자: "스케일은 건들지 말아봐").
+    /// </summary>
+    private void DockProgressIntoResultPage()
+    {
+        if (!dockProgressIntoResultPage || progressDocked) return;
+
+        Transform root = ResolveProgressRoot();
+        InfoPanelController panel = InfoPanel;
+        GameObject page = panel != null ? panel.ResultPageObject : null;
+
+        if (root == null || page == null)
+        {
+            // ★조용히 넘어가지 않는다 — 아무 일도 안 일어나면 원인을 못 찾는다.
+            ChunaLogger.LogWarning("[실측Bridge] 진행Root 또는 정보패널 결과 페이지를 못 찾아 " +
+                                   "진행창을 못 옮겼습니다. 진행Root는 원래 자리에 둡니다.");
+            return;
+        }
+
+        // ★원래 <b>월드</b> 자리를 적어 둔다. 부모를 안 바꾸므로 로컬이 아니라 월드로 되돌린다.
+        dockHomeParent = root.parent;
+        dockHomeLocalPos = root.localPosition;
+        dockHomeLocalRot = root.localRotation;
+        dockHomeLocalScale = root.localScale;
+        progressDocked = true;
+
+        FitProgressToPage(root, page);
+
+        panel.ShowResultPageExternally();
+        PlaceProgressAtResultPage();
+
+        ChunaLogger.Log("<color=cyan>[실측Bridge] 진행창을 정보패널 결과 페이지 자리로 옮기고 그 페이지를 띄웠다.</color>");
+    }
+
+    /// <summary>
+    /// 진행창을 결과 페이지 <b>크기에 맞춰 키운다</b>(2026-09-04 — "가운데에 완전 쪼끄맣게 나오잖아").
+    ///
+    /// ★손으로 넣는 배율이 아니라 <b>계산</b>이다. 두 물건의 실제 크기를 재서 비율을 구한다 —
+    ///   씬 실측으로는 진행 캔버스가 1024×310 @0.0005 = <b>0.512m × 0.155m</b>이고,
+    ///   결과 페이지는 캔버스 스케일이 달라 훨씬 크다. 그래서 가운데 점처럼 보였다.
+    /// ★<b>가로세로 같은 배율</b>이라 글씨 비율이 안 망가진다 — 통째로 커지므로 폰트도 같이 커진다.
+    ///   (폰트만 따로 키우면 줄바꿈·여백이 씬 설정과 어긋난다.)
+    /// ★넣은 쪽이 되돌린다 — 원래 localScale은 dockHomeLocalScale에 적어 뒀다.
+    /// </summary>
+    private void FitProgressToPage(Transform root, GameObject page)
+    {
+        if (!(page.transform is RectTransform pageRect)) return;
+
+        Vector3 pl = pageRect.lossyScale;
+        float pageW = Mathf.Abs(pageRect.rect.width * pl.x);
+        float pageH = Mathf.Abs(pageRect.rect.height * pl.y);
+        if (pageW < 1e-4f || pageH < 1e-4f) return;
+
+        // 진행창이 실제로 차지하는 월드 크기 — 자식 RectTransform 중 가장 큰 것을 본다.
+        float rootW = 0f, rootH = 0f;
+        RectTransform[] rects = root.GetComponentsInChildren<RectTransform>(true);
+        for (int i = 0; i < rects.Length; i++)
+        {
+            Vector3 rl = rects[i].lossyScale;
+            rootW = Mathf.Max(rootW, Mathf.Abs(rects[i].rect.width * rl.x));
+            rootH = Mathf.Max(rootH, Mathf.Abs(rects[i].rect.height * rl.y));
+        }
+        if (rootW < 1e-4f || rootH < 1e-4f)
+        {
+            ChunaLogger.LogWarning("[실측Bridge] 진행창 크기를 못 재서 배율을 그대로 둡니다.");
+            return;
+        }
+
+        // ★긴 쪽이 페이지를 넘지 않게 <b>작은 비율</b>을 쓴다. 여백은 dockFillRatio가 준다.
+        float k = Mathf.Min(pageW / rootW, pageH / rootH) * Mathf.Clamp(dockFillRatio, 0.1f, 1f);
+        root.localScale = dockHomeLocalScale * k;
+
+        ChunaLogger.Log($"<color=cyan>[실측Bridge] 진행창 배율 {k:F2}배 " +
+                        $"(진행 {rootW:F2}×{rootH:F2}m → 페이지 {pageW:F2}×{pageH:F2}m)</color>");
+    }
+
+    /// <summary>
+    /// 진행Root를 결과 페이지가 있는 자리에 겹쳐 놓는다. ★크기는 FitProgressToPage가 한 번만 정한다.
+    /// 패널을 손으로 잡아 옮기면 따라가야 하므로 매 프레임 맞춘다.
+    /// </summary>
+    private void PlaceProgressAtResultPage()
+    {
+        if (!progressDocked) return;
+
+        Transform root = progressRoot;
+        GameObject page = InfoPanel != null ? InfoPanel.ResultPageObject : null;
+        if (root == null || page == null) return;
+
+        Transform t = page.transform;
+
+        // ★★<b>RectTransform의 position은 '피벗' 자리다</b>(2026-09-04 재수정).
+        //   이 페이지의 피벗이 <b>왼쪽 아래</b>라, transform.position을 그대로 쓰면
+        //   진행창이 패널 왼쪽 아래 구석에 가서 붙는다 — 사용자 화면의 축 기즈모가 그 자리였다.
+        //   → rect.center를 거쳐 <b>보이는 한가운데</b>를 구한다. 피벗이 어디든 맞는다.
+        Vector3 basePos = t is RectTransform rt ? rt.TransformPoint(rt.rect.center) : t.position;
+
+        // ★★<b>사용자 쪽으로 당긴다</b>(2026-09-04 지적 — "반대 방향을 밀면 어떡해").
+        //   종전에는 t.forward로 밀었는데, 패널의 forward가 <b>사용자 반대쪽</b>을 본다.
+        //   ★방향은 짐작하지 않는다(규칙 9) — <b>카메라 위치를 재서</b> 그쪽으로 당긴다.
+        //     패널을 어느 방향으로 돌려 놓든 항상 사용자 쪽이 된다.
+        Camera cam = Camera.main;
+        Vector3 toUser = cam != null ? (cam.transform.position - basePos) : -t.forward;
+        toUser = toUser.sqrMagnitude > 1e-6f ? toUser.normalized : -t.forward;
+
+        root.SetPositionAndRotation(
+            basePos + t.rotation * dockLocalPosition + toUser * dockForwardOffset, t.rotation);
+    }
+
+    /// <summary>
+    /// 정보패널을 손으로 잡아 옮기면 진행창도 따라간다. ★자리만 맞춘다.
+    /// ★페이지 전환은 <b>여기서 안 한다</b> — InfoPanelController가 시나리오 시작에서
+    ///   실측이면 결과 페이지로 바로 켜 준다(2026-09-04). 붙들 이유가 없어졌다.
+    /// </summary>
+    private void TickDockAssert() => PlaceProgressAtResultPage();
+
+    /// <summary>진행Root를 원래 부모·자리로 되돌린다. ★넣은 쪽이 뺀다.</summary>
+    private void UndockProgressRoot()
+    {
+        if (!progressDocked) return;
+        progressDocked = false;
+
+        Transform root = progressRoot;
+        if (root == null) return;
+
+        // ★부모를 안 바꿨으므로 로컬 자리만 되돌린다. 스케일은 애초에 안 건드렸다.
+        if (dockHomeParent != null && root.parent != dockHomeParent) root.SetParent(dockHomeParent, false);
+        root.localPosition = dockHomeLocalPos;
+        root.localRotation = dockHomeLocalRot;
+        root.localScale = dockHomeLocalScale;   // ★키운 쪽이 되돌린다
+
+        ChunaLogger.Log("<color=cyan>[실측Bridge] 진행Root를 원래 부모로 되돌렸다.</color>");
+    }
+
     /// <summary>각도기를 교육모드 상태로 되돌린다.</summary>
     private void RestorePlaneGauge()
     {
         if (planeGauge == null) return;
+
+        // ★우리가 접었으면 <b>먼저</b> 편다. 아래 HasExternalSource 가드보다 앞에 와야 한다 —
+        //   간결 표시에서는 출처를 안 끼우므로, 그 가드에 걸리면 각도기가 교육모드에서
+        //   <b>영영 접힌 채</b>로 남는다(07-27 xray 사고와 같은 형태).
+        if (gaugeHiddenByUs)
+        {
+            planeGauge.SetForceHidden(false);
+            gaugeHiddenByUs = false;
+            if (showDebugLogs) ChunaLogger.Log("<color=cyan>[실측Bridge] 접었던 실습 각도기를 다시 폈다.</color>");
+        }
 
         if (!planeGauge.HasExternalSource) return;   // 우리가 안 끼웠으면 안 건드린다
 
@@ -757,14 +1004,36 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         //   ★교육모드는 그대로 체크리스트를 쓴다.
         if (stepName == "준비") return measure.ReferenceReady;
 
-        // ★결과도 브리지가 넘기지 않는다. 대신 [다음] 토글을 띄워 사람이 읽고 넘기게 한다.
-        //   토글은 stepNo 0에서만 자동으로 뜨는데 '결과'는 stepNo 12라 안 뜬다 —
-        //   그래서 종전에는 여기서 통째로 멈췄다.
+        // ★★<b>결과창은 자동으로 넘어간다</b>(2026-09-04 회의 지시 —
+        //   "시나리오가 끝나면 다음 버튼 누르지 않아도 자동으로 결과창이 나오게").
+        //
+        //   종전에는 [다음] 토글을 띄워 사람이 눌러야 넘어갔다. 토글은 stepNo 0에서만 자동으로
+        //   뜨는데 '결과'는 stepNo 12라 안 떠서, 그걸 메우려고 강제로 띄우던 자리다.
+        //   ★autoAdvanceResult를 끄면 종전(사람이 누르는 토글)으로 돌아간다 — 코드는 남겨 둔다.
+        // ★★<b>결과 = 시나리오를 여기서 끝낸다</b>(2026-09-04, 두 번 물린 끝에 정리).
+        //   ①넘기면 CSV 다음 행 '종료 | 가이드'로 가서 <b>[메인] 버튼</b>이 뜬다.
+        //   ②안 넘기면 CompleteScenario가 안 불려 <b>결과표가 빈 채</b>로 남는다
+        //     (결과는 resultTracker.FinishTracking()에서만 확정된다).
+        //   → 넘기지 말고 <b>끝낸다.</b> 그래야 표가 채워지고 종료 안내도 안 뜬다.
+        //   ★ScenarioCompleted 이벤트가 나가면 InfoPanelController가
+        //     결과 페이지 전환·표 갱신·진행UI 숨김을 <b>전부</b> 한다. 우리가 또 할 필요가 없다.
         if (stepName == "결과")
         {
-            ShowResultNextToggle();
-            return false;
+            if (!autoAdvanceResult) { ShowResultNextToggle(); return false; }
+
+            if (!resultShown)
+            {
+                resultShown = true;
+
+                // ★우리가 옮긴 진행창은 우리가 되돌린다. 끄는 것은 InfoPanelController가 한다.
+                UndockProgressRoot();
+
+                scenarioManager.CompleteScenarioExternally();
+                ChunaLogger.Log("<color=cyan>[실측Bridge] 측정 끝 — 시나리오를 끝내고 결과를 확정했다.</color>");
+            }
+            return false;   // ★넘기지 않는다. 종료 안내로 가면 안 된다.
         }
+        resultShown = false;
 
         // ★'기준정렬'(양손을 어깨에) 단계는 없앴다(2026-08-31).
         //   기준축을 파지선에서 세우므로 어깨를 짚을 이유가 사라졌다.

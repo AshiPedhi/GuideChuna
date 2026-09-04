@@ -202449,7 +202449,6 @@ MonoBehaviour:
   placeOppositeToViewer: 1
   progressSideDeadZone: 0.08
   sideGripStepName: "\uC2DC\uC0C1\uBA74 \uD30C\uC9C0"
-  postureStepName: "\uC790\uC138\uC815\uB82C"
   frontGripStepNames:
   - "\uAD00\uC0C1\uBA74 \uD30C\uC9C0"
   playStepCues: 1
@@ -202493,35 +202492,73 @@ MonoBehaviour:
   gripJudge: {fileID: 0}
   leftHandOverride: {fileID: 0}
   rightHandOverride: {fileID: 0}
-  direction: 1
+  direction: 6
   holdSeconds: 1.5
+  holdDecayRate: 2
+  holdSpeedExitFactor: 2
+  trackingGraceSeconds: 0.35
+  holdAngleTolerance: 1.5
+  holdSecondsOverride: 2.5
+  simplifiedGating: 1
+  simpleHoldSeconds: 1.6
+  simpleHoldAngleTolerance: 2.5
+  holdAngleGraceSeconds: 0.22
   holdSpeedThreshold: 0.03
+  speedSmoothing: 0.15
   advanceOnHold: 1
   minAngleToMark: 5
-  minPassiveGain: 3
+  minPassiveGain: 2
   requireGripGate: 1
-  sagittalGripRange: {x: 0.14, y: 0.26}
+  sagittalGripRange: {x: 0.12, y: 0.26}
   temporalGripRange: {x: 0.11, y: 0.22}
+  gripSpanMinOverride: 0.12
+  thumbOnlySpanRange: {x: 0.05, y: 0.35}
+  usePinchGate: 0
   pinchWidthRange: {x: 0.01, y: 0.07}
   releaseHysteresis: 0.25
   releaseGraceSeconds: 0.35
+  requireReference: 1
+  carryNeutralWithinGrip: 1
+  evaluationGuidance: 1
+  hideResultNumbers: 1
+  requireForwardDirection: 1
+  passiveSkipPenalty: 5
+  gripReleasePenalty: 2
+  minRomScore: 60
+  shoulderSpanRange: {x: 0.28, y: 0.55}
+  thumbOnlyShoulderSpanRange: {x: 0.15, y: 0.55}
+  shoulderLevelTolerance: 0.12
+  midlineLength: 0.8
+  midlineAlwaysOn: 1
+  midlineColor: {r: 0.45, g: 1, b: 0.85, a: 0.9}
+  showShoulderLine: 1
+  shoulderLineLength: 1
+  flipSagittal: 1
+  flipCoronal: 1
+  flipTransverse: 1
+  transverseZeroFlip: 0
+  operatorBehindPatient: 1
   minPerpRatio: 0.34
   slipTolerance: 0.15
   smoothing: 0.08
+  maxHandSpeed: 1.2
+  maxRejectSeconds: 0.5
+  singleHandFallback: 1
+  singleHandMaxSeconds: 4
   showReadout: 1
   showAxes: 1
   showProgress: 1
   showGauge: 1
-  gaugeHalfSpan: 90
-  gaugeRadius: 0.3
+  gaugeHalfSpan: 180
+  gaugeRadius: 0.2
   majorStep: 10
   minorStep: 5
-  microStep: 1
+  microStep: 0
   majorTickLength: 0.055
   minorTickLength: 0.035
   microTickLength: 0.018
-  tickWidth: 0.0035
-  gaugeLabelSize: 0.035
+  tickWidth: 0.0018
+  gaugeLabelSize: 0.07
   gaugeLabelOffset: 0.028
   tickColor: {r: 0.85, g: 0.9, b: 1, a: 0.95}
   microColor: {r: 0.6, g: 0.68, b: 0.8, a: 0.55}
@@ -202531,10 +202568,41 @@ MonoBehaviour:
   passiveMarkColor: {r: 1, g: 0.45, b: 0.35, a: 1}
   font: {fileID: 0}
   readoutSize: 0.05
-  pivotRise: 0.1
+  textScale: 1.8
+  readoutRise: 0.34
+  readoutMinDistance: 0.35
+  overrideReadoutPlacement: 1
+  readoutRiseOverride: 0.06
+  readoutScaleOverride: 2.6
+  readoutFollowHands: 1
+  routeReadoutToGuideUI: 1
+  pivotRise: 0.05
+  minimalDisplay: 1
+  minimalCrossWidth: 0.0022
+  minimalNeedleWidth: 0.005
+  minimalCrossLength: 0.18
+  minimalNeedleLength: 0.25
+  minimalCrossBothAxes: 0
+  showNeckLineCompare: 1
+  usesPalmForShoulders: 1
   axisLength: 0.18
+  showAxisLabels: 1
+  axisLabelSize: 0.03
   showDebugLogs: 1
   useKeyboard: 1
+  usePracticeGauge: 1
+  referenceDriver: {fileID: 5866666021072361730}
+  gaugePivotRise: 0.12
+  gaugeDrawRise: 0
+  gaugeAtGrip: 1
+  useRealityGauge: 1
+  practiceGaugeRise: 0
+  practiceGaugeFixed: 1
+  gaugeRadiusOverride: 0.2
+  realityGaugeDrop: 0.18
+  previewMode: 0
+  previewAngle: 30
+  previewDistance: 1
 --- !u!1 &1351441085
 GameObject:
   m_ObjectHideFlags: 0
@@ -400628,9 +400696,17 @@ MonoBehaviour:
   leftIndexTip: {fileID: 785329823}
   rightThumbTip: {fileID: 1887512698}
   rightIndexTip: {fileID: 159818317}
+  leftPalm: {fileID: 0}
+  rightPalm: {fileID: 0}
   fingerTipRadius: 0.012
   requireBothFingers: 1
+  fingerSource: 1
   ignoreAssignedTips: 0
+  singleFingerFallback: 1
+  maxFingerSpeed: 1.2
+  fingerGapTolerance: 0.025
+  gapFollowSeconds: 0.5
+  singleFingerMaxSeconds: 4
   showSpheres: 0
   showDebugLogs: 1
 --- !u!114 &5866666021072361732
@@ -400647,7 +400723,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CervicalRomPlaneGauge
   driver: {fileID: 5866666021072361730}
   font: {fileID: 11400000, guid: 561f4e50cf36d5a498aa8dd400160e55, type: 2}
-  showPlane: 1
+  showPlane: 0
   autoFitPlane: 0
   planeMargin: 0.1
   planeSize: {x: 0.95, y: 0.95}
@@ -400690,6 +400766,7 @@ MonoBehaviour:
   pressFillColor: {r: 0.95, g: 0.55, b: 0.18, a: 0.6}
   deficitFillColor: {r: 0.55, g: 0.55, b: 0.58, a: 0.3}
   fillRadius: 0.28
+  showFill: 0
   showDeficitFromStart: 1
   needleColor: {r: 0.1, g: 0.1, b: 0.12, a: 0.95}
   needleWidth: 0.005

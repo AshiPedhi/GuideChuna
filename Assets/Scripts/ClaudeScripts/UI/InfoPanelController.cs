@@ -822,6 +822,33 @@ public class InfoPanelController : MonoBehaviour
         ChunaLogger.Log($"[InfoPanel] 페이지 전환: {page}");
     }
 
+    // ── 경추ROM 실측 전용 접근구 (2026-09-04) ─────────────────────────────
+    // 사용자: "결과창을 현재 진행창으로 바꿔서, 모드 선택한 후에 진행창을 띄워서 보여줘."
+    //
+    // ★<b>ROM 실측에서만</b> 쓴다(사용자 확정). 13개 술기가 이 화면을 공유하므로
+    //   여기서 흐름을 바꾸지 않는다 — 밖에서 부를 <b>수단</b>만 연다.
+    //   종전 흐름(모드 선택 → 근골격 페이지)은 그대로 둔다.
+
+    /// <summary>결과 페이지의 루트. ROM 실측이 여기에 진행Root를 넣는다.</summary>
+    public GameObject ResultPageObject => resultPage;
+
+    /// <summary>
+    /// 결과 페이지를 띄운다. ROM 실측에서는 이 페이지가 <b>'현재 진행'</b> 노릇을 한다.
+    /// ★토글 상태도 같이 맞춘다 — 안 맞추면 화면과 버튼이 서로 다른 말을 한다.
+    /// </summary>
+    public void ShowResultPageExternally(bool refreshTable = false)
+    {
+        SetToggleWithoutNotify(skeletonToggle, false);
+        SetToggleWithoutNotify(expertVideoToggle, false);
+        SetToggleWithoutNotify(resultToggle, true);
+        ShowContentPage(ContentPage.Result);
+        if (refreshTable) RefreshResultUI();
+        UpdateAllToggleColors();
+    }
+
+    /// <summary>지금 결과 페이지가 떠 있는가.</summary>
+    public bool IsResultPageShown => currentContentPage == ContentPage.Result;
+
     private void SetContentTogglesInteractable(bool interactable)
     {
         if (skeletonToggle != null) skeletonToggle.interactable = interactable;
@@ -878,11 +905,20 @@ public class InfoPanelController : MonoBehaviour
         // 메뉴 토글 활성화 (설정, 메인으로)
         SetMenuTogglesInteractable(true);
 
-        // 근골격 페이지로 자동 전환
-        SetToggleWithoutNotify(skeletonToggle, true);
+        // ★★<b>실측(ROM 평가)이면 결과 페이지로 시작한다</b>(2026-09-04 회의 지시).
+        //   그 페이지가 실측에서는 '현재 진행' 창 노릇을 한다 — 진행Root가 그 자리에 얹힌다.
+        //   사용자: "시작할 때 골격 말고 결과창(지금은 진행 단계창)으로 바꾸라니까."
+        //
+        // ★<b>실측일 때만</b> 갈린다. 나머지 12개 술기는 종전대로 근골격 페이지다.
+        //   바로 아래 ShowProgressBar와 같은 DifficultyManager를 본다 — 새 배선이 없다.
+        //   ★실측 모드는 경추ROM에만 있다(measurementPhases를 가진 시나리오가 그것 하나다).
+        bool measurement = ChunaTraining.DifficultyManager.Instance != null
+                           && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode;
+
+        SetToggleWithoutNotify(skeletonToggle, !measurement);
         SetToggleWithoutNotify(expertVideoToggle, false);
-        SetToggleWithoutNotify(resultToggle, false);
-        ShowContentPage(ContentPage.Skeleton);
+        SetToggleWithoutNotify(resultToggle, measurement);
+        ShowContentPage(measurement ? ContentPage.Result : ContentPage.Skeleton);
 
         // 시나리오 진행 UI 표시 (난이도 설정에 따라)
         if (scenarioProgressUI != null)
