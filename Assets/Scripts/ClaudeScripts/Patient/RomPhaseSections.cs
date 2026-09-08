@@ -38,6 +38,10 @@ public class RomPhaseSections : MonoBehaviour
              "  '회전'은 좌회전·우회전에 걸린다(2026-09-08 CSV 실측).")]
     [SerializeField] private string[] sectionLabels = { "굴곡", "신전", "측굴", "회전" };
 
+    [Tooltip("앞 형제(가이드 제목 칸)를 이 폭 아래로는 줄이지 않는다(px).\n" +
+             "★칸이 늘어난 만큼 앞칸을 줄여 줄을 왼쪽으로 넓히는데, 끝까지 줄이면 제목이 깨진다.")]
+    [SerializeField] private float minSiblingWidth = 200f;
+
     [SerializeField] private bool showDebugLogs = true;
 
     // ── 되돌릴 것들 ──────────────────────────────────────────────────────
@@ -47,6 +51,11 @@ public class RomPhaseSections : MonoBehaviour
     private readonly List<string> homeLabels = new List<string>(); // 원래 글자
     private readonly List<bool> homeActive = new List<bool>();     // 원래 켜짐 여부
     private readonly List<GameObject> clones = new List<GameObject>();
+
+    // ── 줄 넓히기 되돌릴 것 (2026-09-08) ────────────────────────────────
+    private bool rowFitted;
+    private RectTransform rowRect, sibRect;
+    private Vector2 rowHome, sibHome;
 
     private ScenarioManager scenarioManager;
     private int lastActiveIndex = -2;   // -2 = 아직 한 번도 안 칠했다
@@ -132,6 +141,10 @@ public class RomPhaseSections : MonoBehaviour
             else ChunaLogger.LogWarning($"[ROM단계칸] {slots[i].name}에 글자(TMP)가 없어 '{sectionLabels[i]}'를 못 넣었다.");
         }
 
+        // ★★칸을 늘렸으면 <b>줄을 왼쪽으로 넓혀야 한다</b>(2026-09-08 Play에서 넷째 칸이 넘쳤다).
+        rowFitted = false;
+        FitSectionRow();
+
         // ★공용 규칙이 덮어쓰지 못하게 막는다. 이걸 안 하면 phase가 바뀔 때마다 색이 지워진다.
         guideUI.ExternalPhaseControl = true;
 
@@ -153,10 +166,89 @@ public class RomPhaseSections : MonoBehaviour
         return img != null ? img.GetComponentInChildren<TextMeshProUGUI>(true) : null;
     }
 
+    /// <summary>
+    /// 칸이 늘어난 만큼 <b>줄을 왼쪽으로 넓힌다.</b>
+    ///
+    /// ★★<b>2026-09-08 Play에서 넷째 칸이 오른쪽으로 넘쳤다.</b> 내가 씬을 잘못 읽었다 —
+    ///   부모 <c>Phase</c>는 <c>ChildForceExpandWidth=1</c>이지만 <b><c>ChildControlWidth=0</c></b>이다.
+    ///   그러면 그룹은 <b>자식 폭을 정해 주지 않고</b> 각자의 <c>sizeDelta</c>(100)를 그대로 쓴다.
+    ///   ForceExpand는 <b>남는 공간만</b> 나눠 준다. 그래서 100×4=400 > 340이 되어 넘쳤다.
+    ///
+    /// ★<b>칸 폭은 건드리지 않는다</b>(2026-09-08 사용자 지시: "나누는 간격은 지금 그대로가 좋은데
+    ///   오른쪽으로 쌓이게 말고 왼쪽으로 알아서 밀리기"). 대신 두 가지를 한다:
+    ///   ① <c>Phase</c>의 폭을 필요한 만큼 늘린다 — <b>pivot이 (1,1)</b>이라 <b>왼쪽으로</b> 자란다(씬 실측).
+    ///   ② 그만큼 <b>앞 형제(가이드 제목 칸)를 줄인다</b> — 안 줄이면 줄 전체가 넓어져
+    ///      결국 오른쪽으로 그대로 넘친다. 줄의 총폭은 그대로 두는 것이 핵심이다.
+    /// ★<b>원래 폭은 적어 두고 되돌린다</b> — 다른 술기는 3칸 그대로여야 한다.
+    /// ★레이아웃이 아직 안 잡혀 폭이 0으로 읽히는 프레임이 있다. 그때는 다음 프레임에 다시 잰다.
+    /// </summary>
+    private void FitSectionRow()
+    {
+        if (rowFitted || slots.Count == 0) return;
+        if (!(slots[0].transform.parent is RectTransform row)) return;
+
+        float have = row.rect.width;
+        if (have <= 1f) return;   // 아직 레이아웃 전 — 다음 프레임에 다시 온다
+
+        float spacing = 0f;
+        var hg = row.GetComponent<HorizontalLayoutGroup>();
+        if (hg != null) spacing = hg.spacing;
+
+        int n = Mathf.Min(slots.Count, sectionLabels.Length);
+        if (n <= 0) return;
+
+        float need = spacing * (n - 1);
+        for (int i = 0; i < n; i++)
+            if (slots[i] != null && slots[i].transform is RectTransform rt) need += rt.rect.width;
+
+        float delta = need - have;
+        if (delta <= 0.5f) { rowFitted = true; return; }   // 이미 들어간다
+
+        rowRect = row;
+        rowHome = row.sizeDelta;
+        row.sizeDelta = new Vector2(have + delta, row.sizeDelta.y);
+
+        // ★앞 형제를 그만큼 줄여 줄의 총폭을 지킨다. 못 찾으면 넓히기만 하고 경고를 남긴다.
+        RectTransform sib = PreviousSibling(row);
+        if (sib != null)
+        {
+            sibRect = sib;
+            sibHome = sib.sizeDelta;
+            float shrunk = Mathf.Max(minSiblingWidth, sib.sizeDelta.x - delta);
+            sib.sizeDelta = new Vector2(shrunk, sib.sizeDelta.y);
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[ROM단계칸] 줄을 왼쪽으로 {delta:F0}px 넓혔다 — " +
+                                $"칸줄 {have:F0}→{have + delta:F0} · 앞칸 '{sib.name}' {sibHome.x:F0}→{shrunk:F0}</color>");
+        }
+        else
+        {
+            ChunaLogger.LogWarning($"[ROM단계칸] 앞 형제를 못 찾아 줄만 {delta:F0}px 넓혔다 — " +
+                                   "오른쪽으로 밀려 보일 수 있다.");
+        }
+
+        rowFitted = true;
+    }
+
+    /// <summary>같은 부모 안에서 <paramref name="t"/> 바로 앞의 형제 RectTransform.</summary>
+    private RectTransform PreviousSibling(RectTransform t)
+    {
+        Transform parent = t != null ? t.parent : null;
+        if (parent == null) return null;
+        int idx = t.GetSiblingIndex();
+        for (int i = idx - 1; i >= 0; i--)
+        {
+            if (parent.GetChild(i) is RectTransform r && r.gameObject.activeSelf) return r;
+        }
+        return null;
+    }
+
     // ================= 칠하기 =================
 
     private void Refresh()
     {
+        // ★첫 프레임에는 레이아웃이 아직 안 잡혀 폭이 0으로 읽힌다. 잡힐 때까지 다시 잰다.
+        if (!rowFitted) FitSectionRow();
+
         int idx = ActiveIndexFromStep();
 
         // ★바뀔 때만 칠한다. 매 프레임 색을 대입하면 VR 프레임 예산에서 의미 없는 비용이다.
@@ -225,6 +317,12 @@ public class RomPhaseSections : MonoBehaviour
             }
             if (i < homeActive.Count) baseSlots[i].gameObject.SetActive(homeActive[i]);
         }
+
+        // ★넓힌 줄을 원래대로 되돌린다. 안 되돌리면 다음 술기의 제목 칸이 좁은 채로 남는다.
+        if (rowRect != null) rowRect.sizeDelta = rowHome;
+        if (sibRect != null) sibRect.sizeDelta = sibHome;
+        rowRect = sibRect = null;
+        rowFitted = false;
 
         // ★풀어 준다. 안 풀면 다음 술기의 전부·중부·후부 표시가 통째로 죽는다.
         if (guideUI != null) guideUI.ExternalPhaseControl = false;

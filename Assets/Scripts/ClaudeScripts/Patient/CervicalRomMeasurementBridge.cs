@@ -177,7 +177,22 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
              "끄면 종전대로 [다음] 토글을 띄워 사람이 누르게 한다.")]
     [SerializeField] private bool autoAdvanceResult = true;
 
+    [Tooltip("<b>중립으로 돌아온 뒤 다음 방향</b>으로 넘어가기까지 두는 텀(초).\n" +
+             "★거는 자리는 방향 단계의 <b>마지막 substep(중립복귀)</b> 하나뿐이다 —\n" +
+             "  능동·압박·파지·준비는 종전대로 즉시 넘어간다(2026-09-08 사용자 확인).\n" +
+             "★0이면 종전처럼 <b>즉시</b> 넘어간다.\n" +
+             "★조건이 중간에 풀리면 텀도 처음부터 다시 센다 — 시간만 채워 넘어가지 않는다.\n" +
+             "★이 컴포넌트는 브리지가 런타임에 붙여 씬에 안 굳는다 — 코드 기본값이 그대로 먹는다.")]
+    // ★2026-09-08 <b>되돌렸다</b>(사용자: "중립 돌아오고 나서 기다리는 거 이전으로 다시 돌리고").
+    //   무턱대고 기다리는 것은 안내가 없어 <b>왜 안 넘어가는지</b>를 알 수 없었다.
+    //   그 자리는 이제 <b>튐 감지 + 경고</b>가 맡는다(CervicalRomRealityMeasure.IsBackToNeutral).
+    //   기능은 남겨 둔다 — 값만 0이면 종전 동작이다.
+    [SerializeField] private float stepAdvancePause;
+
     private bool resultShown;
+
+    /// <summary>결과에 닿았는가. 닿은 뒤로는 종료 안내에서도 표시물을 접어 둔다(2026-09-08).</summary>
+    private bool resultLocked;
 
     [SerializeField] private bool showDebugLogs = true;
 
@@ -353,7 +368,12 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
         // ★결과 단계에서는 측정을 얼린다. 안 그러면 손을 내리는 순간 0점이 풀리고,
         //   거기서 잠깐 멈추면 <b>마지막 방향을 다시 재기 시작한다</b>(09-03 사용자: 좌회전이 계속 다시 측정됨).
-        bool done = name == "결과";
+        // ★★<b>결과에 닿으면 그 뒤로도 계속 접어 둔다</b>(2026-09-08).
+        //   09-08부터 결과 다음에 '종료' 안내로 <b>넘어간다</b>. 이름만 보면 거기서 done이 false로
+        //   풀려 <b>각도기·강체·정보창이 도로 켜진다</b> — 결과를 읽는 자리에 재는 화면이 다시 뜬다.
+        //   실측 세션이 끝날 때(ExitRealWorld) 같이 푼다. ★켠 쪽이 되돌린다.
+        if (name == "결과") resultLocked = true;
+        bool done = name == "결과" || resultLocked;
         measure.SetFrozen(done);
 
         // ★다 재고 나면 각도기를 접는다(2026-09-03 사용자 지시).
@@ -736,6 +756,7 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     {
         if (!realWorldApplied) return;
         realWorldApplied = false;
+        resultLocked = false;   // ★켠 쪽이 되돌린다 — 다음 실측에서 표시물이 접힌 채로 시작하면 안 된다.
 
         if (practiceSettings != null)
         {
@@ -1172,7 +1193,52 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
     }
 
     /// <summary>이 substep을 넘겨도 되는가.</summary>
+    /// <summary>
+    /// 조건이 찼어도 <b>바로 넘기지 않고 잠깐 둔다</b> (2026-09-08 지시:
+    /// "각 단계별로 다음으로 진행하기 전에 텀을 좀 줘야 할 것 같은데 — 실측 부분").
+    ///
+    /// ★<b>왜 감싸는가</b>: 아래 판정은 갈래가 많고 반환 지점이 여러 곳이다.
+    ///   각 자리에 텀을 심으면 <b>빠뜨린 갈래가 반드시 생긴다.</b> 나가는 문을 하나로 모은다.
+    /// ★<b>조건이 풀리면 텀도 푼다</b> — 잠깐 찼다 풀린 것을 시간만 채워 넘기면 안 된다.
+    /// ★단계·substep이 바뀌면 새로 센다.
+    /// </summary>
     private bool IsSatisfied(string stepName, int subNo)
+    {
+        bool ok = IsSatisfiedCore(stepName, subNo);
+
+        // ★★<b>텀은 '중립복귀 → 다음 방향' 한 자리에만 건다</b>(2026-09-08 사용자 확인:
+        //   "내가 말한 단계텀이란 게 중립으로 돌아온 뒤 다음 방향을 말한 건데").
+        //   ★처음에 나는 <b>모든 substep</b>에 걸었다 — 능동·압박·파지·준비까지 느려진다.
+        //     요구한 것보다 넓었다. 방향 단계의 <b>마지막 substep(중립복귀)</b>만 본다.
+        //   ★<c>subNo == 3</c>만으로는 부족하다. 방향 단계인지도 같이 본다 —
+        //     다른 단계에 substep 3이 생기면 조용히 같이 느려진다.
+        bool atDirectionEnd = subNo == 3 && DirectionOf(stepName) != CervicalRomDriver.Direction.None;
+
+        if (stepAdvancePause <= 0f || !atDirectionEnd) return ok;
+
+        if (!ok)
+        {
+            pauseKey = null;   // 풀렸다 — 다시 차면 처음부터 센다
+            return false;
+        }
+
+        string key = stepName + "/" + subNo;
+        if (pauseKey != key)
+        {
+            pauseKey = key;
+            pauseUntil = Time.time + stepAdvancePause;
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[실측Bridge] '{stepName} {subNo}' 조건 충족 — {stepAdvancePause:F1}초 뒤에 넘긴다.</color>");
+            return false;
+        }
+
+        return Time.time >= pauseUntil;
+    }
+
+    private string pauseKey;
+    private float pauseUntil;
+
+    private bool IsSatisfiedCore(string stepName, int subNo)
     {
         // ★준비 단계 = <b>양손을 환자 양어깨에 올려 중심선을 세운다</b>(2026-09-01 사용자 지시).
         //   종전의 표준자세 체크리스트는 실측에서 뺐다. 어깨선·중심선이 그 역할을 대신한다 —
@@ -1225,10 +1291,19 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
                 // ★우리가 옮긴 진행창은 우리가 되돌린다. 끄는 것은 InfoPanelController가 한다.
                 UndockProgressRoot();
 
-                scenarioManager.CompleteScenarioExternally();
-                ChunaLogger.Log("<color=cyan>[실측Bridge] 측정 끝 — 시나리오를 끝내고 결과를 확정했다.</color>");
+                ChunaLogger.Log("<color=cyan>[실측Bridge] 측정 끝 — 종료 안내로 넘긴다.</color>");
             }
-            return false;   // ★넘기지 않는다. 종료 안내로 가면 안 된다.
+
+            // ★★<b>2026-09-08 — 여기서 끝내지 않고 넘긴다.</b>
+            //   종전에는 <c>CompleteScenarioExternally()</c>로 <b>결과 단계에서 시나리오를 끝냈고</b>,
+            //   주석도 "넘기지 않는다. 종료 안내로 가면 안 된다"였다(09-04). 그때는 종료 안내가
+            //   <c>[메인] 버튼을 누르세요</c>라 결과를 못 보고 나가는 자리였기 때문이다.
+            //   ★<b>그 전제가 09-08에 바뀌었다</b> — 종료 안내가 곧 "종료를 눌러 결과를 확인하세요"이고,
+            //     [종료]가 정상 경로로 시나리오를 끝내며 결과를 띄운다.
+            //   ★안 넘기면 <b>실측에서만</b> 종료 안내가 통째로 건너뛰어진다 —
+            //     09-08 Play에서 실제로 그랬다(Editor.log: 'Step 변경: 결과'가 마지막,
+            //     새 문구·[종료]·종료 나레이션이 전부 안 나옴).
+            return true;
         }
         resultShown = false;
 

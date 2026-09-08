@@ -49,6 +49,12 @@ public class CervicalRomPracticeReadout : MonoBehaviour
              "  그래서 이 줄을 켜면 각도가 두 군데 뜬다 — 실측모드도 지금 같은 상태다.\n" +
              "  거슬리면 이것만 끈다. 게이지와 방향 목록은 남는다.")]
     [SerializeField] private bool showAngleLine = true;
+
+    [Tooltip("방향 목록(●굴곡 ▶신전 ○측굴…)을 같이 그린다.\n" +
+             "★<b>기본은 끔</b>이다(2026-09-08 사용자 지시: '정보는 현재각도 유지 게이지만 남기고 비활성화').\n" +
+             "★<b>끄면 자세정렬·파지 단계에서 정보창이 빈다</b> — 그 단계에는 방향도 게이지도 없어\n" +
+             "  이 줄이 유일하게 남던 줄이었다. 그 자리의 안내는 진행 칸이 맡는다.")]
+    [SerializeField] private bool showDirectionRow;
     [Tooltip("환자 머리 중심 위로 이만큼 띄운다(m). 중립에서 잰 높이다.\n" +
              "★2026-09-07: 0.22 → 0.32. 머리에 가려서 올렸다.")]
     [SerializeField] private float headRise = 0.32f;
@@ -302,11 +308,18 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         }
 
         // ★앞에 아무것도 없으면 개행을 넣지 않는다 — 빈 첫 줄이 생겨 글이 떠 보인다.
-        //   방향도 게이지도 없는 단계(자세정렬·파지)에서는 이 줄만 남는다.
-        if (sb.Length > 0) sb.Append('\n');
-        sb.Append("<size=70%>");
-        AppendDirectionRow(dir);
-        sb.Append("</size>");
+        // ★★<b>2026-09-08부터 기본으로 접는다</b>(사용자 지시: "정보는 현재각도 유지 게이지만 남기고 비활성화").
+        //   ★<b>그래서 방향도 게이지도 없는 단계(자세정렬·파지)에서는 정보창이 통째로 빈다.</b>
+        //     종전에는 이 줄이 그 자리를 메우고 있었다. 빈 판은 FitBackdrop이 접으므로
+        //     아무것도 안 뜬다 — 그 단계의 안내는 진행 칸(진행Root)이 말한다.
+        //   ★09-07에 "실습에서 안 나온다"를 겪은 자리라 <b>일부러 적어 둔다.</b>
+        if (showDirectionRow)
+        {
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append("<size=70%>");
+            AppendDirectionRow(dir);
+            sb.Append("</size>");
+        }
 
         label.text = sb.ToString();
         FitBackdrop();

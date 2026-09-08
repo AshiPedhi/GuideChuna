@@ -385,6 +385,16 @@ public class PracticeSettingsController : MonoBehaviour
     }
 
     /// <summary>
+    /// 설정 팝업의 <b>맞춤 설정</b>을 밖에서 그대로 한 번 부른다 (2026-09-08 지시:
+    /// "환자 위치도 최초에 불러올 때 자동맞춤 1회 호출").
+    ///
+    /// ★<b>토글을 건드리지 않는다</b> — 같은 함수를 부를 뿐이라 사용자가 나중에 설정에서
+    ///   다시 눌러도 종전과 똑같이 동작한다. 배선을 두 벌로 만들지 않는 것이 요점이다.
+    /// ★부르는 쪽은 <see cref="InfoPanelController"/>의 시나리오 시작 처리 한 곳뿐이다.
+    /// </summary>
+    public void ApplyCustomPositioningOnce() => OnCustomPositioning();
+
+    /// <summary>
     /// 맞춤 설정: 헤드셋 위치 기준으로 오브젝트 위치 초기화
     /// </summary>
     private void OnCustomPositioning()

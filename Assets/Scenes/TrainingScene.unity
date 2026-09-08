@@ -183035,6 +183035,15 @@ MonoBehaviour:
   passiveMarkColor: {r: 1, g: 0.45, b: 0.35, a: 1}
   font: {fileID: 0}
   readoutSize: 0.05
+  hideShoulderLineAfterHead: 1
+  minFlatForDirection: 0.12
+  neutralJumpDeg: 8
+  neutralResettleSeconds: 0.6
+  showInfoBackdrop: 1
+  infoBackdropColor: {r: 0.06, g: 0.07, b: 0.1, a: 0.72}
+  infoBackdropPadX: 5
+  infoBackdropPadY: 3
+  showSecondaryInfo: 0
   textScale: 1.8
   readoutRise: 0.1
   readoutScale: 2.6
@@ -183044,17 +183053,17 @@ MonoBehaviour:
   routeReadoutToGuideUI: 1
   pivotRise: 0.05
   minimalDisplay: 1
-  minimalCrossWidth: 0.0022
+  minimalCrossWidth: 0.003
   minimalNeedleWidth: 0.005
-  minimalCrossLength: 0.18
-  minimalNeedleLength: 0.25
+  minimalCrossLength: 0.23
+  minimalNeedleLength: 0.26
   minimalCrossBothAxes: 0
   showNeckLineCompare: 1
   usesPalmForShoulders: 1
   useRigidBodyMeasure: 1
   radiusDriftTolerance: 0.25
   primaryHandWeight: 0.75
-  showRigidBody: 1
+  showRigidBody: 0
   rigidTopRise: 0.06
   rigidForwardOffset: 0.07
   rigidWidthScale: 0.2
@@ -183153,6 +183162,7 @@ MonoBehaviour:
   realityMeasure: {fileID: 0}
   show: 1
   showAngleLine: 1
+  showDirectionRow: 0
   headRise: 0.25
   headBone: {fileID: 0}
   fontSize: 0.05
@@ -189472,6 +189482,10 @@ MonoBehaviour:
     eulerAngles: {x: 0, y: 0, z: 0}
     applyScale: 1
     scale: 8
+  sideTarget: {fileID: 483442387}
+  sideYawDegrees: 40
+  sideDistance: 0.6
+  sideHeightOffset: -0.15
   minPlausibleHeadHeight: 0.5
   maxPlausibleHeadHeight: 2.5
 --- !u!1 &1406266242
@@ -273065,7 +273079,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
   defaultScenarioIndex: 12
-  forceDefaultIndex: 0
+  forceDefaultIndex: 1
   showDebugLog: 1
 --- !u!4 &1964066469
 Transform:

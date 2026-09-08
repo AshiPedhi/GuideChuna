@@ -61,6 +61,21 @@ public class ScenarioUIPositioner : MonoBehaviour
              "위치를 손으로 잡은 뒤 컨텍스트 메뉴 '고정 배치 — 현재 씬 값 담기'를 쓰면 값이 채워진다.")]
     [SerializeField] private FixedPlacement[] fixedPlacements;
 
+    [Header("=== 진행 패널 옆자리 배치 (2026-09-08) ===")]
+    [Tooltip("정면에서 옆으로 돌려 놓을 대상. 보통 <b>UI Group/진행Root</b>.\n" +
+             "★<b>비우면 이 기능이 통째로 꺼진다</b> — 다른 술기에는 아무 영향이 없다.\n" +
+             "★uiTargets의 자식이어도 된다. 부모를 놓은 <b>뒤에</b> 다시 잡으므로 이쪽이 이긴다.")]
+    [SerializeField] private Transform sideTarget;
+
+    [Tooltip("헤드셋 정면에서 몇 도 돌릴지. <b>+ = 오른쪽</b>.")]
+    [SerializeField] private float sideYawDegrees = 45f;
+
+    [Tooltip("헤드셋에서 그 방향으로 떨어질 거리 (m)")]
+    [SerializeField] private float sideDistance = 0.9f;
+
+    [Tooltip("헤드셋 높이 기준 오프셋 (m, 음수 = 아래)")]
+    [SerializeField] private float sideHeightOffset = -0.35f;
+
     [Header("=== 헤드셋 Y 정상범위 가드 (FloorLevel 기준) ===")]
     [Tooltip("헤드셋 Y가 이 범위를 벗어나면 트래킹 미안정/글리치로 보고 배치를 건너뜀. (0,0,0) 박힘이나 일시적 튐으로 UI가 엉뚱한 높이에 잠기는 것 방지")]
     [SerializeField] private float minPlausibleHeadHeight = 0.5f;
@@ -68,6 +83,10 @@ public class ScenarioUIPositioner : MonoBehaviour
 
     // UI 위치 초기화가 한 번만 실행되도록 하는 플래그
     private bool hasPositionedOnce = false;
+
+    // 진행 패널의 원래 눕힘 각(로컬 X). ★한 번만 읽는다 — 두 번째부터는 우리가 돌려 놓은 값이다.
+    private bool sideTiltCaptured;
+    private float sideTiltX;
 
     void Awake()
     {
@@ -340,6 +359,9 @@ public class ScenarioUIPositioner : MonoBehaviour
             }
         }
 
+        // ★진행 패널만 <b>옆으로</b> 돌려 놓는다. 정면은 환자에게 비워 둔다 (2026-09-08 지시).
+        PlaceSideTarget(headsetPosition, headsetForward);
+
         // ★고정 대상을 다시 못박는다.
         //   고정 대상이 uiTargets의 <b>자식</b>일 수 있다(실제 배선이 그렇다 —
         //   uiTargets=UI Group, 고정 대상=그 아래 정보패널Root). 부모를 헤드셋 쪽으로
@@ -347,6 +369,47 @@ public class ScenarioUIPositioner : MonoBehaviour
         //   같은 오브젝트일 때만 건너뛰는 걸로는 이 경우를 못 막는다.
         ApplyFixedPlacementsAll();
         return true;
+    }
+
+    /// <summary>
+    /// 진행 패널을 헤드셋 정면에서 <b>옆으로 돌린 자리</b>에 놓는다 (2026-09-08 지시:
+    /// "오른쪽으로 45도 회전된 진행루트").
+    ///
+    /// ★<b>정면을 비우는 것이 목적이다.</b> 정면에는 환자가 있어야 한다.
+    /// ★<b>기울기는 씬 값을 그대로 쓴다.</b> 진행Root는 로컬 X로 45도 눕혀 놓은 판이라
+    ///   (씬 실측 <c>m_LocalEulerAnglesHint {x:45}</c>) 그걸 잃으면 판이 곧추선다.
+    ///   → 수평 겨눔만 새로 정하고 <b>원래 기울기를 곱한다.</b>
+    /// ★비어 있으면 아무 일도 안 한다 — 다른 술기에는 영향이 없다.
+    /// </summary>
+    private void PlaceSideTarget(Vector3 headsetPosition, Vector3 headsetForward)
+    {
+        if (sideTarget == null) return;
+
+        // 처음 한 번 원래 기울기를 적어 둔다. 두 번째부터는 이미 우리가 돌려 놓은 값이라 읽으면 안 된다.
+        if (!sideTiltCaptured)
+        {
+            sideTiltX = sideTarget.localEulerAngles.x;
+            sideTiltCaptured = true;
+        }
+
+        // 헤드셋 수평 정면을 sideYawDegrees만큼 돌린 방향 (+ = 오른쪽)
+        Quaternion yaw = Quaternion.AngleAxis(sideYawDegrees, Vector3.up);
+        Vector3 dir = yaw * headsetForward;
+
+        sideTarget.position = new Vector3(
+            headsetPosition.x + dir.x * sideDistance,
+            headsetPosition.y + sideHeightOffset,
+            headsetPosition.z + dir.z * sideDistance
+        );
+
+        // 판이 사용자를 보게 겨누고, 원래 눕힘을 그대로 얹는다.
+        Vector3 look = sideTarget.position - headsetPosition;
+        look.y = 0f;
+        if (look.sqrMagnitude > 0.001f)
+            sideTarget.rotation = Quaternion.LookRotation(look) * Quaternion.Euler(sideTiltX, 0f, 0f);
+
+        ChunaLogger.Log($"<color=cyan>[ScenarioUIPositioner] 진행 패널을 오른쪽 {sideYawDegrees:F0}도 자리로 — " +
+                        $"{sideTarget.position} (거리 {sideDistance:F2}m · 높이 {sideHeightOffset:+0.00;-0.00} · 눕힘 {sideTiltX:F0}도)</color>");
     }
 
     /// <summary>

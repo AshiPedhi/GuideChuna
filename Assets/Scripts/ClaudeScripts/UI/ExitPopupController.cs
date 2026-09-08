@@ -200,11 +200,21 @@ public class ExitPopupController : BaseUIPanel
         {
             popupPanel.SetActive(true);
 
-            // 초기 토글 상태 설정 (취소 토글을 기본 선택)
-            if (cancelToggle != null)
-            {
-                cancelToggle.isOn = true;
-            }
+            // ★★<b>2026-09-08 — 열자마자 저절로 눌리던 것을 고친다.</b>
+            //   증상: "메인으로 팝업에서 취소를 눌렀을 때 창이 안 닫혀."
+            //   ★Editor.log 실측: `[InfoPanel] 메인으로 토글: ON` <b>바로 다음 줄</b>에
+            //     `[ExitPopup] 다시하기 토글 선택됨 → 다시하기 실행`이 5번 중 4번 찍혔다.
+            //     사람이 누르기 전에 <b>팝업이 스스로</b> 동작을 실행하고 있었다.
+            //   ★원인 = <c>isOn = true</c> 대입이 <c>onValueChanged</c>를 <b>발화</b>시키고,
+            //     <c>autoExecuteOnToggle</c>이 켜져 있어 그 자리에서 실행까지 갔다.
+            //     그리고 취소가 이미 켜진 상태라, 진짜로 취소를 누르면 true→<b>false</b>가 되어
+            //     <c>if (!isOn) return;</c>에 걸려 <b>아무 일도 안 일어났다.</b> 그게 "안 닫힌다"였다.
+            //   ★씬에 <c>toggleGroup</c>이 <b>비어 있어</b> 배타 선택도 안 된다 — 기본 선택을 둘 이유가 없다.
+            // → <b>전부 꺼 두고, 알림 없이</b> 초기화한다. 이제 사람이 누른 것만 발화한다.
+            SetToggleOffSilently(cancelToggle);
+            SetToggleOffSilently(retryToggle);
+            SetToggleOffSilently(mainMenuToggle);
+            SetToggleOffSilently(closeToggle);
 
             // 애니메이션
             if (animationCoroutine != null)
@@ -219,6 +229,16 @@ public class ExitPopupController : BaseUIPanel
         {
             Time.timeScale = 0f;
         }
+    }
+
+    /// <summary>
+    /// 토글을 <b>이벤트 없이</b> 끈다 (2026-09-08).
+    /// ★<c>isOn = false</c>는 <c>onValueChanged</c>를 발화시킨다 — 여기서 그러면
+    ///   팝업을 여닫을 때마다 동작이 저절로 실행된다. 그게 이번 버그의 형태였다.
+    /// </summary>
+    private static void SetToggleOffSilently(Toggle t)
+    {
+        if (t != null) t.SetIsOnWithoutNotify(false);
     }
 
     /// <summary>

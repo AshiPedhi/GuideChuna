@@ -30,6 +30,12 @@ public class CervicalRomHandAngleProbe : MonoBehaviour
     [Tooltip("0점을 다시 잡는 기준 — 대본 각이 이보다 작으면 지금을 중립으로 본다(도).")]
     [SerializeField] private float neutralResetAngle = 1.5f;
 
+    [Tooltip("결과 화면 맨 아래에 <b>손 각 부록</b>(A-12 교차검증 표)을 붙인다.\n" +
+             "★<b>기본은 끔</b>이다(2026-09-08 사용자 지시: \"실습결과 임시 항목 빼\").\n" +
+             "★끄면 제공자를 안 꽂는다 = 부록이 안 붙는다. 기록은 계속 쌓이므로 켜는 즉시 다시 나온다.\n" +
+             "★이 컴포넌트는 브리지가 런타임에 붙이므로 씬에 안 굳는다 — 코드 기본값이 그대로 먹는다.")]
+    [SerializeField] private bool attachResultAppendix;
+
     [SerializeField] private bool showDebugLogs = false;
 
     private CervicalRomDriver.Direction zeroedFor = CervicalRomDriver.Direction.None;
@@ -61,10 +67,18 @@ public class CervicalRomHandAngleProbe : MonoBehaviour
         if (driver == null) driver = FindFirstObjectByType<CervicalRomDriver>();
         if (gripJudge == null) gripJudge = FindFirstObjectByType<CervicalGripJudge>();
 
-        // ★[A-12] 지난 판 기록을 지우고, 결과 화면에 부록을 대는 제공자를 꽂는다.
-        //   static이라 씬을 다시 열어도 값이 남는다 — 여기서 지워야 이번 판만 나온다.
+        // ★[A-12] 지난 판 기록을 지운다. static이라 씬을 다시 열어도 값이 남는다 —
+        //   여기서 지워야 이번 판만 나온다.
         CervicalRomHandAngleLog.Clear();
-        TrainingResultData.RomAppendixProvider = CervicalRomHandAngleLog.BuildAppendix;
+
+        // ★★<b>결과 화면 부록은 기본으로 안 붙인다</b>(2026-09-08 지시: "실습결과 임시 항목 빼").
+        //   `CervicalRomHandAngleLog`가 스스로 <b>[임시 · A-12 교차검증 전용]</b>이라 적어 둔 그것이다.
+        //   ★<b>제공자를 안 꽂으면 부록이 안 붙는다</b> — 그 파일의 '지우는 법'이 그렇게 적혀 있다.
+        //     그래서 코드는 한 줄도 안 지웠다(미사용 코드 방침). 검증이 다시 필요하면 이 스위치만 켠다.
+        //   ★기록 자체는 계속 쌓는다 — 비용이 없고, 켜는 순간 바로 쓸 수 있어야 한다.
+        TrainingResultData.RomAppendixProvider = attachResultAppendix
+                                              ? CervicalRomHandAngleLog.BuildAppendix
+                                              : null;
     }
 
     // ★[A-12] 드라이버가 측정값을 남기는 순간을 듣는다. 그 순간의 손 각을 같이 찍어 둔다.

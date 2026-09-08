@@ -175,6 +175,12 @@ public class InfoPanelController : MonoBehaviour
     #region Unity Lifecycle
     void Awake()
     {
+        // 골격 페이지 좌상단의 '실습 소요 시간' 표시 (2026-09-08).
+        // ★씬에 올려 두면 여기서 안 붙인다 — 인스펙터로 여백·글씨를 맞추려면 씬에 올려야 한다
+        //   (런타임에 붙인 것은 Play를 멈추면 사라져 맞춘 값이 저장되지 않는다).
+        if (FindFirstObjectByType<PracticeElapsedLabel>(FindObjectsInactive.Include) == null)
+            gameObject.AddComponent<PracticeElapsedLabel>();
+
         // 컨트롤러 자동 검색
         if (guideVideoController == null)
             guideVideoController = FindFirstObjectByType<GuideVideoController>();
@@ -833,6 +839,13 @@ public class InfoPanelController : MonoBehaviour
     public GameObject ResultPageObject => resultPage;
 
     /// <summary>
+    /// 근골격(골격) 페이지. <see cref="PracticeElapsedLabel"/>이 좌상단에 소요 시간을 얹는다.
+    /// ★<b>여는 것은 창뿐이다</b> — 페이지를 켜고 끄는 규칙은 이 클래스가 그대로 쥐고 있다.
+    ///   13개 술기가 같이 쓰는 패널이라, 표시물을 더하는 일은 부르는 쪽에서 한다.
+    /// </summary>
+    public GameObject SkeletonPageObject => skeletonPage;
+
+    /// <summary>
     /// 결과 페이지를 띄운다. ROM 실측에서는 이 페이지가 <b>'현재 진행'</b> 노릇을 한다.
     /// ★토글 상태도 같이 맞춘다 — 안 맞추면 화면과 버튼이 서로 다른 말을 한다.
     /// </summary>
@@ -970,7 +983,39 @@ public class InfoPanelController : MonoBehaviour
 
         // ★ 환자 위치도 헤드셋 기준으로 초기화
         InitializePatientPosition();
+
+        // ★★설정 팝업의 <b>맞춤 설정</b>을 여기서 <b>1회</b> 부른다 (2026-09-08 지시).
+        //   위의 InitializePatientPosition은 <b>프리셋</b>(앉기·눕기)을 적용할 뿐이라
+        //   지금 사람이 서 있는 자리와는 무관하다. 헤드셋 기준으로 실제로 맞추는 것은
+        //   설정의 '맞춤 설정'(PracticeSettingsController)이고, 종전에는 <b>사람이 눌러야만</b> 돌았다.
+        //   ★같은 함수를 부른다 — 배선을 두 벌로 만들면 어느 쪽이 이겼는지 매번 확인해야 한다.
+        ApplyCustomPositioningOnce();
     }
+
+    /// <summary>
+    /// 설정의 '맞춤 설정'을 시나리오당 <b>한 번만</b> 부른다.
+    /// ★두 번 부르면 <see cref="PracticeSettingsController"/>가 authored 로컬 포즈를 복원한 뒤
+    ///   다시 옮기므로 결과는 같지만, 사람이 손으로 옮겨 둔 것을 되돌려 버린다.
+    /// </summary>
+    private void ApplyCustomPositioningOnce()
+    {
+        if (customPositioningApplied) return;
+
+        var settings = FindFirstObjectByType<PracticeSettingsController>(FindObjectsInactive.Include);
+        if (settings == null)
+        {
+            // ★조용히 넘어가지 않는다 — 안 맞춰졌는데 이유가 안 보이면 코드를 의심하게 된다.
+            ChunaLogger.LogWarning("[InfoPanel] 맞춤 설정을 부르려 했으나 PracticeSettingsController가 씬에 없다.");
+            return;
+        }
+
+        settings.ApplyCustomPositioningOnce();
+        customPositioningApplied = true;
+        if (showDebugLogs)
+            ChunaLogger.Log("<color=cyan>[InfoPanel] 시나리오 시작 — 설정의 '맞춤 설정'을 1회 불렀다.</color>");
+    }
+
+    private bool customPositioningApplied;
 
     /// <summary>
     /// 환자 위치를 프리셋으로 초기화 (PatientPositionManager에 위임)

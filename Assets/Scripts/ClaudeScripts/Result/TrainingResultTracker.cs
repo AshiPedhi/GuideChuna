@@ -488,6 +488,7 @@ public class TrainingResultTracker : MonoBehaviour
             skipTimeThreshold = float.MaxValue;
 
         isTracking = true;
+        sessionStartTime = Time.time;   // 화면에 띄울 '실습 소요 시간'의 출처 (2026-09-08)
         currentPhaseName = "";
         currentStepName = "";
 
@@ -832,6 +833,17 @@ public class TrainingResultTracker : MonoBehaviour
     /// 추적 중인지 여부
     /// </summary>
     public bool IsTracking => isTracking;
+
+    /// <summary>
+    /// 실습을 시작한 뒤 흐른 시간(초). 추적 중이 아니면 0 (2026-09-08).
+    /// ★<b>여기 하나만 둔다.</b> 표시하는 쪽이 자기 타이머를 새로 만들면
+    ///   조건이 조금만 달라도 화면과 기록이 서로 다른 말을 한다(08-24에 겪은 형태).
+    /// ★결과표의 <c>totalTime</c>과는 <b>다른 값</b>이다 — 그쪽은 step별 시간의 합이고
+    ///   이건 벽시계다. 화면에 "소요 시간"으로 띄우기에는 벽시계가 맞다.
+    /// </summary>
+    public float SessionElapsed => isTracking ? Time.time - sessionStartTime : 0f;
+
+    private float sessionStartTime;
 
     /// <summary>
     /// 현재 추적 세션이 공식 평가인지 여부 (중도 종료 시 미완료 기록 대상 판단용)
