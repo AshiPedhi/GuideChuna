@@ -165,10 +165,23 @@ def main():
     print(f"음성 {args.voice} · 난이도 {', '.join(levels)}")
 
     if conflicts:
-        print(f"\n★ 충돌 {len(conflicts)}건 — 같은 파일명에 다른 문장이 붙어 있다. 생성하지 않는다.")
-        for name, a, b in conflicts:
-            print(f"  {name}\n    A: {a}\n    B: {b}")
-        sys.exit(1)
+        # ★--only로 좁혔으면 <b>쓰려는 클립의 충돌만</b> 막는다 (2026-09-08).
+        #   종전에는 CSV 어딘가에 충돌이 하나라도 있으면 무관한 클립까지 통째로 거부해,
+        #   기존 충돌 5건 때문에 '종료' 한 개를 못 만들었다.
+        #   ★안전 규칙은 그대로다 — 만들려는 그 클립이 충돌이면 여전히 중단한다.
+        blocking = [c for c in conflicts if not only or c[0] in only]
+        skipped = [c for c in conflicts if c not in blocking]
+
+        if skipped:
+            print(f"\n주의: 이번에 만들지 않는 클립의 충돌 {len(skipped)}건 — 건너뛴다(기존 문제).")
+            for name, a, b in skipped:
+                print(f"  {name}\n    A: {a}\n    B: {b}")
+
+        if blocking:
+            print(f"\n★ 충돌 {len(blocking)}건 — 같은 파일명에 다른 문장이 붙어 있다. 생성하지 않는다.")
+            for name, a, b in blocking:
+                print(f"  {name}\n    A: {a}\n    B: {b}")
+            sys.exit(1)
     if missing_text:
         print(f"\n주의: voiceInstruction은 있는데 {args.text_column}이 빈 행 {len(missing_text)}개 "
               f"→ 건너뜀 ({', '.join(sorted(set(missing_text)))})")

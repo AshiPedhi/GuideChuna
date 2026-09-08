@@ -1289,6 +1289,13 @@ public class InfoPanelController : MonoBehaviour
     }
 
     /// <summary>
+    /// 지금 걸려 있는 제목. ★<b>경추ROM 한정</b>으로
+    /// <see cref="RomProgressInResultPage"/>가 제목을 잠깐 바꿔 걸고 <b>나갈 때 되돌리려고</b> 읽는다.
+    /// 읽기 전용이다 — 제목을 정하는 것은 여전히 <c>ScenarioBootstrapper</c>다.
+    /// </summary>
+    public string ScenarioTitle => scenarioTitleText != null ? scenarioTitleText.text : null;
+
+    /// <summary>
     /// 연습 모드에서 난이도를 외부에서 설정할 때 사용 (리스너 트리거 방지)
     /// </summary>
     public void SetDifficultyForPractice(DifficultyLevel difficulty)

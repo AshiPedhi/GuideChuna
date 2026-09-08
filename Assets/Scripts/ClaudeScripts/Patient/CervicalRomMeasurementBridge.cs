@@ -93,7 +93,14 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
 
     [Tooltip("★진행Root(스텝 안내 + [다음] 버튼)를 정보패널의 <b>결과 페이지 안</b>에 넣는다.\n" +
              "ROM 실측에서만 돈다. 다른 술기는 종전 그대로다.")]
-    [SerializeField] private bool dockProgressIntoResultPage = true;
+    // ★★2026-09-07 — 기본값을 false로 내렸다. <b>겹치기 도킹을 그만둔다.</b>
+    //   진행Root는 월드 오브젝트고 결과 페이지는 UI라, 겹쳐 놓으면 캔버스가 둘이라
+    //   배율을 계산해야 했다(FitProgressToPage). 그게 09-04에 남은 "배율 5.92배" 숙제였다.
+    //   → 이제 <see cref="RomProgressInResultPage"/>가 <b>내용을 패널 안에서 그린다.</b>
+    //   ★둘을 같이 켜면 안 된다 — 진행Root를 한쪽은 옮기고 한쪽은 접어 서로 되돌린다.
+    //   ★이 브리지는 런타임 부착이라(씬 인스턴스 0개, 09-07 실측) 이 코드 기본값이 그대로 먹는다.
+    //   되살리려면 여기를 true로. 옛 경로는 지우지 않고 남겨 둔다(사용자 방침).
+    [SerializeField] private bool dockProgressIntoResultPage;
 
     [Tooltip("결과 페이지 기준 로컬 위치. 페이지 한가운데가 0,0,0이다.")]
     [SerializeField] private Vector3 dockLocalPosition = Vector3.zero;

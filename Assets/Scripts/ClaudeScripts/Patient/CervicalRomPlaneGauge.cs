@@ -382,6 +382,16 @@ public class CervicalRomPlaneGauge : MonoBehaviour
 
     // ── 생성물 ────────────────────────────────────────────────────────────
     private Transform root;              // 면과 함께 도는 부모. 회전 중심에 붙는다.
+
+    /// <summary>
+    /// 각도기가 서 있는 자세. <b>면 안에 누운</b> 좌표계다
+    /// (<c>LookRotation(회전축, 0도방향)</c> — forward가 회전축, up이 0도 방향).
+    ///
+    /// 아직 안 세워졌으면 null이다. ★지금은 쓰는 곳이 없다(2026-09-07 신설, 읽기 전용).
+    ///   정보창은 각도기 자세를 베끼는 대신 <b>단면별로 시술자가 서는 자리</b>를 쓴다 —
+    ///   시상면은 옆, 관상·횡단면은 뒤통수 쪽이다.
+    /// </summary>
+    public Transform GaugeRoot => root;
     private MeshFilter staticFilter;     // 판 + 눈금 (방향이 바뀔 때만 다시 만든다)
     private MeshFilter dynamicFilter;    // 채움 + 지침 (각도가 변하면 다시 만든다)
     private Mesh staticMesh;

@@ -52,6 +52,13 @@ public class ScenarioGuideUIController : MonoBehaviour
     [Header("=== 설명 텍스트 ===")]
     [SerializeField] private TextMeshProUGUI descriptionText;
 
+    [Header("=== 진행 패널 루트 (2026-09-08) ===")]
+    [Tooltip("[종료]를 눌러 시나리오가 끝나면 통째로 접을 패널.\n" +
+             "★씬의 <b>UI Group/진행Root</b>를 물린다. 비어 있으면 접지 않는다(종전 동작 그대로).\n" +
+             "  이 컴포넌트는 GameManager에 붙어 있어 진행Root를 스스로 알지 못한다 —\n" +
+             "  이름으로 찾지 않는다(규칙 8: 이름 매칭은 조용히 죽는다). 인스펙터에서 물려야 한다.")]
+    [SerializeField] private GameObject progressRootObject;
+
     /// <summary>
     /// 표준자세 체크리스트가 진행 패널 안에 붙을 수 있게 여는 접근자들.
     /// ★이 토글을 <b>복제하지 않는다</b>(2026-08-28) — 화살표 아이콘이 붙은 '다음' 버튼이라
@@ -59,6 +66,34 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     public Toggle NextToggle => startToggle;
     public TextMeshProUGUI DescriptionLabel => descriptionText;
+
+    /// <summary>
+    /// [다음] 토글이 올라앉은 오브젝트. ★<b>경추ROM 한정</b>으로
+    /// <see cref="RomProgressInResultPage"/>가 이걸 정보패널 결과 페이지 안으로 옮긴다.
+    /// 옮긴 쪽이 되돌린다 — 여기서는 창만 열어 준다.
+    /// </summary>
+    public GameObject NextToggleObject => startToggleObject;
+
+    // ── Phase 칸을 밖에서 쓰는 창 (2026-09-08) ────────────────────────────
+    // ★<b>여는 것은 창뿐이다.</b> 이 컴포넌트는 13개 술기가 같이 쓴다 —
+    //   칸을 늘리거나 라벨을 바꾸는 일은 <b>부르는 쪽</b>(경추ROM)이 하고, 되돌리는 것도 그쪽이 한다.
+    //   여기서 ROM을 알아보게 만들면 나머지 12개에 조건이 번진다.
+    public Image FrontPhaseImage => frontPhaseImage;
+    public Image MiddlePhaseImage => middlePhaseImage;
+    public Image BackPhaseImage => backPhaseImage;
+    public Color ActivePhaseColor => activePhaseColor;
+    public Color InactivePhaseColor => inactivePhaseColor;
+
+    /// <summary>
+    /// Phase 칸의 표시·색을 <b>밖에서 정한다</b>(2026-09-08, 경추ROM 4칸용).
+    ///
+    /// ★켜져 있는 동안 <see cref="UpdatePhaseImages"/>는 <b>한 줄도 안 그린다.</b>
+    ///   안 막으면 phase가 바뀔 때마다 공용 규칙이 다시 칠해 밖에서 칠한 색을 지운다.
+    ///   ★평가모드의 <see cref="ShowOnlyActivePhaseImage"/>도 같이 막힌다 — 그게 목적이다.
+    ///     경추ROM은 실습·평가 <b>둘 다</b> 4칸을 띄운다(2026-09-08 사용자 확정).
+    /// ★<b>켠 쪽이 끈다.</b> 안 되돌리면 다음 술기의 전부·중부·후부 칸이 통째로 죽는다.
+    /// </summary>
+    public bool ExternalPhaseControl { get; set; }
 
     [Header("=== 진행 원형 표시 (Duration) ===")]
     [Tooltip("ProgressCircle 프리팹 루트 GameObject")]
@@ -98,6 +133,29 @@ public class ScenarioGuideUIController : MonoBehaviour
     private float currentDuration = 0f;
     private float elapsedTime = 0f;
 
+    // ── 진행 표시 값을 밖에서 읽는 창 (2026-09-07) ────────────────────────
+    // ★<b>읽기 전용이다.</b> 그리는 규칙도, 숨기는 조건도, 타이머도 건드리지 않는다 —
+    //   같은 값을 다른 자리(경추ROM 실습의 손 옆 게이지)에도 그리려고 여는 창일 뿐이다.
+    //   이 컴포넌트는 13개 술기가 같이 쓴다. 동작을 바꾸는 변경은 여기 넣지 않는다.
+    // ★값을 따로 세지 않고 <b>화면에 실제로 얹은 그 값</b>을 남긴다. 타이머가 둘이면
+    //   조건이 조금만 달라도 두 표시가 서로 다른 말을 한다(08-24에 실제로 겪은 형태다).
+    private bool progressShown;
+    private bool progressCompleted;
+    private float lastProgressRemaining;
+    private float lastProgressRatio;
+
+    /// <summary>지금 진행 원형이 떠 있는가.</summary>
+    public bool ProgressVisible => progressShown;
+
+    /// <summary>남은 시간(초). 안 떠 있으면 0.</summary>
+    public float ProgressRemaining => progressShown ? lastProgressRemaining : 0f;
+
+    /// <summary>남은 비율(1=시작 · 0=끝). ProgressCircle의 fillAmount와 같은 값이다.</summary>
+    public float ProgressRatio01 => progressShown ? lastProgressRatio : 0f;
+
+    /// <summary>다 찼는가(완료 표시가 뜬 상태).</summary>
+    public bool ProgressCompleted => progressShown && progressCompleted;
+
     // 홀드 상태 (ChunaPathEvaluator 연동)
     private bool isCurrentlyHolding = false;
 
@@ -122,6 +180,8 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnStepChanged += OnStepChanged;
         eventSystem.OnSubStepStarted += OnSubStepStarted;
         eventSystem.OnButtonStateUpdateRequested += OnButtonStateUpdateRequested;
+        eventSystem.OnScenarioCompleted += OnScenarioCompletedHideProgress;
+        eventSystem.OnScenarioStarted += OnScenarioStartedShowProgress;
 
         // ChunaPathEvaluator 홀드 이벤트 구독
         if (pathEvaluator != null)
@@ -138,6 +198,8 @@ public class ScenarioGuideUIController : MonoBehaviour
         eventSystem.OnStepChanged -= OnStepChanged;
         eventSystem.OnSubStepStarted -= OnSubStepStarted;
         eventSystem.OnButtonStateUpdateRequested -= OnButtonStateUpdateRequested;
+        eventSystem.OnScenarioCompleted -= OnScenarioCompletedHideProgress;
+        eventSystem.OnScenarioStarted -= OnScenarioStartedShowProgress;
 
         // ChunaPathEvaluator 홀드 이벤트 구독 해제
         if (pathEvaluator != null)
@@ -320,6 +382,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         currentDuration = duration;
         elapsedTime = 0f;
         isProgressActive = true;
+        progressCompleted = false;
 
         progressCircleObject.SetActive(true);
 
@@ -341,6 +404,11 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void UpdateProgressCircle(float remainingTime, float progress)
     {
+        // ★밖에서 읽을 값을 남긴다(2026-09-07). 화면에 얹는 그 값 그대로다.
+        progressShown = true;
+        lastProgressRemaining = remainingTime;
+        lastProgressRatio = progress;
+
         // FillAmount 업데이트
         if (progressCircleFillImage != null)
         {
@@ -361,6 +429,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     private void CompleteProgress()
     {
         isProgressActive = false;
+        progressCompleted = true;
 
         // Duration 텍스트 숨김
         if (durationText != null)
@@ -383,6 +452,8 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (progressCircleObject == null) return;
 
         isProgressActive = false;
+        progressShown = false;
+        progressCompleted = false;
         progressCircleObject.SetActive(false);
 
         ChunaLogger.Log($"[GuideUI] ProgressCircle 숨김");
@@ -411,6 +482,7 @@ public class ScenarioGuideUIController : MonoBehaviour
         {
             externalProgressActive = true;
             isProgressActive = false;        // 내부 타이머를 재운다
+            progressCompleted = false;
             progressCircleObject.SetActive(true);
             if (completeText != null) completeText.gameObject.SetActive(false);
             if (completeIcon != null) completeIcon.SetActive(false);
@@ -556,6 +628,10 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void UpdatePhaseImages()
     {
+        // ★밖에서 칸을 잡고 있으면 여기서는 아무것도 안 그린다 (2026-09-08).
+        //   경추ROM이 4칸을 직접 칠하는 동안 공용 규칙이 덮어쓰는 것을 막는다.
+        if (ExternalPhaseControl) return;
+
         // Phase 이미지를 숨겨야 하는 Phase인지 확인
         if (ShouldHidePhaseImages())
         {
@@ -589,6 +665,55 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (backPhaseImage != null)
         {
             UpdateImageColor(backPhaseImage, IsPhaseNameMatch(thirdPhaseNames));
+        }
+    }
+
+    /// <summary>
+    /// 지금이 <b>마지막 phase</b>인가. [다음]/[종료] 라벨을 가르는 자리다(2026-09-08).
+    /// ★이름('종료')이 아니라 <b>배열의 마지막 자리</b>로 본다 — phase 이름을 바꿔도 안 죽는다.
+    /// </summary>
+    private bool IsLastPhase()
+    {
+        if (scenarioManager == null || scenarioManager.CurrentScenario == null) return false;
+        var phases = scenarioManager.CurrentScenario.phases;
+        if (phases == null || phases.Count == 0) return false;
+        return scenarioManager.CurrentPhase == phases[phases.Count - 1];
+    }
+
+    /// <summary>
+    /// 시나리오가 끝나면 <b>진행 패널을 통째로 접는다</b>(2026-09-08 지시:
+    /// "종료 버튼 누르면 가이드 패널이 사라지게").
+    ///
+    /// ★결과는 이 시점에 이미 뜬다 — <c>ScenarioManager.CompleteScenario()</c>가
+    ///   이 이벤트를 쏘기 직전에 결과표를 채우고, 정보패널이 결과 페이지를 띄운다.
+    ///   그래서 여기서 할 일은 <b>가리는 것을 치우는 것</b>뿐이다.
+    /// ★<c>progressRootObject</c>가 비어 있으면 아무것도 안 한다(종전 동작).
+    /// </summary>
+    private void OnScenarioCompletedHideProgress(ScenarioData scenario)
+    {
+        if (progressRootObject == null)
+        {
+            // ★조용히 넘어가지 않는다 — 안 접히는데 원인이 안 보이면 코드를 의심하게 된다.
+            ChunaLogger.LogWarning("[GuideUI] 시나리오 완료 — 진행 패널을 접으려 했으나 " +
+                                   "progressRootObject가 비어 있다(인스펙터에서 UI Group/진행Root를 물려야 한다).");
+            return;
+        }
+
+        progressRootObject.SetActive(false);
+        ChunaLogger.Log("<color=cyan>[GuideUI] 시나리오 완료 — 진행 패널을 접었다(결과만 남긴다).</color>");
+    }
+
+    /// <summary>
+    /// 새 시나리오가 시작되면 접었던 진행 패널을 <b>다시 편다</b>.
+    /// ★접은 쪽이 되돌린다. 씬 재로드로 시나리오가 바뀌는 것이 보통이지만,
+    ///   같은 씬에서 다시 시작하는 경로(재시작)가 있어 대칭을 맞춰 둔다.
+    /// </summary>
+    private void OnScenarioStartedShowProgress(ScenarioData scenario)
+    {
+        if (progressRootObject != null && !progressRootObject.activeSelf)
+        {
+            progressRootObject.SetActive(true);
+            ChunaLogger.Log("[GuideUI] 시나리오 시작 — 진행 패널을 다시 폈다.");
         }
     }
 
@@ -720,7 +845,13 @@ public class ScenarioGuideUIController : MonoBehaviour
             // 첫 번째 가이드인지 확인
             bool isFirstPhase = scenarioManager.CurrentScenario != null
                 && scenarioManager.CurrentPhase == scenarioManager.CurrentScenario.phases[0];
-            startToggleText.text = isFirstPhase ? "시작" : "다음";
+
+            // ★마지막 phase의 가이드는 <b>[종료]</b>다 (2026-09-08 지시).
+            //   여기서 넘기면 ScenarioManager가 CompleteScenario()를 불러 결과가 뜬다 —
+            //   그러니 '다음'이 아니라 '종료'가 실제 동작에 맞는 이름이다.
+            //   ★13개 술기 전부 마지막 phase 이름이 '종료'다(2026-09-08 CSV 실측).
+            //     그래도 <b>이름이 아니라 자리로</b> 판정한다 — 이름이 바뀌어도 안 죽게(규칙 8).
+            startToggleText.text = isFirstPhase ? "시작" : (IsLastPhase() ? "종료" : "다음");
         }
 
         // 토글 상태 초기화 (꺼진 상태로)

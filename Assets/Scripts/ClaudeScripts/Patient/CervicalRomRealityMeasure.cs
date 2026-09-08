@@ -428,34 +428,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "2026-08-31 사용자: '작은데다 가까워서 흐려 글씨가 안 보였다'.\n" +
              "★<b>2026-09-01 정정</b>: 08-31에 '신규 필드라 코드 기본값이 먹는다'고 적었는데, " +
              "그 뒤 씬을 저장하면서 1.8이 굳었다. 이제는 코드에서 못 바꾼다 — " +
-             "안내문 크기는 아래 readoutScaleOverride로 바꾼다.")]
+             "안내문 크기는 readoutScale로 바꾼다.")]
     [SerializeField] private float textScale = 1.8f;
 
-    [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 손과 겹치지 않게 띄운다.")]
-    [SerializeField] private float readoutRise = 0.34f;
+    [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). " +
+             "★2026-09-07: 오버라이드 필드를 걷고 이 값 하나만 쓴다. 인스펙터에서 맞춘다.")]
+    [SerializeField] private float readoutRise = 0.3f;
+
+    [Tooltip("안내문 글씨 배율. 눈금 숫자까지 키우는 textScale과 달리 안내문만 키운다. " +
+             "★2026-09-07: readoutScaleOverride를 이 이름으로 합쳤다. 인스펙터에서 맞춘다.")]
+    [SerializeField] private float readoutScale = 2.6f;
 
     [Tooltip("★안내문이 눈에서 이보다 가까우면 밀어낸다(m). VR은 너무 가까우면 초점이 안 맞아 흐리다.")]
     [SerializeField] private float readoutMinDistance = 0.55f;
 
-    // ── 안내문 배치 덮어쓰기 (2026-09-01) ────────────────────────────────
-    // ★위 textScale·readoutRise는 <b>이미 씬에 직렬화됐다</b>(1.8 / 0.34). 163번 줄 툴팁의
-    //   "신규 필드라 코드 기본값이 먹는다"는 08-31 당시엔 맞았지만 그 뒤 씬을 저장하면서
-    //   값이 굳었다 — 지금은 코드에서 못 바꾼다(규칙 7). 그래서 holdSecondsOverride와
-    //   같은 방식으로 덮어쓰기 필드를 따로 둔다.
-    // 2026-09-01 사용자: "실측할 때 환자 머리가 아니라 그거 보려고 고개를 위로 살짝 올려야 해서 불편하다."
-
-    [Tooltip("★켜면 아래 두 값이 textScale·readoutRise를 대신한다. 끄면 씬(인스펙터) 값을 쓴다.")]
-    [SerializeField] private bool overrideReadoutPlacement = true;
-
-    [Tooltip("안내문을 기준점보다 이만큼 위에 띄운다(m). 씬 값은 0.34였다.\n" +
-             "★각도기 반지름이 0.30이라 이보다 낮추면 눈금 호와 겹칠 수 있다 — " +
-             "그때는 음수로 내려 각도기 <b>아래</b>로 빼는 편이 낫다.\n" +
-             "★2026-09-03 컨펌: '손에 좀 더 가깝게' → 0.18 → 0.10.")]
-    [SerializeField] private float readoutRiseOverride = 0.10f;
-
-    [Tooltip("★<b>안내문 전용</b> 글씨 배율. textScale은 눈금 숫자까지 같이 키워서 따로 뒀다.\n" +
-             "씬의 textScale은 1.8이고 readoutSize는 0.05다 → 1.8이면 종전과 같은 크기.")]
-    [SerializeField] private float readoutScaleOverride = 2.6f;
+    [Tooltip("시술자 쪽으로 이만큼 <b>수평으로</b> 당겨 온다(m). 환자 머리에 가리는 것을 푼다.\n" +
+             "★올리는 것(readoutRise)과 <b>따로</b> 둔 손잡이다 — 하나로 묶으면\n" +
+             "  높이를 만질 때 거리가 같이 변한다.\n" +
+             "★이 컴포넌트는 씬에 있다. 씬을 저장하면 이 값이 굳어 코드 기본값이 안 먹는다(규칙 7).")]
+    [SerializeField] private float readoutPullToViewer = 0.25f;
 
     /// <summary>실제로 쓸 안내문 높이(m).</summary>
     // ★★2026-09-04 지시 — 안내문(진행 여부 UI)이 <b>손을 따라온다</b>.
@@ -465,17 +456,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("★안내문을 <b>손을 잇는 선의 가운데</b> 위에 띄운다(2026-09-04 지시).\n" +
              "양손을 잡고 있으면 두 손의 중점, 한 손만 읽히면 그 손을 쓴다.\n" +
              "끄면 종전대로 0점을 잡은 파지 지점에 고정된다(신전에서 안 보인다).\n" +
-             "위로 띄우는 높이는 readoutRiseOverride다.")]
+             "위로 띄우는 높이는 readoutRise다.")]
     [SerializeField] private bool readoutFollowHands = true;
 
     /// <summary>안내문이 따라갈 자리. 양손이면 중점, 한 손이면 그 손(월드). 매 프레임 갱신된다.</summary>
     private Vector3 handMid;
     private bool handMidValid;
 
-    private float ReadoutRiseNow => overrideReadoutPlacement ? readoutRiseOverride : readoutRise;
+    private float ReadoutRiseNow => readoutRise;
 
     /// <summary>실제로 쓸 안내문 글씨 배율.</summary>
-    private float ReadoutScaleNow => overrideReadoutPlacement ? readoutScaleOverride : textScale;
+    private float ReadoutScaleNow => readoutScale;
 
     // ── 안내문을 진행 UI로 보내기 (2026-09-03) ───────────────────────────
     // 2026-09-03 사용자: "이미 진행 UI가 있는데 손 위에 별도 UI가 뜨는 게 가독성이 떨어진다.
@@ -645,6 +636,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("기둥 꼭대기를 파지점보다 이만큼 <b>더 위로</b> 올린다(m).")]
     [SerializeField] private float rigidTopRise = 0.06f;
 
+    [Tooltip("기둥을 환자 <b>앞쪽</b>으로 이만큼 옮긴다(m).\n" +
+             "★엄지는 머리 <b>뒤쪽</b>에서 잡히므로 엄지 중점은 실제 머리 중심보다 뒤에 있다.\n" +
+             "  그대로 세우면 기둥이 뒤로 밀려 보인다(2026-09-07 지적).\n" +
+             "★보이는 기둥만 옮긴다 — 회전축·축원점은 그대로다(각도 계산에 안 섞인다).\n" +
+             "★반대로 가면 <b>음수</b>를 넣는다. 부호는 Play에서 보고 정한다.")]
+    [SerializeField] private float rigidForwardOffset = 0.07f;
+
     [Tooltip("기둥 굵기를 파지 간격의 몇 배로 할지. 1이면 간격이 곧 지름이다.")]
     [SerializeField] private float rigidWidthScale = 1f;
 
@@ -707,14 +705,22 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         }
 
         headCenter = (l + r) * 0.5f;
+
         axisOrigin = headCenter - Vector3.up * Mathf.Max(0f, neckDropFromHead);
         headReady = true;
         holdTimer = 0f;
         frameStamp++;
 
         // ★기둥은 여기서 <b>수직으로</b> 만든다. 축원점이 머리 중심 바로 아래라 구성상 수직이다.
-        rigidBase0 = axisOrigin;
-        rigidTop0 = headCenter + Vector3.up * rigidTopRise;
+        // ★★<b>2026-09-07 — 기둥을 앞으로 뺀다(사용자 지시).</b>
+        //   "강체 위치가 엄지 기준보다 앞에 있어야 한다. <b>엄지는 뒤쪽에서 잡히잖아.</b>"
+        //   엄지 중점(headCenter)은 실제 머리 중심보다 <b>뒤</b>에 있다 — 그대로 세우면 기둥이 뒤로 밀린다.
+        //   ★<b>기둥(보이는 것)만</b> 옮긴다. 회전축·축원점(axisOrigin)은 각도 계산에 들어가므로 안 건드린다.
+        //   ★부호는 추론하지 않는다(규칙 9) — 값을 음수로 넣으면 반대로 간다. Play에서 보고 정한다.
+        Vector3 fwdShift = refFwd.sqrMagnitude > 1e-8f
+                           ? refFwd.normalized * rigidForwardOffset : Vector3.zero;
+        rigidBase0 = axisOrigin + fwdShift;
+        rigidTop0 = headCenter + Vector3.up * rigidTopRise + fwdShift;
         rigidRadius = Mathf.Max(0.02f, span * 0.5f * Mathf.Max(0.1f, rigidWidthScale));
         rigidReady = true;
 
@@ -726,6 +732,43 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     /// <summary>머리 위치가 잡혔는가. 브리지가 단계를 넘길 조건으로 읽는다.</summary>
     public bool HeadReady => headReady;
+
+    /// <summary>
+    /// 강체가 지금 돈 만큼의 회전. 축은 고정이고 강체만 이만큼 돌아 있다.
+    /// ★기둥·코끝선·정보창이 <b>모두 이 하나를 쓴다.</b> 따로 계산하면 표시끼리 어긋난다.
+    /// </summary>
+    private Quaternion RigidTurn()
+    {
+        // ★단락 평가로 묶으면 out 변수가 '확실히 할당됨'을 못 넘긴다(CS0165) — 호출을 먼저 한다.
+        Vector3 axis = AxisFor(direction);
+        bool angleOk = TryGetAngle(out _, out _, out float signed);
+        if (axis.sqrMagnitude < 1e-8f || !angleOk) return Quaternion.identity;
+        return Quaternion.AngleAxis(signed, axis.normalized);
+    }
+
+    /// <summary>
+    /// 강체에 <b>완전히 붙은</b> 자리를 준다 — 머리 중심에서 <paramref name="riseAboveHead"/>만큼 위,
+    /// 그리고 강체가 돈 만큼 같이 돈 자리다. 머리가 숙으면 이 점도 같이 앞으로 넘어간다.
+    ///
+    /// ★2026-09-07 사용자 지시: "손에 따라오는 디스플레이가 환자 머리랑 강체를 기준으로
+    ///   일정 위치에 고정 배치돼서 움직이는 거야." 손 떨림이 글씨 떨림이 되던 것을 여기서 끊는다.
+    /// ★<b>강체를 아직 안 잡았으면 false다</b>(어깨선·머리위치 단계). 그때는 부르는 쪽이
+    ///   종전대로 손을 따라간다 — 그 두 단계는 손을 보며 하는 작업이다(사용자 확정).
+    /// </summary>
+    public bool TryGetRigidAnchor(float riseAboveHead, out Vector3 world, out Vector3 up)
+    {
+        world = Vector3.zero;
+        up = Vector3.up;
+        if (!headReady) return false;
+        Quaternion turn = RigidTurn();
+        Vector3 local = headCenter + Vector3.up * riseAboveHead - rigidBase0;
+        world = rigidBase0 + turn * local;
+
+        // ★강체가 기운 만큼 글자도 기운다(2026-09-07 사용자 지시).
+        //   중립에서 기둥은 수직이므로, 돈 뒤의 '위쪽'은 같은 회전을 먹인 수직이다.
+        up = turn * Vector3.up;
+        return true;
+    }
 
     /// <summary>중립에서의 기둥 — 밑동(축원점)·꼭대기·반지름. 잡을 때 한 번 정한다.</summary>
     private Vector3 rigidBase0, rigidTop0;
@@ -2982,6 +3025,20 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
            && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode;
 
     /// <summary>
+    /// 이 측정기가 <b>지금 화면을 그리고 있는가</b>. 실습 표시(<see cref="CervicalRomPracticeReadout"/>)가
+    /// 겹치지 않으려고 묻는다.
+    ///
+    /// ★★<b>2026-09-07 — 이 창을 낸 이유.</b> 실습 표시가 모드를 <c>enabled</c>로 <b>간접 추론</b>했다가
+    ///   틀렸다. 이 컴포넌트는 <b>씬에 m_Enabled: 1로 굳어 있어</b>(TrainingScene) 실습에서도 켜져 있다.
+    ///   브리지의 <c>enabled = false</c>는 <b>런타임에 새로 붙일 때만</b> 도는 코드라 한 번도 안 돈다.
+    ///   → 그리는지 마는지는 <b>그리는 쪽이 대답한다.</b> 따로 계산하면 또 어긋난다
+    ///     (규칙 9의 "미리보기는 실제와 같은 함수를 타야 한다"와 같은 형태다).
+    ///   ★<c>Update</c>의 두 갈래(미리보기 · 실측모드)와 <b>같은 조건</b>을 쓴다. 여기만 고치면 안 된다 —
+    ///     저 두 갈래가 바뀌면 이것도 같이 바꾼다.
+    /// </summary>
+    public bool IsDrawing => PreviewActive || IsMeasurementMode();
+
+    /// <summary>
     /// ★<b>어깨를 짚을 때 쓸 손 위치</b>(2026-09-04 회의 지시).
     ///
     /// 어깨 짚기는 <b>손바닥을 얹는</b> 동작인데 종전에는 엄지·검지 파지점을 썼다.
@@ -3294,6 +3351,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   ★2026-09-04 정정: gripAnchor는 <b>0점에서 얼어붙는다</b>. 그 바람에 신전에서 안내문이
         //     중립 자리에 남아 안 보였다. → 손을 따라오는 handMid를 먼저 쓴다(양손이면 가운데).
         //
+        // ★★2026-09-07 사용자 지시 — <b>강체가 잡히면 강체에 붙는다.</b>
+        //   손을 따라오게 해 뒀더니 핸드트래킹 떨림이 그대로 글씨 떨림이 됐다.
+        //   강체는 어깨선·머리위치로 <b>사람이 직접 잡은</b> 기준이라 흔들리지 않는다.
+        //   ★자리는 강체에 완전 종속이고(머리가 숙으면 글자도 같이 넘어간다),
+        //     <b>글자가 보는 방향만</b> 시술자를 따라 돈다(아래 FaceCamera). 안 그러면
+        //     회전 90도에서 글이 뒤집혀 못 읽는다.
+        //   ★강체 전(어깨선·머리위치 단계)에는 종전대로 손을 따라간다 — 손을 보며 하는 작업이다.
+        //   ★새 스위치를 만들지 않았다. 켜고 끄는 값을 하나 더 만들면 씬에 굳는다(09-03 사고).
+        //     되돌릴 일이 생기면 이 분기를 지운다.
+        if (TryGetRigidAnchor(ReadoutRiseNow, out Vector3 rigidReadout, out Vector3 rigidUp))
+        {
+            // ★★★2026-09-07 사용자 지시 — 강체에 붙은 자리는 <b>사용자와의 거리를 재지 않는다.</b>
+            //   "그냥 축에 따라가게 하고 방향만 사용자가 볼 수 있게 회전시켜."
+            //   그래서 당김·최소거리 밀어내기를 <b>안 태운다</b>(clampToViewer: false).
+            PlaceReadout(rigidReadout, rigidUp, clampToViewer: false);
+            return;
+        }
+
         Vector3 readoutBase = readoutFollowHands && handMidValid
             ? handMid
             : (gripAnchorValid ? gripAnchor : pivot);
@@ -3303,19 +3378,58 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //
         // ★★2026-09-04 지적: "난 분명 손을 바라보는데 진행정보텍스트는 저 위쪽으로 가 있어서 안 보인다."
         //   ★손잡이는 <b>둘 다 이미 있다</b> — 오버라이드 필드를 새로 파지 않고 인스펙터에서 맞춘다.
-        //     readoutRiseOverride : 올리는 높이(m). 0.18은 높다.
+        //     readoutRise : 올리는 높이(m).
         //     readoutMinDistance  : 이보다 가까우면 시선 방향으로 밀어낸다(m). 0.55는 멀다.
-        Vector3 readoutPos = readoutBase + Vector3.up * ReadoutRiseNow;
+        // 강체 전(어깨선·머리위치)에는 기울일 강체가 없다 — 월드 수직으로 세운다.
+        // ★이 경로는 손을 따라가던 <b>종전 방식 그대로</b>다. 거기서는 최소거리가 여전히 쓸모 있다.
+        PlaceReadout(readoutBase + Vector3.up * ReadoutRiseNow, Vector3.up, clampToViewer: true);
+    }
+
+    /// <summary>
+    /// 안내문을 그 자리에 놓고 시술자를 보게 돌린다.
+    /// ★강체에 붙일 때와 손을 따라갈 때가 <b>같은 함수를 타야 한다</b> — 최소 거리 밀어내기와
+    ///   글자 방향이 두 경로에서 달라지면 "왜 여기선 안 밀려나지"가 된다(규칙 9).
+    /// </summary>
+    private void PlaceReadout(Vector3 readoutPos, Vector3 up, bool clampToViewer)
+    {
         Camera rcam = Camera.main;
-        if (rcam != null)
+        if (rcam != null && clampToViewer)
         {
-            Vector3 toReadout = readoutPos - rcam.transform.position;
-            float dist = toReadout.magnitude;
-            if (dist > 1e-3f && dist < readoutMinDistance)
-                readoutPos = rcam.transform.position + toReadout / dist * readoutMinDistance;
+            // ★★환자 머리에 가려서 시술자 쪽으로 당겨 온다(2026-09-07 지적).
+            //   ★<b>수평으로만</b> 당긴다. 시선 방향으로 당기면 카메라가 위에 있어
+            //     당길수록 아래로 내려와, 올린 만큼이 도로 깎인다.
+            if (readoutPullToViewer > 0f)
+            {
+                Vector3 flat = rcam.transform.position - readoutPos;
+                flat.y = 0f;
+                if (flat.sqrMagnitude > 1e-6f) readoutPos += flat.normalized * readoutPullToViewer;
+            }
+
+            // 너무 가까우면 초점이 안 맞아 흐리다(08-31) → 밀어낸다.
+            // ★★<b>2026-09-07 — 여기가 "고개를 들면 정보가 내려간다"의 범인이었다.</b>
+            //   종전 <c>cam.position + 방향 * 최소거리</c>는 글자를 <b>카메라 기준 구면</b>에 붙인다.
+            //   그 거리 안으로 들어오면 위치가 통째로 사용자 머리를 따라간다.
+            //   → <b>수평으로만</b> 민다. 높이는 강체가 준 값 그대로 둔다.
+            Vector3 away = readoutPos - rcam.transform.position;
+            away.y = 0f;
+            float flatDist = away.magnitude;
+            if (flatDist > 1e-3f && flatDist < readoutMinDistance)
+                readoutPos += away / flatDist * (readoutMinDistance - flatDist);
         }
         readout.transform.position = readoutPos;
-        FaceCamera(readout.transform);
+
+        // ★★좌우는 시술자를 향하고, 기울기는 강체를 따른다(2026-09-07 사용자 지시).
+        //   ★시선과 up이 거의 나란해지면 LookRotation이 무너진다 — 그때만 월드 수직으로 돌아간다.
+        if (rcam != null)
+        {
+            Vector3 fwd = readout.transform.position - rcam.transform.position;
+            if (fwd.sqrMagnitude > 1e-8f)
+            {
+                if (up.sqrMagnitude < 1e-8f) up = Vector3.up;
+                if (Mathf.Abs(Vector3.Dot(fwd.normalized, up.normalized)) > 0.99f) up = Vector3.up;
+                readout.transform.rotation = Quaternion.LookRotation(fwd, up);
+            }
+        }
     }
 
     // ---- 진행 표시 ----
@@ -3661,11 +3775,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (rigidBody == null) return;
         if (!rigidBody.gameObject.activeSelf) rigidBody.gameObject.SetActive(true);
 
-        // ★단락 평가로 묶으면 out 변수가 '확실히 할당됨'을 못 넘긴다(CS0165) — 호출을 먼저 한다.
-        Vector3 axis = AxisFor(direction);
-        bool angleOk = TryGetAngle(out _, out _, out float signed);
-        bool has = axis.sqrMagnitude > 1e-8f && angleOk;
-        Quaternion turn = has ? Quaternion.AngleAxis(signed, axis.normalized) : Quaternion.identity;
+        Quaternion turn = RigidTurn();
 
         // 밑동은 축원점에 붙어 있고, 꼭대기만 돈다 — 그게 "축은 고정, 강체만 움직임"이다.
         Vector3 baseP = rigidBase0;

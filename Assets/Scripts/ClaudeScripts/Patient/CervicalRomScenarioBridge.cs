@@ -170,6 +170,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float overpressureHeldTime;    // 압박 한계에서 버틴 시간(초). 목표는 overpressureHoldSeconds.
     private bool active;
 
+    /// <summary>
+    /// 지금 경추ROM 시나리오 안인가. <see cref="CervicalRomPracticeReadout"/>이 읽는다.
+    /// ★이게 필요한 이유 — 동반 컴포넌트는 <see cref="Awake"/>에서 <b>무조건</b> 붙는다.
+    ///   그래서 13개 술기 어디서나 살아 있다. 그리는 쪽이 스스로 "지금 ROM인가"를 물어야 한다.
+    /// </summary>
+    public bool RomScenarioActive => active;
+
     // ── 압박 기준점. 두 방식을 각각 따로 잡는다. ──
     private bool arcStarted;             // ①중점호 기준을 잡았는가
     private Vector3 arcStartArm;         // 그때의 회전 중심→손끝중점 벡터
@@ -597,11 +604,37 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             Log("실측 브리지를 붙였다(런타임).");
         }
 
-        // 실습모드에서 손 측정각을 머리 위에 띄우는 검증용 프로브(A-12). 판정에는 관여하지 않는다.
+        // 실습모드에서 손 측정각을 재 결과지 부록에 남기는 프로브(A-12). 판정에는 관여하지 않는다.
+        // ★2026-09-07부터 <b>화면에는 아무것도 안 그린다</b> — 재기만 한다.
         if (FindFirstObjectByType<CervicalRomHandAngleProbe>(FindObjectsInactive.Include) == null)
         {
             gameObject.AddComponent<CervicalRomHandAngleProbe>();
-            Log("손각도 프로브를 붙였다(런타임).");
+            Log("손각도 프로브를 붙였다(런타임, 표시 없음).");
+        }
+
+        // 실습모드의 정보 디스플레이. 실측과 같은 모양으로 방향·각도·게이지를 그린다.
+        // ★실측모드에서는 스스로 접는다 — 그쪽은 측정기가 같은 자리를 그린다.
+        // ★★<b>씬에 올려 두면 여기서 안 붙인다</b>(2026-09-07). 인스펙터로 튜닝하려면 씬에 올려야 한다 —
+        //   런타임에 붙인 것은 Play를 멈추면 사라져 <b>맞춘 값이 저장되지 않는다.</b>
+        if (FindFirstObjectByType<CervicalRomPracticeReadout>(FindObjectsInactive.Include) == null)
+        {
+            gameObject.AddComponent<CervicalRomPracticeReadout>();
+            Log("실습 정보 디스플레이를 붙였다(런타임).");
+        }
+
+        // 진행+결과를 정보패널 한 판에 합치는 물건. ★경추ROM 안에서만 작동한다(RomScenarioActive).
+        if (FindFirstObjectByType<RomProgressInResultPage>(FindObjectsInactive.Include) == null)
+        {
+            gameObject.AddComponent<RomProgressInResultPage>();
+            Log("진행+결과 통합을 붙였다(런타임).");
+        }
+
+        // 진행 패널의 Phase 칸을 굴곡·신전·측굴·회전 4개로 바꾸는 물건 (2026-09-08).
+        // ★경추ROM 안에서만 작동하고, 벗어나면 스스로 원래 3칸으로 되돌린다.
+        if (FindFirstObjectByType<RomPhaseSections>(FindObjectsInactive.Include) == null)
+        {
+            gameObject.AddComponent<RomPhaseSections>();
+            Log("단계 칸 4분할을 붙였다(런타임).");
         }
     }
 

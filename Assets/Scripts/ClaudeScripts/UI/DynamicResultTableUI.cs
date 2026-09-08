@@ -602,12 +602,15 @@ public class DynamicResultTableUI : BaseUIPanel
     /// 실제로 바꾸면 브리지가 "대상 시나리오가 아니다"라며 손을 떼고
     /// 정보패널 고정 배치도 풀린다. 그래서 보이는 이름만 갈아 끼운다.
     /// </summary>
-    private static string DisplayScenarioName(string internalName)
+    /// ★2026-09-07 — <c>public</c>으로 열었다. 정보패널 제목도 <b>같은 표를 봐야</b> 한다.
+    ///   표기를 두 군데서 따로 정하면 결과지와 제목이 서로 다른 이름을 말한다.
+    public static string DisplayScenarioName(string internalName)
     {
         if (string.IsNullOrEmpty(internalName)) return internalName;
         switch (internalName)
         {
-            case "경추ROM측정": return "ROM진단";
+            // 2026-09-07 사용자 지시: 표기는 "경추ROM진단"이다(이전 표기 "ROM진단"에서 바꿈).
+            case "경추ROM측정": return "경추ROM진단";
             default:            return internalName;
         }
     }
