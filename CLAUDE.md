@@ -143,6 +143,7 @@ CSV(`Assets/Resources/Scenarios/*.csv`) + `ScenarioConfig`(`Assets/Resources/Sce
 |---|---|
 | ★**증상 보고를 받았다**("안 나온다"·"안 움직인다"·"이상하다") | ★★**`log-first`** — 원인을 말하기 전에 **Editor.log부터 읽는다** |
 | ★**표시·판정·배선을 새로 만들거나 바꾼다** | ★**`log-first`** — 위험한 자리에 **로그를 먼저 심는다**(나중엔 늦다) |
+| ★**표시물 게이트를 켜거나 끈다**(`bool on = A && B && …`) | ★**`gate-trace`** — **항을 전부** 분해한다. 09-08에 하루 4번 **덜 풀었다** |
 | `.cs` 아무거나 | `dotnet build` + **`change-impact`** |
 | 표시물·UI·판정 | `change-impact` → ★**공유 컴포넌트로 나오면 다른 술기 하나를 Play 목록에 넣어 달라고 말한다** |
 | CSV `textInstruction` | ★**그 자리에서 `narration-gen`** (텍스트만 고치고 넘어가지 않는다) |
@@ -195,6 +196,7 @@ CSV(`Assets/Resources/Scenarios/*.csv`) + `ScenarioConfig`(`Assets/Resources/Sce
 | Skill | 언제 |
 |---|---|
 | `log-first` | ★★**"왜 안 되냐 / 안 나온다 / 안 움직인다"를 들었을 때 — 원인을 말하기 전에 Editor.log부터.** 기능을 추가·변경할 때 위험한 자리에 로그를 심는 틀도 여기 있다 |
+| `gate-trace` | ★**"안 보인다 / 왜 파지해야 보이냐"** — `bool on = A && B && C`를 항으로 분해해 **막는 항**을 짚는다. `log-first` 다음 순서다 (읽기 전용) |
 | `change-impact` | ★**고친 게 어디까지 번지는지** — 씬에 굳은 값·공유 컴포넌트·죽은 이벤트·낡은 나레이션 (읽기 전용) |
 | `unity-scene-audit` | 씬 배선 확인, 오브젝트/컴포넌트/참조 조회 (읽기 전용) |
 | `rom-frame-verify` | 경추ROM 실측 각도기 부호 검증 — 축이 뒤집혔다 싶으면 **여기부터** (읽기 전용) |
