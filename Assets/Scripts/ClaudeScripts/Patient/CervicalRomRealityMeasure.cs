@@ -82,13 +82,6 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
              "0 이하면 이 검사를 끈다(종전 동작).")]
     [SerializeField] private float holdAngleTolerance = 1.5f;
 
-    [Tooltip("★0보다 크면 위 holdSeconds 대신 이 값을 쓴다. 0이면 씬 값을 그대로 쓴다.\n\n" +
-             "2026-08-31 사용자: '압박에서 1.5초 하니까 중간에 그냥 인식해버린다'.\n" +
-             "압박은 밀어 가는 도중에도 손이 잠깐 느려지는 구간이 있어서 1.5초로는 끝점 전에 잡힌다.\n" +
-             "★holdSeconds는 씬에 직렬화돼 있어 코드 기본값이 안 먹는다(규칙 7). " +
-             "이 필드는 신규라 먹으므로 인스펙터를 안 거치고 바꿀 수 있다.")]
-    [SerializeField] private float holdSecondsOverride = 2.5f;
-
     // ── 간소 게이팅 (2026-09-03 사용자 지시) ─────────────────────────────
     // "홀드 시간이 너무 길어서 한 번 튀면 몇 초를 기다려야 해 과정이 안 끝나고 늘어진다.
     //  사용자는 '이거 왜 안 되지'가 돼 버린다. 조금은 정확도가 밀리더라도 간결하게."
@@ -97,24 +90,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     //   ①유지 시간 2.5초가 길다.
     //   ②★<b>각도 앵커에서 벗어나면 타이머를 통째로 0으로 죽인다.</b> 속도 쪽은 holdDecayRate로
     //     깎기만 하는데 각도 쪽만 0이라, 엄지가 한 번 구르면(신전에서 특히) 2.5초를 처음부터 다시 센다.
-    // ★전부 신규 필드라 씬 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
-    //   기존 holdSecondsOverride·holdAngleTolerance는 씬에 굳어 있어 못 건드린다.
-
-    [Header("=== 간소 게이팅 (2026-09-03) ===")]
-    [Tooltip("★켜면 아래 두 값이 holdSecondsOverride·holdAngleTolerance를 대신한다.\n" +
-             "끄면 종전 값(2.5초 × 1.5도)으로 돌아간다.")]
-    [SerializeField] private bool simplifiedGating = true;
-
-    [Tooltip("간소 모드의 정지 유지 시간(초). 종전 2.5초.\n" +
-             "★2026-09-03 재조정: 1.2초는 <b>너무 짧았다</b> — '이동하는 중에 주춤하는 사이에 찍혀버려'.\n" +
-             "  1.8초. 늘어짐은 시간이 아니라 아래 유예·감쇠가 막는다.")]
-    [SerializeField] private float simpleHoldSeconds = 1.8f;
-
-    [Tooltip("간소 모드의 각도 여유(도). 종전 1.5도.\n" +
-             "★이게 '천천히 지나가는 것'과 '멈춘 것'을 가르는 값이다 — 너무 키우면\n" +
-             "  주춤하는 사이에 찍힌다. 3.5도는 헐거웠다(2026-09-03) → 2.5도.\n" +
-             "  엄지가 구르며 생기는 2~3도 흔들림은 <b>여유가 아니라 아래 유예</b>가 흡수한다.")]
-    [SerializeField] private float simpleHoldAngleTolerance = 2.5f;
+    //
+    // ★★2026-09-09 손잡이를 하나로 합쳤다. 종전에는 한 값에 손잡이가 <b>셋</b>이었다 —
+    //   `simplifiedGating ? simpleHoldSeconds : (holdSecondsOverride > 0 ? … : holdSeconds)`.
+    //   셋 다 씬에 굳어, 어느 것이 이기는지 매번 확인해야 했다.
+    //   원인은 "씬 값을 못 고쳐서 신규 필드를 팠다"였는데, 이제 에디터를 통해 씬 값을 직접 넣을 수 있다.
+    //   합칠 때 <b>그때 실제로 먹던 값</b>(1.6초 · 2.5도)을 holdSeconds·holdAngleTolerance에 넣었으므로
+    //   동작은 그대로다.
 
     [Tooltip("각도 앵커에서 벗어나도 이만큼은 봐준다(초). 한 프레임 튐으로 타이머를 잃지 않게 한다.\n" +
              "★튐 흡수는 <b>여기가</b> 한다. 여유(각도)를 키우는 것과 역할이 다르다 —\n" +
@@ -123,14 +105,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [SerializeField] private float holdAngleGraceSeconds = 0.25f;
 
     /// <summary>실제로 쓸 정지 유지 시간.</summary>
-    private float HoldSeconds => simplifiedGating && simpleHoldSeconds > 0f
-        ? simpleHoldSeconds
-        : (holdSecondsOverride > 0f ? holdSecondsOverride : holdSeconds);
+    private float HoldSeconds => holdSeconds;
 
     /// <summary>실제로 쓸 각도 여유(도).</summary>
-    private float HoldAngleToleranceNow => simplifiedGating && simpleHoldAngleTolerance > 0f
-        ? simpleHoldAngleTolerance
-        : holdAngleTolerance;
+    private float HoldAngleToleranceNow => holdAngleTolerance;
 
     [Tooltip("정지로 인정할 손 속도(m/s). ★씬에 값이 있으니 인스펙터 값이 먹는다.")]
     [SerializeField] private float holdSpeedThreshold = 0.03f;
@@ -167,13 +145,6 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("측두부 파지(관상면·횡단면)의 양손 간격 허용 범위(m). 사람 머리 좌우 폭 대역이다.")]
     [SerializeField] private Vector2 temporalGripRange = new Vector2(0.11f, 0.22f);
 
-    [Tooltip("★양손 간격 <b>하한</b>을 이 값까지 내린다(m). 0 이하면 위 범위를 그대로 쓴다.\n\n" +
-             "2026-08-31 실측: 이마·후두를 감싸 잡으면 엄지·검지 중점이 안쪽으로 들어와 " +
-             "머리 앞뒤 20cm가 <b>12~16cm로 읽힌다</b>. 씬에 박힌 시상면 하한 0.14가 그 대역 한가운데라 " +
-             "정상 파지가 여러 번 거절됐다('한 번에 안 되고 손을 좀 트니까 됐다'의 정체).\n\n" +
-             "★<b>내리기만 한다</b>(Mathf.Min). 측두 하한은 이미 0.11이라 이 값이 그걸 끌어올리지 않는다.\n" +
-             "★위 두 Vector2는 씬에 직렬화돼 있어 코드에서 못 바꾼다(규칙 7). 이 필드는 신규라 먹는다.")]
-    [SerializeField] private float gripSpanMinOverride = 0.12f;
 
     // ★새 필드라 씬에 값이 없다 → 코드 기본값이 그대로 먹는다(규칙 7).
     //   ★일부러 <b>넓게</b> 잡았다. 첫 판은 "얼마나 나오나"를 재는 판이다 —
@@ -941,6 +912,12 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private int trackingRelocks;     // 너무 오래 거절해 새 위치를 받아들인 횟수
     private int holdResets;          // 흔들려서 홀드가 깎여 0까지 간 횟수
     private float lostTotal;         // 손을 못 읽은 총 시간(초)
+
+    // ★멈춤 진단(2026-09-09). 위 계수기들이 <b>0인데도</b> 측정이 안 되는 경우가 있어 신설했다.
+    //   09-09 신전이 그랬다 — 버린 프레임 0인데 각이 10초 넘게 얼어붙어 있었다.
+    private float staleRun;          // 각이 얼어붙어 있던 시간(초)
+    private float slipMaxRun;        // 파지 간격이 중립에서 벗어난 최대치(부호 있는 비율)
+    private int neutralRefreshRun;   // 0점을 조용히 다시 잡은 횟수
     private bool relockedThisFrame;         // 이 프레임에 손이 다시 잡혔는가 - 그 프레임은 속도를 안 잰다
     private float peakAngle;                // 이 단계에서 본 최대 각 - minAngleToMark 판정용
     private float angleExcursionSeconds;    // 각도 앵커를 벗어나 있은 시간(초). 유예 판정용.
@@ -968,6 +945,17 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         public bool passiveSkipped;   // 압박을 안 하고 중립으로 돌아왔다
         public int gripReleases;      // 이 방향에서 손을 뗀 횟수
         public float lostSeconds;
+
+        // ── 멈춤 진단 (2026-09-09 신설) ────────────────────────────────
+        // ★★<b>왜 만들었나</b>: 09-09에 기기에서 신전이 64도에 <b>10초 넘게 얼어붙었는데</b>,
+        //   결과 CSV의 어느 칸에도 그 흔적이 없었다. 버린 프레임 0 · 손 유실 0.0초라
+        //   나는 "손 문제가 아니다"라고 <b>반대로 결론</b>냈다. 영상을 보고서야 틀린 걸 알았다.
+        //   릴리스 빌드는 ChunaLogger가 통째로 잘리고(Conditional) 화면 진단도 꺼져 있어,
+        //   <b>CSV가 유일한 통로</b>다. 그런데 그 통로에 이 신호가 없었다.
+        // ★셋 다 <b>표시 여부와 무관하게</b> 쌓는다. 화면에서 감춘 것과 기록하지 않는 것은 다르다.
+        public float staleSeconds;      // 각이 얼어붙어 있던 시간(믿을 손이 없어 값을 갱신 못 함)
+        public float slipMaxPercent;    // 파지 간격이 중립에서 벗어난 최대치(%). 부호 있음
+        public int neutralRefreshes;    // 0점을 조용히 다시 잡은 횟수
     }
     private readonly Result[] results = new Result[7];
 
@@ -1496,6 +1484,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         if (!IsGripPlausible(l, r, 0f, out _)) return;
 
         refreshCooldown = 0.5f;
+        neutralRefreshRun++;   // ★조용히 하더라도 <b>세기는 센다</b>(2026-09-09)
 
         radL0 = l - AnglePivotNow;
         radR0 = r - AnglePivotNow;
@@ -1554,10 +1543,38 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         return forLeft ? leftShare : 1f - leftShare;
     }
 
+    /// <summary>
+    /// 멈춤 진단을 쌓는다 — <b>화면에 안 띄워도 기록은 남긴다</b>(2026-09-09 신설).
+    /// ★<c>slipTolerance</c>·<c>showSecondaryInfo</c>를 꺼도 <b>여기는 계속 센다.</b>
+    ///   감추는 것과 안 재는 것은 다르다. 09-09에 그 둘을 섞어서 원인을 반대로 짚었다.
+    /// </summary>
+    private void TickStallDiagnostics(float dt)
+    {
+        if (!neutralReady) return;
+
+        // ①각이 얼어붙어 있던 시간. 믿을 손이 없어 값을 갱신 못 하는 상태다.
+        if (AngleStale) staleRun += dt;
+
+        // ②파지 간격이 중립에서 얼마나 벗어났나. ★부호를 살린다 —
+        //   좁아진 것(−)과 벌어진 것(+)은 원인이 다르다. 절대값이 큰 쪽을 남긴다.
+        if (vNowValid && len0 > 1e-4f)
+        {
+            float slip = vNow.magnitude / len0 - 1f;
+            if (Mathf.Abs(slip) > Mathf.Abs(slipMaxRun)) slipMaxRun = slip;
+        }
+    }
+
     /// <summary>파지가 미끄러졌는가 - 머리가 강체라 양손 거리는 보존돼야 한다.</summary>
     public bool IsSlipping(out float ratio)
     {
         ratio = 1f;
+        // ★★2026-09-09 사용자 지시로 <b>끌 수 있게</b> 만든다. "파지 미끄러짐은 꺼."
+        //   이유: 처음에 제대로 잡은 뒤 <b>환자 머리가 움직여</b> 손이 미끄러지거나 틀어지는 건
+        //   시술자가 어쩔 수 없는 것이라, 경고로 띄워 봐야 오해만 만든다.
+        //   ★종전에는 끄는 값이 없었다 — 0을 넣으면 오히려 <b>항상</b> 걸렸다(`> 0`이라).
+        //     다른 필드들과 같은 규약(`0이면 검사 안 함`)으로 맞춘다.
+        //   ★이건 <b>표시 전용</b>이다. 껐다고 측정·판정이 달라지지 않는다(쓰는 곳은 `:3260` 하나뿐).
+        if (slipTolerance <= 0f) return false;
         if (!neutralReady || !vNowValid || len0 < 1e-4f) return false;
         ratio = vNow.magnitude / len0;
         return Mathf.Abs(ratio - 1f) > slipTolerance;
@@ -1777,7 +1794,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     //   그래서 확정 뒤에도 파지가 풀리면 0점을 무효화한다. 잘못 잡았으면 손을 떼고
     //   다시 잡는 게 자연스러운 동작이고, 그 동작이 그대로 복구 신호가 된다.
 
-    /// <summary>지금 이 방향에 맞는 양손 간격 범위. 하한은 <see cref="gripSpanMinOverride"/>까지 내려간다.</summary>
+    /// <summary>지금 이 방향에 맞는 양손 간격 범위.</summary>
     private Vector2 GripSpanRange(CervicalRomDriver.Direction d)
     {
         // ★★엄지 단독이면 <b>다른 범위</b>를 쓴다(2026-09-02).
@@ -1789,9 +1806,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   화면의 거절 문구가 실제 cm를 찍어 주므로 그게 곧 자 노릇을 한다.
         if (gripJudge != null && gripJudge.IsThumbOnly) return thumbOnlySpanRange;
 
-        Vector2 r = IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
-        if (gripSpanMinOverride > 0f) r.x = Mathf.Min(r.x, gripSpanMinOverride);
-        return r;
+        // ★2026-09-09: 하한을 내리던 gripSpanMinOverride를 걷었다. 씬 값이 이미
+        //   시상 0.12 · 측두 0.11이라 Min(하한, 0.12)가 <b>아무것도 안 바꾸고</b> 있었다.
+        //   하한을 더 내려야 하면 아래 두 Vector2를 인스펙터에서 직접 고친다.
+        return IsSagittalGrip(d) ? sagittalGripRange : temporalGripRange;
     }
 
     /// <summary>
@@ -1967,7 +1985,13 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     // ★간결 표시에서는 A_2(실습 각도기를 실측으로 옮긴 것)도 끈다(2026-09-04 회의).
     //   usePracticeGauge는 씬에 1로 굳어 있어 코드 기본값으로는 못 끈다(규칙 7) → 여기서 덮는다.
     //   ★브리지가 이 값을 보고 각도기를 끼울지 말지 정하므로, 여기 하나만 막으면 A_2가 안 뜬다.
-    public bool UsePracticeGauge => usePracticeGauge && !minimalDisplay;
+    // ★★2026-09-09 사용자 지시로 <b>위 문단을 뒤집는다.</b> "평가에서도 A_2가 다시 나오게 해라."
+    //   09-04 회의의 "정보를 줄이자"로 걸었던 `&& !minimalDisplay`를 걷는다 —
+    //   이제 씬의 usePracticeGauge를 그대로 따른다(씬 값 1).
+    //   ★A_2를 켜도 B(실측 전용 반원)는 이 값 때문에 꺼지지 않는다. UpdateGauge는 09-03부터
+    //     `!UsePracticeGauge`를 안 본다. B는 <b>showGauge</b>로 따로 끈다.
+    //   ★다시 접고 싶으면 이 항을 되살리지 말고 <b>인스펙터에서 usePracticeGauge를 끈다.</b>
+    public bool UsePracticeGauge => usePracticeGauge;
 
     [Tooltip("실습 각도기를 파지 지점에서 이만큼 <b>위로</b> 올린다(m).\n" +
              "★둘을 같이 띄우면 같은 자리에 겹친다 — 실측 각도기는 파지 지점,\n" +
@@ -1985,13 +2009,10 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     private Vector3 fixedGaugeAnchor;
     private bool fixedGaugeAnchorValid;
 
-    [Tooltip("★<b>실측 각도기 반지름 덮어쓰기</b>(m). 0이면 씬의 gaugeRadius를 쓴다.\n" +
-             "gaugeRadius는 씬에 0.3이 굳어 있어 코드로 못 바꾼다(규칙 7) — 그래서 신규 필드를 둔다.\n" +
-             "2026-09-03 사용자: '실측용 각도기 반지름 줄여'.")]
-    [SerializeField] private float gaugeRadiusOverride = 0.20f;
 
     /// <summary>실제로 쓸 실측 각도기 반지름.</summary>
-    private float GaugeRadiusNow => gaugeRadiusOverride > 0f ? gaugeRadiusOverride : gaugeRadius;
+    // ★2026-09-09: gaugeRadiusOverride를 걷었다. 씬 값이 이미 0.2로 같아 덮을 것이 없었다.
+    private float GaugeRadiusNow => gaugeRadius;
 
     [Tooltip("★<b>B(실측 전용 각도기)</b>를 파지 위치에서 이만큼 <b>내린다</b>(m). 목 부근이 목표다.\n" +
              "2026-09-03 사용자: '양손 파지 위치에서 조금 아래 목 부근으로 내려서\n" +
@@ -2551,9 +2572,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         Vector3 nAxis = AxisFor(direction);
         if (minMeasureRadius > 0f && nAxis.sqrMagnitude > 1e-8f)
         {
-            float rL = Vector3.ProjectOnPlane(radL0, nAxis).magnitude;
-            float rR = Vector3.ProjectOnPlane(radR0, nAxis).magnitude;
-            float rBest = Mathf.Max(rL, rR);
+            // ★★<b>재는 값으로 막는다</b>(2026-09-09 수정). 종전에는 회전도 <b>반경</b>으로 막았는데,
+            //   회전은 반경이 아니라 <b>T라인</b>(양손을 잇는 선)으로 잰다(UpdateAngleCache의 회전 분기).
+            //   즉 <b>쓰지도 않는 값으로 막고 있었다.</b>
+            //   09-09 로그: `우회전 못 잽니다 — 측정 반경 4.4cm (최소 4.5cm)`.
+            //   1mm 차이로 0점이 거부됐는데, 정작 그 4.4cm는 회전 각 계산에 안 들어가는 값이다.
+            //   ★사용자: "손이 잘 보이게 잡으려면 좁게도 잡힌다" — 좁은 파지는 오류가 아니라 전제다.
+            //     그러면 막는 기준은 <b>그 방법이 실제로 쓰는 길이</b>여야 한다.
+            float rBest;
+            if (IsRotationDir(direction))
+            {
+                // 회전: T라인의 면내 성분. 파지폭(측두 간격)이 그대로 지렛대가 된다.
+                rBest = Vector3.ProjectOnPlane(v0, nAxis).magnitude;
+            }
+            else
+            {
+                float rL = Vector3.ProjectOnPlane(radL0, nAxis).magnitude;
+                float rR = Vector3.ProjectOnPlane(radR0, nAxis).magnitude;
+                rBest = Mathf.Max(rL, rR);
+            }
             if (rBest < minMeasureRadius)
             {
                 neutralReady = false;
@@ -2674,16 +2711,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             results[i].rejectedFrames += rejectedFrames;
             results[i].relocks += trackingRelocks;
             results[i].lostSeconds += lostTotal;
+
+            // ★멈춤 진단(2026-09-09). 미끄러짐은 <b>절대값이 큰 쪽</b>을 남긴다.
+            results[i].staleSeconds += staleRun;
+            results[i].neutralRefreshes += neutralRefreshRun;
+            if (Mathf.Abs(slipMaxRun) > Mathf.Abs(results[i].slipMaxPercent))
+                results[i].slipMaxPercent = slipMaxRun * 100f;
         }
 
         if (showDebugLogs && any)
         {
             ChunaLogger.Log($"<color=cyan>[실측/{Label(direction)}] {why} · " +
                             $"홀드 리셋 {holdResets}회 · 튐 버림 {rejectedFrames}프레임 · " +
-                            $"재잠금 {trackingRelocks}회 · 손 유실 {lostTotal:F1}초</color>");
+                            $"재잠금 {trackingRelocks}회 · 손 유실 {lostTotal:F1}초 · " +
+                            $"각 얼어붙음 {staleRun:F1}초 · 미끄러짐 최대 {slipMaxRun * 100f:+0;-0}% · " +
+                            $"0점 재잡기 {neutralRefreshRun}회</color>");
         }
 
         holdResets = 0; rejectedFrames = 0; trackingRelocks = 0; lostTotal = 0f;
+        staleRun = 0f; slipMaxRun = 0f; neutralRefreshRun = 0;
     }
 
     /// <summary>
@@ -2766,6 +2812,25 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         rejectedFrameCount = r.rejectedFrames;
         relockCount = r.relocks;
         lostTrackingSeconds = r.lostSeconds;
+    }
+
+    /// <summary>
+    /// 멈춤 진단을 꺼낸다(2026-09-09 신설). ★기존 GetDiagnostics가 <b>0인데도</b>
+    /// 측정이 안 되던 경우를 가르려고 만들었다 — 09-09 신전이 그랬다.
+    /// </summary>
+    public void GetStallDiagnostics(CervicalRomDriver.Direction d,
+                                    out float staleSeconds, out float slipMaxPercent,
+                                    out int neutralRefreshes)
+    {
+        staleSeconds = 0f; slipMaxPercent = 0f; neutralRefreshes = 0;
+
+        int i = (int)d;
+        if (i <= 0 || i >= results.Length) return;
+
+        Result r = results[i];
+        staleSeconds = r.staleSeconds;
+        slipMaxPercent = r.slipMaxPercent;
+        neutralRefreshes = r.neutralRefreshes;
     }
 
     [ContextMenu("5 - 다음 방향")]
@@ -2927,6 +2992,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
         UpdateAngleCache(frameDt);   // ★각은 프레임당 한 번 계산한다(스무딩·신뢰도 포함)
         TickNeutralRefresh(frameDt, has, l, r);
+        TickStallDiagnostics(frameDt);
 
         UpdateGripRelease(usable, l, r);
         UpdateHold(usable, l, r);
@@ -2964,14 +3030,21 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
             return;
         }
 
-        // ★★<b>직전 값을 붙들고 있는 동안에는 확정하지 않는다</b>(2026-09-04).
-        //   각을 안 버리는 것은 <b>바늘이 중립으로 접히지 않게</b> 하려는 것이지,
-        //   그 값으로 기록하려는 게 아니다. 0으로 죽이지 않고 깎기만 한다.
-        if (AngleStale)
-        {
-            holdTimer = Mathf.Max(0f, holdTimer - dt * holdDecayRate);
-            return;
-        }
+        // ★★<b>2026-09-09 — 위 09-04 판단을 뒤집는다.</b>
+        //   종전: 각이 얼어붙은 동안(AngleStale) 유지 타이머를 <b>깎고 return</b>했다.
+        //         "못 믿는 값으로 기록하지 않는다"는 뜻이었다.
+        //   ★그런데 그게 <b>확정을 원리적으로 불가능</b>하게 만들었다. 09-09 기기 테스트에서
+        //     신전이 64도에 10초 넘게 멈췄다 — 시술자는 손을 고정하고 있었는데
+        //     타이머는 쌓이기는커녕 깎이고 있었다. 게다가 '믿을 수 없음' 표시는
+        //     showSecondaryInfo가 꺼져 있어 <b>막혔다는 사실조차 안 보였다.</b>
+        //   ★사용자 지시: "걸려서 못 재는 것보단 어긋나도 일단 측정되는 게 중요해."
+        //     → 막지 않는다. 얼어붙은 동안에도 <b>마지막 좋은 값</b>으로 그대로 진행한다.
+        //   ★교환 조건을 분명히 적는다: 값이 조금 어긋난 채 확정될 수 있다.
+        //     그 대신 <b>영영 안 끝나는 일이 없다.</b> 얼어붙은 시간은 결과 CSV의
+        //     <c>StaleSeconds</c>에 그대로 남으므로, 나중에 그 측정이 얼마나 미심쩍은지 판단할 수 있다.
+        //   ★되돌리려면 아래 두 줄을 되살린다:
+        //       holdTimer = Mathf.Max(0f, holdTimer - dt * holdDecayRate);
+        //       return;
 
         // ★손을 못 읽는 동안(가림·튐 포함) 타이머를 <b>얼린다</b>. 종전에는 즉시 0이었다.
         if (!has)
@@ -3356,7 +3429,16 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         //   다음에 뭘 해야 하는지를 그대로 알려 주는 줄이라, 평가에서는 힌트다.
         //   ★홀드 게이지·방향 목록은 남긴다 — 그건 절차가 아니라 <b>지금 먹히고 있나</b>를 보는 것이다.
         //     정지로만 넘어가는 구조라 게이지가 없으면 왜 안 넘어가는지 알 수가 없다.
-        if (showProgress && !HideHints && showSecondaryInfo)
+        // ★★<b>2026-09-09 위 판단을 뒤집는다</b>(컨펌 결과 — 사용자 전달).
+        //   "평가모드가 말만 평가모드고, 복잡한 정보를 최소화한 <b>실측 가이드</b> 형태로 가자.
+        //    능동·압박 안내와 지금 어느 단계를 재고 있는지는 알려 줘야 한다.
+        //    미끄러짐·신뢰없음 같은 건 빼고."
+        //   → 사슬은 <b>힌트가 아니라 절차 안내</b>로 재분류한다. 빼는 것은 <b>내부 진단</b>이지
+        //     "지금 뭘 재고 있나"가 아니다. 그 둘을 09-03에 같이 묶었던 것이 틀렸다.
+        //   ★그래서 HideHints·showSecondaryInfo 게이트를 걷는다.
+        //     showSecondaryInfo는 능동·수동 숫자와 테스트 줄을 접는 스위치라, 여기 묶여 있으면
+        //     그걸 끄는 순간 사슬까지 사라진다 — 한 스위치가 두 가지를 하고 있었다.
+        if (showProgress)
         {
             sb.Append("<size=70%>");
             AppendStageChain();

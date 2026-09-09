@@ -751,6 +751,8 @@ public class TrainingResultTracker : MonoBehaviour
         float lostSeconds = 0f;
         bool passiveSkipped = false;
         int gripReleases = 0;
+        float staleSeconds = 0f, slipMaxPercent = 0f;
+        int neutralRefreshes = 0;
 
         if (useMeasure)
         {
@@ -758,6 +760,7 @@ public class TrainingResultTracker : MonoBehaviour
             measure.GetDiagnostics(d, out holdResets, out rejectedFrames, out relocks, out lostSeconds);
             passiveSkipped = measure.WasPassiveSkipped(d);
             gripReleases = measure.GripReleasesFor(d);
+            measure.GetStallDiagnostics(d, out staleSeconds, out slipMaxPercent, out neutralRefreshes);
         }
         else
         {
@@ -780,6 +783,9 @@ public class TrainingResultTracker : MonoBehaviour
             lostSeconds = lostSeconds,
             passiveSkipped = passiveSkipped,
             gripReleases = gripReleases,
+            staleSeconds = staleSeconds,
+            slipMaxPercent = slipMaxPercent,
+            neutralRefreshes = neutralRefreshes,
         });
     }
 

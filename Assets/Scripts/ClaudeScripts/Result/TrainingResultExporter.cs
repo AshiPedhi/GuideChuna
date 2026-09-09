@@ -113,7 +113,9 @@ public class TrainingResultExporter : MonoBehaviour
         // ★뒤 2열은 <b>평가</b> 계수기다(2026-09-02). 진단 계수기와 성격이 다르다 —
         //   기계가 잘 읽었나가 아니라 사람이 절차를 밟았나이고, 감점은 이쪽만 본다.
         sb.AppendLine("SessionId,UserName,Scenario,StartTime,Plane,Direction,Reference,Active,Passive,Deficit,"
-                    + "HoldResets,RejectedFrames,Relocks,LostSeconds,PassiveSkipped,GripReleases");
+                    + "HoldResets,RejectedFrames,Relocks,LostSeconds,PassiveSkipped,GripReleases,"
+                    // ★멈춤 진단 3열(2026-09-09) — 위 계수기가 전부 0인데도 안 되던 경우를 가른다.
+                    + "StaleSeconds,SlipMaxPercent,NeutralRefreshes");
 
         foreach (var m in data.romMeasurements)
         {
@@ -134,7 +136,10 @@ public class TrainingResultExporter : MonoBehaviour
             sb.Append(m.relocks.ToString(inv)).Append(',');
             sb.Append(m.lostSeconds.ToString("F1", inv)).Append(',');
             sb.Append(m.passiveSkipped ? "1" : "0").Append(',');
-            sb.Append(m.gripReleases.ToString(inv));
+            sb.Append(m.gripReleases.ToString(inv)).Append(',');
+            sb.Append(m.staleSeconds.ToString("F1", inv)).Append(',');
+            sb.Append(m.slipMaxPercent.ToString("F0", inv)).Append(',');
+            sb.Append(m.neutralRefreshes.ToString(inv));
             sb.AppendLine();
         }
 

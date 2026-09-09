@@ -312,12 +312,17 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         ApplyDirectionFor(name);
 
         // ★압박 방향 화살표 — 실측 substep은 x.1 능동 / x.2 압박 / x.3 복귀다.
-        //   압박(x.2)에서만 켠다. 교육 브리지가 하는 것과 같은 규칙이다.
-        //   ★실측에 화살표가 더 필요하다 — 정해진 끝점이 없어서 "이 방향으로 더"가 유일한 유도다.
+        //   ★★<b>2026-09-09 사용자 지시로 실측에서는 안 켠다.</b> "A_2는 화살표 압박 표시 꺼줘."
+        //     바로 위 줄에 "실측에 화살표가 더 필요하다 — 정해진 끝점이 없어서 '이 방향으로 더'가
+        //     유일한 유도다"라고 적어 뒀었는데, 그 판단을 사용자가 되돌렸다.
+        //   ★<b>교육(실습)은 그대로다</b> — 거기는 CervicalRomScenarioBridge가 켠다.
+        //     각도기 컴포넌트는 씬에 <b>하나뿐</b>이라, 컴포넌트의 showPressArrow를 끄면
+        //     실습에서도 화살표가 사라진다. 그래서 <b>켜는 쪽을</b> 막는다.
+        //   ★끄는 것도 매 프레임 한다 — 실습에서 켠 채 실측으로 들어와도 여기서 꺼진다
+        //     (우리가 켠 것만 우리가 되돌린다는 원칙의 반대편: 우리가 안 켜는 것은 확실히 꺼 둔다).
         if (planeGauge != null && planeGauge.HasExternalSource)
         {
-            bool pressing = subNo == 2 && DirectionOf(name) != CervicalRomDriver.Direction.None;
-            planeGauge.SetPressGuide(pressing);
+            planeGauge.SetPressGuide(false);
         }
 
         // ★실측에서는 체크리스트를 안 띄운다(2026-09-01 사용자 지시).
@@ -354,7 +359,15 @@ public class CervicalRomMeasurementBridge : MonoBehaviour
         if (measuringStep)
         {
             FollowProgressRoot();
-            PushReadout();
+
+            // ★★멘트가 울리는 동안은 CSV 지시문을 <b>덮지 않는다</b>(2026-09-09 사용자 지시:
+            //   "그냥 우측굴 좌측굴 이러고 단어만 말하고 끝나잖아 — 지금 뭘 하라는 건지 알려 달라").
+            //   종전에는 매 프레임 측정값으로 덮어서, CSV 문구를 문장으로 되돌려도
+            //   <b>화면에는 한 프레임도 안 보였다.</b> 들리기만 하고 안 보이는 상태였다.
+            //   준비 단계가 이미 같은 규칙을 쓴다(아래 :366) — 재는 단계에도 똑같이 건다.
+            //   ★멘트가 끝나면 측정값으로 바뀐다. 각도·유지 게이지를 봐야 하는 시간이 훨씬 기니
+            //     읽을 시간만 벌어 주고 자리를 내주는 것이다.
+            if (!IsNarrationPlaying()) PushReadout();
         }
         else
         {

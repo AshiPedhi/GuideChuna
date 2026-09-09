@@ -45,7 +45,14 @@ public class PatientHeadPokeDetector : MonoBehaviour
     private float currentAnimationRatio = 0f;
     private float targetAnimationRatio = 0f;
     private Vector3 pokePosition;
-    private float pokeDepth;
+    // ★★<b>한 번도 대입되지 않는다</b> — 늘 0이다(CS0649, 2026-09-09 확인).
+    //   `PokeDepth`와 `OnPokeUpdated`가 이 값을 그대로 내보내므로, 되살리면
+    //   <b>깊이가 항상 0인 채로</b> 도는 것을 아무도 눈치채지 못한다.
+    //   08-24 `returnSpeed`가 똑같은 형태였고 실제 버그였다.
+    //   ★이 파일은 미사용이라(최상단 배너) 지금 채우지 않는다 — 깊이를 무엇으로 잴지
+    //     정하려면 접촉면이 필요한데, 그건 되살릴 때 설계와 함께 정해야 한다.
+    //   경고만 끄고 표시를 남긴다. <b>되살릴 때 반드시 여기부터 채운다.</b>
+    private float pokeDepth = 0f;
 
     // 이벤트
     public event Action<Handedness> OnPokeStarted;
