@@ -243,7 +243,9 @@ def find_definitions(name, prefer=None):
         # bool x = <식>;  (지역변수 · 초기값 있는 필드 둘 다 걸린다)
         for m in re.finditer(
                 r"^([ \t]*)(?:\[[^\]]*\][ \t]*)*(?:public|private|protected|internal|static|readonly|\s)*"
-                r"bool[ \t]+" + re.escape(name) + r"[ \t]*=[ \t]*([^;]+);", text, re.M):
+                # ★`=(?!>)` — 안 막으면 `bool X => expr;`(표현식 프로퍼티)까지 잡아
+                #   `> expr` 을 식으로 읽는다. 2026-09-09에 실제로 그렇게 나왔다.
+                r"bool[ \t]+" + re.escape(name) + r"[ \t]*=(?!>)[ \t]*([^;]+);", text, re.M):
             expr = " ".join(m.group(2).split())
             ln = line_of(text, m.start())
             kind = "field" if re.search(r"\[SerializeField\]|public|private static", m.group(0)) and \
