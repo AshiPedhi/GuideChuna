@@ -225,14 +225,14 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
 
     [Tooltip("압박을 생략했을 때 깎는 점수(1회당).\n" +
              "★폭을 작게 잡았다 — 점수가 낮게 나오면 거부감이 생긴다(2026-09-02 사용자).")]
-    [SerializeField] private float passiveSkipPenalty = 5f;
+    [SerializeField] private float passiveSkipPenalty = DefaultPassiveSkipPenalty;
 
     [Tooltip("파지를 놓쳐 다시 잡았을 때 깎는 점수(1회당).")]
-    [SerializeField] private float gripReleasePenalty = 2f;
+    [SerializeField] private float gripReleasePenalty = DefaultGripReleasePenalty;
 
     [Tooltip("아무리 깎여도 이 아래로는 안 내려간다.\n" +
              "★6방향을 전부 생략해도 이 점수는 남는다 — 학습자가 납득할 하한이다.")]
-    [SerializeField] private float minRomScore = 60f;
+    [SerializeField] private float minRomScore = DefaultMinRomScore;
 
     [Tooltip("양손을 어깨에 올렸다고 볼 간격(m). 사람 어깨 폭 대역이다.")]
     [SerializeField] private Vector2 shoulderSpanRange = new Vector2(0.28f, 0.55f);
@@ -738,7 +738,7 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
         rigidReady = true;
 
         Mark($"머리 위치 고정 - 측두 간격 {span * 100f:F0}cm · 회전 중심은 {neckDropFromHead * 100f:F0}cm 아래. " +
-             "이제 시상면 파지로 가세요.");
+             "이제 환자 측면에서 파지하세요.");   // ★단면 용어는 말하지 않는다(2026-09-11 사용자 지시)
         ChunaLogger.Log($"<color=cyan>[실측] 머리 위치 — 중심 {headCenter} · 축원점 {axisOrigin} " +
                         $"· 기둥 높이 {(rigidTop0.y - rigidBase0.y) * 100f:F0}cm</color>");
     }
@@ -2785,14 +2785,24 @@ public class CervicalRomRealityMeasure : MonoBehaviour, ICervicalRomGaugeSource
     ///   학생들이 반발하기도 하고 은근 민감한 영역이라 최대한 거부감은 없게 하고 싶어").
     ///   기본값이면 6방향을 전부 생략해도 100 − 30 = 70점이고, 하한 60 아래로는 안 내려간다.
     /// </summary>
-    public float RomScore
-    {
-        get
-        {
-            float s = 100f - PassiveSkipCount * passiveSkipPenalty - GripReleaseCount * gripReleasePenalty;
-            return Mathf.Clamp(s, minRomScore, 100f);
-        }
-    }
+    public float RomScore => ScoreFor(PassiveSkipCount, GripReleaseCount);
+
+    /// <summary>
+    /// 같은 규칙·같은 감점 폭으로 <b>다른 계수</b>를 채점한다(2026-09-11).
+    /// ★가상환자 평가(<see cref="CervicalRomScenarioBridge"/>)가 여기서 감점 폭을 빌려 간다 —
+    ///   손잡이를 둘로 만들지 않으려고. 감점 폭을 바꾸면 실측·가상 평가가 같이 바뀐다.
+    /// </summary>
+    public float ScoreFor(int passiveSkips, int gripReleases)
+        => ComputeRomScore(passiveSkips, gripReleases, passiveSkipPenalty, gripReleasePenalty, minRomScore);
+
+    public const float DefaultPassiveSkipPenalty = 5f;
+    public const float DefaultGripReleasePenalty = 2f;
+    public const float DefaultMinRomScore = 60f;
+
+    /// <summary>ROM 절차 점수 공식. 측정기가 씬에 없을 때도 같은 식을 쓰게 밖에 연다.</summary>
+    public static float ComputeRomScore(int passiveSkips, int gripReleases,
+                                        float skipPenalty, float releasePenalty, float minScore)
+        => Mathf.Clamp(100f - passiveSkips * skipPenalty - gripReleases * releasePenalty, minScore, 100f);
 
     /// <summary>
     /// 그 방향의 진단 계수기. 각도가 아니라 <b>왜 오래 걸렸는지</b>를 담는다.

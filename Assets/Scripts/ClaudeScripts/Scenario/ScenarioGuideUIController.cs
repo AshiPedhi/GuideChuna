@@ -580,9 +580,21 @@ public class ScenarioGuideUIController : MonoBehaviour
             case "자세준비": return "자세를 준비하세요.";
             case "파지": return "파지하세요.";
             // 경추ROM은 면 이름을 붙여 통일했다(2026-08-26). 없으면 default로 빠져 화면이 빈다.
-            case "시상면 파지": return "파지하세요.";
-            case "관상면 파지": return "파지하세요.";
-            case "횡단면 파지": return "파지하세요.";
+            // ★2026-09-11 사용자 지시: "단면 말하는 거 다 빼 줘. 직관적으로 — 환자 측면·환자 뒷면 이런 식으로.
+            //   방향은 굴곡·신전·회전·측굴 같은 교과서 명칭을 써야 해." → 서는 자리로 말한다.
+            //   (stepName은 판정 키라 그대로 둔다 — 규칙 8. 바꾸는 건 읽히는 문장뿐이다.)
+            case "시상면 파지": return "환자 측면에서 파지하세요.";
+            case "관상면 파지": return "환자 뒷면에서 파지하세요.";
+            case "횡단면 파지": return "환자 뒷면에서 파지하세요.";
+
+            // ── 경추ROM 가상환자 평가 (2026-09-11 신설) ──
+            //   ★09-10 회의로 [평가]가 가상환자 대상이 되면서 이 경로가 <b>처음</b> 열렸다
+            //     (08-31~09-10엔 [평가]가 곧 실측이라 여기를 안 탔다). 없으면 화면이 빈다.
+            //   ★방향 6종은 아래 규칙에서 처리한다.
+            case "자세정렬": return "시작 자세를 정렬하세요.";
+            case "시상면평가": return "굴곡·신전 결과를 기록하세요.";
+            case "관상면평가": return "측굴 결과를 기록하세요.";
+            case "횡단면평가": return "회전 결과를 기록하세요.";
             case "견착": return "견착하세요.";
             case "교정": return "교정하세요.";
             case "교정·호흡": return "호흡에 맞춰 교정하세요.";
@@ -595,6 +607,17 @@ public class ScenarioGuideUIController : MonoBehaviour
 
         // 경추ROM 측정 6종(굴곡측정·신전측정·좌우 측굴/회전측정) — 규칙으로 처리한다.
         string t = stepName.Trim();
+
+        // 경추ROM 방향 6종(2026-09-11). ★압박 단계도 <b>같은 문장</b>을 쓴다 —
+        //   평가에서 압박은 자율이다(실측 09-02 규칙을 옮겼다). '압박하세요'라고 말하면 수행 방법을 알려 주는 것이고,
+        //   빈칸으로 두면 막힌 건지 진행 중인지 구분이 안 된다(08-18 지적). 방향 전체가 한 '진단' 과제다.
+        string romDir = t.EndsWith("압박") ? t.Substring(0, t.Length - 2) : t;
+        switch (romDir)
+        {
+            case "굴곡": case "신전": case "우측굴": case "좌측굴": case "우회전": case "좌회전":
+                return $"{romDir}을 진단하세요.";
+        }
+
         if (t.EndsWith("측정"))
         {
             string what = t.Substring(0, t.Length - 2).Replace('_', ' ').Trim();

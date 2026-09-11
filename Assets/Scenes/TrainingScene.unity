@@ -182909,6 +182909,9 @@ MonoBehaviour:
   guideToggleDebounce: 0.25
   stallButtonSeconds: 20
   stallTimeoutSeconds: 0
+  passiveSkipBackDegrees: 8
+  gripReleaseGraceSeconds: 0.35
+  scoreSource: {fileID: 0}
   progressRoot: {fileID: 483442387}
   sidePointLeft: {fileID: 1925348194}
   sidePointRight: {fileID: 2042824688}
@@ -273071,6 +273074,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 358cfbb104314934979cc0a8abf3187d, type: 2}
   - {fileID: 11400000, guid: e208a326390d40c29827ca69221756ec, type: 2}
   - {fileID: 11400000, guid: 0fa698d8666c464fb3440d92dd0db04e, type: 2}
+  - {fileID: 11400000, guid: 636a67dd82004b44b5e58b750cb373fa, type: 2}
   defaultScenarioIndex: 12
   forceDefaultIndex: 1
   showDebugLog: 1

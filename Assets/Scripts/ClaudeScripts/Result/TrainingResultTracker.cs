@@ -718,20 +718,33 @@ public class TrainingResultTracker : MonoBehaviour
         //   (측정기 쪽은 비우고 더하는 방식이라 두 번 불려도 값이 늘지 않는다.)
         if (useMeasure) measure.FlushPendingDiagnostics();
 
-        // ★ROM 평가 점수. 측정기만 이 값을 안다(교육모드 드라이버에는 절차 계수기가 없다).
+        // ★★가상환자 평가(2026-09-11). 09-10 회의로 [평가]가 가상환자 대상이 되면서 절차 계수기를
+        //   ROM 브리지가 들게 됐다. 규칙·감점 폭은 측정기와 같다. 평가로 돈 판이 아니면 null이다.
+        CervicalRomScenarioBridge romBridge = useMeasure ? null : FindFirstObjectByType<CervicalRomScenarioBridge>();
+        if (romBridge != null && !romBridge.HasEvaluationScore) romBridge = null;
+
+        // ★ROM 평가 점수. 실측은 측정기가, 가상환자 평가는 브리지가 안다.
         if (useMeasure)
         {
             resultData.romScore = measure.RomScore;
             resultData.romPassiveSkips = measure.PassiveSkipCount;
             resultData.romGripReleases = measure.GripReleaseCount;
         }
+        else if (romBridge != null)
+        {
+            resultData.romScore = romBridge.EvaluationRomScore;
+            resultData.romPassiveSkips = romBridge.EvaluationPassiveSkipCount;
+            resultData.romGripReleases = romBridge.EvaluationGripReleaseCount;
+            ChunaLogger.Log($"<color=cyan>[TrainingResultTracker] 경추ROM 가상환자 평가 점수 {resultData.romScore:F0} " +
+                            $"(압박 생략 {resultData.romPassiveSkips} · 파지 놓침 {resultData.romGripReleases})</color>");
+        }
 
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.Extension, "시상면", "신전");
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
-        AddRom(driver, measure, useMeasure, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.Extension, "시상면", "신전");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
+        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
 
         if (resultData.romMeasurements.Count > 0 && showDebugLogs)
         {
@@ -744,6 +757,7 @@ public class TrainingResultTracker : MonoBehaviour
     /// ★참고치(임상 최대각)는 어느 쪽이든 드라이버가 들고 있다 — 실측에서도 그 값을 쓴다.
     /// </summary>
     private void AddRom(CervicalRomDriver driver, CervicalRomRealityMeasure measure, bool useMeasure,
+                        CervicalRomScenarioBridge evalBridge,
                         CervicalRomDriver.Direction d, string planeName, string directionName)
     {
         float active, passive;
@@ -768,6 +782,13 @@ public class TrainingResultTracker : MonoBehaviour
             if (!m.recorded) return;   // 그 방향을 아직 안 쟀다(중도 종료 등)
             active = m.active;
             passive = m.passive;
+
+            // 가상환자 평가면 생략·놓침을 결과 행에 싣는다 — 생략은 수동 0°가 아니라 '생략'으로 적힌다.
+            if (evalBridge != null)
+            {
+                passiveSkipped = evalBridge.WasEvaluationPassiveSkipped(d);
+                gripReleases = evalBridge.EvaluationGripReleasesFor(d);
+            }
         }
 
         resultData.romMeasurements.Add(new TrainingResultData.RomMeasurement

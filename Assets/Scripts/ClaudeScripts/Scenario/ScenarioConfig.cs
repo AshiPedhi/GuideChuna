@@ -92,10 +92,11 @@ public class ScenarioConfig : ScriptableObject
     public string[] educationPhases;
 
     [Tooltip("실측 모드에서 진행할 phase 이름들. 비어있으면 이 시나리오는 실측을 지원하지 않는다.\n" +
-             "예: 경추ROM은 [시작, 실측, 종료]")]
+             "★채우면 이 시나리오는 <b>실측 전용</b>이 된다 — [실습]·[평가] 어느 쪽을 눌러도 실측으로 간다(2026-09-11).\n" +
+             "예: 경추ROM실측은 [실측, 종료]. 가상환자 경추ROM(경추ROM측정)은 비워 둔다.")]
     public string[] measurementPhases;
 
-    /// <summary>실측 모드로 진입할 수 있는 시나리오인가 (로비·정보패널에서 선택지를 띄울지 판단)</summary>
+    /// <summary>실측 전용 시나리오인가. ★2026-09-11부터 채워져 있으면 모드 버튼과 무관하게 실측이다.</summary>
     public bool SupportsMeasurementMode => measurementPhases != null && measurementPhases.Length > 0;
 
     /// <summary>

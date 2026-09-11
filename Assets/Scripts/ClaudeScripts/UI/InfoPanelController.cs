@@ -491,11 +491,23 @@ public class InfoPanelController : MonoBehaviour
 
         // ★ DifficultyManager 동기화: 평가 모드는 난이도 토글 무시하고 Evaluation 강제,
         //    실습 모드는 현재 선택된 난이도 반영 (이전엔 난이도 토글 변경 시에만 set돼서 평가모드가 동작 안 했음)
-        // ★★2026-08-31 모드 재정의 — <b>평가모드가 곧 실측</b>이다. 단, 실측을 지원하는 술기에서만.
-        //   시나리오 이름을 코드에 박지 않는다 — ScenarioConfig가 measurementPhases로
-        //   지원 여부를 이미 들고 있다. 지금 그걸 가진 config는 경추ROM측정 하나뿐이고,
-        //   나머지 12개 술기의 평가모드는 종전대로 교육 진행 + 채점이다.
-        bool useMeasurement = mode == ModeType.Evaluation && ScenarioSupportsMeasurement();
+        // ★★2026-09-11 재정의(09-10 XR-ROM 2차 회의) — <b>실측은 별도 시나리오</b>다.
+        //   종전(08-31)엔 "[평가] = 실측"이었다. 이제 measurementPhases를 가진 config(= 경추ROM실측)는
+        //   <b>어느 버튼을 눌러도</b> 실측이고, 가상환자 경추ROM(경추ROM측정)은 measurementPhases를 비워
+        //   [평가]가 다른 12개 술기처럼 교육 진행 + 채점으로 간다.
+        //   갈림길은 여전히 measurementPhases 유무 하나다 — 시나리오 이름을 코드에 박지 않는다.
+        bool useMeasurement = ScenarioSupportsMeasurement();
+
+        // ★실측이면 모드를 [평가]로 맞춘다. 결과의 Mode 열이 종전 실측 기록('평가')과 같아야
+        //   서버 쪽 집계가 갈리지 않는다. 토글 표시도 같이 맞춘다 — 안 맞추면 화면과 기록이 다른 말을 한다.
+        if (useMeasurement && mode != ModeType.Evaluation)
+        {
+            ChunaLogger.Log($"[InfoPanel] 실측 전용 시나리오 — '{mode}'를 눌렀지만 실측(평가)으로 진행한다");
+            mode = ModeType.Evaluation;
+            selectedMode = mode;
+            SetToggleWithoutNotify(practiceToggle, false);
+            SetToggleWithoutNotify(evaluationToggle, true);
+        }
 
         if (DifficultyManager.Instance != null)
         {

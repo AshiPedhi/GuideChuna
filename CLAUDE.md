@@ -79,14 +79,21 @@ dotnet build Assembly-CSharp.csproj -v q --nologo      # 약 23초, 기존 경�
     `CervicalRomHandAngleProbe`가 그렇다 — 씬에 없지만 `CervicalRomScenarioBridge`가 런타임에 붙인다.
   - ★**에디터 전용(`MenuItem`·`CustomEditor`·빌드 후처리)은 원래 참조가 안 잡힌다.** 전부 살아 있는 코드다.
 
-## 모드 정의 (2026-08-31 확정)
+## 모드 정의 (2026-08-31 확정 · 2026-09-11 개정)
 
 - **현실 모드** = 설정의 **패스스루 on/off 스위치일 뿐**이다. 환자·골격 외형은 건드리지 않는다.
   배경 오브젝트를 끄는 것만 패스스루의 일부로 남긴다(방 모델이 켜져 있으면 패스스루가 무의미하다).
   추나 베드도 그 방 모델(`배경/patient9_2020_1`) 안에 있어 함께 사라진다.
-- **ROM은 [평가]를 고르면 그게 곧 실측**이다. 별도 '실측' 모드 버튼은 폐지했다(`ModeType.Measurement` 삭제).
-  갈림길은 `ScenarioConfig.measurementPhases` 유무 하나뿐이고, 그걸 가진 건 `경추ROM측정` 하나다.
-  **시나리오 이름을 코드에 박지 않는다.**
+- ★**실측은 별도 시나리오다**(09-10 XR-ROM 2차 회의 결정). 로비 카드 idx 13 = `경추ROM실측.asset`.
+  설정에 `measurementPhases`가 있으면 **[실습]·[평가] 어느 쪽을 눌러도 실측**이다(모드는 '평가'로 기록).
+  ROM [평가]는 **가상환자 과정 평가**다 — 다른 12개 술기처럼 교육 진행 + 채점(절차 점수는 `CervicalRomScenarioBridge`).
+  - **틀렸던 것**: 08-31~09-10엔 "ROM은 [평가]를 고르면 그게 곧 실측"이었다. 그 기간 ROM의 평가 지시문·파지 나레이션이
+    비어 있었는데 아무도 그 경로를 안 타서 몰랐다(09-11 발견).
+  - ★두 설정의 `scenarioName`은 **둘 다 `경추ROM측정`**이다 — CSV 키이자 브리지들의 대상 이름이라 못 바꾼다.
+    그래서 `ScenarioWiringAuditTool`의 "scenarioName ≠ 파일명" 경고는 `경추ROM실측`에서는 의도된 것이다.
+  - 갈림길은 여전히 `ScenarioConfig.measurementPhases` 유무 하나다. **시나리오 이름을 코드에 박지 않는다.**
+- ★**ROM 안내는 단면 용어(시상면·관상면·횡단면)를 말하지 않는다**(09-11 사용자 지시). 서는 자리("환자 측면에서",
+  "환자 뒷면에서")와 교과서 방향 명칭(굴곡·신전·측굴·회전)으로 말한다. `stepName`은 판정 키라 그대로 둔다(규칙 8).
 - ★**실측 난이도는 초급 고정이다.** 실측 나레이션이 `Beginner`·`Intermediate`에만 있고
   `Advanced`·`Evaluation`에는 **0개**라, 평가 난이도로 두면 절차 안내가 통째로 무음이 된다.
 - 실측 진입/이탈은 `CervicalRomMeasurementBridge` **한 곳**에서 대칭으로 처리한다.

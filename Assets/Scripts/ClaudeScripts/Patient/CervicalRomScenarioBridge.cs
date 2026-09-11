@@ -87,6 +87,23 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "★0이면 자동 진행하지 않는다(기본값). 위의 '다음' 버튼으로만 넘어간다.")]
     [SerializeField] private float stallTimeoutSeconds = 0f;
 
+    [Header("=== 평가 채점 (2026-09-11, 가상환자 평가) ===")]
+    // ★09-10 XR-ROM 2차 회의로 [평가]가 가상환자 대상이 됐다(실측은 별도 시나리오로 분리).
+    //   실측의 절차 점수(09-02)를 그대로 옮긴다 — 압박 생략·파지 놓침만 깎고 각도 값은 점수에 안 넣는다.
+    //   감점 폭은 실측 측정기의 인스펙터 값을 같이 쓴다(scoreSource) — 손잡이를 둘로 만들지 않는다.
+    // ★전부 새 필드라 씬에 값이 없다 → 코드 기본값이 먹는다(규칙 7).
+    [Tooltip("평가에서 압박 유지 중 손을 중립 쪽으로 이만큼(도) 되돌리면 '압박 생략'으로 보고 복귀로 넘긴다.\n" +
+             "★실측의 '압박 안 하고 중립으로 돌아오면 생략·감점'(09-02)을 가상환자로 옮긴 것이다. 0이면 끈다.\n" +
+             "손 떨림(08-25 로그 ±3° 안팎)보다 충분히 커야 한다.")]
+    [SerializeField] private float passiveSkipBackDegrees = 8f;
+
+    [Tooltip("평가에서 파지가 이 시간(초) 이상 풀려 있어야 '파지 놓침' 1회로 센다. 트래킹이 한 프레임 튀는 건 안 센다.\n" +
+             "실측 측정기 releaseGraceSeconds의 기본값과 같다.")]
+    [SerializeField] private float gripReleaseGraceSeconds = 0.35f;
+
+    [Tooltip("감점 폭(압박 생략·파지 놓침·하한)을 빌려 올 실측 측정기. 비우면 씬에서 찾고, 없으면 기본값(5·2·60)을 쓴다.")]
+    [SerializeField] private CervicalRomRealityMeasure scoreSource;
+
     [Header("=== 진행 UI 자동 배치 ===")]
     // ★두 번만 옮긴다.
     //   ① 시상면 파지(시술자가 환자 <b>측면</b>에 선다) → 좌·우 포인트 중 한쪽으로. 최초 1회.
@@ -170,6 +187,17 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float overpressureHeldTime;    // 압박 한계에서 버틴 시간(초). 목표는 overpressureHoldSeconds.
     private bool active;
 
+    // ── 평가 채점 (2026-09-11) ── 방향 enum 값을 인덱스로 쓴다(None=0).
+    private static readonly int DirectionCount = System.Enum.GetValues(typeof(CervicalRomDriver.Direction)).Length;
+    private readonly bool[] evalPassiveSkipped = new bool[DirectionCount];
+    private readonly int[] evalGripReleases = new int[DirectionCount];
+    private bool evalScoredRun;        // 이번 판을 가상환자 평가로 돌렸는가(결과 수집기가 본다)
+    private bool evalGripSeen;         // 이 파지 묶음에서 한 번이라도 잡았는가 — 안 잡은 걸 '놓침'으로 세지 않는다
+    private float evalReleaseTimer;
+    private bool evalReleaseCounted;   // 이번 풀림을 이미 셌는가 — 다시 잡아야 다음 풀림을 센다
+    private string lastStepName;
+    private int lastSubStepNo;
+
     /// <summary>
     /// 지금 경추ROM 시나리오 안인가. <see cref="CervicalRomPracticeReadout"/>이 읽는다.
     /// ★이게 필요한 이유 — 동반 컴포넌트는 <see cref="Awake"/>에서 <b>무조건</b> 붙는다.
@@ -250,6 +278,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             active = true;
             Log($"대상 시나리오 진입 — 여기서부터 목 각도를 굴린다");
+            ResetEvaluationScore();
         }
 
         string key = $"{step.stepName}#{sub.subStepNo}";
@@ -267,7 +296,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             //   세 줄을 전부 체크해야 다음으로 넘어간다 — 게이팅은 UpdatePostureGate가 한다.
             UpdatePostureGate(step.stepName);
 
+            // ★lastStepKey를 덮기 <b>전에</b> 본다 — 압박 유지를 끝내지 않고 넘어갔는지([다음])는
+            //   떠나는 substep에서만 알 수 있다.
+            NoteLeavingSubStep();
+            if (IsGripStep(step.stepName)) evalGripSeen = false;   // 면이 바뀌면 새 파지 묶음이다
+
             lastStepKey = key;
+            lastStepName = step.stepName;
+            lastSubStepNo = sub.subStepNo;
             stepEnteredTime = Time.time;
             stallButtonShown = false;
             ApplyGripPair(step.stepName);
@@ -288,6 +324,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   사용자 지시로 복귀도 파지를 유지해야 움직이도록 바꿨다(2026-08-26).
         //   시술자가 손을 댄 채로 따라 내려오는 게 실제 술기다.
         driver.Paused = !BothHandsTouching();
+
+        TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
 
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
@@ -359,6 +397,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                                        $"현재 {driver.CurrentAngle:F0}° / 목표 {driver.ActiveTargetAngle:F0}°</color>");
                 done = true;
                 reason = "정체 타임아웃";
+
+                // ★평가에서 압박 유지를 못 채우고 시간으로 넘어갔으면 생략이다 — 버틴 게 아니다.
+                if (isOverpressure && subStepNo == 2)
+                    MarkEvaluationPassiveSkipped(stepName, $"{stallTimeoutSeconds:F0}초 정체 타임아웃");
             }
             else
             {
@@ -381,6 +423,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   그대로 두면 다음 substep의 나레이션이 WaitForAutoPlayComplete()에서 무한 대기하고,
         //   여기서 NextSubStep까지 부르면 파이프라인 진행과 겹쳐 두 번 넘어간다.
         //   완료 처리만 하면 기존 경로(OnAutoPlayCompleted · ConditionManager)가 알아서 넘긴다.
+        FinishSubStep();
+    }
+
+    /// <summary>지금 substep을 끝낸다. AutoPlay가 돌면 그쪽을 끝내고, 아니면 직접 넘긴다(위 주석 참조).</summary>
+    private void FinishSubStep()
+    {
         if (evaluator != null && evaluator.IsAutoPlayMode)
         {
             evaluator.CompleteAutoPlayExternally();
@@ -388,6 +436,148 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
 
         scenarioManager.NextSubStep();
+    }
+
+    // ================= 평가 채점 (2026-09-11) =================
+
+    /// <summary>가상환자 평가인가 — 평가 난이도이고 실측이 아닐 때.</summary>
+    private static bool IsEvaluationScoring()
+    {
+        var dm = ChunaTraining.DifficultyManager.Instance;
+        return dm != null && dm.IsEvaluationMode && !dm.IsMeasurementMode;
+    }
+
+    private void ResetEvaluationScore()
+    {
+        System.Array.Clear(evalPassiveSkipped, 0, evalPassiveSkipped.Length);
+        System.Array.Clear(evalGripReleases, 0, evalGripReleases.Length);
+        evalGripSeen = false;
+        evalReleaseTimer = 0f;
+        evalReleaseCounted = false;
+        evalScoredRun = IsEvaluationScoring();
+
+        // ★조용히 안 세는 상태를 구분하려고 켜질 때·안 켜질 때 둘 다 남긴다.
+        ChunaLogger.Log(evalScoredRun
+            ? "<color=cyan>[ROM 평가] 가상환자 평가 채점 시작 — 압박 생략·파지 놓침을 센다</color>"
+            : "[ROM 평가] 평가 난이도가 아니라 절차 점수를 세지 않는다(실습·실측)");
+    }
+
+    /// <summary>
+    /// 압박 유지(x.2)를 <b>끝내지 않고</b> 떠났으면 생략으로 적는다. [다음] 버튼으로 넘긴 경우다.
+    /// ★목표 도달·되돌림 생략은 우리가 넘기면서 <see cref="advancedKey"/>를 찍어 두므로 여기 안 걸린다.
+    /// </summary>
+    private void NoteLeavingSubStep()
+    {
+        if (string.IsNullOrEmpty(lastStepKey) || lastSubStepNo != 2) return;
+        if (string.IsNullOrEmpty(lastStepName) || !lastStepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
+        if (advancedKey == lastStepKey) return;
+
+        MarkEvaluationPassiveSkipped(lastStepName, "압박 유지를 끝내지 않고 넘어갔다([다음])");
+    }
+
+    private void MarkEvaluationPassiveSkipped(string stepName, string why)
+    {
+        if (!evalScoredRun) return;
+        int i = (int)DirectionOf(stepName);
+        if (i <= 0 || i >= evalPassiveSkipped.Length || evalPassiveSkipped[i]) return;
+
+        evalPassiveSkipped[i] = true;
+        ChunaLogger.Log($"<color=orange>[ROM 평가] {stepName} 압박 생략 — {why}. 감점 대상</color>");
+    }
+
+    /// <summary>
+    /// 평가에서 압박하지 않고 중립 쪽으로 되돌렸다 — 생략으로 적고 복귀(x.3)로 넘긴다.
+    /// ★실측 09-02 규칙("안 하고 중립으로 돌아오면 그냥 완료시키고 생략으로 감점")을 옮긴 것이다.
+    /// </summary>
+    private void SkipOverpressureInEvaluation(string stepName, int subStepNo, float swept)
+    {
+        string key = $"{stepName}#{subStepNo}";
+        if (advancedKey == key) return;
+        advancedKey = key;
+
+        MarkEvaluationPassiveSkipped(stepName, $"밀지 않고 중립 쪽으로 {-swept:F1}° 되돌렸다");
+        FinishSubStep();
+    }
+
+    /// <summary>
+    /// 평가에서 파지를 놓친 횟수를 센다. 손을 대고 움직이는 구간(x.2 동작·유지, x.3 복귀)만 본다.
+    /// ★한 번도 안 잡은 걸 '놓침'으로 세지 않는다 — 면이 바뀌면(파지 단계) 다시 잡을 때까지 안 센다.
+    /// ★같은 풀림을 두 번 세지 않는다 — 다시 잡아야 다음 풀림을 센다.
+    /// </summary>
+    private void TrackEvaluationGripRelease(string stepName, int subStepNo)
+    {
+        if (!evalScoredRun) return;
+
+        if (BothHandsTouching())
+        {
+            evalGripSeen = true;
+            evalReleaseTimer = 0f;
+            evalReleaseCounted = false;
+            return;
+        }
+
+        CervicalRomDriver.Direction dir = DirectionOf(stepName);
+        if (dir == CervicalRomDriver.Direction.None || subStepNo < 2) { evalReleaseTimer = 0f; return; }
+        if (!evalGripSeen || evalReleaseCounted) return;
+
+        evalReleaseTimer += Time.deltaTime;
+        if (evalReleaseTimer < gripReleaseGraceSeconds) return;
+
+        evalReleaseCounted = true;
+        evalGripReleases[(int)dir]++;
+        ChunaLogger.Log($"<color=orange>[ROM 평가] {stepName} {subStepNo} 파지 놓침 " +
+                        $"({gripReleaseGraceSeconds:F2}초 넘게 풀림 · 이 방향 {evalGripReleases[(int)dir]}회째). 감점 대상</color>");
+    }
+
+    /// <summary>이번 판을 가상환자 평가로 돌렸는가. 결과 수집기가 점수를 여기서 읽을지 정한다.</summary>
+    public bool HasEvaluationScore => evalScoredRun;
+
+    public bool WasEvaluationPassiveSkipped(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < evalPassiveSkipped.Length && evalPassiveSkipped[i];
+    }
+
+    public int EvaluationGripReleasesFor(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < evalGripReleases.Length ? evalGripReleases[i] : 0;
+    }
+
+    public int EvaluationPassiveSkipCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 1; i < evalPassiveSkipped.Length; i++) if (evalPassiveSkipped[i]) n++;
+            return n;
+        }
+    }
+
+    public int EvaluationGripReleaseCount
+    {
+        get
+        {
+            int n = 0;
+            for (int i = 1; i < evalGripReleases.Length; i++) n += evalGripReleases[i];
+            return n;
+        }
+    }
+
+    /// <summary>가상환자 평가 점수. 실측과 <b>같은 식·같은 감점 폭</b>이다.</summary>
+    public float EvaluationRomScore
+    {
+        get
+        {
+            if (scoreSource == null)
+                scoreSource = FindFirstObjectByType<CervicalRomRealityMeasure>(FindObjectsInactive.Include);
+            return scoreSource != null
+                ? scoreSource.ScoreFor(EvaluationPassiveSkipCount, EvaluationGripReleaseCount)
+                : CervicalRomRealityMeasure.ComputeRomScore(EvaluationPassiveSkipCount, EvaluationGripReleaseCount,
+                      CervicalRomRealityMeasure.DefaultPassiveSkipPenalty,
+                      CervicalRomRealityMeasure.DefaultGripReleasePenalty,
+                      CervicalRomRealityMeasure.DefaultMinRomScore);
+        }
     }
 
     /// <summary>
@@ -901,6 +1091,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         sweptSmoothed = overpressureSmoothTime > 0f
             ? Mathf.SmoothDamp(sweptSmoothed, swept, ref sweptVelocity, overpressureSmoothTime)
             : swept;
+
+        // ★평가에서는 압박이 자율이다(2026-09-11). 밀지 않고 중립 쪽으로 되돌리면 생략으로 보고 복귀로 넘긴다.
+        //   음수 = 되돌아가는 방향 — 바로 아래 진행률 계산이 이미 같은 약속으로 음수를 0으로 자른다.
+        if (evalScoredRun && passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees)
+        {
+            SkipOverpressureInEvaluation(stepName, subStepNo, sweptSmoothed);
+            return;
+        }
 
         float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
 
