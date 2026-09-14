@@ -394,9 +394,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             {
                 stallButtonShown = true;
 
-                // ★[다음]을 띄우는 순간 AutoPlay를 정리한다. 사람이 그걸 누르면 강제 진행인데,
-                //   앞 단계의 AutoPlay가 살아 있으면 다음 단계가 그걸 기다리다 영영 안 넘어간다.
-                evaluator?.CompleteAutoPlayExternally();
+                // ★★<b>여기서 AutoPlay를 끝내면 안 된다</b>(2026-09-14 사용자 지적:
+                //   "다음으로 자동 진행 시키란 게 아니잖아").
+                //   AutoPlay가 끝나는 순간 공용 대기 코루틴이 <c>NextSubStep()</c>을 불러
+                //   <b>사람이 누르기도 전에 넘어간다</b>. 버튼은 띄우되 진행은 사람이 정한다.
+                //   정리는 실제로 넘어간 뒤(다음 substep 진입)에 한다.
                 ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
                                        $"{stallButtonSeconds:F0}초 동안 목표에 못 닿았다 — '다음' 버튼을 띄운다. " +
                                        $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
@@ -485,11 +487,51 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     /// </summary>
     private void NoteLeavingSubStep()
     {
-        if (string.IsNullOrEmpty(lastStepKey) || lastSubStepNo != 2) return;
-        if (string.IsNullOrEmpty(lastStepName) || !lastStepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
-        if (advancedKey == lastStepKey) return;
+        if (string.IsNullOrEmpty(lastStepKey) || string.IsNullOrEmpty(lastStepName)) return;
 
-        MarkEvaluationPassiveSkipped(lastStepName, "압박 유지를 끝내지 않고 넘어갔다([다음])");
+        // ★조건을 채워 넘어갔으면 advancedKey가 찍혀 있다. 안 찍혔으면 [다음]으로 건너뛴 것이다.
+        bool skipped = advancedKey != lastStepKey;
+        if (!skipped) return;
+
+        bool overpressure = lastStepName.EndsWith("압박", System.StringComparison.Ordinal);
+
+        // ★★<b>건너뛴 과정의 결과를 머리에 반영한다</b>(2026-09-14 사용자 지적:
+        //   "압박할 때 기다렸다가 스킵했더니 압박 위치로 머리 이동도 안 한다").
+        //   반영하지 않으면 다음 단계가 어긋난 각에서 시작한다 — 압박은 능동 끝점을,
+        //   다음 방향은 중립을 전제로 계산하기 때문이다.
+        //   ★SnapTo는 Paused를 무시한다. [다음]을 누르는 순간은 대개 손을 뗀 상태라
+        //     보통 경로로는 머리가 <b>한 도도 안 움직인다</b>.
+        CervicalRomDriver.Direction dir = DirectionOf(lastStepName);
+        if (driver != null && dir != CervicalRomDriver.Direction.None && lastSubStepNo >= 2)
+        {
+            // ★★<b>각도 기록도 같이 남긴다.</b> Record*는 정상 완료 경로에서만 불려서,
+            //   건너뛰면 그 방향의 측정값이 <b>아예 안 남았다</b> — 각도기 도달 마커도,
+            //   결과표의 능동/수동 칸도 비었다(2026-09-14 사용자 지적:
+            //   "스킵할 경우 압박이 완료된 상태에서 중립으로 돌아가는 과정이 나와야 하니까
+            //    압박 위치 각도 마크가 나와야 하는데 그것도 안 나온다").
+            //   ★SnapTo로 적용각을 먼저 박아야 Record*가 그 값을 집는다. 순서를 바꾸면 안 된다.
+            if (!overpressure)
+            {
+                driver.SnapTo(dir, driver.ActiveTargetAngle);         // 능동을 건너뜀 → 끝점
+                driver.RecordActiveReached();
+                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 능동 끝점 {driver.ActiveTargetAngle:F0}°로 맞추고 기록한다.");
+            }
+            else if (lastSubStepNo == 2)
+            {
+                driver.SnapTo(dir, driver.PassiveLimitAngle);         // 압박을 건너뜀 → 압박 한계
+                driver.RecordPassiveReached();
+                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 압박 한계 {driver.PassiveLimitAngle:F0}°로 맞추고 기록한다.");
+            }
+            else
+            {
+                driver.SnapTo(dir, 0f);                               // 복귀를 건너뜀 → 중립(측정값 아님)
+                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 중립으로 맞춘다.");
+            }
+        }
+
+        // 평가 감점은 압박 유지(x.2)를 건너뛴 경우만이다.
+        if (overpressure && lastSubStepNo == 2)
+            MarkEvaluationPassiveSkipped(lastStepName, "압박 유지를 끝내지 않고 넘어갔다([다음])");
     }
 
     private void MarkEvaluationPassiveSkipped(string stepName, string why)
@@ -1018,6 +1060,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private void OnSubStepEntered(string stepName, int subStepNo)
     {
         PlaceProgressUI(stepName, subStepNo);
+
+        // ★★<b>실제로 들어온 뒤에</b> AutoPlay를 정리한다(2026-09-14).
+        //   넘어가기 <b>전에</b> 끝내면 공용 대기 코루틴이 사람 대신 NextSubStep을 불러
+        //   버튼을 누르기도 전에 진행된다. 안 하면 반대로 다음 단계가 영영 대기한다.
+        //   ★파지 단계는 제외한다 — 거긴 AutoPlay 진행률로 유지 게이지를 그린다(끝내면 게이지가 죽는다).
+        if (!IsGripStep(stepName)) evaluator?.CompleteAutoPlayExternally();
 
         CervicalRomDriver.Direction dir = DirectionOf(stepName);
         if (dir == CervicalRomDriver.Direction.None)

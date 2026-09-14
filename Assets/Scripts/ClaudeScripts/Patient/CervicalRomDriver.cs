@@ -537,6 +537,27 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         targetAngle = Mathf.Clamp(ActiveTargetAngle + sweptDegrees, keepDirectionAngle, PassiveLimitAngle);
     }
 
+    /// <summary>
+    /// 단계를 <b>건너뛴 뒤</b> 그 단계의 결과 상태로 <b>즉시</b> 맞춘다.
+    ///
+    /// ★2026-09-14 사용자 지적: "압박할 때 기다렸다가 [다음]으로 스킵했더니
+    ///   <b>압박 위치로 머리 이동도 안 한다</b>." 건너뛴 과정의 결과가 머리에 반영되지 않으면
+    ///   다음 단계 계산이 통째로 어긋난다(압박은 능동 끝점에서 시작하는 게 전제다).
+    /// ★★<b><see cref="Paused"/>를 무시한다.</b> 보통 [다음]을 누르는 순간은 손을 뗀 상태라
+    ///   Paused가 참이고, 그러면 LateUpdate가 commandedAngle을 갱신하지 않아
+    ///   <see cref="SetAngle"/>도 <see cref="ReturnToNeutral"/>도 <b>아무 일도 못 한다</b>.
+    ///   그래서 여기서는 적용각까지 직접 박는다.
+    /// </summary>
+    public void SnapTo(Direction direction, float degrees)
+    {
+        currentDirection = direction;
+        targetAngle = Mathf.Max(0f, degrees);
+        commandedAngle = targetAngle;
+        appliedAngle = targetAngle;
+        angleVelocity = 0f;
+        ramifySpeed = 0f;
+    }
+
     /// <summary>각도를 직접 지정한다(도).</summary>
     public void SetAngle(Direction direction, float degrees)
     {
