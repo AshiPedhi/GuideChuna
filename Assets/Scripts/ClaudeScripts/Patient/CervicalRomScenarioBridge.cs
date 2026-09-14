@@ -409,6 +409,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 && Time.time - stepEnteredTime > stallButtonSeconds)
             {
                 stallButtonShown = true;
+
+                // ★[다음]을 띄우는 순간 AutoPlay를 정리한다. 사람이 그걸 누르면 강제 진행인데,
+                //   앞 단계의 AutoPlay가 살아 있으면 다음 단계가 그걸 기다리다 영영 안 넘어간다.
+                evaluator?.CompleteAutoPlayExternally();
                 ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
                                        $"{stallButtonSeconds:F0}초 동안 목표에 못 닿았다 — '다음' 버튼을 띄운다. " +
                                        $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
@@ -645,6 +649,17 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
             if (guideUI == null) return;
+        }
+
+        // ★★<b>평가는 진행 표시를 아예 안 띄운다</b>(2026-09-14 사용자 지적:
+        //   "압박 안 하고 중립으로 가면 진행표시 부분이 사라져서 힌트가 된다").
+        //   ★핵심은 게이지가 <b>사라지는 것</b>이 신호라는 점이다 — 압박을 건너뛰었다는 걸 알려 준다.
+        //     차 있는 것도 마찬가지로 "지금 제대로 누르고 있다"를 알려 준다. 둘 다 답을 주는 것이다.
+        //   ★<b>처음부터 없으면 사라질 것도 없다.</b> 실습은 종전대로 띄운다 — 거긴 가르치는 모드다.
+        if (IsEvaluationScoring())
+        {
+            guideUI.ClearExternalProgress();
+            return;
         }
 
         bool isOverpressure = !string.IsNullOrEmpty(stepName)
@@ -1021,7 +1036,25 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         PlaceProgressUI(stepName, subStepNo);
 
         CervicalRomDriver.Direction dir = DirectionOf(stepName);
-        if (dir == CervicalRomDriver.Direction.None) return;
+        if (dir == CervicalRomDriver.Direction.None)
+        {
+            // ★★<b>방향 없는 단계로 들어왔는데 각이 남아 있으면 중립으로 돌린다</b>(2026-09-14).
+            //   사용자: "과정을 통과시켰으면 환자 머리도 중립으로 돌아오던가 해야지."
+            //   복귀(x.3)를 [다음]으로 건너뛰면 머리가 그 각 그대로 남았다 — 여기가
+            //   <b>첫 줄에서 그냥 return</b>이라 각을 정리하는 코드가 아예 없었다.
+            if (driver != null && driver.CurrentAngle > 0.5f)
+            {
+                driver.ReturnToNeutral();
+                Log($"{stepName} — 방향 없는 단계다. 남은 {driver.CurrentAngle:F0}°를 중립으로 되돌린다.");
+            }
+
+            // ★★<b>AutoPlay도 같이 정리한다</b>. 안 하면 다음 단계가
+            //   <c>while (pathEvaluator.IsAutoPlayMode) yield</c>에서 <b>영원히 대기</b>한다
+            //   (2026-09-14 로그: "AutoPlay 완료 대기 중..." 뒤로 아무것도 없었다).
+            //   [다음]으로 강제 진행하면 앞 단계의 AutoPlay가 안 끝난 채 남는다. 멱등한 호출이다.
+            evaluator?.CompleteAutoPlayExternally();
+            return;
+        }
 
         bool isOverpressure = stepName.EndsWith("압박", System.StringComparison.Ordinal);
 
