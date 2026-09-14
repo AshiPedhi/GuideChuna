@@ -299,6 +299,35 @@ public class TrainingResultData
     public string highestSimilarityStep;           // 최고 유사도 구간
     public float highestSimilarity;                // 최고 유사도
 
+    // ========== 평가 모드 점수 하한 (2026-09-14 사용자 지시) ==========
+
+    /// <summary>
+    /// ★평가 모드에서 점수가 이 아래로는 안 내려간다.
+    ///
+    /// 사용자(09-14): "애들이 점수에 민감해. 게다가 평가 포인트가 그렇게 크지가 않다보니까."
+    /// 실측으로 확인한 것 — 평가 결과가 유사도 0.13에 79.2점, 0.68에 76.8점이었다.
+    /// <b>잘해도 못해도 70점대</b>라 변별이 거의 없는데, 채점되는 단계가 하나도 없으면
+    /// <see cref="FinalizeResult"/>의 <c>scoredStepCount == 0</c>으로 빠져 <b>0점 F</b>가
+    /// 그대로 서버까지 올라갔다. 점수가 낮은 게 아니라 <b>잴 재료가 없는</b> 것이었다.
+    ///
+    /// ★재료가 없어 0점인 것과 못해서 0점인 것을 화면에서 가를 수 없다 — 그래서 밑을 막는다.
+    /// </summary>
+    public const float EvaluationMinScore = 80f;
+
+    /// <summary>평가 모드인가. 실측도 '평가'로 기록된다(09-11 InfoPanelController).</summary>
+    public bool IsEvaluationMode =>
+        !string.IsNullOrEmpty(selectedMode) && selectedMode.Contains("평가");
+
+    /// <summary>
+    /// 평가 모드면 <see cref="EvaluationMinScore"/>를 하한으로 씌운다. 실습은 종전 그대로다.
+    /// ★<b>표시·종합에만 씌운다</b> — step의 <c>finalScore</c> 원값은 건드리지 않는다.
+    ///   <see cref="FinalizeResult"/>가 <c>finalScore &gt; 0</c>으로 "채점된 단계"를 가리므로,
+    ///   원값에 80을 박으면 <b>채점되지 않은 단계까지 평균에 섞여</b> 종합이 되레 망가진다.
+    ///   결과 CSV(TrainingResultExporter)의 step Score 열도 원값이라 왜 그런지 추적할 수 있다.
+    /// </summary>
+    public float ApplyEvaluationFloor(float rawScore)
+        => IsEvaluationMode ? Mathf.Max(rawScore, EvaluationMinScore) : rawScore;
+
     // ========== 생성자 ==========
 
     public TrainingResultData()
@@ -447,8 +476,17 @@ public class TrainingResultData
         overallSimilarity = phaseCount > 0 ? totalSimilarity / phaseCount : 0f;
 
         // 전체 평균 점수 및 등급
-        overallScore = scoredStepCount > 0 ? totalScore / scoredStepCount : 0f;
+        // ★평가 모드는 하한을 씌운다(2026-09-14). 여기가 <b>0점 F</b>가 나오던 자리다 —
+        //   채점된 단계가 하나도 없으면(scoredStepCount == 0) 위 삼항이 0f로 떨어진다.
+        float rawOverall = scoredStepCount > 0 ? totalScore / scoredStepCount : 0f;
+        overallScore = ApplyEvaluationFloor(rawOverall);
         overallGrade = EvaluationScoringEngine.GetGradeFromScore(overallScore);
+
+        // ★하한이 실제로 걸렸는지 Play에서 <b>눈이 아니라 로그로</b> 확인한다.
+        //   모드 문자열이 '평가'가 아니면 하한이 조용히 안 걸린다 — 그때 여기서 드러난다.
+        ChunaLogger.Log($"<color=cyan>[결과] 종합 점수 {rawOverall:F1} → {overallScore:F1} ({overallGrade}) · " +
+                        $"모드 '{selectedMode}' · 평가하한 {(IsEvaluationMode ? $"적용({EvaluationMinScore:F0})" : "미적용")} · " +
+                        $"채점된 단계 {scoredStepCount}개</color>");
     }
 
     /// <summary>
@@ -506,7 +544,7 @@ public class TrainingResultData
     }
 
     /// <summary>두개골 단계 2줄 요약. 유사도 대신 '자세 성립·유지'를 보여준다.</summary>
-    private static void AppendCranialStepLines(StringBuilder sb, string phaseName, StepResult step, string grade)
+    private static void AppendCranialStepLines(StringBuilder sb, string phaseName, StepResult step, string grade, float shownScore)
     {
         var c = step.cranial;
 
@@ -514,7 +552,7 @@ public class TrainingResultData
         string done = c.posesRequired > 0
             ? $"자세 {c.posesCompleted}/{c.posesRequired}"
             : $"파지 {(c.firstContactSeconds >= 0f ? "성립" : "미성립")}";
-        sb.AppendLine($"■ {phaseName} {step.stepName}  {step.finalScore:F0}점 ({grade}) · {done} · 유지 {c.holdSeconds:F1}초");
+        sb.AppendLine($"■ {phaseName} {step.stepName}  {shownScore:F0}점 ({grade}) · {done} · 유지 {c.holdSeconds:F1}초");
 
         // 2줄: 안정성 + (해당 단계만) 호흡·견착
         string firstContact = c.firstContactSeconds >= 0f ? $"{c.firstContactSeconds:F1}초" : "없음";
@@ -558,17 +596,25 @@ public class TrainingResultData
                     if (!firstStep) sb.AppendLine();
                     firstStep = false;
 
-                    string grade = string.IsNullOrEmpty(step.grade) ? "-" : step.grade;
+                    // ★평가 모드는 단계 점수에도 같은 하한을 씌운다(2026-09-14).
+                    //   종합만 올리면 <b>단계마다 0점 F가 줄줄이 뜨는데 종합만 80</b>이라 되레 이상하다.
+                    //   등급도 <b>보이는 점수로</b> 다시 매긴다 — 80점인데 F라고 적히면 안 된다.
+                    float shownScore = data.ApplyEvaluationFloor(step.finalScore);
+                    string grade = data.IsEvaluationMode
+                        ? EvaluationScoringEngine.GetGradeFromScore(shownScore)
+                        : (string.IsNullOrEmpty(step.grade) ? "-" : step.grade);
 
                     // ★두개골 단계는 유사도·리밋이 성립하지 않으므로(전부 0) 자세 성립·유지 지표로 대체한다.
                     if (step.cranial != null)
                     {
-                        AppendCranialStepLines(sb, phase.phaseName, step, grade);
+                        AppendCranialStepLines(sb, phase.phaseName, step, grade, shownScore);
                         continue;
                     }
 
                     // step별 상태 심볼(O/△/X)은 제거 — 점수로 충분, 스킵 개수는 종합에 집계
-                    sb.AppendLine($"■ {phase.phaseName} {step.stepName}  {step.finalScore:F0}점 ({grade}) · 유사도 {step.averageSimilarity:P0} · 위험 범위 초과 {step.limitViolationCount}");
+                    // ★단계 이름은 <b>별칭으로 바꾸지 않는다</b> — 이 문자열은 서버(learnLevel2)로도 나간다.
+                    //   서버가 이름을 어떻게 쓰는지 모르는 채로 바꾸면 조용히 깨질 수 있다(규칙 8의 연장).
+                    sb.AppendLine($"■ {phase.phaseName} {step.stepName}  {shownScore:F0}점 ({grade}) · 유사도 {step.averageSimilarity:P0} · 위험 범위 초과 {step.limitViolationCount}");
                     sb.AppendLine($"   좌 {step.leftAverageSimilarity:P0} / 우 {step.rightAverageSimilarity:P0} · 최저 {step.minSimilarity:P0} / 최고 {step.maxSimilarity:P0}");
                 }
             }
@@ -655,7 +701,8 @@ public class TrainingResultData
 
         // ★수행 점수 — 절차를 안 밟은 만큼만 깎는다. 왜 깎였는지를 같이 적는다.
         //   이유 없이 숫자만 낮으면 납득이 안 된다.
-        sb.Append($"수행 점수 {data.romScore:F0}점");
+        // ★평가 모드는 같은 하한을 씌운다(2026-09-14). 실습 ROM은 측정기의 minRomScore(씬 값 60) 그대로다.
+        sb.Append($"수행 점수 {data.ApplyEvaluationFloor(data.romScore):F0}점");
         if (data.romPassiveSkips > 0 || data.romGripReleases > 0)
         {
             sb.Append("  <size=80%><color=#b0b0b0>(");
