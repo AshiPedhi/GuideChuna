@@ -97,8 +97,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     //   실측의 절차 점수(09-02)를 그대로 옮긴다 — 압박 생략·파지 놓침만 깎고 각도 값은 점수에 안 넣는다.
     //   감점 폭은 실측 측정기의 인스펙터 값을 같이 쓴다(scoreSource) — 손잡이를 둘로 만들지 않는다.
     // ★전부 새 필드라 씬에 값이 없다 → 코드 기본값이 먹는다(규칙 7).
-    [Tooltip("평가에서 압박 유지 중 손을 중립 쪽으로 이만큼(도) 되돌리면 '압박 생략'으로 보고 복귀로 넘긴다.\n" +
-             "★실측의 '압박 안 하고 중립으로 돌아오면 생략·감점'(09-02)을 가상환자로 옮긴 것이다. 0이면 끈다.\n" +
+    [Tooltip("압박 유지 중 손을 중립 쪽으로 이만큼(도) 되돌렸을 때의 임계.\n" +
+             "  · 평가 — '압박 생략'으로 보고 감점하고 복귀로 넘긴다.\n" +
+             "  · 실습 — 넘기지 않고 <b>실습 정보창에 '되돌아가고 있습니다'를 띄운다</b>(2026-09-14).\n" +
+             "★실측의 '압박 안 하고 중립으로 돌아오면 생략·감점'(09-02)을 가상환자로 옮긴 것이다. 0이면 둘 다 끈다.\n" +
+             "★모드가 갈려도 임계는 하나다 — 손잡이를 둘로 만들지 않는다.\n" +
              "손 떨림(08-25 로그 ±3° 안팎)보다 충분히 커야 한다.")]
     [SerializeField] private float passiveSkipBackDegrees = 8f;
 
@@ -537,6 +540,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
     /// <summary>이번 판을 가상환자 평가로 돌렸는가. 결과 수집기가 점수를 여기서 읽을지 정한다.</summary>
     public bool HasEvaluationScore => evalScoredRun;
+
+    /// <summary>
+    /// 압박 구간인데 손을 <b>중립 쪽으로</b> 되돌리고 있는가(임계 <see cref="passiveSkipBackDegrees"/>).
+    ///
+    /// ★실습 정보창(<see cref="CervicalRomPracticeReadout"/>)이 읽어 그 자리에서 알려 준다(2026-09-14).
+    ///   평가는 같은 임계에서 이미 감점하고 복귀로 넘어가므로 여기가 켜질 일이 없다.
+    /// ★<b>창만 낸다</b> — 표시는 읽는 쪽이 정한다.
+    /// </summary>
+    public bool OverpressureBacking { get; private set; }
 
     public bool WasEvaluationPassiveSkipped(CervicalRomDriver.Direction d)
     {
@@ -1047,6 +1059,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     /// </summary>
     private void AdvanceOverpressure(string stepName, int subStepNo)
     {
+        // ★매 프레임 먼저 끈다. 켜는 자리는 아래 압박 분기 한 곳뿐이다 — 켠 쪽이 끈다.
+        //   (미끄러짐·손 유실로 중간에 돌아서는 길이 여럿이라, 끄는 걸 분기마다 두면 반드시 하나를 빠뜨린다.)
+        OverpressureBacking = false;
+
         if (subStepNo < 2 || !stepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
 
         // ★x.2 = 미는 구간 · x.3 = 되돌리는 구간. <b>손 각을 재는 방법은 똑같다</b>(2026-09-14).
@@ -1150,6 +1166,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             SkipOverpressureInEvaluation(stepName, subStepNo, sweptSmoothed);
             return;
         }
+
+        // ★실습에서는 <b>그 자리에서 말해 준다</b>(2026-09-14 사용자 판단).
+        //   평가는 바로 위에서 감점하고 복귀로 넘어갔으므로 여기 도달하지 않는다 — 여기는 사실상 실습 전용이다.
+        //   ★임계는 평가 감점과 <b>같은 손잡이</b>(passiveSkipBackDegrees)를 쓴다. 둘로 만들지 않는다.
+        //   왜 알려야 하나: 게이지가 0으로 떨어지고 화살표가 반대를 가리켜도 <b>전부 간접 신호</b>고,
+        //   20초 뒤 [다음]이 떠 버려서 잘못한 줄 모른 채 넘어갈 수 있다.
+        OverpressureBacking = passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees;
 
         float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
 

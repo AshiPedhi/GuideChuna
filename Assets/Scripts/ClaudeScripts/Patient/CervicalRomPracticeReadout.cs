@@ -111,6 +111,7 @@ public class CervicalRomPracticeReadout : MonoBehaviour
     private int shownMask = int.MinValue;
 
     private readonly System.Text.StringBuilder sb = new System.Text.StringBuilder(160);
+    private bool shownBacking;   // 직전에 그린 '되돌림' 경고 상태(변경 감지용)
 
     // ── 안 뜰 때 <b>스스로 이유를 말한다</b> (2026-09-07) ──────────────────
     // ★"안 나온다"를 추측으로 고치면 왕복한다. 막은 게이트를 그 자리에서 이름으로 찍는다.
@@ -283,11 +284,16 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         int angle = Mathf.RoundToInt(driver.CurrentAngle);
         int mask = DoneMask();
 
+        // ★압박 중 손을 중립 쪽으로 되돌리고 있는가(2026-09-14). 밀면 꺼진다.
+        bool backing = bridge != null && bridge.OverpressureBacking;
+
+        // ★★변경 감지 키에 <b>경고 상태도</b> 넣는다. 안 넣으면 각도·게이지가 그대로인 프레임에
+        //   경고가 켜져도 <b>다시 그리지 않아</b> 화면에 안 뜨다.
         if ((int)dir == shownDirection && angle == shownAngle && gaugeStep == shownGauge
-            && remain == shownRemain && mask == shownMask) return;
+            && remain == shownRemain && mask == shownMask && backing == shownBacking) return;
 
         shownDirection = (int)dir; shownAngle = angle;
-        shownGauge = gaugeStep; shownRemain = remain; shownMask = mask;
+        shownGauge = gaugeStep; shownRemain = remain; shownMask = mask; shownBacking = backing;
 
         sb.Clear();
 
@@ -319,6 +325,14 @@ public class CervicalRomPracticeReadout : MonoBehaviour
             sb.Append("<size=70%>");
             AppendDirectionRow(dir);
             sb.Append("</size>");
+        }
+
+        // ★경고는 <b>맨 아래</b>에 붙인다 — 위에 끼우면 각도·게이지 줄이 매번 아래로 밀려
+        //   글이 출렁거려 읽기 나쁘다.
+        if (backing)
+        {
+            if (sb.Length > 0) sb.Append('\n');
+            sb.Append("<size=70%><color=#ffb74d>⚠ 되돌아가고 있습니다 — 압박 방향으로 밀어 주세요</color></size>");
         }
 
         label.text = sb.ToString();
