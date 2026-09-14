@@ -652,10 +652,13 @@ public class RomProgressInResultPage : MonoBehaviour
         // ★번호를 붙일 거면 <b>전부</b> 붙이고, 뺄 거면 <b>전부</b> 뺀다(2026-09-07 지적).
         //   종전에는 가이드 스텝만 번호가 없어 '자세정렬' 다음에 '2. 시상면 파지'가 나왔다.
         //   가이드 스텝은 stepNo가 0이라 번호가 의미 없으므로 <b>기본은 다 빼는 쪽</b>이다.
+        // ★이름을 그대로 쓰지 않는다 — 판정 키(stepName)와 <b>읽히는 이름</b>을 가른다(2026-09-14).
+        //   여기가 ROM에서 <b>실제로 눈에 보이는</b> 단계 제목이다. '시상면 파지'가 여기에 떠 있었다.
+        string curName = cur == null ? "" : StepDisplayName.Of(cur.stepName);
         string stage = cur == null ? ""
                      : (showStepNumber && !cur.IsGuideStep())
-                        ? $"{cur.stepNo}. {cur.stepName}"
-                        : cur.stepName;
+                        ? $"{cur.stepNo}. {curName}"
+                        : curName;
         if (stage != shownStage)
         {
             shownStage = stage;

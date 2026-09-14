@@ -645,9 +645,11 @@ public class TrainingResultData
                           $"{C3}{m.passiveAngle:F0}°{C4}{deficit}");
         }
 
-        // 좌우 비대칭 — 관상면·횡단면만. 시상면은 굴곡·신전이라 대칭 개념이 없다.
-        AppendRomAsymmetry(sb, data, "좌측굴", "우측굴", "관상면", asymmetryWarn);
-        AppendRomAsymmetry(sb, data, "좌회전", "우회전", "횡단면", asymmetryWarn);
+        // 좌우 비대칭 — 측굴·회전만. 굴곡·신전은 좌우 개념이 없다.
+        // ★2026-09-14 사용자 지시(09-11 지시의 연장) — 화면에서 단면 용어를 말하지 않는다.
+        //   표 본문은 08-27 회의로 이미 방향 이름만 쓰고 있었고, 이 두 줄만 '관상면·횡단면'으로 남아 있었다.
+        AppendRomAsymmetry(sb, data, "좌측굴", "우측굴", "측굴", asymmetryWarn);
+        AppendRomAsymmetry(sb, data, "좌회전", "우회전", "회전", asymmetryWarn);
 
         sb.AppendLine();
 

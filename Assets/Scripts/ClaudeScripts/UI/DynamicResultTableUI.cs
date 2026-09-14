@@ -357,7 +357,8 @@ public class DynamicResultTableUI : BaseUIPanel
         var stepNameText = row.GetComponentInChildren<TextMeshProUGUI>();
         if (stepNameText != null)
         {
-            stepNameText.text = $"{stepIndex}.{stepName}";
+            // ★그리는 값만 갈아 끼운다. row.name·cellLookup 키는 <b>stepName 그대로</b>여야 한다(조회 키).
+            stepNameText.text = $"{stepIndex}.{StepDisplayName.Of(stepName)}";
         }
         else
         {
@@ -393,7 +394,7 @@ public class DynamicResultTableUI : BaseUIPanel
         rectTransform.sizeDelta = new Vector2(150, 40);
 
         var text = cell.AddComponent<TextMeshProUGUI>();
-        text.text = $"{stepIndex}.{stepName}";
+        text.text = $"{stepIndex}.{StepDisplayName.Of(stepName)}";
         text.fontSize = 14;
         text.alignment = TextAlignmentOptions.Left;
         text.color = Color.white;

@@ -511,13 +511,16 @@ public class ScenarioGuideUIController : MonoBehaviour
         if (stepNameText != null)
         {
             // 가이드 스텝이 아닌 경우 stepNo 추가
+            // ★이름을 그대로 쓰지 않는다 — 판정 키(stepName)와 <b>읽히는 이름</b>을 가른다(2026-09-14).
+            //   매핑에 없는 이름은 그대로 통과하므로 다른 술기는 종전과 같다.
+            string shown = StepDisplayName.Of(step.stepName);
             if (step.IsGuideStep())
             {
-                stepNameText.text = step.stepName;
+                stepNameText.text = shown;
             }
             else
             {
-                stepNameText.text = $"{step.stepNo}. {step.stepName}";
+                stepNameText.text = $"{step.stepNo}. {shown}";
             }
         }
     }
@@ -948,7 +951,7 @@ public class ScenarioGuideUIController : MonoBehaviour
     {
         if (stepNameText != null)
         {
-            stepNameText.text = stepName;
+            stepNameText.text = StepDisplayName.Of(stepName);
         }
     }
 
