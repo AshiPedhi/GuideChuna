@@ -542,12 +542,25 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   그대로 두면 다음 substep의 나레이션이 <c>WaitForAutoPlayComplete</c>에서 영원히 대기한다
         //   (로그: "신전 2 건너뜀" 뒤로 "압박 시작"이 안 찍히고 멈췄다).
         //   ★<b>스킵일 때만</b> 부른다 — 정상 완료는 <see cref="FinishSubStep"/>이 이미 같은 일을 한다.
-        //   ★여기는 다음 substep의 조건 처리가 시작되기 <b>전</b>이라, 끝내는 것은 <b>떠나는 단계</b>의
-        //     AutoPlay다. 진입 자리에서 부르면 새로 시작된 것을 죽여 전 과정이 스킵된다(같은 날 겪었다).
-        if (evaluator != null && evaluator.IsAutoPlayMode)
+        //
+        // ★★★<b>새 단계가 AutoPlay를 쓰면 건드리면 안 된다</b>(2026-09-14, 여기서 또 물렸다).
+        //   이 함수는 이름과 달리 <b>이미 다음 substep으로 넘어간 뒤</b>에 불린다. 그래서 여기서
+        //   무조건 끝내면 <b>새 단계가 막 시작한 AutoPlay를 죽인다</b> —
+        //   복귀(x.3)는 voiceGate라 AutoPlay로 접촉을 기다리는데, 그걸 죽여서
+        //   <b>손을 안 댔는데 그냥 다음 방향으로 넘어갔다</b>(사용자 지적).
+        //   반대로 지시 substep(x.1)은 자기 AutoPlay를 시작하지 않으므로, 스킵한 단계의 것이
+        //   남아 있으면 <c>WaitForAutoPlayComplete</c>에서 영영 대기한다 — 그때는 정리해야 한다.
+        //   → <b>새 substep의 conditionType으로 가른다.</b> 비어 있으면(지시·평가) 정리, 있으면 그대로 둔다.
+        SubStepData now = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
+        string nowCond = now != null && now.conditionType != null ? now.conditionType.Trim() : "";
+        bool nextUsesAutoPlay = nowCond.Length > 0
+                                && !nowCond.Equals("None", System.StringComparison.OrdinalIgnoreCase);
+
+        if (!nextUsesAutoPlay && evaluator != null && evaluator.IsAutoPlayMode)
         {
             evaluator.CompleteAutoPlayExternally();
-            Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 남은 AutoPlay를 정리한다(다음 단계가 대기하지 않게).");
+            Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 남은 AutoPlay를 정리한다 " +
+                $"(다음 substep은 conditionType이 없어 자기 AutoPlay를 안 쓴다).");
         }
 
         // 평가 감점은 압박 유지(x.2)를 건너뛴 경우만이다.
