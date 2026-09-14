@@ -568,12 +568,16 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     /// ★압박(<see cref="SetOverpressure"/>)과 <b>같은 방식</b>이다 — 속도 제한을 풀고 손을 즉시 따라간다.
     ///   구간만 다르다(압박은 능동끝→압박한계, 복귀는 복귀시작각→0).
     /// </summary>
-    public void SetReturn(float fromAngle, float progress01)
+    /// ★2026-09-14 <b>진행률 방식을 버렸다.</b> 종전에는 (시작각, 0~1)을 받아 Lerp했는데,
+    ///   손 각이 0 근처에서 흔들려 진행률이 0으로 떨어지면 <b>목표각이 시작각으로 되돌아가</b>
+    ///   머리가 82°로 한 번에 튀었다(사용자: "머리가 뒤로 휭 날아가잖아").
+    ///   이제 <b>각을 직접</b> 받는다. 되돌린 양을 누가 어떻게 세는지는 부르는 쪽이 정한다.
+    public void SetReturnAngle(float degrees)
     {
         if (currentDirection == Direction.None) return;
 
         ramifySpeed = 0f;   // 손을 즉시 따라간다. 속도 제한을 걸면 손과 머리가 어긋난다.
-        targetAngle = Mathf.Lerp(Mathf.Max(0f, fromAngle), 0f, Mathf.Clamp01(progress01));
+        targetAngle = Mathf.Max(0f, degrees);
     }
 
     private void LateUpdate()

@@ -80,6 +80,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "1.0으로 두면 손 지터 한 번에 타이머가 끊긴다.")]
     [Range(0.8f, 1f)] [SerializeField] private float overpressureHoldThreshold = 0.97f;
 
+    [Tooltip("중립 복귀(x.3)를 끝난 것으로 볼 각(도). 여기 닿으면 나머지는 자동으로 0까지 내린다.\n" +
+             "★종전에는 AtNeutral(0.5°)을 썼는데, 그건 <b>자동 복귀일 때나 닿는 값</b>이다.\n" +
+             "  손으로 되돌리게 바꾼 뒤로는 4°에서 멈춰 20초 정체가 났다(2026-09-14 로그).\n" +
+             "★되돌렸다는 것은 이미 보였다 — 마지막 몇 도를 손으로 긁어맞추게 할 이유가 없다.\n" +
+             "★새 필드라 씬에 값이 없다 → 지금은 코드 기본값이 먹는다(규칙 7).")]
+    [SerializeField] private float returnDoneAngle = 5f;
+
     [Tooltip("가이드손을 켜고 끌 때 접촉 상태를 이만큼 붙잡는다(초).\n" +
              "★손 트래킹이 한 프레임 튀어도 가이드손이 파르르 떨지 않게 한다. 0이면 끈다.")]
     [SerializeField] private float guideToggleDebounce = 0.25f;
@@ -225,6 +232,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float sweptSmoothed;         // 지터를 거른 회전각
     private float sweptVelocity;         // SmoothDamp용
     private float returnFromAngle;       // 중립 복귀를 시작한 각(도). 손이 이만큼 되돌리면 중립이다.
+    private float returnRatchet;         // 복귀 중 <b>지금까지 도달한 가장 작은 각</b>. 다시 올라가지 않는다.
     private float lastPressLogTime = -99f;
 
     private void Awake()
@@ -374,8 +382,20 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
         else
         {
-            done = driver.AtNeutral;
-            reason = "중립 복귀 완료";
+            // ★★<b>0.5°는 손으로 맞출 수 있는 값이 아니다</b>(2026-09-14).
+            //   자동 복귀(returnSpeed)일 때는 늘 0까지 내려가 <c>AtNeutral</c>이 항상 참이 됐는데,
+            //   손으로 되돌리게 바꾸면서 그 임계가 과해졌다 — 로그: "현재 4°"에서 20초 정체.
+            //   ★닿고 나면 <b>나머지는 자동으로</b> 0까지 내린다. 사람이 마지막 몇 도를
+            //     손으로 긁어맞추게 할 이유가 없다. 되돌렸다는 것은 이미 보였다.
+            done = driver.CurrentAngle <= returnDoneAngle || driver.AtNeutral;
+            if (done)
+            {
+                // ★래칫도 같이 0으로 내린다. 안 내리면 substep이 바뀌기 전 몇 프레임 동안
+                //   AdvanceOverpressure가 다시 돌아 SetReturnAngle(래칫)이 이 복귀를 덮어쓴다.
+                returnRatchet = 0f;
+                driver.ReturnToNeutral();
+            }
+            reason = $"중립 복귀 완료 ({driver.CurrentAngle:F1}° ≤ {returnDoneAngle:F0}°)";
         }
 
         // ★막혔을 때 <b>자동으로 넘기지 않는다</b>. '다음' 버튼을 띄우고 사람이 정한다
@@ -391,7 +411,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 stallButtonShown = true;
                 ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
                                        $"{stallButtonSeconds:F0}초 동안 목표에 못 닿았다 — '다음' 버튼을 띄운다. " +
-                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {driver.ActiveTargetAngle:F0}°</color>");
+                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
                 if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
                 guideUI?.ClearExternalProgress();
                 guideUI?.EnableStartToggle();
@@ -403,7 +423,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             {
                 ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
                                        $"{stallTimeoutSeconds:F0}초 동안 목표에 못 닿아 넘긴다. " +
-                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {driver.ActiveTargetAngle:F0}°</color>");
+                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
                 done = true;
                 reason = "정체 타임아웃";
 
@@ -536,6 +556,19 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         evalGripReleases[(int)dir]++;
         ChunaLogger.Log($"<color=orange>[ROM 평가] {stepName} {subStepNo} 파지 놓침 " +
                         $"({gripReleaseGraceSeconds:F2}초 넘게 풀림 · 이 방향 {evalGripReleases[(int)dir]}회째). 감점 대상</color>");
+    }
+
+    /// <summary>
+    /// 정체 로그에 적을 '목표'. 구간마다 목표가 다르다.
+    /// ★종전에는 <c>ActiveTargetAngle</c>을 그대로 찍어서, 복귀(x.3)인데 "목표 75°"라고
+    ///   나왔다(2026-09-14 로그). 되돌리는 구간의 목표는 <b>0에 가까운 각</b>이다.
+    /// </summary>
+    private float StallTargetOf(string stepName, int subStepNo)
+    {
+        bool overpressure = !string.IsNullOrEmpty(stepName)
+                            && stepName.EndsWith("압박", System.StringComparison.Ordinal);
+        if (!overpressure) return driver.ActiveTargetAngle;              // 능동 — 끝점까지
+        return subStepNo >= 3 ? returnDoneAngle : driver.PassiveLimitAngle;  // 복귀 — 중립 / 압박 — 한계
     }
 
     /// <summary>이번 판을 가상환자 평가로 돌렸는가. 결과 수집기가 점수를 여기서 읽을지 정한다.</summary>
@@ -1043,6 +1076,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             //   손을 대고만 있으면 됐다. 그건 시술자가 한 일이 아니라서 평가할 것이 없다.
             //   ★손 기준점을 여기서 다시 잡는다. 압박 때 잡은 기준을 그대로 쓰면 되돌린 각이 이미 밀린 값이 된다.
             returnFromAngle = driver.CurrentAngle;
+            returnRatchet = returnFromAngle;
             arcStarted = false;
             pairStarted = false;
             sweptSmoothed = 0f;
@@ -1152,9 +1186,19 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   ★더 되돌리려 해도 0도에서 멈춘다(Clamp01). 반대로 밀면 진행이 0으로 잘려 그 자리에 선다.
         if (isReturn)
         {
+            // 손이 중립 쪽으로 되돌린 양(양수). 미는 쪽으로 가면 0이다.
             float back = Mathf.Max(0f, -sweptSmoothed);
-            float span = Mathf.Max(1f, returnFromAngle);   // 0으로 나누지 않는다
-            driver.SetReturn(returnFromAngle, Mathf.Clamp01(back / span));
+            float want = Mathf.Clamp(returnFromAngle - back, 0f, returnFromAngle);
+
+            // ★★<b>래칫 — 한 번 내려간 각은 다시 안 올라간다</b>(2026-09-14).
+            //   이게 없으면 손 각이 0 근처에서 한 번만 흔들려도 목표각이 시작각으로 되돌아가
+            //   <b>머리가 82°로 튄다</b>(사용자: "머리가 뒤로 휭 날아가잖아").
+            //   압박은 낙차가 5~7°라 티가 안 났지만 복귀는 82°라 그대로 드러났다.
+            //   ★복귀는 <b>되돌리는</b> 단계다 — 다시 미는 구간이 아니므로 한 방향만 허용하는 게 맞다.
+            //     (압박 x.2에서 중립 쪽으로 가는 길은 열어 둔 그대로다. 여기는 x.3 얘기다.)
+            if (want < returnRatchet) returnRatchet = want;
+
+            driver.SetReturnAngle(returnRatchet);
             DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
             return;
         }
