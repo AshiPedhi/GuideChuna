@@ -77,6 +77,18 @@ public class RomMarkerLab : MonoBehaviour
     [Tooltip("검지 끝이 마커에 이만큼 가까우면 고른다(m).")]
     [SerializeField] private float pickRadius = 0.03f;
 
+    // ── 자유 모드(패스스루) ──────────────────────────────────────────
+    [Header("=== 자유 모드 ===")]
+    [Tooltip("켜면 시작하자마자 <b>패스스루를 켜고 배경·가상환자·UI를 전부 끈다</b>.\n" +
+             "★이 프로토타입의 기본값이다 — 정해진 과정 없이 실제 환자를 재는 도구라\n" +
+             "  기존 씬의 구성요소가 남아 있으면 방해만 된다(2026-09-14 사용자 지시).\n" +
+             "★우리가 끈 것만 되돌린다. 원래 꺼져 있던 것은 건드리지 않는다.")]
+    [SerializeField] private bool freeModeOnStart = true;
+
+    [Tooltip("추가로 끌 오브젝트 이름. 캔버스가 아니어서 안 꺼지는 것이 있으면 여기 적는다.\n" +
+             "★못 찾으면 조용히 넘어가지 않고 경고를 남긴다 — 이름이 바뀌었을 수 있다.")]
+    [SerializeField] private string[] alsoHideByName;
+
     [Header("=== 진단 ===")]
     [SerializeField] private bool showDebugLogs = true;
 
@@ -96,6 +108,11 @@ public class RomMarkerLab : MonoBehaviour
     private Camera cam;
     private TMP_FontAsset font;   // ★한글 폰트. 안 넣으면 TMP 기본 폰트라 글자가 통째로 깨진다.
 
+    private readonly List<GameObject> hiddenByUs = new List<GameObject>();
+    private PracticeSettingsController practiceSettings;
+    private bool passthroughWasOn;
+    private bool freeModeApplied;
+
     /// <summary>손목에 붙는 버튼 묶음. 버튼은 반대 손 검지로 누른다.</summary>
     private class WristMenu
     {
@@ -113,6 +130,8 @@ public class RomMarkerLab : MonoBehaviour
         root.SetParent(transform, false);
         cam = Camera.main;
         font = KoreanFontResolver.Resolve();
+
+        if (freeModeOnStart) EnterFreeMode();
 
         ResolveHands();
         BuildMenus();
@@ -143,6 +162,93 @@ public class RomMarkerLab : MonoBehaviour
 
         RefreshVisuals();
     }
+
+    // ── 자유 모드 ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// 패스스루를 켜고 <b>기존 씬의 배경·가상환자·UI를 전부 치운다</b>(2026-09-14 사용자 지시:
+    /// "디폴트가 패스쓰루 모드에서 정해진 과정 없이 자유롭게 하는 거라
+    ///  기존 씬에서 배경이랑 UI는 싹 꺼야 해").
+    ///
+    /// ★<b>배경은 따로 안 끈다</b> — 패스스루를 켜면 방 모델째 사라지고 추나 베드도 그 안에 있다
+    ///   (08-31 실측). 여기서 치울 것은 가상 환자와 UI다.
+    /// ★★<b>우리가 끈 것만 우리가 되돌린다.</b> 원래 꺼져 있던 것은 목록에 안 담는다 —
+    ///   켠 쪽과 끄는 쪽이 다르면 상태가 샌다(07-27 xray 사고가 그 형태였다).
+    /// </summary>
+    private void EnterFreeMode()
+    {
+        if (freeModeApplied) return;
+        freeModeApplied = true;
+
+        practiceSettings = FindFirstObjectByType<PracticeSettingsController>(FindObjectsInactive.Include);
+        if (practiceSettings != null)
+        {
+            passthroughWasOn = practiceSettings.IsRealityModeOn;
+            if (!passthroughWasOn) practiceSettings.SetRealityMode(true);
+            practiceSettings.SetPatientBodyVisible(false);
+        }
+        else
+        {
+            ChunaLogger.LogWarning("[실측랩] PracticeSettingsController가 없어 패스스루·환자 숨김을 못 겁니다 — " +
+                                   "배경이 그대로 보이면 이것 때문입니다.");
+        }
+
+        hiddenByUs.Clear();
+
+        // ★UI는 캔버스 단위로 끈다. 이름으로 하나씩 찾으면 이름이 바뀔 때마다 조용히 죽는다.
+        Canvas[] canvases = FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        for (int i = 0; i < canvases.Length; i++) HideOne(canvases[i].gameObject);
+
+        // 캔버스가 아니라서 안 꺼지는 것(월드 글자·게이지 등)은 이름으로 받는다.
+        if (alsoHideByName != null)
+        {
+            for (int i = 0; i < alsoHideByName.Length; i++)
+            {
+                string n = alsoHideByName[i];
+                if (string.IsNullOrWhiteSpace(n)) continue;
+                GameObject go = GameObject.Find(n.Trim());
+                if (go == null)
+                {
+                    ChunaLogger.LogWarning($"[실측랩] '{n}'을(를) 못 찾아 숨기지 못했습니다 — 이름이 바뀌었는지 확인하세요.");
+                    continue;
+                }
+                HideOne(go);
+            }
+        }
+
+        ChunaLogger.Log($"<color=cyan>[실측랩] 자유 모드 — 패스스루 {(passthroughWasOn ? "이미 켜져 있었음" : "켬")} · " +
+                        $"캔버스 {canvases.Length}개 검사 · 우리가 끈 것 {hiddenByUs.Count}개</color>");
+    }
+
+    /// <summary>원래 켜져 있던 것만 끈다. 끈 것만 기억했다가 나갈 때 되돌린다.</summary>
+    private void HideOne(GameObject go)
+    {
+        if (go == null || !go.activeSelf) return;
+        if (go.transform.IsChildOf(transform)) return;   // 우리 것은 끄지 않는다
+        go.SetActive(false);
+        hiddenByUs.Add(go);
+    }
+
+    private void ExitFreeMode()
+    {
+        if (!freeModeApplied) return;
+        freeModeApplied = false;
+
+        for (int i = 0; i < hiddenByUs.Count; i++)
+            if (hiddenByUs[i] != null) hiddenByUs[i].SetActive(true);
+        hiddenByUs.Clear();
+
+        if (practiceSettings != null)
+        {
+            practiceSettings.SetPatientBodyVisible(true);
+            // ★우리가 켠 것만 되돌린다 — 사용자가 미리 켜 둔 패스스루는 그대로 둔다.
+            if (!passthroughWasOn) practiceSettings.SetRealityMode(false);
+        }
+
+        ChunaLogger.Log("<color=cyan>[실측랩] 자유 모드 해제 — 껐던 것을 되돌렸다.</color>");
+    }
+
+    private void OnDisable() => ExitFreeMode();
 
     // ── 손 찾기 ──────────────────────────────────────────────────────
 
