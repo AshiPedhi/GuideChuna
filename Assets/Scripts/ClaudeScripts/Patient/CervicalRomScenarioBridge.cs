@@ -187,7 +187,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private int lastTickSecond = -1; // 유지 타이머 틱 — 초가 바뀔 때만 운다
     private AudioSource cueSource;
     private AudioClip defaultCueClip;
-    private bool stallButtonShown;   // 이 substep에서 다음 버튼을 이미 띄웠는가
+    private bool stallButtonShown;
+    private bool autoPlayRescued;        // 이번 substep에서 막힌 AutoPlay를 한 번 풀었는가   // 이 substep에서 다음 버튼을 이미 띄웠는가
     private bool warnedNotTarget;
     private float overpressureProgress;
     private ScenarioGuideUIController guideUI;   // ProgressCircle을 직접 그리기 위해 잡아 둔다
@@ -314,6 +315,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             lastSubStepNo = sub.subStepNo;
             stepEnteredTime = Time.time;
             stallButtonShown = false;
+            autoPlayRescued = false;
             ApplyGripPair(step.stepName);
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
@@ -339,6 +341,22 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                         && !BothHandsTouching();
 
         TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
+
+        // ★★<b>막힌 AutoPlay만 푼다</b>(2026-09-14). 방향 없는 단계(평가 설명 등)는
+        //   이 브리지가 넘기지 않으므로, 앞 단계에서 안 끝난 AutoPlay가 남아 있으면
+        //   공용 코루틴이 <c>while (IsAutoPlayMode) yield</c>에서 <b>영원히 대기</b>한다.
+        //   ★★<b>진입 즉시 풀면 안 된다</b> — 그 시점은 AutoPlay가 막 시작되는 때라
+        //     단계가 통째로 스킵된다(같은 날 실제로 그렇게 만들어 전 과정이 날아갔다).
+        //     <b>충분히 머문 뒤 한 번만</b> 푼다. 정상 흐름은 그 전에 이미 끝나 있다.
+        if (!autoPlayRescued && stepEnteredTime > 0f
+            && Time.time - stepEnteredTime > stallButtonSeconds
+            && DirectionOf(step.stepName) == CervicalRomDriver.Direction.None
+            && evaluator != null && evaluator.IsAutoPlayMode)
+        {
+            autoPlayRescued = true;
+            evaluator.CompleteAutoPlayExternally();
+            Log($"{step.stepName} — AutoPlay가 {stallButtonSeconds:F0}초 넘게 안 끝나 여기서 푼다(진행 막힘 방지).");
+        }
 
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
@@ -1061,11 +1079,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     {
         PlaceProgressUI(stepName, subStepNo);
 
-        // ★★<b>실제로 들어온 뒤에</b> AutoPlay를 정리한다(2026-09-14).
-        //   넘어가기 <b>전에</b> 끝내면 공용 대기 코루틴이 사람 대신 NextSubStep을 불러
-        //   버튼을 누르기도 전에 진행된다. 안 하면 반대로 다음 단계가 영영 대기한다.
-        //   ★파지 단계는 제외한다 — 거긴 AutoPlay 진행률로 유지 게이지를 그린다(끝내면 게이지가 죽는다).
-        if (!IsGripStep(stepName)) evaluator?.CompleteAutoPlayExternally();
+        // ★★★<b>여기서 AutoPlay를 정리하면 안 된다</b>(2026-09-14에 넣었다가 <b>즉시 되돌렸다</b>).
+        //   substep <b>진입 시점이 곧 AutoPlay가 막 시작되는 시점</b>이다. 여기서 끝내면
+        //   공용 대기 코루틴이 그 자리에서 NextSubStep을 불러 <b>들어가자마자 다음으로 넘어간다</b> —
+        //   단계가 줄줄이 날아가고 환자 애니메이션도 재생 전에 죽는다.
+        //   정리가 필요한 건 <b>이미 끝났어야 하는데 안 끝난</b> AutoPlay뿐이다.
+        //   그래서 아래 '방향 없는 단계'에서 <b>충분히 머문 뒤에만</b> 한 번 정리한다.
 
         CervicalRomDriver.Direction dir = DirectionOf(stepName);
         if (dir == CervicalRomDriver.Direction.None)
@@ -1080,11 +1099,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 Log($"{stepName} — 방향 없는 단계다. 남은 {driver.CurrentAngle:F0}°를 중립으로 되돌린다.");
             }
 
-            // ★★<b>AutoPlay도 같이 정리한다</b>. 안 하면 다음 단계가
-            //   <c>while (pathEvaluator.IsAutoPlayMode) yield</c>에서 <b>영원히 대기</b>한다
-            //   (2026-09-14 로그: "AutoPlay 완료 대기 중..." 뒤로 아무것도 없었다).
-            //   [다음]으로 강제 진행하면 앞 단계의 AutoPlay가 안 끝난 채 남는다. 멱등한 호출이다.
-            evaluator?.CompleteAutoPlayExternally();
             return;
         }
 
