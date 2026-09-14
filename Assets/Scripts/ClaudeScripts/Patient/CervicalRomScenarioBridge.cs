@@ -80,13 +80,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "1.0으로 두면 손 지터 한 번에 타이머가 끊긴다.")]
     [Range(0.8f, 1f)] [SerializeField] private float overpressureHoldThreshold = 0.97f;
 
-    [Tooltip("중립 복귀(x.3)를 끝난 것으로 볼 각(도). 여기 닿으면 나머지는 자동으로 0까지 내린다.\n" +
-             "★종전에는 AtNeutral(0.5°)을 썼는데, 그건 <b>자동 복귀일 때나 닿는 값</b>이다.\n" +
-             "  손으로 되돌리게 바꾼 뒤로는 4°에서 멈춰 20초 정체가 났다(2026-09-14 로그).\n" +
-             "★되돌렸다는 것은 이미 보였다 — 마지막 몇 도를 손으로 긁어맞추게 할 이유가 없다.\n" +
-             "★새 필드라 씬에 값이 없다 → 지금은 코드 기본값이 먹는다(규칙 7).")]
-    [SerializeField] private float returnDoneAngle = 5f;
-
     [Tooltip("가이드손을 켜고 끌 때 접촉 상태를 이만큼 붙잡는다(초).\n" +
              "★손 트래킹이 한 프레임 튀어도 가이드손이 파르르 떨지 않게 한다. 0이면 끈다.")]
     [SerializeField] private float guideToggleDebounce = 0.25f;
@@ -231,8 +224,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float pairSpan;              // 두 손 사이 거리(m)
     private float sweptSmoothed;         // 지터를 거른 회전각
     private float sweptVelocity;         // SmoothDamp용
-    private float returnFromAngle;       // 중립 복귀를 시작한 각(도). 손이 이만큼 되돌리면 중립이다.
-    private float returnRatchet;         // 복귀 중 <b>지금까지 도달한 가장 작은 각</b>. 다시 올라가지 않는다.
     private float lastPressLogTime = -99f;
 
     private void Awake()
@@ -382,20 +373,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
         else
         {
-            // ★★<b>0.5°는 손으로 맞출 수 있는 값이 아니다</b>(2026-09-14).
-            //   자동 복귀(returnSpeed)일 때는 늘 0까지 내려가 <c>AtNeutral</c>이 항상 참이 됐는데,
-            //   손으로 되돌리게 바꾸면서 그 임계가 과해졌다 — 로그: "현재 4°"에서 20초 정체.
-            //   ★닿고 나면 <b>나머지는 자동으로</b> 0까지 내린다. 사람이 마지막 몇 도를
-            //     손으로 긁어맞추게 할 이유가 없다. 되돌렸다는 것은 이미 보였다.
-            done = driver.CurrentAngle <= returnDoneAngle || driver.AtNeutral;
-            if (done)
-            {
-                // ★래칫도 같이 0으로 내린다. 안 내리면 substep이 바뀌기 전 몇 프레임 동안
-                //   AdvanceOverpressure가 다시 돌아 SetReturnAngle(래칫)이 이 복귀를 덮어쓴다.
-                returnRatchet = 0f;
-                driver.ReturnToNeutral();
-            }
-            reason = $"중립 복귀 완료 ({driver.CurrentAngle:F1}° ≤ {returnDoneAngle:F0}°)";
+            done = driver.AtNeutral;
+            reason = "중립 복귀 완료";
         }
 
         // ★막혔을 때 <b>자동으로 넘기지 않는다</b>. '다음' 버튼을 띄우고 사람이 정한다
@@ -572,7 +551,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         bool overpressure = !string.IsNullOrEmpty(stepName)
                             && stepName.EndsWith("압박", System.StringComparison.Ordinal);
         if (!overpressure) return driver.ActiveTargetAngle;              // 능동 — 끝점까지
-        return subStepNo >= 3 ? returnDoneAngle : driver.PassiveLimitAngle;  // 복귀 — 중립 / 압박 — 한계
+        return subStepNo >= 3 ? 0f : driver.PassiveLimitAngle;   // 복귀 — 중립(0°) / 압박 — 한계
     }
 
     /// <summary>이번 판을 가상환자 평가로 돌렸는가. 결과 수집기가 점수를 여기서 읽을지 정한다.</summary>
@@ -1103,18 +1082,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             //   평가는 여전히 안 띄운다 — 어느 쪽으로 가야 하는지가 평가 대상이다.
             planeGauge?.SetPressGuide(!IsEvaluationScoring(), reversed: true);
 
-            // ★★복귀도 <b>시술자 손이 끈다</b>(2026-09-14 사용자 지시:
-            //   "중립으로 돌리는건 따라가게 말고 그냥 본인이 돌리게. 그래야 평가가 되니까").
-            //   종전에는 driver.ReturnToNeutral()로 returnSpeed(씬 값 20도/초)만큼 알아서 내려왔다 —
-            //   손을 대고만 있으면 됐다. 그건 시술자가 한 일이 아니라서 평가할 것이 없다.
-            //   ★손 기준점을 여기서 다시 잡는다. 압박 때 잡은 기준을 그대로 쓰면 되돌린 각이 이미 밀린 값이 된다.
-            returnFromAngle = driver.CurrentAngle;
-            returnRatchet = returnFromAngle;
-            arcStarted = false;
-            pairStarted = false;
-            sweptSmoothed = 0f;
-            sweptVelocity = 0f;
-            Log($"중립 복귀 {stepName} — {returnFromAngle:F1}°에서 손으로 되돌린다 (부족각 {driver.DeficitAngle:F1}°)");
+            // ★복귀는 <b>자동</b>이다 — 손을 대고 있으면 returnSpeed로 돌아간다(손을 떼면 Paused로 멈춘다).
+            //   2026-09-14에 손으로 직접 돌리게 바꿨다가 <b>같은 날 되돌렸다</b>(사용자 판단:
+            //   "내가 너무 욕심 부린 것 같아. 기존처럼 자동으로, 대고 있으면 돌아가게").
+            //   ★평가에 필요한 것은 <b>압박 구간에서 이미 잡힌다</b> — 압박 포인트로 안 가고 중립 쪽으로
+            //   되돌리려 했는지를 passiveSkipBackDegrees가 본다. 복귀까지 손으로 만들 이유가 없었다.
+            driver.ReturnToNeutral();
+            Log($"중립 복귀 {stepName} (부족각 {driver.DeficitAngle:F1}°)");
         }
     }
 
@@ -1130,11 +1104,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   (미끄러짐·손 유실로 중간에 돌아서는 길이 여럿이라, 끄는 걸 분기마다 두면 반드시 하나를 빠뜨린다.)
         OverpressureBacking = false;
 
-        if (subStepNo < 2 || !stepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
-
-        // ★x.2 = 미는 구간 · x.3 = 되돌리는 구간. <b>손 각을 재는 방법은 똑같다</b>(2026-09-14).
-        //   부호만 반대다 — 미는 쪽이 양수, 되돌리는 쪽이 음수다. 그래서 계산은 한 벌만 둔다.
-        bool isReturn = subStepNo >= 3;
+        // ★x.2(압박)에서만 돈다. 복귀(x.3)는 자동이라 손 각을 잴 일이 없다.
+        if (subStepNo != 2 || !stepName.EndsWith("압박", System.StringComparison.Ordinal)) return;
 
         Transform pivot = driver.Pivot;
         Vector3 axis = driver.CurrentWorldAxis;
@@ -1177,15 +1148,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         if (float.IsNaN(swept))
         {
-            // 손끝을 하나도 못 찾은 경우에만 예전 방식으로 물러난다.
-            // ★복귀는 <b>자동 램프</b>로 물러난다 — 손을 못 읽는 건 학습자 잘못이 아닌데
-            //   그대로 두면 중립까지 영영 못 가 단계가 막힌다("걸려서 못 재는 것보단
-            //   어긋나도 일단 되는 게 중요하다" — 09-08 사용자 방침).
-            if (!arcStarted && !pairStarted)
-            {
-                if (isReturn) driver.ReturnToNeutral();
-                else AdvanceOverpressureByTime();
-            }
+            // 손끝을 하나도 못 찾은 경우에만 예전 시간 방식으로 물러난다.
+            if (!arcStarted && !pairStarted) AdvanceOverpressureByTime();
             DiagnoseOverpressure("기준 잡는 중", arcAngle, pairAngle, axis, pivot);
             return;
         }
@@ -1217,25 +1181,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ★★복귀(x.3) — 손이 되돌린 만큼만 머리가 돌아온다(2026-09-14).
         //   부호가 반대라 -sweptSmoothed가 '되돌린 양'이다. 시작 각만큼 되돌리면 중립이다.
         //   ★더 되돌리려 해도 0도에서 멈춘다(Clamp01). 반대로 밀면 진행이 0으로 잘려 그 자리에 선다.
-        if (isReturn)
-        {
-            // 손이 중립 쪽으로 되돌린 양(양수). 미는 쪽으로 가면 0이다.
-            float back = Mathf.Max(0f, -sweptSmoothed);
-            float want = Mathf.Clamp(returnFromAngle - back, 0f, returnFromAngle);
-
-            // ★★<b>래칫 — 한 번 내려간 각은 다시 안 올라간다</b>(2026-09-14).
-            //   이게 없으면 손 각이 0 근처에서 한 번만 흔들려도 목표각이 시작각으로 되돌아가
-            //   <b>머리가 82°로 튄다</b>(사용자: "머리가 뒤로 휭 날아가잖아").
-            //   압박은 낙차가 5~7°라 티가 안 났지만 복귀는 82°라 그대로 드러났다.
-            //   ★복귀는 <b>되돌리는</b> 단계다 — 다시 미는 구간이 아니므로 한 방향만 허용하는 게 맞다.
-            //     (압박 x.2에서 중립 쪽으로 가는 길은 열어 둔 그대로다. 여기는 x.3 얘기다.)
-            if (want < returnRatchet) returnRatchet = want;
-
-            driver.SetReturnAngle(returnRatchet);
-            DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
-            return;
-        }
-
         // ★평가에서는 압박이 자율이다(2026-09-11). 밀지 않고 중립 쪽으로 되돌리면 생략으로 보고 복귀로 넘긴다.
         //   음수 = 되돌아가는 방향 — 바로 아래 진행률 계산이 이미 같은 약속으로 음수를 0으로 자른다.
         if (evalScoredRun && passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees)

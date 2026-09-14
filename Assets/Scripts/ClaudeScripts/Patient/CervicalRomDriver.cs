@@ -529,8 +529,8 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         //     로그: "파지 O … 머리 0.0° → 압박한계 0° (최대 0°) · 축 ★없음(방향 None)".
         //   ★종전 <see cref="SetOverpressure"/>는 하한이 ActiveTargetAngle이라 0에 닿을 일이 없었다.
         //     되돌리는 쪽을 열면서 생긴 구멍이다.
-        //   ★<b>중립까지 내려가는 일은 복귀(x.3)가 맡는다</b>(<see cref="SetReturn"/>). 거기서는 0에 닿아야
-        //     <see cref="AtNeutral"/>로 단계가 끝나므로 지워지는 게 정상 흐름이다. 역할이 다르다.
+        //   ★<b>중립까지 내려가는 일은 복귀(x.3)가 맡는다</b>(<see cref="ReturnToNeutral"/>).
+        //     거기서는 0에 닿아야 <see cref="AtNeutral"/>로 단계가 끝나므로 지워지는 게 정상이다.
         //   0.6°는 화면에서 중립과 구분되지 않으면서 스냅 조건(0.05°)을 확실히 비껴간다.
         const float keepDirectionAngle = 0.6f;
 
@@ -548,36 +548,21 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     /// <summary>중립에 도달했는가. 다음 방향으로 넘어가도 되는 시점이다.</summary>
     public bool AtNeutral => currentDirection == Direction.None || appliedAngle < 0.5f;
 
-    /// <summary>중립으로 되돌린다. returnSpeed로 천천히 내려온다.</summary>
-    /// ★2026-09-14부터 이건 <b>폴백</b>이다 — 손끝을 못 읽을 때만 쓴다.
-    ///   평상시 복귀는 <see cref="SetReturn"/>로 시술자 손이 끈다.
+    /// <summary>
+    /// 중립으로 되돌린다. <see cref="returnSpeed"/>로 천천히 내려온다.
+    ///
+    /// ★2026-09-14에 <b>손으로 직접 돌리는 방식</b>을 넣었다가 <b>같은 날 되돌렸다</b>(사용자 판단:
+    ///   "내가 너무 욕심 부린 것 같아. 중립으로 돌리는 거 기존처럼 자동으로, 대고 있으면 돌아가게").
+    ///   손으로 돌리게 하니 셋이 줄줄이 터졌다 — 중립에 닿아 방향이 지워져 <b>굳음</b> ·
+    ///   손 각이 흔들리면 <b>시작각으로 튐</b> · 완료 임계(0.5°)를 손으로 못 맞춰 <b>정체</b>.
+    /// ★<b>평가에 필요한 것은 압박 구간에서 이미 잡힌다</b> — 압박 포인트로 안 가고 중립 쪽으로
+    ///   되돌리려 했는지를 <c>passiveSkipBackDegrees</c>가 본다. 복귀까지 손으로 만들 이유가 없었다.
+    /// ★손을 떼면 멈추는 것은 그대로다(<c>Paused</c>). '대고 있으면' 돌아간다.
+    /// </summary>
     public void ReturnToNeutral()
     {
         targetAngle = 0f;
         ramifySpeed = returnSpeed;
-    }
-
-    /// <summary>
-    /// 복귀를 <b>시술자 손이 끈다</b>(2026-09-14 사용자 지시:
-    /// "중립으로 돌리는건 따라가게 말고 그냥 본인이 돌리게").
-    ///
-    /// 종전에는 손만 대고 있으면 <see cref="returnSpeed"/>로 알아서 0도까지 내려왔다.
-    /// 그건 시술자가 <b>한 일이 아니라서</b> 평가할 것이 없다.
-    /// 이제 복귀 시작 각(<paramref name="fromAngle"/>)에서 손이 되돌린 만큼만 내려온다.
-    ///
-    /// ★압박(<see cref="SetOverpressure"/>)과 <b>같은 방식</b>이다 — 속도 제한을 풀고 손을 즉시 따라간다.
-    ///   구간만 다르다(압박은 능동끝→압박한계, 복귀는 복귀시작각→0).
-    /// </summary>
-    /// ★2026-09-14 <b>진행률 방식을 버렸다.</b> 종전에는 (시작각, 0~1)을 받아 Lerp했는데,
-    ///   손 각이 0 근처에서 흔들려 진행률이 0으로 떨어지면 <b>목표각이 시작각으로 되돌아가</b>
-    ///   머리가 82°로 한 번에 튀었다(사용자: "머리가 뒤로 휭 날아가잖아").
-    ///   이제 <b>각을 직접</b> 받는다. 되돌린 양을 누가 어떻게 세는지는 부르는 쪽이 정한다.
-    public void SetReturnAngle(float degrees)
-    {
-        if (currentDirection == Direction.None) return;
-
-        ramifySpeed = 0f;   // 손을 즉시 따라간다. 속도 제한을 걸면 손과 머리가 어긋난다.
-        targetAngle = Mathf.Max(0f, degrees);
     }
 
     private void LateUpdate()
