@@ -331,7 +331,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ★중립 복귀(x.3)도 예외가 아니다 — 예전엔 복귀만 파지를 면제했는데,
         //   사용자 지시로 복귀도 파지를 유지해야 움직이도록 바꿨다(2026-08-26).
         //   시술자가 손을 댄 채로 따라 내려오는 게 실제 술기다.
-        driver.Paused = !BothHandsTouching();
+        // ★★단 <b>방향 없는 단계</b>(평가 설명·파지·결과)에서는 파지로 막지 않는다(2026-09-14).
+        //   그 단계엔 손을 댈 이유가 없는데, 막아 두면 [다음]으로 건너뛴 뒤 걸어 둔
+        //   <c>ReturnToNeutral</c>이 <b>영영 안 내려간다</b> — 버튼을 누르는 순간은 대개 손을 뗀 상태다.
+        //   그러면 "통과시켰는데 머리가 그대로"가 다시 난다. 되돌릴 각이 없으면 어차피 아무 일도 없다.
+        driver.Paused = DirectionOf(step.stepName) != CervicalRomDriver.Direction.None
+                        && !BothHandsTouching();
 
         TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
 
