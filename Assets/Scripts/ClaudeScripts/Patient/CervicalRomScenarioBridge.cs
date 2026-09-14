@@ -347,6 +347,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
         TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
 
+        TryShowStallButton(step.stepName, sub.subStepNo, key);
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
 
@@ -355,6 +356,32 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     /// CSV의 duration을 0으로 두면 AutoPlay가 스스로 완료하지 않으므로 여기서만 넘긴다
     /// (ScenarioConditionManager의 subStepToken 가드가 중복 진행을 막는다).
     /// </summary>
+    /// <summary>
+    /// 정체하면 [다음] 버튼을 띄운다. ★<b>모든 단계에서</b> 돈다(2026-09-14 사용자 지적:
+    ///   "파지 단계는 왜 스킵 없는 건데").
+    ///
+    /// ★종전에는 <see cref="TryAdvanceWhenDone"/> 안에 있었는데, 그 함수는 방향이 없거나
+    ///   subStepNo가 2 미만이면 첫 줄에서 돌아선다. 그래서 <b>파지·지시·평가 단계에서는
+    ///   버튼이 아예 안 떴고, 거기서 막히면 빠져나갈 길이 없었다.</b>
+    /// ★버튼만 띄운다. 진행은 사람이 누를 때 <see cref="HandleSkipPressed"/>가 한다 —
+    ///   여기서 AutoPlay를 끝내면 누르기도 전에 넘어간다(같은 날 그렇게 만들어 물렸다).
+    /// </summary>
+    private void TryShowStallButton(string stepName, int subStepNo, string key)
+    {
+        if (stallButtonShown || advancedKey == key) return;
+        if (stepEnteredTime <= 0f || Time.time - stepEnteredTime <= stallButtonSeconds) return;
+
+        stallButtonShown = true;
+
+        ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 "
+                               + $"{stallButtonSeconds:F0}초 동안 끝나지 않았다 — '다음' 버튼을 띄운다. "
+                               + $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
+
+        if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+        guideUI?.ClearExternalProgress();
+        guideUI?.EnableStartToggle();
+    }
+
     private void TryAdvanceWhenDone(string stepName, int subStepNo, string key)
     {
         if (advancedKey == key) return;
@@ -396,23 +423,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   그래서 여기서 직접 띄운다.
         if (!done)
         {
-            if (!stallButtonShown && stepEnteredTime > 0f
-                && Time.time - stepEnteredTime > stallButtonSeconds)
-            {
-                stallButtonShown = true;
-
-                // ★★<b>여기서 AutoPlay를 끝내면 안 된다</b>(2026-09-14 사용자 지적:
-                //   "다음으로 자동 진행 시키란 게 아니잖아").
-                //   AutoPlay가 끝나는 순간 공용 대기 코루틴이 <c>NextSubStep()</c>을 불러
-                //   <b>사람이 누르기도 전에 넘어간다</b>. 버튼은 띄우되 진행은 사람이 정한다.
-                //   정리는 실제로 넘어간 뒤(다음 substep 진입)에 한다.
-                ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {stepName} {subStepNo}가 " +
-                                       $"{stallButtonSeconds:F0}초 동안 목표에 못 닿았다 — '다음' 버튼을 띄운다. " +
-                                       $"현재 {driver.CurrentAngle:F0}° / 목표 {StallTargetOf(stepName, subStepNo):F0}°</color>");
-                if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
-                guideUI?.ClearExternalProgress();
-                guideUI?.EnableStartToggle();
-            }
 
             // stallTimeoutSeconds가 0 이하면 자동 진행은 아예 하지 않는다(기본값).
             if (stallTimeoutSeconds > 0f && stepEnteredTime > 0f
@@ -518,31 +528,41 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         string name = step.stepName;
         int no = sub.subStepNo;
         CervicalRomDriver.Direction dir = DirectionOf(name);
-        if (dir == CervicalRomDriver.Direction.None || driver == null) return false;
-
         bool overpressure = !string.IsNullOrEmpty(name)
                             && name.EndsWith("압박", System.StringComparison.Ordinal);
 
         // ①② 건너뛴 과정의 결과를 머리에 반영하고 측정값을 남긴다.
         //    ★SnapTo는 Paused를 무시한다 — 버튼을 누르는 순간은 대개 손을 뗀 상태다.
         //    ★SnapTo로 적용각을 먼저 박아야 Record*가 그 값을 집는다. 순서를 바꾸면 안 된다.
-        if (!overpressure)
+        // ★★<b>방향 없는 단계(파지·자세정렬·평가)도 여기서 처리한다</b>(2026-09-14).
+        //    머리를 건드릴 것은 없지만, 그 단계들도 AutoPlay를 쓰므로 <b>넘기는 방법은 같아야 한다</b> —
+        //    가이드UI가 NextSubStep만 부르면 그 AutoPlay가 남아 다음 단계가 영영 대기한다.
+        if (dir == CervicalRomDriver.Direction.None || driver == null)
+        {
+            Log($"{name} {no} 건너뜀 — 각을 쓰지 않는 단계다(머리는 그대로 둔다).");
+        }
+        else if (!overpressure && no >= 2)
         {
             driver.SnapTo(dir, driver.ActiveTargetAngle);
             driver.RecordActiveReached();
             Log($"{name} {no} 건너뜀 — 능동 끝점 {driver.ActiveTargetAngle:F0}°로 맞추고 기록한다.");
         }
-        else if (no == 2)
+        else if (overpressure && no == 2)
         {
             driver.SnapTo(dir, driver.PassiveLimitAngle);
             driver.RecordPassiveReached();
             MarkEvaluationPassiveSkipped(name, "압박 유지를 끝내지 않고 넘어갔다([다음])");   // ③
             Log($"{name} {no} 건너뜀 — 압박 한계 {driver.PassiveLimitAngle:F0}°로 맞추고 기록한다.");
         }
-        else
+        else if (overpressure && no >= 3)
         {
             driver.SnapTo(dir, 0f);
             Log($"{name} {no} 건너뜀 — 중립으로 맞춘다.");
+        }
+        else
+        {
+            // 지시(x.1) substep — 각은 그대로 두고 넘기기만 한다.
+            Log($"{name} {no} 건너뜀 — 지시 단계다(머리는 그대로 둔다).");
         }
 
         // ④ 정상 완료와 같은 경로로 넘긴다. AutoPlay가 돌면 그쪽을 끝내고 파이프라인이 진행한다.
@@ -704,17 +724,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             if (guideUI == null) return;
         }
 
-        // ★★<b>평가는 진행 표시를 아예 안 띄운다</b>(2026-09-14 사용자 지적:
-        //   "압박 안 하고 중립으로 가면 진행표시 부분이 사라져서 힌트가 된다").
-        //   ★핵심은 게이지가 <b>사라지는 것</b>이 신호라는 점이다 — 압박을 건너뛰었다는 걸 알려 준다.
-        //     차 있는 것도 마찬가지로 "지금 제대로 누르고 있다"를 알려 준다. 둘 다 답을 주는 것이다.
-        //   ★<b>처음부터 없으면 사라질 것도 없다.</b> 실습은 종전대로 띄운다 — 거긴 가르치는 모드다.
-        if (IsEvaluationScoring())
-        {
-            guideUI.ClearExternalProgress();
-            return;
-        }
-
+        // ★2026-09-14: 평가에서 진행 표시를 통째로 껐다가 <b>같은 날 되돌렸다</b>(사용자 지시:
+        //   "평가모드에서도 몇 초 유지해야 하는지는 알려줘야지, 진행률 왜 안 보여주는데").
+        //   ★얼마나 버텨야 하는지는 <b>과제의 조건</b>이지 답이 아니다. 그걸 숨기면 평가가 아니라
+        //     추측 놀이가 된다. 숨길 것은 <b>어떻게 하는지</b>(가이드 손·방향 화살표)다.
         bool isOverpressure = !string.IsNullOrEmpty(stepName)
                               && stepName.EndsWith("압박", System.StringComparison.Ordinal);
 
