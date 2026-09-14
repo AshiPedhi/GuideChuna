@@ -109,6 +109,17 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     public bool SuppressEvaluationProgressSuffix { get; set; }
 
+    /// <summary>
+    /// 시작(계속하기) 토글을 <b>밖에서 가져간다</b>. true를 돌려주면 여기서 NextSubStep을 부르지 않는다.
+    ///
+    /// ★2026-09-14 신설. 경추ROM이 정체 버튼을 띄우고 <b>직접</b> 처리한다 —
+    ///   건너뛴 단계의 결과(머리 각·측정 기록)를 반영한 뒤 자기 완료 경로로 넘겨야
+    ///   AutoPlay가 정상으로 끝난다. 여기서 NextSubStep을 먼저 부르면 그 단계의 AutoPlay가
+    ///   살아남아 다음 단계가 <c>WaitForAutoPlayComplete</c>에서 영영 대기한다.
+    /// ★<b>켠 쪽이 끈다</b> — 등록한 컴포넌트가 시나리오를 벗어날 때 null로 되돌린다.
+    /// </summary>
+    public System.Func<bool> ExternalStartHandler { get; set; }
+
     [Header("=== 진행 원형 표시 (Duration) ===")]
     [Tooltip("ProgressCircle 프리팹 루트 GameObject")]
     [SerializeField] private GameObject progressCircleObject;
@@ -952,6 +963,18 @@ public class ScenarioGuideUIController : MonoBehaviour
         // 토글이 켜졌을 때만 다음 단계로 진행 (ScenarioManager가 활성화 상태일 때만)
         if (isOn && scenarioManager != null && scenarioManager.enabled && scenarioManager.CurrentStep != null)
         {
+            // ★밖에서 이 버튼을 가져간 경우가 있다(2026-09-14). 경추ROM이 정체 버튼을 띄우고
+            //   직접 처리한다 — 건너뛴 단계의 결과를 반영한 뒤 <b>자기 완료 경로</b>로 넘겨야
+            //   AutoPlay가 정상으로 끝난다. 여기서 NextSubStep을 먼저 불러 버리면
+            //   그 단계의 AutoPlay가 살아남아 다음 단계가 영영 대기한다.
+            //   ★핸들러가 true를 돌려주면 진행은 그쪽이 책임진다.
+            if (ExternalStartHandler != null && ExternalStartHandler())
+            {
+                ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 외부 처리기가 진행을 가져갔다");
+                startToggle.isOn = false;
+                return;
+            }
+
             ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
             scenarioManager.NextSubStep();
 

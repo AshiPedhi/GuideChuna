@@ -266,6 +266,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             {
                 active = false;
                 driver.Paused = false;
+                // ★가져갔던 [다음] 버튼을 돌려준다. 안 돌려주면 다음 술기의 버튼까지 우리가 먹는다.
+                if (guideUI != null) guideUI.ExternalStartHandler = null;
                 // ★술기를 벗어날 때만 가이드 손을 머리뼈에서 뗀다. 안 떼면 다음 술기까지
                 //   손이 환자 머리에 매달려 따라다닌다.
                 evaluator?.ReleaseGuideHandHoldInternal();
@@ -287,6 +289,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             active = true;
             Log($"대상 시나리오 진입 — 여기서부터 목 각도를 굴린다");
             ResetEvaluationScore();
+
+            // ★정체 버튼([다음])을 우리가 처리한다. 건너뛴 결과를 반영한 뒤 자기 완료 경로로
+            //   넘겨야 AutoPlay가 정상으로 끝난다. ★켠 쪽이 끈다 — 아래 이탈 자리에서 되돌린다.
+            if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+            if (guideUI != null) guideUI.ExternalStartHandler = HandleSkipPressed;
         }
 
         string key = $"{step.stepName}#{sub.subStepNo}";
@@ -485,87 +492,73 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     /// 압박 유지(x.2)를 <b>끝내지 않고</b> 떠났으면 생략으로 적는다. [다음] 버튼으로 넘긴 경우다.
     /// ★목표 도달·되돌림 생략은 우리가 넘기면서 <see cref="advancedKey"/>를 찍어 두므로 여기 안 걸린다.
     /// </summary>
+    /// <summary>
+    /// ★★<b>건너뛰기는 여기 한 곳에서만 처리한다</b>(2026-09-14).
+    ///
+    /// 종전에는 같은 일을 세 자리에 흩어 놨다 — 버튼을 띄우는 자리, 단계를 떠나는 자리,
+    /// 새 단계에 들어오는 자리. 세 곳이 서로 다른 시점에 돌면서 <b>엉켰다</b>:
+    /// AutoPlay를 너무 일찍 끝내 자동 진행되거나, 새 단계 것을 죽여 접촉 없이 넘어가거나,
+    /// 정리를 놓쳐 다음 단계가 영영 대기했다. 하루에 같은 자리에서 네 번 물렸다.
+    ///
+    /// ★<b>[다음]을 누른 그 순간</b> 여기서 전부 한다 —
+    ///   ①건너뛴 단계의 결과를 머리에 반영 ②측정값 기록 ③평가 감점 ④<b>정상 완료와 같은 경로</b>로 넘김.
+    /// ★④가 핵심이다. <see cref="FinishSubStep"/>은 조건을 채웠을 때 쓰는 바로 그 함수다 —
+    ///   AutoPlay가 돌면 제대로 끝내고 파이프라인이 넘긴다. 조건으로 AutoPlay를 맞히려 들지 않는다.
+    /// </summary>
+    /// <returns>우리가 처리했으면 true. 그러면 가이드UI는 NextSubStep을 부르지 않는다.</returns>
+    private bool HandleSkipPressed()
+    {
+        // 우리가 띄운 버튼이 아니면 관여하지 않는다(가이드 스텝의 [시작]·[종료] 등).
+        if (!stallButtonShown || !active) return false;
+
+        StepData step = scenarioManager != null ? scenarioManager.CurrentStep : null;
+        SubStepData sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
+        if (step == null || sub == null) return false;
+
+        string name = step.stepName;
+        int no = sub.subStepNo;
+        CervicalRomDriver.Direction dir = DirectionOf(name);
+        if (dir == CervicalRomDriver.Direction.None || driver == null) return false;
+
+        bool overpressure = !string.IsNullOrEmpty(name)
+                            && name.EndsWith("압박", System.StringComparison.Ordinal);
+
+        // ①② 건너뛴 과정의 결과를 머리에 반영하고 측정값을 남긴다.
+        //    ★SnapTo는 Paused를 무시한다 — 버튼을 누르는 순간은 대개 손을 뗀 상태다.
+        //    ★SnapTo로 적용각을 먼저 박아야 Record*가 그 값을 집는다. 순서를 바꾸면 안 된다.
+        if (!overpressure)
+        {
+            driver.SnapTo(dir, driver.ActiveTargetAngle);
+            driver.RecordActiveReached();
+            Log($"{name} {no} 건너뜀 — 능동 끝점 {driver.ActiveTargetAngle:F0}°로 맞추고 기록한다.");
+        }
+        else if (no == 2)
+        {
+            driver.SnapTo(dir, driver.PassiveLimitAngle);
+            driver.RecordPassiveReached();
+            MarkEvaluationPassiveSkipped(name, "압박 유지를 끝내지 않고 넘어갔다([다음])");   // ③
+            Log($"{name} {no} 건너뜀 — 압박 한계 {driver.PassiveLimitAngle:F0}°로 맞추고 기록한다.");
+        }
+        else
+        {
+            driver.SnapTo(dir, 0f);
+            Log($"{name} {no} 건너뜀 — 중립으로 맞춘다.");
+        }
+
+        // ④ 정상 완료와 같은 경로로 넘긴다. AutoPlay가 돌면 그쪽을 끝내고 파이프라인이 진행한다.
+        advancedKey = $"{name}#{no}";   // 이 substep은 우리가 처리했다 — 뒤늦은 중복 진행을 막는다
+        FinishSubStep();
+        return true;
+    }
+
+    /// <summary>
+    /// ★<b>비워 뒀다</b>(2026-09-14). 건너뛰기 처리는 전부 <see cref="HandleSkipPressed"/> 한 곳으로 옮겼다 —
+    ///   여기는 <b>이미 다음 substep으로 넘어간 뒤</b>에 불리는 자리라, 무엇을 하든 늦거나
+    ///   새 단계가 막 시작한 것을 건드린다. 그 탓에 하루에 네 번 물렸다.
+    ///   지금은 남길 일이 없어 아무것도 하지 않는다. 호출부는 그대로 둔다(자리 표시).
+    /// </summary>
     private void NoteLeavingSubStep()
     {
-        if (string.IsNullOrEmpty(lastStepKey) || string.IsNullOrEmpty(lastStepName)) return;
-
-        // ★★★<b>스킵 판정은 [다음] 버튼이 실제로 떴는지로 한다</b>(2026-09-14, 같은 날 두 번 틀렸다).
-        //   처음엔 <c>advancedKey != lastStepKey</c>만 봤는데, <b>그건 스킵 판정이 아니다</b> —
-        //   advancedKey는 <b>이 브리지가 넘긴 경우에만</b> 찍힌다. 파지·지시(x.1)·평가 단계는
-        //   브리지가 관여하지 않아 <c>TryAdvanceWhenDone</c>이 첫 줄에서 돌아서므로
-        //   <b>정상으로 지나가도 안 찍힌다.</b> 그걸 스킵으로 읽어 AutoPlay를 끝내는 바람에
-        //   <b>손을 안 대도 전 과정이 알아서 진행됐다.</b>
-        //   ★<c>stallButtonShown</c>은 그 substep에서 정체해 버튼을 띄웠을 때만 참이고,
-        //     다음 substep 진입 시 꺼진다(이 함수는 그 리셋보다 <b>먼저</b> 불린다 — 309 vs 316줄).
-        //   → 버튼이 떠 있었고 + 조건도 못 채웠다 = 사람이 [다음]을 눌러 건너뛴 것이다.
-        bool skipped = stallButtonShown && advancedKey != lastStepKey;
-        if (!skipped) return;
-
-        bool overpressure = lastStepName.EndsWith("압박", System.StringComparison.Ordinal);
-
-        // ★★<b>건너뛴 과정의 결과를 머리에 반영한다</b>(2026-09-14 사용자 지적:
-        //   "압박할 때 기다렸다가 스킵했더니 압박 위치로 머리 이동도 안 한다").
-        //   반영하지 않으면 다음 단계가 어긋난 각에서 시작한다 — 압박은 능동 끝점을,
-        //   다음 방향은 중립을 전제로 계산하기 때문이다.
-        //   ★SnapTo는 Paused를 무시한다. [다음]을 누르는 순간은 대개 손을 뗀 상태라
-        //     보통 경로로는 머리가 <b>한 도도 안 움직인다</b>.
-        CervicalRomDriver.Direction dir = DirectionOf(lastStepName);
-        if (driver != null && dir != CervicalRomDriver.Direction.None && lastSubStepNo >= 2)
-        {
-            // ★★<b>각도 기록도 같이 남긴다.</b> Record*는 정상 완료 경로에서만 불려서,
-            //   건너뛰면 그 방향의 측정값이 <b>아예 안 남았다</b> — 각도기 도달 마커도,
-            //   결과표의 능동/수동 칸도 비었다(2026-09-14 사용자 지적:
-            //   "스킵할 경우 압박이 완료된 상태에서 중립으로 돌아가는 과정이 나와야 하니까
-            //    압박 위치 각도 마크가 나와야 하는데 그것도 안 나온다").
-            //   ★SnapTo로 적용각을 먼저 박아야 Record*가 그 값을 집는다. 순서를 바꾸면 안 된다.
-            if (!overpressure)
-            {
-                driver.SnapTo(dir, driver.ActiveTargetAngle);         // 능동을 건너뜀 → 끝점
-                driver.RecordActiveReached();
-                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 능동 끝점 {driver.ActiveTargetAngle:F0}°로 맞추고 기록한다.");
-            }
-            else if (lastSubStepNo == 2)
-            {
-                driver.SnapTo(dir, driver.PassiveLimitAngle);         // 압박을 건너뜀 → 압박 한계
-                driver.RecordPassiveReached();
-                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 압박 한계 {driver.PassiveLimitAngle:F0}°로 맞추고 기록한다.");
-            }
-            else
-            {
-                driver.SnapTo(dir, 0f);                               // 복귀를 건너뜀 → 중립(측정값 아님)
-                Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 중립으로 맞춘다.");
-            }
-        }
-
-        // ★★<b>건너뛴 단계의 AutoPlay를 여기서 끝낸다</b>(2026-09-14).
-        //   ROM의 동작 substep은 애니도 duration도 없어 AutoPlay가 <b>스스로 못 끝난다</b>.
-        //   그대로 두면 다음 substep의 나레이션이 <c>WaitForAutoPlayComplete</c>에서 영원히 대기한다
-        //   (로그: "신전 2 건너뜀" 뒤로 "압박 시작"이 안 찍히고 멈췄다).
-        //   ★<b>스킵일 때만</b> 부른다 — 정상 완료는 <see cref="FinishSubStep"/>이 이미 같은 일을 한다.
-        //
-        // ★★★<b>새 단계가 AutoPlay를 쓰면 건드리면 안 된다</b>(2026-09-14, 여기서 또 물렸다).
-        //   이 함수는 이름과 달리 <b>이미 다음 substep으로 넘어간 뒤</b>에 불린다. 그래서 여기서
-        //   무조건 끝내면 <b>새 단계가 막 시작한 AutoPlay를 죽인다</b> —
-        //   복귀(x.3)는 voiceGate라 AutoPlay로 접촉을 기다리는데, 그걸 죽여서
-        //   <b>손을 안 댔는데 그냥 다음 방향으로 넘어갔다</b>(사용자 지적).
-        //   반대로 지시 substep(x.1)은 자기 AutoPlay를 시작하지 않으므로, 스킵한 단계의 것이
-        //   남아 있으면 <c>WaitForAutoPlayComplete</c>에서 영영 대기한다 — 그때는 정리해야 한다.
-        //   → <b>새 substep의 conditionType으로 가른다.</b> 비어 있으면(지시·평가) 정리, 있으면 그대로 둔다.
-        SubStepData now = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
-        string nowCond = now != null && now.conditionType != null ? now.conditionType.Trim() : "";
-        bool nextUsesAutoPlay = nowCond.Length > 0
-                                && !nowCond.Equals("None", System.StringComparison.OrdinalIgnoreCase);
-
-        if (!nextUsesAutoPlay && evaluator != null && evaluator.IsAutoPlayMode)
-        {
-            evaluator.CompleteAutoPlayExternally();
-            Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 남은 AutoPlay를 정리한다 " +
-                $"(다음 substep은 conditionType이 없어 자기 AutoPlay를 안 쓴다).");
-        }
-
-        // 평가 감점은 압박 유지(x.2)를 건너뛴 경우만이다.
-        if (overpressure && lastSubStepNo == 2)
-            MarkEvaluationPassiveSkipped(lastStepName, "압박 유지를 끝내지 않고 넘어갔다([다음])");
     }
 
     private void MarkEvaluationPassiveSkipped(string stepName, string why)
@@ -1103,20 +1096,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //   그래서 아래 '방향 없는 단계'에서 <b>충분히 머문 뒤에만</b> 한 번 정리한다.
 
         CervicalRomDriver.Direction dir = DirectionOf(stepName);
-        if (dir == CervicalRomDriver.Direction.None)
-        {
-            // ★★<b>방향 없는 단계로 들어왔는데 각이 남아 있으면 중립으로 돌린다</b>(2026-09-14).
-            //   사용자: "과정을 통과시켰으면 환자 머리도 중립으로 돌아오던가 해야지."
-            //   복귀(x.3)를 [다음]으로 건너뛰면 머리가 그 각 그대로 남았다 — 여기가
-            //   <b>첫 줄에서 그냥 return</b>이라 각을 정리하는 코드가 아예 없었다.
-            if (driver != null && driver.CurrentAngle > 0.5f)
-            {
-                driver.ReturnToNeutral();
-                Log($"{stepName} — 방향 없는 단계다. 남은 {driver.CurrentAngle:F0}°를 중립으로 되돌린다.");
-            }
-
-            return;
-        }
+        if (dir == CervicalRomDriver.Direction.None) return;
 
         bool isOverpressure = stepName.EndsWith("압박", System.StringComparison.Ordinal);
 
