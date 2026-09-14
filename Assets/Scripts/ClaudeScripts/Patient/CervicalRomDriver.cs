@@ -514,10 +514,31 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     public bool AtNeutral => currentDirection == Direction.None || appliedAngle < 0.5f;
 
     /// <summary>중립으로 되돌린다. returnSpeed로 천천히 내려온다.</summary>
+    /// ★2026-09-14부터 이건 <b>폴백</b>이다 — 손끝을 못 읽을 때만 쓴다.
+    ///   평상시 복귀는 <see cref="SetReturn"/>로 시술자 손이 끈다.
     public void ReturnToNeutral()
     {
         targetAngle = 0f;
         ramifySpeed = returnSpeed;
+    }
+
+    /// <summary>
+    /// 복귀를 <b>시술자 손이 끈다</b>(2026-09-14 사용자 지시:
+    /// "중립으로 돌리는건 따라가게 말고 그냥 본인이 돌리게").
+    ///
+    /// 종전에는 손만 대고 있으면 <see cref="returnSpeed"/>로 알아서 0도까지 내려왔다.
+    /// 그건 시술자가 <b>한 일이 아니라서</b> 평가할 것이 없다.
+    /// 이제 복귀 시작 각(<paramref name="fromAngle"/>)에서 손이 되돌린 만큼만 내려온다.
+    ///
+    /// ★압박(<see cref="SetOverpressure"/>)과 <b>같은 방식</b>이다 — 속도 제한을 풀고 손을 즉시 따라간다.
+    ///   구간만 다르다(압박은 능동끝→압박한계, 복귀는 복귀시작각→0).
+    /// </summary>
+    public void SetReturn(float fromAngle, float progress01)
+    {
+        if (currentDirection == Direction.None) return;
+
+        ramifySpeed = 0f;   // 손을 즉시 따라간다. 속도 제한을 걸면 손과 머리가 어긋난다.
+        targetAngle = Mathf.Lerp(Mathf.Max(0f, fromAngle), 0f, Mathf.Clamp01(progress01));
     }
 
     private void LateUpdate()
