@@ -98,11 +98,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     //   감점 폭은 실측 측정기의 인스펙터 값을 같이 쓴다(scoreSource) — 손잡이를 둘로 만들지 않는다.
     // ★전부 새 필드라 씬에 값이 없다 → 코드 기본값이 먹는다(규칙 7).
     [Tooltip("압박 유지 중 손을 중립 쪽으로 이만큼(도) 되돌렸을 때의 임계.\n" +
-             "  · 평가 — '압박 생략'으로 보고 감점하고 복귀로 넘긴다.\n" +
-             "  · 실습 — 넘기지 않고 <b>실습 정보창에 '되돌아가고 있습니다'를 띄운다</b>(2026-09-14).\n" +
-             "★실측의 '압박 안 하고 중립으로 돌아오면 생략·감점'(09-02)을 가상환자로 옮긴 것이다. 0이면 둘 다 끈다.\n" +
-             "★모드가 갈려도 임계는 하나다 — 손잡이를 둘로 만들지 않는다.\n" +
-             "손 떨림(08-25 로그 ±3° 안팎)보다 충분히 커야 한다.")]
+             "  · 평가 — 경고를 띄우고 <b>감점</b>한다(방향당 1회). ★넘기지는 않는다.\n" +
+             "  · 실습 — 경고만 띄운다.\n" +
+             "★2026-09-14: 종전에는 평가에서 여기 걸리면 복귀로 <b>넘겨 버렸다</b>. 그러면 압박을\n" +
+             "  한 번도 못 해 보고 지나가 배우는 것이 없다 — 알리고 깎되 압박은 계속하게 두는 쪽이\n" +
+             "  평가와 학습을 둘 다 살린다(사용자 판단).\n" +
+             "★값이 좁으면 조금만 흔들려도 걸린다. 압박 여유 구간이 5~7°쯤이라 그보다 넉넉해야 한다\n" +
+             "  (09-14에 8°가 좁다는 지적을 받아 씬 값을 15°로 옮겼다).\n" +
+             "0이면 경고도 감점도 끈다. 손 떨림(08-25 로그 ±3° 안팎)보다는 확실히 커야 한다.")]
     [SerializeField] private float passiveSkipBackDegrees = 8f;
 
     [Tooltip("평가에서 파지가 이 시간(초) 이상 풀려 있어야 '파지 놓침' 1회로 센다. 트래킹이 한 프레임 튀는 건 안 센다.\n" +
@@ -626,19 +629,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         ChunaLogger.Log($"<color=orange>[ROM 평가] {stepName} 압박 생략 — {why}. 감점 대상</color>");
     }
 
-    /// <summary>
-    /// 평가에서 압박하지 않고 중립 쪽으로 되돌렸다 — 생략으로 적고 복귀(x.3)로 넘긴다.
-    /// ★실측 09-02 규칙("안 하고 중립으로 돌아오면 그냥 완료시키고 생략으로 감점")을 옮긴 것이다.
-    /// </summary>
-    private void SkipOverpressureInEvaluation(string stepName, int subStepNo, float swept)
-    {
-        string key = $"{stepName}#{subStepNo}";
-        if (advancedKey == key) return;
-        advancedKey = key;
-
-        MarkEvaluationPassiveSkipped(stepName, $"밀지 않고 중립 쪽으로 {-swept:F1}° 되돌렸다");
-        FinishSubStep();
-    }
 
     /// <summary>
     /// 평가에서 파지를 놓친 횟수를 센다. 손을 대고 움직이는 구간(x.2 동작·유지, x.3 복귀)만 본다.
@@ -1292,13 +1282,18 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ★★복귀(x.3) — 손이 되돌린 만큼만 머리가 돌아온다(2026-09-14).
         //   부호가 반대라 -sweptSmoothed가 '되돌린 양'이다. 시작 각만큼 되돌리면 중립이다.
         //   ★더 되돌리려 해도 0도에서 멈춘다(Clamp01). 반대로 밀면 진행이 0으로 잘려 그 자리에 선다.
-        // ★평가에서는 압박이 자율이다(2026-09-11). 밀지 않고 중립 쪽으로 되돌리면 생략으로 보고 복귀로 넘긴다.
-        //   음수 = 되돌아가는 방향 — 바로 아래 진행률 계산이 이미 같은 약속으로 음수를 0으로 자른다.
-        if (evalScoredRun && passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees)
-        {
-            SkipOverpressureInEvaluation(stepName, subStepNo, sweptSmoothed);
-            return;
-        }
+        // ★★★<b>되돌리면 알리고 깎되, 넘기지는 않는다</b>(2026-09-14 사용자 판단:
+        //   "평가모드에서도 압박 생략보다 경고문 띄워 주고 감점하고 압박은 제대로 진행하는 게
+        //    더 좋을 것 같은데. 그래야 평가와 학습 둘 다 효과가 있을 것 같아").
+        //   ★종전 평가는 여기서 <b>복귀로 넘겨 버렸다</b> — 그러면 압박을 한 번도 못 해 보고 지나간다.
+        //     감점은 남지만 배우는 것이 없다. 실습과 평가가 <b>감점 유무만</b> 다르면 된다.
+        //   ★감점은 방향당 한 번뿐이다(<see cref="MarkEvaluationPassiveSkipped"/>가 플래그로 막는다) —
+        //     되돌릴 때마다 계속 깎이면 한 번 실수로 점수가 바닥난다.
+        OverpressureBacking = passiveSkipBackDegrees > 0f
+                              && sweptSmoothed <= -passiveSkipBackDegrees;
+
+        if (OverpressureBacking && evalScoredRun)
+            MarkEvaluationPassiveSkipped(stepName, $"압박 중 중립 쪽으로 {-sweptSmoothed:F1}° 되돌렸다");
 
         // ★실습에서는 <b>그 자리에서 말해 준다</b>(2026-09-14 사용자 판단).
         //   평가는 바로 위에서 감점하고 복귀로 넘어갔으므로 여기 도달하지 않는다 — 여기는 사실상 실습 전용이다.
