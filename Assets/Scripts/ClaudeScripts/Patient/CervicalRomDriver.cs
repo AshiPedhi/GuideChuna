@@ -520,7 +520,21 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         if (currentDirection == Direction.None) return;
 
         ramifySpeed = 0f;
-        targetAngle = Mathf.Clamp(ActiveTargetAngle + sweptDegrees, 0f, PassiveLimitAngle);
+
+        // ★★<b>0에 닿게 두면 안 된다</b>(2026-09-14 실측으로 잡은 회귀).
+        //   아래 LateUpdate의 중립 스냅이 <c>targetAngle &lt;= 0</c>에서 <b>currentDirection을 None으로 지운다.</b>
+        //   지워지면 축이 Vector3.zero가 되어 브리지가 손 각을 아예 못 재고
+        //   (<c>haveGeometry</c> 거짓 → "기준 잡는 중"만 반복), 이 함수도 첫 줄에서 되돌아간다.
+        //   → <b>압박 단계가 통째로 굳는다.</b> 실제로 그렇게 됐다 —
+        //     로그: "파지 O … 머리 0.0° → 압박한계 0° (최대 0°) · 축 ★없음(방향 None)".
+        //   ★종전 <see cref="SetOverpressure"/>는 하한이 ActiveTargetAngle이라 0에 닿을 일이 없었다.
+        //     되돌리는 쪽을 열면서 생긴 구멍이다.
+        //   ★<b>중립까지 내려가는 일은 복귀(x.3)가 맡는다</b>(<see cref="SetReturn"/>). 거기서는 0에 닿아야
+        //     <see cref="AtNeutral"/>로 단계가 끝나므로 지워지는 게 정상 흐름이다. 역할이 다르다.
+        //   0.6°는 화면에서 중립과 구분되지 않으면서 스냅 조건(0.05°)을 확실히 비껴간다.
+        const float keepDirectionAngle = 0.6f;
+
+        targetAngle = Mathf.Clamp(ActiveTargetAngle + sweptDegrees, keepDirectionAngle, PassiveLimitAngle);
     }
 
     /// <summary>각도를 직접 지정한다(도).</summary>
