@@ -720,8 +720,10 @@ public class TrainingResultTracker : MonoBehaviour
 
         // ★★가상환자 평가(2026-09-11). 09-10 회의로 [평가]가 가상환자 대상이 되면서 절차 계수기를
         //   ROM 브리지가 들게 됐다. 규칙·감점 폭은 측정기와 같다. 평가로 돈 판이 아니면 null이다.
-        CervicalRomScenarioBridge romBridge = useMeasure ? null : FindFirstObjectByType<CervicalRomScenarioBridge>();
-        if (romBridge != null && !romBridge.HasEvaluationScore) romBridge = null;
+        // ★두 갈래로 나눈다 — <b>생략 표시</b>는 모드와 무관하고(실습에서도 사실대로 적어야 한다),
+        //   <b>점수·감점</b>은 평가로 돈 판에서만 읽는다(2026-09-14).
+        CervicalRomScenarioBridge anyBridge = useMeasure ? null : FindFirstObjectByType<CervicalRomScenarioBridge>();
+        CervicalRomScenarioBridge romBridge = (anyBridge != null && anyBridge.HasEvaluationScore) ? anyBridge : null;
 
         // ★ROM 평가 점수. 실측은 측정기가, 가상환자 평가는 브리지가 안다.
         if (useMeasure)
@@ -739,12 +741,12 @@ public class TrainingResultTracker : MonoBehaviour
                             $"(압박 생략 {resultData.romPassiveSkips} · 파지 놓침 {resultData.romGripReleases})</color>");
         }
 
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.Extension, "시상면", "신전");
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
-        AddRom(driver, measure, useMeasure, romBridge, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.Flexion, "시상면", "굴곡");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.Extension, "시상면", "신전");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.LateralLeft, "관상면", "좌측굴");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.LateralRight, "관상면", "우측굴");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.RotationLeft, "횡단면", "좌회전");
+        AddRom(driver, measure, useMeasure, romBridge, anyBridge, CervicalRomDriver.Direction.RotationRight, "횡단면", "우회전");
 
         if (resultData.romMeasurements.Count > 0 && showDebugLogs)
         {
@@ -757,13 +759,14 @@ public class TrainingResultTracker : MonoBehaviour
     /// ★참고치(임상 최대각)는 어느 쪽이든 드라이버가 들고 있다 — 실측에서도 그 값을 쓴다.
     /// </summary>
     private void AddRom(CervicalRomDriver driver, CervicalRomRealityMeasure measure, bool useMeasure,
-                        CervicalRomScenarioBridge evalBridge,
+                        CervicalRomScenarioBridge evalBridge, CervicalRomScenarioBridge anyBridge,
                         CervicalRomDriver.Direction d, string planeName, string directionName)
     {
         float active, passive;
         int holdResets = 0, rejectedFrames = 0, relocks = 0;
         float lostSeconds = 0f;
         bool passiveSkipped = false;
+        bool activeSkipped = false;
         int gripReleases = 0;
         float staleSeconds = 0f, slipMaxPercent = 0f;
         int neutralRefreshes = 0;
@@ -789,6 +792,13 @@ public class TrainingResultTracker : MonoBehaviour
                 passiveSkipped = evalBridge.WasEvaluationPassiveSkipped(d);
                 gripReleases = evalBridge.EvaluationGripReleasesFor(d);
             }
+
+            // ★[다음]으로 건너뛴 구간은 모드와 무관하게 "생략"으로 적는다.
+            if (anyBridge != null)
+            {
+                activeSkipped = anyBridge.WasActiveSkipped(d);
+                if (anyBridge.WasSkippedPassive(d)) passiveSkipped = true;
+            }
         }
 
         resultData.romMeasurements.Add(new TrainingResultData.RomMeasurement
@@ -798,6 +808,7 @@ public class TrainingResultTracker : MonoBehaviour
             maxAngle = driver.MaxAngleFor(d),
             activeAngle = active,
             passiveAngle = passive,
+            activeSkipped = activeSkipped,
             holdResets = holdResets,
             rejectedFrames = rejectedFrames,
             relocks = relocks,

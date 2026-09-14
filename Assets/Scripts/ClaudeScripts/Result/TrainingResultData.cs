@@ -223,6 +223,7 @@ public class TrainingResultData
         public float maxAngle;     // 임상 최대각
         public float activeAngle;     // 환자가 스스로 도달한 각
         public float passiveAngle;    // 시술자가 밀어 도달한 각
+        public bool activeSkipped;    // ★능동을 [다음]으로 건너뛰었다 — 잰 값이 아니다
         public float DeficitAngle => Mathf.Max(0f, maxAngle - passiveAngle);
 
         // ── 진단 계수기 (2026-09-01, 실측 전용) ──────────────────────────
@@ -670,9 +671,14 @@ public class TrainingResultData
             // ★★압박을 생략했으면 <b>수동 0°로 적지 않는다</b>(2026-09-02).
             //   0으로 적으면 차이값이 참고치 전체가 돼서(신전이면 90°) 가동범위가 전혀 없는 것처럼 읽힌다.
             //   안 잰 것과 0인 것은 다르다 — 안 잰 것은 안 잰 것으로 적는다.
+            // ★건너뛴 칸은 <b>잰 값이 아니다</b> — 숫자를 적으면 한 것처럼 읽힌다(2026-09-14).
+            string activeCell = m.activeSkipped
+                ? "<color=#b0b0b0>생략</color>"
+                : $"{m.activeAngle:F0}°";
+
             if (m.passiveSkipped)
             {
-                sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{m.activeAngle:F0}°" +
+                sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{activeCell}" +
                               $"{C3}<color=#b0b0b0>생략</color>{C4}<color=#b0b0b0>-</color>");
                 continue;
             }
@@ -687,7 +693,7 @@ public class TrainingResultData
                 ? $"<mark=#ffd54f40><b>{m.DeficitAngle:F0}°</b></mark>"
                 : $"{m.DeficitAngle:F0}°";
 
-            sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{m.activeAngle:F0}°" +
+            sb.AppendLine($"{m.directionName}{C1}{m.maxAngle:F0}°{C2}{activeCell}" +
                           $"{C3}{m.passiveAngle:F0}°{C4}{deficit}");
         }
 

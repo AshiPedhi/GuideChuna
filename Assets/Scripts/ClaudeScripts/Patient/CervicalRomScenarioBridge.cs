@@ -205,6 +205,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private static readonly int DirectionCount = System.Enum.GetValues(typeof(CervicalRomDriver.Direction)).Length;
     private readonly bool[] evalPassiveSkipped = new bool[DirectionCount];
     private readonly int[] evalGripReleases = new int[DirectionCount];
+    // ★[다음]으로 건너뛴 구간. <b>모드와 무관</b>하게 적는다 — 결과표의 "생략" 표시는
+    //   실습에서도 사실대로 나와야 한다(2026-09-14 사용자: "본인이 못할 경우에도 누를 수 있으니까").
+    private readonly bool[] skippedActive = new bool[DirectionCount];
+    private readonly bool[] skippedPassive = new bool[DirectionCount];
+
     private bool evalScoredRun;        // 이번 판을 가상환자 평가로 돌렸는가(결과 수집기가 본다)
     private bool evalGripSeen;         // 이 파지 묶음에서 한 번이라도 잡았는가 — 안 잡은 걸 '놓침'으로 세지 않는다
     private float evalReleaseTimer;
@@ -516,6 +521,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     {
         System.Array.Clear(evalPassiveSkipped, 0, evalPassiveSkipped.Length);
         System.Array.Clear(evalGripReleases, 0, evalGripReleases.Length);
+        System.Array.Clear(skippedActive, 0, skippedActive.Length);
+        System.Array.Clear(skippedPassive, 0, skippedPassive.Length);
+
         evalGripSeen = false;
         evalReleaseTimer = 0f;
         evalReleaseCounted = false;
@@ -574,12 +582,14 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         {
             driver.SnapTo(dir, driver.ActiveTargetAngle);
             driver.RecordActiveReached();
+            skippedActive[(int)dir] = true;
             Log($"{name} {no} 건너뜀 — 능동 끝점 {driver.ActiveTargetAngle:F0}°로 맞추고 기록한다.");
         }
         else if (overpressure && no == 2)
         {
             driver.SnapTo(dir, driver.PassiveLimitAngle);
             driver.RecordPassiveReached();
+            skippedPassive[(int)dir] = true;
             MarkEvaluationPassiveSkipped(name, "압박 유지를 끝내지 않고 넘어갔다([다음])");   // ③
             Log($"{name} {no} 건너뜀 — 압박 한계 {driver.PassiveLimitAngle:F0}°로 맞추고 기록한다.");
         }
@@ -675,6 +685,21 @@ public class CervicalRomScenarioBridge : MonoBehaviour
 
     /// <summary>이번 판을 가상환자 평가로 돌렸는가. 결과 수집기가 점수를 여기서 읽을지 정한다.</summary>
     public bool HasEvaluationScore => evalScoredRun;
+
+    /// <summary>그 방향의 능동을 [다음]으로 건너뛰었는가. ★모드와 무관하다(결과표 "생략" 표시용).</summary>
+    public bool WasActiveSkipped(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < skippedActive.Length && skippedActive[i];
+    }
+
+    /// <summary>그 방향의 압박을 [다음]으로 건너뛰었는가. ★모드와 무관하다.</summary>
+    public bool WasSkippedPassive(CervicalRomDriver.Direction d)
+    {
+        int i = (int)d;
+        return i > 0 && i < skippedPassive.Length && skippedPassive[i];
+    }
+
 
     /// <summary>
     /// 압박 구간인데 손을 <b>중립 쪽으로</b> 되돌리고 있는가(임계 <see cref="passiveSkipBackDegrees"/>).
