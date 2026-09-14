@@ -1020,7 +1020,10 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             overpressureHeldTime = 0f;
             driver.HoldElapsed = 0f;
             driver.HoldTarget = 0f;
-            planeGauge?.SetPressGuide(false);   // 복귀는 밀라는 구간이 아니다
+            // ★복귀도 이제 시술자가 직접 돌리는 구간이라 <b>중립 쪽 화살표</b>를 띄운다
+            //   (2026-09-14 사용자 지시: "실습모드에서는 중립으로 돌아가는 방향 화살표도 넣어주고").
+            //   평가는 여전히 안 띄운다 — 어느 쪽으로 가야 하는지가 평가 대상이다.
+            planeGauge?.SetPressGuide(!IsEvaluationScoring(), reversed: true);
 
             // ★★복귀도 <b>시술자 손이 끈다</b>(2026-09-14 사용자 지시:
             //   "중립으로 돌리는건 따라가게 말고 그냥 본인이 돌리게. 그래야 평가가 되니까").
@@ -1154,7 +1157,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ★진행률은 기준점 대비 절대값이라, 손을 되돌리면 머리도 능동 끝점으로 되돌아온다.
         //   시술자가 힘을 빼면 머리가 따라 돌아오는 게 맞으므로 의도된 동작이다.
         overpressureProgress = Mathf.Clamp01(Mathf.Max(0f, sweptSmoothed) / gap);
-        driver.SetOverpressure(overpressureProgress);
+
+        // ★★머리는 <b>되돌리는 쪽으로도</b> 따라간다(2026-09-14 사용자 지시:
+        //   "압박에서 중립으로도 가게 막지 말고 둬"). 압박을 생략하고 중립으로 돌아가는 것도
+        //   평가 대상인데(감점), 머리가 능동 끝점에서 멈춰 버리면 그 동작을 <b>할 수가 없었다</b>.
+        //   ★진행률(overpressureProgress)은 민 만큼만 센다 — 유지 타이머·게이지는 종전 그대로다.
+        driver.SetOverpressureSweep(sweptSmoothed);
 
         AccumulateOverpressureHold();
 

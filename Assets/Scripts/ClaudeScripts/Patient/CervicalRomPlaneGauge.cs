@@ -817,6 +817,7 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// ★각도기가 스스로 알아낼 방법이 없다 — 드라이버는 능동이든 압박이든 그냥 각도만 들고 있다.
     /// </summary>
     private bool pressGuideOn;
+    private bool pressGuideReversed;   // true면 중립 쪽(각이 작아지는 쪽)을 가리킨다
 
     /// <summary>호가 지금 쓸려 가고 있는가. 켜져 있으면 메시를 매 프레임 다시 만들어야 한다.</summary>
     private bool PressArrowAnimating => showPressArrow && pressGuideOn
@@ -826,10 +827,20 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     /// 압박 방향 화살표를 켜고 끈다. 압박 유지 substep에 들어갈 때 켜고, 복귀·다른 단계에서 끈다.
     /// ★능동 구간에서 켜면 안 된다 — 환자가 스스로 가는 구간이라 시술자에게 줄 지시가 없다.
     /// </summary>
-    public void SetPressGuide(bool on)
+    public void SetPressGuide(bool on) => SetPressGuide(on, false);
+
+    /// <summary>
+    /// 방향 화살표를 켜고 끈다. <paramref name="reversed"/>면 <b>중립 쪽</b>을 가리킨다.
+    ///
+    /// ★2026-09-14 사용자 지시 — "실습모드에서는 중립으로 돌아가는 방향 화살표도 넣어주고".
+    ///   복귀도 이제 시술자가 직접 돌리는 구간이라, 미는 구간과 똑같이 어느 쪽으로 가야 하는지
+    ///   알려 줄 것이 있다. 각이 <b>작아지는</b> 쪽으로 그리는 것만 다르다.
+    /// </summary>
+    public void SetPressGuide(bool on, bool reversed)
     {
-        if (pressGuideOn == on) return;
+        if (pressGuideOn == on && pressGuideReversed == reversed) return;
         pressGuideOn = on;
+        pressGuideReversed = reversed;
         lastDrawnAngle = float.NaN;   // 켜지든 꺼지든 다음 프레임에 다시 그리게 한다
     }
 
@@ -1131,12 +1142,26 @@ public class CervicalRomPlaneGauge : MonoBehaviour
             }
         }
 
+        Color c = pressArrowFromPlaneColor ? NeedleColorOf(builtDirection) : pressArrowColor;
+        c.a *= Mathf.Lerp(pressArrowMinAlpha, 1f, fade);
+
+        // ★중립 쪽(복귀)은 각이 <b>작아지는</b> 쪽으로 그린다. 쓸기도 같이 뒤집는다 —
+        //   안 뒤집으면 화살촉은 중립을 가리키는데 빛은 반대로 흘러 방향이 흐려진다.
+        if (pressGuideReversed)
+        {
+            float rStart = angle - phase * pressArrowSweepDeg;
+            float rTip = Mathf.Max(rStart - pressArrowSpanDeg, 0f);   // 눈금 0 아래로는 안 나간다
+            if (rStart - rTip < pressArrowHeadDeg + 0.5f) return;
+
+            float rHeadBase = rTip + pressArrowHeadDeg;
+            AddArcBand(rHeadBase, rStart, radius, pressArrowWidth, c);
+            AddArcHead(rHeadBase, rTip, radius, pressArrowHeadWidth, c);
+            return;
+        }
+
         float start = angle + phase * pressArrowSweepDeg;
         float end = Mathf.Min(start + pressArrowSpanDeg, limit);
         if (end - start < pressArrowHeadDeg + 0.5f) return;    // 자리가 없으면 아예 안 그린다
-
-        Color c = pressArrowFromPlaneColor ? NeedleColorOf(builtDirection) : pressArrowColor;
-        c.a *= Mathf.Lerp(pressArrowMinAlpha, 1f, fade);
 
         float headBase = end - pressArrowHeadDeg;
         AddArcBand(start, headBase, radius, pressArrowWidth, c);

@@ -502,6 +502,27 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         targetAngle = Mathf.Lerp(ActiveTargetAngle, PassiveLimitAngle, Mathf.Clamp01(progress01));
     }
 
+    /// <summary>
+    /// 압박 구간에서 손이 <b>민(되돌린) 각을 그대로</b> 먹인다. 음수면 중립 쪽으로 간다.
+    ///
+    /// ★2026-09-14 사용자 지시: "압박에서 중립으로도 가게 막지 말고 둬."
+    ///   종전 <see cref="SetOverpressure"/>는 진행률을 0~1로 잘라서, 손을 되돌려도
+    ///   머리가 <b>능동 끝점에서 멈췄다</b>. 압박을 생략하고 중립으로 돌아가는 것도
+    ///   평가 대상인데(감점), 머리가 안 따라오면 그 동작을 <b>할 수가 없었다</b>.
+    ///
+    /// ★손 각과 머리 각은 1:1이다 — 종전 식도 결국
+    ///   <c>Lerp(Active, PassiveLimit, swept/gap) = Active + swept</c>였다
+    ///   (<see cref="CurrentPassiveGain"/> = PassiveLimit − Active).
+    ///   그래서 되돌리는 쪽으로 늘려도 미는 쪽 거동은 종전과 같다. 클램프 범위만 넓어진다.
+    /// </summary>
+    public void SetOverpressureSweep(float sweptDegrees)
+    {
+        if (currentDirection == Direction.None) return;
+
+        ramifySpeed = 0f;
+        targetAngle = Mathf.Clamp(ActiveTargetAngle + sweptDegrees, 0f, PassiveLimitAngle);
+    }
+
     /// <summary>각도를 직접 지정한다(도).</summary>
     public void SetAngle(Direction direction, float degrees)
     {

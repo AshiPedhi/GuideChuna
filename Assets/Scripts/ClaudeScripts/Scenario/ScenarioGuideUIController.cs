@@ -95,6 +95,20 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     public bool ExternalPhaseControl { get; set; }
 
+    /// <summary>
+    /// 평가모드 지시문 뒤의 진행 표시 "(1/3)"을 감춘다.
+    ///
+    /// ★2026-09-14 사용자 지시 — "진단 단계 (1/3) 이런 거 표시하지 말고".
+    ///   경추ROM은 진행 패널의 네 칸(굴곡·신전·측굴·회전)과 각도기가 이미 진행을 보여준다.
+    ///   숫자를 또 붙이면 <b>같은 말을 두 군데</b> 하는 것이다.
+    /// ★<b>창만 낸다</b> — 켜고 끄는 건 경추ROM 쪽(<see cref="RomPhaseSections"/>)이다.
+    ///   여기서 시나리오 이름을 보고 가르면 공용 UI가 특정 술기를 아는 꼴이 된다.
+    ///   ★켠 쪽이 끈다 — Undock에서 반드시 false로 돌린다(07-27 xray 사고가 이 대칭이 깨져서 났다).
+    /// ★다른 12개 술기는 종전대로 "(2/5)"가 뜬다 — 08-18에 "막힌 건지 진행 중인지
+    ///   구분이 안 된다"는 지적으로 넣은 것이라 함부로 걷지 않는다.
+    /// </summary>
+    public bool SuppressEvaluationProgressSuffix { get; set; }
+
     [Header("=== 진행 원형 표시 (Duration) ===")]
     [Tooltip("ProgressCircle 프리팹 루트 GameObject")]
     [SerializeField] private GameObject progressCircleObject;
@@ -637,6 +651,8 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// "오류인지 내가 못하는 건지"를 학습자가 스스로 판단할 수 있다.</summary>
     private string EvaluationProgressSuffix()
     {
+        if (SuppressEvaluationProgressSuffix) return "";
+
         var step = scenarioManager != null ? scenarioManager.CurrentStep : null;
         var sub = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
         if (step == null || sub == null || step.subSteps == null) return "";

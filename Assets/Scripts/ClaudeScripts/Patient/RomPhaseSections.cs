@@ -82,6 +82,15 @@ public class RomPhaseSections : MonoBehaviour
 
         bool want = enableSections && bridge != null && bridge.RomScenarioActive;
 
+        // ★평가모드 지시문 뒤의 "(1/3)"을 감춘다(2026-09-14 사용자 지시:
+        //   "진단 단계 (1/3) 이런 거 표시하지 말고"). 진행 칸과 각도기가 이미 진행을
+        //   보여 주므로 숫자를 또 붙이면 같은 말을 두 군데 하는 것이다.
+        // ★★<b>Dock 성공 여부와 무관하게</b> 둔다 — Dock은 Phase 칸을 못 찾으면 그자리에서
+        //   돌아서지는데, 칸을 못 물렸다고 숫자가 다시 떠야 할 이유는 없다.
+        //   ★want를 그대로 대입하므로 경추ROM을 벗어나면 <b>저절로 풀린다</b>(켠 쪽이 끈다).
+        if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
+        if (guideUI != null) guideUI.SuppressEvaluationProgressSuffix = want;
+
         if (want && !docked) Dock();
         else if (!want && docked) Undock();
 
@@ -325,7 +334,13 @@ public class RomPhaseSections : MonoBehaviour
         rowFitted = false;
 
         // ★풀어 준다. 안 풀면 다음 술기의 전부·중부·후부 표시가 통째로 죽는다.
-        if (guideUI != null) guideUI.ExternalPhaseControl = false;
+        //   ★켜줌 설정은 <b>전부</b> 되돌린다 — "(1/3)" 감춤도 안 풀면 다른 12개 술기의
+        //   진행 표시가 같이 죽는다(08-18에 넣은 것이다).
+        if (guideUI != null)
+        {
+            guideUI.ExternalPhaseControl = false;
+            guideUI.SuppressEvaluationProgressSuffix = false;
+        }
 
         slots.Clear();
         lastActiveIndex = -2;
