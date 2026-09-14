@@ -489,8 +489,16 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     {
         if (string.IsNullOrEmpty(lastStepKey) || string.IsNullOrEmpty(lastStepName)) return;
 
-        // ★조건을 채워 넘어갔으면 advancedKey가 찍혀 있다. 안 찍혔으면 [다음]으로 건너뛴 것이다.
-        bool skipped = advancedKey != lastStepKey;
+        // ★★★<b>스킵 판정은 [다음] 버튼이 실제로 떴는지로 한다</b>(2026-09-14, 같은 날 두 번 틀렸다).
+        //   처음엔 <c>advancedKey != lastStepKey</c>만 봤는데, <b>그건 스킵 판정이 아니다</b> —
+        //   advancedKey는 <b>이 브리지가 넘긴 경우에만</b> 찍힌다. 파지·지시(x.1)·평가 단계는
+        //   브리지가 관여하지 않아 <c>TryAdvanceWhenDone</c>이 첫 줄에서 돌아서므로
+        //   <b>정상으로 지나가도 안 찍힌다.</b> 그걸 스킵으로 읽어 AutoPlay를 끝내는 바람에
+        //   <b>손을 안 대도 전 과정이 알아서 진행됐다.</b>
+        //   ★<c>stallButtonShown</c>은 그 substep에서 정체해 버튼을 띄웠을 때만 참이고,
+        //     다음 substep 진입 시 꺼진다(이 함수는 그 리셋보다 <b>먼저</b> 불린다 — 309 vs 316줄).
+        //   → 버튼이 떠 있었고 + 조건도 못 채웠다 = 사람이 [다음]을 눌러 건너뛴 것이다.
+        bool skipped = stallButtonShown && advancedKey != lastStepKey;
         if (!skipped) return;
 
         bool overpressure = lastStepName.EndsWith("압박", System.StringComparison.Ordinal);
