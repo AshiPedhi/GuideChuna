@@ -188,6 +188,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private AudioSource cueSource;
     private AudioClip defaultCueClip;
     private bool stallButtonShown;
+    private string skipWatchKey;         // 스킵을 건 substep. 넘어갈 때까지 지켜본다.
+    private float skipWatchTime;         // 스킵을 건 시각
+
     private bool warnedNotTarget;
     private float overpressureProgress;
     private ScenarioGuideUIController guideUI;   // ProgressCircle을 직접 그리기 위해 잡아 둔다
@@ -251,6 +254,9 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                         $"판정기 {(evaluator != null ? "있음" : "없음(접촉 게이트 없이 진행)")} · " +
                         $"시나리오매니저 {(scenarioManager != null ? "있음" : "★없음")}</color>");
     }
+
+    /// <summary>스킵을 걸고 이만큼 지나도 안 넘어가면 직접 넘긴다(초). 손잡이를 늘리지 않으려고 상수로 둔다.</summary>
+    private const float SkipWatchdogSeconds = 1.0f;
 
     private void Update()
     {
@@ -346,6 +352,26 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                         && !BothHandsTouching();
 
         TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
+
+        // ★★★<b>스킵 워치독</b> — 스킵을 걸었는데 그래도 안 넘어가면 <b>직접</b> 넘긴다.
+        //   스킵은 조건부 편의가 아니라 <b>어떤 상태에서도 빠져나오는 최후의 가드</b>다.
+        //   파이프라인이 토큰 불일치로 진행을 취소하는 경우가 실제로 있어(로그 확인),
+        //   그쪽에만 기대면 최후의 수단이 실패한다.
+        if (skipWatchKey != null)
+        {
+            if (key != skipWatchKey)
+            {
+                skipWatchKey = null;                 // 넘어갔다
+            }
+            else if (Time.time - skipWatchTime > SkipWatchdogSeconds)
+            {
+                ChunaLogger.LogWarning($"<color=orange>[ROM Bridge] {step.stepName} {sub.subStepNo} — "
+                                       + $"스킵했는데 {SkipWatchdogSeconds:F1}초가 지나도 안 넘어갔다. 직접 넘긴다(최후 가드).</color>");
+                skipWatchKey = null;
+                scenarioManager.NextSubStep();
+                return;
+            }
+        }
 
         TryShowStallButton(step.stepName, sub.subStepNo, key);
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
@@ -568,6 +594,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         // ④ 정상 완료와 같은 경로로 넘긴다. AutoPlay가 돌면 그쪽을 끝내고 파이프라인이 진행한다.
         advancedKey = $"{name}#{no}";   // 이 substep은 우리가 처리했다 — 뒤늦은 중복 진행을 막는다
         FinishSubStep();
+
+        // ★★★<b>넘어갔는지 지켜본다</b>(2026-09-14 사용자 정의: 스킵은 "혹시 모를 에러나 방황에서
+        //   빠져나오는 <b>시스템적 최후의 가드</b>"다).
+        //   <see cref="FinishSubStep"/>은 AutoPlay를 끝내고 <b>파이프라인이 넘겨 주기를 기대</b>하는데,
+        //   그쪽이 토큰 불일치로 취소하는 경우가 실제로 있다
+        //   (로그: "지난 단계의 자동 진행 무시 — 예약 당시 토큰=7, 현재=8").
+        //   그러면 최후의 수단이 <b>남에게 기대다 실패</b>한다. 안 넘어가면 직접 넘긴다.
+        skipWatchKey = advancedKey;
+        skipWatchTime = Time.time;
         return true;
     }
 
