@@ -188,7 +188,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private AudioSource cueSource;
     private AudioClip defaultCueClip;
     private bool stallButtonShown;
-    private bool autoPlayRescued;        // 이번 substep에서 막힌 AutoPlay를 한 번 풀었는가   // 이 substep에서 다음 버튼을 이미 띄웠는가
     private bool warnedNotTarget;
     private float overpressureProgress;
     private ScenarioGuideUIController guideUI;   // ProgressCircle을 직접 그리기 위해 잡아 둔다
@@ -315,7 +314,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             lastSubStepNo = sub.subStepNo;
             stepEnteredTime = Time.time;
             stallButtonShown = false;
-            autoPlayRescued = false;
             ApplyGripPair(step.stepName);
             OnSubStepEntered(step.stepName, sub.subStepNo);
         }
@@ -341,22 +339,6 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                         && !BothHandsTouching();
 
         TrackEvaluationGripRelease(step.stepName, sub.subStepNo);
-
-        // ★★<b>막힌 AutoPlay만 푼다</b>(2026-09-14). 방향 없는 단계(평가 설명 등)는
-        //   이 브리지가 넘기지 않으므로, 앞 단계에서 안 끝난 AutoPlay가 남아 있으면
-        //   공용 코루틴이 <c>while (IsAutoPlayMode) yield</c>에서 <b>영원히 대기</b>한다.
-        //   ★★<b>진입 즉시 풀면 안 된다</b> — 그 시점은 AutoPlay가 막 시작되는 때라
-        //     단계가 통째로 스킵된다(같은 날 실제로 그렇게 만들어 전 과정이 날아갔다).
-        //     <b>충분히 머문 뒤 한 번만</b> 푼다. 정상 흐름은 그 전에 이미 끝나 있다.
-        if (!autoPlayRescued && stepEnteredTime > 0f
-            && Time.time - stepEnteredTime > stallButtonSeconds
-            && DirectionOf(step.stepName) == CervicalRomDriver.Direction.None
-            && evaluator != null && evaluator.IsAutoPlayMode)
-        {
-            autoPlayRescued = true;
-            evaluator.CompleteAutoPlayExternally();
-            Log($"{step.stepName} — AutoPlay가 {stallButtonSeconds:F0}초 넘게 안 끝나 여기서 푼다(진행 막힘 방지).");
-        }
 
         TryAdvanceWhenDone(step.stepName, sub.subStepNo, key);
     }
@@ -545,6 +527,19 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 driver.SnapTo(dir, 0f);                               // 복귀를 건너뜀 → 중립(측정값 아님)
                 Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 중립으로 맞춘다.");
             }
+        }
+
+        // ★★<b>건너뛴 단계의 AutoPlay를 여기서 끝낸다</b>(2026-09-14).
+        //   ROM의 동작 substep은 애니도 duration도 없어 AutoPlay가 <b>스스로 못 끝난다</b>.
+        //   그대로 두면 다음 substep의 나레이션이 <c>WaitForAutoPlayComplete</c>에서 영원히 대기한다
+        //   (로그: "신전 2 건너뜀" 뒤로 "압박 시작"이 안 찍히고 멈췄다).
+        //   ★<b>스킵일 때만</b> 부른다 — 정상 완료는 <see cref="FinishSubStep"/>이 이미 같은 일을 한다.
+        //   ★여기는 다음 substep의 조건 처리가 시작되기 <b>전</b>이라, 끝내는 것은 <b>떠나는 단계</b>의
+        //     AutoPlay다. 진입 자리에서 부르면 새로 시작된 것을 죽여 전 과정이 스킵된다(같은 날 겪었다).
+        if (evaluator != null && evaluator.IsAutoPlayMode)
+        {
+            evaluator.CompleteAutoPlayExternally();
+            Log($"{lastStepName} {lastSubStepNo} 건너뜀 — 남은 AutoPlay를 정리한다(다음 단계가 대기하지 않게).");
         }
 
         // 평가 감점은 압박 유지(x.2)를 건너뛴 경우만이다.
