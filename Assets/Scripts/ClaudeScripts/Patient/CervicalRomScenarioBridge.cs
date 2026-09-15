@@ -56,6 +56,31 @@ public class CervicalRomScenarioBridge : MonoBehaviour
              "둘 다 매 프레임 재서 로그에 같이 찍는다. Play 중에 바꿔 가며 비교하면 된다.")]
     [SerializeField] private OverpressureSource overpressureSource = OverpressureSource.HandMidpointArc;
 
+    // ★★2026-09-15: "회전에서 손 움직임이랑 괴리감이 너무 크고 혼자 휙 돌아버린다"(사용자).
+    //   로그로 원인이 확정됐다 — <b>회전에서만 중점호의 지렛대가 무너진다.</b>
+    //     굴곡 0.23m · 신전 0.21m · 측굴 0.19m · <b>회전 0.03m</b>
+    //   회전은 회전축이 목을 따라 <b>세로</b>라, 좌·우 측두를 잡으면 두 손 중점이
+    //   <b>축 위에 얹힌다</b>. 지렛대 3cm면 손이 3mm 흔들려도 5.7°가 나오는데,
+    //   밀 양은 5.6°뿐이라 손떨림 하나가 게이지를 통째로 채운다.
+    //   실제로 같은 구간에서 ①은 2.1→12.7→19.6°로 튀었고 ②는 −1.4~−2.1°로 매끄러웠다.
+    //   한 번은 −15.6°로 읽혀 "압박 생략" 감점까지 먹었다(손은 그대로였다).
+    //
+    // ★<b>08-25의 "중점호가 기본" 판단은 틀리지 않았다</b> — 굴곡·신전만 보고 정한 것이다.
+    //   면마다 답이 다르므로 <b>고정할 값이 아니라 재서 고를 값</b>이다.
+    // ★<b>고르는 기준은 지렛대 길이 하나다.</b> 둘 다 이미 매 프레임 재고 있었다 —
+    //   고를 기준만 없었다. 굴곡·신전·측굴은 그대로 중점호가 뽑힌다(08-25 결정이 살아 있다).
+    // ★<b>단계에 들어갈 때 한 번만 고르고 그 단계 내내 유지한다.</b> 중간에 바꾸면 기준이 달라져
+    //   각이 통째로 튄다(재파지 스냅과 같은 형태의 사고다).
+    [Tooltip("압박 소스를 지렛대가 긴 쪽으로 자동으로 고른다. 끄면 위에서 지정한 값을 그대로 쓴다.")]
+    [SerializeField] private bool autoPickOverpressureSource = true;
+
+    private bool sourcePicked;                  // 이번 압박 단계에서 이미 골랐는가
+    private OverpressureSource pickedSource;    // 그때 고른 것
+
+    /// <summary>지금 실제로 쓰는 소스. 자동 선택이 끝났으면 그것, 아니면 인스펙터 값.</summary>
+    private OverpressureSource ActiveSource =>
+        autoPickOverpressureSource && sourcePicked ? pickedSource : overpressureSource;
+
     [Tooltip("압박 유지 substep에서 0 → 1까지 가는 데 걸리는 시간(초).\n" +
              "★손끝을 하나도 못 찾았을 때만 쓰는 폴백이다.")]
     [SerializeField] private float overpressureRampSeconds = 3f;
@@ -235,6 +260,19 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     private float pairSpan;              // 두 손 사이 거리(m)
     private float sweptSmoothed;         // 지터를 거른 회전각
     private float sweptVelocity;         // SmoothDamp용
+
+    // ★★2026-09-15 사용자 요구 ⑦: "떼었다가 잡을 경우에 잡은 위치에서부터 움직일 수 있게 하면 안 돼?
+    //   순간이동마냥 목이 휙하고 다시 돌아버리니까 불편해"
+    //
+    // ★<b>원인</b>: 기준 벡터(arcStartArm·pairStartVector)를 압박 진입 때 <b>한 번만</b> 잡고
+    //   파지가 풀려도 버리지 않았다. 다른 자리에서 다시 잡으면 <b>원래 기준과의 차이가 통째로</b>
+    //   회전각으로 실려 머리가 휙 돈다.
+    // ★<b>해법</b>: 파지가 풀리면 기준을 버리고 <b>지금까지 민 각을 여기 넘겨 둔다</b>.
+    //   다시 잡을 때 기준을 새로 잡으므로 회전각은 0에서 시작하고, 거기에 이 값을 더해
+    //   <b>머리는 있던 자리에 그대로 있는다</b>.
+    // ★래칫이 되지 않는가: 된다. 다만 driver.SetOverpressureSweep이 PassiveLimitAngle로
+    //   클램프하므로 <b>압박 한계를 넘지는 못한다</b>. 뗐다 잡기를 반복해도 갈 수 있는 끝은 같다.
+    private float sweptCarry;
     private float lastPressLogTime = -99f;
 
     private void Awake()
@@ -281,7 +319,12 @@ public class CervicalRomScenarioBridge : MonoBehaviour
                 active = false;
                 driver.Paused = false;
                 // ★가져갔던 [다음] 버튼을 돌려준다. 안 돌려주면 다음 술기의 버튼까지 우리가 먹는다.
-                if (guideUI != null) guideUI.ExternalStartHandler = null;
+                if (guideUI != null)
+                {
+                    guideUI.ExternalStartHandler = null;
+                    // ★[다음]을 '나타남/사라짐'으로 다루는 것도 ROM 전용이다 — 같이 돌려준다.
+                    guideUI.HideNextUntilNarrationEnds = false;
+                }
                 // ★술기를 벗어날 때만 가이드 손을 머리뼈에서 뗀다. 안 떼면 다음 술기까지
                 //   손이 환자 머리에 매달려 따라다닌다.
                 evaluator?.ReleaseGuideHandHoldInternal();
@@ -307,7 +350,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             // ★정체 버튼([다음])을 우리가 처리한다. 건너뛴 결과를 반영한 뒤 자기 완료 경로로
             //   넘겨야 AutoPlay가 정상으로 끝난다. ★켠 쪽이 끈다 — 아래 이탈 자리에서 되돌린다.
             if (guideUI == null) guideUI = FindFirstObjectByType<ScenarioGuideUIController>(FindObjectsInactive.Include);
-            if (guideUI != null) guideUI.ExternalStartHandler = HandleSkipPressed;
+            if (guideUI != null)
+            {
+                guideUI.ExternalStartHandler = HandleSkipPressed;
+                // ★[다음]은 색으로 활성화를 알리지 않고 <b>나레이션이 끝나면 나타난다</b>(2026-09-15).
+                //   ★ROM 전용이다 — 나갈 때 위에서 되돌린다.
+                guideUI.HideNextUntilNarrationEnds = true;
+            }
         }
 
         string key = $"{step.stepName}#{sub.subStepNo}";
@@ -1193,6 +1242,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             planeGauge?.SetPressGuide(!IsEvaluationScoring());
             sweptSmoothed = 0f;
             sweptVelocity = 0f;
+            sweptCarry = 0f;       // ★새 방향이므로 넘겨 둔 각도 버린다
+            sourcePicked = false;  // ★면이 바뀌면 지렛대도 바뀐다 — 다시 고른다
             Log($"압박 시작 {stepName} — {driver.CurrentAngle:F0}° 에서 압박 한계 {driver.PassiveLimitAngle:F0}° 까지 " +
                 $"(밀 양 {driver.CurrentPassiveGain:F1}° · 최대 {driver.MaxAngle:F0}° · "
                 + $"예상 부족각 {driver.MaxAngle - driver.PassiveLimitAngle:F1}° · 소스 {overpressureSource})");
@@ -1239,6 +1290,8 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         if (!BothHandsTouching())
         {
             // 파지가 풀리면 그 자리에서 멈춘다. 왜 멈췄는지는 로그에 남긴다.
+            // ★★기준을 여기서 <b>버린다</b> — 다시 잡을 때 그 자리에서 이어 가기 위해서다(⑦).
+            ReleaseOverpressureBaseline();
             DiagnoseOverpressure("파지 안 잡힘 — 진행도 회전도 멈춰 있다", float.NaN, float.NaN, axis, pivot);
             return;
         }
@@ -1270,7 +1323,20 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             }
         }
 
-        float swept = overpressureSource == OverpressureSource.HandPairRotation ? pairAngle : arcAngle;
+        // ★★지렛대가 긴 쪽을 고른다 — 기준을 둘 다 잡은 첫 순간에 <b>한 번만</b>.
+        if (autoPickOverpressureSource && !sourcePicked && arcStarted && pairStarted)
+        {
+            sourcePicked = true;
+            pickedSource = arcStartRadius >= pairStartSpan
+                ? OverpressureSource.HandMidpointArc
+                : OverpressureSource.HandPairRotation;
+
+            Log($"압박 소스 자동 선택 — {(pickedSource == OverpressureSource.HandMidpointArc ? "중점호" : "손쌍회전")} " +
+                $"(지렛대 중점호 {arcStartRadius:F2}m vs 손쌍 {pairStartSpan:F2}m). " +
+                $"인스펙터 지정값은 {overpressureSource}");
+        }
+
+        float swept = ActiveSource == OverpressureSource.HandPairRotation ? pairAngle : arcAngle;
 
         if (float.IsNaN(swept))
         {
@@ -1279,6 +1345,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             DiagnoseOverpressure("기준 잡는 중", arcAngle, pairAngle, axis, pivot);
             return;
         }
+
+        // ★★다시 잡은 경우 지금까지 민 각을 얹는다(⑦). 기준을 새로 잡았으므로 swept는 0에서
+        //   시작하고, 여기에 넘겨 둔 각을 더하면 <b>머리가 있던 자리에서 이어진다</b>.
+        //   ★한 번도 안 놓쳤으면 sweptCarry는 0이라 종전과 완전히 같다.
+        swept += sweptCarry;
 
         // ★강체 구속 — 머리를 제대로 잡고 돌리면 두 손 간격과 반지름이 보존된다.
         //   제자리에서 손목만 틀면 손이 머리 위를 미끄러져 둘 다 깨진다.
@@ -1345,6 +1416,27 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         DiagnoseOverpressure(null, arcAngle, pairAngle, axis, pivot);
     }
 
+    /// <summary>
+    /// 파지가 풀렸다 — 잡아 둔 기준을 버리고 <b>지금까지 민 각을 넘겨 둔다</b>(2026-09-15 ⑦).
+    ///
+    /// ★<b>넘기는 값은 sweptSmoothed다</b>(방금 계산한 swept가 아니다). 화면·머리에 실제로
+    ///   반영된 값이 그쪽이라, 이 값을 이어받아야 다시 잡는 순간 머리가 안 움직인다.
+    /// ★기준을 버리면 반지름·두 손 간격 기준도 같이 다시 잡힌다 — 다시 잡은 자리가
+    ///   처음과 다르다고 '미끄러졌다'로 오판하던 것도 같이 사라진다.
+    /// </summary>
+    private void ReleaseOverpressureBaseline()
+    {
+        if (!arcStarted && !pairStarted) return;   // 잡아 둔 기준이 없으면 할 일이 없다
+
+        sweptCarry = sweptSmoothed;
+        arcStarted = false;
+        pairStarted = false;
+
+        if (logOverpressure)
+            Log($"파지가 풀려 기준을 버린다 — 지금까지 민 각 {sweptCarry:F1}°를 넘겨 둔다 " +
+                "(다시 잡으면 그 자리에서 이어진다)");
+    }
+
     /// <summary>손끝을 하나도 못 찾았을 때의 폴백. 시간으로 민다.</summary>
     private void AdvanceOverpressureByTime()
     {
@@ -1372,7 +1464,7 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         }
 
         float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
-        bool usingPair = overpressureSource == OverpressureSource.HandPairRotation;
+        bool usingPair = ActiveSource == OverpressureSource.HandPairRotation;
 
         ChunaLogger.Log(
             $"<color=cyan>[ROM 압박] {(note ?? "진행 중")} — 파지 {(BothHandsTouching() ? "O" : "X")}  {grip}\n" +

@@ -338,6 +338,18 @@ public class ScenarioGuideUIController : MonoBehaviour
             }
         }
 
+        // ★나레이션이 있는 가이드 substep은 <b>처음부터 감춘다</b>(2026-09-15).
+        //   스텝이 바뀔 때 UpdateStartToggleVisibility가 버튼을 켜 두기 때문에,
+        //   여기서 안 감추면 나레이션 시작 신호가 오기 전까지 <b>한순간 보였다 사라진다</b>.
+        if (HideNextUntilNarrationEnds
+            && scenarioManager != null && scenarioManager.CurrentStep != null
+            && scenarioManager.CurrentStep.IsGuideStep()
+            && scenarioManager.CurrentStep.stepName != "가이드"
+            && subStep != null && subStep.HasNarration())
+        {
+            SetStartToggleVisible(false);
+        }
+
         // 시작 토글 초기화 (다음 SubStep으로 넘어갔으므로)
         ResetStartToggle();
 
@@ -957,8 +969,29 @@ public class ScenarioGuideUIController : MonoBehaviour
             if (sub == null || !sub.HasNarration()) return;
         }
 
-        startToggle.interactable = isEnabled;
+        // ★★2026-09-15 사용자 지시 — <b>색으로 활성화를 표시하지 않는다.</b>
+        //   "체크리스트 현재는 처음부터 다음버튼이 나와있고 나래이션 재생이 끝나면 버튼이
+        //    파란색으로 바뀌면서 활성화를 표시하는데, 그렇게 말고 다음버튼이 없는 상태에서
+        //    체크리스트 나래이션이 끝나면 다음버튼이 나타나라는 소리야."
+        //   ★이 프로젝트에서 <b>파란색은 토글의 on/off 상태</b>를 뜻한다. 활성화를 파랑으로 쓰면
+        //     "켜져 있다"로 읽히고 다른 버튼들과 색이 안 맞아 혼자 튄다.
+        //   → 잠그는(interactable) 대신 <b>보이고 감춘다</b>. 색 전환 자체가 사라진다.
+        //   ★<see cref="SetStartToggleVisible"/>은 보일 때 isOn=false로 되돌리므로
+        //     나타나는 순간의 색은 <b>꺼진 상태의 기본색</b>이다 — 파랗지 않다.
+        if (HideNextUntilNarrationEnds) SetStartToggleVisible(isEnabled);
+        else startToggle.interactable = isEnabled;   // 종전 방식 — 다른 12개 술기는 그대로다
     }
+
+    /// <summary>
+    /// ★ROM <b>전용</b> 스위치(2026-09-15 사용자 지시: "이거 ROM의 체크리스트에서만 적용이야,
+    ///   다른 술기까지 적용하면 안돼").
+    ///
+    /// 켜지면 [다음]을 <b>색이 아니라 나타남/사라짐</b>으로 다룬다 —
+    /// 나레이션이 도는 동안 감췄다가 끝나면 나타난다.
+    /// ★<b>켠 쪽이 끈다.</b> <c>CervicalRomScenarioBridge</c>가 대상 시나리오에 들어올 때 켜고
+    ///   나갈 때 끈다. 안 끄면 다음 술기까지 이 방식이 따라간다(<c>ExternalStartHandler</c>와 같은 규약).
+    /// </summary>
+    public bool HideNextUntilNarrationEnds { get; set; }
 
     /// <summary>
     /// 시작 토글 변경 시

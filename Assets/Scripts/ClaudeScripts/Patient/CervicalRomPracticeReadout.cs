@@ -55,9 +55,39 @@ public class CervicalRomPracticeReadout : MonoBehaviour
              "★<b>끄면 자세정렬·파지 단계에서 정보창이 빈다</b> — 그 단계에는 방향도 게이지도 없어\n" +
              "  이 줄이 유일하게 남던 줄이었다. 그 자리의 안내는 진행 칸이 맡는다.")]
     [SerializeField] private bool showDirectionRow;
-    [Tooltip("환자 머리 중심 위로 이만큼 띄운다(m). 중립에서 잰 높이다.\n" +
-             "★2026-09-07: 0.22 → 0.32. 머리에 가려서 올렸다.")]
+
+    // ★★2026-09-15 사용자 요구 ③: "평가모드에서 가이드핸드가 없으니까 이게 파지가 제대로 된건지에
+    //   대한 확신이 안 서서, 환자 압박할 때 손인식의 문제인지 접촉점 인식 문제인지 구분이 안 간다."
+    //
+    // ★이건 <b>답을 알려 주는 것이 아니다</b>. 어디를 어떻게 잡아야 하는지는 여전히 안 알려 준다 —
+    //   지금 <b>시스템이 그 손을 인식하고 있는가</b>만 말한다. 09-14에 정한 원칙과 같은 줄이다
+    //   ("유지 시간은 과제의 조건이지 답이 아니다"). 그래서 실습·평가 <b>둘 다</b>에 띄운다(사용자 지시).
+    [Tooltip("파지 중인 손을 좌·우로 나눠 초록 체크로 보여준다. 쌍이 정해진 단계에서만 뜬다.")]
+    [SerializeField] private bool showGripChecks = true;
+    [Tooltip("★머리 본을 못 찾았을 때만 쓰는 예비값 — 목 뿌리 위로 이만큼 띄운다(m). " +
+             "★2026-09-15부터 정상 경로는 이 값을 안 쓴다. readoutHeight·readoutOutward가 자리를 정한다.")]
     [SerializeField] private float headRise = 0.32f;
+
+    // ★★2026-09-15 사용자 지시: "정보창 머리 위 말고 측면이랑 뒤통수에 붙이자. 너무 높다.
+    //   딱 손 사이에 들어오면 좋은데 모델에 안 가려지게."
+    //
+    // ★<b>손이 잡은 두 점을 피한 자리가 곧 답이다.</b>
+    //     시상면 쌍(이마·뒤통수)을 잡으면 → <b>옆면</b>이 빈다. 시술자도 옆에 서 있다.
+    //     관상·횡단 쌍(좌·우 측두)을 잡으면 → <b>뒤통수</b>가 빈다. 시술자도 뒤에 서 있다.
+    //   두 경우 모두 판이 <b>두 손 사이</b>에 놓인다 — 시상면이면 앞뒤 가운데(z=0),
+    //   회전이면 좌우 가운데(x=0)다.
+    // ★<b>가림은 "사용자가 있는 쪽으로 낸다"로 푼다.</b> 종전에는 높이(headRise)로 풀었고
+    //   그래서 너무 높아졌다. 머리 반대편으로 내면 머리에 가리므로, 부호는 <b>카메라에 가까운 쪽</b>으로 고른다.
+    //   ★홀더 스케일이 음수라 <b>방향 벡터로 부호를 고르면 뒤집힌다</b> —
+    //     두 후보의 <b>월드 좌표를 직접 비교</b>한다(TransformPoint는 스케일을 탄다).
+    // ★머리 본 로컬 실측(2026-09-15): 이마 z=+0.064 · 뒤통수 z=−0.068 · 측두 x=±0.05 ·
+    //   접촉점 높이 y≈0.08~0.096. 그래서 머리 중심 높이를 0.09로 둔다. 추론이 아니라 잰 값이다.
+    [Tooltip("머리 본 기준 높이(m). 머리 '위'가 아니라 머리 중심 높이다. 실측 접촉점 높이가 0.08~0.096이다.")]
+    [SerializeField] private float readoutHeight = 0.11f;
+
+    [Tooltip("머리 중심에서 바깥으로 이만큼(m). 옆면 또는 뒤통수 쪽으로 낸다. " +
+             "작으면 머리에 파묻히고, 크면 손에서 멀어진다. 실측 머리 반지름이 5~7cm다.")]
+    [SerializeField] private float readoutOutward = 0.1f;
     // ★[폐기 2026-09-07] pullToViewer·minDistance는 <b>카메라 위치</b>를 읽어 자리를 정하던 값이다.
     //   사용자 지시로 걷어냈다 — "사용자랑 거리 재지 말고 축에 따라가게 하고 방향만 회전시켜."
     //   가림은 headRise(높이)로 푼다. 되살리지 말 것.
@@ -87,6 +117,13 @@ public class CervicalRomPracticeReadout : MonoBehaviour
     [Tooltip("글자 상자보다 이만큼 넉넉하게(글자 로컬 단위). 위아래.")]
     [SerializeField] private float backdropPadY = 3f;
 
+    // ★2026-09-15 사용자 요청: "테두리 살짝만 곡선으로".
+    // ★판은 Quad가 아니라 <b>모서리를 깎은 사각형 메시</b>를 직접 만든다.
+    //   Quad에 스케일을 비균등으로 주면(가로가 세로보다 길다) 둥근 모서리가 <b>타원으로 늘어난다</b>.
+    //   그래서 <b>실제 크기대로 메시를 만들고 스케일은 1로 둔다</b> — 모서리 반지름이 일정해진다.
+    [Tooltip("판 모서리 둥글기. 글자 단위계다(패딩과 같은 단위). 0이면 각진 사각형.")]
+    [SerializeField] private float backdropCornerRadius = 1.5f;
+
     [SerializeField] private bool showDebugLogs = false;
 
     private Transform root;
@@ -112,6 +149,11 @@ public class CervicalRomPracticeReadout : MonoBehaviour
 
     private readonly System.Text.StringBuilder sb = new System.Text.StringBuilder(160);
     private bool shownBacking;   // 직전에 그린 '되돌림' 경고 상태(변경 감지용)
+
+    // ★파지 체크 줄의 직전 상태. ★★변경 감지 키에 <b>반드시</b> 넣어야 한다 —
+    //   각도·게이지가 그대로인 프레임에 손만 떨어지면 다시 그리지 않아 체크가 안 바뀐다
+    //   (바로 위 shownBacking이 같은 이유로 들어가 있다).
+    private int shownGrip = int.MinValue;
 
     // ── 안 뜰 때 <b>스스로 이유를 말한다</b> (2026-09-07) ──────────────────
     // ★"안 나온다"를 추측으로 고치면 왕복한다. 막은 게이트를 그 자리에서 이름으로 찍는다.
@@ -248,29 +290,29 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         //   ★축은 내가 만들지 않는다 — 드라이버가 각 방향의 회전축을 이미 갖고 있다.
         //     굴곡의 회전축 = 좌우축, 측굴의 회전축 = 전후축이다. 그대로 가져다 쓴다.
         //   ★좌우 중 어느 쪽인지는 <b>사용자가 실제로 있는 쪽</b>으로 정한다(부호만 뒤집는다).
-        //   ★면이 바뀔 때만 잡는다. 매 프레임 안 돈다.
+        //   ★★<b>2026-09-15 정정 — 글씨가 뒤집혀 보이던 자리다.</b>
+        //     종전에는 ①자세를 <b>면이 바뀔 때만</b> 잡고 ②그 축의 부호를 <b>여기서 따로</b> 골랐다.
+        //     그런데 판을 놓는 자리(<see cref="ReadoutLocalOffset"/>)도 자기 나름대로 부호를 고른다.
+        //     둘이 어긋나면 <b>판 뒷면을 보게 되어 글자가 거울처럼 보인다.</b>
+        //   → 부호를 <b>두 번 고르지 않는다.</b> 놓을 때 고른 그 방향을 그대로 쓴다
+        //     (규칙 9 — 한 값이 두 곳에 쓰이면 손잡이를 나누지 말고 하나로 모은다).
+        //   → 그리고 <b>자리가 바뀌면 자세도 다시 잡는다.</b> 면이 안 바뀌어도 사용자가 반대편으로
+        //     돌아가면 판은 따라 넘어가므로, 그때 자세를 안 고치면 곧바로 뒷면을 보게 된다.
         int planeNow = PlaneOf(driver.CurrentDirection);
-        if (cam != null && planeNow != 0 && planeNow != aimedPlane)
+        if (cam != null && readoutOutwardWorld.sqrMagnitude > 1e-8f
+            && (planeNow != aimedPlane || readoutSideSign != aimedSideSign))
         {
             aimedPlane = planeNow;
+            aimedSideSign = readoutSideSign;
 
-            Vector3 axis = planeNow == 1
-                ? driver.WorldAxisFor(CervicalRomDriver.Direction.Flexion)       // 좌우축
-                : driver.WorldAxisFor(CervicalRomDriver.Direction.LateralRight); // 전후축
+            // readoutOutwardWorld = 머리 중심 → 판. 즉 <b>사용자 쪽</b>이다.
+            // 글자는 똑바로 선다(up = 월드 수직). forward는 사용자 반대쪽 — 이 프로젝트 규약이다.
+            root.rotation = Quaternion.LookRotation(-readoutOutwardWorld.normalized, Vector3.up);
 
-            if (axis.sqrMagnitude > 1e-8f)
-            {
-                axis.Normalize();
-                // 사용자가 있는 쪽으로 부호를 맞춘다.
-                if (Vector3.Dot(axis, cam.transform.position - root.position) < 0f) axis = -axis;
-
-                // 글자는 똑바로 선다(up = 월드 수직). forward는 사용자 반대쪽 — 이 프로젝트 규약이다.
-                root.rotation = Quaternion.LookRotation(-axis, Vector3.up);
-
-                if (showDebugLogs)
-                    ChunaLogger.Log($"<color=cyan>[실습표시] 단면 {planeNow} " +
-                                    $"({(planeNow == 1 ? "시상면·옆" : "관상/횡단면·뒤")}) — 자세를 잡았다.</color>");
-            }
+            if (showDebugLogs)
+                ChunaLogger.Log($"<color=cyan>[실습표시] 단면 {planeNow} " +
+                                $"({(planeNow == 1 ? "시상면·옆" : "관상/횡단면·뒤")}) " +
+                                $"부호 {readoutSideSign} — 자세를 잡았다.</color>");
         }
 
         // --- 글 ---
@@ -287,18 +329,36 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         // ★압박 중 손을 중립 쪽으로 되돌리고 있는가(2026-09-14). 밀면 꺼진다.
         bool backing = bridge != null && bridge.OverpressureBacking;
 
+        // ★파지 체크(2026-09-15). 쌍이 정해진 단계에서만 뜬다 — 자세정렬처럼 잡을 것이 없는
+        //   단계에서는 grip이 -1이라 줄 자체가 없다.
+        int grip = GripState();
+
         // ★★변경 감지 키에 <b>경고 상태도</b> 넣는다. 안 넣으면 각도·게이지가 그대로인 프레임에
         //   경고가 켜져도 <b>다시 그리지 않아</b> 화면에 안 뜨다.
         if ((int)dir == shownDirection && angle == shownAngle && gaugeStep == shownGauge
-            && remain == shownRemain && mask == shownMask && backing == shownBacking) return;
+            && remain == shownRemain && mask == shownMask && backing == shownBacking
+            && grip == shownGrip) return;
 
         shownDirection = (int)dir; shownAngle = angle;
         shownGauge = gaugeStep; shownRemain = remain; shownMask = mask; shownBacking = backing;
+        shownGrip = grip;
 
         sb.Clear();
 
+        // ★맨 위에 둔다. 압박 중에 제일 자주 흘깃 보는 줄이고, 한 단계 내내 계속 떠 있어
+        //   아래 줄들을 밀어 출렁이게 하지 않는다(경고를 맨 아래 둔 것과 같은 이유).
+        if (grip >= 0)
+        {
+            sb.Append("<size=70%>");
+            AppendGripChecks(grip);
+            sb.Append("</size>");
+        }
+
         if (showAngleLine && dir != CervicalRomDriver.Direction.None)
         {
+            // ★파지 줄이 위에 붙었으므로 줄을 바꾼다. 09-15에 이걸 빠뜨려 '파지'와 각도가
+            //   한 줄에 붙어 나왔다 — 종전엔 각도가 첫 줄이라 개행이 필요 없었다.
+            if (sb.Length > 0) sb.Append('\n');
             sb.Append(Label(dir));
             sb.Append("  ");
             sb.Append(angle);
@@ -387,9 +447,75 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         if (root.parent != h) root.SetParent(h, false);
 
         // 홀더 로컬에서 <b>위쪽으로 headRise</b>. 머리가 기울면 이 점이 같이 넘어간다.
-        root.localPosition = Vector3.up * headRise;
+        root.localPosition = ReadoutLocalOffset(h);
         root.localScale = Vector3.one;
         return true;
+    }
+
+    /// <summary>
+    /// 정보창을 홀더 로컬 어디에 놓을지(2026-09-15). <b>머리 위가 아니라 머리 옆 또는 뒤통수</b>다.
+    ///
+    /// ★<b>어느 쪽인지는 손이 정한다</b> — 지금 잡은 접촉점 쌍의 반대편이 빈 자리다.
+    ///   시상면 쌍(이마·뒤통수) → 옆면 · 관상·횡단 쌍(좌·우 측두) → 뒤통수.
+    ///   쌍이 아직 없으면 방향의 단면으로 정하고, 그것도 없으면 옆면을 쓴다.
+    /// ★<b>부호는 카메라에 가까운 쪽</b>. 반대편으로 내면 머리에 가린다.
+    ///   ★★후보 두 개를 <b>월드 좌표로 만들어 비교</b>한다. 홀더 스케일이 음수(−1,1,1)라
+    ///     방향 벡터로 고르면 <b>X가 뒤집힌다</b>(TransformDirection은 스케일을 안 타고,
+    ///     실제 배치에 쓰는 localPosition은 탄다). 09-15에 이 함정을 미리 막아 둔다.
+    /// ★<b>흔들림 방지</b>: 정확히 옆에 섰을 때 두 후보가 엎치락뒤치락하면 판이 떤다.
+    ///   지금 쪽이 확실히 더 멀 때만(<see cref="ReadoutFlipMargin"/>) 바꾼다.
+    /// </summary>
+    private const float ReadoutFlipMargin = 0.05f;   // 5cm 이상 차이 나야 반대쪽으로 넘어간다
+    private int readoutSideSign;                     // 0 = 아직 안 정함
+    private int aimedSideSign;                       // 자세를 잡을 때 쓴 부호
+    private Vector3 readoutOutwardWorld;             // 머리 중심 → 판 (월드). ★자세도 이 값을 쓴다
+
+    private Vector3 ReadoutLocalOffset(Transform h)
+    {
+        Vector3 baseLocal = Vector3.up * readoutHeight;
+        if (h == null) return baseLocal;
+
+        // 뒤통수 쪽인가 옆면인가 — 잡은 쌍이 1순위, 없으면 단면.
+        bool back;
+        if (gripJudge != null && gripJudge.CurrentPair != CervicalGripJudge.GripPair.None)
+            back = gripJudge.CurrentPair == CervicalGripJudge.GripPair.Lateral;
+        else
+            back = PlaneOf(driver != null ? driver.CurrentDirection : CervicalRomDriver.Direction.None) >= 2;
+
+        // 머리 본 로컬 실측: 전후 = z(+가 얼굴) · 좌우 = x.
+        Vector3 axis = back ? Vector3.forward : Vector3.right;
+
+        if (cam != null)
+        {
+            Vector3 eye = cam.transform.position;
+            float dPlus = (h.TransformPoint(baseLocal + axis * readoutOutward) - eye).sqrMagnitude;
+            float dMinus = (h.TransformPoint(baseLocal - axis * readoutOutward) - eye).sqrMagnitude;
+
+            int want = dPlus <= dMinus ? 1 : -1;
+            if (readoutSideSign == 0)
+            {
+                readoutSideSign = want;
+            }
+            else if (want != readoutSideSign)
+            {
+                // 지금 쪽이 확실히 더 멀 때만 넘어간다.
+                float now = readoutSideSign > 0 ? dPlus : dMinus;
+                float other = readoutSideSign > 0 ? dMinus : dPlus;
+                if (Mathf.Sqrt(now) - Mathf.Sqrt(other) > ReadoutFlipMargin) readoutSideSign = want;
+            }
+        }
+        else if (readoutSideSign == 0)
+        {
+            readoutSideSign = -1;   // 카메라를 못 찾으면 뒤통수/왼쪽 기본
+        }
+
+        Vector3 local = baseLocal + axis * (readoutOutward * readoutSideSign);
+
+        // ★자세를 잡을 때 쓸 방향을 여기서 <b>한 번만</b> 정해 둔다. 저쪽에서 다시 고르면 어긋난다.
+        //   ★홀더 스케일이 음수라 방향 벡터가 아니라 <b>두 점의 차</b>로 구한다.
+        readoutOutwardWorld = h.TransformPoint(local) - h.TransformPoint(baseLocal);
+
+        return local;
     }
 
     /// <summary>
@@ -444,13 +570,57 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         return null;
     }
 
+    /// <summary>
+    /// 지금 왼손·오른손이 접촉점에 닿아 있는가. 비트 0 = 왼손, 비트 1 = 오른손.
+    /// 쌍이 안 정해진 단계(자세정렬 등)나 표시를 껐으면 <b>-1</b> — 줄 자체를 안 그린다.
+    ///
+    /// ★<b>어느 접촉점인지는 따지지 않는다.</b> `CervicalGripJudge`가 이미 "두 점을 서로 다른 손이
+    ///   하나씩"으로 판정하므로, 여기서 필요한 것은 <b>그 손이 인식되고 있는가</b> 하나다.
+    ///   사용자가 가르고 싶어한 것이 정확히 그것이다 — 손인식 문제인가 접촉점 문제인가.
+    /// </summary>
+    private int GripState()
+    {
+        if (!showGripChecks || gripJudge == null || !gripJudge.IsActive) return -1;
+
+        if (!gripJudge.TryGetGripState(out bool aLeft, out bool aRight, out bool bLeft, out bool bRight))
+            return -1;
+
+        int s = 0;
+        if (aLeft || bLeft) s |= 1;
+        if (aRight || bRight) s |= 2;
+        return s;
+    }
+
+    /// <summary>파지 체크 줄. 닿은 손은 초록 체크, 안 닿은 손은 회색 빈 표시.</summary>
+    private void AppendGripChecks(int grip)
+    {
+        sb.Append("파지  ");
+        AppendOneCheck("좌", (grip & 1) != 0);
+        sb.Append("  ");
+        AppendOneCheck("우", (grip & 2) != 0);
+    }
+
+    private void AppendOneCheck(string handName, bool ok)
+    {
+        // ★색만으로 가르지 않는다 — 기호도 같이 바꾼다. 패스스루 배경이 밝으면
+        //   초록·회색 차이가 잘 안 보인다.
+        // ★★동그라미를 쓴다(2026-09-15 사용자 지적: "다 사각형이라 디자인이 그래").
+        //   ★'동그라미 안에 체크'(✅ 등)는 <b>이모지</b>라 NotoSansKR에 글리프가 없을 수 있다 —
+        //     없으면 두부(□)로 나와 더 나쁘다. ●/○는 방향 줄에서 이미 쓰고 있어 확실히 나온다.
+        sb.Append(ok ? "<color=#7ad67a>" : "<color=#808080>");
+        sb.Append(ok ? "● " : "○ ");
+        sb.Append(handName);
+        sb.Append("</color>");
+    }
+
     private void AppendGauge(int steps, int remain)
     {
         bool full = steps >= 10;
         if (full) sb.Append("<color=#7ad67a>");
         sb.Append(gaugeLabel);
         sb.Append(' ');
-        for (int i = 0; i < 10; i++) sb.Append(i < steps ? '■' : '□');
+        // ★네모 대신 동그라미(2026-09-15 사용자 지적). 칸 수·의미는 그대로다.
+        for (int i = 0; i < 10; i++) sb.Append(i < steps ? '●' : '○');
         if (remain > 0)
         {
             sb.Append(' ');
@@ -524,15 +694,9 @@ public class CervicalRomPracticeReadout : MonoBehaviour
     /// </summary>
     private void BuildBackdrop()
     {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        go.name = "배경";
-        go.hideFlags = HideFlags.DontSave;
-
-        var col = go.GetComponent<Collider>();
-        if (col != null)
-        {
-            if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-        }
+        var go = new GameObject("배경") { hideFlags = HideFlags.DontSave };
+        go.AddComponent<MeshFilter>();
+        go.AddComponent<MeshRenderer>();
 
         backdrop = go.transform;
         backdrop.SetParent(label.transform, false);
@@ -559,11 +723,91 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         }
         if (!backdrop.gameObject.activeSelf) backdrop.gameObject.SetActive(true);
 
-        backdrop.localScale = new Vector3(b.size.x + backdropPadX * 2f,
-                                          b.size.y + backdropPadY * 2f, 1f);
+        // ★스케일은 1로 둔다. 크기는 <b>메시 자체</b>로 만든다 —
+        //   비균등 스케일을 주면 둥근 모서리가 타원으로 늘어난다.
+        float w = b.size.x + backdropPadX * 2f;
+        float h = b.size.y + backdropPadY * 2f;
+        RebuildBackdropMesh(w, h);
+
+        backdrop.localScale = Vector3.one;
         // ★글자보다 <b>뒤</b>로 살짝 물린다. 같은 평면에 두면 z-파이팅으로 지글거린다.
         backdrop.localPosition = new Vector3(b.center.x, b.center.y, 0.6f);
         backdrop.localRotation = Quaternion.identity;
+    }
+
+    private Mesh backdropMesh;
+    private float builtW, builtH, builtR;
+
+    /// <summary>
+    /// 모서리를 깎은 사각형 판을 만든다. 크기가 그대로면 다시 만들지 않는다.
+    ///
+    /// ★<b>부채꼴로 잇는다</b> — 가운데 한 점에서 테두리 점들로 삼각형을 두른다. 가장 단순하고
+    ///   볼록한 도형이라 이 방법으로 충분하다.
+    /// ★반지름은 <b>짧은 변의 절반</b>을 넘지 못하게 자른다. 안 그러면 모서리끼리 겹쳐 뒤집힌다.
+    /// ★재질이 Sprites/Default면 <c>Cull Off</c>라 앞뒤 어느 쪽에서도 보인다 — 감는 방향을 안 따진다.
+    /// </summary>
+    private void RebuildBackdropMesh(float w, float h)
+    {
+        float r = Mathf.Clamp(backdropCornerRadius, 0f, Mathf.Min(w, h) * 0.5f);
+
+        // 같은 크기면 다시 만들지 않는다(글이 바뀔 때마다 부르는 경로다).
+        if (backdropMesh != null &&
+            Mathf.Abs(w - builtW) < 1e-4f && Mathf.Abs(h - builtH) < 1e-4f && Mathf.Abs(r - builtR) < 1e-4f)
+            return;
+
+        builtW = w; builtH = h; builtR = r;
+
+        const int Seg = 5;                  // 모서리 한 곳당 나누는 수. 5면 충분히 매끄럽다.
+        int perCorner = Seg + 1;
+        int rim = perCorner * 4;
+
+        var verts = new Vector3[rim + 1];   // 0번은 한가운데
+        var uvs = new Vector2[rim + 1];
+        verts[0] = Vector3.zero;
+        uvs[0] = new Vector2(0.5f, 0.5f);
+
+        float hw = w * 0.5f - r;
+        float hh = h * 0.5f - r;
+        var centers = new[]
+        {
+            new Vector2(hw, hh), new Vector2(-hw, hh), new Vector2(-hw, -hh), new Vector2(hw, -hh),
+        };
+
+        int v = 1;
+        for (int c = 0; c < 4; c++)
+        {
+            for (int i = 0; i <= Seg; i++)
+            {
+                float deg = c * 90f + 90f * i / Seg;
+                float rad = deg * Mathf.Deg2Rad;
+                float x = centers[c].x + Mathf.Cos(rad) * r;
+                float y = centers[c].y + Mathf.Sin(rad) * r;
+                verts[v] = new Vector3(x, y, 0f);
+                uvs[v] = new Vector2(x / w + 0.5f, y / h + 0.5f);
+                v++;
+            }
+        }
+
+        var tris = new int[rim * 3];
+        for (int i = 0; i < rim; i++)
+        {
+            tris[i * 3] = 0;
+            tris[i * 3 + 1] = i + 1;
+            tris[i * 3 + 2] = (i + 1) % rim + 1;
+        }
+
+        if (backdropMesh == null)
+        {
+            backdropMesh = new Mesh { name = "실습표시_판", hideFlags = HideFlags.DontSave };
+            backdrop.GetComponent<MeshFilter>().sharedMesh = backdropMesh;
+        }
+
+        backdropMesh.Clear();
+        backdropMesh.vertices = verts;
+        backdropMesh.uv = uvs;
+        backdropMesh.triangles = tris;
+        backdropMesh.RecalculateBounds();
+        backdropMesh.RecalculateNormals();
     }
 
     private void Teardown()
@@ -573,6 +817,14 @@ public class CervicalRomPracticeReadout : MonoBehaviour
             if (Application.isPlaying) Destroy(root.gameObject);
             else DestroyImmediate(root.gameObject);
         }
+        // ★우리가 만든 메시는 우리가 치운다. 안 치우면 Play를 껐다 켤 때마다 쌓인다.
+        if (backdropMesh != null)
+        {
+            if (Application.isPlaying) Destroy(backdropMesh); else DestroyImmediate(backdropMesh);
+            backdropMesh = null;
+        }
+        builtW = builtH = builtR = 0f;
+
         root = null;
         label = null;
         backdrop = null;
@@ -586,6 +838,7 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         shownGauge = int.MinValue;
         shownRemain = int.MinValue;
         shownMask = int.MinValue;
+        shownGrip = int.MinValue;
     }
 
     // ★[삭제 2026-09-07] SwingAboutWorldUp — 강체 기울기를 빌보드에 <b>곱해서</b> 얹던 방식의 부품이었다.
