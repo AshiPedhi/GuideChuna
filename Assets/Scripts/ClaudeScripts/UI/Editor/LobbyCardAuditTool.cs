@@ -32,6 +32,7 @@ public static class LobbyCardAuditTool
         "두개골교정", "두개골PM교정", "두개골PJ교정",
         "복와위_하부흉추_굴곡변위", "앙와위_흉추_신전변위",
         "제1늑골_앙와위", "제2늑골_상방변위", "경추ROM측정",
+        "경추ROM실측",
     };
 
     [MenuItem("GuideChuna/시나리오·로비/로비 카드 점검 (읽기 전용)")]

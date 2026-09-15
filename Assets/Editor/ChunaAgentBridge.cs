@@ -655,9 +655,33 @@ public static class ChunaAgentBridge
                     // 에셋 경로면 에셋을, 아니면 씬 오브젝트 경로로 본다.
                     if (v.StartsWith("Assets/"))
                     {
-                        var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(v);
-                        if (asset == null) { why = $"그 에셋이 없다: {v}"; return false; }
-                        p.objectReferenceValue = asset; return true;
+                        // ★메인 에셋만 보면 안 된다(2026-09-15). png의 메인은 Texture2D라
+                        //   Sprite 칸(Image.m_Sprite)에 못 들어간다 — 서브 에셋에 Sprite가 따로 있다.
+                        //   필드가 기대하는 타입(p.type = "PPtr<Sprite>")을 읽어 그 타입을 골라 준다.
+                        string want = p.type;                       // 예: PPtr<$Sprite> · PPtr<Sprite>
+                        int lt = want.IndexOf('<'), gt = want.LastIndexOf('>');
+                        if (lt >= 0 && gt > lt) want = want.Substring(lt + 1, gt - lt - 1).TrimStart('$');
+
+                        var main = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(v);
+                        if (main == null) { why = $"그 에셋이 없다: {v}"; return false; }
+
+                        UnityEngine.Object pick = main;
+                        if (!string.IsNullOrEmpty(want) && main.GetType().Name != want)
+                        {
+                            pick = null;
+                            foreach (var sub in AssetDatabase.LoadAllAssetsAtPath(v))
+                            {
+                                if (sub == null) continue;
+                                if (sub.GetType().Name == want) { pick = sub; break; }
+                            }
+                            if (pick == null)
+                            {
+                                why = $"그 에셋에 {want} 가 없다: {v} (메인은 {main.GetType().Name})";
+                                return false;
+                            }
+                        }
+
+                        p.objectReferenceValue = pick; return true;
                     }
 
                     // "경로" 또는 "경로|컴포넌트"
