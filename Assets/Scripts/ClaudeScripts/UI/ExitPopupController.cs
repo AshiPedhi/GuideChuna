@@ -53,7 +53,11 @@ public class ExitPopupController : BaseUIPanel
 
     // 상태
     private bool isShowing = false;
+    // 2026-09-15: 팝업은 on/off만 한다(사용자 지시). 아래 AnimateShow/AnimateHide 는 안 부른다 —
+    //   지우지 않는 것은 프로젝트 방침이다. 다시 쓰려면 이 필드에 StartCoroutine 결과를 담으면 된다.
+#pragma warning disable CS0649   // 지금은 아무도 대입하지 않는다(애니메이션 미사용)
     private Coroutine animationCoroutine;
+#pragma warning restore CS0649
 
     // InfoPanelController 참조 (팝업 상태 알림용)
     private InfoPanelController infoPanelController;
@@ -221,7 +225,10 @@ public class ExitPopupController : BaseUIPanel
             {
                 StopCoroutine(animationCoroutine);
             }
-            animationCoroutine = StartCoroutine(AnimateShow());
+            // 2026-09-15 사용자 지시: "쓸데없이 애니메이션 넣지 말고 기존처럼 그냥 on/off만 해."
+            //   축소/확대 애니메이션은 안 쓴다. 스케일만 1로 되돌려 둔다 —
+            //   예전에 0으로 남아 "다시 키니까 안 돌아오는" 사고가 났던 자리다.
+            popupPanel.transform.localScale = Vector3.one;
         }
 
         // 게임 일시정지
@@ -246,7 +253,33 @@ public class ExitPopupController : BaseUIPanel
     /// </summary>
     public void HidePopup()
     {
-        if (!isShowing) return;
+        // 2026-09-15 — 취소가 안 먹던 자리다.
+        //   팝업을 여는 경로가 둘이다: 이 클래스의 ShowPopup() 과,
+        //   InfoPanelController 가 exitConfirmPopup.SetActive(true) 로 직접 켜는 것.
+        //   뒤쪽으로 열리면 isShowing 이 false 로 남아, 취소를 눌러도 여기서 그냥 빠져나갔다
+        //   — 로그에는 "취소 실행"이 찍히는데 창은 그대로이고, timeScale 복구와 닫기 애니메이션도 안 돌았다.
+        //   -> 실제로 켜져 있으면 닫는다. 상태 플래그가 아니라 화면의 사실을 본다.
+        bool panelOpen = popupPanel != null && popupPanel.activeSelf;
+        if (!isShowing && !panelOpen) return;
+
+        // 우리가 띄운 게 아니면 애니메이션 없이 그냥 닫는다.
+        //   InfoPanelController 가 직접 켠 경우인데, 그쪽은 AnimateShow 를 안 타서
+        //   축소 애니메이션만 걸면 <b>스케일이 0인 채로 남아 다음에 열 때 안 보인다.</b>
+        //   (2026-09-15: 애니메이션을 살렸더니 "왜 줄어들고 사라지냐"는 지적을 받은 자리다 —
+        //    종전 동작은 즉시 닫힘이었다. 그 동작을 지킨다.)
+        if (!isShowing)
+        {
+            isShowing = false;
+            IsVisible = false;
+            if (animationCoroutine != null) StopCoroutine(animationCoroutine);
+            if (popupPanel != null)
+            {
+                popupPanel.transform.localScale = Vector3.one;   // 다음에 열 때를 위해 되돌린다
+                popupPanel.SetActive(false);
+            }
+            if (pauseGameOnShow) Time.timeScale = 1f;
+            return;
+        }
 
         isShowing = false;
         IsVisible = false;
@@ -257,7 +290,12 @@ public class ExitPopupController : BaseUIPanel
         {
             StopCoroutine(animationCoroutine);
         }
-        animationCoroutine = StartCoroutine(AnimateHide());
+        // on/off만 한다(2026-09-15). 애니메이션 없음.
+        if (popupPanel != null)
+        {
+            popupPanel.transform.localScale = Vector3.one;
+            popupPanel.SetActive(false);
+        }
 
         // 게임 재개
         if (pauseGameOnShow)
@@ -290,6 +328,12 @@ public class ExitPopupController : BaseUIPanel
 
         ChunaLogger.Log("[ExitPopup] 취소 토글 선택됨");
 
+        // 모멘터리로 되돌린다(2026-09-15). 이 토글들은 켜진 채로 남는다 —
+        //   팝업을 InfoPanelController 가 SetActive 로 직접 열어서 ShowPopup() 의
+        //   초기화(SetToggleOffSilently)가 돌지 않기 때문이다. 그래서 다음 클릭이 ON->OFF 가 되어
+        //   if (!isOn) return 에 걸리고, 두 번 눌러야 동작하는 상태가 됐다.
+        SetToggleOffSilently(cancelToggle);
+
         if (autoExecuteOnToggle)
         {
             ExecuteCancel();
@@ -305,6 +349,12 @@ public class ExitPopupController : BaseUIPanel
 
         ChunaLogger.Log("[ExitPopup] 다시하기 토글 선택됨");
 
+        // 모멘터리로 되돌린다(2026-09-15). 이 토글들은 켜진 채로 남는다 —
+        //   팝업을 InfoPanelController 가 SetActive 로 직접 열어서 ShowPopup() 의
+        //   초기화(SetToggleOffSilently)가 돌지 않기 때문이다. 그래서 다음 클릭이 ON->OFF 가 되어
+        //   if (!isOn) return 에 걸리고, 두 번 눌러야 동작하는 상태가 됐다.
+        SetToggleOffSilently(retryToggle);
+
         if (autoExecuteOnToggle)
         {
             ExecuteRetry();
@@ -319,6 +369,12 @@ public class ExitPopupController : BaseUIPanel
         if (!isOn) return;
 
         ChunaLogger.Log("[ExitPopup] 메인으로 토글 선택됨");
+
+        // 모멘터리로 되돌린다(2026-09-15). 이 토글들은 켜진 채로 남는다 —
+        //   팝업을 InfoPanelController 가 SetActive 로 직접 열어서 ShowPopup() 의
+        //   초기화(SetToggleOffSilently)가 돌지 않기 때문이다. 그래서 다음 클릭이 ON->OFF 가 되어
+        //   if (!isOn) return 에 걸리고, 두 번 눌러야 동작하는 상태가 됐다.
+        SetToggleOffSilently(mainMenuToggle);
 
         if (autoExecuteOnToggle)
         {
@@ -353,6 +409,12 @@ public class ExitPopupController : BaseUIPanel
 
         // 팝업 숨기기
         HidePopup();
+
+        // 팝업을 연 주인에게도 알린다(2026-09-15).
+        //   이 팝업은 InfoPanelController 의 실습종료 토글이 켜져 있는 동안 열려 있는 구조다.
+        //   패널만 끄면 토글이 ON 으로 남아 다시 열려면 두 번 눌러야 한다.
+        var panel = FindFirstObjectByType<InfoPanelController>();
+        if (panel != null) panel.NotifyExitPopupClosedExternally();
     }
 
     /// <summary>
@@ -452,6 +514,7 @@ public class ExitPopupController : BaseUIPanel
         if (popupPanel == null) yield break;
         yield return ScaleAnimation(popupPanel.transform, Vector3.one, Vector3.zero, animationDuration, scaleCurve);
         popupPanel.SetActive(false);
+        popupPanel.transform.localScale = Vector3.one;   // 0으로 남으면 다음에 열 때 안 보인다
     }
 
     /// <summary>

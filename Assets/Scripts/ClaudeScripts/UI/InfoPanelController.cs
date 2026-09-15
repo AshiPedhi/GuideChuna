@@ -799,6 +799,23 @@ public class InfoPanelController : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// 팝업을 <b>바깥에서</b> 닫았을 때(취소 버튼) 이 패널의 상태를 맞춘다 — 2026-09-15.
+    ///
+    /// ★왜 필요한가: 이 팝업은 <c>mainMenuToggle</c>이 <b>켜져 있는 동안</b> 열려 있는 구조다.
+    ///   그런데 취소는 <c>ExitPopupController</c>가 처리하면서 <b>패널만</b> 껐다.
+    ///   토글은 ON으로 남아 다음에 누르면 OFF가 되어(= 닫기) 아무 일도 안 일어나고,
+    ///   <b>두 번 눌러야 다시 열리는</b> 상태가 됐다.
+    /// ★알림 없이 끈다 — <c>onValueChanged</c>가 돌면 CloseExitPopupInternal이 또 불려 겹친다.
+    /// </summary>
+    public void NotifyExitPopupClosedExternally()
+    {
+        // ★토글을 그냥 끈다. 나머지는 <b>기존 경로가 그대로 한다</b> —
+        //   OnMainMenuToggleChanged(false) → CloseExitPopupInternal() → 패널 끄기 · 상태 내리기 · 색 갱신.
+        //   따로 흉내 내면 손잡이가 둘이 되어 또 어긋난다.
+        if (mainMenuToggle != null && mainMenuToggle.isOn) mainMenuToggle.isOn = false;
+    }
+
     private void CloseExitPopupInternal()
     {
         if (exitConfirmPopup != null && isExitPopupOpen)
