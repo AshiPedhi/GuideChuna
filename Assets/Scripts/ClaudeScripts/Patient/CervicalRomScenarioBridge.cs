@@ -123,6 +123,11 @@ public class CervicalRomScenarioBridge : MonoBehaviour
     //   감점 폭은 실측 측정기의 인스펙터 값을 같이 쓴다(scoreSource) — 손잡이를 둘로 만들지 않는다.
     // ★전부 새 필드라 씬에 값이 없다 → 코드 기본값이 먹는다(규칙 7).
     [Tooltip("압박 유지 중 손을 중립 쪽으로 이만큼(도) 되돌렸을 때의 임계.\n" +
+             "★★2026-09-17 — <b>되돌림 바닥(CervicalRomDriver.overpressureBackLimitDegrees)이\n" +
+             "  켜져 있으면 이 값은 거의 안 쓰인다.</b> 머리가 바닥에서 안 내려가는 걸 보면\n" +
+             "  시술자가 더 되돌리지 않아 여기까지 올 일이 없기 때문이다(사용자 지적).\n" +
+             "  그래서 <b>바닥에 닿는 순간</b>을 경고 조건으로 삼고, 이 값은 <b>안 막는 설정(0)</b>일 때의\n" +
+             "  대비책으로 남겼다. 둘 중 하나라도 걸리면 경고·감점이다.\n" +
              "  · 평가 — 경고를 띄우고 <b>감점</b>한다(방향당 1회). ★넘기지는 않는다.\n" +
              "  · 실습 — 경고만 띄운다.\n" +
              "★2026-09-14: 종전에는 평가에서 여기 걸리면 복귀로 <b>넘겨 버렸다</b>. 그러면 압박을\n" +
@@ -950,6 +955,13 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             gripCuePlayed = true;
             PlayStepCue(gripCueClip != null ? gripCueClip : Resources.Load<AudioClip>("Audio/RomGrip"),
                         "파지 성립");
+
+            // ★같은 순간에 각도기의 좌우를 굳힌다(2026-09-17).
+            //   각도기를 <b>띄우는</b> 것과 좌우를 <b>정하는</b> 것은 시점이 달라야 한다 —
+            //   띄우는 건 즉시가 맞지만(08-28), 좌우는 시술자가 그 자리에 섰다는 증거가
+            //   있어야 정할 수 있다. 파지 성립이 그 증거다.
+            //   그 전까지 각도기는 매 프레임 시술자 반대편을 따라다닌다.
+            planeGauge?.LockSidePick();
         }
     }
 
@@ -1385,18 +1397,25 @@ public class CervicalRomScenarioBridge : MonoBehaviour
         //     감점은 남지만 배우는 것이 없다. 실습과 평가가 <b>감점 유무만</b> 다르면 된다.
         //   ★감점은 방향당 한 번뿐이다(<see cref="MarkEvaluationPassiveSkipped"/>가 플래그로 막는다) —
         //     되돌릴 때마다 계속 깎이면 한 번 실수로 점수가 바닥난다.
-        OverpressureBacking = passiveSkipBackDegrees > 0f
-                              && sweptSmoothed <= -passiveSkipBackDegrees;
-
-        if (OverpressureBacking && evalScoredRun)
-            MarkEvaluationPassiveSkipped(stepName, $"압박 중 중립 쪽으로 {-sweptSmoothed:F1}° 되돌렸다");
-
-        // ★실습에서는 <b>그 자리에서 말해 준다</b>(2026-09-14 사용자 판단).
-        //   평가는 바로 위에서 감점하고 복귀로 넘어갔으므로 여기 도달하지 않는다 — 여기는 사실상 실습 전용이다.
-        //   ★임계는 평가 감점과 <b>같은 손잡이</b>(passiveSkipBackDegrees)를 쓴다. 둘로 만들지 않는다.
+        // ★★★<b>되돌림을 막기 시작한 뒤로는 «막혔는가»가 곧 «너무 되돌렸는가»다</b>(2026-09-17).
+        //   사용자 지적: "각도가 일정 이상에서 막히니까 경고문이 뜰 일이 없네." 정확하다 —
+        //   머리가 5°에서 안 내려가는 걸 보면 시술자는 더 되돌리지 않으므로, 손 각으로 재는
+        //   passiveSkipBackDegrees(씬 15°)에는 <b>영영 도달하지 않는다.</b>
+        //   막는 값과 경고하는 값을 <b>따로</b> 두면 반드시 어긋난다. 그래서 하나로 묶었다.
+        //   ★막지 않는 설정(overpressureBackLimitDegrees = 0)에서는 종전 각도 임계를 그대로 쓴다.
+        //   ★실습·평가 공통 한 줄이다 — 종전에 이 계산이 <b>똑같이 두 번</b> 적혀 있었다(중복 제거).
         //   왜 알려야 하나: 게이지가 0으로 떨어지고 화살표가 반대를 가리켜도 <b>전부 간접 신호</b>고,
         //   20초 뒤 [다음]이 떠 버려서 잘못한 줄 모른 채 넘어갈 수 있다.
-        OverpressureBacking = passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees;
+        OverpressureBacking = driver.AtOverpressureBackLimit
+                              || (passiveSkipBackDegrees > 0f && sweptSmoothed <= -passiveSkipBackDegrees);
+
+        // ★★★<b>되돌리면 알리고 깎되, 넘기지는 않는다</b>(2026-09-14 사용자 판단:
+        //   "평가모드에서도 압박 생략보다 경고문 띄워 주고 감점하고 압박은 제대로 진행하는 게
+        //    더 좋을 것 같은데. 그래야 평가와 학습 둘 다 효과가 있을 것 같아").
+        //   ★감점은 방향당 한 번뿐이다(<see cref="MarkEvaluationPassiveSkipped"/>가 플래그로 막는다) —
+        //     되돌릴 때마다 계속 깎이면 한 번 실수로 점수가 바닥난다.
+        if (OverpressureBacking && evalScoredRun)
+            MarkEvaluationPassiveSkipped(stepName, $"압박 중 중립 쪽으로 {-sweptSmoothed:F1}° 되돌렸다");
 
         float gap = driver.CurrentPassiveGain;   // 손이 밀어야 하는 양 = 머리가 더 가는 양
 

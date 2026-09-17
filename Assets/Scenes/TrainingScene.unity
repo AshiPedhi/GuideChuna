@@ -139509,7 +139509,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0.14662382, y: 0.00024227511, z: 0.001087789, w: 0.9891918}
   m_LocalPosition: {x: -0.0001, y: 0.0957, z: 0.0636}
-  m_LocalScale: {x: 0.18, y: 0.18, z: 0.05}
+  m_LocalScale: {x: 0.18, y: 0.18, z: 0.0909}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3010130398466078172}
@@ -141434,15 +141434,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMax.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchorMin.y
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 40
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_SizeDelta.y
@@ -141450,11 +141450,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 20
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 697411000507578077, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -19
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1399643648098774758, guid: 4c6d008da39564a4e946ee49a59a7f02, type: 3}
       propertyPath: m_Layer
@@ -197761,7 +197761,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.05, y: 0.095, z: -0.0051}
-  m_LocalScale: {x: 0.05, y: 0.18, z: 0.18}
+  m_LocalScale: {x: 0.0909, y: 0.18, z: 0.18}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3010130398466078172}
@@ -203967,7 +203967,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: -0.065637, y: 0.00010846561, z: 0.00048695772, w: 0.99784344}
   m_LocalPosition: {x: 0.0004, y: 0.0795, z: -0.0682}
-  m_LocalScale: {x: 0.18, y: 0.18, z: 0.05}
+  m_LocalScale: {x: 0.18, y: 0.18, z: 0.0909}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3010130398466078172}
@@ -217321,7 +217321,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0.05, y: 0.0949, z: -0.0053}
-  m_LocalScale: {x: 0.05, y: 0.18, z: 0.18}
+  m_LocalScale: {x: 0.0909, y: 0.18, z: 0.18}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 3010130398466078172}
@@ -370952,6 +370952,7 @@ MonoBehaviour:
   randomizePerLoad: 1
   dysfunctionRange: {x: 10.09, y: 18}
   passiveGainRange: {x: 3, y: 8}
+  overpressureBackLimitDegrees: 5
   randomSeed: 0
   activeSpeed: 12
   returnSpeed: 20
@@ -370977,11 +370978,13 @@ MonoBehaviour:
   leftIndexTip: {fileID: 785329823}
   rightThumbTip: {fileID: 1887512698}
   rightIndexTip: {fileID: 159818317}
+  leftMiddleTip: {fileID: 0}
+  rightMiddleTip: {fileID: 0}
   leftPalm: {fileID: 0}
   rightPalm: {fileID: 0}
   fingerTipRadius: 0.012
   requireBothFingers: 1
-  fingerSource: 1
+  fingerSource: 2
   ignoreAssignedTips: 0
   singleFingerFallback: 1
   maxFingerSpeed: 1.2

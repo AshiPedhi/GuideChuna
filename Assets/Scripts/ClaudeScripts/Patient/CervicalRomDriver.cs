@@ -124,6 +124,21 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     [Tooltip("압박 여유를 뽑을 범위 (도). x=최소, y=최대")]
     [SerializeField] private Vector2 passiveGainRange = new Vector2(5f, 10f);
 
+    // ★2026-09-17 신설. 씬에 없는 새 필드라 <b>이 코드 기본값이 그대로 먹는다</b>(규칙 7).
+    //   바꾸고 싶으면 인스펙터 '되돌림 바닥'에서 조절하면 된다.
+    [Tooltip("압박 유지 중 손을 되돌릴 때, 머리가 <b>능동 끝에서 아래로</b> 갈 수 있는 최대 각(도).\n" +
+             "2026-09-17 사용자 지시 — \"압박 안 하고 중립으로 갈 때 일정 이상 못 가게 막아달라.\"\n" +
+             "굴곡·신전에서 손이 어긋나면 머리가 중립까지 따라 내려가 손 위치가 통째로 흐트러졌다.\n" +
+             "\n" +
+             "· 작게 — 머리가 능동 끝 근처를 지킨다. 손 위치가 안정적이지만 되돌리는 동작이 잘 안 보인다.\n" +
+             "· 크게 — 되돌리는 동작이 잘 보이지만 중립 근처까지 내려간다.\n" +
+             "· 0 — 막지 않는다(2026-09-14~09-17 동작. 중립까지 내려간다).\n" +
+             "\n" +
+             "★기본 5°는 압박 여유(3~8°)보다 작게 잡은 값이다 — '압박한 만큼 도로 풀었다'가\n" +
+             "  눈에 보이는 선에서 멈춘다. ★계산으로 고른 값이지 Play로 맞춰 본 값이 아니다.\n" +
+             "★<b>평가 감점과는 무관하다.</b> 감점은 손이 되돌린 각으로 재고, 여기서 막는 건 머리뿐이다.")]
+    [SerializeField] private float overpressureBackLimitDegrees = 5f;
+
     [Tooltip("0이 아니면 그 값을 시드로 써서 매번 같은 값이 나온다. 재현이 필요할 때만 쓴다.")]
     [SerializeField] private int randomSeed = 0;
 
@@ -474,6 +489,7 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         currentDirection = direction;
         pendingDirection = Direction.None;
         directionPrimed = false;   // 실제 동작이 시작됐다 — 이제 중립에 닿으면 방향을 놓는다
+        AtOverpressureBackLimit = false;   // ★새 동작이다 — 지난 압박의 '막힘'을 끌고 오지 않는다
         targetAngle = ActiveTargetAngle;
         ramifySpeed = activeSpeed;       // ★즉시 대입하면 안 된다. 속도로 밀어야 부드럽다.
 
@@ -499,6 +515,8 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
 
         // 압박은 시술자 손을 즉시 따라가야 한다. 속도 제한을 걸면 손과 머리가 어긋난다.
         ramifySpeed = 0f;
+        // ★이 경로(진행률 0~1)는 되돌림 자체가 없다 — Clamp01이라 능동 끝 아래로 못 간다.
+        AtOverpressureBackLimit = false;
         targetAngle = Mathf.Lerp(ActiveTargetAngle, PassiveLimitAngle, Mathf.Clamp01(progress01));
     }
 
@@ -521,6 +539,18 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
 
         ramifySpeed = 0f;
 
+        // ★★되돌아가는 쪽에 <b>바닥</b>을 깐다(2026-09-17 사용자 지시).
+        //   "압박 안 하고 중립으로 갈 때 일정 이상 못 가게 막아달라."
+        //   증상: 굴곡·신전에서 손이 잘 어긋나는데, 어긋난 만큼 머리가 <b>중립까지 따라 내려가</b>
+        //         손 위치가 통째로 흐트러지고, 잘못하고 있는 줄 모른 채 지나간다.
+        //
+        // ★09-14에 이 방향을 <b>완전히 열었던 것</b>을 절반만 되돌린다. 그때 이유는
+        //   "머리가 능동 끝점에서 멈춰 버리면 되돌리는 동작을 할 수가 없다"였는데,
+        //   바닥을 능동 끝 <b>아래</b>에 두면 되돌리는 동작은 그대로 보이면서 중립까지는 안 간다.
+        //
+        // ★★<b>평가 감점은 안 건드린다.</b> 감점은 손이 되돌린 각(브리지의 sweptSmoothed)으로
+        //   재는데, 머리를 막아도 손 각은 계속 읽힌다. 여기서 막는 것은 <b>머리</b>뿐이다.
+
         // ★★<b>0에 닿게 두면 안 된다</b>(2026-09-14 실측으로 잡은 회귀).
         //   아래 LateUpdate의 중립 스냅이 <c>targetAngle &lt;= 0</c>에서 <b>currentDirection을 None으로 지운다.</b>
         //   지워지면 축이 Vector3.zero가 되어 브리지가 손 각을 아예 못 재고
@@ -534,8 +564,31 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
         //   0.6°는 화면에서 중립과 구분되지 않으면서 스냅 조건(0.05°)을 확실히 비껴간다.
         const float keepDirectionAngle = 0.6f;
 
-        targetAngle = Mathf.Clamp(ActiveTargetAngle + sweptDegrees, keepDirectionAngle, PassiveLimitAngle);
+        // 바닥 = 능동 끝에서 이만큼만 내려온다. 0 이하로 두면 종전대로 중립까지 간다.
+        bool limiting = overpressureBackLimitDegrees > 0f;
+        float floor = limiting
+            ? Mathf.Max(keepDirectionAngle, ActiveTargetAngle - overpressureBackLimitDegrees)
+            : keepDirectionAngle;
+
+        float wanted = ActiveTargetAngle + sweptDegrees;
+
+        // ★★바닥에 <b>닿았다</b>는 것 자체가 "너무 되돌렸다"는 신호다(2026-09-17 사용자 지적:
+        //   "각도가 일정 이상에서 막히니까 경고문이 뜰 일이 없네").
+        //   머리가 안 내려가는 걸 보면 시술자는 더 되돌리지 않는다 — 그래서 손 각으로 재는
+        //   종전 임계(passiveSkipBackDegrees, 씬 15°)에는 <b>영영 도달하지 않는다.</b>
+        //   막는 값과 경고하는 값을 따로 두면 반드시 어긋난다 → <b>막히는 순간을 경고 조건으로 쓴다.</b>
+        AtOverpressureBackLimit = limiting && wanted <= floor;
+
+        targetAngle = Mathf.Clamp(wanted, floor, PassiveLimitAngle);
     }
+
+    /// <summary>
+    /// 되돌림 <b>바닥에 닿아 있는가</b>. 압박 중 손을 중립 쪽으로 너무 되돌려 머리가 더는
+    /// 안 내려가는 상태다. 브리지가 경고·감점 조건으로 읽는다.
+    /// ★<see cref="overpressureBackLimitDegrees"/>가 0이면(안 막으면) 항상 거짓이다 —
+    ///   그때는 브리지가 종전 각도 임계를 쓴다.
+    /// </summary>
+    public bool AtOverpressureBackLimit { get; private set; }
 
     /// <summary>
     /// 단계를 <b>건너뛴 뒤</b> 그 단계의 결과 상태로 <b>즉시</b> 맞춘다.
@@ -582,6 +635,9 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     /// </summary>
     public void ReturnToNeutral()
     {
+        // ★복귀는 중립까지 가는 것이 정상이다 — 되돌림 바닥은 압박 구간에만 건다.
+        //   ★여기서 안 풀면 복귀 내내 '막힘'이 참으로 남아 경고문이 계속 뜬다.
+        AtOverpressureBackLimit = false;
         targetAngle = 0f;
         ramifySpeed = returnSpeed;
     }

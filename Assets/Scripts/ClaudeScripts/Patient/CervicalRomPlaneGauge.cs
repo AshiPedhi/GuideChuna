@@ -88,27 +88,36 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     //   (굴곡 −X / 신전 +X, 우측굴 −Z / 좌측굴 +Z) 같은 값을 넣어도 굴곡은 오른쪽,
     //   신전은 왼쪽으로 간다. 그래서 몸통의 해부학 축을 기준으로 잡는다.
     //
-    //   시상면(굴곡·신전)  torso.right    — 시술자가 서는 환자 우측으로 뺀다
-    //   관상면(좌우측굴)   torso.forward  — 환자 앞쪽으로 뺀다
+    //   시상면(굴곡·신전)  torso.right    — 시술자가 선 쪽의 <b>반대편</b>으로 뺀다(자동)
+    //   관상면(좌우측굴)   torso.forward  — 환자 <b>앞쪽으로 고정</b>(자동 판단 안 한다)
     //   횡단면(좌우회전)   torso.up       — 위아래로 뺀다
 
     [Tooltip("시상면(굴곡·신전)을 환자 좌우로 미는 거리 (m).\n" +
-             "절차상 시술자가 환자 우측 측면에 서므로 양수면 그쪽으로 나온다.\n" +
-             "★어느 쪽이 우측인지는 실측하지 않았다 — 반대로 나오면 부호를 뒤집으면 된다.")]
+             "CSV '시상면 파지'가 \"환자의 옆면에 서서\"라 좌·우가 자유다 — 세 면 중 여기만\n" +
+             "자동 판단이 붙는 이유다.\n" +
+             "★부호는 autoSideByViewer가 정한다(시술자 반대편). 끄면 이 부호를 그대로 쓴다.")]
     [SerializeField] private float sagittalNormalOffset = 0.30f;
 
-    [Tooltip("관상면(좌우측굴)을 환자 앞뒤로 미는 거리 (m). 양수면 앞쪽이다.\n" +
-             "★앞뒤 부호도 미실측이다. 반대면 뒤집는다.")]
+    [Tooltip("관상면(좌우측굴)을 환자 앞뒤로 미는 거리 (m). <b>양수 = 환자 앞쪽.</b>\n" +
+             "★2026-09-17 실측으로 확정했다 — 추정이 아니다.\n" +
+             "  (눈 본 중점 − 머리 본)·torso.forward = +0.059 > 0 이라 torso.forward가 얼굴 쪽이다.\n" +
+             "  c8에 음수 스케일(X −1.1)이 있어 <b>좌우는</b> 본 이름을 못 믿지만, 전후축 Z는\n" +
+             "  스케일이 +1.1이라 거울과 무관하다.\n" +
+             "★시술자는 측굴에서 항상 뒤통수에 서므로, 앞쪽 = 머리 너머다. 고정해도 된다.")]
     [SerializeField] private float coronalNormalOffset = 0.32f;
 
     [Tooltip("횡단면(좌우회전)을 위아래로 미는 거리 (m).\n" +
              "목에 걸친 지금 모습이 보기 좋다고 하셔서 기본 0이다.")]
     [SerializeField] private float transverseNormalOffset = 0f;
 
-    [Tooltip("시술자가 선 쪽의 <b>반대편</b>에 면을 놓는다. 위 오프셋의 부호를 자동으로 정한다.\n" +
-             "★그 면 단계에 들어갈 때 한 번 정하고 고정한다 — 매 프레임 보면 시술자가\n" +
-             "  정중선 근처에서 움직일 때 면이 좌우로 깜빡인다.\n" +
-             "끄면 위에 적은 부호를 그대로 쓴다.")]
+    [Tooltip("<b>시상면(굴곡·신전)에만</b> 적용된다. 시술자가 선 쪽의 반대편에 면을 놓는다.\n" +
+             "★2026-09-17에 관상면(측굴)을 여기서 뺐다. 측굴·회전은 시술자가 <b>항상 환자\n" +
+             "  뒤통수</b>에 서므로(CSV '관상면 파지' = \"환자의 뒷면에 서서\") 판단할 것이 없다.\n" +
+             "  종전엔 관상면도 자동이었는데, 결정되는 순간 시술자는 아직 <b>직전 시상면\n" +
+             "  자리(옆면)</b>에 있었다 — 옆면에서는 전후 성분이 거의 0이라 데드존 언저리의\n" +
+             "  우연한 부호가 잡혔고, 뒤통수로 옮긴 뒤엔 그게 같은 쪽이 됐다(사용자 보고).\n" +
+             "★자리가 굳는 시점은 면 진입이 아니라 <b>파지 성립</b>이다 — LockSidePick 참조.\n" +
+             "끄면 sagittalNormalOffset의 부호를 그대로 쓴다.")]
     [SerializeField] private bool autoSideByViewer = true;
 
     [Tooltip("정중선에 이만큼 가까우면 좌우를 판단하지 않고 수동 부호를 쓴다 (m).\n" +
@@ -434,14 +443,27 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     public void ClearSticky()
     {
         stickyDirection = CervicalRomDriver.Direction.None;
+
+        // ★좌우 잠금도 같이 푼다. 면이 바뀔 때만 푸는 것으로는 부족하다 —
+        //   다시 들어와도 첫 면이 같은 시상면이면 지난번 잠금이 그대로 남는다.
+        //   ★우리가 잠근 것은 우리가 푼다(07-27 xray 사고가 정확히 이 형태였다).
+        sideLocked = false;
+        sagittalSide = 0;
+        hasLastGroup = false;
+
         SetVisible(false);
     }
     private int lastReadoutDegrees = int.MinValue;
 
-    // ── 좌우 자동 배치. 그 면에 들어갈 때 한 번 정하고 고정한다. ─────────
+    // ── 시상면 좌우 자동 배치 ─────────────────────────────────────────────
+    // ★2026-09-17에 "언제 정하나"를 바꿨다. 종전엔 <b>면에 들어가는 첫 프레임</b>에 정하고
+    //   굳혔는데, 그 프레임은 CSV가 "환자의 옆면에 서세요"라고 <b>말하기도 전</b>이라
+    //   시술자가 아직 그 자리에 없었다. 굳힌 뒤엔 다시 안 보니 이동해도 그대로였다.
+    //   → 이제 <b>파지가 성립할 때까지는 매 프레임 따라가고</b>(그때는 시술자가 걸어다니는
+    //     중이라 따라오는 게 맞다), 파지가 성립하면 그 값으로 굳힌다(LockSidePick).
     private bool labelFlip;              // 글씨를 반대편으로 돌려야 하는가
-    private int sagittalSide;            // −1 / +1, 0 = 아직 안 정함
-    private int coronalSide;
+    private int sagittalSide;            // −1 / +1, 0 = 아직 못 정함(정중선 근처)
+    private bool sideLocked;             // 파지가 성립해 굳었는가
     private PlaneGroup lastGroup;
     private bool hasLastGroup;
 
@@ -593,15 +615,15 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         if (zeroDir.sqrMagnitude < 1e-6f) { SetVisible(false); return; }
         zeroDir.Normalize();
 
-        // ★면이 바뀌면 좌우를 다시 정한다. 같은 면 안에서는(굴곡→굴곡압박→신전…)
-        //   처음 정한 쪽을 끝까지 지킨다 — 중간에 면이 반대로 넘어가면 더 헷갈린다.
+        // ★면이 바뀌면 좌우를 <b>다시 열어 둔다</b>. 같은 면 안에서는(굴곡→굴곡압박→신전…)
+        //   파지 성립 때 굳은 쪽을 끝까지 지킨다 — 중간에 면이 반대로 넘어가면 더 헷갈린다.
         PlaneGroup group = PlaneGroupOf(dir);
         if (!hasLastGroup || group != lastGroup)
         {
             hasLastGroup = true;
             lastGroup = group;
             sagittalSide = 0;
-            coronalSide = 0;
+            sideLocked = false;
         }
 
         // 면 안의 두 기저. root를 이 자세로 두면 이하 계산이 전부 로컬로 끝난다.
@@ -756,34 +778,60 @@ public class CervicalRomPlaneGauge : MonoBehaviour
         switch (PlaneGroupOf(d))
         {
             case PlaneGroup.Sagittal:   // 환자 좌우. 시술자가 선 쪽의 반대편으로 뺀다.
-                return t.right * SideSigned(t.right, sagittalNormalOffset, ref sagittalSide);
-            case PlaneGroup.Coronal:    // 환자 앞뒤. 후면에 서면 앞쪽으로 나간다.
-                return t.forward * SideSigned(t.forward, coronalNormalOffset, ref coronalSide);
+                return t.right * SagittalSigned();
+
+            // ★관상면은 자동 판단하지 않는다(2026-09-17 사용자 지시).
+            //   "측굴·회전 각도기는 무조건 환자 뒤통수에서 바라보기 때문에 정면 고정이야."
+            //   torso.forward가 환자 앞쪽인 것은 같은 날 실측으로 확정했다 —
+            //   (눈 본 중점 − 머리 본)·torso.forward = +0.059 > 0.
+            //   그래서 양수 오프셋이 곧 '머리 너머'다. 씬 값도 +0.32라 그대로 맞는다.
+            case PlaneGroup.Coronal:
+                return t.forward * coronalNormalOffset;
+
             default:
                 return t.up * transverseNormalOffset;        // 위아래는 자동 판단 대상이 아니다
         }
     }
 
     /// <summary>
-    /// 시술자가 선 쪽의 <b>반대편</b> 부호를 붙인다.
-    /// ★한 번 정하면 그 면을 벗어날 때까지 고정한다. 매 프레임 보면 정중선 근처에서 깜빡인다.
+    /// 시상면 오프셋에 시술자 <b>반대편</b> 부호를 붙인다.
+    ///
+    /// ★파지가 성립하기 전(<see cref="sideLocked"/>가 false)에는 <b>매 프레임 다시 본다.</b>
+    ///   그 구간은 시술자가 "환자의 옆면에 서세요"를 듣고 <b>걸어가는 중</b>이라, 따라오는 것이 맞다.
+    ///   종전처럼 면에 들어가는 첫 프레임에 굳히면 <b>이동하기 전 자리</b>로 정해 버린다.
+    /// ★파지가 성립하면 굳는다 — 그 뒤로는 시술자가 움직여도 면이 좌우로 튀지 않는다.
     /// </summary>
-    private float SideSigned(Vector3 anatomicalAxis, float magnitude, ref int latched)
+    private float SagittalSigned()
     {
-        if (!autoSideByViewer) return magnitude;
+        if (!autoSideByViewer) return sagittalNormalOffset;
 
-        if (latched == 0)
+        if (!sideLocked)
         {
-            int viewer = ViewerSide(anatomicalAxis);
-            if (viewer == 0) return magnitude;   // 정중선 근처 — 판단 보류, 수동 부호를 쓴다
-            latched = -viewer;                   // 반대편
-            if (showDebugLogs)
-            {
-                ChunaLogger.Log($"<color=cyan>[ROM 각도기] 시술자가 {(viewer > 0 ? "+" : "−")}쪽에 있어 " +
-                                $"면을 {(latched > 0 ? "+" : "−")}쪽에 놓는다</color>");
-            }
+            int viewer = ViewerSide(Src.Torso.right);
+            // 정중선 근처면 판단 보류 — 직전에 정해 둔 쪽이 있으면 그걸 쓰고, 없으면 수동 부호다.
+            if (viewer != 0) sagittalSide = -viewer;
         }
-        return Mathf.Abs(magnitude) * latched;
+
+        if (sagittalSide == 0) return sagittalNormalOffset;
+        return Mathf.Abs(sagittalNormalOffset) * sagittalSide;
+    }
+
+    /// <summary>
+    /// 지금 정해져 있는 시상면 좌우를 <b>굳힌다.</b> 파지가 성립하는 순간 브리지가 부른다
+    /// (<c>CervicalRomScenarioBridge.UpdateGaugeOnGrip</c>) — 그때가 시술자가 그 자리에
+    /// 섰다는 유일한 증거다.
+    /// ★면이 바뀌면 자동으로 풀린다. 굳히는 쪽과 푸는 쪽이 다르면 상태가 샌다(07-27 xray 사고).
+    /// </summary>
+    public void LockSidePick()
+    {
+        if (sideLocked) return;
+        sideLocked = true;
+
+        // ★자기 침묵이 아니라 <b>1회</b> 로그다. 굳는 순간은 딱 한 번뿐이고,
+        //   "각도기가 왜 저쪽이냐"를 다음에 또 들었을 때 이 한 줄이 답을 준다.
+        ChunaLogger.Log($"<color=cyan>[ROM 각도기] 파지 성립 — 시상면을 " +
+                        $"{(sagittalSide > 0 ? "+" : sagittalSide < 0 ? "−" : "수동(정중선 근처라 못 정함)")}" +
+                        $"쪽에 굳힌다</color>");
     }
 
     /// <summary>보는 사람이 그 축의 어느 쪽에 있는가. 정중선 근처면 0(판단 보류).</summary>

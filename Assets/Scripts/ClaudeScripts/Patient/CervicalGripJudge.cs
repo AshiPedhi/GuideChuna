@@ -33,6 +33,17 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [SerializeField] private Transform rightThumbTip;
     [SerializeField] private Transform rightIndexTip;
 
+    // ★2026-09-17 신설. ThumbPlusAny 모드에서만 쓴다.
+    //   ★<b>비워 둬도 된다</b> — Play에서 XRHand_MiddleTip을 이름으로 찾아 채운다.
+    //     못 찾으면 경고 한 줄을 남기고 엄지+검지로만 판정한다(조용히 죽지 않는다).
+    //   ★파지점(각도를 재는 위치)에는 <b>절대 안 섞는다.</b> 중지는 머리 뒤로 넘어가
+    //     가려지는 손가락이라, 섞으면 09-02에 고친 '파지점 튐'이 그대로 돌아온다.
+    [Tooltip("중지 끝. ThumbPlusAny 모드에서 접촉 판정에만 쓴다.\n" +
+             "비워 두면 Play에서 XRHand_MiddleTip을 찾아 채운다 — 보통 비워 두면 된다.\n" +
+             "★파지점·각도 계산에는 안 들어간다. 접촉했는지만 본다.")]
+    [SerializeField] private Transform leftMiddleTip;
+    [SerializeField] private Transform rightMiddleTip;
+
     // ★★손바닥 (2026-09-04 회의 지시 — "어깨를 짚을 때는 엄지 말고 손바닥 기준으로")
     //
     //   어깨를 짚는 동작은 <b>손바닥을 어깨에 얹는</b> 것이다. 그런데 지금까지는 어깨 기준선도
@@ -62,6 +73,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     {
         ThumbAndIndex,   // 엄지·검지 둘 다 (종전)
         ThumbOnly,       // 엄지만
+        ThumbPlusAny,    // ★엄지 필수 + 검지·중지 중 하나 이상 (2026-09-17). ★반드시 끝에 붙인다
     }
 
     // ★★2026-09-02 사용자: "엄지 검지로 하려고 했는데 엄지는 확실하게 유지가 되거든?
@@ -78,13 +90,32 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     [Tooltip("파지점과 접촉 판정을 어느 손끝으로 볼 것인가.\n" +
              "ThumbOnly = 엄지만 본다. 검지는 아예 안 쓴다 — 머리 뒤로 넘어가 가려지는 손가락이라서다.\n" +
              "ThumbAndIndex = 종전대로 둘 다 본다(가려지면 성한 쪽으로 이어간다).\n" +
+             "★ThumbPlusAny = 엄지 필수 + 검지·중지 중 하나 이상(2026-09-17 지시).\n" +
+             "  절차 학습이 목적인데 판정에서 막히는 사람이 있어 문턱을 낮춘 모드다.\n" +
+             "  ★<b>접촉 판정만</b> 무르게 한다 — 파지점(각도를 재는 위치)은 ThumbOnly와 똑같이 엄지다.\n" +
              "★되돌리려면 이 값 하나만 바꾸면 된다.")]
     [SerializeField] private FingerSource fingerSource = FingerSource.ThumbOnly;
 
-    private bool ThumbOnly => fingerSource == FingerSource.ThumbOnly;
+    // ★★한 값이 두 곳에 쓰이면 손잡이를 나눈다(CLAUDE.md 규칙 9).
+    //   종전엔 `ThumbOnly` 하나가 ①파지점 위치와 ②접촉 성립 조건을 <b>같이</b> 정했다.
+    //   09-17에 ②만 무르게 해 달라는 요청이 왔으므로 둘을 갈랐다.
+    //   ★①을 같이 바꾸면 안 되는 이유: 검지가 가려지면 <b>낡은 위치가 절반의 무게로</b>
+    //     파지점에 섞여 각도가 튄다(09-02 실측). 그 사실은 지금도 그대로다.
 
-    /// <summary>지금 엄지만 보고 있는가. 측정기가 파지 간격 기준을 고르는 데 쓴다.</summary>
-    public bool IsThumbOnly => ThumbOnly;
+    /// <summary>파지점·핀치폭·압박 기준을 <b>엄지 한 점</b>으로 내는가.</summary>
+    private bool UseThumbPoint => fingerSource == FingerSource.ThumbOnly
+                               || fingerSource == FingerSource.ThumbPlusAny;
+
+    /// <summary>접촉 성립을 '엄지 + 검지·중지 중 하나'로 보는가.</summary>
+    private bool ThumbPlusAny => fingerSource == FingerSource.ThumbPlusAny;
+
+    /// <summary>
+    /// 지금 파지점을 엄지 한 점으로 내고 있는가. 측정기가 파지 간격 기준을 고르는 데 쓴다.
+    /// ★<b>위치 기준</b>을 묻는 것이지 접촉 판정을 묻는 것이 아니다 — 그래서 ThumbPlusAny에서도 참이다.
+    ///   실측(<c>CervicalRomRealityMeasure</c>)이 이걸 읽는데, 09-17 변경으로 그쪽 동작이
+    ///   달라지면 안 된다(사용자: "실측 말고 실습·평가만").
+    /// </summary>
+    public bool IsThumbOnly => UseThumbPoint;
 
     [Tooltip("인스펙터에 배정된 손끝을 무시하고 Play에서 다시 찾는다.\n" +
              "★배정된 것이 실제 손끝이 아니라 손목·손바닥 쪽 뼈면, 손목만 틀어도 파지 지점이 움직여\n" +
@@ -164,7 +195,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
     {
         midpoint = Vector3.zero;
         int n = 0;
-        bool useIndex = !ThumbOnly;   // ★엄지 단독이면 검지는 여기서도 안 섞는다
+        bool useIndex = !UseThumbPoint;   // ★파지점을 엄지로 낼 때는 검지를 여기서도 안 섞는다
         if (leftThumbTip != null) { midpoint += leftThumbTip.position; n++; }
         if (useIndex && leftIndexTip != null) { midpoint += leftIndexTip.position; n++; }
         if (rightThumbTip != null) { midpoint += rightThumbTip.position; n++; }
@@ -338,7 +369,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         //   ★손 단위 튐 거르기는 위층(CervicalRomRealityMeasure.AcceptHand)이 이미 하고 있다.
         //     여기서 한 번 더 거르면 이중으로 버려 진행이 멎을 수 있어, 여기서는 통과시킨다.
         //     (속도 초과는 thumbOk에 남겨 로그로만 드러낸다.)
-        if (ThumbOnly)
+        if (UseThumbPoint)
         {
             t.indexOk = false;
             t.gapRefValid = false;
@@ -657,6 +688,7 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         if (ignoreAssignedTips)
         {
             leftThumbTip = leftIndexTip = rightThumbTip = rightIndexTip = null;
+            leftMiddleTip = rightMiddleTip = null;
             ChunaLogger.Log("<color=cyan>[GripJudge] 인스펙터 손끝 배정을 무시하고 다시 찾는다.</color>");
         }
 
@@ -668,15 +700,34 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
             ready += AttachTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Thumb);
             ready += AttachTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Index);
 
+            // ★중지는 <b>준비 조건에 넣지 않는다</b>(2026-09-17).
+            //   리그에 중지 끝이 없으면 ready가 영영 4를 못 채워 <b>엄지·검지까지 같이</b>
+            //   "못 붙였다"로 끝난다. 중지는 있으면 더 무르게 잡아 주는 <b>덤</b>이지
+            //   없으면 안 되는 것이 아니다.
+            int middleReady = AttachTip(GripFingerTip.Side.Left, GripFingerTip.Finger.Middle)
+                            + AttachTip(GripFingerTip.Side.Right, GripFingerTip.Finger.Middle);
+
             if (ready == 4)
             {
                 // ★무엇을 물었는지 경로째 남긴다. '엄지·검지 끝'이 아니라 손목 쪽 뼈를 물면
                 //   손목만 틀어도 파지 지점이 움직여 각도가 흔들린다 — 그때 여기서 바로 보인다.
-                ChunaLogger.Log("<color=cyan>[GripJudge] 손끝 표식 4개 준비 완료.\n" +
+                ChunaLogger.Log($"<color=cyan>[GripJudge] 손끝 표식 준비 완료 — 엄지·검지 4개" +
+                                $" + 중지 {middleReady}개.\n" +
                                 $"  L엄지 {PathOf(leftThumbTip)}\n" +
                                 $"  L검지 {PathOf(leftIndexTip)}\n" +
+                                $"  L중지 {PathOf(leftMiddleTip)}\n" +
                                 $"  R엄지 {PathOf(rightThumbTip)}\n" +
-                                $"  R검지 {PathOf(rightIndexTip)}</color>");
+                                $"  R검지 {PathOf(rightIndexTip)}\n" +
+                                $"  R중지 {PathOf(rightMiddleTip)}</color>");
+
+                // ★중지를 못 붙였는데 그걸 쓰는 모드면 <b>말해 준다.</b> 안 그러면
+                //   "엄지+검지일 때와 똑같이 빡빡하다"로 보이고 원인을 못 찾는다.
+                if (ThumbPlusAny && middleReady < 2)
+                {
+                    ChunaLogger.LogWarning($"<color=orange>[GripJudge] 모드가 ThumbPlusAny인데 중지 끝을 " +
+                                           $"{middleReady}개만 찾았다 — 못 찾은 손은 <b>엄지+검지</b>로만 " +
+                                           "판정한다. 인스펙터의 leftMiddleTip / rightMiddleTip에 직접 넣으면 된다.</color>");
+                }
                 yield break;
             }
             yield return new WaitForSeconds(0.5f);   // 손 리그가 생길 때까지 기다린다
@@ -694,13 +745,18 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         if (bone == null) return 0;
 
         // 찾은 손끝을 보관한다. 압박 구간에서 중점을 내는 데 쓴다.
+        // ★중지는 보관만 하고 중점 계산에는 안 들어간다 — 위 필드 주석 참조.
         if (side == GripFingerTip.Side.Left)
         {
-            if (finger == GripFingerTip.Finger.Thumb) leftThumbTip = bone; else leftIndexTip = bone;
+            if (finger == GripFingerTip.Finger.Thumb) leftThumbTip = bone;
+            else if (finger == GripFingerTip.Finger.Middle) leftMiddleTip = bone;
+            else leftIndexTip = bone;
         }
         else
         {
-            if (finger == GripFingerTip.Finger.Thumb) rightThumbTip = bone; else rightIndexTip = bone;
+            if (finger == GripFingerTip.Finger.Thumb) rightThumbTip = bone;
+            else if (finger == GripFingerTip.Finger.Middle) rightMiddleTip = bone;
+            else rightIndexTip = bone;
         }
 
         GripFingerTip tip = bone.GetComponent<GripFingerTip>();
@@ -741,8 +797,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         }
 
         // ★모드를 매 프레임 밀어 넣는다 — Play 중에 인스펙터에서 fingerSource를 바꿔도 바로 듣게.
-        //   대입 두 개뿐이라 프레임 예산에 영향이 없다.
-        a.ThumbOnly = b.ThumbOnly = ThumbOnly;
+        //   대입 몇 개뿐이라 프레임 예산에 영향이 없다.
+        // ★여기 넘기는 것은 <b>접촉 성립 조건</b>이다. 파지점 위치(UseThumbPoint)와는 다른 손잡이다.
+        a.ThumbOnly = b.ThumbOnly = fingerSource == FingerSource.ThumbOnly;
+        a.ThumbPlusAny = b.ThumbPlusAny = ThumbPlusAny;
 
         // 서로 다른 손이 두 점을 하나씩 집으면 성립.
         bool gripped = (a.LeftGripping && b.RightGripping) || (a.RightGripping && b.LeftGripping);
@@ -791,7 +849,8 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         if (!inUse) return;
 
         p.RequireBothFingers = requireBothFingers;
-        p.ThumbOnly = ThumbOnly;
+        p.ThumbOnly = fingerSource == FingerSource.ThumbOnly;
+        p.ThumbPlusAny = ThumbPlusAny;
         foreach (Renderer r in p.GetComponentsInChildren<Renderer>(true)) r.enabled = showSpheres;
     }
 
@@ -1002,8 +1061,10 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         //   자동 탐색으로 헤매느니 직접 지정하는 쪽이 확실하다.
         Transform assigned =
             side == GripFingerTip.Side.Left
-                ? (finger == GripFingerTip.Finger.Thumb ? leftThumbTip : leftIndexTip)
-                : (finger == GripFingerTip.Finger.Thumb ? rightThumbTip : rightIndexTip);
+                ? (finger == GripFingerTip.Finger.Thumb ? leftThumbTip
+                 : finger == GripFingerTip.Finger.Middle ? leftMiddleTip : leftIndexTip)
+                : (finger == GripFingerTip.Finger.Thumb ? rightThumbTip
+                 : finger == GripFingerTip.Finger.Middle ? rightMiddleTip : rightIndexTip);
         if (assigned != null) return assigned;
 
         ChunaPathEvaluator evaluator = FindFirstObjectByType<ChunaPathEvaluator>();
@@ -1025,7 +1086,8 @@ public class CervicalGripJudge : MonoBehaviour, ChunaPathEvaluator.IHandContactS
         //   이 프로젝트의 오른손 리그도 뼈 이름이 b_l_* 이다(2026-08-24 실측:
         //   HANDR1/Model/l_handMeshNode/b_l_wrist. b_r_wrist는 씬 전체에 1곳뿐).
         //   좌우는 어느 손 루트 아래인지로만 가르고, 이름은 손가락 종류만 본다.
-        string keyword = finger == GripFingerTip.Finger.Thumb ? "thumb" : "index";
+        string keyword = finger == GripFingerTip.Finger.Thumb ? "thumb"
+                       : finger == GripFingerTip.Finger.Middle ? "middle" : "index";
 
         // ★실제로 도는 손은 OpenXR 리그다 — XRHand_ThumbTip / XRHand_IndexTip.
         //   b_l_* / b_r_* 는 비활성인 구형 OculusHand 리그의 이름이라 거기 붙이면
