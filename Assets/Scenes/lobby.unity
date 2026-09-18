@@ -801,6 +801,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 7
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &56180384
 GameObject:
@@ -1752,6 +1753,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 3
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!225 &114701152 stripped
 CanvasGroup:
@@ -2378,6 +2380,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 12
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &244188848
 GameObject:
@@ -6911,6 +6914,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 5
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &508962426
 GameObject:
@@ -10048,6 +10052,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 11
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1039185958 stripped
 GameObject:
@@ -12777,6 +12782,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 9
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1232861220
 GameObject:
@@ -13619,6 +13625,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 10
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!114 &1269327542
 MonoBehaviour:
@@ -14460,6 +14467,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 6
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1394800305
 GameObject:
@@ -14976,6 +14984,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 8
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1464963838
 GameObject:
@@ -17860,6 +17869,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 1
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1001 &1692973042
 PrefabInstance:
@@ -18253,6 +18263,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 13
+  sceneOverride: RomMarkerScene
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1697140337
 GameObject:
@@ -20523,6 +20534,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 2
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1 &1755726218
 GameObject:
@@ -22887,6 +22899,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 4
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!82 &30746233366849678
 AudioSource:
@@ -24329,6 +24342,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ScenarioLaunchButton
   scenarioIndex: 0
+  sceneOverride: 
   lobbyAuthUI: {fileID: 0}
 --- !u!1001 &440948656676930486
 PrefabInstance:
