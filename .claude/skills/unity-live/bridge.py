@@ -4,7 +4,8 @@
 2026-09-09 신설. Unity 공식 `com.unity.pipeline`이 이 프로젝트(.NET Standard)에서
 컴파일 에러 117건을 내서, 필요한 조회·수정 기능만 직접 만들었다.
 
-★저장은 안 한다. 값만 바꾸고 dirty 표시까지다 — 사람이 보고 Ctrl+S 한다(절대규칙 2).
+★기존 씬은 저장 안 한다. 값만 바꾸고 dirty 표시까지다 — 사람이 보고 Ctrl+S 한다(절대규칙 2).
+  예외(2026-09-18 사용자 허가): scene-copy로 브리지가 새로 만든 씬만 저장·삭제·추가한다.
 ★모든 수정은 Undo 가 걸린다. 에디터에서 Ctrl+Z 로 되돌아간다.
 """
 import io
@@ -127,7 +128,7 @@ def main():
                 p = line[3:].strip().strip('"')
                 if " -> " in p:
                     p = p.split(" -> ", 1)[1]
-                if p.endswith(keep):
+                if p.endswith(keep) and not p.startswith("Assets/Results/"):   # 실행 결과 CSV는 코드가 아니다
                     paths.append(p)
             if paths:
                 args["paths"] = ";".join(paths)
