@@ -25,10 +25,13 @@ public class RomRecordWristMenu
     private int activeCount;
     private Transform root;
     private float cooldownUntil;
+    // ★버튼 사이 간격은 <b>글자 실제 폭</b>으로 잡는다(09-18). 글자를 키우면 옆 버튼 글자와 겹치므로
+    //   TMP가 계산한 폭(GetPreferredValues)이 gap보다 크면 그만큼 벌린다.
+    private float colGap, rowGap, labelHeight;
 
-    public float buttonSize = 0.024f;
+    public float buttonSize = 0.018f;
     public float gap = 0.034f;
-    public float labelSize = 0.016f;      // ★TMP 폰트 크기(스케일 1). 09-18 첫 판 0.9는 버튼을 통째로 가렸다
+    public float labelSize = 0.026f;      // ★TMP 폰트 크기(스케일 1). 09-18 첫 판 0.9는 버튼을 통째로 가렸다
     public int columns = 4;
     public float lift = 0.06f;            // 손목에서 위로(m)
     public float towardEye = 0.02f;       // 눈 쪽으로(m)
@@ -57,7 +60,7 @@ public class RomRecordWristMenu
             t.fontSize = labelSize;
             t.alignment = TextAlignmentOptions.Center;
             t.color = Color.white;
-            t.rectTransform.sizeDelta = new Vector2(gap, labelSize * 2f);
+            t.rectTransform.sizeDelta = new Vector2(0.2f, labelSize * 2f);   // 넉넉히 — 실제 폭은 Relayout이 잰다
             t.textWrappingMode = TextWrappingModes.NoWrap;
 
             pool.Add(new Btn { tr = go.transform, label = t });
@@ -83,12 +86,31 @@ public class RomRecordWristMenu
             var r = pool[i].tr.GetComponent<Renderer>();
             if (tints != null) r.material.color = tints[i];   // ★인스턴스 머티리얼 — 공유 머티리얼을 물들이지 않는다
         }
+        Relayout(true);
+    }
+
+    /// <summary>글자 실제 폭·높이로 간격을 다시 잡는다. 단계 전환·글자 변경 때만 부른다(매 프레임 아님).</summary>
+    private void Relayout(bool log)
+    {
+        float maxW = 0f, maxH = 0f;
+        for (int i = 0; i < activeCount; i++)
+        {
+            Vector2 pv = pool[i].label.GetPreferredValues(pool[i].label.text);
+            if (pv.x > maxW) maxW = pv.x;
+            if (pv.y > maxH) maxH = pv.y;
+        }
+        labelHeight = maxH;
+        colGap = Mathf.Max(gap, Mathf.Max(buttonSize, maxW) + 0.004f);
+        rowGap = buttonSize + maxH + 0.006f;
+        if (log)
+            Debug.Log($"[실측기록] {root.name} — 버튼 {activeCount}개 · 글자 폭 최대 {maxW * 100f:F1}cm·높이 {maxH * 100f:F1}cm → " +
+                      $"가로 간격 {colGap * 100f:F1}cm · 세로 간격 {rowGap * 100f:F1}cm");
     }
 
     public void SetLabel(string id, string text)
     {
         for (int i = 0; i < activeCount; i++)
-            if (pool[i].id == id) { pool[i].label.text = text; return; }
+            if (pool[i].id == id) { pool[i].label.text = text; Relayout(false); return; }
     }
 
     public void SetVisible(bool on)
@@ -108,9 +130,10 @@ public class RomRecordWristMenu
         for (int i = 0; i < activeCount; i++)
         {
             int c = i % columns, rI = i / columns;
-            Vector3 p = basePos + right * ((c - (columns - 1) * 0.5f) * gap) + up * (((rows - 1) - rI) * gap);
+            Vector3 p = basePos + right * ((c - (columns - 1) * 0.5f) * colGap) + up * (((rows - 1) - rI) * rowGap);
             pool[i].tr.position = p;
-            pool[i].label.transform.position = p + up * (buttonSize * 0.9f);
+            // 글자는 버튼 바로 위 — 버튼 반지름 + 글자 높이의 절반만큼 올린다
+            pool[i].label.transform.position = p + up * (buttonSize * 0.5f + labelHeight * 0.6f);
             pool[i].label.transform.rotation = Quaternion.LookRotation(p - eye.position, up);
         }
     }

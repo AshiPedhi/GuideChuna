@@ -1837,8 +1837,8 @@ MonoBehaviour:
   axisLength: 0.25
   textSize: 0.03
   panelTextSize: 0.028
-  buttonLabelSize: 0.016
-  buttonSize: 0.024
+  buttonLabelSize: 0.026
+  buttonSize: 0.018
   buttonGap: 0.034
   menuLift: 0.06
   yawStepDeg: 1

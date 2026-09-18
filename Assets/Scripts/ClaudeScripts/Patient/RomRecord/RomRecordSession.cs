@@ -36,9 +36,9 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("안내판(단계·지시·기록 요약) 글자.")]
     [SerializeField] private float panelTextSize = 0.028f;
     [Tooltip("손목 버튼 글자.")]
-    [SerializeField] private float buttonLabelSize = 0.016f;
+    [SerializeField] private float buttonLabelSize = 0.026f;
     [Tooltip("손목 버튼 지름(m).")]
-    [SerializeField] private float buttonSize = 0.024f;
+    [SerializeField] private float buttonSize = 0.018f;
     [Tooltip("손목 버튼 사이 간격(m).")]
     [SerializeField] private float buttonGap = 0.034f;
     [Tooltip("손목 메뉴를 손목에서 위로 띄우는 높이(m).")]
