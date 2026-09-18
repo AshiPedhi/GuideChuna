@@ -591,6 +591,13 @@ public class CervicalRomDriver : MonoBehaviour, ICervicalRomGaugeSource
     public bool AtOverpressureBackLimit { get; private set; }
 
     /// <summary>
+    /// 되돌릴 수 있는 최대 각(도). 0이면 안 막는다.
+    /// ★브리지가 <b>손 각을 여기서 자르려고</b> 읽는다 — 자르지 않으면 머리는 바닥에서 멈추는데
+    ///   손 각만 계속 쌓여, 되돌린 만큼 도로 밀 때까지 머리가 안 움직인다(windup).
+    /// </summary>
+    public float OverpressureBackFloorDegrees => Mathf.Max(0f, overpressureBackLimitDegrees);
+
+    /// <summary>
     /// 단계를 <b>건너뛴 뒤</b> 그 단계의 결과 상태로 <b>즉시</b> 맞춘다.
     ///
     /// ★2026-09-14 사용자 지적: "압박할 때 기다렸다가 [다음]으로 스킵했더니

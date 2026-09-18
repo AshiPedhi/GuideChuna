@@ -1395,6 +1395,15 @@ public class CervicalRomScenarioBridge : MonoBehaviour
             }
         }
 
+        // ★★되돌리는 쪽은 <b>바닥에서 더 쌓이지 않게 자른다</b>(2026-09-17).
+        //   머리는 바닥에서 멈추는데 손 각만 계속 음수로 쌓이면, 되돌린 양을 <b>전부 도로
+        //   밀 때까지</b> 머리가 꿈쩍도 안 한다 — 20° 되돌렸으면 20°를 다시 밀어야 움직인다.
+        //   제어에서 말하는 windup 그대로이고, 사용자가 본 "밀어도 반응이 없다"의 한 몫이다.
+        //   ★자르면 바닥에 닿은 뒤 <b>미는 즉시</b> 머리가 따라 올라온다.
+        //   ★자른 뒤에도 '바닥에 닿아 있다'는 사실은 남으므로 경고·감점은 그대로 동작한다.
+        float backFloor = driver.OverpressureBackFloorDegrees;
+        if (backFloor > 0f) swept = Mathf.Max(swept, -backFloor);
+
         // ★지터를 걸러낸다. 여유 구간이 7~13°라 손 떨림 몇 도가 그대로 게이지에 실린다.
         sweptSmoothed = overpressureSmoothTime > 0f
             ? Mathf.SmoothDamp(sweptSmoothed, swept, ref sweptVelocity, overpressureSmoothTime)
