@@ -29,6 +29,21 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("3축 선 길이(m, 중심에서 한쪽).")]
     [SerializeField] private float axisLength = 0.25f;
 
+    [Header("=== 크기(글자는 TMP 폰트 크기, 스케일 1) ===")]
+    [Tooltip("축 끝 글자·마커 각도 글자. ★기존 각도기 기준: 축·눈금 0.03 · 판독 0.05(기기 확인값).\n" +
+             "09-18 첫 판은 1.1이라 20~30배 컸다.")]
+    [SerializeField] private float textSize = 0.03f;
+    [Tooltip("안내판(단계·지시·기록 요약) 글자.")]
+    [SerializeField] private float panelTextSize = 0.028f;
+    [Tooltip("손목 버튼 글자.")]
+    [SerializeField] private float buttonLabelSize = 0.016f;
+    [Tooltip("손목 버튼 지름(m).")]
+    [SerializeField] private float buttonSize = 0.024f;
+    [Tooltip("손목 버튼 사이 간격(m).")]
+    [SerializeField] private float buttonGap = 0.034f;
+    [Tooltip("손목 메뉴를 손목에서 위로 띄우는 높이(m).")]
+    [SerializeField] private float menuLift = 0.06f;
+
     [Header("=== 조정 단위 ===")]
     [SerializeField] private float yawStepDeg = 1f;
     [SerializeField] private float heightStepMm = 5f;
@@ -86,12 +101,23 @@ public class RomRecordSession : MonoBehaviour
         Material mat = sh != null ? new Material(sh) : null;
         if (mat == null) ChunaLogger.LogWarning("[실측기록] Sprites/Default 셰이더를 못 찾았다 — 선이 분홍으로 보이면 이것이다.");
 
+        view.textSize = textSize;
+        view.panelSize = panelTextSize;
         view.Build(transform, font, mat);
+        foreach (var menu in new[] { leftMenu, rightMenu })
+        {
+            menu.labelSize = buttonLabelSize;
+            menu.buttonSize = buttonSize;
+            menu.gap = buttonGap;
+            menu.lift = menuLift;
+            menu.pressRadius = buttonSize * 0.75f;   // 버튼을 키우면 누르는 범위도 같이
+        }
         leftMenu.Build(transform, "왼손목 메뉴", 10, font, mat);
         rightMenu.Build(transform, "오른손목 메뉴", 10, font, mat);
         ApplyStepButtons();
 
-        Debug.Log("[실측기록] 시작 — 기준선 세팅부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm");
+        Debug.Log("[실측기록] 시작 — 기준선 세팅부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
+                  $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 버튼 {buttonSize * 100f:F1}cm 간격 {buttonGap * 100f:F1}cm");
     }
 
     private void EnablePassthrough()

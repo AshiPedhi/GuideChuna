@@ -29,6 +29,12 @@ public class RomRecordVisual
     private readonly TextMeshPro[] markLabels = new TextMeshPro[MaxMarks];
     private GameObject dialRoot;
 
+    // ★글자 크기는 TMP 폰트 크기(스케일 1)다. 기기에서 확인된 기존 값: 각도 판독 0.05 · 축·눈금 글자 0.03
+    //   (CervicalRomPlaneGauge·PracticeReadout, TrainingScene). 09-18 첫 판은 1.1을 넣어 20~30배 컸다 —
+    //   실측랩 코드의 labelSize 1.2를 그대로 따라 썼다.
+    public float textSize = 0.03f;     // 축 끝 글자·마커 글자
+    public float panelSize = 0.028f;   // 안내판
+
     public static readonly Color UpColor = new Color(0.35f, 0.95f, 0.45f);
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
     public static readonly Color RightColor = new Color(1f, 0.4f, 0.4f);
@@ -49,12 +55,12 @@ public class RomRecordVisual
         pivotAxis = Line("기준축(목 중앙)", PivotColor, 0.006f);
         neutralLine = Line("중립선", Color.white, 0.003f);
 
-        labUp = Label("위", 1.1f, UpColor);
-        labDown = Label("아래", 0.9f, UpColor);
-        labFwd = Label("환자 앞", 1.1f, FwdColor);
-        labBack = Label("환자 뒤", 0.9f, FwdColor);
-        labRight = Label("환자 오른쪽", 1.1f, RightColor);
-        labLeft = Label("환자 왼쪽", 0.9f, RightColor);
+        labUp = Label("위", textSize, UpColor);
+        labDown = Label("아래", textSize * 0.8f, UpColor);
+        labFwd = Label("환자 앞", textSize, FwdColor);
+        labBack = Label("환자 뒤", textSize * 0.8f, FwdColor);
+        labRight = Label("환자 오른쪽", textSize, RightColor);
+        labLeft = Label("환자 왼쪽", textSize * 0.8f, RightColor);
 
         pivotDot = Dot("기준점", PivotColor, 0.012f);
         c7Dot = Dot("대추", new Color(0.3f, 0.9f, 1f), 0.016f);
@@ -70,19 +76,19 @@ public class RomRecordVisual
         for (int i = 0; i < TickLabelCount; i++)
         {
             int deg = i * 30;
-            tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), 0.7f, new Color(1f, 1f, 1f, 0.8f), dialRoot.transform);
+            tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), textSize * 0.7f, new Color(1f, 1f, 1f, 0.8f), dialRoot.transform);
         }
 
         for (int i = 0; i < MaxMarks; i++)
         {
             markDots[i] = Dot("마커", ActiveColor, 0.016f);
             markLines[i] = Line("마커선", ActiveColor, 0.003f);
-            markLabels[i] = Label("", 1.0f, ActiveColor);
+            markLabels[i] = Label("", textSize, ActiveColor);
         }
 
-        panel = Label("", 1.1f, Color.white);
+        panel = Label("", panelSize, Color.white);
         panel.alignment = TextAlignmentOptions.TopLeft;
-        panel.rectTransform.sizeDelta = new Vector2(0.45f, 0.35f);
+        panel.rectTransform.sizeDelta = new Vector2(panelSize * 16f, panelSize * 12f);
 
         SetLive(false, Vector3.zero);
         SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.15f);
@@ -224,7 +230,7 @@ public class RomRecordVisual
         t.color = c;
         t.alignment = TextAlignmentOptions.Center;
         t.textWrappingMode = TextWrappingModes.NoWrap;
-        t.rectTransform.sizeDelta = new Vector2(0.3f, 0.05f);
+        t.rectTransform.sizeDelta = new Vector2(size * 10f, size * 2f);
         // ★패스스루(실제 방) 위에서 읽혀야 한다 — 밝은 벽에서도 보이게 외곽선을 준다.
         t.outlineWidth = 0.25f;
         t.outlineColor = new Color32(0, 0, 0, 220);

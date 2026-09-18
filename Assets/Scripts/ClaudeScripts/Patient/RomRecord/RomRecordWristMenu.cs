@@ -26,8 +26,9 @@ public class RomRecordWristMenu
     private Transform root;
     private float cooldownUntil;
 
-    public float buttonSize = 0.02f;
-    public float gap = 0.027f;
+    public float buttonSize = 0.024f;
+    public float gap = 0.034f;
+    public float labelSize = 0.016f;      // ★TMP 폰트 크기(스케일 1). 09-18 첫 판 0.9는 버튼을 통째로 가렸다
     public int columns = 4;
     public float lift = 0.06f;            // 손목에서 위로(m)
     public float towardEye = 0.02f;       // 눈 쪽으로(m)
@@ -53,10 +54,10 @@ public class RomRecordWristMenu
             labGo.transform.SetParent(root, false);
             var t = labGo.AddComponent<TextMeshPro>();
             if (font != null) t.font = font;
-            t.fontSize = 0.9f;
+            t.fontSize = labelSize;
             t.alignment = TextAlignmentOptions.Center;
             t.color = Color.white;
-            t.rectTransform.sizeDelta = new Vector2(0.05f, 0.012f);
+            t.rectTransform.sizeDelta = new Vector2(gap, labelSize * 2f);
             t.textWrappingMode = TextWrappingModes.NoWrap;
 
             pool.Add(new Btn { tr = go.transform, label = t });
