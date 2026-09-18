@@ -1835,12 +1835,15 @@ MonoBehaviour:
   startDistance: 0.7
   startBelowEye: 0.3
   axisLength: 0.25
-  textSize: 0.03
-  panelTextSize: 0.028
-  buttonLabelSize: 0.026
-  buttonSize: 0.018
-  buttonGap: 0.034
+  textSize: 0.05
+  panelTextSize: 0.045
+  buttonLabelSize: 0.03
+  menuCellWidth: 0.042
+  menuRowHeight: 0.034
+  menuButtonHeight: 0.026
   menuLift: 0.06
+  menuHoldDistance: 0.15
+  soundVolume: 0.6
   yawStepDeg: 1
   heightStepMm: 5
   nudgeStepMm: 1

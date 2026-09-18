@@ -30,19 +30,27 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float axisLength = 0.25f;
 
     [Header("=== 크기(글자는 TMP 폰트 크기, 스케일 1) ===")]
-    [Tooltip("축 끝 글자·마커 각도 글자. ★기존 각도기 기준: 축·눈금 0.03 · 판독 0.05(기기 확인값).\n" +
-             "09-18 첫 판은 1.1이라 20~30배 컸다.")]
-    [SerializeField] private float textSize = 0.03f;
+    [Tooltip("축 끝 글자·마커 각도 글자·눈금 숫자(0.8배). ★기존 각도기 판독 0.05(기기 확인값).\n" +
+             "09-18: 1.1(너무 큼) → 0.03(\"각도기도 텍스트도 너무 줄였다\") → 0.05.")]
+    [SerializeField] private float textSize = 0.05f;
     [Tooltip("안내판(단계·지시·기록 요약) 글자.")]
-    [SerializeField] private float panelTextSize = 0.028f;
-    [Tooltip("손목 버튼 글자.")]
-    [SerializeField] private float buttonLabelSize = 0.026f;
-    [Tooltip("손목 버튼 지름(m).")]
-    [SerializeField] private float buttonSize = 0.018f;
-    [Tooltip("손목 버튼 사이 간격(m).")]
-    [SerializeField] private float buttonGap = 0.034f;
+    [SerializeField] private float panelTextSize = 0.045f;
+    [Tooltip("손목 판의 버튼 글자·머리줄 글자.")]
+    [SerializeField] private float buttonLabelSize = 0.03f;
+
+    [Header("=== 손목 판 ===")]
+    [Tooltip("판의 칸 너비(m). 판은 6칸 너비다.")]
+    [SerializeField] private float menuCellWidth = 0.042f;
+    [Tooltip("판의 줄 높이(m).")]
+    [SerializeField] private float menuRowHeight = 0.034f;
+    [Tooltip("버튼 높이(m).")]
+    [SerializeField] private float menuButtonHeight = 0.026f;
     [Tooltip("손목 메뉴를 손목에서 위로 띄우는 높이(m).")]
     [SerializeField] private float menuLift = 0.06f;
+    [Tooltip("누르는 손 검지가 판에서 이 거리(m) 안으로 오면 판이 손목을 따라가지 않고 멈춘다(가림으로 튀는 것 방지).")]
+    [SerializeField] private float menuHoldDistance = 0.15f;
+    [Tooltip("버튼·핀치 소리 크기(0이면 무음).")]
+    [Range(0f, 1f)] [SerializeField] private float soundVolume = 0.6f;
 
     [Header("=== 조정 단위 ===")]
     [SerializeField] private float yawStepDeg = 1f;
@@ -89,6 +97,10 @@ public class RomRecordSession : MonoBehaviour
     private bool livePinchLeft;            // 지금 오므리고 있는 손(한 번에 하나만 받는다)
     private bool liveActive;
     private readonly StringBuilder sb = new StringBuilder(512);
+    private float lastPressTime = -99f;
+    private bool menuHoldL, menuHoldR;
+    private AudioSource audioSrc;
+    private AudioClip sndPress, sndRepeat, sndPinch, sndUndo, sndDeny;
 
     private static readonly string[] StepTitle = { "기준선 세팅", "대추·미간", "굴곡", "신전", "측굴", "회전", "완료" };
 
@@ -107,17 +119,58 @@ public class RomRecordSession : MonoBehaviour
         foreach (var menu in new[] { leftMenu, rightMenu })
         {
             menu.labelSize = buttonLabelSize;
-            menu.buttonSize = buttonSize;
-            menu.gap = buttonGap;
+            menu.headerSize = buttonLabelSize;
+            menu.cellW = menuCellWidth;
+            menu.rowH = menuRowHeight;
+            menu.buttonH = menuButtonHeight;
             menu.lift = menuLift;
-            menu.pressRadius = buttonSize * 0.75f;   // 버튼을 키우면 누르는 범위도 같이
         }
-        leftMenu.Build(transform, "왼손목 메뉴", 10, font, mat);
-        rightMenu.Build(transform, "오른손목 메뉴", 10, font, mat);
+        leftMenu.Build(transform, "왼손목 메뉴", 14, font, mat);
+        rightMenu.Build(transform, "오른손목 메뉴", 14, font, mat);
         ApplyStepButtons();
+        BuildSounds();
 
         Debug.Log("[실측기록] 시작 — 기준선 세팅부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
-                  $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 버튼 {buttonSize * 100f:F1}cm 간격 {buttonGap * 100f:F1}cm");
+                  $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
+    }
+
+    // ── 소리 ─────────────────────────────────────────────────────────
+    // ★09-18 사용자: "누른 건지 구분이 안 간다. 소리도 애니메이션도 없다."
+    //   음원 파일 없이 짧은 음을 코드로 만든다(에셋 배선이 필요 없고 빌드에서 빠질 일이 없다).
+    private void BuildSounds()
+    {
+        audioSrc = gameObject.AddComponent<AudioSource>();
+        audioSrc.playOnAwake = false;
+        audioSrc.spatialBlend = 0f;            // 2D — 어디서 눌러도 같은 크기로 들린다
+        sndPress = Tone("누름", 1250f, 1250f, 0.045f);
+        sndRepeat = Tone("반복", 1600f, 1600f, 0.025f);
+        sndPinch = Tone("찍음", 880f, 1320f, 0.11f);      // 올라가는 두 음 — 기록됐다
+        sndUndo = Tone("취소", 700f, 440f, 0.09f);        // 내려가는 음 — 지웠다
+        sndDeny = Tone("거부", 300f, 300f, 0.12f);        // 낮은 음 — 받지 않았다
+    }
+
+    private static AudioClip Tone(string name, float f0, float f1, float seconds)
+    {
+        const int rate = 44100;
+        int n = Mathf.CeilToInt(rate * seconds);
+        var data = new float[n];
+        float phase = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = i / (float)n;
+            float f = Mathf.Lerp(f0, f1, t);
+            phase += 2f * Mathf.PI * f / rate;
+            float env = Mathf.Min(1f, t * 40f) * (1f - t) * (1f - t);   // 짧게 올라갔다 빠르게 사라진다(딸깍)
+            data[i] = Mathf.Sin(phase) * env * 0.6f;
+        }
+        var clip = AudioClip.Create("[실측기록] " + name, n, 1, rate, false);
+        clip.SetData(data, 0);
+        return clip;
+    }
+
+    private void Play(AudioClip c)
+    {
+        if (audioSrc != null && c != null && soundVolume > 0f) audioSrc.PlayOneShot(c, soundVolume);
     }
 
     private void EnablePassthrough()
@@ -190,58 +243,119 @@ public class RomRecordSession : MonoBehaviour
     {
         bool lw = hands.TryWrist(true, out Pose lwp);
         bool rw = hands.TryWrist(false, out Pose rwp);
-        leftMenu.SetVisible(lw);
-        rightMenu.SetVisible(rw);
-        if (lw) leftMenu.Place(lwp.position, eye);
-        if (rw) rightMenu.Place(rwp.position, eye);
-
-        // ★왼손목 메뉴는 오른 검지로, 오른손목 메뉴는 왼 검지로 누른다.
         bool rTip = hands.TryJoint(false, HandJointId.HandIndexTip, out Vector3 rIdx);
         bool lTip = hands.TryJoint(true, HandJointId.HandIndexTip, out Vector3 lIdx);
-        string id = lw ? leftMenu.Poll(rIdx, rTip) : null;
-        if (id == null && rw) id = rightMenu.Poll(lIdx, lTip);
-        if (id != null) OnButton(id);
+
+        // ★다가오면 제자리 고정(09-18 사용자 결정). 왼손목 판은 오른 검지가, 오른손목 판은 왼 검지가 누른다.
+        //   누르는 손이 판 쪽 손목을 가리면 그 손목 추적이 끊겨 판이 숨었다 튀었다("UI가 도망간다").
+        menuHoldL = rTip && leftMenu.Distance(rIdx) < menuHoldDistance;
+        menuHoldR = lTip && rightMenu.Distance(lIdx) < menuHoldDistance;
+        leftMenu.Follow(lw, lwp.position, eye, menuHoldL);
+        rightMenu.Follow(rw, rwp.position, eye, menuHoldR);
+
+        string id = leftMenu.Poll(rIdx, rTip);
+        bool repeat = leftMenu.LastRepeat;
+        if (id == null) { id = rightMenu.Poll(lIdx, lTip); repeat = rightMenu.LastRepeat; }
+        if (id != null)
+        {
+            lastPressTime = Time.unscaledTime;
+            Play(id == "undo" ? sndUndo : repeat ? sndRepeat : sndPress);
+            OnButton(id);
+        }
+        leftMenu.Tick();
+        rightMenu.Tick();
     }
 
+    private static readonly Color NavTint = new Color(0.35f, 0.65f, 0.95f);
+    private static readonly Color ExitTint = new Color(0.9f, 0.3f, 0.3f);
+    private static readonly Color AdjTint = new Color(0.45f, 0.75f, 0.35f);
+    private static readonly Color TargetTint = new Color(0.95f, 0.75f, 0.2f);
+    private static readonly Color UndoTint = new Color(0.95f, 0.55f, 0.2f);
+
+    /// <summary>
+    /// 단계별 판 배치(09-18 사용자 결정 "그룹 판넬"). 판은 6칸 너비 · 0행은 머리줄.
+    /// 머리줄: 단계·진행 + [나가기](오른쪽 끝) / 가운데: 그 단계의 조작 묶음 / 맨 아래: [◀ 이전] [다음 ▶].
+    /// </summary>
     private void ApplyStepButtons()
     {
-        string[] ids, labels;
-        bool[] rep;
-        Color[] tint;
-        Color nav = new Color(0.55f, 0.85f, 1f), exit = new Color(1f, 0.45f, 0.4f), adj = new Color(0.8f, 0.95f, 0.5f);
+        var items = new List<RomMenuItem>(14);
+        items.Add(RomMenuItem.Button("exit", "나가기", 4.6f, 0, 1.4f, ExitTint));
+        float navRow;
 
         switch (step)
         {
             case RomRecordStep.Setup:
-                ids = new[] { "yaw-", "yaw+", "h+", "h-", "next", "exit" };
-                labels = new[] { "Y◀", "Y▶", "높이▲", "높이▼", "다음", "나가기" };
-                rep = new[] { true, true, true, true, false, false };
-                tint = new[] { adj, adj, adj, adj, nav, exit };
+                items.Add(RomMenuItem.Text("정면", 0f, 1, 1f));
+                items.Add(RomMenuItem.Button("yaw-", "↺", 1f, 1, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("yaw+", "↻", 2f, 1, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Text("높이", 3.2f, 1, 1f));
+                items.Add(RomMenuItem.Button("h+", "▲", 4.4f, 1, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("h-", "▼", 4.4f, 2, 1f, AdjTint, repeat: true));
+                navRow = 3;
                 break;
+
             case RomRecordStep.Landmarks:
-                ids = new[] { "target", "up", "down", "fwd", "back", "left", "right", "prev", "next", "exit" };
-                labels = new[] { TargetLabel(), "위", "아래", "앞", "뒤", "왼", "오른", "이전", "다음", "나가기" };
-                rep = new[] { false, true, true, true, true, true, true, false, false, false };
-                tint = new[] { new Color(1f, 0.85f, 0.3f), adj, adj, adj, adj, adj, adj, nav, nav, exit };
+                items.Add(RomMenuItem.Button("t0", "대추", 0f, 1, 2f, TargetTint, selected: landmarkTarget == 0));
+                items.Add(RomMenuItem.Button("t1", "미간", 2f, 1, 2f, TargetTint, selected: landmarkTarget == 1));
+                items.Add(RomMenuItem.Button("t2", "목중앙", 4f, 1, 2f, TargetTint, selected: landmarkTarget == 2));
+                if (landmarkTarget == 2)
+                {
+                    // 목 중앙은 앞·뒤로만 옮긴다(미간은 그대로)
+                    items.Add(RomMenuItem.Button("fwd", "앞", 2f, 2, 2f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("back", "뒤", 2f, 3, 2f, AdjTint, repeat: true));
+                }
+                else
+                {
+                    // 십자: 앞·뒤·왼·오른(수평) + 옆에 위·아래(수직). 환자 기준 방향이다.
+                    items.Add(RomMenuItem.Button("fwd", "앞", 1f, 2, 1f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("left", "왼", 0f, 3, 1f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("right", "오른", 2f, 3, 1f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("back", "뒤", 1f, 4, 1f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("up", "위", 4.4f, 2, 1.2f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("down", "아래", 4.4f, 4, 1.2f, AdjTint, repeat: true));
+                }
+                navRow = 5;
                 break;
+
             case RomRecordStep.Done:
-                ids = new[] { "prev", "exit" };
-                labels = new[] { "이전", "나가기" };
-                rep = new[] { false, false };
-                tint = new[] { nav, exit };
+                navRow = 1;
                 break;
-            default:
-                ids = new[] { "adj+", "adj-", "undo", "prev", "next", "exit" };
-                labels = new[] { "+1°", "-1°", "취소", "이전", "다음", "나가기" };
-                rep = new[] { true, true, false, false, false, false };
-                tint = new[] { adj, adj, new Color(1f, 0.7f, 0.3f), nav, nav, exit };
+
+            default:   // 굴곡·신전·측굴·회전
+                items.Add(RomMenuItem.Button("adj-", "-1°", 1f, 1, 1.8f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("adj+", "+1°", 3.2f, 1, 1.8f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("undo", "취소", 2.1f, 2, 1.8f, UndoTint));
+                navRow = 3;
                 break;
         }
-        leftMenu.SetButtons(ids, labels, rep, tint);
-        rightMenu.SetButtons(ids, labels, rep, tint);
+
+        if (step > RomRecordStep.Setup) items.Add(RomMenuItem.Button("prev", "◀ 이전", 0f, navRow, 2.2f, NavTint));
+        if (step < RomRecordStep.Done) items.Add(RomMenuItem.Button("next", "다음 ▶", 3.8f, navRow, 2.2f, NavTint));
+
+        var arr = items.ToArray();
+        string head = MenuHeader();
+        leftMenu.SetLayout(head, arr);
+        rightMenu.SetLayout(head, arr);
     }
 
-    private string TargetLabel() => landmarkTarget == 0 ? "대상:대추" : landmarkTarget == 1 ? "대상:미간" : "대상:목중앙";
+    /// <summary>판 머리줄 — 단계·진행, 동작 단계면 지금까지 찍은 값. 값이 바뀔 때만 만든다.</summary>
+    private string MenuHeader()
+    {
+        sb.Clear();
+        sb.Append((int)step + 1).Append("/7  ").Append(StepTitle[(int)step]);
+        if (IsMotion(step))
+        {
+            var list = marks[MotionIndex(step)];
+            Vector3 pivot = Pivot;
+            for (int i = 0; i < list.Count; i++)
+                sb.Append(i == 0 ? "   " : " · ").Append(Kind(list[i])).Append(" ").Append(AngleOf(step, list[i], pivot).ToString("F0")).Append("°");
+        }
+        else if (step == RomRecordStep.Landmarks && landmarkTarget == 2)
+        {
+            sb.Append("   목중앙 ").Append(neckOffsetMm.ToString("F0")).Append("mm");
+        }
+        return sb.ToString();
+    }
 
     private void OnButton(string id)
     {
@@ -253,11 +367,9 @@ public class RomRecordSession : MonoBehaviour
             case "yaw+": yaw += yawStepDeg; break;
             case "h+": if (!hasC7) frameOrigin += u * (heightStepMm * 0.001f); break;
             case "h-": if (!hasC7) frameOrigin -= u * (heightStepMm * 0.001f); break;
-            case "target":
-                landmarkTarget = (landmarkTarget + 1) % 3;
-                leftMenu.SetLabel("target", TargetLabel());
-                rightMenu.SetLabel("target", TargetLabel());
-                break;
+            case "t0": SetTarget(0); break;
+            case "t1": SetTarget(1); break;
+            case "t2": SetTarget(2); break;
             case "up": Nudge(u * mm); break;
             case "down": Nudge(-u * mm); break;
             case "fwd": if (landmarkTarget == 2) neckOffsetMm += neckStepMm; else Nudge(f * mm); break;
@@ -276,6 +388,13 @@ public class RomRecordSession : MonoBehaviour
         dirty = true;
     }
 
+    private void SetTarget(int t)
+    {
+        if (landmarkTarget == t) return;
+        landmarkTarget = t;
+        ApplyStepButtons();   // 고른 버튼을 밝히고, 목중앙이면 앞·뒤만 남긴다
+    }
+
     private void Nudge(Vector3 d)
     {
         if (landmarkTarget == 0 && hasC7) c7 += d;
@@ -287,6 +406,7 @@ public class RomRecordSession : MonoBehaviour
         if (s < RomRecordStep.Setup || s > RomRecordStep.Done) return;
         if (IsMotion(s) && (!hasC7 || !hasGlab))
         {
+            Play(sndDeny);
             Debug.Log("[실측기록] 대추와 미간(중립)을 먼저 찍는다 — 동작 단계로 못 넘어간다.");
             return;
         }
@@ -309,11 +429,13 @@ public class RomRecordSession : MonoBehaviour
         // ★한 번에 한 손만. 다른 손이 오므리고 있으면 이 손은 새로 시작하지 않는다.
         bool otherBusy = liveActive && livePinchLeft != isLeft;
 
-        // ★버튼을 누르려던 손이 핀치로 읽히지 않게, 검지가 메뉴 근처면 새로 시작하지 않는다.
+        // ★버튼을 누르는 동안과 누른 직후에는 핀치를 받지 않는다(09-18 로그: 의도하지 않은 핀치 30여 번).
+        //   판을 누르러 다가오는 중(고정 상태)이면 양손 모두 막는다 — 가려진 손이 핀치로 읽히는 것을 막는다.
+        bool interacting = menuHoldL || menuHoldR || Time.unscaledTime - lastPressTime < 0.4f;
         bool nearMenu = hands.TryJoint(isLeft, HandJointId.HandIndexTip, out Vector3 tip)
                         && (leftMenu.Near(tip, 0.06f) || rightMenu.Near(tip, 0.06f));
 
-        int ev = hands.UpdatePinch(isLeft, otherBusy || nearMenu || (liveActive && livePinchLeft != isLeft), out Vector3 fixedPos);
+        int ev = hands.UpdatePinch(isLeft, otherBusy || nearMenu || interacting, out Vector3 fixedPos);
         var st = isLeft ? hands.LeftPinch : hands.RightPinch;
 
         if (ev == 1)
@@ -330,11 +452,11 @@ public class RomRecordSession : MonoBehaviour
                 view.SetLive(false, Vector3.zero);
                 OnPinchFixed(fixedPos);
             }
-            else if (ev == 3)
+            else if (ev == 3 || ev == 4)
             {
                 liveActive = false;
                 view.SetLive(false, Vector3.zero);
-                Debug.Log("[실측기록] 핀치 취소 — 손을 놓쳤거나 시스템 제스처가 시작됐다.");
+                if (ev == 3) Debug.Log("[실측기록] 핀치 취소 — 손을 놓쳤거나 시스템 제스처가 시작됐다.");
             }
         }
     }
@@ -344,6 +466,7 @@ public class RomRecordSession : MonoBehaviour
         switch (step)
         {
             case RomRecordStep.Setup:
+                Play(sndDeny);
                 Debug.Log("[실측기록] 기준선 세팅 중에는 찍지 않는다 — [다음]으로 넘어간 뒤 대추를 찍는다.");
                 return;
 
@@ -352,16 +475,17 @@ public class RomRecordSession : MonoBehaviour
                 {
                     c7 = p; hasC7 = true;
                     landmarkTarget = 1;                       // 대추 다음은 미간
-                    leftMenu.SetLabel("target", TargetLabel());
-                    rightMenu.SetLabel("target", TargetLabel());
+                    ApplyStepButtons();
+                    Play(sndPinch);
                     Debug.Log($"[실측기록] 대추 {Fmt(c7)}");
                 }
                 else if (landmarkTarget == 1)
                 {
                     glab = p; hasGlab = true;
+                    Play(sndPinch);
                     Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
                 }
-                else Debug.Log("[실측기록] 대상이 목 중앙일 때는 앞·뒤 버튼으로 옮긴다(찍지 않는다).");
+                else { Play(sndDeny); Debug.Log("[실측기록] 대상이 목 중앙일 때는 앞·뒤 버튼으로 옮긴다(찍지 않는다)."); }
                 dirty = true;
                 return;
 
@@ -372,6 +496,7 @@ public class RomRecordSession : MonoBehaviour
         var list = marks[MotionIndex(step)];
         if (list.Count >= Capacity(step))
         {
+            Play(sndDeny);
             Debug.Log($"[실측기록] {StepTitle[(int)step]}은 {Capacity(step)}개까지다 — [취소]로 지우고 다시 찍는다.");
             return;
         }
@@ -383,6 +508,7 @@ public class RomRecordSession : MonoBehaviour
             side = HasSides(step) ? RomRecordGeometry.Side(glab, p, yaw, flipSides) : 0,
         };
         list.Add(m);
+        Play(sndPinch);
         LogMark(step, m);
         dirty = true;
     }
@@ -457,6 +583,11 @@ public class RomRecordSession : MonoBehaviour
         view.SetFrame(pivot, yaw, axisLength);
         view.SetLandmarks(hasC7, c7, hasGlab, glab, pivot);
 
+        // 손목 판 머리줄 — 지금까지 찍은 값(값이 바뀔 때만)
+        string head = MenuHeader();
+        leftMenu.SetHeader(head);
+        rightMenu.SetHeader(head);
+
         bool dial = IsMotion(step) && hasGlab;
         if (dial)
         {
@@ -494,7 +625,7 @@ public class RomRecordSession : MonoBehaviour
                 break;
             case RomRecordStep.Landmarks:
                 sb.Append(!hasC7 ? "대추에 핀치하세요\n" : !hasGlab ? "미간(중립)에 핀치하세요\n" : "위치를 버튼으로 다듬고 [다음]\n");
-                sb.Append(TargetLabel()).Append(" · 목 중앙 보정 ").Append(neckOffsetMm.ToString("F0")).Append("mm\n");
+                sb.Append(landmarkTarget == 0 ? "대상: 대추" : landmarkTarget == 1 ? "대상: 미간" : "대상: 목중앙").Append(" · 목 중앙 보정 ").Append(neckOffsetMm.ToString("F0")).Append("mm\n");
                 break;
             case RomRecordStep.Done:
                 sb.Append("기록을 마쳤습니다\n");

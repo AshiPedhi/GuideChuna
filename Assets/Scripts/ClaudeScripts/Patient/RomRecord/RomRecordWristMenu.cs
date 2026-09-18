@@ -2,178 +2,303 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
+/// <summary>한 칸의 버튼(또는 글자). id가 null이면 누를 수 없는 글자다.</summary>
+public struct RomMenuItem
+{
+    public string id;
+    public string label;
+    public bool repeat;       // 누르고 있으면 반복
+    public Color tint;
+    public float col, row;    // 판 안의 칸 좌표(왼쪽 위가 0,0 · 0행은 머리줄)
+    public float span;        // 가로 칸 수
+    public bool selected;     // 고른 상태(대상 선택 등) — 밝게 칠한다
+
+    public static RomMenuItem Button(string id, string label, float col, float row, float span, Color tint,
+                                     bool repeat = false, bool selected = false)
+        => new RomMenuItem { id = id, label = label, col = col, row = row, span = span, tint = tint, repeat = repeat, selected = selected };
+
+    public static RomMenuItem Text(string label, float col, float row, float span)
+        => new RomMenuItem { id = null, label = label, col = col, row = row, span = span };
+}
+
 /// <summary>
-/// 실측 기록의 손목 메뉴 — <b>양 손목에 같은 메뉴</b>가 뜨고 <b>반대 손 검지</b>로 누른다(2026-09-18 사용자 안).
-/// 압박 중에는 누르는 손의 손목 메뉴를 자유 손이 누른다 — 누르는 손을 머리에서 뗄 필요가 없다.
+/// 실측 기록의 손목 메뉴 — <b>양 손목에 같은 판</b>이 뜨고 <b>반대 손 검지</b>로 누른다(2026-09-18 사용자 안).
 ///
-/// ★메뉴판은 손목 위에 떠서 <b>눈을 향해 선다</b>(손목 뼈의 축 방향에 기대지 않는다 — 그 방향은 Play에서 재 본 적이 없다).
-/// ★버튼은 단계가 바뀔 때만 다시 쓴다. 매 프레임 문자열을 만들지 않는다.
+/// ★2판(09-18 사용자 결정 "그룹 판넬"): 어두운 판 위에 머리줄(단계·진행·[나가기]) / 조작 묶음 / 이동 줄.
+///   버튼은 글자가 안에 들어간 납작한 사각형이고, 칸 좌표로 배치한다.
+/// ★가림 대응(09-18 사용자 결정 "다가오면 제자리 고정"): 누르는 손이 다가오면 판이 손목을 따라가지 않고 멈춘다.
+///   누르는 손이 메뉴 쪽 손목을 가려 그 손목 추적이 끊기면, 종전엔 판이 숨었다가 튀었다("UI가 도망간다").
+///   추적이 잠깐 끊겨도 <see cref="grace"/>초는 숨기지 않는다.
+/// ★눌림 표시(09-18 사용자: "누른 건지 구분이 안 간다"): 손가락이 들어오면 밝아지고, 눌리는 순간 움찔 줄며 번쩍인다.
+///   소리는 본체(<see cref="RomRecordSession"/>)가 낸다.
+/// ★매 프레임 하는 일은 판 루트 이동과 버튼 색·크기뿐이다. 배치·글자는 단계가 바뀔 때만 다시 쓴다.
 /// </summary>
 public class RomRecordWristMenu
 {
     private class Btn
     {
-        public Transform tr;
+        public Transform quad;
+        public Renderer rend;
         public TextMeshPro label;
         public string id;
         public bool repeat;
         public bool inside;
         public float nextRepeat;
+        public float pressedAt = -99f;
+        public Color baseColor;
+        public Vector2 half;      // 판 로컬 반폭·반높이
+        public Vector3 local;     // 판 로컬 중심
+        public Vector3 scale;
     }
 
     private readonly List<Btn> pool = new List<Btn>();
     private int activeCount;
-    private Transform root;
+    private Transform root, plate;
+    private TextMeshPro header;
     private float cooldownUntil;
-    // ★버튼 사이 간격은 <b>글자 실제 폭</b>으로 잡는다(09-18). 글자를 키우면 옆 버튼 글자와 겹치므로
-    //   TMP가 계산한 폭(GetPreferredValues)이 gap보다 크면 그만큼 벌린다.
-    private float colGap, rowGap, labelHeight;
+    private float panelW, panelH;
+    private bool placedOnce;
+    private float lastValidTime = -99f;
+    private string displayName;
 
-    public float buttonSize = 0.018f;
-    public float gap = 0.034f;
-    public float labelSize = 0.026f;      // ★TMP 폰트 크기(스케일 1). 09-18 첫 판 0.9는 버튼을 통째로 가렸다
-    public int columns = 4;
-    public float lift = 0.06f;            // 손목에서 위로(m)
-    public float towardEye = 0.02f;       // 눈 쪽으로(m)
-    public float pressRadius = 0.018f;
-    public float holdDelay = 0.5f;        // 누르고 있으면 이 뒤부터 반복
+    // 모양
+    public float cellW = 0.036f;       // 칸 너비(m)
+    public float rowH = 0.03f;         // 줄 높이(m)
+    public float buttonH = 0.022f;     // 버튼 높이(m)
+    public float labelSize = 0.026f;   // ★TMP 폰트 크기(스케일 1). 첫 판 0.9는 버튼을 통째로 가렸다
+    public float headerSize = 0.026f;
+    public int columns = 6;
+    // 자리
+    public float lift = 0.06f;
+    public float towardEye = 0.02f;
+    public float followSharpness = 14f;   // 손목을 따라가는 부드러움(클수록 빠름)
+    public float grace = 1.5f;             // 손목 추적이 끊겨도 이만큼은 판을 그대로 둔다(초)
+    // 누르기
+    public float pressDepth = 0.02f;       // 판 앞뒤로 이 안에 들어오면 누른 것
+    public float pressMargin = 0.003f;
+    public float holdDelay = 0.5f;
     public float repeatInterval = 0.12f;
-    public float cooldown = 0.35f;        // 반복 안 하는 버튼은 한 번 누른 뒤 이만큼 잠근다
+    public float cooldown = 0.35f;
+    public float pressAnim = 0.18f;        // 눌림 애니메이션 길이(초)
+
+    public bool Visible => root != null && root.gameObject.activeSelf;
+    public bool LastRepeat { get; private set; }   // 방금 눌린 것이 반복 입력인가 — 소리를 가볍게 낸다
+
+    private static readonly Color PlateColor = new Color(0.06f, 0.08f, 0.12f, 0.8f);
 
     public void Build(Transform parent, string name, int capacity, TMP_FontAsset font, Material mat)
     {
+        displayName = name;
         root = new GameObject("[실측기록] " + name).transform;
         root.SetParent(parent, false);
+
+        plate = MakeQuad("판", mat, PlateColor, 0);
+        plate.localPosition = new Vector3(0f, 0f, 0.002f);   // 버튼보다 조금 뒤(눈에서 먼 쪽)
+
+        header = MakeLabel(font, headerSize, TextAlignmentOptions.MidlineLeft, 3);
+
         for (int i = 0; i < capacity; i++)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            Object.Destroy(go.GetComponent<Collider>());   // 물리는 안 쓴다 — 거리로만 판정한다
-            go.transform.SetParent(root, false);
-            go.transform.localScale = Vector3.one * buttonSize;
-            var r = go.GetComponent<Renderer>();
-            if (mat != null) r.sharedMaterial = mat;
-
-            var labGo = new GameObject("글자");
-            labGo.transform.SetParent(root, false);
-            var t = labGo.AddComponent<TextMeshPro>();
-            if (font != null) t.font = font;
-            t.fontSize = labelSize;
-            t.alignment = TextAlignmentOptions.Center;
-            t.color = Color.white;
-            t.rectTransform.sizeDelta = new Vector2(0.2f, labelSize * 2f);   // 넉넉히 — 실제 폭은 Relayout이 잰다
-            t.textWrappingMode = TextWrappingModes.NoWrap;
-
-            pool.Add(new Btn { tr = go.transform, label = t });
+            Transform q = MakeQuad("버튼", mat, Color.gray, 1);
+            pool.Add(new Btn { quad = q, rend = q.GetComponent<Renderer>(), label = MakeLabel(font, labelSize, TextAlignmentOptions.Center, 3) });
         }
+        root.gameObject.SetActive(false);
     }
 
-    /// <summary>단계가 바뀔 때 부른다. ids와 labels는 같은 길이. repeat는 누르고 있으면 반복되는 버튼.</summary>
-    public void SetButtons(string[] ids, string[] labels, bool[] repeat, Color[] tints)
+    /// <summary>단계가 바뀔 때(또는 고른 상태가 바뀔 때) 부른다. 칸 좌표로 판을 다시 짠다.</summary>
+    public void SetLayout(string headerText, RomMenuItem[] items)
     {
-        activeCount = Mathf.Min(ids.Length, pool.Count);
-        // ★단계가 바뀌면 버튼 자리가 달라진다. 방금 누른 손가락이 새 버튼 위에 남아 곧바로 눌리지 않게 잠깐 잠근다.
-        cooldownUntil = Time.unscaledTime + cooldown;
+        cooldownUntil = Time.unscaledTime + cooldown;   // ★방금 누른 손가락이 새 버튼 위에 남아 곧바로 눌리지 않게
+        activeCount = Mathf.Min(items.Length, pool.Count);
+
+        float maxRow = 0f;
+        for (int i = 0; i < activeCount; i++) maxRow = Mathf.Max(maxRow, items[i].row);
+        panelW = columns * cellW + 0.01f;
+        panelH = (maxRow + 1f) * rowH + 0.01f;
+        plate.localScale = new Vector3(panelW, panelH, 1f);
+
+        header.text = headerText;
+        header.rectTransform.sizeDelta = new Vector2(panelW - 0.012f, rowH);
+        header.transform.localPosition = new Vector3(0f, panelH * 0.5f - 0.005f - rowH * 0.5f, -0.002f);
+
         for (int i = 0; i < pool.Count; i++)
         {
+            Btn b = pool[i];
             bool on = i < activeCount;
-            pool[i].tr.gameObject.SetActive(on);
-            pool[i].label.gameObject.SetActive(on);
-            if (!on) continue;
-            pool[i].id = ids[i];
-            pool[i].label.text = labels[i];
-            pool[i].repeat = repeat != null && repeat[i];
-            pool[i].inside = false;
-            var r = pool[i].tr.GetComponent<Renderer>();
-            if (tints != null) r.material.color = tints[i];   // ★인스턴스 머티리얼 — 공유 머티리얼을 물들이지 않는다
+            b.label.gameObject.SetActive(on);
+            if (!on) { b.quad.gameObject.SetActive(false); b.id = null; continue; }
+
+            RomMenuItem it = items[i];
+            bool isButton = it.id != null;
+            b.quad.gameObject.SetActive(isButton);
+            b.id = it.id;
+            b.repeat = it.repeat;
+            b.inside = false;
+            b.pressedAt = -99f;
+            b.label.text = it.label;
+
+            float x = -panelW * 0.5f + 0.005f + (it.col + it.span * 0.5f) * cellW;
+            float y = panelH * 0.5f - 0.005f - (it.row + 0.5f) * rowH;
+            float w = it.span * cellW - 0.004f;
+            if (isButton)
+            {
+                // 글자가 칸보다 넓으면 버튼을 넓힌다(옆과 겹칠 수 있어 로그로 알린다)
+                float need = b.label.GetPreferredValues(it.label).x + 0.006f;
+                if (need > w)
+                {
+                    Debug.Log($"[실측기록] {displayName} — '{it.label}' 글자가 칸보다 넓어 버튼을 {w * 100f:F1}→{need * 100f:F1}cm로 늘렸다");
+                    w = need;
+                }
+                b.baseColor = it.selected ? Color.Lerp(it.tint, Color.white, 0.35f) : it.tint * new Color(0.6f, 0.6f, 0.6f, 1f);
+                b.scale = new Vector3(w, buttonH, 1f);
+                b.quad.localPosition = new Vector3(x, y, 0f);
+                b.quad.localScale = b.scale;
+                b.rend.material.color = b.baseColor;
+                b.label.color = Color.white;
+                b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
+            }
+            else
+            {
+                b.label.color = new Color(0.75f, 0.8f, 0.85f, 1f);
+                b.label.fontStyle = FontStyles.Normal;
+            }
+            b.local = new Vector3(x, y, 0f);
+            b.half = new Vector2(w * 0.5f, buttonH * 0.5f);
+            b.label.rectTransform.sizeDelta = new Vector2(Mathf.Max(w, 0.02f), buttonH);
+            b.label.transform.localPosition = new Vector3(x, y, -0.001f);   // 버튼보다 조금 앞(눈 쪽)
         }
-        Relayout(true);
     }
 
-    /// <summary>글자 실제 폭·높이로 간격을 다시 잡는다. 단계 전환·글자 변경 때만 부른다(매 프레임 아님).</summary>
-    private void Relayout(bool log)
+    public void SetHeader(string text)
     {
-        float maxW = 0f, maxH = 0f;
-        for (int i = 0; i < activeCount; i++)
-        {
-            Vector2 pv = pool[i].label.GetPreferredValues(pool[i].label.text);
-            if (pv.x > maxW) maxW = pv.x;
-            if (pv.y > maxH) maxH = pv.y;
-        }
-        labelHeight = maxH;
-        colGap = Mathf.Max(gap, Mathf.Max(buttonSize, maxW) + 0.004f);
-        rowGap = buttonSize + maxH + 0.006f;
-        if (log)
-            Debug.Log($"[실측기록] {root.name} — 버튼 {activeCount}개 · 글자 폭 최대 {maxW * 100f:F1}cm·높이 {maxH * 100f:F1}cm → " +
-                      $"가로 간격 {colGap * 100f:F1}cm · 세로 간격 {rowGap * 100f:F1}cm");
+        if (header != null && header.text != text) header.text = text;
     }
 
-    public void SetLabel(string id, string text)
+    /// <summary>
+    /// 판을 손목 위에 둔다. <paramref name="hold"/>가 참이면(누르는 손이 다가옴) <b>그 자리에 멈춘다</b>.
+    /// 손목 추적이 끊겨도 grace초 동안은 숨기지 않는다.
+    /// </summary>
+    public void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold)
     {
-        for (int i = 0; i < activeCount; i++)
-            if (pool[i].id == id) { pool[i].label.text = text; Relayout(false); return; }
-    }
+        if (root == null || eye == null) return;
+        float now = Time.unscaledTime;
+        if (wristValid) lastValidTime = now;
 
-    public void SetVisible(bool on)
-    {
-        if (root != null && root.gameObject.activeSelf != on) root.gameObject.SetActive(on);
-    }
+        bool show = wristValid || (placedOnce && (hold || now - lastValidTime < grace));
+        if (root.gameObject.activeSelf != show) root.gameObject.SetActive(show);
+        if (!show) { placedOnce = false; return; }
 
-    /// <summary>손목 위에 눈을 향해 격자로 놓는다.</summary>
-    public void Place(Vector3 wrist, Transform eye)
-    {
-        if (eye == null) return;
+        // ★멈춘다 — 가림으로 튀는 손목을 따라가지 않는다. 단 한 번도 자리를 안 잡았으면 먼저 잡는다.
+        if (!wristValid || (hold && placedOnce)) return;
+
         Vector3 toEye = eye.position - wrist;
-        Vector3 basePos = wrist + Vector3.up * lift + toEye.normalized * towardEye;
+        Vector3 anchor = wrist + Vector3.up * lift + toEye.normalized * towardEye;
+        Vector3 target = anchor + Vector3.up * (panelH * 0.5f);
+        Quaternion rot = Quaternion.LookRotation(target - eye.position, Vector3.up);
 
-        Vector3 right = eye.right, up = eye.up;
-        int rows = Mathf.CeilToInt(activeCount / (float)columns);
+        if (!placedOnce)
+        {
+            root.SetPositionAndRotation(target, rot);
+            placedOnce = true;
+            return;
+        }
+        float k = 1f - Mathf.Exp(-followSharpness * Time.unscaledDeltaTime);
+        root.SetPositionAndRotation(Vector3.Lerp(root.position, target, k), Quaternion.Slerp(root.rotation, rot, k));
+    }
+
+    /// <summary>눌림·손가락 들어옴 표시. 매 프레임 부른다 — 할당은 없다.</summary>
+    public void Tick()
+    {
+        if (!Visible) return;
+        float now = Time.unscaledTime;
         for (int i = 0; i < activeCount; i++)
         {
-            int c = i % columns, rI = i / columns;
-            Vector3 p = basePos + right * ((c - (columns - 1) * 0.5f) * colGap) + up * (((rows - 1) - rI) * rowGap);
-            pool[i].tr.position = p;
-            // 글자는 버튼 바로 위 — 버튼 반지름 + 글자 높이의 절반만큼 올린다
-            pool[i].label.transform.position = p + up * (buttonSize * 0.5f + labelHeight * 0.6f);
-            pool[i].label.transform.rotation = Quaternion.LookRotation(p - eye.position, up);
+            Btn b = pool[i];
+            if (b.id == null) continue;
+            float t = (now - b.pressedAt) / pressAnim;                 // 0 → 1
+            float pulse = t < 1f ? 1f - t : 0f;
+            Color c = b.inside ? Color.Lerp(b.baseColor, Color.white, 0.3f) : b.baseColor;
+            c = Color.Lerp(c, Color.white, pulse * 0.8f);              // 눌린 순간 번쩍
+            b.rend.material.color = c;
+            b.quad.localScale = b.scale * (1f - 0.18f * pulse);         // 눌린 순간 움찔
         }
     }
 
-    /// <summary>이 자리가 메뉴 근처인가 — 핀치를 막는 데 쓴다(버튼 누르려던 손이 핀치로 읽히지 않게).</summary>
+    /// <summary>판 중심까지 거리 — 누르는 손이 다가오는지 보는 데 쓴다.</summary>
+    public float Distance(Vector3 p) => Visible ? Vector3.Distance(root.position, p) : float.MaxValue;
+
+    /// <summary>이 자리가 판 근처인가 — 핀치를 막는 데 쓴다.</summary>
     public bool Near(Vector3 tip, float margin)
     {
-        for (int i = 0; i < activeCount; i++)
-            if ((pool[i].tr.position - tip).sqrMagnitude < margin * margin) return true;
-        return false;
+        if (!Visible) return false;
+        Vector3 l = root.InverseTransformPoint(tip);
+        return Mathf.Abs(l.x) < panelW * 0.5f + margin && Mathf.Abs(l.y) < panelH * 0.5f + margin && Mathf.Abs(l.z) < margin;
     }
 
     /// <summary>반대 손 검지로 눌린 버튼 id. 없으면 null.</summary>
     public string Poll(Vector3 tip, bool tipValid)
     {
+        if (!Visible) return null;
         float now = Time.unscaledTime;
+        Vector3 l = tipValid ? root.InverseTransformPoint(tip) : Vector3.zero;
+
         for (int i = 0; i < activeCount; i++)
         {
             Btn b = pool[i];
-            bool inNow = tipValid && (b.tr.position - tip).sqrMagnitude < pressRadius * pressRadius;
-            // ★나갈 때는 조금 더 멀어져야 나간 것으로 본다 — 경계에서 떨려 연타되지 않게.
-            bool outNow = !tipValid || (b.tr.position - tip).sqrMagnitude > (pressRadius * 1.4f) * (pressRadius * 1.4f);
+            if (b.id == null) continue;
+            float dx = Mathf.Abs(l.x - b.local.x), dy = Mathf.Abs(l.y - b.local.y), dz = Mathf.Abs(l.z);
+            bool inNow = tipValid && dx < b.half.x + pressMargin && dy < b.half.y + pressMargin && dz < pressDepth;
+            // ★나갈 때는 조금 더 벗어나야 나간 것으로 본다 — 경계에서 떨려 연타되지 않게.
+            bool outNow = !tipValid || dx > b.half.x + pressMargin * 3f || dy > b.half.y + pressMargin * 3f || dz > pressDepth * 1.5f;
 
             if (!b.inside)
             {
-                if (!inNow) continue;
-                if (now < cooldownUntil) continue;
+                if (!inNow || now < cooldownUntil) continue;
                 b.inside = true;
                 b.nextRepeat = now + holdDelay;
+                b.pressedAt = now;
                 if (!b.repeat) cooldownUntil = now + cooldown;
+                LastRepeat = false;
                 return b.id;
             }
-
             if (outNow) { b.inside = false; continue; }
             if (b.repeat && now >= b.nextRepeat)
             {
                 b.nextRepeat = now + repeatInterval;
+                b.pressedAt = now;
+                LastRepeat = true;
                 return b.id;
             }
         }
         return null;
+    }
+
+    // ── 만드는 도구 ──────────────────────────────────────────────────
+    private Transform MakeQuad(string name, Material mat, Color c, int order)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = name;
+        Object.Destroy(go.GetComponent<Collider>());   // 물리는 안 쓴다 — 판 로컬 좌표로 판정한다
+        go.transform.SetParent(root, false);
+        var r = go.GetComponent<Renderer>();
+        if (mat != null) r.sharedMaterial = mat;       // Sprites/Default — 양면(컬링 없음)·투명
+        r.material.color = c;
+        r.sortingOrder = order;                        // ★같은 투명 큐라 그리는 순서를 정해 준다: 판 0 · 버튼 1 · 글자 3
+        return go.transform;
+    }
+
+    private TextMeshPro MakeLabel(TMP_FontAsset font, float size, TextAlignmentOptions align, int order)
+    {
+        var go = new GameObject("글자");
+        go.transform.SetParent(root, false);
+        var t = go.AddComponent<TextMeshPro>();
+        if (font != null) t.font = font;
+        t.fontSize = size;
+        t.alignment = align;
+        t.color = Color.white;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
+        t.rectTransform.sizeDelta = new Vector2(0.2f, size * 2f);
+        t.sortingOrder = order;
+        return t;
     }
 }

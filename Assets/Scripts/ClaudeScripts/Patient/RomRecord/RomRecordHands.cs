@@ -39,6 +39,12 @@ public class RomRecordHands
     public float closeDistance = 0.015f;   // 이보다 가까우면 오므림
     public float openDistance = 0.030f;    // 이보다 멀면 폄(사이는 그대로 — 떨림으로 깜박이지 않게)
     public float releaseLookback = 0.15f;  // 펴기 직전 이만큼 앞의 자리를 쓴다(초)
+    // ★09-18 첫 기기 실행 로그: 의도하지 않은 핀치가 한 판에 30번 넘게 잡혔다("이미 다 찍었다" 21·미간 재지정 9).
+    //   손가락이 가려지면 추적이 엄지·손가락 끝을 붙여 버리는 순간이 있다(추정). 두 가지로 거른다.
+    public float minHold = 0.12f;          // 이보다 짧게 오므렸다 편 것은 핀치가 아니다(초)
+    public bool requireHighConfidence = true;   // 추적 신뢰도가 낮을 때 오므린 것은 받지 않는다
+    public int IgnoredShort { get; private set; }
+    public int IgnoredLowConfidence { get; private set; }
 
     public bool HasLeft => left != null;
     public bool HasRight => right != null;
@@ -93,7 +99,8 @@ public class RomRecordHands
     }
 
     /// <summary>
-    /// 한 손의 핀치를 갱신한다. 반환: 0 변화 없음 · 1 방금 오므림 · 2 방금 폄(released에 고정 자리) · 3 취소(손을 놓침).
+    /// 한 손의 핀치를 갱신한다. 반환: 0 변화 없음 · 1 방금 오므림 · 2 방금 폄(released에 고정 자리) · 3 취소(손을 놓침)
+    /// · 4 너무 짧아 무시.
     /// ★<paramref name="blocked"/>가 참이면(손목 버튼 근처 등) 새로 시작하지 않는다.
     /// </summary>
     public int UpdatePinch(bool isLeft, bool blocked, out Vector3 released)
@@ -120,6 +127,8 @@ public class RomRecordHands
             if (blocked) return 0;
             float d = Mathf.Min(dI, dM);
             if (d > closeDistance) return 0;
+            Hand hc = isLeft ? left : right;
+            if (requireHighConfidence && hc != null && !hc.IsHighConfidence) { IgnoredLowConfidence++; return 0; }
             s.closed = true;
             s.middle = dM < dI;
             s.closeTime = Time.unscaledTime;
@@ -141,6 +150,7 @@ public class RomRecordHands
 
         // 폈다 — 펴기 직전 자리를 돌려준다.
         s.closed = false;
+        if (Time.unscaledTime - s.closeTime < minHold) { IgnoredShort++; return 4; }
         released = Lookback(s, Time.unscaledTime - releaseLookback);
         return 2;
     }

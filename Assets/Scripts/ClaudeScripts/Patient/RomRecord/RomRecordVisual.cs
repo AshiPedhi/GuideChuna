@@ -32,8 +32,8 @@ public class RomRecordVisual
     // ★글자 크기는 TMP 폰트 크기(스케일 1)다. 기기에서 확인된 기존 값: 각도 판독 0.05 · 축·눈금 글자 0.03
     //   (CervicalRomPlaneGauge·PracticeReadout, TrainingScene). 09-18 첫 판은 1.1을 넣어 20~30배 컸다 —
     //   실측랩 코드의 labelSize 1.2를 그대로 따라 썼다.
-    public float textSize = 0.03f;     // 축 끝 글자·마커 글자
-    public float panelSize = 0.028f;   // 안내판
+    public float textSize = 0.05f;     // 축 끝 글자·마커 글자(눈금 숫자는 0.8배)
+    public float panelSize = 0.045f;   // 안내판
 
     public static readonly Color UpColor = new Color(0.35f, 0.95f, 0.45f);
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
@@ -69,14 +69,14 @@ public class RomRecordVisual
 
         dialRoot = new GameObject("각도기");
         dialRoot.transform.SetParent(root, false);
-        ring = Line("눈금판", new Color(1f, 1f, 1f, 0.55f), 0.0025f, dialRoot.transform);
+        ring = Line("눈금판", new Color(1f, 1f, 1f, 0.7f), 0.004f, dialRoot.transform);
         ring.positionCount = RingSegments + 1;
-        zeroLine = Line("눈금 0", new Color(1f, 1f, 1f, 0.8f), 0.0035f, dialRoot.transform);
-        for (int i = 0; i < TickCount; i++) ticks[i] = Line("눈금", new Color(1f, 1f, 1f, 0.6f), 0.0018f, dialRoot.transform);
+        zeroLine = Line("눈금 0", new Color(1f, 1f, 1f, 0.9f), 0.005f, dialRoot.transform);
+        for (int i = 0; i < TickCount; i++) ticks[i] = Line("눈금", new Color(1f, 1f, 1f, 0.75f), 0.003f, dialRoot.transform);
         for (int i = 0; i < TickLabelCount; i++)
         {
             int deg = i * 30;
-            tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), textSize * 0.7f, new Color(1f, 1f, 1f, 0.8f), dialRoot.transform);
+            tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), textSize * 0.8f, new Color(1f, 1f, 1f, 0.9f), dialRoot.transform);
         }
 
         for (int i = 0; i < MaxMarks; i++)
