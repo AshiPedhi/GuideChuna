@@ -40,6 +40,21 @@ USAGE = """쓰는 법 — 조회
     참조      씬 경로 "Root/Obj"  ·  "Root/Obj|컴포넌트"  ·  에셋 "Assets/…"  ·  none
     활성      --item="경로|GameObject|active|false"
 
+쓰는 법 — 씬 편집 (2026-09-18. ★브리지가 scene-copy로 만든 씬에서만. 기존 씬은 저장·삭제 불가)
+  bridge.py scene-list                                         # 열린 씬·저장 안 한 변경·소유 씬·Build Settings
+  bridge.py scene-copy --src=Assets/Scenes/lobby.unity --dst=Assets/Scenes/새씬.unity   # 대상 있으면 거부
+  bridge.py scene-open --path=Assets/Scenes/새씬.unity [--mode=additive]    # 저장 안 한 씬이 있으면 거부
+  bridge.py delete   --path=Root/Obj
+  bridge.py add-go   --name=이름 [--parent=Root/Obj] [--pos="x,y,z"]
+  bridge.py add-comp --path=Root/Obj --type=컴포넌트이름
+  bridge.py scene-save [--path=Assets/Scenes/새씬.unity]
+  bridge.py build-add --path=Assets/Scenes/새씬.unity
+
+쓰는 법 — 캡처·재생
+  bridge.py capture [--view=scene|game] [--label=이름] [--frame=Root/Obj] [--w=1600 --h=900]
+                                                               # → <프로젝트>/Captures/날짜/시각_이름.png
+  bridge.py play  /  bridge.py stop
+
 옵션
   --timeout=15    응답을 기다릴 초 (기본 15)
 """
@@ -98,6 +113,27 @@ def main():
         elif a.startswith("--") and "=" in a:
             k, v = a[2:].split("=", 1)
             args[k] = v
+
+    # ★Unity가 백그라운드면 파일 감시가 멈춰 refresh가 바뀐 파일을 못 본다(2026-09-18 실측).
+    #   git으로 바뀐 스크립트·데이터를 찾아 경로로 넘겨 강제 임포트하게 한다. 씬·프리팹은 넘기지 않는다(열린 씬을 건드리지 않게).
+    if cmd == "refresh" and "paths" not in args:
+        try:
+            import subprocess
+            out = subprocess.run(["git", "-c", "core.quotepath=off", "status", "--porcelain", "-uall", "--", "Assets"],
+                                 cwd=ROOT, capture_output=True).stdout.decode("utf-8", "replace")
+            keep = (".cs", ".csv", ".asset", ".json", ".txt", ".shader", ".mat")
+            paths = []
+            for line in out.splitlines():
+                p = line[3:].strip().strip('"')
+                if " -> " in p:
+                    p = p.split(" -> ", 1)[1]
+                if p.endswith(keep):
+                    paths.append(p)
+            if paths:
+                args["paths"] = ";".join(paths)
+                print(f"(바뀐 파일 {len(paths)}개를 강제 임포트로 넘긴다)")
+        except Exception as e:
+            print(f"(git으로 바뀐 파일을 못 찾았다 — 일반 refresh만 한다: {e})")
 
     if cmd == "set" and not items and "path" not in args:
         print("★set 에는 --item=\"경로|컴포넌트|프로퍼티|값\" 이 필요하다.\n")

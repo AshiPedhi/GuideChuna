@@ -10,6 +10,9 @@
 // ★★저장은 <b>절대 안 한다</b>(사용자 지시 2026-09-09). 값만 바꾸고 dirty 표시까지만 한다.
 //   이유: 절대규칙 2 — 환자 피부가 분홍이 된 상태로 저장하면 디스크가 손상된다(07-27 전례).
 //   사람이 눈으로 보고 Ctrl+S 하는 그 한 단계가 그 사고의 유일한 안전판이다. 그걸 안 없앤다.
+// ★★<b>예외 하나</b>(사용자 허가 2026-09-18): 브리지가 <b>새로 복사해 만든 씬</b>만 삭제·추가·저장을 허용한다.
+//   기존 씬(TrainingScene·lobby 등)은 종전대로 값 수정까지만이고 저장은 안 한다.
+//   소유 목록은 EditorPrefs에 남긴다 — ChunaAgentBridge.Scene.cs 참조.
 // ★모든 수정은 `Undo.RecordObject`를 건다 — 에디터에서 Ctrl+Z로 되돌아간다.
 // ★모든 수정은 before→after를 응답에 적는다. 조용히 바꾸지 않는다.
 //
@@ -29,7 +32,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 [InitializeOnLoad]
-public static class ChunaAgentBridge
+public static partial class ChunaAgentBridge
 {
     private const string PrefKey = "ChunaAgentBridge.Enabled";
     // ★0.2 → 0.05 (2026-09-09). 매 틱에 하는 일은 File.Exists 하나뿐이라 20Hz도 부담이 없다.
@@ -105,11 +108,16 @@ public static class ChunaAgentBridge
                 case "get": DoGet(sb, args); break;
                 case "find": DoFind(sb, args); break;
                 case "set": ok = DoSet(sb, args, items, out err); break;
-                case "refresh": DoRefresh(sb); break;
+                case "refresh": DoRefresh(sb, args); break;
                 case "missing": DoMissing(sb, args); break;
                 default:
-                    ok = false;
-                    err = $"모르는 명령이다: '{cmd}' (ping · hierarchy · get · find · set)";
+                    // ★씬 편집·캡처·재생 명령은 ChunaAgentBridge.Scene.cs에 있다(2026-09-18).
+                    if (!TrySceneCommand(cmd, sb, args, out ok, out err))
+                    {
+                        ok = false;
+                        err = $"모르는 명령이다: '{cmd}' (ping · hierarchy · get · find · set · refresh · missing · " +
+                              "scene-list · scene-copy · scene-open · scene-save · delete · add-go · add-comp · build-add · capture · play · stop)";
+                    }
                     break;
             }
         }
@@ -347,8 +355,26 @@ public static class ChunaAgentBridge
     /// ★스크립트가 바뀌었으면 이 요청 직후 <b>도메인 리로드</b>가 돈다. 응답은 그 전에 나가므로
     ///   다음 명령은 리로드가 끝날 때까지 기다려야 한다(요청 파일은 남아 있으니 저절로 처리된다).
     /// </summary>
-    private static void DoRefresh(StringBuilder sb)
+    private static void DoRefresh(StringBuilder sb, Dictionary<string, string> a)
     {
+        // ★2026-09-18 실측: Unity가 <b>백그라운드</b>면 파일 변경 감시가 멈춰 Refresh가 바뀐 파일을 못 본다
+        //   (Refresh 0.005초, 컴파일 없음). paths=로 받은 파일은 <b>강제 임포트</b>해 감시와 상관없이 읽게 한다.
+        //   bridge.py가 git으로 바뀐 파일을 찾아 자동으로 넘긴다.
+        string paths = Get(a, "paths", "");
+        if (paths.Length > 0)
+        {
+            int n = 0;
+            foreach (var p in paths.Split(';'))
+            {
+                string q = p.Trim().Replace('\\', '/');
+                if (q.Length == 0 || !q.StartsWith("Assets/")) continue;
+                string full = Path.Combine(Directory.GetParent(Application.dataPath).FullName, q);
+                if (!File.Exists(full)) continue;
+                AssetDatabase.ImportAsset(q, ImportAssetOptions.ForceUpdate);
+                n++;
+            }
+            sb.Append($"강제 임포트 {n}개.\n");
+        }
         sb.Append("에셋을 다시 읽는다. 스크립트가 바뀌었으면 컴파일·도메인 리로드가 이어진다.\n");
         sb.Append("★다음 명령은 리로드가 끝난 뒤에 처리된다 — 조금 기다려라.\n");
         EditorApplication.delayCall += () => AssetDatabase.Refresh();
