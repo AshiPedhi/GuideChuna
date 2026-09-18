@@ -536,7 +536,13 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// <summary>
     /// 시나리오 카드 클릭 핸들러
     /// </summary>
-    public void OnScenarioCardClicked(int scenarioIndex)
+    public void OnScenarioCardClicked(int scenarioIndex) => OnScenarioCardClicked(scenarioIndex, null);
+
+    /// <summary>
+    /// ★2026-09-18 — 카드가 갈 씬을 직접 정할 수 있게 한다(ScenarioLaunchButton.sceneOverride).
+    /// 비어 있으면 종전대로 TrainingScene. 로그인 확인·인덱스 저장은 어느 쪽이든 똑같이 거친다.
+    /// </summary>
+    public void OnScenarioCardClicked(int scenarioIndex, string sceneOverride)
     {
         ChunaLogger.Log($"[LobbyUI] ========== 시나리오 카드 {scenarioIndex + 1} 클릭 ==========");
 
@@ -554,8 +560,11 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         PlayerPrefs.SetInt(PrefsKeys.SelectedScenario, scenarioIndex);
         PlayerPrefs.Save();
 
-        // 통합 TrainingScene 로드
-        SceneLoader.LoadScene("TrainingScene");
+        // 통합 TrainingScene 로드 — 카드가 다른 씬을 지정했으면 그 씬으로
+        string sceneName = string.IsNullOrWhiteSpace(sceneOverride) ? "TrainingScene" : sceneOverride.Trim();
+        if (sceneName != "TrainingScene")
+            ChunaLogger.Log($"[LobbyUI] 카드가 지정한 씬으로 간다: {sceneName}");
+        SceneLoader.LoadScene(sceneName);
     }
 
     private void OnUserIconClicked()

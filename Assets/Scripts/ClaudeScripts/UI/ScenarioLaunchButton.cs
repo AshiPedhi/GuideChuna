@@ -29,6 +29,14 @@ public class ScenarioLaunchButton : MonoBehaviour
              "(2026-08-01 PJ를 7에 삽입하면서 카드 8~11이 한 칸씩 어긋난 전례).")]
     [SerializeField] private int scenarioIndex;
 
+    // ★2026-09-18 — 실측 기록 프로그램은 TrainingScene이 아니라 <b>별도 씬</b>에서 돈다(패스스루 전용).
+    //   인덱스(13)를 코드에 박지 않고 카드가 직접 "이 씬으로 간다"고 들고 있게 했다 —
+    //   인덱스는 시나리오를 중간에 넣을 때마다 밀린다(08-01 전례).
+    [Tooltip("비우면 종전대로 TrainingScene으로 간다.\n" +
+             "이름을 넣으면 그 씬으로 간다(예: RomMarkerScene). ★Build Settings에 들어 있어야 한다.\n" +
+             "로그인 확인·인덱스 저장은 종전과 같이 거친다.")]
+    [SerializeField] private string sceneOverride = "";
+
     [Tooltip("비우면 씬에서 자동 검색. 로그인/팝업/씬로드를 담당하는 브레인")]
     [SerializeField] private LobbyAuthUI_Complete lobbyAuthUI;
 
@@ -56,7 +64,7 @@ public class ScenarioLaunchButton : MonoBehaviour
         toggle.SetIsOnWithoutNotify(false);
 
         if (lobbyAuthUI != null)
-            lobbyAuthUI.OnScenarioCardClicked(scenarioIndex);   // 로그인 체크·팝업·인덱스저장·씬로드 = 브레인이 처리
+            lobbyAuthUI.OnScenarioCardClicked(scenarioIndex, sceneOverride);   // 로그인 체크·팝업·인덱스저장·씬로드 = 브레인이 처리
         else
             ChunaLogger.LogError($"[ScenarioLaunchButton] 브레인 참조 없음! index={scenarioIndex}");
     }
