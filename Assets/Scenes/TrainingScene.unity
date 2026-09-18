@@ -182958,7 +182958,7 @@ MonoBehaviour:
   autoPickOverpressureSource: 1
   overpressureRampSeconds: 2
   overpressureSmoothTime: 0.15
-  gripSlipTolerance: 0.04
+  gripSlipTolerance: 0
   overpressureHoldSeconds: 2
   overpressureHoldThreshold: 0.97
   guideToggleDebounce: 0.25
