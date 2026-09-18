@@ -315863,6 +315863,7 @@ MonoBehaviour:
   startToggleObject: {fileID: 1901625107}
   startToggle: {fileID: 1901625111}
   startToggleText: {fileID: 2092139270}
+  infoPanelForSettings: {fileID: 0}
   descriptionText: {fileID: 317949916032245943}
   progressRootObject: {fileID: 483442386}
   progressCircleObject: {fileID: 24367748}

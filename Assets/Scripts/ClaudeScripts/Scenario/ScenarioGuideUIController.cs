@@ -49,6 +49,17 @@ public class ScenarioGuideUIController : MonoBehaviour
     [SerializeField] private Toggle startToggle;
     [SerializeField] private TextMeshProUGUI startToggleText;
 
+    // ★2026-09-17 사용자: "설정하고 메뉴 안 닫은 채로 진행해 버리더라고."
+    //   설정 패널을 열어 환자 위치를 맞춘 뒤, 닫지 않고 [시작]을 눌러 그대로 실습에 들어간다.
+    //   → [시작]을 누르는 순간 설정 패널을 닫는다. 위치 조정 컨트롤러·토글도 같이 꺼진다
+    //     (InfoPanelController.CloseSettingsPopup → OnSettingsToggleChanged(false)
+    //      → PracticeSettingsController.ForceDisablePatientPositionController).
+    //   ★비워 두면 Play에서 찾는다. 씬에 InfoPanelController는 하나뿐이라 안전하다.
+    [Tooltip("[시작]을 누를 때 설정 패널을 닫을 대상. 비우면 Play에서 찾는다.\n" +
+             "★위치 조정 컨트롤러와 그 토글도 같이 꺼진다 — 설정 패널을 닫는 경로가 이미 그렇게 되어 있다.")]
+    [SerializeField] private InfoPanelController infoPanelForSettings;
+    private bool triedFindInfoPanel;
+
     [Header("=== 설명 텍스트 ===")]
     [SerializeField] private TextMeshProUGUI descriptionText;
 
@@ -998,6 +1009,12 @@ public class ScenarioGuideUIController : MonoBehaviour
     /// </summary>
     private void OnStartToggleChanged(bool isOn)
     {
+        // ★설정 패널이 열려 있으면 여기서 닫는다(2026-09-17).
+        //   ★<b>아래 진행 조건보다 먼저</b> 본다 — 진행 조건이 안 맞아도 패널은 닫혀야 한다.
+        //   ★열려 있을 때만 부른다. 매번 부르면 [다음]을 누를 때마다 설정·위치조정 로그가
+        //     쏟아져 진짜 신호를 덮는다(자기 침묵).
+        if (isOn) CloseSettingsIfOpen();
+
         // 토글이 켜졌을 때만 다음 단계로 진행 (ScenarioManager가 활성화 상태일 때만)
         if (isOn && scenarioManager != null && scenarioManager.enabled && scenarioManager.CurrentStep != null)
         {
@@ -1019,6 +1036,34 @@ public class ScenarioGuideUIController : MonoBehaviour
             // 토글 상태 초기화 (다음 클릭을 위해)
             startToggle.isOn = false;
         }
+    }
+
+    /// <summary>
+    /// 설정 패널이 열려 있으면 닫는다. [시작]·[다음]을 누르는 순간 부른다.
+    /// ★위치 조정 컨트롤러와 그 토글도 같이 꺼진다 — 닫는 경로가 이미 그렇게 되어 있어
+    ///   여기서 따로 손댈 것이 없다(PracticeSettingsController.ForceDisablePatientPositionController).
+    /// ★13개 술기가 이 컴포넌트를 공유한다. 설정 패널은 어느 술기에서나 같은 것이라 동작도 같다.
+    /// </summary>
+    private void CloseSettingsIfOpen()
+    {
+        if (infoPanelForSettings == null && !triedFindInfoPanel)
+        {
+            // ★한 번만 찾는다. 못 찾았는데 매 클릭마다 다시 뒤지면 낭비다.
+            triedFindInfoPanel = true;
+            infoPanelForSettings = FindFirstObjectByType<InfoPanelController>(FindObjectsInactive.Include);
+
+            if (infoPanelForSettings == null)
+            {
+                // ★조용히 죽지 않는다 — 없으면 "시작을 눌러도 설정이 안 닫힌다"로만 보인다.
+                ChunaLogger.LogWarning("<color=orange>[GuideUI] InfoPanelController를 못 찾아 " +
+                                       "[시작]에서 설정 패널을 닫지 못한다 — 인스펙터의 '설정 닫기 대상'에 물려야 한다.</color>");
+            }
+        }
+
+        if (infoPanelForSettings == null || !infoPanelForSettings.IsSettingsOpen) return;
+
+        ChunaLogger.Log("<color=cyan>[GuideUI] [시작] — 열려 있던 설정 패널을 닫는다(위치 조정도 같이 꺼진다)</color>");
+        infoPanelForSettings.CloseSettingsPopup();
     }
 
     /// <summary>
