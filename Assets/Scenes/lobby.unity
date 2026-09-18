@@ -17493,6 +17493,7 @@ MonoBehaviour:
     cardContainer: {fileID: 6030829799560956498}
   searchInput: {fileID: 688733258267013090}
   hideEmptySections: 1
+  alwaysHiddenCards: []
 --- !u!1001 &1655694955
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -24671,6 +24672,7 @@ MonoBehaviour:
   sections: []
   searchInput: {fileID: 0}
   hideEmptySections: 1
+  alwaysHiddenCards: []
 --- !u!114 &440948656676930492
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -25926,6 +25928,7 @@ MonoBehaviour:
   sections: []
   searchInput: {fileID: 0}
   hideEmptySections: 1
+  alwaysHiddenCards: []
 --- !u!114 &440948657153762014
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -27241,6 +27244,7 @@ MonoBehaviour:
   sections: []
   searchInput: {fileID: 0}
   hideEmptySections: 1
+  alwaysHiddenCards: []
 --- !u!114 &440948658475508819
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -61,6 +61,16 @@ public class LobbyBrowser : MonoBehaviour
     [Tooltip("필터/검색 결과 카드가 하나도 없는 섹션은 헤더까지 숨김")]
     [SerializeField] private bool hideEmptySections = true;
 
+    // ★2026-09-17 — 아직 내보내지 않을 카드를 목록으로 숨긴다.
+    //   ★<b>씬에서 카드를 꺼 두는 것으로는 안 된다.</b> 아래 Refresh가 모든 카드에
+    //     SetActive(show)를 무조건 걸어서, 탭을 한 번만 눌러도 되살아난다.
+    //   ★카드를 지우거나 컨테이너 밖으로 빼는 것보다 이쪽이 안전하다 —
+    //     되돌릴 때 이 목록에서 빼기만 하면 되고, 씬 구조를 안 건드린다.
+    [Tooltip("필터와 무관하게 <b>항상 숨길</b> 카드. 개발 중이라 아직 내보내지 않을 것을 넣는다.\n" +
+             "★여기 넣은 카드는 검색으로도 안 나온다.\n" +
+             "★되돌리려면 목록에서 빼기만 하면 된다 — 카드는 씬에 그대로 남아 있다.")]
+    [SerializeField] private GameObject[] alwaysHiddenCards;
+
     private bool filterIsAll = true;
     private LobbyCategory activeCategory = LobbyCategory.Simple;
     private string searchLower = string.Empty;
@@ -143,6 +153,17 @@ public class LobbyBrowser : MonoBehaviour
         Refresh();
     }
 
+    /// <summary>이 카드는 필터와 무관하게 늘 숨기는가.</summary>
+    private bool IsAlwaysHidden(GameObject card)
+    {
+        if (alwaysHiddenCards == null || card == null) return false;
+
+        for (int i = 0; i < alwaysHiddenCards.Length; i++)
+            if (alwaysHiddenCards[i] == card) return true;
+
+        return false;
+    }
+
     /// <summary>현재 필터(카테고리 + 검색어)로 섹션/카드 표시를 갱신.</summary>
     public void Refresh()
     {
@@ -168,6 +189,9 @@ public class LobbyBrowser : MonoBehaviour
                     bool show = categoryPass && (card != null
                         ? card.MatchesSearch(searchLower)
                         : string.IsNullOrEmpty(searchLower));
+
+                    // ★아직 내보내지 않을 카드는 무엇으로도 안 보인다 — 검색으로도.
+                    if (show && IsAlwaysHidden(child.gameObject)) show = false;
 
                     child.gameObject.SetActive(show);
                     if (show) visibleCards++;
