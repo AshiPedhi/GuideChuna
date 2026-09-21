@@ -44,8 +44,11 @@ public class RomRecordHands
     public readonly PinchState LeftPinch = new PinchState();
     public readonly PinchState RightPinch = new PinchState();
 
-    public float closeDistance = 0.015f;   // 이보다 가까우면 오므림
-    public float openDistance = 0.030f;    // 이보다 멀면 폄(사이는 그대로 — 떨림으로 깜박이지 않게)
+    // ★★09-21 실측: 두 판 연속으로 «덜 오므림»이 막은 이유 1위였다(63회·72회).
+    //   손가락을 붙였다고 생각해도 추적이 1.5cm 안으로 안 들어온 것이다 — 문턱을 넓힌다.
+    //   ★오므림 판정만 넓히고 <b>짧은 핀치·낮은 신뢰도 거르기는 그대로</b> 둔다(오핀치 방패는 그쪽이다).
+    public float closeDistance = 0.022f;   // 이보다 가까우면 오므림
+    public float openDistance = 0.042f;    // 이보다 멀면 폄(사이는 그대로 — 떨림으로 깜박이지 않게)
     public float releaseLookback = 0.15f;  // 펴기 직전 이만큼 앞의 자리를 쓴다(초)
     // ★09-18 첫 기기 실행 로그: 의도하지 않은 핀치가 한 판에 30번 넘게 잡혔다("이미 다 찍었다" 21·미간 재지정 9).
     //   손가락이 가려지면 추적이 엄지·손가락 끝을 붙여 버리는 순간이 있다(추정). 두 가지로 거른다.

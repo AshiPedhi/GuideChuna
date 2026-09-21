@@ -35,6 +35,24 @@ public struct RomMenuItem
 /// ★눌림 표시(09-18 사용자: "누른 건지 구분이 안 간다"): 손가락이 들어오면 밝아지고, 눌리는 순간 움찔 줄며 번쩍인다.
 ///   소리는 본체(<see cref="RomRecordSession"/>)가 낸다.
 /// ★매 프레임 하는 일은 판 루트 이동과 버튼 색·크기뿐이다. 배치·글자는 단계가 바뀔 때만 다시 쓴다.
+///
+/// ★★3판 모양내기(2026-09-21 사용자 지시 "UI 디자인 진행ROOT나 세팅 팝업 같은 느낌으로",
+///   앞선 지적 "UI 너무 조잡해 · 버튼 디자인도 투박하고").
+///   <b>이 프로젝트가 실제로 쓰는 UI를 재서 그대로 옮겼다</b>(아래는 전부 실측이다):
+///   - 설정 팝업 = 씬 루트 <c>Setting</c>(TrainingScene, 668x304px). 진행Root = <c>UI Group/진행Root/진행/CanvasRoot/Guide</c>
+///     (월드 캔버스 1024x310px, 캔버스 스케일 0.0005 → <b>1px = 0.5mm</b>).
+///   - 두 판 <b>모두</b> 같은 재질을 쓴다: Meta Interaction SDK의 <c>RoundedBoxGradientUIDark.mat</c>
+///     + <c>RoundedBoxUIProperties.borderRadius = 20px</c>, VerticalLayoutGroup 여백 24px·간격 12px.
+///     재질 실측: 안쪽 그라데이션 0.153(아래) → 0.255(위), 테두리 2.5px에 0.329(위) → 0.141(아래).
+///   - 버튼 = Meta UISet <c>TextTileButton_IconAndLabel_Toggle</c>(모서리 16px, 칸 176x106px, 사이 8px).
+///     상태색은 애니메이터 <c>ToggleButton_Dark.controller</c> 실측:
+///     보통 0.294 · 손가락 들어옴 0.365 · 눌림 0.435(그리고 크기 0.95배) · 고름 흰색 a=0.698 + 글자 0.153.
+///     글자는 흰색 a=0.902, 보조 글자는 흰색 a=0.698.
+///   ★<b>둥근 모서리를 스프라이트로는 못 낸다</b> — 저쪽 UI는 스프라이트를 안 쓰고
+///     셰이더(<c>Unlit/RoundedBoxWithGradientUI</c>)가 <c>uv0.zw</c>(칸 크기)와 <c>uv1</c>(모서리 반지름)을 읽어서
+///     그린다. 그 값은 <c>RoundedBoxUIProperties</c>가 <b>uGUI 메시에</b> 실어 준다(Image 전용이다).
+///     그래서 여기서는 <b>둥근 모서리 메시를 직접 만들어</b> 같은 모양을 낸다. 판의 그라데이션도
+///     정점 색으로 굽는다(Sprites/Default가 정점 색을 곱해 준다).
 /// </summary>
 public class RomRecordWristMenu : IRomRecordMenu
 {
@@ -42,16 +60,18 @@ public class RomRecordWristMenu : IRomRecordMenu
     {
         public Transform quad;
         public Renderer rend;
+        public Mesh mesh;         // ★버튼마다 제 크기로 구운 둥근 사각형. 단계가 바뀔 때만 다시 굽는다
         public TextMeshPro label;
         public string id;
         public bool repeat;
         public bool inside;
+        public bool selected;     // 고른 상태 — 밝히는 방식이 다르다(색이 아니라 알파를 올린다)
         public float nextRepeat;
         public float pressedAt = -99f;
         public Color baseColor;
         public Vector2 half;      // 판 로컬 반폭·반높이
         public Vector3 local;     // 판 로컬 중심
-        public Vector3 scale;
+        public Vector3 scale;     // 논리 크기(가로·세로). ★그리기는 메시가 하고, 이 값은 판정·막대에 쓴다
         // ★길게 누르기(09-21). holdSeconds가 0보다 크면 닿아 있는 시간이 그만큼 쌓여야 실행된다.
         public float holdSeconds;
         public float holdStart;   // 닿기 시작한 시각
@@ -62,7 +82,8 @@ public class RomRecordWristMenu : IRomRecordMenu
 
     private readonly List<Btn> pool = new List<Btn>();
     private int activeCount;
-    private Transform root, plate;
+    private Transform root, plate, border;
+    private Mesh plateMesh, borderMesh;
     private TextMeshPro header;
     private float cooldownUntil;
     private float panelW, panelH;
@@ -70,7 +91,7 @@ public class RomRecordWristMenu : IRomRecordMenu
     private float lastValidTime = -99f;
     private string displayName;
 
-    // 모양
+    // 모양 — 크기
     public float cellW = 0.036f;       // 칸 너비(m)
     public float rowH = 0.03f;         // 줄 높이(m)
     public float buttonH = 0.022f;     // 버튼 높이(m)
@@ -90,6 +111,53 @@ public class RomRecordWristMenu : IRomRecordMenu
     public float cooldown = 0.35f;
     public float pressAnim = 0.18f;        // 눌림 애니메이션 길이(초)
 
+    // ── 모양내기(2026-09-21) ─────────────────────────────────────────
+    // ★전부 설정 팝업·진행Root 실측에서 가져왔다. 출처는 클래스 주석에 적어 뒀다.
+    //   ★이 클래스는 MonoBehaviour가 아니라 <b>인스펙터에 안 뜬다</b>. 본체 RomRecordSession이
+    //   덮어쓰는 것은 labelSize·headerSize·cellW·rowH·buttonH 다섯뿐이고, 아래 값들은 코드 기본값이 그대로 산다.
+    [Tooltip("판 위쪽 색 — 실측 RoundedBoxGradientUIDark._ColorB")]
+    public Color plateTopColor = new Color(0.255f, 0.255f, 0.255f, 1f);
+    [Tooltip("판 아래쪽 색 — 실측 _ColorA")]
+    public Color plateBottomColor = new Color(0.153f, 0.153f, 0.153f, 1f);
+    [Tooltip("테두리 위쪽 색 — 실측 _BorderColorA")]
+    public Color borderTopColor = new Color(0.329f, 0.329f, 0.329f, 1f);
+    [Tooltip("테두리 아래쪽 색 — 실측 _BorderColorB")]
+    public Color borderBottomColor = new Color(0.141f, 0.141f, 0.141f, 1f);
+    [Tooltip("테두리 두께(m). 실측은 668px 판에 2.5px(=0.37%)라 손목 판 폭에서는 약 0.5mm다")]
+    public float borderWidth = 0.0008f;
+    [Tooltip("버튼 바탕색 — 실측 ToggleButton_Dark 'Normal' 0.294 회색")]
+    public Color buttonBaseColor = new Color(0.294f, 0.294f, 0.294f, 1f);
+    [Tooltip("항목이 들고 온 tint를 바탕색에 섞는 정도. 0이면 저쪽 UI처럼 완전 무채색이 된다")]
+    public float buttonTintStrength = 0.5f;
+    [Tooltip("손가락이 들어왔을 때 밝히는 양 — 실측 0.365-0.294")]
+    public float hoverLift = 0.071f;
+    [Tooltip("눌린 순간 밝히는 양 — 실측 0.435-0.294")]
+    public float pressLift = 0.141f;
+    [Tooltip("눌린 순간 줄어드는 비율 — 실측 ToggleButton_Dark 'SelectedPressed' 0.95배")]
+    public float pressShrink = 0.05f;
+    [Tooltip("고른 버튼 — 실측 'SelectedSelected' 흰색 a=0.698")]
+    public Color selectedColor = new Color(1f, 1f, 1f, 0.698f);
+    [Tooltip("고른 버튼의 글자 — 실측 0.153 어두운 회색(판 바탕과 같은 색이다)")]
+    public Color selectedLabelColor = new Color(0.153f, 0.153f, 0.153f, 1f);
+    [Tooltip("버튼 글자 — 실측 Label 흰색 a=0.902")]
+    public Color labelColor = new Color(1f, 1f, 1f, 0.902f);
+    [Tooltip("누를 수 없는 설명 글자 — 실측 보조 Label 흰색 a=0.698")]
+    public Color captionColor = new Color(1f, 1f, 1f, 0.698f);
+    [Tooltip("길게 누르기 막대 색 — ★저쪽 UI에 대응물이 없어 이건 실측이 아니다")]
+    public Color fillColor = new Color(1f, 1f, 1f, 0.45f);
+    [Tooltip("판 모서리 반지름(m). 실측 20px × 0.5mm/px = 1.0cm")]
+    public float plateRadius = 0.010f;
+    [Tooltip("버튼 모서리 반지름(m). 실측은 16px/106px = 버튼 높이의 30%다")]
+    public float buttonRadius = 0.005f;
+    [Tooltip("모서리 한 귀퉁이를 몇 조각으로 나눠 그리나. 4면 충분히 둥글다")]
+    public int cornerSegments = 4;
+    [Tooltip("판 안쪽 여백(m). 실측 24px/668px = 3.6%")]
+    public float padding = 0.006f;
+    [Tooltip("버튼과 칸 사이의 틈(m). 실측 8px/176px = 4.5%")]
+    public float buttonGap = 0.004f;
+    [Tooltip("머리줄 글자를 버튼 글자의 몇 배로 할까 — ★실측 설정 팝업은 20/14=1.43이지만 손목 판은 좁아 1.15로 뒀다(실측 아님)")]
+    public float headerScale = 1.15f;
+
     // ★공간 고정 모드(2026-09-21 사용자 지시 "진행ROOT 패널처럼 따로 분리").
     //   손목을 따라다니면 <b>기록하는 손과 판이 같은 자리</b>에 있어 서로 간섭한다 —
     //   09-21 로그 실측에서 핀치를 막은 주범이 판 자신이었다(판 근처 3,084 · 다가옴 3,708 프레임).
@@ -101,28 +169,36 @@ public class RomRecordWristMenu : IRomRecordMenu
     public bool Visible => root != null && root.gameObject.activeSelf;
     public bool LastRepeat { get; private set; }   // 방금 눌린 것이 반복 입력인가 — 소리를 가볍게 낸다
 
-    private static readonly Color PlateColor = new Color(0.06f, 0.08f, 0.12f, 0.8f);
-
     public void Build(Transform parent, string name, int capacity, TMP_FontAsset font, Material mat)
     {
         displayName = name;
         root = new GameObject("[실측기록] " + name).transform;
         root.SetParent(parent, false);
 
-        plate = MakeQuad("판", mat, PlateColor, 0);
+        // ★그리는 순서: 테두리(-1) → 판(0) → 버튼(1) → 차오름(2) → 글자(3).
+        //   테두리는 판보다 조금 크게 구워 뒤에 깔아 둔다 — 저쪽 UI의 2.5px 테두리를 이렇게 흉내 낸다.
+        borderMesh = new Mesh { name = "판테두리" };
+        plateMesh = new Mesh { name = "판" };
+        border = MakeRect("판테두리", mat, Color.white, -1, borderMesh);
+        border.localPosition = new Vector3(0f, 0f, 0.0025f);
+        plate = MakeRect("판", mat, Color.white, 0, plateMesh);
         plate.localPosition = new Vector3(0f, 0f, 0.002f);   // 버튼보다 조금 뒤(눈에서 먼 쪽)
 
-        header = MakeLabel(font, headerSize, TextAlignmentOptions.MidlineLeft, 3);
+        header = MakeLabel(font, headerSize * headerScale, TextAlignmentOptions.MidlineLeft, 3);
+        header.color = labelColor;
 
+        Mesh unit = MakeUnitQuadMesh();   // 차오름 막대는 크기를 매 프레임 바꾸므로 공용 단위 사각형을 쓴다
         for (int i = 0; i < capacity; i++)
         {
-            Transform q = MakeQuad("버튼", mat, Color.gray, 1);
-            Transform fl = MakeQuad("차오름", mat, Color.white, 2);   // ★버튼과 글자 사이(1 < 2 < 3)
+            var mesh = new Mesh { name = "버튼" };
+            Transform q = MakeRect("버튼", mat, buttonBaseColor, 1, mesh);
+            Transform fl = MakeRect("차오름", mat, fillColor, 2, unit);   // ★버튼과 글자 사이(1 < 2 < 3)
             fl.gameObject.SetActive(false);
             pool.Add(new Btn
             {
                 quad = q,
                 rend = q.GetComponent<Renderer>(),
+                mesh = mesh,
                 fill = fl,
                 fillRend = fl.GetComponent<Renderer>(),
                 label = MakeLabel(font, labelSize, TextAlignmentOptions.Center, 3),
@@ -145,13 +221,17 @@ public class RomRecordWristMenu : IRomRecordMenu
             maxRow = Mathf.Max(maxRow, items[i].row);
             maxCol = Mathf.Max(maxCol, items[i].col + items[i].span);
         }
-        panelW = maxCol * cellW + 0.01f;
-        panelH = (maxRow + 1f) * rowH + 0.01f;
-        plate.localScale = new Vector3(panelW, panelH, 1f);
+        panelW = maxCol * cellW + padding * 2f;
+        panelH = (maxRow + 1f) * rowH + padding * 2f;
+        // ★판·테두리는 <b>제 크기로 구운 메시</b>다. 스케일로 늘리면 모서리가 타원이 된다.
+        FillRoundedRect(plateMesh, panelW, panelH, plateRadius, cornerSegments, plateBottomColor, plateTopColor);
+        FillRoundedRect(borderMesh, panelW + borderWidth * 2f, panelH + borderWidth * 2f,
+                        plateRadius + borderWidth, cornerSegments, borderBottomColor, borderTopColor);
 
         header.text = headerText;
-        header.rectTransform.sizeDelta = new Vector2(panelW - 0.012f, rowH);
-        header.transform.localPosition = new Vector3(0f, panelH * 0.5f - 0.005f - rowH * 0.5f, -0.002f);
+        header.fontSize = headerSize * headerScale;
+        header.rectTransform.sizeDelta = new Vector2(Mathf.Max(panelW - padding * 2f, 0.02f), rowH);
+        header.transform.localPosition = new Vector3(0f, panelH * 0.5f - padding - rowH * 0.5f, -0.002f);
 
         for (int i = 0; i < pool.Count; i++)
         {
@@ -166,6 +246,7 @@ public class RomRecordWristMenu : IRomRecordMenu
             b.fill.gameObject.SetActive(false);
             b.id = it.id;
             b.repeat = it.repeat;
+            b.selected = it.selected;
             b.holdSeconds = it.holdSeconds;
             b.holdStart = -99f;
             b.holdFired = false;
@@ -173,9 +254,9 @@ public class RomRecordWristMenu : IRomRecordMenu
             b.pressedAt = -99f;
             b.label.text = it.label;
 
-            float x = -panelW * 0.5f + 0.005f + (it.col + it.span * 0.5f) * cellW;
-            float y = panelH * 0.5f - 0.005f - (it.row + 0.5f) * rowH;
-            float w = it.span * cellW - 0.004f;
+            float x = -panelW * 0.5f + padding + (it.col + it.span * 0.5f) * cellW;
+            float y = panelH * 0.5f - padding - (it.row + 0.5f) * rowH;
+            float w = it.span * cellW - buttonGap;
             if (isButton)
             {
                 // 글자가 칸보다 넓으면 버튼을 넓힌다(옆과 겹칠 수 있어 로그로 알린다)
@@ -185,17 +266,19 @@ public class RomRecordWristMenu : IRomRecordMenu
                     Debug.Log($"[실측기록] {displayName} — '{it.label}' 글자가 칸보다 넓어 버튼을 {w * 100f:F1}→{need * 100f:F1}cm로 늘렸다");
                     w = need;
                 }
-                b.baseColor = it.selected ? Color.Lerp(it.tint, Color.white, 0.35f) : it.tint * new Color(0.6f, 0.6f, 0.6f, 1f);
+                // ★색 실측: 고르지 않은 버튼은 0.294 회색에 항목 색을 섞고, 고른 버튼은 흰색 a=0.698이다.
+                b.baseColor = it.selected ? selectedColor : MixTint(it.tint);
                 b.scale = new Vector3(w, buttonH, 1f);
                 b.quad.localPosition = new Vector3(x, y, 0f);
-                b.quad.localScale = b.scale;
+                b.quad.localScale = Vector3.one;     // ★크기는 메시가 들고 있다. 스케일은 눌림 연출에만 쓴다
+                FillRoundedRect(b.mesh, w, buttonH, buttonRadius, cornerSegments, Color.white, Color.white);
                 b.rend.material.color = b.baseColor;
-                b.label.color = Color.white;
+                b.label.color = it.selected ? selectedLabelColor : labelColor;
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
             }
             else
             {
-                b.label.color = new Color(0.75f, 0.8f, 0.85f, 1f);
+                b.label.color = captionColor;
                 b.label.fontStyle = FontStyles.Normal;
             }
             b.local = new Vector3(x, y, 0f);
@@ -288,10 +371,14 @@ public class RomRecordWristMenu : IRomRecordMenu
             if (b.id == null) continue;
             float t = (now - b.pressedAt) / pressAnim;                 // 0 → 1
             float pulse = t < 1f ? 1f - t : 0f;
-            Color c = b.inside ? Color.Lerp(b.baseColor, Color.white, 0.3f) : b.baseColor;
-            c = Color.Lerp(c, Color.white, pulse * 0.8f);              // 눌린 순간 번쩍
+            // ★실측 그대로: 밝히는 양은 색에 더한다(0.294 → 0.365 → 0.435).
+            //   고른 버튼은 이미 흰색이라 더할 데가 없어 <b>알파</b>를 올린다(실측 0.698 → 0.8).
+            float up = (b.inside ? hoverLift : 0f) + pressLift * pulse;
+            Color c = b.baseColor;
+            if (b.selected) c.a = Mathf.Min(1f, c.a + up);
+            else { c.r += up; c.g += up; c.b += up; }
             b.rend.material.color = c;
-            b.quad.localScale = b.scale * (1f - 0.18f * pulse);         // 눌린 순간 움찔
+            b.quad.localScale = Vector3.one * (1f - pressShrink * pulse);   // 눌린 순간 움찔(실측 0.95배)
 
             // ★길게 누르는 버튼 — 닿아 있는 동안 막대가 왼쪽에서 차오른다. 얼마나 더 있어야 하는지 눈에 보인다.
             if (b.holdSeconds <= 0f) continue;
@@ -299,10 +386,12 @@ public class RomRecordWristMenu : IRomRecordMenu
             bool showFill = fillP > 0.002f;
             if (b.fill.gameObject.activeSelf != showFill) b.fill.gameObject.SetActive(showFill);
             if (!showFill) continue;
-            float fw = b.scale.x * fillP;
-            b.fill.localScale = new Vector3(fw, b.scale.y * 0.82f, 1f);
-            b.fill.localPosition = new Vector3(b.local.x - b.scale.x * 0.5f + fw * 0.5f, b.local.y, -0.0005f);
-            b.fillRend.material.color = Color.Lerp(b.baseColor, Color.white, 0.55f);
+            // ★버튼 모서리가 둥글어졌으니 막대를 그 안쪽으로 물려 둔다 — 안 그러면 귀퉁이 밖으로 삐져나온다.
+            float usable = Mathf.Max(b.scale.x - buttonRadius, 0.001f);
+            float fw = usable * fillP;
+            b.fill.localScale = new Vector3(fw, b.scale.y * 0.7f, 1f);
+            b.fill.localPosition = new Vector3(b.local.x - usable * 0.5f + fw * 0.5f, b.local.y, -0.0005f);
+            b.fillRend.material.color = fillColor;
         }
     }
 
@@ -369,16 +458,30 @@ public class RomRecordWristMenu : IRomRecordMenu
     }
 
     // ── 만드는 도구 ──────────────────────────────────────────────────
-    private Transform MakeQuad(string name, Material mat, Color c, int order)
+
+    /// <summary>항목 색을 실측 바탕색(0.294 회색)에 섞는다. 알파는 바탕색 쪽을 쓴다.</summary>
+    private Color MixTint(Color tint)
     {
-        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        go.name = name;
-        Object.Destroy(go.GetComponent<Collider>());   // 물리는 안 쓴다 — 판 로컬 좌표로 판정한다
+        float k = Mathf.Clamp01(buttonTintStrength);
+        return new Color(Mathf.Lerp(buttonBaseColor.r, tint.r, k),
+                         Mathf.Lerp(buttonBaseColor.g, tint.g, k),
+                         Mathf.Lerp(buttonBaseColor.b, tint.b, k),
+                         buttonBaseColor.a);
+    }
+
+    private Transform MakeRect(string name, Material mat, Color c, int order, Mesh mesh)
+    {
+        var go = new GameObject(name);
         go.transform.SetParent(root, false);
-        var r = go.GetComponent<Renderer>();
-        if (mat != null) r.sharedMaterial = mat;       // Sprites/Default — 양면(컬링 없음)·투명
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var r = go.AddComponent<MeshRenderer>();
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        r.lightProbeUsage = UnityEngine.Rendering.LightProbeUsage.Off;
+        r.reflectionProbeUsage = UnityEngine.Rendering.ReflectionProbeUsage.Off;
+        if (mat != null) r.sharedMaterial = mat;       // Sprites/Default — 양면(컬링 없음)·투명·정점색을 곱한다
         r.material.color = c;
-        r.sortingOrder = order;                        // ★같은 투명 큐라 그리는 순서를 정해 준다: 판 0 · 버튼 1 · 글자 3
+        r.sortingOrder = order;                        // ★같은 투명 큐라 그리는 순서를 정해 준다: 테두리 -1 · 판 0 · 버튼 1 · 차오름 2 · 글자 3
         return go.transform;
     }
 
@@ -390,10 +493,83 @@ public class RomRecordWristMenu : IRomRecordMenu
         if (font != null) t.font = font;
         t.fontSize = size;
         t.alignment = align;
-        t.color = Color.white;
+        t.color = labelColor;
         t.textWrappingMode = TextWrappingModes.NoWrap;
         t.rectTransform.sizeDelta = new Vector2(0.2f, size * 2f);
         t.sortingOrder = order;
         return t;
+    }
+
+    // ── 둥근 사각형 메시 ────────────────────────────────────────────
+    // ★저쪽 UI는 셰이더로 모서리를 깎지만 그건 uGUI Image 전용이다(클래스 주석 참고).
+    //   여기서는 모서리를 <b>메시로</b> 만든다. 단계가 바뀔 때만 굽고, 매 프레임 경로에서는 굽지 않는다.
+    //   리스트는 정적으로 돌려 써서 다시 굽더라도 새로 할당하지 않는다.
+    private static readonly List<Vector3> gVtx = new List<Vector3>(128);
+    private static readonly List<Color> gCol = new List<Color>(128);
+    private static readonly List<Vector2> gUv = new List<Vector2>(128);
+    private static readonly List<int> gTri = new List<int>(384);
+
+    /// <summary>가로 w·세로 h·모서리 radius인 둥근 사각형을 굽는다. 색은 아래→위로 정점에 굽는다.</summary>
+    private static void FillRoundedRect(Mesh mesh, float w, float h, float radius, int seg, Color bottom, Color top)
+    {
+        float hw = Mathf.Max(w, 0.0001f) * 0.5f;
+        float hh = Mathf.Max(h, 0.0001f) * 0.5f;
+        radius = Mathf.Clamp(radius, 0f, Mathf.Min(hw, hh));
+        seg = Mathf.Max(1, seg);
+
+        gVtx.Clear(); gCol.Clear(); gUv.Clear(); gTri.Clear();
+        gVtx.Add(Vector3.zero);
+        gCol.Add(Color.Lerp(bottom, top, 0.5f));
+        gUv.Add(new Vector2(0.5f, 0.5f));
+
+        // 오른위 → 왼위 → 왼아래 → 오른아래 순으로 네 귀퉁이를 돈다
+        for (int c = 0; c < 4; c++)
+        {
+            float cx = (c == 0 || c == 3) ? hw - radius : -hw + radius;
+            float cy = (c == 0 || c == 1) ? hh - radius : -hh + radius;
+            for (int s = 0; s <= seg; s++)
+            {
+                float a = (c * 90f + 90f * s / seg) * Mathf.Deg2Rad;
+                float x = cx + Mathf.Cos(a) * radius;
+                float y = cy + Mathf.Sin(a) * radius;
+                gVtx.Add(new Vector3(x, y, 0f));
+                gCol.Add(Color.Lerp(bottom, top, Mathf.InverseLerp(-hh, hh, y)));
+                gUv.Add(new Vector2((x + hw) / (hw * 2f), (y + hh) / (hh * 2f)));
+            }
+        }
+
+        int n = gVtx.Count - 1;
+        for (int i = 0; i < n; i++)
+        {
+            gTri.Add(0);
+            gTri.Add(1 + i);
+            gTri.Add(1 + (i + 1) % n);
+        }
+
+        mesh.Clear();
+        mesh.SetVertices(gVtx);
+        mesh.SetColors(gCol);
+        mesh.SetUVs(0, gUv);
+        mesh.SetTriangles(gTri, 0);
+        mesh.RecalculateBounds();
+    }
+
+    /// <summary>차오름 막대용 단위 사각형(1x1). 크기는 스케일로 준다 — 매 프레임 바뀌므로 굽지 않는다.</summary>
+    private static Mesh MakeUnitQuadMesh()
+    {
+        var m = new Mesh { name = "단위사각형" };
+        m.SetVertices(new List<Vector3>
+        {
+            new Vector3(-0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f),
+            new Vector3(0.5f, 0.5f, 0f), new Vector3(0.5f, -0.5f, 0f)
+        });
+        m.SetColors(new List<Color> { Color.white, Color.white, Color.white, Color.white });
+        m.SetUVs(0, new List<Vector2>
+        {
+            new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f)
+        });
+        m.SetTriangles(new List<int> { 0, 1, 2, 0, 2, 3 }, 0);
+        m.RecalculateBounds();
+        return m;
     }
 }

@@ -86,9 +86,10 @@ public class RomRecordVisual
     // 글자를 선·원에서 비켜 놓는 양 — ★글자가 선 위에 얹히면 둘 다 안 읽힌다(09-21 사용자 지적).
     public float tickLabelOut = 1.20f;      // 눈금 숫자를 원 밖으로 미는 배수(옛 1.12 — 원에 붙어 있었다)
     public float needleLabelAlong = 0.55f;  // 바늘 방향으로 나가는 거리(반지름 배수)
-    public float needleLabelSide = 0.24f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수).
+    public float needleLabelSide = 0.34f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수). 09-21에 0.24에서 넓혔다.
                                             //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.
-    public float needleLabelAlongStep = 0.22f; // ★좌우 쌍(0·1 / 2·3)을 <b>반지름으로도</b> 어긋나게 하는 양.
+    // ★09-21 녹화 실측: 0.22로는 네 이름표가 위아래로 거의 붙어 못 읽었다 — 넓힌다(여전히 기기 미검증).
+    public float needleLabelAlongStep = 0.42f; // ★좌우 쌍(0·1 / 2·3)을 <b>반지름으로도</b> 어긋나게 하는 양.
                                                //   좌우 바늘이 둘 다 0°에 가까우면 각으로는 안 갈라져서
                                                //   수직 비킴만으로는 넷 중 둘이 겹친다(09-21 개정).
 

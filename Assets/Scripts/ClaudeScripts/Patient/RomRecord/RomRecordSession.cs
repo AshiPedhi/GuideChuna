@@ -72,6 +72,14 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("회전 단계 원통 벽의 높이(m, 위아래 합). ★추정값이다 — 머리에 맞는지 눈으로 볼 것.")]
     [SerializeField] private float cylinderHeight = 0.20f;
 
+    [Header("=== 판 모양(2026-09-21) ===")]
+    // ★판 디자인은 진행Root·설정 팝업을 재서 그대로 옮겼다(RomRecordWristMenu 주석에 실측값이 있다).
+    //   그 값들은 코드에 두고, <b>눈으로 자주 만질 둘만</b> 여기로 뺀다.
+    [Tooltip("판 배경의 불투명도. ★실측(저쪽 UI)은 1이지만 패스스루에서 답답하면 0.8쯤으로 내린다.")]
+    [Range(0.2f, 1f)] [SerializeField] private float menuPlateAlpha = 1f;
+    [Tooltip("버튼에 항목 색(tint)을 섞는 정도. 0이면 저쪽 UI처럼 완전 무채색이 된다.")]
+    [Range(0f, 1f)] [SerializeField] private float menuTintStrength = 0.5f;
+
     [Header("=== 판 자리(2026-09-21) ===")]
     // ★사용자 지시 09-21: "UI 동작할 때 간섭이 너무 많다 — 진행ROOT 패널처럼 따로 분리해야겠다."
     //   손목을 따라다니면 <b>기록하는 손과 판이 같은 자리</b>에 있어 서로 막는다.
@@ -247,6 +255,12 @@ public class RomRecordSession : MonoBehaviour
                 menu.rowH = menuRowHeight;
                 menu.buttonH = menuButtonHeight;
                 menu.lift = menuLift;
+                // ★판 색은 실측값을 쓰되 불투명도만 여기서 조절한다(패스스루에서 답답할 수 있어서).
+                Color top = menu.plateTopColor, bot = menu.plateBottomColor;
+                top.a = bot.a = menuPlateAlpha;
+                menu.plateTopColor = top;
+                menu.plateBottomColor = bot;
+                menu.buttonTintStrength = menuTintStrength;
             }
             leftMenu = lm;
             rightMenu = rm;
@@ -954,7 +968,8 @@ public class RomRecordSession : MonoBehaviour
     /// <summary>그 단계에서 쓰는 바늘 수 — 굴곡·신전은 둘, 측굴·회전은 넷(좌우가 있어서).</summary>
     private int NeedleCountOf(RomRecordStep s) => HasSides(s) ? 4 : 2;
 
-    private static string NeedleName(int k) => (k % 2 == 0 ? "능동" : "압박") + (k >= 2 ? "2" : "");
+    // ★이름을 짧게 쓴다(09-21 녹화 실측) — "능동2/압박2"는 네 글자가 서로 겹쳐 읽을 수가 없었다.
+    private static string NeedleName(int k) => k == 0 ? "능1" : k == 1 ? "압1" : k == 2 ? "능2" : "압2";
 
     private void ApplyDrag(Vector3 p)
     {
