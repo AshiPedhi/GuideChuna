@@ -69,6 +69,16 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("대추·미간 점을 잡을 수 있는 반경(m).")]
     [SerializeField] private float dotGrabRadius = 0.08f;
 
+    [Header("=== 바늘 각도기(2026-09-21 신설) ===")]
+    // ★사용자 지시 09-21: "미간 찍는 게 빡세면 각도기에 니들을 하나 그어서 그 끝을 잡고
+    //   그 면에서만 회전하도록". ★점찍기를 <b>대체하지 않는다</b> — 둘 다 두고 따로 테스트한다.
+    [Tooltip("동작 단계에서 바늘을 띄운다. 손목 판의 [바늘] 버튼으로도 껐다 켤 수 있다.")]
+    [SerializeField] private bool needleEnabled = true;
+    [Tooltip("바늘 손잡이를 잡을 수 있는 반경(m).")]
+    [SerializeField] private float needleGrabRadius = 0.1f;
+    [Tooltip("미간을 아직 안 찍었을 때 쓸 각도기 반지름(m). 미간이 있으면 중심에서 미간까지를 쓴다.")]
+    [SerializeField] private float needleFallbackRadius = 0.18f;
+
     [Header("=== 나가기 ===")]
     [Tooltip("[나가기]를 이만큼(초) 누르고 있어야 나간다. ★09-21: 지탱하던 손이 스쳐 나가기가 눌렸다.")]
     [SerializeField] private float exitHoldSeconds = 1f;
@@ -108,7 +118,11 @@ public class RomRecordSession : MonoBehaviour
     private bool dirty = true;
     private bool livePinchLeft;            // 지금 오므리고 있는 손(한 번에 하나만 받는다)
     private bool liveActive;
-    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · -1 아무것도 안 잡음(그러면 종전대로 «찍기»다)
+    // ★바늘(09-21) — 단계마다 방향 하나를 들고 있는다. <b>각이 아니라 방향</b>이다(규칙 9: 부호를 정할 일이 없다).
+    private readonly Vector3[] needleDir = new Vector3[4];
+    private readonly bool[] needlePlaced = new bool[4];
+    private bool needleOn = true;
+    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3 바늘 · -1 아무것도 안 잡음(그러면 종전대로 «찍기»다)
     private int dragTarget = -1;
     private Vector3 dragGrabbedAt, dragStartValue;
     private string lastPinchReason;        // 진단 로그 자기 침묵용
@@ -130,6 +144,7 @@ public class RomRecordSession : MonoBehaviour
         Material mat = sh != null ? new Material(sh) : null;
         if (mat == null) ChunaLogger.LogWarning("[실측기록] Sprites/Default 셰이더를 못 찾았다 — 선이 분홍으로 보이면 이것이다.");
 
+        needleOn = needleEnabled;   // ★런타임 토글([바늘] 버튼)이 이 값을 이어받는다
         view.textSize = textSize;
         view.panelSize = panelTextSize;
         view.Build(transform, font, mat);
@@ -243,6 +258,31 @@ public class RomRecordSession : MonoBehaviour
     // ── 계산 ─────────────────────────────────────────────────────────
     private Vector3 Pivot => hasC7 ? c7 + RomRecordGeometry.Forward(yaw) * (neckOffsetMm * 0.001f) : frameOrigin;
 
+    /// <summary>
+    /// 각도기·바늘이 함께 쓰는 기하(2026-09-21). ★표시·드래그·기록이 <b>같은 함수</b>를 탄다(규칙 9 —
+    /// 따로 계산하면 미리보기가 거짓말을 한다).
+    /// ★미간이 없어도 뜬다 — 바늘은 미간 찍기를 대신하려고 만든 것이다. 그때는 반지름이 기본값이고
+    ///   중립선 기준 각은 못 낸다(눈금 기준 각만 남는다).
+    /// </summary>
+    private bool DialFrame(out Vector3 center, out Vector3 normal, out Vector3 zero, out float radius)
+    {
+        center = default;
+        normal = Vector3.up;
+        zero = Vector3.forward;
+        radius = needleFallbackRadius;
+        if (!IsMotion(step) || !hasC7) return false;
+
+        Vector3 pivot = Pivot;
+        normal = RomRecordGeometry.PlaneNormal(step, yaw);
+        zero = RomRecordGeometry.ScaleZero(step, yaw);
+        // 회전 눈금판은 미간 높이의 수평면에 둔다 — 회전 중심 높이에 두면 머리에 가려 안 보인다.
+        center = step == RomRecordStep.Rotation && hasGlab ? new Vector3(pivot.x, glab.y, pivot.z) : pivot;
+        radius = hasGlab
+            ? Mathf.Max(0.08f, Vector3.ProjectOnPlane(glab - center, normal).magnitude)
+            : needleFallbackRadius;
+        return true;
+    }
+
     private static int MotionIndex(RomRecordStep s) => (int)s - (int)RomRecordStep.Flexion;
     private static bool IsMotion(RomRecordStep s) => s >= RomRecordStep.Flexion && s <= RomRecordStep.Rotation;
     private static int Capacity(RomRecordStep s) => s == RomRecordStep.LateralFlexion || s == RomRecordStep.Rotation ? 4 : 2;
@@ -288,6 +328,7 @@ public class RomRecordSession : MonoBehaviour
     private static readonly Color AdjTint = new Color(0.45f, 0.75f, 0.35f);
     private static readonly Color TargetTint = new Color(0.95f, 0.75f, 0.2f);
     private static readonly Color UndoTint = new Color(0.95f, 0.55f, 0.2f);
+    private static readonly Color NeedleTint = new Color(0.2f, 0.8f, 0.7f);   // 바늘 — 표시물 색과 같은 계열
 
     /// <summary>
     /// 단계별 판 배치(09-18 사용자 결정 "그룹 판넬"). 판은 6칸 너비 · 0행은 머리줄.
@@ -341,7 +382,10 @@ public class RomRecordSession : MonoBehaviour
                 items.Add(RomMenuItem.Button("adj-", "-1°", 1f, 1, 1.8f, AdjTint, repeat: true));
                 items.Add(RomMenuItem.Button("adj+", "+1°", 3.2f, 1, 1.8f, AdjTint, repeat: true));
                 items.Add(RomMenuItem.Button("undo", "취소", 2.1f, 2, 1.8f, UndoTint));
-                navRow = 3;
+                // ★바늘(09-21) — 점찍기와 <b>나란히</b> 둔다. 어느 쪽으로 기록할지는 사용자가 고른다.
+                items.Add(RomMenuItem.Button("needle", needleOn ? "바늘 끔" : "바늘 켬", 0f, 3, 2.4f, NeedleTint, selected: needleOn));
+                if (needleOn) items.Add(RomMenuItem.Button("nrec", "바늘 기록", 2.8f, 3, 3.2f, NeedleTint));
+                navRow = 4;
                 break;
         }
 
@@ -367,13 +411,27 @@ public class RomRecordSession : MonoBehaviour
             var list = marks[MotionIndex(step)];
             Vector3 pivot = Pivot;
             for (int i = 0; i < list.Count; i++)
-                sb.Append(i == 0 ? "   " : " · ").Append(Kind(list[i])).Append(" ").Append(AngleOf(step, list[i], pivot).ToString("F0")).Append("°");
+            {
+                sb.Append(i == 0 ? "   " : " · ").Append(Kind(list[i])).Append(' ');
+                AppendDeg(sb, step, list[i], pivot);
+            }
         }
         else if (step == RomRecordStep.Landmarks && landmarkTarget == 2)
         {
             sb.Append("   목중앙 ").Append(neckOffsetMm.ToString("F0")).Append("mm");
         }
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 요약 줄에 쓸 각 하나. ★바늘은 눈금 각, 점은 중립선 기준 각이다 — <b>다른 수</b>라서 섞어 적으면 안 된다.
+    /// 미간이 없으면 점은 각이 없다(0°가 아니라 «—»다).
+    /// </summary>
+    private void AppendDeg(StringBuilder b, RomRecordStep s, RomRecordMark m, Vector3 pivot)
+    {
+        if (m.byNeedle) b.Append(m.dialDeg.ToString("F0")).Append('°');
+        else if (hasGlab) b.Append(AngleOf(s, m, pivot).ToString("F0")).Append('°');
+        else b.Append('—');
     }
 
     private void OnButton(string id)
@@ -398,6 +456,13 @@ public class RomRecordSession : MonoBehaviour
             case "adj+": AdjustLast(+adjustStepDeg); break;
             case "adj-": AdjustLast(-adjustStepDeg); break;
             case "undo": UndoLast(); break;
+            case "needle":
+                needleOn = !needleOn;
+                lastNeedleDegShown = -999;
+                Debug.Log("[실측기록] 바늘 " + (needleOn ? "켬" : "끔"));
+                ApplyStepButtons();
+                break;
+            case "nrec": RecordNeedle(); break;
             case "prev": GoTo(step - 1); break;
             case "next": GoTo(step + 1); break;
             case "exit": Exit(); break;
@@ -423,12 +488,16 @@ public class RomRecordSession : MonoBehaviour
     private void GoTo(RomRecordStep s)
     {
         if (s < RomRecordStep.Setup || s > RomRecordStep.Done) return;
-        if (IsMotion(s) && (!hasC7 || !hasGlab))
+        // ★대추만 필수로 바꿨다(09-21). 바늘은 미간 없이도 재는 수단이라 미간으로 막으면 그 길이 닫힌다.
+        //   미간이 없으면 점찍기 각(중립선 기준)은 못 내고 바늘 눈금 각만 남는다 — 안내판이 그것을 말한다.
+        if (IsMotion(s) && !hasC7)
         {
             Play(sndDeny);
-            Debug.Log("[실측기록] 대추와 미간(중립)을 먼저 찍는다 — 동작 단계로 못 넘어간다.");
+            Debug.Log("[실측기록] 대추를 먼저 찍는다 — 동작 단계로 못 넘어간다.");
             return;
         }
+        if (IsMotion(s) && !hasGlab)
+            Debug.Log("[실측기록] ★미간이 없다 — 점찍기는 각이 안 나온다. 바늘로 눈금 각만 기록된다.");
         step = s;
         ApplyStepButtons();
         Debug.Log($"[실측기록] 단계 → {StepTitle[(int)step]}");
@@ -523,12 +592,18 @@ public class RomRecordSession : MonoBehaviour
     }
 
     // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
-    private static string DragName(int t) => t == 0 ? "기준선(3축)" : t == 1 ? "대추" : "미간";
+    private static string DragName(int t) => t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : "바늘";
 
     /// <summary>핀치를 오므린 자리에서 잡을 수 있는 것을 고른다. 없으면 -1(그러면 «찍기»로 간다).</summary>
     private int FindDragTarget(Vector3 p, out Vector3 startValue)
     {
         startValue = default;
+        // ★바늘 손잡이가 먼저다(09-21) — 동작 단계에서 바늘 끝을 잡으면 마커를 찍지 않는다.
+        if (NeedleVisible(out Vector3 nc, out _, out _, out float nr, out int mi)
+            && Vector3.Distance(p, nc + needleDir[mi] * nr) <= needleGrabRadius)
+        {
+            return 3;
+        }
         if (step == RomRecordStep.Setup)
         {
             if (Vector3.Distance(p, frameOrigin) > axesGrabRadius) return -1;
@@ -546,8 +621,37 @@ public class RomRecordSession : MonoBehaviour
         return 2;
     }
 
+    /// <summary>바늘이 지금 보이나. 보이면 기하와 그 단계의 바늘 칸 번호를 준다.</summary>
+    private bool NeedleVisible(out Vector3 center, out Vector3 normal, out Vector3 zero, out float radius, out int mi)
+    {
+        mi = 0;
+        if (!needleOn || !DialFrame(out center, out normal, out zero, out radius))
+        {
+            center = default; normal = Vector3.up; zero = Vector3.forward; radius = needleFallbackRadius;
+            return false;
+        }
+        mi = MotionIndex(step);
+        if (!needlePlaced[mi])
+        {
+            needleDir[mi] = zero;      // 처음엔 눈금 0(연직 · 회전은 정면)에 세워 둔다
+            needlePlaced[mi] = true;
+        }
+        return true;
+    }
+
     private void ApplyDrag(Vector3 p)
     {
+        // ★바늘은 델타가 아니라 <b>손이 있는 쪽</b>을 향한다. 단면에 투영해 그 면에서만 돌게 한다.
+        if (dragTarget == 3)
+        {
+            if (NeedleVisible(out Vector3 nc, out Vector3 nn, out _, out _, out int mi))
+            {
+                needleDir[mi] = RomRecordGeometry.OnPlane(p - nc, nn, needleDir[mi]);
+                DrawNeedle();
+            }
+            return;
+        }
+
         Vector3 v = dragStartValue + (p - dragGrabbedAt);
         switch (dragTarget)
         {
@@ -563,9 +667,67 @@ public class RomRecordSession : MonoBehaviour
 
     private void EndDrag()
     {
-        Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(dragTarget == 0 ? frameOrigin : dragTarget == 1 ? c7 : glab)}");
+        if (dragTarget == 3 && NeedleVisible(out _, out _, out Vector3 z, out _, out int mi))
+            Debug.Log($"[실측기록] 바늘 놓았다 — 눈금 {Vector3.Angle(z, needleDir[mi]):F1}° ([바늘 기록]을 눌러야 남는다)");
+        else
+            Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(dragTarget == 0 ? frameOrigin : dragTarget == 1 ? c7 : glab)}");
         dragTarget = -1;
         Play(sndPinch);
+        dirty = true;
+    }
+
+    // ── 바늘(09-21 신설) ─────────────────────────────────────────────
+    private int lastNeedleDegShown = -999;
+
+    /// <summary>바늘과 각을 그린다. ★끄는 동안 매 프레임 불린다 — 각이 1° 넘게 바뀔 때만 글자를 새로 만든다.</summary>
+    private void DrawNeedle()
+    {
+        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out int mi))
+        {
+            view.SetNeedle(false, Vector3.zero, Vector3.up, 0.1f, null, false);
+            lastNeedleDegShown = -999;
+            return;
+        }
+        int d = Mathf.RoundToInt(Vector3.Angle(z, needleDir[mi]));
+        string label = null;
+        if (d != lastNeedleDegShown)
+        {
+            lastNeedleDegShown = d;
+            label = d.ToString() + "°";
+        }
+        view.SetNeedle(true, c, needleDir[mi], r, label, dragTarget == 3);
+    }
+
+    /// <summary>바늘이 지금 가리키는 각을 기록한다. ★점찍기와 따로 남긴다 — 사용자가 둘을 비교한다.</summary>
+    private void RecordNeedle()
+    {
+        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out int mi))
+        {
+            Play(sndDeny);
+            Debug.Log("[실측기록] 바늘이 없다 — 대추를 먼저 찍고 동작 단계로 온다.");
+            return;
+        }
+        var list = marks[mi];
+        if (list.Count >= Capacity(step))
+        {
+            Play(sndDeny);
+            Debug.Log($"[실측기록] {StepTitle[(int)step]}은 {Capacity(step)}개까지다 — [취소]로 지우고 다시 한다.");
+            return;
+        }
+
+        Vector3 dir = needleDir[mi];
+        var m = new RomRecordMark
+        {
+            raw = c + dir * r,
+            byNeedle = true,
+            dialDeg = Vector3.Angle(z, dir),
+            passive = list.Count % 2 == 1,
+            // ★좌우는 바늘이 가리키는 쪽으로 본다 — 미간이 없어도 갈린다.
+            side = HasSides(step) ? RomRecordGeometry.SideOfDirection(dir, yaw, flipSides) : 0,
+        };
+        list.Add(m);
+        Play(sndPinch);
+        LogMark(step, m);
         dirty = true;
     }
 
@@ -628,6 +790,19 @@ public class RomRecordSession : MonoBehaviour
         var list = marks[MotionIndex(step)];
         if (list.Count == 0) return;
         var m = list[list.Count - 1];
+        // ★바늘로 맞춘 것은 ±1°로 고치지 않는다 — 바늘을 다시 잡아 맞추는 것이 그 방식의 수정이다.
+        if (m.byNeedle)
+        {
+            Play(sndDeny);
+            Debug.Log("[실측기록] 바늘로 기록한 것은 ±1°로 못 고친다 — [취소]하고 바늘을 다시 맞춘다.");
+            return;
+        }
+        if (!hasGlab)
+        {
+            Play(sndDeny);
+            Debug.Log("[실측기록] 미간이 없어 각이 없다 — ±1°로 고칠 것이 없다.");
+            return;
+        }
         float before = AngleOf(step, m, Pivot);
         m.adjustDeg += d;
         // ★0° 아래로는 안 간다 — 중립을 넘어 반대쪽으로 도는 것은 수정이 아니다.
@@ -650,15 +825,25 @@ public class RomRecordSession : MonoBehaviour
     private static string Kind(RomRecordMark m)
     {
         string side = m.side > 0 ? "우 " : m.side < 0 ? "좌 " : "";
-        return side + (m.passive ? "수동" : "능동");
+        // ★바늘로 맞춘 것은 표시에서도 구분한다 — 점찍기와 섞이면 비교를 못 한다.
+        return side + (m.passive ? "수동" : "능동") + (m.byNeedle ? "·바늘" : "");
     }
 
     private void LogMark(RomRecordStep s, RomRecordMark m)
     {
+        string how = m.byNeedle ? "바늘" : "점";
+        if (!hasGlab)
+        {
+            // ★미간이 없으면 중립선이 없어 중립 기준 각을 못 낸다 — 0을 각인 것처럼 적지 않는다.
+            Debug.Log($"[실측기록] 기록 {StepTitle[(int)s]} {Kind(m)} ({how}) 눈금 {m.dialDeg:F1}° · " +
+                      $"★미간이 없어 중립 기준 각은 못 낸다 · 자리 {Fmt(m.raw)}");
+            return;
+        }
         float atPivot = AngleOf(s, m, Pivot);
         float atC7 = Mathf.Max(0f, RomRecordGeometry.PlaneAngle(c7, glab, m.raw, RomRecordGeometry.PlaneNormal(s, yaw)) + m.adjustDeg);
         // ★두 기준을 같이 남긴다 — 대추 기준과 목 중앙 기준 중 어느 쪽이 실측에 가까운지 나중에 판별한다(사용자 09-18).
-        Debug.Log($"[실측기록] 기록 {StepTitle[(int)s]} {Kind(m)} {atPivot:F1}° (목중앙 {neckOffsetMm:F0}mm 기준) · 대추 기준 {atC7:F1}° · " +
+        Debug.Log($"[실측기록] 기록 {StepTitle[(int)s]} {Kind(m)} ({how}) {atPivot:F1}° (목중앙 {neckOffsetMm:F0}mm 기준) · " +
+                  $"대추 기준 {atC7:F1}°{(m.byNeedle ? $" · 눈금 {m.dialDeg:F1}°" : "")} · " +
                   $"자리 {Fmt(m.raw)} · 수정 {m.adjustDeg:+0;-0;0}°");
     }
 
@@ -674,8 +859,16 @@ public class RomRecordSession : MonoBehaviour
             for (int i = 0; i < list.Count; i++)
             {
                 if (i > 0) sb.Append(" · ");
-                float c7a = Mathf.Max(0f, RomRecordGeometry.PlaneAngle(c7, glab, list[i].raw, RomRecordGeometry.PlaneNormal(s, yaw)) + list[i].adjustDeg);
-                sb.Append(Kind(list[i])).Append(' ').Append(AngleOf(s, list[i], Pivot).ToString("F1"))
+                var mk = list[i];
+                sb.Append(Kind(mk)).Append(' ');
+                if (mk.byNeedle) sb.Append("눈금 ").Append(mk.dialDeg.ToString("F1")).Append('°');
+                if (!hasGlab)
+                {
+                    if (!mk.byNeedle) sb.Append('—');
+                    continue;
+                }
+                float c7a = Mathf.Max(0f, RomRecordGeometry.PlaneAngle(c7, glab, mk.raw, RomRecordGeometry.PlaneNormal(s, yaw)) + mk.adjustDeg);
+                sb.Append(mk.byNeedle ? " / " : "").Append(AngleOf(s, mk, Pivot).ToString("F1"))
                   .Append("°(대추 ").Append(c7a.ToString("F1")).Append("°)");
             }
             sb.Append('\n');
@@ -700,16 +893,12 @@ public class RomRecordSession : MonoBehaviour
         leftMenu.SetHeader(head);
         rightMenu.SetHeader(head);
 
-        bool dial = IsMotion(step) && hasGlab;
-        if (dial)
-        {
-            Vector3 n = RomRecordGeometry.PlaneNormal(step, yaw);
-            float radius = Mathf.Max(0.08f, Vector3.ProjectOnPlane(glab - pivot, n).magnitude);
-            // 회전 눈금판은 미간 높이의 수평면에 둔다 — 회전 중심 높이에 두면 머리에 가려 안 보인다.
-            Vector3 center = step == RomRecordStep.Rotation ? new Vector3(pivot.x, glab.y, pivot.z) : pivot;
-            view.SetDial(true, center, n, RomRecordGeometry.ScaleZero(step, yaw), radius);
-        }
-        else view.SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.1f);
+        // ★각도기와 바늘은 같은 기하를 쓴다(DialFrame) — 따로 계산하면 미리보기가 거짓말을 한다(규칙 9).
+        if (DialFrame(out Vector3 dc, out Vector3 dn, out Vector3 dz, out float dr))
+            view.SetDial(true, dc, dn, dz, dr);
+        else
+            view.SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.1f);
+        DrawNeedle();
 
         var list = IsMotion(step) ? marks[MotionIndex(step)] : null;
         for (int i = 0; i < RomRecordVisual.MaxMarks; i++)
@@ -718,8 +907,13 @@ public class RomRecordSession : MonoBehaviour
             if (!on) { view.SetMark(i, false, Vector3.zero, Vector3.zero, null, Color.white); continue; }
             var m = list[i];
             Vector3 n = RomRecordGeometry.PlaneNormal(step, yaw);
-            Vector3 shown = RomRecordGeometry.Adjusted(pivot, glab, m.raw, n, m.adjustDeg);
-            string label = Kind(m) + " " + AngleOf(step, m, pivot).ToString("F0") + "°";
+            // ★미간이 없으면 중립선이 없어 돌릴 기준도 없다 — 찍힌 자리를 그대로 둔다.
+            Vector3 shown = hasGlab ? RomRecordGeometry.Adjusted(pivot, glab, m.raw, n, m.adjustDeg) : m.raw;
+            // ★바늘은 <b>눈금 각</b>을 보여 준다 — 사용자가 눈으로 읽어 맞춘 값이 그것이다.
+            string deg = m.byNeedle ? m.dialDeg.ToString("F0") + "°"
+                       : hasGlab ? AngleOf(step, m, pivot).ToString("F0") + "°"
+                       : "—";
+            string label = Kind(m) + " " + deg;
             view.SetMark(i, true, shown, pivot, label, m.passive ? RomRecordVisual.PassiveColor : RomRecordVisual.ActiveColor);
         }
 
@@ -746,8 +940,14 @@ public class RomRecordSession : MonoBehaviour
                 var list = marks[MotionIndex(step)];
                 int next = list.Count;
                 if (next >= Capacity(step)) sb.Append("다 찍었습니다 — [다음]\n");
-                else sb.Append(next % 2 == 0 ? "능동" : "수동").Append(" 위치의 미간에 핀치하세요 (")
-                       .Append(next + 1).Append('/').Append(Capacity(step)).Append(")\n");
+                else
+                {
+                    sb.Append(next % 2 == 0 ? "능동" : "수동").Append(' ').Append(next + 1).Append('/').Append(Capacity(step));
+                    // ★두 길을 나란히 알린다(09-21) — 어느 쪽으로 남길지는 사용자가 고른다.
+                    sb.Append(needleOn ? " — 바늘 끝을 잡아 맞추고 [바늘 기록], 또는 미간에 핀치\n"
+                                       : " — 위치의 미간에 핀치하세요\n");
+                }
+                if (!hasGlab) sb.Append("★미간 없음 — 바늘 눈금 각만 기록됩니다\n");
                 break;
         }
         sb.Append('\n');
@@ -757,7 +957,10 @@ public class RomRecordSession : MonoBehaviour
             var list = marks[MotionIndex(s)];
             if (list.Count == 0) sb.Append('—');
             for (int i = 0; i < list.Count; i++)
-                sb.Append(i > 0 ? " · " : "").Append(Kind(list[i])).Append(' ').Append(AngleOf(s, list[i], pivot).ToString("F0")).Append('°');
+            {
+                sb.Append(i > 0 ? " · " : "").Append(Kind(list[i])).Append(' ');
+                AppendDeg(sb, s, list[i], pivot);
+            }
             sb.Append('\n');
         }
         return sb.ToString();

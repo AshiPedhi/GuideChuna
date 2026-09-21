@@ -17,6 +17,9 @@ public class RomRecordMark
 {
     public Vector3 raw;        // 핀치로 고정된 자리(월드). 수정해도 이 값은 안 바뀐다 — 원래 찍힌 값을 남긴다.
     public float adjustDeg;    // 1° 단위 수정량(+ = 각이 커지는 쪽)
+    // ★바늘로 맞춰 기록한 것인가(2026-09-21). 점찍기와 <b>따로</b> 비교하려고 구분해 남긴다 — 사용자가 둘 다 테스트한다.
+    public bool byNeedle;
+    public float dialDeg;      // 각도기 눈금으로 읽은 각(연직 0 · 회전은 정면 0). 육안 판독값과 같은 수다.
     public bool passive;       // false = 능동, true = 수동
     public int side;           // 측굴·회전: +1 환자 오른쪽, -1 환자 왼쪽, 0 = 해당 없음
     public Transform visual;   // 표시용 구체
@@ -84,6 +87,27 @@ public static class RomRecordGeometry
         float d = Vector3.Dot(mark - neutral, Right(yawDeg));
         int s = d >= 0f ? 1 : -1;
         return flip ? -s : s;
+    }
+
+    /// <summary>
+    /// 바늘이 환자 오른쪽(+1)을 가리키나 왼쪽(-1)을 가리키나. 측굴·회전의 좌우 판별.
+    /// ★<see cref="Side"/>와 달리 <b>미간이 없어도</b> 된다 — 바늘은 미간 없이도 쓰는 수단이다(09-21).
+    /// </summary>
+    public static int SideOfDirection(Vector3 dir, float yawDeg, bool flip)
+    {
+        int s = Vector3.Dot(dir, Right(yawDeg)) >= 0f ? 1 : -1;
+        return flip ? -s : s;
+    }
+
+    /// <summary>
+    /// 단면에 투영한 단위 방향. 단면에 거의 안 걸리면 <paramref name="fallback"/>을 돌려준다.
+    /// ★바늘(2026-09-21)은 <b>각이 아니라 방향</b>으로 들고 있는다 — 각으로 바꿔 들면 부호를 정해야 하고,
+    ///   부호는 추론으로 맞히면 안 되는 것이다(규칙 9). 손이 간 쪽으로 바늘이 가면 그만이다.
+    /// </summary>
+    public static Vector3 OnPlane(Vector3 v, Vector3 normal, Vector3 fallback)
+    {
+        Vector3 p = Vector3.ProjectOnPlane(v, normal);
+        return p.sqrMagnitude < 1e-8f ? fallback : p.normalized;
     }
 
     /// <summary>

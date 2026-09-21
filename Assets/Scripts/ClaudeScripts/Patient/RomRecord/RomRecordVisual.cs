@@ -19,7 +19,9 @@ public class RomRecordVisual
     private Material lineMat;
     private readonly List<TextMeshPro> facing = new List<TextMeshPro>();
 
-    private LineRenderer axisUp, axisFwd, axisRight, pivotAxis, neutralLine, ring, zeroLine;
+    private LineRenderer axisUp, axisFwd, axisRight, pivotAxis, neutralLine, ring, zeroLine, needle;
+    private Transform needleGrip;
+    private TextMeshPro needleLabel;
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
     private Transform c7Dot, glabDot, liveDot, pivotDot;
     private readonly LineRenderer[] ticks = new LineRenderer[TickCount];
@@ -41,6 +43,8 @@ public class RomRecordVisual
     public static readonly Color PivotColor = new Color(1f, 0.85f, 0.2f);
     public static readonly Color ActiveColor = new Color(1f, 0.6f, 0.15f);
     public static readonly Color PassiveColor = new Color(0.95f, 0.35f, 0.95f);
+    public static readonly Color NeedleColor = new Color(0.2f, 1f, 0.85f);      // 바늘 — 마커 색과 겹치지 않게 청록
+    public static readonly Color NeedleHeldColor = new Color(1f, 1f, 0.35f);    // 잡고 있는 동안
 
     public void Build(Transform parent, TMP_FontAsset f, Material mat)
     {
@@ -79,6 +83,11 @@ public class RomRecordVisual
             tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), textSize * 0.8f, new Color(1f, 1f, 1f, 0.9f), dialRoot.transform);
         }
 
+        // ★바늘(2026-09-21) — 각도기 중심에서 뻗은 지침. 끝의 손잡이를 잡아 그 단면 안에서만 돌린다.
+        needle = Line("바늘", NeedleColor, 0.007f);
+        needleGrip = Dot("바늘 손잡이", NeedleColor, 0.03f);
+        needleLabel = Label("", textSize * 1.4f, NeedleColor);
+
         for (int i = 0; i < MaxMarks; i++)
         {
             markDots[i] = Dot("마커", ActiveColor, 0.016f);
@@ -91,6 +100,7 @@ public class RomRecordVisual
         panel.rectTransform.sizeDelta = new Vector2(panelSize * 16f, panelSize * 12f);
 
         SetLive(false, Vector3.zero);
+        SetNeedle(false, Vector3.zero, Vector3.up, 0.15f, null, false);
         SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.15f);
         for (int i = 0; i < MaxMarks; i++) SetMark(i, false, Vector3.zero, Vector3.zero, null, ActiveColor);
     }
@@ -177,6 +187,29 @@ public class RomRecordVisual
     {
         Show(liveDot, on);
         if (on) liveDot.position = pos;
+    }
+
+    /// <summary>
+    /// 바늘(2026-09-21). 각도기 중심에서 <paramref name="dir"/> 쪽으로 뻗고, 끝에 잡는 손잡이가 달린다.
+    /// ★손잡이는 <b>바늘보다 조금 더 밖</b>에 둔다 — 눈금과 겹치면 잡으려다 눈금을 가린다.
+    /// </summary>
+    public void SetNeedle(bool on, Vector3 center, Vector3 dir, float radius, string label, bool held)
+    {
+        Show(needle, on);
+        Show(needleGrip, on);
+        if (needleLabel.gameObject.activeSelf != on) needleLabel.gameObject.SetActive(on);
+        if (!on) return;
+
+        Color c = held ? NeedleHeldColor : NeedleColor;
+        Vector3 tip = center + dir * radius;
+        Seg(needle, center, tip);
+        needle.startColor = needle.endColor = c;
+        needleGrip.position = tip;
+        needleGrip.GetComponent<Renderer>().material.color = c;
+        needleGrip.localScale = Vector3.one * (held ? 0.038f : 0.03f);
+        needleLabel.color = c;
+        if (label != null) needleLabel.text = label;
+        needleLabel.transform.position = center + dir * (radius * 0.62f);
     }
 
     public void SetPanel(Vector3 pos, string text)
