@@ -4,22 +4,39 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 실측 기록의 손목 메뉴 — <b>Meta Interaction SDK의 UI Set</b>으로 만든 판(2026-09-21 사용자 지시).
+/// 실측 기록의 조작 판 — <b>Meta Interaction SDK의 UI Set</b>으로 만든 판(2026-09-21).
 ///
-/// ★09-21 증상: "빈 공간도 많고 글씨도 작다 · 누르려다 손에 간섭된다."
-///   글씨는 Meta 표준을 그대로 쓴다 — 라벨 14px × 캔버스 스케일 0.0005 = <b>7mm</b>.
-///   종전 월드 TMP(fontSize 0.03)는 계산상 그 절반이 안 됐다(★계산이다, 기기 실측이 아니다).
-///   빈 공간은 <b>판 폭을 내용에 맞춰</b> 줄여 없앤다 — 종전엔 항목이 다섯이어도 6칸 폭을 썼다.
+/// ★09-21 1차 판정은 <b>퇴화</b>였다(사용자): ①버튼 크기가 들쭉날쭉 ②배치가 헐거움 ③누르는 손에 가림.
+///   ③은 판을 허공에 고정해(<see cref="FixedInSpace"/>) 따로 해결됐고, ①②를 아래에서 고쳤다(09-21 2차).
 ///
-/// ★쓰는 프리팹(Assets/Resources/RomRecordUI/에 패키지에서 들여온 것)
-///   · RomMenuBackplate       — 그 자체로 Poke가 되는 판이다(PokeInteractable·PointableCanvas·GraphicRaycaster).
-///   · RomMenuButtonPrimary   — 보통 버튼 · RomMenuButtonSecondary — 보조 · RomMenuButtonDestructive — 나가기
-///   ★버튼 프리팹에는 Unity <c>Button</c>이 없다. 생김새와 레이아웃만 들어 있어
-///     누름은 <see cref="RomMenuButtonUI"/>가 포인터 이벤트로 받는다(09-21 프리팹 실측).
+/// ── ①이 왜 생겼나 (전부 프리팹 YAML 실측이다. 추정이 아니다) ─────────────────
+///   <c>RomMenuButtonPrimary.prefab</c>의 계층은 루트 > Content > Background > Elements > (Icon·Gap·Text > Label)이고
+///   루트·Content·Elements·Text에 레이아웃 그룹이 <b>켜져</b> 있다.
+///   · 루트 HorizontalLayoutGroup: ChildControlWidth=1 / <b>ChildControlHeight=0</b>
+///   · Content HorizontalLayoutGroup: 같은 설정. Background의 sizeDelta.y는 <b>40으로 고정</b>이다.
+///   → 가로는 내가 준 폭을 따라오지만 <b>세로는 무슨 값을 줘도 40px</b>이고, 정렬이 UpperLeft라
+///     칸 위쪽에 붙는다. 그래서 칸 높이(<see cref="rowPx"/> 68)와 보이는 상자(40)가 어긋나
+///     <b>버튼마다 크기가 다르게 보이고 아래에 빈 자리가 남았다</b> — ①과 ②가 같은 원인이었다.
+///   · Label의 RectTransform은 <b>40×14px 고정</b>이고 왼쪽에 8px짜리 Gap이 붙어 있어
+///     글자가 가운데에서 4px 밀리고, 석 자가 넘으면 칸을 넘친다.
+///   · 루트 Animator의 <c>PrimaryButton_Dark</c> 컨트롤러가 Normal 상태를 <b>반복 재생</b>하며
+///     <c>Content/Background</c>의 Image 색을 매 프레임 흰색(a=0.902)으로 덮어쓴다 → 우리 tint가 안 보인다.
+///   ▶ 고친 방법: 프리팹 안의 레이아웃 그룹·애니메이터를 <b>전부 끄고</b>, 속(Content·Background·Elements·Text·Label)을
+///     루트에 늘어붙게 만든다. 그러면 <b>루트 sizeDelta 하나가 보이는 크기이자 누름 영역</b>이 된다.
+///     둥근 모서리는 <c>RoundedBoxUIProperties</c>가 uGUI 메시에 칸 크기를 실어 그리는 것이라
+///     크기를 바꿔도 알아서 따라온다(RectTransform이 바뀌면 메시가 다시 만들어진다).
 ///
-/// ★누름 판정을 ISDK가 한다 — 손가락 좌표를 이 클래스가 재지 않는다(구현 1과 가장 다른 점).
-///   씬에 <c>PointableCanvasModule</c>과 <c>EventSystem</c>이 있어야 돈다. 없으면 <b>조용히</b> 안 눌린다.
-///   그래서 Build에서 둘을 확인하고 없으면 경고를 남긴다.
+/// ── ③ Poke (프리팹·씬 실측) ────────────────────────────────────────────────
+///   · 누름 판정은 <b>ISDK가</b> 한다. 이 클래스는 손가락 좌표를 재지 않는다(구현 1과 가장 다른 점).
+///   · 씬 <c>RomMarkerScene</c>의 오브젝트 <c>PointableCanvasModule</c>에 EventSystem과 PointableCanvasModule이
+///     둘 다 붙어 있고, 손에는 <c>HandPokeInteractorFist/Palm</c>이 있다(09-21 실측). 그래서 판이 눌린다.
+///   · 판 프리팹의 Surface에 <c>RectTransformBoundsClipperDriver</c>가 있어
+///     <b>판 크기를 바꾸면 Poke 범위가 저절로 따라온다</b>(OnRectTransformDimensionsChange → BoundsClipper.Size).
+///   · PlaneSurface의 facing은 0 = Backward(-Z)다. 캔버스는 +Z가 눈 반대쪽을 보게 세우므로
+///     손가락이 <b>보는 쪽에서</b> 들어오는 게 맞다 — 방향이 맞물려 있다.
+///   · ★프리팹 기본값은 <c>MinThresholds.Enabled=0</c>·<c>RecoilAssist.Enabled=0</c>이다.
+///     둘 다 꺼져 있으면 손가락이 표면 근처에서 떨 때 select/unselect가 되풀이돼 <b>연타로 들어온다.</b>
+///     그래서 <see cref="Build"/>에서 켠다(값은 아래 공개 필드).
 /// </summary>
 public class RomRecordMenuUI : IRomRecordMenu
 {
@@ -31,31 +48,55 @@ public class RomRecordMenuUI : IRomRecordMenu
         public Image background;
         public Image fill;
         public TextMeshProUGUI label;
-        public Color tint;
         public bool isText;        // 누를 수 없는 글자 칸
     }
 
     // ── 모양(캔버스 픽셀. 캔버스 스케일 0.0005라 1px = 0.5mm) ──────────
-    public float cellPx = 84f;       // 칸 너비 — 6칸이면 504px ≈ 25cm
-    public float rowPx = 68f;        // 줄 높이
-    public float buttonPx = 56f;     // 버튼 높이
+    // ★본체(RomRecordSession)가 cellPx·rowPx·buttonPx·labelPt를 인스펙터 값으로 덮어쓴다.
+    //   기본값은 Quad 판의 씬 값(칸 4.9cm · 줄 4.1cm · 버튼 3.4cm)을 px로 옮긴 것이다.
+    public float cellPx = 98f;       // 칸 너비 — 4.9cm
+    public float rowPx = 82f;        // 줄 높이 — 4.1cm
+    public float buttonPx = 68f;     // 버튼 높이 — 3.4cm
     public float labelPt = 15f;      // 버튼 글자(Meta 표준 14)
     public float headerPt = 15f;
-    public float padPx = 14f;        // 판 안쪽 여백
+    public float padPx = 12f;        // 판 안쪽 여백 — Quad 판의 padding 0.006m과 같다
+    public float gapPx = 8f;         // 버튼 사이 틈(칸 폭에서 뺀다) — Quad 판의 buttonGap 0.004m과 같다
+    public float labelPadPx = 10f;   // 글자와 버튼 모서리 사이
+
+    // ── 색 ───────────────────────────────────────────────────────────
+    // ★애니메이터를 껐으므로 여기 값이 그대로 화면에 나온다(전에는 Normal 클립이 덮어썼다).
+    public Color labelColor = new Color(1f, 1f, 1f, 0.902f);          // Meta 표준 글자색
+    public Color selectedLabelColor = new Color(0.153f, 0.153f, 0.153f, 1f);
+    public Color captionColor = new Color(1f, 1f, 1f, 0.698f);        // 누를 수 없는 글자 칸
+    public Color fillColor = new Color(1f, 1f, 1f, 0.92f);            // 길게 누르기 막대
+    public float selectedMix = 0.35f;                                  // 고른 버튼을 흰색 쪽으로 섞는 정도
+
     // ── 자리 ─────────────────────────────────────────────────────────
     public float lift = 0.06f;
     public float towardEye = 0.02f;
     public float followSharpness = 14f;
     public float grace = 1.5f;
-    public float cooldown = 0.35f;
+
+    // ── 연타 막기 ────────────────────────────────────────────────────
+    public float cooldown = 0.5f;        // 어떤 버튼이든 누른 뒤 이만큼은 안 받는다(Quad 판과 같은 값)
+    public float samePressGap = 0.7f;    // ★같은 버튼을 다시 받기까지. 손 떨림으로 두세 번 들어오는 것을 막는다
+    public float repeatGap = 0.1f;       // 반복 입력 사이 최소 간격
+
+    // ── Poke 판정(ISDK) ──────────────────────────────────────────────
+    // ★0을 넣으면 그 보정을 끈다(= 프리팹 기본값 그대로).
+    public float pokeMinApproach = 0.01f;   // 이만큼 앞에서 다가와야 새로 누를 수 있다(판이 손 위로 떠서 눌리는 것 방지)
+    public float pokeRecoilExit = 0.02f;    // 가장 깊이 누른 지점에서 이만큼 빼야 뗀 것으로 본다
+    public float pokeRecoilReEnter = 0.02f; // 뗀 뒤 다시 누르려면 이만큼 더 들어와야 한다(이 둘이 연타를 막는 이력이다)
+    public bool holdStillWhilePressed = true;   // 누르는 동안은 판을 돌리지 않는다(누르는 중에 표면이 움직이면 판정이 흔들린다)
 
     private const string PrefabDir = "RomRecordUI/";
 
     private Transform root;
     private GameObject plate;
     private RectTransform canvasRoot;
-    private RectTransform backdrop;     // UIBackplate — 둥근 배경판(★고정 크기라 같이 늘려야 한다)
+    private RectTransform backdrop;     // UIBackplate — 둥근 배경판(고정 크기라 늘어붙게 묶는다)
     private RectTransform pokeArea;     // ISDK_PokeInteraction — Poke 표면의 범위
+    private Oculus.Interaction.PokeInteractable poke;
     private TextMeshProUGUI header;
     private readonly List<Btn> pool = new List<Btn>();
     private int activeCount;
@@ -65,8 +106,11 @@ public class RomRecordMenuUI : IRomRecordMenu
     private TMP_FontAsset korean;
     private string displayName;
     private bool placedOnce;
+    private bool warnedShape;
     private float lastValidTime = -99f;
     private float cooldownUntil;
+    private string lastPressedId;
+    private float lastPressedAt = -99f;
     private float panelW, panelH;          // 월드 크기(m)
     private string pendingId;
     private bool pendingRepeat;
@@ -93,23 +137,42 @@ public class RomRecordMenuUI : IRomRecordMenu
         if (root != null) root.position = pos;
     }
 
+    /// <summary>판을 눈 쪽으로 돌린다. ★누르는 중에는 돌리지 않는다 — 표면이 움직이면 Poke 깊이가 흔들린다.</summary>
     private void FaceEye(Transform eye)
     {
         if (root == null || eye == null || !placedOnce) return;
         if (!root.gameObject.activeSelf) root.gameObject.SetActive(true);
+        if (holdStillWhilePressed && poke != null &&
+            poke.State == Oculus.Interaction.InteractableState.Select) return;
         Vector3 away = root.position - eye.position;
         if (away.sqrMagnitude < 1e-4f) return;
         float k = 1f - Mathf.Exp(-followSharpness * 0.35f * Time.unscaledDeltaTime);
         root.rotation = Quaternion.Slerp(root.rotation, Quaternion.LookRotation(away, Vector3.up), k);
     }
 
-    /// <summary>버튼이 눌렸다고 알려 온다(<see cref="RomMenuButtonUI"/>가 부른다).</summary>
+    /// <summary>
+    /// 버튼이 눌렸다고 알려 온다(<see cref="RomMenuButtonUI"/>가 부른다).
+    /// ★막는 문이 셋이다 — ①전체 쿨다운 ②같은 버튼 되풀이 ③반복 입력 간격.
+    ///   ISDK가 같은 누름을 여러 번 보낼 수 있어서(표면 근처 떨림) 받는 쪽에서도 막는다.
+    /// </summary>
     public void OnPressed(string id, bool repeat)
     {
-        if (Time.unscaledTime < cooldownUntil) return;
+        float now = Time.unscaledTime;
+        if (now < cooldownUntil) return;
+        if (repeat)
+        {
+            if (now - lastPressedAt < repeatGap) return;
+        }
+        else if (id != null && id == lastPressedId && now - lastPressedAt < samePressGap)
+        {
+            return;
+        }
+
         pendingId = id;
         pendingRepeat = repeat;
-        if (!repeat) cooldownUntil = Time.unscaledTime + cooldown;
+        lastPressedId = id;
+        lastPressedAt = now;
+        if (!repeat) cooldownUntil = now + cooldown;
     }
 
     public void Build(Transform parent, string name, int capacity, TMP_FontAsset font, Material mat)
@@ -131,7 +194,6 @@ public class RomRecordMenuUI : IRomRecordMenu
         plate = Object.Instantiate(backPrefab, root);
         plate.name = "판";
 
-        // CanvasRoot를 찾는다. ★이름으로 찾는다 — 못 찾으면 조용히 죽으므로 경고를 남긴다(규칙 8).
         Canvas canvas = plate.GetComponentInChildren<Canvas>(true);
         if (canvas == null)
         {
@@ -139,18 +201,25 @@ public class RomRecordMenuUI : IRomRecordMenu
             return;
         }
         canvasRoot = canvas.transform as RectTransform;
-        // ★판 프리팹의 캔버스에는 가로 레이아웃이 걸려 있다 — 켜 두면 우리가 정한 칸 자리가 무시된다.
-        var hl = canvasRoot.GetComponent<HorizontalLayoutGroup>();
-        if (hl != null) hl.enabled = false;
 
-        // ★배경과 Poke 범위를 캔버스에 <b>늘어붙게</b> 만든다(09-21 프리팹 실측: 계층은
-        //   CanvasRoot > UIBackplate / ISDK_PokeInteraction > Surface, 배경은 500x500 고정이었다).
-        //   레이아웃 그룹을 껐으니 이렇게 묶어 두지 않으면 판 크기를 바꿔도 배경이 따라오지 않는다.
+        // ★판 쪽 레이아웃 그룹도 전부 끈다. CanvasRoot의 HorizontalLayoutGroup(간격 50px)을 켜 두면
+        //   우리가 정한 칸 자리를 통째로 무시한다(09-21 프리팹 실측).
+        DisableLayout(plate.transform);
+
+        // ★UIThemeManager는 <c>_themes</c>가 빈 배열이라 Start에서 "Theme index out of range" 에러만 남긴다(실측).
+        //   색은 우리가 정하므로 아예 끈다 — 컴포넌트를 끄면 Start가 돌지 않는다.
+        var theme = plate.GetComponent<Oculus.Interaction.UIThemeManager>();
+        if (theme != null) theme.enabled = false;
+
+        // ★배경과 Poke 범위를 캔버스에 늘어붙게 만든다(계층은 CanvasRoot > UIBackplate / ISDK_PokeInteraction > Surface,
+        //   배경은 500x500 고정이었다). 레이아웃 그룹을 껐으니 묶어 두지 않으면 판 크기를 바꿔도 배경이 안 따라온다.
         backdrop = FindDeep(plate.transform, "UIBackplate") as RectTransform;
         pokeArea = FindDeep(plate.transform, "ISDK_PokeInteraction") as RectTransform;
         if (backdrop == null) Debug.LogWarning($"[실측기록] ★{displayName} — 판 배경(UIBackplate)을 못 찾았다. 배경이 안 따라온다.");
         Stretch(backdrop);
         Stretch(pokeArea);
+
+        SetupPoke();
 
         header = MakeLabel(canvasRoot, headerPt, TextAlignmentOptions.MidlineLeft, "머리줄");
 
@@ -163,7 +232,36 @@ public class RomRecordMenuUI : IRomRecordMenu
             Debug.LogWarning("[실측기록] ★씬에 PointableCanvasModule이 없다 — 손가락 Poke가 uGUI로 전달되지 않는다.");
 
         root.gameObject.SetActive(false);
-        Debug.Log($"[실측기록] {displayName} — Meta UI 판을 만들었다(칸 {cellPx}px · 글자 {labelPt}pt · 버튼 {pool.Count}개)");
+        Debug.Log($"[실측기록] {displayName} — Meta UI 판을 만들었다(칸 {cellPx}×{rowPx}px · 버튼 높이 {buttonPx}px · " +
+                  $"글자 {labelPt}pt · 버튼 {pool.Count}개 · Poke 보정 {(poke != null ? "켬" : "없음")})");
+    }
+
+    /// <summary>
+    /// Poke 판정에 이력(hysteresis)을 준다. ★프리팹 기본값은 둘 다 꺼져 있어
+    /// 표면 근처에서 손이 떨면 누름이 되풀이된다 — 그게 "다다다 눌린다"의 구조적 원인이다.
+    /// </summary>
+    private void SetupPoke()
+    {
+        poke = plate.GetComponentInChildren<Oculus.Interaction.PokeInteractable>(true);
+        if (poke == null)
+        {
+            Debug.LogWarning($"[실측기록] ★{displayName} — 판에 PokeInteractable이 없다. 손가락으로 못 누른다.");
+            return;
+        }
+
+        var min = poke.MinThresholds;
+        min.Enabled = pokeMinApproach > 0f;
+        if (min.Enabled) min.MinNormal = pokeMinApproach;
+        poke.MinThresholds = min;
+
+        var recoil = poke.RecoilAssist;
+        recoil.Enabled = pokeRecoilExit > 0f;
+        if (recoil.Enabled)
+        {
+            recoil.ExitDistance = pokeRecoilExit;
+            recoil.ReEnterDistance = pokeRecoilReEnter;
+        }
+        poke.RecoilAssist = recoil;
     }
 
     private Btn MakeButton()
@@ -171,23 +269,53 @@ public class RomRecordMenuUI : IRomRecordMenu
         var go = Object.Instantiate(primaryPrefab, canvasRoot);
         var b = new Btn { go = go, rt = go.transform as RectTransform };
 
-        b.background = FindImage(go.transform, "Background");
-        b.label = FindText(go.transform, "Label");
-        // 부제와 아이콘은 안 쓴다 — 라벨만 가운데 남긴다.
-        Transform sub = go.transform.Find("Content/Elements/Text/Subtitle") ?? FindDeep(go.transform, "Subtitle");
-        if (sub != null) sub.gameObject.SetActive(false);
-        Transform icon = FindDeep(go.transform, "Icon");
-        if (icon != null) icon.gameObject.SetActive(false);
+        // ★① 프리팹 안의 레이아웃을 전부 끈다 — 이것이 "크기가 들쭉날쭉"의 진짜 원인이었다.
+        //   루트·Content HLG가 ChildControlHeight=0이라 Background 높이가 40px에 못 박혀 있었다.
+        DisableLayout(go.transform);
 
-        if (b.label != null && korean != null) b.label.font = korean;
+        // ★② 애니메이터를 끈다 — Normal 클립이 Background 색을 매 프레임 덮어쓴다.
+        var anim = go.GetComponent<Animator>();
+        if (anim != null) anim.enabled = false;
+
+        // ★③ 속을 루트에 늘어붙게 만든다. 이걸로 루트 sizeDelta 하나가 보이는 크기이자 누름 영역이 된다.
+        Transform content = FindDeep(go.transform, "Content");
+        Transform background = FindDeep(go.transform, "Background");
+        Transform elements = FindDeep(go.transform, "Elements");
+        Transform text = FindDeep(go.transform, "Text");
+        b.background = background != null ? background.GetComponent<Image>() : null;
+        b.label = FindText(go.transform, "Label");
+        if ((content == null || background == null || elements == null || text == null || b.label == null) && !warnedShape)
+        {
+            warnedShape = true;
+            Debug.LogWarning($"[실측기록] ★{displayName} — 버튼 프리팹 속이 바뀌었다(Content·Background·Elements·Text·Label 중 없는 것이 있다). " +
+                             "크기가 다시 들쭉날쭉해진다.");
+        }
+        Stretch(content as RectTransform);
+        Stretch(background as RectTransform);
+        StretchInset(elements as RectTransform, labelPadPx, 0f);
+        Stretch(text as RectTransform);
+        if (b.label != null) Stretch(b.label.rectTransform);
+        b.rt.localScale = Vector3.one;
+
+        // 아이콘·틈·부제는 안 쓴다 — 라벨만 가운데 남긴다. ★Gap(8px)을 살려 두면 글자가 오른쪽으로 밀린다.
+        Deactivate(FindDeep(go.transform, "Icon"));
+        Deactivate(FindDeep(go.transform, "Gap"));
+        Deactivate(FindDeep(go.transform, "Subtitle"));
+
         if (b.label != null)
         {
+            if (korean != null) b.label.font = korean;
             b.label.fontSize = labelPt;
             b.label.alignment = TextAlignmentOptions.Center;
             b.label.enableAutoSizing = false;
+            b.label.textWrappingMode = TextWrappingModes.NoWrap;
+            b.label.overflowMode = TextOverflowModes.Overflow;   // 잘라 내지 않는다 — 넘치면 눈에 보여야 고칠 수 있다
+            b.label.margin = Vector4.zero;
+            b.label.raycastTarget = false;
+            b.label.color = labelColor;
         }
 
-        // 길게 누르기 막대 — 레이아웃에 끼지 않게 무시 표시를 준다.
+        // 길게 누르기 막대 — 레이아웃에 끼지 않게 무시 표시를 준다(레이아웃을 껐어도 남겨 둔다).
         var fillGo = new GameObject("차오름", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(LayoutElement));
         var fillRt = (RectTransform)fillGo.transform;
         fillRt.SetParent(b.rt, false);
@@ -197,7 +325,7 @@ public class RomRecordMenuUI : IRomRecordMenu
         fillRt.offsetMax = new Vector2(-4f, 0f);
         fillGo.GetComponent<LayoutElement>().ignoreLayout = true;
         b.fill = fillGo.GetComponent<Image>();
-        b.fill.color = new Color(1f, 1f, 1f, 0.92f);
+        b.fill.color = fillColor;
         b.fill.type = Image.Type.Filled;
         b.fill.fillMethod = Image.FillMethod.Horizontal;
         b.fill.raycastTarget = false;
@@ -215,6 +343,7 @@ public class RomRecordMenuUI : IRomRecordMenu
     {
         if (canvasRoot == null) return;
         cooldownUntil = Time.unscaledTime + cooldown;
+        pendingId = null;              // ★앞 배치에서 들어온 눌림을 새 배치로 넘기지 않는다
         activeCount = Mathf.Min(items.Length, pool.Count);
 
         // ★판 폭을 내용에 맞춘다 — 빈 칸이 남지 않게(09-21 "빈 공간이 많다").
@@ -229,6 +358,7 @@ public class RomRecordMenuUI : IRomRecordMenu
         Resize(wPx, hPx);
 
         header.text = headerText;
+        header.fontSize = headerPt;
         header.rectTransform.anchoredPosition = new Vector2(padPx, -padPx);
         header.rectTransform.sizeDelta = new Vector2(wPx - padPx * 2f, rowPx);
 
@@ -236,6 +366,9 @@ public class RomRecordMenuUI : IRomRecordMenu
         {
             Btn b = pool[i];
             bool on = i < activeCount;
+            // ★배치가 바뀌는 순간 눌려 있던 상태를 푼다. 안 풀면 손가락을 댄 채 단계가 넘어갈 때
+            //   그 슬롯의 새 버튼이 <b>누른 적도 없는데</b> 반복·길게누르기로 실행된다(나가기가 그 자리에 온다).
+            b.press.OnPointerUp(null);
             if (b.go.activeSelf != on) b.go.SetActive(on);
             if (!on) { b.press.id = null; continue; }
 
@@ -244,50 +377,70 @@ public class RomRecordMenuUI : IRomRecordMenu
             b.press.id = it.id;
             b.press.repeat = it.repeat;
             b.press.holdSeconds = it.holdSeconds;
-            b.tint = it.tint;
 
-            float w = it.span * cellPx - 6f;
+            float w = it.span * cellPx - gapPx;
+            float h = b.isText ? rowPx : buttonPx;
             b.rt.anchorMin = b.rt.anchorMax = new Vector2(0f, 1f);
             b.rt.pivot = new Vector2(0f, 1f);
-            b.rt.sizeDelta = new Vector2(w, b.isText ? rowPx : buttonPx);
+            b.rt.sizeDelta = new Vector2(w, h);
+            // 칸 안에서 위아래 가운데에 둔다(칸 높이 rowPx, 버튼 높이 h).
             b.rt.anchoredPosition = new Vector2(padPx + it.col * cellPx,
-                                                -(padPx + it.row * rowPx) - (rowPx - (b.isText ? rowPx : buttonPx)) * 0.5f);
+                                                -(padPx + it.row * rowPx + (rowPx - h) * 0.5f));
 
             if (b.label != null)
             {
                 b.label.text = it.label;
+                b.label.fontSize = labelPt;
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
+                b.label.color = b.isText ? captionColor : (it.selected ? selectedLabelColor : labelColor);
             }
             if (b.background != null)
             {
                 // 글자 칸은 배경을 지운다 — 누를 수 없는 것이 버튼처럼 보이면 안 된다.
-                Color c = b.isText ? new Color(0f, 0f, 0f, 0f)
-                        : it.selected ? Color.Lerp(it.tint, Color.white, 0.35f)
-                        : it.tint;
-                b.background.color = c;
+                b.background.color = b.isText ? new Color(0f, 0f, 0f, 0f)
+                                   : it.selected ? Color.Lerp(it.tint, Color.white, selectedMix)
+                                   : it.tint;
                 b.background.raycastTarget = !b.isText;
             }
             b.press.enabled = !b.isText;
-            b.press.Setup(b.background, b.fill);
+            b.press.Setup(b.background, b.fill);   // ★색을 정한 뒤에 부른다 — 여기서 되돌릴 색을 기억한다
             if (b.fill != null) b.fill.gameObject.SetActive(false);
         }
     }
 
-    /// <summary>부모에 늘어붙게 만든다 — 판 크기를 바꾸면 따라오게.</summary>
-    private static void Stretch(RectTransform r)
+    /// <summary>부모에 늘어붙게 만든다 — 판·버튼 크기를 바꾸면 따라오게.</summary>
+    private static void Stretch(RectTransform r) => StretchInset(r, 0f, 0f);
+
+    /// <summary>부모에 늘어붙이되 좌우·위아래로 그만큼 안쪽에 둔다.</summary>
+    private static void StretchInset(RectTransform r, float x, float y)
     {
         if (r == null) return;
         r.anchorMin = Vector2.zero;
         r.anchorMax = Vector2.one;
-        r.offsetMin = Vector2.zero;
-        r.offsetMax = Vector2.zero;
+        r.offsetMin = new Vector2(x, y);
+        r.offsetMax = new Vector2(-x, -y);
+    }
+
+    /// <summary>레이아웃 그룹·크기 맞춤을 전부 끈다. ★켜 두면 우리가 준 크기를 다시 계산해 덮는다.</summary>
+    private static void DisableLayout(Transform t)
+    {
+        var groups = t.GetComponentsInChildren<LayoutGroup>(true);
+        for (int i = 0; i < groups.Length; i++) groups[i].enabled = false;
+        var fitters = t.GetComponentsInChildren<ContentSizeFitter>(true);
+        for (int i = 0; i < fitters.Length; i++) fitters[i].enabled = false;
+    }
+
+    private static void Deactivate(Transform t)
+    {
+        if (t != null) t.gameObject.SetActive(false);
     }
 
     /// <summary>판 크기를 바꾼다. 월드 크기도 같이 기억해 둔다(Near·Distance가 쓴다).</summary>
     private void Resize(float wPx, float hPx)
     {
         canvasRoot.sizeDelta = new Vector2(wPx, hPx);
-        // 배경·Poke 범위는 Build에서 늘어붙게 묶어 뒀다 — 여기서 따로 손대지 않는다.
+        // 배경·Poke 범위는 Build에서 늘어붙게 묶어 뒀고, Poke 범위(BoundsClipper)는
+        // RectTransformBoundsClipperDriver가 크기 변화를 받아 스스로 맞춘다(패키지 소스 실측).
         float s = canvasRoot.lossyScale.x;
         panelW = wPx * s;
         panelH = hPx * s;
@@ -359,18 +512,12 @@ public class RomRecordMenuUI : IRomRecordMenu
         if (korean != null) t.font = korean;
         t.fontSize = pt;
         t.alignment = align;
-        t.color = Color.white;
+        t.color = labelColor;
         t.textWrappingMode = TextWrappingModes.NoWrap;
         t.raycastTarget = false;
         var le = go.AddComponent<LayoutElement>();
         le.ignoreLayout = true;
         return t;
-    }
-
-    private static Image FindImage(Transform root, string name)
-    {
-        Transform t = FindDeep(root, name);
-        return t != null ? t.GetComponent<Image>() : null;
     }
 
     private static TextMeshProUGUI FindText(Transform root, string name)
