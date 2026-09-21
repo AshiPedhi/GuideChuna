@@ -41,6 +41,16 @@ public class RomRecordVisual
     private readonly Transform[] markDots = new Transform[MaxMarks];
     private readonly LineRenderer[] markLines = new LineRenderer[MaxMarks];
     private readonly TextMeshPro[] markLabels = new TextMeshPro[MaxMarks];
+    // ★삼각면(2026-09-21 사용자 지시) — 찍은 점에서 단면으로 <b>수직으로 내린 선</b>과,
+    //   중심에서 그 발까지의 선. 둘을 더하면 (중심 · 발 · 점)이 삼각형이 된다.
+    //   ★이건 장식이 아니다. 각은 <b>단면에 투영해서</b> 재므로, 점이 단면에서 벗어난 만큼이
+    //   그대로 «재지 못한 성분»이다. 그 벗어남을 눈에 보이게 하는 것이 이 삼각형이다.
+    private readonly LineRenderer[] markPerp = new LineRenderer[MaxMarks];   // 점 → 단면 위의 발
+    private readonly LineRenderer[] markBase = new LineRenderer[MaxMarks];   // 중심 → 발
+    private readonly TextMeshPro[] markOffLabels = new TextMeshPro[MaxMarks];
+    // ★단면 사각형 — 3축이 이루는 면을 사람 크기만큼 네모로 보여 준다(테두리 + 옅은 격자).
+    private LineRenderer sectionRect;
+    private readonly LineRenderer[] sectionGrid = new LineRenderer[4];
     private GameObject dialRoot;
     // ★마지막으로 그린 각도기의 단면 법선. 바늘 글자를 <b>선에서 옆으로</b> 비키는 데 쓴다(09-21).
     private Vector3 dialNormal = Vector3.up;
@@ -89,6 +99,15 @@ public class RomRecordVisual
     public float needleLabelSide = 0.34f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수). 09-21에 0.24에서 넓혔다.
                                             //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.
     // ★09-21 녹화 실측: 0.22로는 네 이름표가 위아래로 거의 붙어 못 읽었다 — 넓힌다(여전히 기기 미검증).
+    // ── 단면 사각형(2026-09-21) ──────────────────────────────────────
+    [Tooltip("단면 사각형의 가로 반폭(m). 사람 어깨~몸통 범위를 덮게 잡는다.")]
+    public float sectionHalfWidth = 0.35f;
+    [Tooltip("단면 사각형의 세로 반높이(m).")]
+    public float sectionHalfHeight = 0.45f;
+    public float sectionLineWidth = 0.002f;
+    [Tooltip("단면에서 이만큼(m) 넘게 벗어나면 벗어난 양을 숫자로 적는다. ★각은 단면에 투영해 재므로 그만큼이 «못 잰 성분»이다.")]
+    public float offPlaneWarnMeters = 0.02f;
+
     public float needleLabelAlongStep = 0.42f; // ★좌우 쌍(0·1 / 2·3)을 <b>반지름으로도</b> 어긋나게 하는 양.
                                                //   좌우 바늘이 둘 다 0°에 가까우면 각으로는 안 갈라져서
                                                //   수직 비킴만으로는 넷 중 둘이 겹친다(09-21 개정).
@@ -112,6 +131,10 @@ public class RomRecordVisual
     public static readonly Color PivotColor = new Color(1f, 0.85f, 0.2f);
     public static readonly Color ActiveColor = new Color(1f, 0.6f, 0.15f);
     public static readonly Color PassiveColor = new Color(0.95f, 0.35f, 0.95f);
+    // ★단면 사각형·삼각면(2026-09-21). 표시물이지 판독값이 아니라 눈에 덜 띄게 둔다.
+    public static readonly Color SectionColor = new Color(0.45f, 0.55f, 0.70f, 0.45f);
+    public static readonly Color SectionGridColor = new Color(0.45f, 0.55f, 0.70f, 0.22f);
+    public static readonly Color OffPlaneColor = new Color(1f, 0.85f, 0.35f, 0.85f);   // 단면에서 벗어난 양 — 노랑 경고 계열
     public static readonly Color NeedleColor = new Color(0.2f, 1f, 0.85f);      // 바늘 — 마커 색과 겹치지 않게 청록
     public static readonly Color NeedleHeldColor = new Color(1f, 1f, 0.35f);    // 잡고 있는 동안
 
@@ -174,7 +197,17 @@ public class RomRecordVisual
             markDots[i] = Dot("마커", ActiveColor, 0.016f);
             markLines[i] = Line("마커선", ActiveColor, markLineWidth);
             markLabels[i] = Label("", textSize, ActiveColor);
+            markPerp[i] = Line("단면까지 수직", OffPlaneColor, markLineWidth);
+            markBase[i] = Line("단면 위 밑변", OffPlaneColor, markLineWidth);
+            markOffLabels[i] = Label("", textSize * 0.7f, OffPlaneColor);
         }
+
+        // ★단면 사각형 — 테두리 하나와 가로·세로 가운데 줄 둘(면이 어디 있는지만 알면 된다).
+        //   면을 통째로 칠하면 패스스루가 가려져 오히려 방해가 된다.
+        sectionRect = Line("단면 테두리", SectionColor, sectionLineWidth);
+        sectionRect.positionCount = 5;                       // 네 귀퉁이 + 닫기
+        for (int i = 0; i < sectionGrid.Length; i++)
+            sectionGrid[i] = Line("단면 눈금줄", SectionGridColor, sectionLineWidth * 0.7f);
 
         panel = Label("", panelSize, Color.white);
         panel.alignment = TextAlignmentOptions.TopLeft;
@@ -184,6 +217,7 @@ public class RomRecordVisual
         for (int i = 0; i < NeedleCount; i++) SetNeedle(i, false, Vector3.zero, Vector3.up, 0.15f, 0.2f, null, false);
         SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.15f);
         for (int i = 0; i < MaxMarks; i++) SetMark(i, false, Vector3.zero, Vector3.zero, null, ActiveColor);
+        SetSectionPlane(false, Vector3.zero, Vector3.up, Vector3.up);
     }
 
     // ── 3축 · 기준축 ──────────────────────────────────────────────────
@@ -343,13 +377,30 @@ public class RomRecordVisual
     }
 
     // ── 동작 마커 ────────────────────────────────────────────────────
-    public void SetMark(int i, bool on, Vector3 pos, Vector3 pivot, string label, Color c)
+    /// <summary>
+    /// 마커 하나. <paramref name="planeNormal"/>이 0이 아니면 <b>삼각면</b>도 함께 그린다(2026-09-21).
+    ///
+    /// ★삼각면이 뜻하는 것: 각은 점을 <b>단면에 투영해서</b> 잰다. 그러니 점이 단면에서 벗어난 만큼은
+    ///   <b>재지 못한 성분</b>이다. (중심 · 단면 위의 발 · 실제 점) 세 점을 이으면 그 벗어남이 눈에 보인다.
+    ///   밑변이 실제로 각에 쓰인 선이고, 수직선이 버려진 양이다.
+    /// </summary>
+    public void SetMark(int i, bool on, Vector3 pos, Vector3 pivot, string label, Color c,
+                        Vector3 planeCenter = default, Vector3 planeNormal = default)
     {
         if (i < 0 || i >= MaxMarks) return;
         Show(markDots[i], on);
         Show(markLines[i], on);
         if (markLabels[i].gameObject.activeSelf != on) markLabels[i].gameObject.SetActive(on);
-        if (!on) return;
+
+        bool tri = on && planeNormal.sqrMagnitude > 1e-6f;
+        Show(markPerp[i], tri);
+        Show(markBase[i], tri);
+
+        if (!on)
+        {
+            if (markOffLabels[i].gameObject.activeSelf) markOffLabels[i].gameObject.SetActive(false);
+            return;
+        }
 
         markDots[i].position = pos;
         markDots[i].GetComponent<Renderer>().material.color = c;
@@ -358,6 +409,60 @@ public class RomRecordVisual
         markLabels[i].color = c;
         if (label != null) markLabels[i].text = label;
         markLabels[i].transform.position = pos + Vector3.up * 0.03f;
+
+        if (!tri)
+        {
+            if (markOffLabels[i].gameObject.activeSelf) markOffLabels[i].gameObject.SetActive(false);
+            return;
+        }
+
+        // 단면 위로 내린 발 — 점에서 법선 방향 성분을 뺀 자리다.
+        Vector3 n = planeNormal.normalized;
+        float off = Vector3.Dot(pos - planeCenter, n);
+        Vector3 foot = pos - n * off;
+        Seg(markPerp[i], pos, foot);       // 버려진 성분(수직)
+        Seg(markBase[i], pivot, foot);     // 실제로 각에 쓰인 선(단면 안)
+
+        // ★벗어남이 눈에 띌 만큼일 때만 숫자를 적는다. 늘 적으면 화면이 시끄럽다.
+        float mm = Mathf.Abs(off);
+        bool warn = mm > offPlaneWarnMeters;
+        if (markOffLabels[i].gameObject.activeSelf != warn) markOffLabels[i].gameObject.SetActive(warn);
+        if (warn)
+        {
+            markOffLabels[i].text = (mm * 100f).ToString("F0") + "cm 벗어남";
+            markOffLabels[i].transform.position = (pos + foot) * 0.5f;
+        }
+    }
+
+    /// <summary>
+    /// 3축이 이루는 <b>단면 사각형</b>(2026-09-21 사용자 지시). 사람 크기만큼만 네모로 보여 준다.
+    /// ★면을 칠하지 않고 테두리와 가운데 줄만 긋는다 — 패스스루를 가리면 오히려 방해가 된다.
+    /// </summary>
+    public void SetSectionPlane(bool on, Vector3 center, Vector3 normal, Vector3 upHint)
+    {
+        Show(sectionRect, on);
+        for (int i = 0; i < sectionGrid.Length; i++) Show(sectionGrid[i], on);
+        if (!on) return;
+
+        // 단면 안의 두 방향을 잡는다. ★upHint를 면에 투영해 세로로 삼는다 — 그래야 사각형이 눕지 않는다.
+        Vector3 n = normal.normalized;
+        Vector3 up = Vector3.ProjectOnPlane(upHint, n);
+        if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.up, n);
+        if (up.sqrMagnitude < 1e-6f) up = Vector3.ProjectOnPlane(Vector3.forward, n);
+        up.Normalize();
+        Vector3 right = Vector3.Cross(n, up).normalized;
+
+        Vector3 hw = right * sectionHalfWidth, hh = up * sectionHalfHeight;
+        sectionRect.SetPosition(0, center - hw - hh);
+        sectionRect.SetPosition(1, center + hw - hh);
+        sectionRect.SetPosition(2, center + hw + hh);
+        sectionRect.SetPosition(3, center - hw + hh);
+        sectionRect.SetPosition(4, center - hw - hh);
+
+        Seg(sectionGrid[0], center - hw, center + hw);              // 가로 가운데
+        Seg(sectionGrid[1], center - hh, center + hh);              // 세로 가운데
+        Seg(sectionGrid[2], center - hw + hh * 0.5f, center + hw + hh * 0.5f);
+        Seg(sectionGrid[3], center - hw - hh * 0.5f, center + hw - hh * 0.5f);
     }
 
     public void SetLive(bool on, Vector3 pos)

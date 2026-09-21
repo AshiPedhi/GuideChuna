@@ -151,6 +151,13 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("측굴·회전의 좌우가 반대로 기록되면 켠다. ★Play에서 환자 오른쪽으로 기울여 '우'가 찍히는지 먼저 본다.")]
     [SerializeField] private bool flipSides = false;
 
+    [Header("=== 단면 표시(2026-09-21 신설) ===")]
+    [Tooltip("3축이 이루는 단면을 사람 크기만큼 사각형으로 보여 준다.")]
+    [SerializeField] private bool showSectionPlane = true;
+    [Tooltip("찍은 점에서 단면까지 수직선을 그어 삼각면으로 보여 준다.\n" +
+             "★각은 단면에 투영해 재므로, 벗어난 만큼이 «각에 못 쓴 성분»이다. 그걸 눈에 보이게 한다.")]
+    [SerializeField] private bool showOffPlaneTriangle = true;
+
     [Header("=== 현실에 가려지기(2026-09-21 신설) ===")]
     // ★사용자 09-21: "패스스루에서 오브젝트가 현실 위에 붕 떠 있다 — 사람 위에 십자선을 그어도
     //   몸통을 관통하는 십자선이 아니라 그냥 위에 올려진 십자선 같다."
@@ -1368,11 +1375,17 @@ public class RomRecordSession : MonoBehaviour
         if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetHeader(head);
 
         // ★각도기와 바늘은 같은 기하를 쓴다(DialFrame) — 따로 계산하면 미리보기가 거짓말을 한다(규칙 9).
-        if (DialFrame(out Vector3 dc, out Vector3 dn, out Vector3 dz, out float dr))
-            view.SetDial(true, dc, dn, dz, dr);
-        else
-            view.SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.1f);
+        bool hasDial = DialFrame(out Vector3 dc, out Vector3 dn, out Vector3 dz, out float dr);
+        if (hasDial) view.SetDial(true, dc, dn, dz, dr);
+        else view.SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.1f);
         DrawNeedle();
+
+        // ★단면 사각형(09-21) — 지금 재는 면이 어디인지 사람 크기만큼 네모로 보여 준다.
+        //   회전은 눈금판이 미간 높이로 올라가 있으므로 사각형도 같은 중심을 쓴다.
+        if (hasDial && showSectionPlane)
+            view.SetSectionPlane(true, dc, dn, RomRecordGeometry.ScaleZero(step, yaw));
+        else
+            view.SetSectionPlane(false, Vector3.zero, Vector3.up, Vector3.up);
 
         var list = IsMotion(step) ? marks[MotionIndex(step)] : null;
         for (int i = 0; i < RomRecordVisual.MaxMarks; i++)
@@ -1383,12 +1396,16 @@ public class RomRecordSession : MonoBehaviour
             Vector3 n = RomRecordGeometry.PlaneNormal(step, yaw);
             // ★미간이 없으면 중립선이 없어 돌릴 기준도 없다 — 찍힌 자리를 그대로 둔다.
             Vector3 shown = hasGlab ? RomRecordGeometry.Adjusted(pivot, glab, m.raw, n, m.adjustDeg) : m.raw;
+            // ★삼각면(09-21) — 점이 단면에서 벗어난 만큼이 «각에 못 쓴 성분»이다. 바늘은 면에 붙어 있어 뜻이 없다.
+            Vector3 triC = !m.byNeedle && showOffPlaneTriangle && hasDial ? dc : Vector3.zero;
+            Vector3 triN = !m.byNeedle && showOffPlaneTriangle && hasDial ? n : Vector3.zero;
             // ★바늘은 <b>눈금 각</b>을 보여 준다 — 사용자가 눈으로 읽어 맞춘 값이 그것이다.
             string deg = m.byNeedle ? m.dialDeg.ToString("F0") + "°"
                        : hasGlab ? AngleOf(step, m, pivot).ToString("F0") + "°"
                        : "—";
             string label = Kind(m) + " " + deg;
-            view.SetMark(i, true, shown, pivot, label, m.passive ? RomRecordVisual.PassiveColor : RomRecordVisual.ActiveColor);
+            view.SetMark(i, true, shown, pivot, label,
+                         m.passive ? RomRecordVisual.PassiveColor : RomRecordVisual.ActiveColor, triC, triN);
         }
 
         view.SetPanel(pivot + Vector3.up * (axisLength + 0.18f), PanelText(pivot));
