@@ -90,6 +90,14 @@ public class RomRecordWristMenu : IRomRecordMenu
     public float cooldown = 0.35f;
     public float pressAnim = 0.18f;        // 눌림 애니메이션 길이(초)
 
+    // ★공간 고정 모드(2026-09-21 사용자 지시 "진행ROOT 패널처럼 따로 분리").
+    //   손목을 따라다니면 <b>기록하는 손과 판이 같은 자리</b>에 있어 서로 간섭한다 —
+    //   09-21 로그 실측에서 핀치를 막은 주범이 판 자신이었다(판 근처 3,084 · 다가옴 3,708 프레임).
+    //   고정 모드에서는 판이 환자 옆 허공에 멈춰 있고, 조작할 때만 손을 뻗는다.
+    public bool fixedInSpace;
+    public bool FixedInSpace { get => fixedInSpace; set => fixedInSpace = value; }
+    public bool Placed => placedOnce;
+
     public bool Visible => root != null && root.gameObject.activeSelf;
     public bool LastRepeat { get; private set; }   // 방금 눌린 것이 반복 입력인가 — 소리를 가볍게 낸다
 
@@ -206,9 +214,44 @@ public class RomRecordWristMenu : IRomRecordMenu
     /// 판을 손목 위에 둔다. <paramref name="hold"/>가 참이면(누르는 손이 다가옴) <b>그 자리에 멈춘다</b>.
     /// 손목 추적이 끊겨도 grace초 동안은 숨기지 않는다.
     /// </summary>
+    /// <summary>
+    /// 공간 고정 모드에서 판을 그 자리에 세운다(2026-09-21). 위치는 <b>한 번만</b> 정하고,
+    /// 회전만 천천히 눈 쪽으로 돌린다 — 자리가 바뀌면 손이 헛짚는다.
+    /// </summary>
+    public void PlaceAt(Vector3 pos, Transform eye)
+    {
+        if (root == null || eye == null) return;
+        if (!root.gameObject.activeSelf) root.gameObject.SetActive(true);
+        root.position = pos;
+        root.rotation = Quaternion.LookRotation(pos - eye.position, Vector3.up);
+        placedOnce = true;
+        lastValidTime = Time.unscaledTime;
+    }
+
+    /// <summary>공간 고정 모드의 매 프레임 — 자리는 그대로 두고 회전만 눈을 따라간다.</summary>
+    public void FaceEye(Transform eye)
+    {
+        if (root == null || eye == null || !placedOnce) return;
+        if (!root.gameObject.activeSelf) root.gameObject.SetActive(true);
+        Vector3 away = root.position - eye.position;
+        if (away.sqrMagnitude < 1e-4f) return;
+        Quaternion rot = Quaternion.LookRotation(away, Vector3.up);
+        float k = 1f - Mathf.Exp(-followSharpness * 0.35f * Time.unscaledDeltaTime);
+        root.rotation = Quaternion.Slerp(root.rotation, rot, k);
+    }
+
+    /// <summary>판을 통째로 옮긴다(잡아 끌기).</summary>
+    public void MoveTo(Vector3 pos)
+    {
+        if (root != null) root.position = pos;
+    }
+
+    public Vector3 Position => root != null ? root.position : Vector3.zero;
+
     public void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold)
     {
         if (root == null || eye == null) return;
+        if (fixedInSpace) { FaceEye(eye); return; }   // ★고정 모드에서는 손목을 따라가지 않는다
         float now = Time.unscaledTime;
         if (wristValid) lastValidTime = now;
 

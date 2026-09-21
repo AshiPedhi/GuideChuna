@@ -53,6 +53,21 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("Meta 판의 글자 크기(pt). ★Meta 표준은 14 — 캔버스 스케일을 곱하면 7mm다.")]
     [SerializeField] private float metaLabelPt = 15f;
 
+    [Header("=== 판 자리(2026-09-21) ===")]
+    // ★사용자 지시 09-21: "UI 동작할 때 간섭이 너무 많다 — 진행ROOT 패널처럼 따로 분리해야겠다."
+    //   손목을 따라다니면 <b>기록하는 손과 판이 같은 자리</b>에 있어 서로 막는다.
+    //   09-21 로그 실측에서 핀치를 막은 주범이 판 자신이었다(판 근처 3,084 · 다가옴 3,708 프레임).
+    [Tooltip("판을 손목이 아니라 <b>허공에 고정</b>한다(진행Root 방식). 끄면 종전처럼 양 손목을 따라다닌다.")]
+    [SerializeField] private bool menuFixedInSpace = true;
+    [Tooltip("고정 판을 처음 놓을 자리 — 눈앞 거리(m).")]
+    [SerializeField] private float menuFixedDistance = 0.55f;
+    [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m).")]
+    [SerializeField] private float menuFixedBelowEye = 0.3f;
+    [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
+    [SerializeField] private float menuFixedSide = -0.38f;
+    [Tooltip("고정 판을 잡아 끌 수 있는 반경(m). 판 중심에서 이 안을 핀치로 오므리면 판이 따라온다.")]
+    [SerializeField] private float menuGrabRadius = 0.16f;
+
     [Header("=== 손목 판(종전 Quad 판) ===")]
     [Tooltip("판의 칸 너비(m). 판은 6칸 너비다.")]
     [SerializeField] private float menuCellWidth = 0.042f;
@@ -202,9 +217,21 @@ public class RomRecordSession : MonoBehaviour
             leftMenu = lm;
             rightMenu = rm;
         }
-        leftMenu.Build(transform, "왼손목 메뉴", 14, font, mat);
-        rightMenu.Build(transform, "오른손목 메뉴", 14, font, mat);
-        Debug.Log("[실측기록] 손목 판 — " + (useMetaUI ? "Meta UI Set" : "종전 Quad 판"));
+        leftMenu.FixedInSpace = menuFixedInSpace;
+        leftMenu.Build(transform, menuFixedInSpace ? "조작 판" : "왼손목 메뉴", 14, font, mat);
+        // ★고정 모드면 판은 <b>하나</b>다(둘을 허공에 띄우면 서로 가린다). 그때는 오른쪽 자리에
+        //   같은 판을 다시 가리켜 둔다 — SetLayout·Near 같은 곳에서 널을 만지지 않게.
+        if (menuFixedInSpace)
+        {
+            rightMenu = leftMenu;
+        }
+        else
+        {
+            rightMenu.FixedInSpace = false;
+            rightMenu.Build(transform, "오른손목 메뉴", 14, font, mat);
+        }
+        Debug.Log($"[실측기록] 판 — {(useMetaUI ? "Meta UI Set" : "Quad")} · " +
+                  $"{(menuFixedInSpace ? "허공 고정(진행Root 방식)" : "양 손목 추종")}");
         ApplyStepButtons();
         BuildSounds();
 
@@ -344,10 +371,42 @@ public class RomRecordSession : MonoBehaviour
     // ── 손목 메뉴 ────────────────────────────────────────────────────
     private void HandleMenus()
     {
-        bool lw = hands.TryWrist(true, out Pose lwp);
-        bool rw = hands.TryWrist(false, out Pose rwp);
         bool rTip = hands.TryJoint(false, HandJointId.HandIndexTip, out Vector3 rIdx);
         bool lTip = hands.TryJoint(true, HandJointId.HandIndexTip, out Vector3 lIdx);
+
+        // ★허공 고정 모드(09-21) — 판 하나를 세워 두고 <b>양손 검지 어느 쪽으로든</b> 누른다.
+        //   판이 손에서 떨어져 있으니 "판 고정·판 근처" 차단이 필요 없다 — 그게 간섭의 주범이었다.
+        if (menuFixedInSpace)
+        {
+            if (!leftMenu.Placed && eye != null)
+            {
+                Vector3 f = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
+                if (f.sqrMagnitude < 1e-4f) f = Vector3.forward;
+                f.Normalize();
+                Vector3 side = Vector3.Cross(Vector3.up, f);   // f를 볼 때 오른쪽
+                Vector3 pos = eye.position + f * menuFixedDistance
+                            + side * menuFixedSide - Vector3.up * menuFixedBelowEye;
+                leftMenu.PlaceAt(pos, eye);
+                Debug.Log($"[실측기록] 조작 판을 세웠다 — {Fmt(pos)} (잡아 끌어 옮길 수 있다)");
+            }
+            leftMenu.Follow(false, Vector3.zero, eye, false);   // 고정 모드에서는 회전만 눈을 따라간다
+            menuHoldL = menuHoldR = false;
+
+            string fid = leftMenu.Poll(rIdx, rTip);
+            bool frep = leftMenu.LastRepeat;
+            if (fid == null) { fid = leftMenu.Poll(lIdx, lTip); frep = leftMenu.LastRepeat; }
+            if (fid != null)
+            {
+                lastPressTime = Time.unscaledTime;
+                Play(fid == "undo" ? sndUndo : frep ? sndRepeat : sndPress);
+                OnButton(fid);
+            }
+            leftMenu.Tick();
+            return;
+        }
+
+        bool lw = hands.TryWrist(true, out Pose lwp);
+        bool rw = hands.TryWrist(false, out Pose rwp);
 
         // ★다가오면 제자리 고정(09-18 사용자 결정). 왼손목 판은 오른 검지가, 오른손목 판은 왼 검지가 누른다.
         //   누르는 손이 판 쪽 손목을 가리면 그 손목 추적이 끊겨 판이 숨었다 튀었다("UI가 도망간다").
@@ -460,7 +519,8 @@ public class RomRecordSession : MonoBehaviour
         var arr = items.ToArray();
         string head = MenuHeader();
         leftMenu.SetLayout(head, arr);
-        rightMenu.SetLayout(head, arr);
+        // ★고정 모드에서는 둘이 같은 판이다 — 두 번 짜지 않는다.
+        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetLayout(head, arr);
     }
 
     /// <summary>판 머리줄 — 단계·진행, 동작 단계면 지금까지 찍은 값. 값이 바뀔 때만 만든다.</summary>
@@ -582,7 +642,10 @@ public class RomRecordSession : MonoBehaviour
 
         // ★버튼을 누르는 동안과 누른 직후에는 핀치를 받지 않는다(09-18 로그: 의도하지 않은 핀치 30여 번).
         //   판을 누르러 다가오는 중(고정 상태)이면 양손 모두 막는다 — 가려진 손이 핀치로 읽히는 것을 막는다.
-        bool nearMenu = hands.TryJoint(isLeft, HandJointId.HandIndexTip, out Vector3 tip)
+        // ★고정 모드에서는 «판 근처»로 막지 않는다(09-21) — 판이 손에서 떨어져 있어 우연히 겹칠 일이 없고,
+        //   오히려 판을 <b>잡아 끌려면</b> 판 근처에서 핀치가 돼야 한다. 그 차단이 간섭의 주범이었다.
+        bool nearMenu = !menuFixedInSpace
+                        && hands.TryJoint(isLeft, HandJointId.HandIndexTip, out Vector3 tip)
                         && (leftMenu.Near(tip, 0.06f) || rightMenu.Near(tip, 0.06f));
 
         // ★막은 이유를 문구로 넘긴다(09-21) — 막는 자리가 넷인데 셋이 조용해 원인을 못 갈랐다.
@@ -659,7 +722,8 @@ public class RomRecordSession : MonoBehaviour
     }
 
     // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
-    private static string DragName(int t) => t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : "바늘";
+    private static string DragName(int t) =>
+        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 5 ? "조작 판" : "바늘";
 
     /// <summary>핀치를 오므린 자리에서 잡을 수 있는 것을 고른다. 없으면 -1(그러면 «찍기»로 간다).</summary>
     private int FindDragTarget(Vector3 p, out Vector3 startValue)
@@ -672,6 +736,13 @@ public class RomRecordSession : MonoBehaviour
             float dA = Vector3.Distance(p, nc + needleDir[mi * 2 + NeedleActive] * nh);
             float dP = Vector3.Distance(p, nc + needleDir[mi * 2 + NeedlePress] * nh);
             if (Mathf.Min(dA, dP) <= needleGrabRadius) return dA <= dP ? 3 : 4;
+        }
+        // ★조작 판도 잡아 끈다(09-21 고정 모드) — 자리가 마음에 안 들면 옮긴다.
+        if (menuFixedInSpace && leftMenu != null && leftMenu.Placed
+            && Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius)
+        {
+            startValue = leftMenu.Position;
+            return 5;
         }
         if (step == RomRecordStep.Setup)
         {
@@ -740,6 +811,7 @@ public class RomRecordSession : MonoBehaviour
             case 0: frameOrigin = v; break;
             case 1: c7 = v; break;
             case 2: glab = v; break;
+            case 5: leftMenu.MoveTo(v); return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
         Vector3 pivot = Pivot;
@@ -756,7 +828,12 @@ public class RomRecordSession : MonoBehaviour
                       $"([{NeedleName(k)} 기록]을 눌러야 남는다)");
         }
         else
-            Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(dragTarget == 0 ? frameOrigin : dragTarget == 1 ? c7 : glab)}");
+        {
+            Vector3 at = dragTarget == 0 ? frameOrigin
+                       : dragTarget == 1 ? c7
+                       : dragTarget == 5 ? leftMenu.Position : glab;
+            Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
+        }
         dragTarget = -1;
         Play(sndPinch);
         dirty = true;
@@ -991,7 +1068,7 @@ public class RomRecordSession : MonoBehaviour
         // 손목 판 머리줄 — 지금까지 찍은 값(값이 바뀔 때만)
         string head = MenuHeader();
         leftMenu.SetHeader(head);
-        rightMenu.SetHeader(head);
+        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetHeader(head);
 
         // ★각도기와 바늘은 같은 기하를 쓴다(DialFrame) — 따로 계산하면 미리보기가 거짓말을 한다(규칙 9).
         if (DialFrame(out Vector3 dc, out Vector3 dn, out Vector3 dz, out float dr))

@@ -27,6 +27,18 @@ public interface IRomRecordMenu
     /// <summary>판을 손목 위에 둔다. <paramref name="hold"/>면 그 자리에 멈춘다(가림으로 튀지 않게).</summary>
     void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold);
 
+    // ── 공간 고정 모드(2026-09-21) ──────────────────────────────────
+    // ★손목을 따라다니면 기록하는 손과 판이 같은 자리에 있어 서로 간섭한다. 진행Root처럼 허공에 세운다.
+    bool FixedInSpace { get; set; }
+    bool Placed { get; }
+    Vector3 Position { get; }
+
+    /// <summary>그 자리에 세운다(위치는 한 번만 — 자리가 바뀌면 손이 헛짚는다).</summary>
+    void PlaceAt(Vector3 pos, Transform eye);
+
+    /// <summary>판을 통째로 옮긴다(잡아 끌기).</summary>
+    void MoveTo(Vector3 pos);
+
     /// <summary>매 프레임. 눌림 표시·반복·길게 누르기 진행을 돌린다.</summary>
     void Tick();
 

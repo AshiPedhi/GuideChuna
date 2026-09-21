@@ -74,6 +74,35 @@ public class RomRecordMenuUI : IRomRecordMenu
     public bool Visible => root != null && root.gameObject.activeSelf;
     public bool LastRepeat { get; private set; }
 
+    // ── 공간 고정 모드(2026-09-21) — 종전 Quad 판과 같은 얼개다 ──────
+    public bool FixedInSpace { get; set; }
+    public bool Placed => placedOnce;
+    public Vector3 Position => root != null ? root.position : Vector3.zero;
+
+    public void PlaceAt(Vector3 pos, Transform eye)
+    {
+        if (root == null || eye == null) return;
+        if (!root.gameObject.activeSelf) root.gameObject.SetActive(true);
+        root.SetPositionAndRotation(pos, Quaternion.LookRotation(pos - eye.position, Vector3.up));
+        placedOnce = true;
+        lastValidTime = Time.unscaledTime;
+    }
+
+    public void MoveTo(Vector3 pos)
+    {
+        if (root != null) root.position = pos;
+    }
+
+    private void FaceEye(Transform eye)
+    {
+        if (root == null || eye == null || !placedOnce) return;
+        if (!root.gameObject.activeSelf) root.gameObject.SetActive(true);
+        Vector3 away = root.position - eye.position;
+        if (away.sqrMagnitude < 1e-4f) return;
+        float k = 1f - Mathf.Exp(-followSharpness * 0.35f * Time.unscaledDeltaTime);
+        root.rotation = Quaternion.Slerp(root.rotation, Quaternion.LookRotation(away, Vector3.up), k);
+    }
+
     /// <summary>버튼이 눌렸다고 알려 온다(<see cref="RomMenuButtonUI"/>가 부른다).</summary>
     public void OnPressed(string id, bool repeat)
     {
@@ -272,6 +301,7 @@ public class RomRecordMenuUI : IRomRecordMenu
     public void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold)
     {
         if (root == null || eye == null) return;
+        if (FixedInSpace) { FaceEye(eye); return; }   // ★고정 모드에서는 손목을 따라가지 않는다
         float now = Time.unscaledTime;
         if (wristValid) lastValidTime = now;
 
