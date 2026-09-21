@@ -357,9 +357,15 @@ public class RomRecordSession : MonoBehaviour
         //   사람 눈은 바닥에서 최소 30cm 위다 — 그 전까지는 아무것도 놓지 않는다.
         if (!EyeReady)
         {
-            ReportNotReady();
-            return;
+            // ★★09-21: XR 초기화가 실패하면(로그에 OVRManager 없음·OpenXR 예외) 눈이 영영 원점이다.
+            //   그때 그냥 기다리기만 하면 <b>화면이 통째로 비어</b> 무슨 일인지 알 수가 없다 —
+            //   실제로 그 판은 2초 만에 꺼졌다. 그래서 얼마간 기다린 뒤에는 그냥 놓고 경고를 남긴다.
+            if (trackingWaitStart < 0f) trackingWaitStart = Time.unscaledTime;
+            float waited = Time.unscaledTime - trackingWaitStart;
+            ReportNotReady(waited);
+            if (waited < trackingWaitSeconds) return;
         }
+        else trackingWaitStart = -1f;
 
         if (!placed)
         {
@@ -393,13 +399,29 @@ public class RomRecordSession : MonoBehaviour
     private bool EyeReady => eye != null && eye.position.y > 0.3f;
 
     private float nextNotReadyLog;
+    private float trackingWaitStart = -1f;
+    private bool trackingGaveUp;
+    // ★이만큼 기다려도 추적이 안 붙으면 그냥 놓는다. 화면이 계속 비어 있는 것보다 낫다(09-21).
+    private const float trackingWaitSeconds = 8f;
 
-    private void ReportNotReady()
+    private void ReportNotReady(float waited)
     {
         if (Time.unscaledTime < nextNotReadyLog) return;
         nextNotReadyLog = Time.unscaledTime + 2f;
-        Debug.Log($"[실측기록] 헤드셋 추적을 기다린다 — 눈 높이 {(eye != null ? eye.position.y : -1f):F2}m " +
-                  "(0.30m를 넘어야 3축과 조작 판을 놓는다)");
+        float y = eye != null ? eye.position.y : -1f;
+        if (waited < trackingWaitSeconds)
+        {
+            Debug.Log($"[실측기록] 헤드셋 추적을 기다린다 — 눈 높이 {y:F2}m · {waited:F0}/{trackingWaitSeconds:F0}초 " +
+                      "(0.30m를 넘어야 3축과 조작 판을 놓는다)");
+            return;
+        }
+        if (trackingGaveUp) return;
+        trackingGaveUp = true;
+        // ★한 번만 크게 알린다 — 이 상태면 XR이 안 붙은 것이라 자리가 엉뚱해도 어쩔 수 없다.
+        ChunaLogger.LogWarning($"<color=orange>[실측기록] ★추적이 {trackingWaitSeconds:F0}초 동안 안 붙었다" +
+                               $"(눈 높이 {y:F2}m) — 그냥 놓는다. XR 초기화 실패일 수 있다" +
+                               "(패스스루 로그의 OVRManager 항목을 본다).</color>");
+        Debug.Log("[실측기록] ★추적 없이 놓는다 — 자리가 엉뚱하면 조작 판과 3축을 손으로 잡아 끈다.");
     }
 
     // ── 계산 ─────────────────────────────────────────────────────────
