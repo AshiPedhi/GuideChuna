@@ -36,7 +36,7 @@ public struct RomMenuItem
 ///   소리는 본체(<see cref="RomRecordSession"/>)가 낸다.
 /// ★매 프레임 하는 일은 판 루트 이동과 버튼 색·크기뿐이다. 배치·글자는 단계가 바뀔 때만 다시 쓴다.
 /// </summary>
-public class RomRecordWristMenu
+public class RomRecordWristMenu : IRomRecordMenu
 {
     private class Btn
     {

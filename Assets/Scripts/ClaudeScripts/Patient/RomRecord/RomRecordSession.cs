@@ -38,7 +38,20 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("손목 판의 버튼 글자·머리줄 글자.")]
     [SerializeField] private float buttonLabelSize = 0.03f;
 
-    [Header("=== 손목 판 ===")]
+    [Header("=== 손목 판 — Meta UI Set(2026-09-21) ===")]
+    [Tooltip("Meta Interaction SDK의 UI Set 프리팹으로 판을 만든다(기본). ★끄면 종전 월드 Quad 판으로 돌아간다 —\n" +
+             "기기에서 Meta 판이 안 눌리거나 이상하면 여기를 꺼서 되돌린다.")]
+    [SerializeField] private bool useMetaUI = true;
+    [Tooltip("Meta 판의 칸 너비(캔버스 px). 캔버스 스케일이 0.0005라 1px = 0.5mm다 — 84px ≈ 4.2cm.")]
+    [SerializeField] private float metaCellPx = 84f;
+    [Tooltip("Meta 판의 줄 높이(px).")]
+    [SerializeField] private float metaRowPx = 68f;
+    [Tooltip("Meta 판의 버튼 높이(px).")]
+    [SerializeField] private float metaButtonPx = 56f;
+    [Tooltip("Meta 판의 글자 크기(pt). ★Meta 표준은 14 — 캔버스 스케일을 곱하면 7mm다.")]
+    [SerializeField] private float metaLabelPt = 15f;
+
+    [Header("=== 손목 판(종전 Quad 판) ===")]
     [Tooltip("판의 칸 너비(m). 판은 6칸 너비다.")]
     [SerializeField] private float menuCellWidth = 0.042f;
     [Tooltip("판의 줄 높이(m).")]
@@ -110,8 +123,8 @@ public class RomRecordSession : MonoBehaviour
     };
 
     private readonly RomRecordHands hands = new RomRecordHands();
-    private readonly RomRecordWristMenu leftMenu = new RomRecordWristMenu();
-    private readonly RomRecordWristMenu rightMenu = new RomRecordWristMenu();
+    // ★판 구현이 둘이다(09-21) — Meta UI Set(기본)과 종전 월드 Quad 판. useMetaUI로 고른다.
+    private IRomRecordMenu leftMenu, rightMenu;
     private readonly RomRecordVisual view = new RomRecordVisual();
     private Transform eye;
     private bool placed;
@@ -148,17 +161,41 @@ public class RomRecordSession : MonoBehaviour
         view.textSize = textSize;
         view.panelSize = panelTextSize;
         view.Build(transform, font, mat);
-        foreach (var menu in new[] { leftMenu, rightMenu })
+        if (useMetaUI)
         {
-            menu.labelSize = buttonLabelSize;
-            menu.headerSize = buttonLabelSize;
-            menu.cellW = menuCellWidth;
-            menu.rowH = menuRowHeight;
-            menu.buttonH = menuButtonHeight;
-            menu.lift = menuLift;
+            var lm = new RomRecordMenuUI();
+            var rm = new RomRecordMenuUI();
+            foreach (var menu in new[] { lm, rm })
+            {
+                menu.cellPx = metaCellPx;
+                menu.rowPx = metaRowPx;
+                menu.buttonPx = metaButtonPx;
+                menu.labelPt = metaLabelPt;
+                menu.headerPt = metaLabelPt;
+                menu.lift = menuLift;
+            }
+            leftMenu = lm;
+            rightMenu = rm;
+        }
+        else
+        {
+            var lm = new RomRecordWristMenu();
+            var rm = new RomRecordWristMenu();
+            foreach (var menu in new[] { lm, rm })
+            {
+                menu.labelSize = buttonLabelSize;
+                menu.headerSize = buttonLabelSize;
+                menu.cellW = menuCellWidth;
+                menu.rowH = menuRowHeight;
+                menu.buttonH = menuButtonHeight;
+                menu.lift = menuLift;
+            }
+            leftMenu = lm;
+            rightMenu = rm;
         }
         leftMenu.Build(transform, "왼손목 메뉴", 14, font, mat);
         rightMenu.Build(transform, "오른손목 메뉴", 14, font, mat);
+        Debug.Log("[실측기록] 손목 판 — " + (useMetaUI ? "Meta UI Set" : "종전 Quad 판"));
         ApplyStepButtons();
         BuildSounds();
 
