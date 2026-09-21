@@ -42,6 +42,7 @@ public static partial class ChunaAgentBridge
             case "play": ok = DoPlay(sb, true, out err); return true;
             case "stop": ok = DoPlay(sb, false, out err); return true;
             case "gameview": ok = DoGameView(sb, a, out err); return true;
+            case "resolve": ok = DoResolvePackages(sb, out err); return true;
         }
         return false;
     }
@@ -392,6 +393,21 @@ public static partial class ChunaAgentBridge
         // ★record.py가 이 줄을 읽는다 — 형식을 바꾸면 녹화의 잘라내기가 깨진다.
         sb.Append(string.Format("rect {0:F0},{1:F0},{2:F0},{3:F0}\n",
                                 r.x, r.y + tb, r.width, Mathf.Max(2f, r.height - tb)));
+        return true;
+    }
+
+    /// <summary>
+    /// <c>Packages/manifest.json</c>을 다시 풀어 패키지를 내려받게 한다(2026-09-21 신설).
+    /// ★<c>refresh</c>(AssetDatabase.Refresh)로는 안 된다 — manifest는 Assets 밖이라 에셋 임포트 대상이 아니다.
+    ///   백그라운드 Unity는 파일 감시도 안 돌아서, 밖에서 manifest를 고쳐도 아무 일이 안 일어난다.
+    /// ★비동기다. 내려받기·컴파일이 끝날 때까지 기다렸다가 <c>ping</c>으로 확인한다.
+    /// </summary>
+    private static bool DoResolvePackages(StringBuilder sb, out string err)
+    {
+        err = null;
+        UnityEditor.PackageManager.Client.Resolve();
+        sb.Append("패키지를 다시 푼다(Client.Resolve).\n");
+        sb.Append("★내려받기와 컴파일이 이어진다 — 끝날 때까지 기다렸다가 ping으로 확인해라.\n");
         return true;
     }
 
