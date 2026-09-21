@@ -53,6 +53,25 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("Meta 판의 글자 크기(pt). ★Meta 표준은 14 — 캔버스 스케일을 곱하면 7mm다.")]
     [SerializeField] private float metaLabelPt = 15f;
 
+    [Header("=== 각도기·바늘 모양(2026-09-21) ===")]
+    // ★사용자 지시 09-21: "각도기도 하얀색 말고 회색 계열로 조금 시선 분산 덜 되게 · 바늘 선 얇게 ·
+    //   각도 텍스트는 직선이나 원이 안 겹치게 · 회전 각도는 원통형으로 머리 둘레에 벽면처럼."
+    // ★여기 값은 전부 <b>눈으로 맞출 것</b>이라 인스펙터로 뺀다(기기 미검증).
+    [Tooltip("눈금판 원·원통 테두리 색.")]
+    [SerializeField] private Color dialColor = new Color(0.60f, 0.62f, 0.65f, 0.55f);
+    [Tooltip("눈금 색.")]
+    [SerializeField] private Color dialTickColor = new Color(0.64f, 0.66f, 0.69f, 0.60f);
+    [Tooltip("눈금 0 색. ★기준선이라 다른 눈금보다 또렷하게 둔다.")]
+    [SerializeField] private Color dialZeroColor = new Color(0.88f, 0.90f, 0.93f, 0.95f);
+    [Tooltip("눈금 숫자 색.")]
+    [SerializeField] private Color dialLabelColor = new Color(0.80f, 0.82f, 0.85f, 0.95f);
+    [Tooltip("바늘 선 굵기(m). 09-21에 0.007에서 줄였다.")]
+    [SerializeField] private float needleWidth = 0.003f;
+    [Tooltip("눈금 숫자를 원 밖으로 미는 배수(반지름 기준).")]
+    [SerializeField] private float tickLabelOut = 1.20f;
+    [Tooltip("회전 단계 원통 벽의 높이(m, 위아래 합). ★추정값이다 — 머리에 맞는지 눈으로 볼 것.")]
+    [SerializeField] private float cylinderHeight = 0.20f;
+
     [Header("=== 판 자리(2026-09-21) ===")]
     // ★사용자 지시 09-21: "UI 동작할 때 간섭이 너무 많다 — 진행ROOT 패널처럼 따로 분리해야겠다."
     //   손목을 따라다니면 <b>기록하는 손과 판이 같은 자리</b>에 있어 서로 막는다.
@@ -184,6 +203,14 @@ public class RomRecordSession : MonoBehaviour
         needleOn = needleEnabled;   // ★런타임 토글([바늘] 버튼)이 이 값을 이어받는다
         view.textSize = textSize;
         view.panelSize = panelTextSize;
+        // ★색·굵기는 매 SetDial/SetNeedle에서 다시 입혀지므로 여기서 한 번 넘기면 된다(09-21).
+        view.dialColor = dialColor;
+        view.dialTickColor = dialTickColor;
+        view.dialZeroColor = dialZeroColor;
+        view.dialLabelColor = dialLabelColor;
+        view.needleWidth = needleWidth;
+        view.tickLabelOut = tickLabelOut;
+        view.cylinderHeight = cylinderHeight;
         view.Build(transform, font, mat);
         if (useMetaUI)
         {
