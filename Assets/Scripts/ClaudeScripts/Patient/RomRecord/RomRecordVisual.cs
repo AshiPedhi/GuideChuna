@@ -13,6 +13,12 @@ public class RomRecordVisual
     private const int TickCount = 36;      // 10°마다
     private const int TickLabelCount = 12; // 30°마다
     public const int MaxMarks = 4;
+    /// <summary>
+    /// 바늘 개수(2026-09-21에 2 → 4). 측굴·회전은 <b>좌 능동·좌 압박·우 능동·우 압박</b> 넷이 필요한데
+    /// 배열이 2개라 <c>SetNeedle(2, ...)</c>·<c>SetNeedle(3, ...)</c>이 조용히 무시되고 있었다(사용자 지적).
+    /// ★짝수 = 능동, 홀수 = 압박. 좌우는 바늘이 뻗는 <b>방향</b>으로 갈리므로 색으로 구분하지 않는다.
+    /// </summary>
+    public const int NeedleCount = 4;
 
     private Transform root;
     private TMP_FontAsset font;
@@ -23,10 +29,11 @@ public class RomRecordVisual
     // ★회전 단계의 <b>원통 벽</b>용(2026-09-21). 평면 눈금판일 때는 꺼 둔다.
     //   ring = 위 테두리 겸 평면 원 · ringLower = 아래 테두리 · zeroRadial = 중심에서 벽까지 그은 0° 안내선.
     private LineRenderer ringLower, zeroRadial;
-    // ★바늘은 <b>둘</b>이다(09-21 사용자 지시) — 능동과 압박을 나란히 놓고 눈으로 비교한다.
-    private readonly LineRenderer[] needles = new LineRenderer[2];
-    private readonly Transform[] needleGrips = new Transform[2];
-    private readonly TextMeshPro[] needleLabels = new TextMeshPro[2];
+    // ★바늘은 <b>넷</b>이다(09-21 개정, 애초엔 둘이었다) — 능동과 압박을 나란히 놓고 눈으로 비교하는데,
+    //   측굴·회전은 좌우가 따로 있어 2개로는 절반만 나왔다. <see cref="NeedleCount"/> 참고.
+    private readonly LineRenderer[] needles = new LineRenderer[NeedleCount];
+    private readonly Transform[] needleGrips = new Transform[NeedleCount];
+    private readonly TextMeshPro[] needleLabels = new TextMeshPro[NeedleCount];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
     private Transform c7Dot, glabDot, liveDot, pivotDot;
     private readonly LineRenderer[] ticks = new LineRenderer[TickCount];
@@ -52,20 +59,38 @@ public class RomRecordVisual
     public Color dialTickColor = new Color(0.64f, 0.66f, 0.69f, 0.60f);   // 10°·30° 눈금
     public Color dialZeroColor = new Color(0.88f, 0.90f, 0.93f, 0.95f);   // ★눈금 0은 기준이라 조금 더 또렷하게
     public Color dialLabelColor = new Color(0.80f, 0.82f, 0.85f, 0.95f);  // 눈금 숫자
-    public float dialLineWidth = 0.003f;   // 원·테두리 굵기(옛 0.004)
-    public float dialTickWidth = 0.002f;   // 눈금 굵기(옛 0.003)
-    public float dialZeroWidth = 0.004f;   // 눈금 0 굵기(옛 0.005)
+    public float dialLineWidth = 0.002f;    // 원·테두리 굵기(0.004 → 0.003 → 0.002)
+    public float dialTickWidth = 0.0013f;   // 눈금 굵기(0.003 → 0.002 → 0.0013)
+    public float dialZeroWidth = 0.0025f;   // 눈금 0 굵기(0.005 → 0.004 → 0.0025)
 
-    // 바늘 — ★선만 얇게 한다. 손잡이 구체는 <b>잡아야 하는 것</b>이라 줄이지 않았다(사용자 지시).
-    public float needleWidth = 0.003f;        // 옛 0.007
-    public float needleGripSize = 0.035f;     // 평소
-    public float needleGripHeldSize = 0.045f; // 잡고 있는 동안
+    // ── 선 굵기(2026-09-21 신설) ─────────────────────────────────────
+    // ★"바늘 전체적으로 모든 선들은 좀더 얇게"(사용자 지시)라 <b>바늘만이 아니라</b> 3축·기준축·중립선·
+    //   마커선까지 한 벌로 낮췄다. 전부 <b>기기 미검증 추정값</b>으로, 종전의 약 0.6배다.
+    //   계산 근거(추정): Quest 3은 눈에서 0.5m 거리에서 1mm가 대략 0.11°다. 각해상도가 20~25ppd쯤이니
+    //   1.3mm면 2~3픽셀은 남아 선으로는 보인다 — 이보다 더 줄이면 끊겨 보일 위험이 있다.
+    // ★Build에서 한 번만 읽는 값이다(각도기 굵기와 달리 다시 입히지 않는다). Session은 Build 전에 대입해라.
+    public float axisWidth = 0.0025f;        // 3축(연직·전후·좌우). 옛 0.004
+    public float pivotAxisWidth = 0.0035f;   // 기준축(목 중앙). 옛 0.006
+    public float neutralLineWidth = 0.002f;  // 중립선(기준점→미간). 옛 0.003
+    public float markLineWidth = 0.002f;     // 마커선(기준점→찍은 점). 옛 0.003
+
+    // 바늘
+    // ★손잡이 구체는 <b>보이는 크기만</b>이다. 잡는 판정 반경은 Session이 따로 들고 있다
+    //   (<c>RomRecordSession.needleGrabRadius</c> = 0.1m). 구체를 줄여도 잡기는 그대로다.
+    //   09-21 이전에는 "잡아야 하는 것이라 줄이지 않는다"고 적어 뒀는데, 사용자가 "니들 끝 구체도 너무 커"라고
+    //   지적했다 — 잡기 반경과 보이는 크기가 애초에 다른 값이라 그 판단이 틀렸다.
+    public float needleWidth = 0.002f;        // 0.007 → 0.003 → 0.002
+    public float needleGripSize = 0.018f;     // 평소. 옛 0.035(지름 3.5cm는 눈금을 가렸다)
+    public float needleGripHeldSize = 0.024f; // 잡고 있는 동안. 옛 0.045
 
     // 글자를 선·원에서 비켜 놓는 양 — ★글자가 선 위에 얹히면 둘 다 안 읽힌다(09-21 사용자 지적).
     public float tickLabelOut = 1.20f;      // 눈금 숫자를 원 밖으로 미는 배수(옛 1.12 — 원에 붙어 있었다)
     public float needleLabelAlong = 0.55f;  // 바늘 방향으로 나가는 거리(반지름 배수)
     public float needleLabelSide = 0.24f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수).
-                                            //   능동은 +쪽, 압박은 -쪽으로 갈라 둘끼리도 안 겹친다.
+                                            //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.
+    public float needleLabelAlongStep = 0.22f; // ★좌우 쌍(0·1 / 2·3)을 <b>반지름으로도</b> 어긋나게 하는 양.
+                                               //   좌우 바늘이 둘 다 0°에 가까우면 각으로는 안 갈라져서
+                                               //   수직 비킴만으로는 넷 중 둘이 겹친다(09-21 개정).
 
     // 회전(횡단면) 각도기를 <b>원통 벽</b>으로 세운다 — 수평 원판은 보는 높이에 따라 납작해져 안 보인다.
     // ★보이는 모양만 바꾸는 것이다. 각 계산(RomRecordGeometry.PlaneAngle)은 그대로 횡단면 투영이다.
@@ -73,6 +98,12 @@ public class RomRecordVisual
     public float cylinderHeight = 0.20f;          // ★추정 — 사람 머리 높이 어림(후보 0.15~0.25m). 기기 미검증
     public float cylinderMinorHeightRatio = 0.35f;// 10° 세로선은 이만큼만(30°는 위아래 테두리까지 꽉)
     public float cylinderLabelRise = 0.03f;       // 숫자를 위 테두리보다 이만큼 더 위에
+    // ★원통 벽을 <b>보이는 크기만</b> 키우는 배수(09-21 사용자 지시 "원통형 지름좀 키우고").
+    //   들어오는 radius는 회전중심에서 미간까지(머리 반지름쯤 = 0.1m 안팎)라 벽이 머리에 바짝 붙는다.
+    //   ★각 계산은 전혀 건드리지 않는다 — 각은 RomRecordGeometry가 내고, 바늘·손잡이도 Session이 주는
+    //     원래 radius/handleRadius를 그대로 쓴다. 여기서 커지는 것은 <b>테두리·세로눈금·숫자</b>뿐이다.
+    //   기본 1.6은 <b>기기 미검증 추정</b>이다(머리 반지름 0.1m 기준으로 벽이 0.16m가 되어 귀에서 6cm쯤 뜬다).
+    public float cylinderRadiusScale = 1.6f;
 
     public static readonly Color UpColor = new Color(0.35f, 0.95f, 0.45f);
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
@@ -90,11 +121,11 @@ public class RomRecordVisual
         root = new GameObject("[실측기록] 표시").transform;
         root.SetParent(parent, false);
 
-        axisUp = Line("연직축", UpColor, 0.004f);
-        axisFwd = Line("전후축", FwdColor, 0.004f);
-        axisRight = Line("좌우축", RightColor, 0.004f);
-        pivotAxis = Line("기준축(목 중앙)", PivotColor, 0.006f);
-        neutralLine = Line("중립선", Color.white, 0.003f);
+        axisUp = Line("연직축", UpColor, axisWidth);
+        axisFwd = Line("전후축", FwdColor, axisWidth);
+        axisRight = Line("좌우축", RightColor, axisWidth);
+        pivotAxis = Line("기준축(목 중앙)", PivotColor, pivotAxisWidth);
+        neutralLine = Line("중립선", Color.white, neutralLineWidth);
 
         labUp = Label("위", textSize, UpColor);
         labDown = Label("아래", textSize * 0.8f, UpColor);
@@ -125,19 +156,22 @@ public class RomRecordVisual
         }
 
         // ★바늘(2026-09-21) — 각도기 중심에서 뻗은 지침. 끝의 손잡이를 잡아 그 단면 안에서만 돌린다.
-        //   둘을 만든다: 0 능동 · 1 압박. 색은 마커와 같은 계열로 맞춘다.
-        for (int i = 0; i < 2; i++)
+        //   ★넷을 <b>여기서 미리 다 만든다</b>(런타임 생성 금지). 안 쓰는 것은 SetNeedle(i, false, ...)로 꺼 둔다.
+        //   짝수 = 능동색 · 홀수 = 압박색. 좌우는 바늘 방향으로 갈리므로 색을 더 나누지 않는다.
+        for (int i = 0; i < NeedleCount; i++)
         {
-            Color c = i == 0 ? ActiveColor : PassiveColor;
-            needles[i] = Line(i == 0 ? "바늘(능동)" : "바늘(압박)", c, needleWidth);
-            needleGrips[i] = Dot("바늘 손잡이", c, needleGripSize);
+            bool act = i % 2 == 0;
+            Color c = act ? ActiveColor : PassiveColor;
+            // 이름은 Build에서 한 번만 만든다(매 프레임 문자열 결합 금지 — 코드 컨벤션).
+            needles[i] = Line(act ? "바늘(능동)" + i : "바늘(압박)" + i, c, needleWidth);
+            needleGrips[i] = Dot("바늘 손잡이" + i, c, needleGripSize);
             needleLabels[i] = Label("", textSize * 1.4f, c);
         }
 
         for (int i = 0; i < MaxMarks; i++)
         {
             markDots[i] = Dot("마커", ActiveColor, 0.016f);
-            markLines[i] = Line("마커선", ActiveColor, 0.003f);
+            markLines[i] = Line("마커선", ActiveColor, markLineWidth);
             markLabels[i] = Label("", textSize, ActiveColor);
         }
 
@@ -146,7 +180,7 @@ public class RomRecordVisual
         panel.rectTransform.sizeDelta = new Vector2(panelSize * 16f, panelSize * 12f);
 
         SetLive(false, Vector3.zero);
-        for (int i = 0; i < 2; i++) SetNeedle(i, false, Vector3.zero, Vector3.up, 0.15f, 0.2f, null, false);
+        for (int i = 0; i < NeedleCount; i++) SetNeedle(i, false, Vector3.zero, Vector3.up, 0.15f, 0.2f, null, false);
         SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.15f);
         for (int i = 0; i < MaxMarks; i++) SetMark(i, false, Vector3.zero, Vector3.zero, null, ActiveColor);
     }
@@ -277,29 +311,32 @@ public class RomRecordVisual
         Vector3 up = Vector3.up;
         float half = cylinderHeight * 0.5f;
         Vector3 top = up * half, bot = up * -half;
+        // ★벽 반지름만 키운다(09-21). 눈금 숫자·세로선·0° 줄이 전부 이 값을 따라가야 벽에 붙어 있는다.
+        //   각 계산에는 안 쓰인다 — 여기 들어온 radius는 그리기용으로만 쓰인다.
+        float wall = radius * Mathf.Max(0.1f, cylinderRadiusScale);
 
         for (int k = 0; k <= RingSegments; k++)
         {
             float a = k * (2f * Mathf.PI / RingSegments);
-            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * radius;
+            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             ring.SetPosition(k, p + top);
             ringLower.SetPosition(k, p + bot);
         }
         for (int i = 0; i < TickCount; i++)
         {
             float a = i * 10f * Mathf.Deg2Rad;
-            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * radius;
+            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             float h = (i % 3 == 0 ? half : half * cylinderMinorHeightRatio);
             Seg(ticks[i], p - up * h, p + up * h);
         }
         for (int i = 0; i < TickLabelCount; i++)
         {
             float a = i * 30f * Mathf.Deg2Rad;
-            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * radius;
+            Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             tickLabels[i].transform.position = p + up * (half + cylinderLabelRise);
         }
         // 0°는 벽에 세운 기둥 하나로 또렷하게, 중심에서 벽까지 한 줄을 더 그어 어느 쪽이 0인지 보이게 한다.
-        Vector3 zp = center + z * radius;
+        Vector3 zp = center + z * wall;
         Seg(zeroLine, zp + bot, zp + top);
         Seg(zeroRadial, center, zp);
     }
@@ -340,13 +377,13 @@ public class RomRecordVisual
     public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, Vector3 normal, float dialRadius,
                           float handleRadius, string label, bool held)
     {
-        if (i < 0 || i >= 2) return;
+        if (i < 0 || i >= NeedleCount) return;
         Show(needles[i], on);
         Show(needleGrips[i], on);
         if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
         if (!on) return;
 
-        Color baseC = i == 0 ? ActiveColor : PassiveColor;
+        Color baseC = i % 2 == 0 ? ActiveColor : PassiveColor;   // 짝수 능동 · 홀수 압박(좌우는 방향이 가른다)
         Color c = held ? NeedleHeldColor : baseC;
         // ★손잡이는 눈금판보다 <b>더 밖</b>에 둔다. 눈금 반지름에 두면 실제 사람 머리 안에 묻혀
         //   잡을 수가 없다(09-21 사용자 지적 — 내 설계 오류였다).
@@ -360,13 +397,17 @@ public class RomRecordVisual
         needleLabels[i].color = c;
         if (label != null) needleLabels[i].text = label;
         // ★글자를 바늘 선 위에 그대로 얹으면 선과 겹쳐 둘 다 안 읽힌다(09-21 사용자 지적).
-        //   단면 안에서 바늘에 <b>수직</b>으로 비킨다. 능동(+)·압박(−)을 반대쪽으로 갈라 둘끼리도 안 겹친다.
+        //   단면 안에서 바늘에 <b>수직</b>으로 비킨다. 넷이 서로 안 겹치게 두 손잡이를 같이 쓴다:
+        //   ① 수직 비킴 — 능동(짝수) +쪽 · 압박(홀수) −쪽. 한 쌍(좌 또는 우) 안에서 갈라 준다.
+        //   ② 반지름 어긋냄 — 쌍 번호(i/2)만큼 밖으로 더 민다. 좌우 바늘이 <b>둘 다 0°에 가까우면</b>
+        //      각으로는 안 갈라지므로 ①만으로는 0과 2, 1과 3이 겹친다. 그때를 ②가 막는다.
         Vector3 side = Vector3.Cross(normal, dir);
         if (side.sqrMagnitude < 1e-8f) side = Vector3.Cross(Vector3.up, dir);   // 법선∥바늘인 퇴화 상황 대비
         if (side.sqrMagnitude < 1e-8f) side = Vector3.right;
-        side = side.normalized * (i == 0 ? 1f : -1f);
+        side = side.normalized * (i % 2 == 0 ? 1f : -1f);
+        float along = needleLabelAlong + (i / 2) * needleLabelAlongStep;        // i/2는 정수 나눗셈(쌍 번호 0·1)
         needleLabels[i].transform.position =
-            center + dir * (dialRadius * needleLabelAlong) + side * (dialRadius * needleLabelSide);
+            center + dir * (dialRadius * along) + side * (dialRadius * needleLabelSide);
     }
 
     public void SetPanel(Vector3 pos, string text)
