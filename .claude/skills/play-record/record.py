@@ -340,6 +340,13 @@ def cmd_watch(a):
                 secs = time.time() - started
                 log("[녹화] Play가 끝났다 — %.0f초 기록" % secs)
                 proc = None
+                # ★잘못 눌렀다가 곧 끈 판은 스스로 지운다(09-21 사용자 지시) — 묻지 않는다.
+                if secs < a.min_seconds:
+                    if path and os.path.exists(path):
+                        os.remove(path)
+                        log("[녹화] %.0f초짜리라 지웠다(%d초 미만은 잘못 누른 것으로 본다)"
+                            % (secs, a.min_seconds))
+                    path = None
                 if not a.repeat:
                     break
 
@@ -474,6 +481,8 @@ def main():
     p.add_argument("--poll", type=float, default=1.5, help="Play 상태를 확인하는 간격(초)")
     p.add_argument("--timeout", type=int, default=3600, help="Play를 기다릴 최대 시간(초)")
     p.add_argument("--repeat", action="store_true", help="한 판만 찍고 끝내지 않고 계속 기다린다")
+    p.add_argument("--min-seconds", dest="min_seconds", type=float, default=10.0,
+                   help="이보다 짧은 판은 잘못 누른 것으로 보고 묻지 않고 지운다(기본 10초)")
     p.add_argument("--crop", default="", help="ffmpeg crop 식(예: 1280:720:100:50). 주면 Game 뷰 자동 잘라내기를 대신한다")
     p.add_argument("--whole", action="store_true",
                    help="Game 뷰만이 아니라 Unity 창 전체를 찍는다(Scene 뷰·인스펙터까지 남긴다)")
