@@ -306,7 +306,9 @@ def cmd_watch(a):
             if os.path.exists(STOP_FLAG):
                 log("[녹화] 멈추라는 신호를 받았다")
                 break
-            if time.time() > deadline:
+            # ★녹화 중에는 시간이 다 돼도 끊지 않는다(09-21에 Play 한복판에서 끊겼다).
+            #   기다리는 시간은 «Play를 기다리는» 시간이지 «찍는» 시간이 아니다.
+            if time.time() > deadline and proc is None:
                 log("[녹화] 기다리는 시간이 다 됐다 — 끝낸다")
                 break
 
