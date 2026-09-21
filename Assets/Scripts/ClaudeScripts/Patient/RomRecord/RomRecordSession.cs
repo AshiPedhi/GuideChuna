@@ -80,8 +80,8 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private bool menuFixedInSpace = true;
     [Tooltip("고정 판을 처음 놓을 자리 — 눈앞 거리(m).")]
     [SerializeField] private float menuFixedDistance = 0.55f;
-    [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m).")]
-    [SerializeField] private float menuFixedBelowEye = 0.3f;
+    [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m). ★09-21: 0.3은 너무 낮아 조작이 힘들었다.")]
+    [SerializeField] private float menuFixedBelowEye = 0.14f;
     [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
     [SerializeField] private float menuFixedSide = -0.38f;
     [Tooltip("고정 판을 잡아 끌 수 있는 반경(m). 판 중심에서 이 안을 핀치로 오므리면 판이 따라온다.")]
@@ -330,6 +330,16 @@ public class RomRecordSession : MonoBehaviour
         if (eye == null && Camera.main != null) eye = Camera.main.transform;
         if (eye == null) return;
 
+        // ★★09-21 실측: 첫 프레임에 자리를 잡으면 <b>헤드셋 추적이 아직 안 붙어</b> 눈이 원점에 있다.
+        //   그러면 3축도 조작 판도 발밑 엉뚱한 곳에 선다 — 로그에 판이 (-0.380,-0.300,0.550)로 찍혔는데
+        //   그건 눈이 (0,0,0)일 때 나오는 값이었고, 그 판에서 "기준선을 못 잡았다"가 8번 찍혔다.
+        //   사람 눈은 바닥에서 최소 30cm 위다 — 그 전까지는 아무것도 놓지 않는다.
+        if (!EyeReady)
+        {
+            ReportNotReady();
+            return;
+        }
+
         if (!placed)
         {
             // 처음 한 번 — 눈앞에, 눈높이보다 조금 아래에 3축을 둔다. 정면은 사용자가 보는 수평 방향.
@@ -353,6 +363,22 @@ public class RomRecordSession : MonoBehaviour
             Redraw();
         }
         view.FaceCamera(eye);
+    }
+
+    /// <summary>
+    /// 헤드셋 추적이 붙었나(2026-09-21 신설). ★붙기 전에는 눈이 원점이라 무엇을 놓든 발밑에 놓인다.
+    /// 사람 눈은 바닥에서 최소 30cm 위다 — 그보다 낮으면 아직 추적 전이다.
+    /// </summary>
+    private bool EyeReady => eye != null && eye.position.y > 0.3f;
+
+    private float nextNotReadyLog;
+
+    private void ReportNotReady()
+    {
+        if (Time.unscaledTime < nextNotReadyLog) return;
+        nextNotReadyLog = Time.unscaledTime + 2f;
+        Debug.Log($"[실측기록] 헤드셋 추적을 기다린다 — 눈 높이 {(eye != null ? eye.position.y : -1f):F2}m " +
+                  "(0.30m를 넘어야 3축과 조작 판을 놓는다)");
     }
 
     // ── 계산 ─────────────────────────────────────────────────────────
