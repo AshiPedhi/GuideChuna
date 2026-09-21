@@ -27,6 +27,14 @@ public class RomRecordHands
         public readonly float[] ringTime = new float[48];
         public int ringHead;
         public int ringCount;
+
+        // ★진단(2026-09-21 신설). 09-21 증상 "위에서 잡으면 핀치가 안 잡힌다"를 로그로 가르려고 둔다.
+        //   막는 자리가 넷인데 셋이 조용해서 원인을 못 갈랐다 — 이제 막은 쪽이 스스로 말한다.
+        public string blockReason;   // 지금 <b>시작</b>을 막고 있는 것(null이면 안 막힘)
+        public float gap = -1f;      // 엄지–검지/중지 중 가까운 쪽 거리(m). 추적이 없으면 -1
+        public bool highConfidence;
+        public bool tracked;
+        public Vector3 tip;          // 엄지 끝(진단용 — 손 높이를 재는 데 쓴다)
     }
 
     private Hand left, right;
@@ -101,9 +109,9 @@ public class RomRecordHands
     /// <summary>
     /// 한 손의 핀치를 갱신한다. 반환: 0 변화 없음 · 1 방금 오므림 · 2 방금 폄(released에 고정 자리) · 3 취소(손을 놓침)
     /// · 4 너무 짧아 무시.
-    /// ★<paramref name="blocked"/>가 참이면(손목 버튼 근처 등) 새로 시작하지 않는다.
+    /// ★<paramref name="blockedBy"/>가 null이 아니면(손목 버튼 근처 등) 새로 시작하지 않는다 — 그 문구가 막은 이유로 기록된다.
     /// </summary>
-    public int UpdatePinch(bool isLeft, bool blocked, out Vector3 released)
+    public int UpdatePinch(bool isLeft, string blockedBy, out Vector3 released)
     {
         released = default;
         PinchState s = isLeft ? LeftPinch : RightPinch;
@@ -112,8 +120,15 @@ public class RomRecordHands
         bool okI = TryJoint(isLeft, HandJointId.HandIndexTip, out Vector3 i);
         bool okM = TryJoint(isLeft, HandJointId.HandMiddleTip, out Vector3 m);
 
-        if (!okT || (!okI && !okM) || SystemGesture(isLeft))
+        Hand h = isLeft ? left : right;
+        s.tracked = okT && (okI || okM);
+        s.highConfidence = h != null && h.IsHighConfidence;
+        s.tip = okT ? t : s.tip;
+
+        if (!s.tracked || SystemGesture(isLeft))
         {
+            s.gap = -1f;
+            s.blockReason = !s.tracked ? "손 끝 추적 끊김" : "시스템 제스처 중";
             // ★잡고 있는데 손을 놓쳤거나 시스템 제스처가 시작됐다 — 엉뚱한 자리에 고정하지 않고 취소한다.
             if (s.closed) { s.closed = false; return 3; }
             return 0;
@@ -121,14 +136,25 @@ public class RomRecordHands
 
         float dI = okI ? Vector3.Distance(t, i) : float.MaxValue;
         float dM = okM ? Vector3.Distance(t, m) : float.MaxValue;
+        s.gap = Mathf.Min(dI, dM);
 
         if (!s.closed)
         {
-            if (blocked) return 0;
-            float d = Mathf.Min(dI, dM);
-            if (d > closeDistance) return 0;
-            Hand hc = isLeft ? left : right;
-            if (requireHighConfidence && hc != null && !hc.IsHighConfidence) { IgnoredLowConfidence++; return 0; }
+            if (blockedBy != null) { s.blockReason = blockedBy; return 0; }
+            float d = s.gap;
+            if (d > closeDistance)
+            {
+                // ★거의 오므렸는데 문턱을 못 넘은 것만 이유로 남긴다. 손을 편 상태는 정상이라 조용히 둔다.
+                s.blockReason = d < closeDistance * 2.5f ? "덜 오므림" : null;
+                return 0;
+            }
+            if (requireHighConfidence && h != null && !h.IsHighConfidence)
+            {
+                IgnoredLowConfidence++;
+                s.blockReason = "추적 신뢰 낮음";
+                return 0;
+            }
+            s.blockReason = null;
             s.closed = true;
             s.middle = dM < dI;
             s.closeTime = Time.unscaledTime;
@@ -150,7 +176,7 @@ public class RomRecordHands
 
         // 폈다 — 펴기 직전 자리를 돌려준다.
         s.closed = false;
-        if (Time.unscaledTime - s.closeTime < minHold) { IgnoredShort++; return 4; }
+        if (Time.unscaledTime - s.closeTime < minHold) { IgnoredShort++; s.blockReason = "너무 짧음"; return 4; }
         released = Lookback(s, Time.unscaledTime - releaseLookback);
         return 2;
     }

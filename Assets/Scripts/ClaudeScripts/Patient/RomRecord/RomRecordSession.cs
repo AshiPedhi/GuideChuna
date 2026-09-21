@@ -61,6 +61,18 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float neckStepMm = 5f;
     [SerializeField] private float adjustStepDeg = 1f;
 
+    [Header("=== 잡아 끌기(2026-09-21 신설) ===")]
+    // ★09-21 로그 실측: 기준선 세팅에서 핀치가 17번 거부됐다("기준선 세팅 중에는 찍지 않는다").
+    //   사용자는 3축을 손으로 잡아 옮기려 한 것이었다 — 5mm 버튼으로만 올리게 해 둬 한참 걸렸다.
+    [Tooltip("3축(기준선)을 잡을 수 있는 반경(m). 이 안에서 핀치를 오므리면 3축이 손을 따라온다.")]
+    [SerializeField] private float axesGrabRadius = 0.25f;
+    [Tooltip("대추·미간 점을 잡을 수 있는 반경(m).")]
+    [SerializeField] private float dotGrabRadius = 0.08f;
+
+    [Header("=== 나가기 ===")]
+    [Tooltip("[나가기]를 이만큼(초) 누르고 있어야 나간다. ★09-21: 지탱하던 손이 스쳐 나가기가 눌렸다.")]
+    [SerializeField] private float exitHoldSeconds = 1f;
+
     [Header("=== 기준축(목 중앙) ===")]
     [Tooltip("대추에서 환자 앞쪽으로 기준축을 옮기는 거리(mm). 사람마다 달라 정해진 값이 없다 — 버튼으로 맞춘다.\n" +
              "★0이면 대추 위치 그대로다.")]
@@ -96,6 +108,11 @@ public class RomRecordSession : MonoBehaviour
     private bool dirty = true;
     private bool livePinchLeft;            // 지금 오므리고 있는 손(한 번에 하나만 받는다)
     private bool liveActive;
+    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · -1 아무것도 안 잡음(그러면 종전대로 «찍기»다)
+    private int dragTarget = -1;
+    private Vector3 dragGrabbedAt, dragStartValue;
+    private string lastPinchReason;        // 진단 로그 자기 침묵용
+    private float nextPinchLog;
     private readonly StringBuilder sb = new StringBuilder(512);
     private float lastPressTime = -99f;
     private bool menuHoldL, menuHoldR;
@@ -279,7 +296,6 @@ public class RomRecordSession : MonoBehaviour
     private void ApplyStepButtons()
     {
         var items = new List<RomMenuItem>(14);
-        items.Add(RomMenuItem.Button("exit", "나가기", 4.6f, 0, 1.4f, ExitTint));
         float navRow;
 
         switch (step)
@@ -331,6 +347,9 @@ public class RomRecordSession : MonoBehaviour
 
         if (step > RomRecordStep.Setup) items.Add(RomMenuItem.Button("prev", "◀ 이전", 0f, navRow, 2.2f, NavTint));
         if (step < RomRecordStep.Done) items.Add(RomMenuItem.Button("next", "다음 ▶", 3.8f, navRow, 2.2f, NavTint));
+        // ★[나가기]는 판 모서리에서 뺀다(09-21 사용자 지시). 맨 아랫줄 <b>가운데</b> + 길게 눌러야 먹는다.
+        //   종전엔 머리줄 오른쪽 끝(모서리)이라 손을 뻗을 때 가장 먼저 닿았고, 닿는 즉시 실행됐다.
+        items.Add(RomMenuItem.Button("exit", "나가기", 2.1f, navRow + 1f, 1.8f, ExitTint, holdSeconds: exitHoldSeconds));
 
         var arr = items.ToArray();
         string head = MenuHeader();
@@ -431,34 +450,123 @@ public class RomRecordSession : MonoBehaviour
 
         // ★버튼을 누르는 동안과 누른 직후에는 핀치를 받지 않는다(09-18 로그: 의도하지 않은 핀치 30여 번).
         //   판을 누르러 다가오는 중(고정 상태)이면 양손 모두 막는다 — 가려진 손이 핀치로 읽히는 것을 막는다.
-        bool interacting = menuHoldL || menuHoldR || Time.unscaledTime - lastPressTime < 0.4f;
         bool nearMenu = hands.TryJoint(isLeft, HandJointId.HandIndexTip, out Vector3 tip)
                         && (leftMenu.Near(tip, 0.06f) || rightMenu.Near(tip, 0.06f));
 
-        int ev = hands.UpdatePinch(isLeft, otherBusy || nearMenu || interacting, out Vector3 fixedPos);
+        // ★막은 이유를 문구로 넘긴다(09-21) — 막는 자리가 넷인데 셋이 조용해 원인을 못 갈랐다.
+        string blockedBy = otherBusy ? "다른 손이 잡는 중"
+                         : menuHoldL || menuHoldR ? "판에 손이 다가옴(판 고정 중)"
+                         : Time.unscaledTime - lastPressTime < 0.4f ? "버튼 누른 직후"
+                         : nearMenu ? "판 근처" : null;
+
+        int ev = hands.UpdatePinch(isLeft, blockedBy, out Vector3 fixedPos);
         var st = isLeft ? hands.LeftPinch : hands.RightPinch;
+        ReportPinch(isLeft, st);
 
         if (ev == 1)
         {
             liveActive = true;
             livePinchLeft = isLeft;
+            // ★잡을 것이 있으면 «찍기»가 아니라 «잡아 끌기»다. 없으면 종전대로 찍는다.
+            dragTarget = FindDragTarget(st.current, out dragStartValue);
+            if (dragTarget >= 0)
+            {
+                dragGrabbedAt = st.current;
+                Play(sndPress);
+                Debug.Log($"[실측기록] 잡았다 — {DragName(dragTarget)}");
+            }
         }
         if (liveActive && livePinchLeft == isLeft)
         {
-            if (st.closed) view.SetLive(true, st.current);
+            if (st.closed)
+            {
+                if (dragTarget >= 0) ApplyDrag(st.current);
+                else view.SetLive(true, st.current);
+            }
             if (ev == 2)
             {
                 liveActive = false;
                 view.SetLive(false, Vector3.zero);
-                OnPinchFixed(fixedPos);
+                if (dragTarget >= 0) EndDrag();
+                else OnPinchFixed(fixedPos);
             }
             else if (ev == 3 || ev == 4)
             {
                 liveActive = false;
                 view.SetLive(false, Vector3.zero);
-                if (ev == 3) Debug.Log("[실측기록] 핀치 취소 — 손을 놓쳤거나 시스템 제스처가 시작됐다.");
+                // ★놓친 드래그는 되돌리지 않는다 — 옮긴 자리를 그대로 둔다(되돌리면 더 놀란다).
+                if (dragTarget >= 0) EndDrag();
+                else if (ev == 3) Debug.Log("[실측기록] 핀치 취소 — 손을 놓쳤거나 시스템 제스처가 시작됐다.");
             }
         }
+    }
+
+    /// <summary>
+    /// ★막힌 이유를 2초에 한 줄만 말한다(자기 침묵 — 잘 잡히면 한 줄도 안 남는다).
+    /// "위에서 잡으면 안 잡힌다"(09-21)를 가르려고 <b>손 높이·판까지 거리·신뢰도</b>를 같이 찍는다.
+    /// </summary>
+    private void ReportPinch(bool isLeft, RomRecordHands.PinchState st)
+    {
+        string r = st.blockReason;
+        if (r == null) { lastPinchReason = null; return; }
+        string key = (isLeft ? "L" : "R") + r;
+        if (key == lastPinchReason && Time.unscaledTime < nextPinchLog) return;
+        lastPinchReason = key;
+        nextPinchLog = Time.unscaledTime + 2f;
+
+        float eyeDy = eye != null ? (st.tip.y - eye.position.y) * 100f : 0f;
+        float toMenu = Mathf.Min(leftMenu.Distance(st.tip), rightMenu.Distance(st.tip));
+        Debug.Log($"[실측기록·핀치] 안 받는다 — {(isLeft ? "왼" : "오른")}손 «{r}» · " +
+                  $"간격 {(st.gap >= 0f ? (st.gap * 100f).ToString("F1") + "cm" : "—")} · " +
+                  $"신뢰 {(st.highConfidence ? "O" : "★낮음")} · 눈높이 대비 {eyeDy:+0;-0}cm · " +
+                  $"판까지 {(toMenu < 9f ? (toMenu * 100f).ToString("F0") + "cm" : "—")}");
+    }
+
+    // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
+    private static string DragName(int t) => t == 0 ? "기준선(3축)" : t == 1 ? "대추" : "미간";
+
+    /// <summary>핀치를 오므린 자리에서 잡을 수 있는 것을 고른다. 없으면 -1(그러면 «찍기»로 간다).</summary>
+    private int FindDragTarget(Vector3 p, out Vector3 startValue)
+    {
+        startValue = default;
+        if (step == RomRecordStep.Setup)
+        {
+            if (Vector3.Distance(p, frameOrigin) > axesGrabRadius) return -1;
+            startValue = frameOrigin;
+            return 0;
+        }
+        if (step != RomRecordStep.Landmarks) return -1;
+
+        // 찍혀 있는 점만 잡는다. 아직 안 찍은 것은 종전대로 핀치로 찍는다.
+        float dC7 = hasC7 ? Vector3.Distance(p, c7) : float.MaxValue;
+        float dGl = hasGlab ? Vector3.Distance(p, glab) : float.MaxValue;
+        if (dC7 > dotGrabRadius && dGl > dotGrabRadius) return -1;
+        if (dC7 <= dGl) { startValue = c7; return 1; }
+        startValue = glab;
+        return 2;
+    }
+
+    private void ApplyDrag(Vector3 p)
+    {
+        Vector3 v = dragStartValue + (p - dragGrabbedAt);
+        switch (dragTarget)
+        {
+            case 0: frameOrigin = v; break;
+            case 1: c7 = v; break;
+            case 2: glab = v; break;
+        }
+        // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
+        Vector3 pivot = Pivot;
+        view.SetFrame(pivot, yaw, axisLength);
+        view.SetLandmarks(hasC7, c7, hasGlab, glab, pivot);
+    }
+
+    private void EndDrag()
+    {
+        Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(dragTarget == 0 ? frameOrigin : dragTarget == 1 ? c7 : glab)}");
+        dragTarget = -1;
+        Play(sndPinch);
+        dirty = true;
     }
 
     private void OnPinchFixed(Vector3 p)
@@ -467,7 +575,8 @@ public class RomRecordSession : MonoBehaviour
         {
             case RomRecordStep.Setup:
                 Play(sndDeny);
-                Debug.Log("[실측기록] 기준선 세팅 중에는 찍지 않는다 — [다음]으로 넘어간 뒤 대추를 찍는다.");
+                // ★잡을 만큼 가까이 가지 않았다는 뜻이다(09-21). 3축 근처에서 오므리면 잡혀서 따라온다.
+                Debug.Log($"[실측기록] 기준선을 못 잡았다 — 3축 중심에서 {axesGrabRadius * 100f:F0}cm 안에서 오므려야 잡힌다.");
                 return;
 
             case RomRecordStep.Landmarks:
@@ -571,6 +680,9 @@ public class RomRecordSession : MonoBehaviour
             }
             sb.Append('\n');
         }
+        // ★조용히 버려진 핀치를 여기서 한 번 센다(09-21) — 얼마나 걸러졌는지 판마다 남는다.
+        sb.Append("  무시된 핀치: 너무 짧음 ").Append(hands.IgnoredShort)
+          .Append(" · 추적 신뢰 낮음 ").Append(hands.IgnoredLowConfidence).Append('\n');
         Debug.Log(sb.ToString());
     }
 
@@ -621,10 +733,10 @@ public class RomRecordSession : MonoBehaviour
         switch (step)
         {
             case RomRecordStep.Setup:
-                sb.Append("Y◀▶로 '환자 앞'을 환자 정면에, 높이▲▼로 목 높이에 맞춘 뒤 [다음]\n");
+                sb.Append("축을 손으로 잡아 끌어 목 높이에 두고, ↺↻로 '환자 앞'을 맞춘 뒤 [다음]\n");
                 break;
             case RomRecordStep.Landmarks:
-                sb.Append(!hasC7 ? "대추에 핀치하세요\n" : !hasGlab ? "미간(중립)에 핀치하세요\n" : "위치를 버튼으로 다듬고 [다음]\n");
+                sb.Append(!hasC7 ? "대추에 핀치하세요\n" : !hasGlab ? "미간(중립)에 핀치하세요\n" : "점을 잡아 끌거나 버튼으로 다듬고 [다음]\n");
                 sb.Append(landmarkTarget == 0 ? "대상: 대추" : landmarkTarget == 1 ? "대상: 미간" : "대상: 목중앙").Append(" · 목 중앙 보정 ").Append(neckOffsetMm.ToString("F0")).Append("mm\n");
                 break;
             case RomRecordStep.Done:

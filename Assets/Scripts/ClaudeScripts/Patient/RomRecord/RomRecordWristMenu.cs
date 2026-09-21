@@ -12,10 +12,13 @@ public struct RomMenuItem
     public float col, row;    // 판 안의 칸 좌표(왼쪽 위가 0,0 · 0행은 머리줄)
     public float span;        // 가로 칸 수
     public bool selected;     // 고른 상태(대상 선택 등) — 밝게 칠한다
+    // ★길게 눌러야 먹는 버튼(2026-09-21 사용자 지시). 0이면 닿는 즉시 실행된다.
+    //   09-21 증상: "양손으로 환자를 지탱하다가 [나가기]가 눌린다" — 스쳐 지나간 손이 곧바로 실행시켰다.
+    public float holdSeconds;
 
     public static RomMenuItem Button(string id, string label, float col, float row, float span, Color tint,
-                                     bool repeat = false, bool selected = false)
-        => new RomMenuItem { id = id, label = label, col = col, row = row, span = span, tint = tint, repeat = repeat, selected = selected };
+                                     bool repeat = false, bool selected = false, float holdSeconds = 0f)
+        => new RomMenuItem { id = id, label = label, col = col, row = row, span = span, tint = tint, repeat = repeat, selected = selected, holdSeconds = holdSeconds };
 
     public static RomMenuItem Text(string label, float col, float row, float span)
         => new RomMenuItem { id = null, label = label, col = col, row = row, span = span };
@@ -49,6 +52,12 @@ public class RomRecordWristMenu
         public Vector2 half;      // 판 로컬 반폭·반높이
         public Vector3 local;     // 판 로컬 중심
         public Vector3 scale;
+        // ★길게 누르기(09-21). holdSeconds가 0보다 크면 닿아 있는 시간이 그만큼 쌓여야 실행된다.
+        public float holdSeconds;
+        public float holdStart;   // 닿기 시작한 시각
+        public bool holdFired;    // 이번 접촉에서 이미 실행했다 — 손이 나갈 때까지 다시 안 쏜다
+        public Transform fill;    // 차오르는 막대(hold 버튼에만 보인다)
+        public Renderer fillRend;
     }
 
     private readonly List<Btn> pool = new List<Btn>();
@@ -100,7 +109,16 @@ public class RomRecordWristMenu
         for (int i = 0; i < capacity; i++)
         {
             Transform q = MakeQuad("버튼", mat, Color.gray, 1);
-            pool.Add(new Btn { quad = q, rend = q.GetComponent<Renderer>(), label = MakeLabel(font, labelSize, TextAlignmentOptions.Center, 3) });
+            Transform fl = MakeQuad("차오름", mat, Color.white, 2);   // ★버튼과 글자 사이(1 < 2 < 3)
+            fl.gameObject.SetActive(false);
+            pool.Add(new Btn
+            {
+                quad = q,
+                rend = q.GetComponent<Renderer>(),
+                fill = fl,
+                fillRend = fl.GetComponent<Renderer>(),
+                label = MakeLabel(font, labelSize, TextAlignmentOptions.Center, 3),
+            });
         }
         root.gameObject.SetActive(false);
     }
@@ -126,13 +144,17 @@ public class RomRecordWristMenu
             Btn b = pool[i];
             bool on = i < activeCount;
             b.label.gameObject.SetActive(on);
-            if (!on) { b.quad.gameObject.SetActive(false); b.id = null; continue; }
+            if (!on) { b.quad.gameObject.SetActive(false); b.fill.gameObject.SetActive(false); b.id = null; continue; }
 
             RomMenuItem it = items[i];
             bool isButton = it.id != null;
             b.quad.gameObject.SetActive(isButton);
+            b.fill.gameObject.SetActive(false);
             b.id = it.id;
             b.repeat = it.repeat;
+            b.holdSeconds = it.holdSeconds;
+            b.holdStart = -99f;
+            b.holdFired = false;
             b.inside = false;
             b.pressedAt = -99f;
             b.label.text = it.label;
@@ -221,6 +243,17 @@ public class RomRecordWristMenu
             c = Color.Lerp(c, Color.white, pulse * 0.8f);              // 눌린 순간 번쩍
             b.rend.material.color = c;
             b.quad.localScale = b.scale * (1f - 0.18f * pulse);         // 눌린 순간 움찔
+
+            // ★길게 누르는 버튼 — 닿아 있는 동안 막대가 왼쪽에서 차오른다. 얼마나 더 있어야 하는지 눈에 보인다.
+            if (b.holdSeconds <= 0f) continue;
+            float fillP = b.inside && b.holdStart > 0f ? Mathf.Clamp01((now - b.holdStart) / b.holdSeconds) : 0f;
+            bool showFill = fillP > 0.002f;
+            if (b.fill.gameObject.activeSelf != showFill) b.fill.gameObject.SetActive(showFill);
+            if (!showFill) continue;
+            float fw = b.scale.x * fillP;
+            b.fill.localScale = new Vector3(fw, b.scale.y * 0.82f, 1f);
+            b.fill.localPosition = new Vector3(b.local.x - b.scale.x * 0.5f + fw * 0.5f, b.local.y, -0.0005f);
+            b.fillRend.material.color = Color.Lerp(b.baseColor, Color.white, 0.55f);
         }
     }
 
@@ -255,13 +288,26 @@ public class RomRecordWristMenu
             {
                 if (!inNow || now < cooldownUntil) continue;
                 b.inside = true;
+                b.holdStart = now;
+                b.holdFired = false;
                 b.nextRepeat = now + holdDelay;
+                if (b.holdSeconds > 0f) continue;   // ★길게 누르는 버튼은 닿는 것만으로는 안 먹는다
                 b.pressedAt = now;
                 if (!b.repeat) cooldownUntil = now + cooldown;
                 LastRepeat = false;
                 return b.id;
             }
-            if (outNow) { b.inside = false; continue; }
+            if (outNow) { b.inside = false; b.holdStart = -99f; continue; }
+            if (b.holdSeconds > 0f)
+            {
+                // 닿아 있는 동안만 쌓인다 — 손이 나가면 위에서 holdStart가 풀려 처음부터 다시다.
+                if (b.holdFired || now - b.holdStart < b.holdSeconds) continue;
+                b.holdFired = true;
+                b.pressedAt = now;
+                cooldownUntil = now + cooldown;
+                LastRepeat = false;
+                return b.id;
+            }
             if (b.repeat && now >= b.nextRepeat)
             {
                 b.nextRepeat = now + repeatInterval;
