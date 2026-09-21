@@ -1837,10 +1837,30 @@ MonoBehaviour:
   axisLength: 0.25
   textSize: 0.05
   panelTextSize: 0.045
-  buttonLabelSize: 0.03
-  menuCellWidth: 0.042
-  menuRowHeight: 0.034
-  menuButtonHeight: 0.026
+  buttonLabelSize: 0.09
+  useMetaUI: 1
+  metaCellPx: 98
+  metaRowPx: 82
+  metaButtonPx: 68
+  metaLabelPt: 15
+  dialColor: {r: 0.6, g: 0.62, b: 0.65, a: 0.55}
+  dialTickColor: {r: 0.64, g: 0.66, b: 0.69, a: 0.6}
+  dialZeroColor: {r: 0.88, g: 0.9, b: 0.93, a: 0.95}
+  dialLabelColor: {r: 0.8, g: 0.82, b: 0.85, a: 0.95}
+  needleWidth: 0.002
+  tickLabelOut: 1.2
+  cylinderHeight: 0.3
+  cylinderRadiusScale: 2.2
+  menuPlateAlpha: 1
+  menuTintStrength: 0.5
+  menuFixedInSpace: 1
+  menuFixedDistance: 0.55
+  menuFixedBelowEye: 0.14
+  menuFixedSide: -0.38
+  menuGrabRadius: 0.16
+  menuCellWidth: 0.049
+  menuRowHeight: 0.041
+  menuButtonHeight: 0.034
   menuLift: 0.06
   menuHoldDistance: 0.15
   soundVolume: 0.6
@@ -1849,8 +1869,19 @@ MonoBehaviour:
   nudgeStepMm: 1
   neckStepMm: 5
   adjustStepDeg: 1
+  axesGrabRadius: 0.25
+  dotGrabRadius: 0.08
+  needleEnabled: 1
+  needleGrabRadius: 0.1
+  needleHandleOut: 0.16
+  needleFallbackRadius: 0.18
+  exitHoldSeconds: 1
   neckOffsetMm: 0
   flipSides: 0
+  showSectionPlane: 1
+  showOffPlaneTriangle: 1
+  useDepthOcclusion: 1
+  occludedAlpha: 0.18
   enablePassthroughOnStart: 1
   lobbySceneName: lobby
 --- !u!4 &628233985
