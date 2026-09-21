@@ -70,7 +70,10 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("눈금 숫자를 원 밖으로 미는 배수(반지름 기준).")]
     [SerializeField] private float tickLabelOut = 1.20f;
     [Tooltip("회전 단계 원통 벽의 높이(m, 위아래 합). ★추정값이다 — 머리에 맞는지 눈으로 볼 것.")]
-    [SerializeField] private float cylinderHeight = 0.20f;
+    [SerializeField] private float cylinderHeight = 0.30f;
+    [Tooltip("원통 벽의 반지름 배수. 1이면 각도기 반지름(회전중심→미간)과 같아 머리에 바짝 붙는다.\n" +
+             "★09-21 사용자 지시로 키웠다. 눈으로 맞출 값이다.")]
+    [SerializeField] private float cylinderRadiusScale = 2.2f;
 
     [Header("=== 판 모양(2026-09-21) ===")]
     // ★판 디자인은 진행Root·설정 팝업을 재서 그대로 옮겼다(RomRecordWristMenu 주석에 실측값이 있다).
@@ -245,6 +248,7 @@ public class RomRecordSession : MonoBehaviour
         view.needleWidth = needleWidth;
         view.tickLabelOut = tickLabelOut;
         view.cylinderHeight = cylinderHeight;
+        view.cylinderRadiusScale = cylinderRadiusScale;
         view.Build(transform, font, mat);
         if (useMetaUI)
         {

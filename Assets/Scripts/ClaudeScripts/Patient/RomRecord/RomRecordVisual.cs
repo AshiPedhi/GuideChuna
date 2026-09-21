@@ -123,7 +123,8 @@ public class RomRecordVisual
     //   ★각 계산은 전혀 건드리지 않는다 — 각은 RomRecordGeometry가 내고, 바늘·손잡이도 Session이 주는
     //     원래 radius/handleRadius를 그대로 쓴다. 여기서 커지는 것은 <b>테두리·세로눈금·숫자</b>뿐이다.
     //   기본 1.6은 <b>기기 미검증 추정</b>이다(머리 반지름 0.1m 기준으로 벽이 0.16m가 되어 귀에서 6cm쯤 뜬다).
-    public float cylinderRadiusScale = 1.6f;
+    // ★09-21 사용자: "회전 각도기 원통 사이즈 좀 키워 줘" — 1.6에서 올렸다(여전히 기기에서 눈으로 맞출 값).
+    public float cylinderRadiusScale = 2.2f;
 
     public static readonly Color UpColor = new Color(0.35f, 0.95f, 0.45f);
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
