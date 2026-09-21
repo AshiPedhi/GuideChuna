@@ -488,9 +488,15 @@ public class RomRecordSession : MonoBehaviour
             leftMenu.Follow(false, Vector3.zero, eye, false);   // 고정 모드에서는 회전만 눈을 따라간다
             menuHoldL = menuHoldR = false;
 
-            string fid = leftMenu.Poll(rIdx, rTip);
+            // ★★09-21 사용자: "눌렀다 뗐다 하는 것에 이중 삼중으로 다다다다 눌려 버려."
+            //   종전엔 같은 판을 <b>양손으로 두 번</b> Poll했다. 그러면 한 손이 버튼 안에 있고 다른 손이 밖일 때
+            //   «들어옴/나감» 상태가 매 프레임 뒤집혀, 쿨다운(0.35초)이 풀릴 때마다 한 번씩 계속 발사됐다.
+            //   → 판에 <b>더 가까운 손 하나만</b> 본다. 두 손으로 번갈아 누를 일은 없다.
+            bool useRight = rTip && (!lTip || leftMenu.Distance(rIdx) <= leftMenu.Distance(lIdx));
+            Vector3 pokeTip = useRight ? rIdx : lIdx;
+            bool pokeOk = useRight ? rTip : lTip;
+            string fid = leftMenu.Poll(pokeTip, pokeOk);
             bool frep = leftMenu.LastRepeat;
-            if (fid == null) { fid = leftMenu.Poll(lIdx, lTip); frep = leftMenu.LastRepeat; }
             if (fid != null)
             {
                 lastPressTime = Time.unscaledTime;
@@ -1143,6 +1149,15 @@ public class RomRecordSession : MonoBehaviour
 
             case RomRecordStep.Done:
                 return;
+        }
+
+        // ★바늘 모드에서는 점을 찍지 않는다(09-21 실측). 바늘을 쓰는 판에서 손잡이 반경 밖을 오므리면
+        //   점이 찍혀 "굴곡은 2개까지다"까지 떴다 — 사용자는 바늘을 맞추려던 참이었다. 둘이 섞이면 안 된다.
+        if (needleOn)
+        {
+            Play(sndDeny);
+            Debug.Log("[실측기록] 바늘 모드다 — 0°의 바늘을 끌어 맞춘다(점으로 찍으려면 [바늘]을 끈다).");
+            return;
         }
 
         var list = marks[MotionIndex(step)];

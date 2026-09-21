@@ -108,7 +108,7 @@ public class RomRecordWristMenu : IRomRecordMenu
     public float pressMargin = 0.003f;
     public float holdDelay = 0.5f;
     public float repeatInterval = 0.12f;
-    public float cooldown = 0.35f;
+    public float cooldown = 0.5f;          // ★09-21에 0.35에서 늘렸다 — "다다다다 눌린다"는 지적
     public float pressAnim = 0.18f;        // 눌림 애니메이션 길이(초)
 
     // ── 모양내기(2026-09-21) ─────────────────────────────────────────
@@ -420,7 +420,11 @@ public class RomRecordWristMenu : IRomRecordMenu
             float dx = Mathf.Abs(l.x - b.local.x), dy = Mathf.Abs(l.y - b.local.y), dz = Mathf.Abs(l.z);
             bool inNow = tipValid && dx < b.half.x + pressMargin && dy < b.half.y + pressMargin && dz < pressDepth;
             // ★나갈 때는 조금 더 벗어나야 나간 것으로 본다 — 경계에서 떨려 연타되지 않게.
-            bool outNow = !tipValid || dx > b.half.x + pressMargin * 3f || dy > b.half.y + pressMargin * 3f || dz > pressDepth * 1.5f;
+            // ★★추적이 잠깐 끊긴 것을 «나갔다»로 보지 않는다(09-21) — 손가락 추적이 깜박일 때마다
+            //   «나갔다 들어왔다»가 되어 쿨다운이 풀릴 때마다 다시 눌렸다. 오래 끊기면 그때 푼다.
+            bool outNow = tipValid
+                ? (dx > b.half.x + pressMargin * 3f || dy > b.half.y + pressMargin * 3f || dz > pressDepth * 1.5f)
+                : (now - b.pressedAt > 1.5f);
 
             if (!b.inside)
             {
