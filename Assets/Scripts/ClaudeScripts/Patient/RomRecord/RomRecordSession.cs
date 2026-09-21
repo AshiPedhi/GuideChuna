@@ -151,6 +151,20 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("측굴·회전의 좌우가 반대로 기록되면 켠다. ★Play에서 환자 오른쪽으로 기울여 '우'가 찍히는지 먼저 본다.")]
     [SerializeField] private bool flipSides = false;
 
+    [Header("=== 현실에 가려지기(2026-09-21 신설) ===")]
+    // ★사용자 09-21: "패스스루에서 오브젝트가 현실 위에 붕 떠 있다 — 사람 위에 십자선을 그어도
+    //   몸통을 관통하는 십자선이 아니라 그냥 위에 올려진 십자선 같다."
+    //   정체는 <b>폐색이 없는 것</b>이다. 가상 물체가 현실 물체 뒤로 안 들어가고 늘 덧그려지니
+    //   뇌가 "몸 안"이 아니라 "몸 앞 유리창의 그림"으로 읽는다.
+    // ★Meta Depth API로 가린다. 다만 <b>완전히 지우지 않고 흐리게</b> 남긴다 — 기준축·십자선은
+    //   몸을 관통해 보여야 하는 것이라 사라지면 안 된다(사용자: "아예 약간 흐린색으로").
+    // ★Quest 3/3S 전용이다. 안 되는 기기에서는 키워드가 안 켜져 <b>종전과 똑같이</b> 보인다.
+    [Tooltip("표시물이 현실 물체에 가려지게 한다(Quest 3/3S). 끄면 종전처럼 늘 덧그려진다.")]
+    [SerializeField] private bool useDepthOcclusion = true;
+    [Tooltip("가려진 부분에 남길 진하기. 0이면 완전히 사라지고, 1이면 폐색이 없는 것과 같다.\n" +
+             "★0.15~0.25가 «몸 안을 지나간다»로 읽히는 구간이다(추정 — 눈으로 맞출 값).")]
+    [Range(0f, 1f)] [SerializeField] private float occludedAlpha = 0.18f;
+
     [Header("=== 씬 ===")]
     [Tooltip("시작할 때 패스스루를 켠다. 이 씬은 패스스루 전용이다.")]
     [SerializeField] private bool enablePassthroughOnStart = true;
@@ -211,9 +225,7 @@ public class RomRecordSession : MonoBehaviour
         if (enablePassthroughOnStart) EnablePassthrough();
 
         TMP_FontAsset font = KoreanFontResolver.Resolve();
-        Shader sh = Shader.Find("Sprites/Default");   // ★Always Included에 들어 있다(GraphicsSettings 10753) — 빌드에서도 null이 아니다
-        Material mat = sh != null ? new Material(sh) : null;
-        if (mat == null) ChunaLogger.LogWarning("[실측기록] Sprites/Default 셰이더를 못 찾았다 — 선이 분홍으로 보이면 이것이다.");
+        Material mat = BuildDisplayMaterial();
 
         needleOn = needleEnabled;   // ★런타임 토글([바늘] 버튼)이 이 값을 이어받는다
         view.textSize = textSize;
@@ -285,6 +297,59 @@ public class RomRecordSession : MonoBehaviour
 
         Debug.Log("[실측기록] 시작 — 기준선 세팅부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
+    }
+
+    /// <summary>
+    /// 표시물이 쓸 머티리얼을 만든다(2026-09-21). 폐색을 켜면 «현실에 가려지면 흐려지는» 셰이더를 쓰고,
+    /// 안 되면 종전 <c>Sprites/Default</c>로 떨어진다.
+    /// ★<b>조용히 실패하지 않게</b> 어느 쪽으로 갔는지 반드시 로그에 남긴다 —
+    ///   폐색이 안 보일 때 "셰이더를 못 찾은 것"인지 "기기가 지원을 안 하는 것"인지 갈려야 한다.
+    /// </summary>
+    private Material BuildDisplayMaterial()
+    {
+        if (useDepthOcclusion)
+        {
+            var src = Resources.Load<Material>("RomRecordUI/RomRecordOccluded");
+            if (src != null)
+            {
+                var m = new Material(src);   // ★에셋 원본을 건드리지 않게 복제한다
+                m.SetFloat("_OccludedAlpha", occludedAlpha);
+                bool supported = EnableDepthOcclusion();
+                Debug.Log($"[실측기록] 표시 머티리얼 — 폐색 셰이더 · 가려진 곳 {occludedAlpha:F2} · " +
+                          $"기기 지원 {(supported ? "O" : "★없음(종전처럼 늘 덧그려진다)")}");
+                return m;
+            }
+            ChunaLogger.LogWarning("[실측기록] ★폐색 머티리얼을 못 찾았다(Resources/RomRecordUI/RomRecordOccluded) — 종전 셰이더로 간다.");
+        }
+
+        // ★Sprites/Default는 Always Included에 들어 있다(GraphicsSettings 10753) — 빌드에서도 null이 아니다
+        Shader sh = Shader.Find("Sprites/Default");
+        if (sh == null)
+        {
+            ChunaLogger.LogWarning("[실측기록] Sprites/Default 셰이더를 못 찾았다 — 선이 분홍으로 보이면 이것이다.");
+            return null;
+        }
+        Debug.Log("[실측기록] 표시 머티리얼 — 종전 Sprites/Default(폐색 없음)");
+        return new Material(sh);
+    }
+
+    /// <summary>
+    /// 깊이(폐색)를 켠다. 켜졌으면 true. ★지원하지 않는 기기에서 켜면 에러를 뱉으므로 먼저 묻는다.
+    /// </summary>
+    private bool EnableDepthOcclusion()
+    {
+        if (!Meta.XR.EnvironmentDepth.EnvironmentDepthManager.IsSupported)
+        {
+            Debug.Log("[실측기록] 이 기기는 환경 깊이를 지원하지 않는다(Quest 3/3S 전용) — 폐색 없이 간다.");
+            return false;
+        }
+        var mgr = FindAnyObjectByType<Meta.XR.EnvironmentDepth.EnvironmentDepthManager>();
+        if (mgr == null) mgr = gameObject.AddComponent<Meta.XR.EnvironmentDepth.EnvironmentDepthManager>();
+        mgr.enabled = true;
+        // 부드러운 폐색이 기본이다 — 경계가 딱딱하면 오려 붙인 것처럼 보인다.
+        mgr.OcclusionShadersMode = Meta.XR.EnvironmentDepth.OcclusionShadersMode.SoftOcclusion;
+        // ★손은 깊이에서 빼지 않는다. 시술자 손이 표시물을 가리는 것도 «앞에 있다»는 단서라 그대로 둔다.
+        return true;
     }
 
     // ── 소리 ─────────────────────────────────────────────────────────
