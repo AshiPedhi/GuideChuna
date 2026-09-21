@@ -379,47 +379,55 @@ public class RomRecordSession : MonoBehaviour
     private static readonly Color NeedleTint = new Color(0.2f, 0.8f, 0.7f);   // 바늘 — 표시물 색과 같은 계열
 
     /// <summary>
-    /// 단계별 판 배치(09-18 사용자 결정 "그룹 판넬"). 판은 6칸 너비 · 0행은 머리줄.
-    /// 머리줄: 단계·진행 + [나가기](오른쪽 끝) / 가운데: 그 단계의 조작 묶음 / 맨 아래: [◀ 이전] [다음 ▶].
+    /// 단계별 판 배치. 0행은 머리줄이고, 판 <b>폭은 쓴 칸 수만큼만</b> 잡힌다(09-21).
+    ///
+    /// ★09-21 사용자: "빈 공간이 너무 많다 · 패널 크기 자체를 줄여라."
+    ///   그래서 ①줄마다 가로를 꽉 채우고 ②줄 수를 줄이고 ③라벨을 짧게 했다.
+    ///   ★<b>라벨 길이가 곧 판 폭이다</b> — 한글 한 글자가 대략 글자 크기 하나만큼 넓어서,
+    ///   "능동 기록"(4자)은 "능동"(2자)의 두 배 칸을 먹는다. 긴 이름을 쓰면 판이 그만큼 커진다.
+    /// ★[나가기]는 모서리를 피해 <b>가운데</b>에 두고 길게 눌러야 먹는다(09-21) — 스친 손에 눌리지 않게.
     /// </summary>
     private void ApplyStepButtons()
     {
         var items = new List<RomMenuItem>(14);
+        const float w2 = 1.8f, gap = 0.1f;     // 두 글자 버튼 폭과 사이
+        float c1 = 0f, c2 = w2 + gap;      // 두 열이면 충분하다 — 셋째 열을 쓰면 판이 그만큼 넓어진다
         float navRow;
 
         switch (step)
         {
             case RomRecordStep.Setup:
-                items.Add(RomMenuItem.Text("정면", 0f, 1, 1f));
-                items.Add(RomMenuItem.Button("yaw-", "↺", 1f, 1, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("yaw+", "↻", 2f, 1, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Text("높이", 3.2f, 1, 1f));
-                items.Add(RomMenuItem.Button("h+", "▲", 4.4f, 1, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("h-", "▼", 4.4f, 2, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Text("정면", c1, 1, 1.4f));
+                items.Add(RomMenuItem.Button("yaw-", "↺", 1.5f, 1, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("yaw+", "↻", 2.6f, 1, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Text("높이", c1, 2, 1.4f));
+                items.Add(RomMenuItem.Button("h+", "▲", 1.5f, 2, 1f, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("h-", "▼", 2.6f, 2, 1f, AdjTint, repeat: true));
                 navRow = 3;
                 break;
 
             case RomRecordStep.Landmarks:
-                items.Add(RomMenuItem.Button("t0", "대추", 0f, 1, 2f, TargetTint, selected: landmarkTarget == 0));
-                items.Add(RomMenuItem.Button("t1", "미간", 2f, 1, 2f, TargetTint, selected: landmarkTarget == 1));
-                items.Add(RomMenuItem.Button("t2", "목중앙", 4f, 1, 2f, TargetTint, selected: landmarkTarget == 2));
+                items.Add(RomMenuItem.Button("t0", "대추", c1, 1, w2, TargetTint, selected: landmarkTarget == 0));
+                items.Add(RomMenuItem.Button("t1", "미간", c2, 1, w2, TargetTint, selected: landmarkTarget == 1));
+                items.Add(RomMenuItem.Button("t2", "목중앙", c1, 2, 2.6f, TargetTint, selected: landmarkTarget == 2));
                 if (landmarkTarget == 2)
                 {
                     // 목 중앙은 앞·뒤로만 옮긴다(미간은 그대로)
-                    items.Add(RomMenuItem.Button("fwd", "앞", 2f, 2, 2f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("back", "뒤", 2f, 3, 2f, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("fwd", "앞", c1, 3, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("back", "뒤", c2, 3, w2, AdjTint, repeat: true));
+                    navRow = 4;
                 }
                 else
                 {
-                    // 십자: 앞·뒤·왼·오른(수평) + 옆에 위·아래(수직). 환자 기준 방향이다.
-                    items.Add(RomMenuItem.Button("fwd", "앞", 1f, 2, 1f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("left", "왼", 0f, 3, 1f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("right", "오른", 2f, 3, 1f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("back", "뒤", 1f, 4, 1f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("up", "위", 4.4f, 2, 1.2f, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("down", "아래", 4.4f, 4, 1.2f, AdjTint, repeat: true));
+                    // 환자 기준 여섯 방향. ★십자 모양을 포기하고 두 칸씩 쌓았다 — 빈 칸이 곧 판 크기다.
+                    items.Add(RomMenuItem.Button("fwd", "앞", c1, 3, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("back", "뒤", c2, 3, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("left", "왼", c1, 4, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("right", "오른", c2, 4, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("up", "위", c1, 5, w2, AdjTint, repeat: true));
+                    items.Add(RomMenuItem.Button("down", "아래", c2, 5, w2, AdjTint, repeat: true));
+                    navRow = 6;
                 }
-                navRow = 5;
                 break;
 
             case RomRecordStep.Done:
@@ -427,26 +435,27 @@ public class RomRecordSession : MonoBehaviour
                 break;
 
             default:   // 굴곡·신전·측굴·회전
-                items.Add(RomMenuItem.Button("adj-", "-1°", 1f, 1, 1.8f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("adj+", "+1°", 3.2f, 1, 1.8f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("undo", "취소", 2.1f, 2, 1.8f, UndoTint));
+                // ★두 칸씩 두 열로 쌓는다 — 손목에 붙는 판이라 <b>가로가 좁은 쪽</b>이 낫다(09-21).
+                items.Add(RomMenuItem.Button("adj-", "-1°", c1, 1, w2, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("adj+", "+1°", c2, 1, w2, AdjTint, repeat: true));
+                items.Add(RomMenuItem.Button("undo", "취소", c1, 2, w2, UndoTint));
                 // ★바늘(09-21) — 점찍기와 <b>나란히</b> 둔다. 어느 쪽으로 기록할지는 사용자가 고른다.
-                items.Add(RomMenuItem.Button("needle", needleOn ? "바늘 끔" : "바늘 켬", 0f, 3, 2.2f, NeedleTint, selected: needleOn));
+                items.Add(RomMenuItem.Button("needle", "바늘", c2, 2, w2, NeedleTint, selected: needleOn));
                 if (needleOn)
                 {
                     // ★바늘이 둘이라 기록도 둘이다(09-21) — 능동·압박을 사용자가 고른다.
-                    items.Add(RomMenuItem.Button("nrecA", "능동 기록", 2.4f, 3, 1.8f, ActiveTint));
-                    items.Add(RomMenuItem.Button("nrecP", "압박 기록", 4.2f, 3, 1.8f, PressTint));
+                    items.Add(RomMenuItem.Button("nrecA", "능동", c1, 3, w2, ActiveTint));
+                    items.Add(RomMenuItem.Button("nrecP", "압박", c2, 3, w2, PressTint));
                 }
-                navRow = 4;
+                navRow = needleOn ? 4 : 3;
                 break;
         }
 
-        if (step > RomRecordStep.Setup) items.Add(RomMenuItem.Button("prev", "◀ 이전", 0f, navRow, 2.2f, NavTint));
-        if (step < RomRecordStep.Done) items.Add(RomMenuItem.Button("next", "다음 ▶", 3.8f, navRow, 2.2f, NavTint));
-        // ★[나가기]는 판 모서리에서 뺀다(09-21 사용자 지시). 맨 아랫줄 <b>가운데</b> + 길게 눌러야 먹는다.
-        //   종전엔 머리줄 오른쪽 끝(모서리)이라 손을 뻗을 때 가장 먼저 닿았고, 닿는 즉시 실행됐다.
-        items.Add(RomMenuItem.Button("exit", "나가기", 2.1f, navRow + 1f, 1.8f, ExitTint, holdSeconds: exitHoldSeconds));
+        // ★[이전][다음]을 한 줄에 두고 [나가기]는 그 아래 가운데다(09-21).
+        //   한 줄에 셋을 넣으면 판이 6칸을 넘어 오히려 넓어진다 — 판 폭은 <b>가장 넓은 줄</b>이 정한다.
+        if (step > RomRecordStep.Setup) items.Add(RomMenuItem.Button("prev", "이전", c1, navRow, w2, NavTint));
+        if (step < RomRecordStep.Done) items.Add(RomMenuItem.Button("next", "다음", c2, navRow, w2, NavTint));
+        items.Add(RomMenuItem.Button("exit", "나가기", 0.55f, navRow + 1f, 2.6f, ExitTint, holdSeconds: exitHoldSeconds));
 
         var arr = items.ToArray();
         string head = MenuHeader();

@@ -6,11 +6,16 @@
 돌아가는 얼개
   · Play 감지는 에이전트 브리지에 물어본다(`Temp/chuna-bridge/resp.json`의 `"playing"`).
     브리지가 안 떠 있으면(Unity가 닫혔거나 스크립트 컴파일 중) 감지가 안 된다 — `status`가 말해 준다.
-  · 화면은 ffmpeg `gdigrab`으로 <b>Unity 창</b>을 긁는다. 창 제목은 씬 이름이 들어가 매번 바뀌므로
-    녹화를 시작할 때 실제 창 제목을 읽어 쓴다.
-  · ★gdigrab은 <b>화면에 보이는 것</b>을 긁는다. Unity 창이 다른 창에 가리면 가린 창이 찍힌다.
+  · 화면은 ffmpeg `gdigrab`으로 <b>Game 뷰가 있는 자리</b>만 긁는다(`-i desktop` + offset/video_size).
+    자리는 브리지 `gameview`가 알려 준다 — Game 뷰를 앞으로 꺼내고 화면 좌표를 돌려준다.
+    `--whole`을 주면 Unity 창 전체를 긁는다(Scene 뷰·인스펙터까지).
+  · ★gdigrab은 <b>화면에 보이는 것</b>을 긁는다. 그 자리를 다른 창이 덮으면 덮은 창이 찍힌다.
 
 ★함정(09-21에 실제로 밟았다)
+  · ★<b>창 제목으로 긁으면 Game 뷰가 안 잡힐 수 있다.</b> 이 PC는 모니터가 둘이고 Game 뷰가
+    <b>두 번째 Unity 창</b>에 들어 있어(실측 x 3881), 메인 창(0,43 2560x1349)을 아무리 잘라도
+    Game 화면이 영영 안 나온다. 그래서 창이 아니라 <b>바탕화면의 그 자리</b>를 긁는다.
+  · ★<b>브리지가 빼는 툴바 21px로는 모자란다.</b> 실측으로 47px이다(아래 `GAME_TOOLBAR_PX`).
   · 창 너비·높이가 홀수면 libx264가 통째로 실패한다("Generic error in an external library",
     결과 0바이트). `scale=trunc(iw/2)*2:trunc(ih/2)*2`를 반드시 건다.
   · 구간을 뽑을 때 `-ss`를 <b>입력 앞</b>에 두면 프레임이 밀린다. 입력 뒤에 두고 다시 인코딩한다.
@@ -56,6 +61,157 @@ def unity_window_title():
         return None
 
 
+_WIN_PS = r"""
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class ChunaWin {
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
+  public struct RECT { public int L, T, R, B; }
+  public struct POINT { public int X, Y; }
+}
+"@
+# 화면 좌표를 물리 픽셀로 받으려면 이 스레드를 DPI 인지로 올려야 한다(PER_MONITOR_AWARE_V2 = -4).
+try { [void][ChunaWin]::SetThreadDpiAwarenessContext([IntPtr](-4)) } catch {}
+$want = $env:CHUNA_WIN_TITLE
+$p = Get-Process Unity -ErrorAction SilentlyContinue |
+     Where-Object { $_.MainWindowTitle -ne '' } |
+     Where-Object { $want -eq '' -or $_.MainWindowTitle -eq $want } |
+     Select-Object -First 1
+if ($null -eq $p) { exit 2 }
+$h = $p.MainWindowHandle
+$c = New-Object ChunaWin+RECT
+[void][ChunaWin]::GetClientRect($h, [ref]$c)
+$o = New-Object ChunaWin+POINT
+[void][ChunaWin]::ClientToScreen($h, [ref]$o)
+$dpi = 96
+try { $dpi = [ChunaWin]::GetDpiForWindow($h) } catch {}
+if ($dpi -le 0) { $dpi = 96 }
+"CX=$($o.X)"
+"CY=$($o.Y)"
+"CW=$($c.R - $c.L)"
+"CH=$($c.B - $c.T)"
+"DPI=$dpi"
+"""
+
+
+def window_metrics(title=""):
+    """Unity 창을 실측한다. 못 읽으면 None.
+
+    돌려주는 것 — 창의 <b>클라이언트 영역</b> 왼쪽 위 화면 좌표(cx, cy)·크기(cw, ch)·그 창의 DPI.
+
+    ★09-21 실측: ffmpeg gdigrab은 `title=`로 창을 잡으면 <b>클라이언트 영역만</b> 긁는다.
+      ffmpeg가 스스로 찍은 줄이 `2560x1349x32 at (0,0)`이었고 이것은 GetClientRect와 딱 같다
+      (GetWindowRect는 -8,-8~2568,1400이라 다르다). 그래서 잘라낼 자리를 창 왼쪽 위가 아니라
+      <b>클라이언트 왼쪽 위</b>에서 빼야 한다 — 실측으로 51px이나 어긋난다(창 y -8 · 클라이언트 y 43).
+    """
+    env = dict(os.environ, CHUNA_WIN_TITLE=title or "")
+    try:
+        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", _WIN_PS],
+                             capture_output=True, text=True, timeout=40, env=env,
+                             encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    d = {}
+    for line in (out.stdout or "").splitlines():
+        if "=" in line:
+            k, _, v = line.strip().partition("=")
+            try:
+                d[k] = int(float(v))
+            except Exception:
+                pass
+    if not all(k in d for k in ("CX", "CY", "CW", "CH")):
+        return None
+    if d["CW"] < 16 or d["CH"] < 16:
+        return None
+    d.setdefault("DPI", 96)
+    return d
+
+
+def window_origin(title=""):
+    """gdigrab이 긁는 영역(= 창의 클라이언트 영역)의 왼쪽 위 화면 좌표. 못 읽으면 (None, None)."""
+    m = window_metrics(title)
+    if m is None:
+        return (None, None)
+    return (m["CX"], m["CY"])
+
+
+# Game 뷰 `position` 위쪽에서 덜어낼 높이(px). ★추정이 아니라 <b>실측</b>이다(2026-09-21):
+# 21로 찍어 한 장 뽑고 줄마다 밝기를 재 보니 0~25줄이 아직 툴바(회색)였고 26줄부터 순검정(게임 그림)이었다.
+# → 21 + 26 = 47. 브리지의 기본값 21은 <b>탭 머리만</b> 덜어낸 값이라 툴바가 그대로 찍힌다.
+# 아래·좌·우는 덜어낼 것이 없었다(같은 실측에서 끝줄·양끝칸이 전부 순검정).
+GAME_TOOLBAR_PX = 47
+
+
+def game_view_rect(timeout=20, toolbar=GAME_TOOLBAR_PX):
+    """Game 뷰를 앞으로 가져오고 그 그림 영역의 화면 좌표를 받는다. 실패하면 None.
+
+    ★09-21: 이것이 없어서 Unity 창을 통째로 긁었고 Scene 뷰가 찍혔다.
+      사용자가 원하는 것은 Game 화면이다.
+    """
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    try:
+        out = subprocess.run([sys.executable, BRIDGE_PY, "gameview",
+                              "--toolbar=%d" % toolbar, "--timeout=%d" % timeout],
+                             capture_output=True, text=True, timeout=timeout + 10, env=env,
+                             encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    for line in (out.stdout or "").splitlines():
+        line = line.strip()
+        if line.startswith("rect "):
+            try:
+                x, y, w, h = [int(float(v)) for v in line[5:].split(",")]
+                if w > 8 and h > 8:
+                    return (x, y, w, h)
+            except Exception:
+                return None
+    return None
+
+
+def dpi_scale(title=""):
+    """Unity 창의 논리→물리 배율. 못 읽으면 1.0.
+
+    ★Unity의 `EditorWindow.position`은 <b>논리 좌표(Unity 포인트)</b>이고 gdigrab은 <b>물리 픽셀</b>을
+      긁는다. 배율이 100%가 아니면 그대로 쓰면 잘라낸 자리가 어긋난다.
+      실측(2026-09-21, 이 PC): `GetDpiForWindow` 96 · `LOGPIXELSX` 96 ·
+      `HORZRES` 2560 = `DESKTOPHORZRES` 2560 → <b>배율 1.0이라 보정이 0이었다.</b>
+      100%가 아닌 화면에서는 아직 <b>미검증</b>이다(이 PC로는 잴 수가 없다).
+    """
+    m = window_metrics(title)
+    return (m.get("DPI", 96) / 96.0) if m else 1.0
+
+
+def capture_region(title, whole=False):
+    """긁을 화면 영역(물리 픽셀, 바탕화면 좌표)을 정한다. (x, y, w, h, 설명) 또는 (None,…,까닭).
+
+    ★09-21 실측 — <b>창 제목으로 긁으면 안 된다.</b> 이 PC는 모니터가 둘(0~2559 · 2560~5119)이고
+      Game 뷰가 <b>두 번째 Unity 창</b>에 들어 있다(실측 x 3881). gdigrab의 `title=`은
+      메인 Unity 창의 클라이언트 영역(0,43 2560x1349)만 긁으므로 Game 뷰는 <b>영영 안 잡힌다</b>.
+      그래서 `-i desktop -offset_x/-offset_y -video_size`로 <b>바탕화면의 그 자리</b>를 긁는다.
+      이러면 Game 뷰가 메인 창 안에 도킹돼 있든 딴 모니터에 떠 있든 똑같이 잡힌다.
+    """
+    s = dpi_scale(title)
+    if whole:
+        m = window_metrics(title)
+        if m is None:
+            return None, None, None, None, "Unity 창 좌표를 못 읽었다"
+        return m["CX"], m["CY"], m["CW"], m["CH"], "Unity 창 전체 %d,%d %dx%d" % (
+            m["CX"], m["CY"], m["CW"], m["CH"])
+
+    r = game_view_rect()
+    if r is None:
+        return None, None, None, None, "Game 뷰 좌표를 못 받았다(브리지에 gameview가 없거나 컴파일 중이다)"
+    x, y = int(round(r[0] * s)), int(round(r[1] * s))
+    w, h = int(round(r[2] * s)), int(round(r[3] * s))
+    note = "Game 뷰 %d,%d %dx%d(논리) → %d,%d %dx%d(물리) · 배율 %.2f" % (
+        r[0], r[1], r[2], r[3], x, y, w, h, s)
+    return x, y, w, h, note
+
+
 def is_playing(timeout=20):
     """브리지에 물어 Play 중인지 본다. (재생중, 브리지응답여부)"""
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
@@ -97,13 +253,20 @@ def out_path(out_dir, label):
     return os.path.join(d, name)
 
 
-def start_ffmpeg(title, path, fps, crop):
+def start_ffmpeg(title, path, fps, crop, region=None):
+    """region이 있으면 바탕화면의 그 자리를, 없으면 창 제목으로 긁는다."""
     vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2"   # ★홀수 해상도면 libx264가 통째로 죽는다
     if crop:
         vf = "crop=%s,%s" % (crop, vf)
-    cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "warning",
-           "-f", "gdigrab", "-framerate", str(fps), "-i", "title=%s" % title,
-           "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+    src = ["-f", "gdigrab", "-framerate", str(fps)]
+    if region:
+        x, y, w, h = region
+        src += ["-offset_x", str(x), "-offset_y", str(y),
+                "-video_size", "%dx%d" % (w, h), "-i", "desktop"]
+    else:
+        src += ["-i", "title=%s" % title]
+    cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "warning"] + src + \
+          ["-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
            "-pix_fmt", "yuv420p", path]
     return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE)
@@ -159,8 +322,15 @@ def cmd_watch(a):
                 if not title:
                     log("[녹화] ★Unity 창을 못 찾았다 — 녹화를 못 시작한다")
                     break
+                # ★Game 화면만 남긴다(09-21 사용자 지시). 창을 통째로 긁으면 Scene 뷰가 찍힌다.
+                x, y, w, h, note = capture_region(title, a.whole)
+                region = None if x is None else (x, y, w, h)
+                if region is None:
+                    log("[녹화] ★%s — 창 제목으로 긁는다(Scene 뷰가 섞인다)" % note)
+                else:
+                    log("[녹화] %s" % note)
                 path = out_path(a.out, a.label)
-                proc = start_ffmpeg(title, path, a.fps, a.crop)
+                proc = start_ffmpeg(title, path, a.fps, a.crop, region)
                 started = time.time()
                 save_state({"path": path, "title": title, "started": started})
                 log("[녹화] 시작 — %s" % path)
@@ -201,11 +371,43 @@ def cmd_status(a):
     st = load_state()
     log("브리지 %s · Play %s" % ("응답 O" if alive else "★응답 없음", "중" if playing else "아니오"))
     log("Unity 창 %s" % (title or "★없음"))
+    if title:
+        ox, oy = window_origin(title)
+        log("창 클라이언트 왼쪽 위 %s" % ("%d,%d" % (ox, oy) if ox is not None else "★못 읽었다"))
     if st.get("path"):
         p = st["path"]
         ok = os.path.exists(p)
         log("마지막 녹화 %s%s" % (p, "" if ok else " ★파일 없음"))
     log("ffmpeg %s" % ("O" if os.path.exists(FFMPEG) else "★없음"))
+    return 0
+
+
+def cmd_crop(a):
+    """긁을 자리를 확인만 한다(녹화는 안 한다). 좌표가 의심스러우면 여기부터 본다.
+
+    ★`--png=경로`를 주면 그 자리를 한 장 찍어 준다 — <b>눈으로 확인하는 것</b>이 제일 확실하다.
+    """
+    title = unity_window_title()
+    if not title:
+        log("★Unity 창을 못 찾았다")
+        return 1
+    log("창 '%s'" % title)
+    m = window_metrics(title)
+    log("클라이언트 %s" % ("%d,%d %dx%d · DPI %d" % (m["CX"], m["CY"], m["CW"], m["CH"], m["DPI"])
+                          if m else "★못 읽었다"))
+    x, y, w, h, note = capture_region(title, a.whole)
+    log("영역 %s" % ("%d,%d %dx%d" % (x, y, w, h) if x is not None else "★없음"))
+    log("     %s" % note)
+    if x is None:
+        return 1
+    if a.png:
+        r = subprocess.run([FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+                            "-f", "gdigrab", "-framerate", "5",
+                            "-offset_x", str(x), "-offset_y", str(y),
+                            "-video_size", "%dx%d" % (w, h), "-i", "desktop",
+                            "-frames:v", "1", a.png],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        log("한 장 찍기 %s" % (a.png if r.returncode == 0 else "★실패 " + (r.stderr or "")[-300:]))
     return 0
 
 
@@ -265,14 +467,17 @@ def cmd_rm(a):
 
 def main():
     p = argparse.ArgumentParser(description="테스트 플레이를 영상으로 남긴다")
-    p.add_argument("cmd", choices=["watch", "stop", "status", "list", "clip", "rm"])
+    p.add_argument("cmd", choices=["watch", "stop", "status", "crop", "list", "clip", "rm"])
     p.add_argument("--out", default=DEFAULT_OUT, help="녹화를 둘 폴더(기본 %s)" % DEFAULT_OUT)
     p.add_argument("--label", default="", help="파일 이름에 붙일 말")
     p.add_argument("--fps", type=int, default=20)
     p.add_argument("--poll", type=float, default=1.5, help="Play 상태를 확인하는 간격(초)")
     p.add_argument("--timeout", type=int, default=3600, help="Play를 기다릴 최대 시간(초)")
     p.add_argument("--repeat", action="store_true", help="한 판만 찍고 끝내지 않고 계속 기다린다")
-    p.add_argument("--crop", default="", help="ffmpeg crop 식(예: 1280:720:100:50)")
+    p.add_argument("--crop", default="", help="ffmpeg crop 식(예: 1280:720:100:50). 주면 Game 뷰 자동 잘라내기를 대신한다")
+    p.add_argument("--whole", action="store_true",
+                   help="Game 뷰만이 아니라 Unity 창 전체를 찍는다(Scene 뷰·인스펙터까지 남긴다)")
+    p.add_argument("--png", default="", help="crop이 그 자리를 한 장 찍어 둘 곳")
     p.add_argument("--src", default="", help="clip·rm이 쓸 원본(없으면 마지막 녹화)")
     p.add_argument("--from", dest="frm", default="0", help="clip 시작(초 또는 MM:SS)")
     p.add_argument("--to", default="10", help="clip 끝(초 또는 MM:SS)")
@@ -283,7 +488,7 @@ def main():
     if not os.path.exists(FFMPEG):
         log("★ffmpeg가 없다 — %s" % FFMPEG)
         return 1
-    return {"watch": cmd_watch, "stop": cmd_stop, "status": cmd_status,
+    return {"watch": cmd_watch, "stop": cmd_stop, "status": cmd_status, "crop": cmd_crop,
             "list": cmd_list, "clip": cmd_clip, "rm": cmd_rm}[a.cmd](a)
 
 

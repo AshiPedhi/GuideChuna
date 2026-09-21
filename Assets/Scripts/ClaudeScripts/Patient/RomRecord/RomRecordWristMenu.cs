@@ -129,9 +129,15 @@ public class RomRecordWristMenu : IRomRecordMenu
         cooldownUntil = Time.unscaledTime + cooldown;   // ★방금 누른 손가락이 새 버튼 위에 남아 곧바로 눌리지 않게
         activeCount = Mathf.Min(items.Length, pool.Count);
 
-        float maxRow = 0f;
-        for (int i = 0; i < activeCount; i++) maxRow = Mathf.Max(maxRow, items[i].row);
-        panelW = columns * cellW + 0.01f;
+        // ★판 폭을 <b>내용에 맞춘다</b>(09-21). 종전엔 columns(6칸)로 고정이라 항목이 적어도
+        //   판이 안 줄었다 — 사용자가 "빈 공간이 너무 많다"고 한 것이 이것이다.
+        float maxRow = 0f, maxCol = 1f;
+        for (int i = 0; i < activeCount; i++)
+        {
+            maxRow = Mathf.Max(maxRow, items[i].row);
+            maxCol = Mathf.Max(maxCol, items[i].col + items[i].span);
+        }
+        panelW = maxCol * cellW + 0.01f;
         panelH = (maxRow + 1f) * rowH + 0.01f;
         plate.localScale = new Vector3(panelW, panelH, 1f);
 
