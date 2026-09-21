@@ -41,6 +41,7 @@ public static partial class ChunaAgentBridge
             case "capture": ok = DoCapture(sb, a, out err); return true;
             case "play": ok = DoPlay(sb, true, out err); return true;
             case "stop": ok = DoPlay(sb, false, out err); return true;
+            case "gameview": ok = DoGameView(sb, a, out err); return true;
         }
         return false;
     }
@@ -366,6 +367,34 @@ public static partial class ChunaAgentBridge
     }
 
     // ── play / stop ─────────────────────────────────────────────────────
+    /// <summary>
+    /// Game 뷰를 앞으로 가져오고 <b>화면 좌표</b>를 알려 준다(2026-09-21 신설).
+    /// ★녹화가 Unity 창을 통째로 긁던 탓에 Scene 뷰가 찍혔다 — 사용자는 Game 화면을 원한다.
+    ///   그래서 ①Game 뷰를 활성 탭으로 만들고 ②그 그림 영역만 잘라낼 좌표를 돌려준다.
+    /// ★<c>position</c>은 스크린 좌표다. Game 뷰 위쪽 툴바만큼은 빼야 그림만 남는다.
+    /// </summary>
+    private static bool DoGameView(StringBuilder sb, Dictionary<string, string> a, out string err)
+    {
+        err = null;
+        var t = Type.GetType("UnityEditor.GameView,UnityEditor");
+        if (t == null) { err = "GameView 타입을 못 찾았다"; return false; }
+
+        var w = EditorWindow.GetWindow(t, false, null, true);   // focus=true — 탭을 앞으로
+        if (w == null) { err = "Game 뷰를 못 열었다"; return false; }
+        w.Focus();
+
+        float tb = 0f;
+        float.TryParse(Get(a, "toolbar", "21"), out tb);
+        Rect r = w.position;
+        sb.Append("Game 뷰를 앞으로 가져왔다.\n");
+        sb.Append(string.Format("창 x{0:F0} y{1:F0} w{2:F0} h{3:F0} · 툴바 {4:F0}px\n",
+                                r.x, r.y, r.width, r.height, tb));
+        // ★record.py가 이 줄을 읽는다 — 형식을 바꾸면 녹화의 잘라내기가 깨진다.
+        sb.Append(string.Format("rect {0:F0},{1:F0},{2:F0},{3:F0}\n",
+                                r.x, r.y + tb, r.width, Mathf.Max(2f, r.height - tb)));
+        return true;
+    }
+
     private static bool DoPlay(StringBuilder sb, bool on, out string err)
     {
         err = null;

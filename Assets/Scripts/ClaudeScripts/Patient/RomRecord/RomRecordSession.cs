@@ -39,9 +39,11 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float buttonLabelSize = 0.03f;
 
     [Header("=== 손목 판 — Meta UI Set(2026-09-21) ===")]
-    [Tooltip("Meta Interaction SDK의 UI Set 프리팹으로 판을 만든다(기본). ★끄면 종전 월드 Quad 판으로 돌아간다 —\n" +
-             "기기에서 Meta 판이 안 눌리거나 이상하면 여기를 꺼서 되돌린다.")]
-    [SerializeField] private bool useMetaUI = true;
+    // ★09-21 기기 판정: Meta UI 판은 <b>퇴화</b>였다(사용자) — 버튼 크기가 들쭉날쭉하고, 배치가 헐겁고,
+    //   무엇보다 <b>누르는 손에 판이 가려</b> 안 보였다. 그래서 기본을 끔으로 내린다.
+    //   지우지는 않는다 — 크기·배치 문제를 풀면 글자 크기 이점(Meta 표준 7mm)이 여전히 크다.
+    [Tooltip("Meta Interaction SDK의 UI Set 프리팹으로 판을 만든다. ★09-21 기기 확인에서 퇴화로 판정돼 기본은 끔이다.")]
+    [SerializeField] private bool useMetaUI = false;
     [Tooltip("Meta 판의 칸 너비(캔버스 px). 캔버스 스케일이 0.0005라 1px = 0.5mm다 — 84px ≈ 4.2cm.")]
     [SerializeField] private float metaCellPx = 84f;
     [Tooltip("Meta 판의 줄 높이(px).")]
@@ -89,6 +91,8 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private bool needleEnabled = true;
     [Tooltip("바늘 손잡이를 잡을 수 있는 반경(m).")]
     [SerializeField] private float needleGrabRadius = 0.1f;
+    [Tooltip("손잡이를 눈금판보다 이만큼(m) 더 밖에 둔다. ★0이면 손잡이가 머리 표면에 놓여 사람 머리에 묻힌다(09-21 사용자 지적).")]
+    [SerializeField] private float needleHandleOut = 0.16f;
     [Tooltip("미간을 아직 안 찍었을 때 쓸 각도기 반지름(m). 미간이 있으면 중심에서 미간까지를 쓴다.")]
     [SerializeField] private float needleFallbackRadius = 0.18f;
 
@@ -131,15 +135,20 @@ public class RomRecordSession : MonoBehaviour
     private bool dirty = true;
     private bool livePinchLeft;            // 지금 오므리고 있는 손(한 번에 하나만 받는다)
     private bool liveActive;
-    // ★바늘(09-21) — 단계마다 방향 하나를 들고 있는다. <b>각이 아니라 방향</b>이다(규칙 9: 부호를 정할 일이 없다).
-    private readonly Vector3[] needleDir = new Vector3[4];
-    private readonly bool[] needlePlaced = new bool[4];
+    // ★바늘(09-21) — 단계마다 <b>둘</b>(능동·압박)을 들고 있는다. 인덱스는 단계*2 + 종류다.
+    //   <b>각이 아니라 방향</b>으로 둔다(규칙 9: 부호를 정할 일이 없다).
+    private const int NeedleActive = 0, NeedlePress = 1;
+    private readonly Vector3[] needleDir = new Vector3[8];
+    private readonly bool[] needlePlaced = new bool[8];
     private bool needleOn = true;
-    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3 바늘 · -1 아무것도 안 잡음(그러면 종전대로 «찍기»다)
+    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3 능동 바늘 · 4 압박 바늘 · -1 아무것도 안 잡음(«찍기»로 간다)
     private int dragTarget = -1;
     private Vector3 dragGrabbedAt, dragStartValue;
-    private string lastPinchReason;        // 진단 로그 자기 침묵용
-    private float nextPinchLog;
+    // ★진단 로그 자기 침묵 — <b>손별로</b> 따로 센다(09-21 수정).
+    //   처음엔 하나로 뒀는데 왼손·오른손을 번갈아 처리하니 «마지막 이유»가 매번 바뀌어
+    //   억제가 통째로 죽었다 — 한 판에 11,000줄이 쏟아졌다. 로그가 로그를 못 보게 만든 꼴이다.
+    private readonly float[] nextPinchLog = new float[2];
+    private readonly Dictionary<string, int> pinchBlockCount = new Dictionary<string, int>();
     private readonly StringBuilder sb = new StringBuilder(512);
     private float lastPressTime = -99f;
     private bool menuHoldL, menuHoldR;
@@ -365,6 +374,8 @@ public class RomRecordSession : MonoBehaviour
     private static readonly Color AdjTint = new Color(0.45f, 0.75f, 0.35f);
     private static readonly Color TargetTint = new Color(0.95f, 0.75f, 0.2f);
     private static readonly Color UndoTint = new Color(0.95f, 0.55f, 0.2f);
+    private static readonly Color ActiveTint = new Color(0.95f, 0.6f, 0.15f);
+    private static readonly Color PressTint = new Color(0.9f, 0.35f, 0.9f);
     private static readonly Color NeedleTint = new Color(0.2f, 0.8f, 0.7f);   // 바늘 — 표시물 색과 같은 계열
 
     /// <summary>
@@ -420,8 +431,13 @@ public class RomRecordSession : MonoBehaviour
                 items.Add(RomMenuItem.Button("adj+", "+1°", 3.2f, 1, 1.8f, AdjTint, repeat: true));
                 items.Add(RomMenuItem.Button("undo", "취소", 2.1f, 2, 1.8f, UndoTint));
                 // ★바늘(09-21) — 점찍기와 <b>나란히</b> 둔다. 어느 쪽으로 기록할지는 사용자가 고른다.
-                items.Add(RomMenuItem.Button("needle", needleOn ? "바늘 끔" : "바늘 켬", 0f, 3, 2.4f, NeedleTint, selected: needleOn));
-                if (needleOn) items.Add(RomMenuItem.Button("nrec", "바늘 기록", 2.8f, 3, 3.2f, NeedleTint));
+                items.Add(RomMenuItem.Button("needle", needleOn ? "바늘 끔" : "바늘 켬", 0f, 3, 2.2f, NeedleTint, selected: needleOn));
+                if (needleOn)
+                {
+                    // ★바늘이 둘이라 기록도 둘이다(09-21) — 능동·압박을 사용자가 고른다.
+                    items.Add(RomMenuItem.Button("nrecA", "능동 기록", 2.4f, 3, 1.8f, ActiveTint));
+                    items.Add(RomMenuItem.Button("nrecP", "압박 기록", 4.2f, 3, 1.8f, PressTint));
+                }
                 navRow = 4;
                 break;
         }
@@ -495,11 +511,12 @@ public class RomRecordSession : MonoBehaviour
             case "undo": UndoLast(); break;
             case "needle":
                 needleOn = !needleOn;
-                lastNeedleDegShown = -999;
+                lastNeedleDegShown[0] = lastNeedleDegShown[1] = -999;
                 Debug.Log("[실측기록] 바늘 " + (needleOn ? "켬" : "끔"));
                 ApplyStepButtons();
                 break;
-            case "nrec": RecordNeedle(); break;
+            case "nrecA": RecordNeedle(NeedleActive); break;
+            case "nrecP": RecordNeedle(NeedlePress); break;
             case "prev": GoTo(step - 1); break;
             case "next": GoTo(step + 1); break;
             case "exit": Exit(); break;
@@ -614,11 +631,15 @@ public class RomRecordSession : MonoBehaviour
     private void ReportPinch(bool isLeft, RomRecordHands.PinchState st)
     {
         string r = st.blockReason;
-        if (r == null) { lastPinchReason = null; return; }
-        string key = (isLeft ? "L" : "R") + r;
-        if (key == lastPinchReason && Time.unscaledTime < nextPinchLog) return;
-        lastPinchReason = key;
-        nextPinchLog = Time.unscaledTime + 2f;
+        if (r == null) return;
+        // ★세는 것은 매번, 말하는 것은 손별로 2초에 한 번. 요약에서 <b>종류별 횟수</b>로 본다 —
+        //   한 줄씩 쏟아 놓고 눈으로 세면 오판한다(09-21에 11,000줄을 쏟아 놓고 그랬다).
+        pinchBlockCount.TryGetValue(r, out int n);
+        pinchBlockCount[r] = n + 1;
+
+        int k = isLeft ? 0 : 1;
+        if (Time.unscaledTime < nextPinchLog[k]) return;
+        nextPinchLog[k] = Time.unscaledTime + 2f;
 
         float eyeDy = eye != null ? (st.tip.y - eye.position.y) * 100f : 0f;
         float toMenu = Mathf.Min(leftMenu.Distance(st.tip), rightMenu.Distance(st.tip));
@@ -636,10 +657,12 @@ public class RomRecordSession : MonoBehaviour
     {
         startValue = default;
         // ★바늘 손잡이가 먼저다(09-21) — 동작 단계에서 바늘 끝을 잡으면 마커를 찍지 않는다.
-        if (NeedleVisible(out Vector3 nc, out _, out _, out float nr, out int mi)
-            && Vector3.Distance(p, nc + needleDir[mi] * nr) <= needleGrabRadius)
+        //   바늘이 둘이라 <b>가까운 쪽</b>을 잡는다.
+        if (NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
         {
-            return 3;
+            float dA = Vector3.Distance(p, nc + needleDir[mi * 2 + NeedleActive] * nh);
+            float dP = Vector3.Distance(p, nc + needleDir[mi * 2 + NeedlePress] * nh);
+            if (Mathf.Min(dA, dP) <= needleGrabRadius) return dA <= dP ? 3 : 4;
         }
         if (step == RomRecordStep.Setup)
         {
@@ -658,32 +681,45 @@ public class RomRecordSession : MonoBehaviour
         return 2;
     }
 
-    /// <summary>바늘이 지금 보이나. 보이면 기하와 그 단계의 바늘 칸 번호를 준다.</summary>
-    private bool NeedleVisible(out Vector3 center, out Vector3 normal, out Vector3 zero, out float radius, out int mi)
+    /// <summary>
+    /// 바늘이 지금 보이나. 보이면 기하와 <b>손잡이 반지름</b>을 준다. 바늘 둘이 같은 기하를 쓴다.
+    /// ★손잡이 반지름은 눈금 반지름보다 <see cref="needleHandleOut"/>만큼 <b>더 밖</b>이다 —
+    ///   눈금 반지름은 회전중심에서 미간까지라 그 자리에 손잡이를 두면 <b>사람 머리 안에 묻힌다</b>(09-21).
+    /// </summary>
+    private bool NeedleVisible(out Vector3 center, out Vector3 normal, out Vector3 zero,
+                               out float radius, out float handleRadius, out int mi)
     {
         mi = 0;
+        handleRadius = needleFallbackRadius + needleHandleOut;
         if (!needleOn || !DialFrame(out center, out normal, out zero, out radius))
         {
             center = default; normal = Vector3.up; zero = Vector3.forward; radius = needleFallbackRadius;
             return false;
         }
+        handleRadius = radius + needleHandleOut;
         mi = MotionIndex(step);
-        if (!needlePlaced[mi])
+        for (int k = 0; k < 2; k++)
         {
-            needleDir[mi] = zero;      // 처음엔 눈금 0(연직 · 회전은 정면)에 세워 둔다
-            needlePlaced[mi] = true;
+            int n = mi * 2 + k;
+            if (needlePlaced[n]) continue;
+            // 처음엔 눈금 0(연직 · 회전은 정면)에서 서로 조금 벌려 세운다 — 겹쳐 두면 하나뿐인 줄 안다.
+            needleDir[n] = Quaternion.AngleAxis(k == NeedleActive ? -8f : 8f, normal) * zero;
+            needlePlaced[n] = true;
         }
         return true;
     }
 
+    private static string NeedleName(int k) => k == NeedleActive ? "능동" : "압박";
+
     private void ApplyDrag(Vector3 p)
     {
         // ★바늘은 델타가 아니라 <b>손이 있는 쪽</b>을 향한다. 단면에 투영해 그 면에서만 돌게 한다.
-        if (dragTarget == 3)
+        if (dragTarget == 3 || dragTarget == 4)
         {
-            if (NeedleVisible(out Vector3 nc, out Vector3 nn, out _, out _, out int mi))
+            if (NeedleVisible(out Vector3 nc, out Vector3 nn, out _, out _, out _, out int mi))
             {
-                needleDir[mi] = RomRecordGeometry.OnPlane(p - nc, nn, needleDir[mi]);
+                int n = mi * 2 + (dragTarget == 3 ? NeedleActive : NeedlePress);
+                needleDir[n] = RomRecordGeometry.OnPlane(p - nc, nn, needleDir[n]);
                 DrawNeedle();
             }
             return;
@@ -704,8 +740,12 @@ public class RomRecordSession : MonoBehaviour
 
     private void EndDrag()
     {
-        if (dragTarget == 3 && NeedleVisible(out _, out _, out Vector3 z, out _, out int mi))
-            Debug.Log($"[실측기록] 바늘 놓았다 — 눈금 {Vector3.Angle(z, needleDir[mi]):F1}° ([바늘 기록]을 눌러야 남는다)");
+        if ((dragTarget == 3 || dragTarget == 4) && NeedleVisible(out _, out _, out Vector3 z, out _, out _, out int mi))
+        {
+            int k = dragTarget == 3 ? NeedleActive : NeedlePress;
+            Debug.Log($"[실측기록] {NeedleName(k)} 바늘 놓았다 — 눈금 {Vector3.Angle(z, needleDir[mi * 2 + k]):F1}° " +
+                      $"([{NeedleName(k)} 기록]을 눌러야 남는다)");
+        }
         else
             Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(dragTarget == 0 ? frameOrigin : dragTarget == 1 ? c7 : glab)}");
         dragTarget = -1;
@@ -714,31 +754,38 @@ public class RomRecordSession : MonoBehaviour
     }
 
     // ── 바늘(09-21 신설) ─────────────────────────────────────────────
-    private int lastNeedleDegShown = -999;
+    private readonly int[] lastNeedleDegShown = { -999, -999 };
 
-    /// <summary>바늘과 각을 그린다. ★끄는 동안 매 프레임 불린다 — 각이 1° 넘게 바뀔 때만 글자를 새로 만든다.</summary>
+    /// <summary>바늘 둘을 그린다. ★끄는 동안 매 프레임 불린다 — 각이 1° 넘게 바뀔 때만 글자를 새로 만든다.</summary>
     private void DrawNeedle()
     {
-        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out int mi))
+        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out float h, out int mi))
         {
-            view.SetNeedle(false, Vector3.zero, Vector3.up, 0.1f, null, false);
-            lastNeedleDegShown = -999;
+            for (int k = 0; k < 2; k++)
+            {
+                view.SetNeedle(k, false, Vector3.zero, Vector3.up, 0.1f, 0.2f, null, false);
+                lastNeedleDegShown[k] = -999;
+            }
             return;
         }
-        int d = Mathf.RoundToInt(Vector3.Angle(z, needleDir[mi]));
-        string label = null;
-        if (d != lastNeedleDegShown)
+        for (int k = 0; k < 2; k++)
         {
-            lastNeedleDegShown = d;
-            label = d.ToString() + "°";
+            Vector3 dir = needleDir[mi * 2 + k];
+            int d = Mathf.RoundToInt(Vector3.Angle(z, dir));
+            string label = null;
+            if (d != lastNeedleDegShown[k])
+            {
+                lastNeedleDegShown[k] = d;
+                label = NeedleName(k) + " " + d + "°";
+            }
+            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k);
         }
-        view.SetNeedle(true, c, needleDir[mi], r, label, dragTarget == 3);
     }
 
     /// <summary>바늘이 지금 가리키는 각을 기록한다. ★점찍기와 따로 남긴다 — 사용자가 둘을 비교한다.</summary>
-    private void RecordNeedle()
+    private void RecordNeedle(int kind)
     {
-        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out int mi))
+        if (!NeedleVisible(out Vector3 c, out _, out Vector3 z, out float r, out _, out int mi))
         {
             Play(sndDeny);
             Debug.Log("[실측기록] 바늘이 없다 — 대추를 먼저 찍고 동작 단계로 온다.");
@@ -752,13 +799,14 @@ public class RomRecordSession : MonoBehaviour
             return;
         }
 
-        Vector3 dir = needleDir[mi];
+        Vector3 dir = needleDir[mi * 2 + kind];
         var m = new RomRecordMark
         {
             raw = c + dir * r,
             byNeedle = true,
             dialDeg = Vector3.Angle(z, dir),
-            passive = list.Count % 2 == 1,
+            // ★바늘은 사용자가 <b>고른다</b> — 점찍기처럼 순서로 정하지 않는다.
+            passive = kind == NeedlePress,
             // ★좌우는 바늘이 가리키는 쪽으로 본다 — 미간이 없어도 갈린다.
             side = HasSides(step) ? RomRecordGeometry.SideOfDirection(dir, yaw, flipSides) : 0,
         };
@@ -863,7 +911,7 @@ public class RomRecordSession : MonoBehaviour
     {
         string side = m.side > 0 ? "우 " : m.side < 0 ? "좌 " : "";
         // ★바늘로 맞춘 것은 표시에서도 구분한다 — 점찍기와 섞이면 비교를 못 한다.
-        return side + (m.passive ? "수동" : "능동") + (m.byNeedle ? "·바늘" : "");
+        return side + (m.passive ? "압박" : "능동") + (m.byNeedle ? "·바늘" : "");
     }
 
     private void LogMark(RomRecordStep s, RomRecordMark m)
@@ -913,6 +961,12 @@ public class RomRecordSession : MonoBehaviour
         // ★조용히 버려진 핀치를 여기서 한 번 센다(09-21) — 얼마나 걸러졌는지 판마다 남는다.
         sb.Append("  무시된 핀치: 너무 짧음 ").Append(hands.IgnoredShort)
           .Append(" · 추적 신뢰 낮음 ").Append(hands.IgnoredLowConfidence).Append('\n');
+        if (pinchBlockCount.Count > 0)
+        {
+            sb.Append("  핀치를 막은 것(프레임 수):");
+            foreach (var kv in pinchBlockCount) sb.Append(' ').Append(kv.Key).Append(' ').Append(kv.Value).Append(" ·");
+            sb.Append('\n');
+        }
         Debug.Log(sb.ToString());
     }
 
@@ -979,7 +1033,7 @@ public class RomRecordSession : MonoBehaviour
                 if (next >= Capacity(step)) sb.Append("다 찍었습니다 — [다음]\n");
                 else
                 {
-                    sb.Append(next % 2 == 0 ? "능동" : "수동").Append(' ').Append(next + 1).Append('/').Append(Capacity(step));
+                    sb.Append(next % 2 == 0 ? "능동" : "압박").Append(' ').Append(next + 1).Append('/').Append(Capacity(step));
                     // ★두 길을 나란히 알린다(09-21) — 어느 쪽으로 남길지는 사용자가 고른다.
                     sb.Append(needleOn ? " — 바늘 끝을 잡아 맞추고 [바늘 기록], 또는 미간에 핀치\n"
                                        : " — 위치의 미간에 핀치하세요\n");

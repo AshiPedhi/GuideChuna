@@ -19,9 +19,11 @@ public class RomRecordVisual
     private Material lineMat;
     private readonly List<TextMeshPro> facing = new List<TextMeshPro>();
 
-    private LineRenderer axisUp, axisFwd, axisRight, pivotAxis, neutralLine, ring, zeroLine, needle;
-    private Transform needleGrip;
-    private TextMeshPro needleLabel;
+    private LineRenderer axisUp, axisFwd, axisRight, pivotAxis, neutralLine, ring, zeroLine;
+    // ★바늘은 <b>둘</b>이다(09-21 사용자 지시) — 능동과 압박을 나란히 놓고 눈으로 비교한다.
+    private readonly LineRenderer[] needles = new LineRenderer[2];
+    private readonly Transform[] needleGrips = new Transform[2];
+    private readonly TextMeshPro[] needleLabels = new TextMeshPro[2];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
     private Transform c7Dot, glabDot, liveDot, pivotDot;
     private readonly LineRenderer[] ticks = new LineRenderer[TickCount];
@@ -84,9 +86,14 @@ public class RomRecordVisual
         }
 
         // ★바늘(2026-09-21) — 각도기 중심에서 뻗은 지침. 끝의 손잡이를 잡아 그 단면 안에서만 돌린다.
-        needle = Line("바늘", NeedleColor, 0.007f);
-        needleGrip = Dot("바늘 손잡이", NeedleColor, 0.03f);
-        needleLabel = Label("", textSize * 1.4f, NeedleColor);
+        //   둘을 만든다: 0 능동 · 1 압박. 색은 마커와 같은 계열로 맞춘다.
+        for (int i = 0; i < 2; i++)
+        {
+            Color c = i == 0 ? ActiveColor : PassiveColor;
+            needles[i] = Line(i == 0 ? "바늘(능동)" : "바늘(압박)", c, 0.007f);
+            needleGrips[i] = Dot("바늘 손잡이", c, 0.035f);
+            needleLabels[i] = Label("", textSize * 1.4f, c);
+        }
 
         for (int i = 0; i < MaxMarks; i++)
         {
@@ -100,7 +107,7 @@ public class RomRecordVisual
         panel.rectTransform.sizeDelta = new Vector2(panelSize * 16f, panelSize * 12f);
 
         SetLive(false, Vector3.zero);
-        SetNeedle(false, Vector3.zero, Vector3.up, 0.15f, null, false);
+        for (int i = 0; i < 2; i++) SetNeedle(i, false, Vector3.zero, Vector3.up, 0.15f, 0.2f, null, false);
         SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.15f);
         for (int i = 0; i < MaxMarks; i++) SetMark(i, false, Vector3.zero, Vector3.zero, null, ActiveColor);
     }
@@ -193,23 +200,28 @@ public class RomRecordVisual
     /// 바늘(2026-09-21). 각도기 중심에서 <paramref name="dir"/> 쪽으로 뻗고, 끝에 잡는 손잡이가 달린다.
     /// ★손잡이는 <b>바늘보다 조금 더 밖</b>에 둔다 — 눈금과 겹치면 잡으려다 눈금을 가린다.
     /// </summary>
-    public void SetNeedle(bool on, Vector3 center, Vector3 dir, float radius, string label, bool held)
+    public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, float dialRadius, float handleRadius,
+                          string label, bool held)
     {
-        Show(needle, on);
-        Show(needleGrip, on);
-        if (needleLabel.gameObject.activeSelf != on) needleLabel.gameObject.SetActive(on);
+        if (i < 0 || i >= 2) return;
+        Show(needles[i], on);
+        Show(needleGrips[i], on);
+        if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
         if (!on) return;
 
-        Color c = held ? NeedleHeldColor : NeedleColor;
-        Vector3 tip = center + dir * radius;
-        Seg(needle, center, tip);
-        needle.startColor = needle.endColor = c;
-        needleGrip.position = tip;
-        needleGrip.GetComponent<Renderer>().material.color = c;
-        needleGrip.localScale = Vector3.one * (held ? 0.038f : 0.03f);
-        needleLabel.color = c;
-        if (label != null) needleLabel.text = label;
-        needleLabel.transform.position = center + dir * (radius * 0.62f);
+        Color baseC = i == 0 ? ActiveColor : PassiveColor;
+        Color c = held ? NeedleHeldColor : baseC;
+        // ★손잡이는 눈금판보다 <b>더 밖</b>에 둔다. 눈금 반지름에 두면 실제 사람 머리 안에 묻혀
+        //   잡을 수가 없다(09-21 사용자 지적 — 내 설계 오류였다).
+        Vector3 tip = center + dir * handleRadius;
+        Seg(needles[i], center, tip);
+        needles[i].startColor = needles[i].endColor = c;
+        needleGrips[i].position = tip;
+        needleGrips[i].GetComponent<Renderer>().material.color = c;
+        needleGrips[i].localScale = Vector3.one * (held ? 0.045f : 0.035f);
+        needleLabels[i].color = c;
+        if (label != null) needleLabels[i].text = label;
+        needleLabels[i].transform.position = center + dir * (dialRadius * 0.62f);
     }
 
     public void SetPanel(Vector3 pos, string text)
