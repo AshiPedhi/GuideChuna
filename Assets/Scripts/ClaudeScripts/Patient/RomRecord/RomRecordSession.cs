@@ -149,7 +149,10 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private string lobbySceneName = "lobby";   // ★실제 종료 팝업(ExitPopupController)이 쓰는 이름과 같게
 
     // ── 상태 ─────────────────────────────────────────────────────────
-    private RomRecordStep step = RomRecordStep.Setup;
+    // ★대추부터 시작한다(2026-09-21 사용자 제안). 대추를 찍으면 3축이 그 자리로 가고,
+    //   정면은 미간을 찍을 때 대추→미간으로 정해진다 — 기준선 세팅을 먼저 할 이유가 없다.
+    //   [이전]으로 기준선 세팅에 갈 수는 있다(3축을 손으로 다듬고 싶을 때).
+    private RomRecordStep step = RomRecordStep.Landmarks;
     private float yaw;
     private Vector3 frameOrigin;           // 대추를 찍기 전 3축 자리
     private bool hasC7, hasGlab;
@@ -648,6 +651,33 @@ public class RomRecordSession : MonoBehaviour
         dirty = true;
     }
 
+    /// <summary>
+    /// 환자 정면을 <b>대추 → 미간</b>으로 잡는다(2026-09-21 사용자 제안:
+    /// "처음에 그냥 생성 바로 대추혈 찍으면 되는 거 아닌가?").
+    ///
+    /// ★대추는 목 뒤, 미간은 이마 앞이다. 그 사이 벡터의 <b>수평 성분</b>이 곧 환자가 보는 쪽이다.
+    ///   그래서 기준선 세팅 단계에서 정면을 손으로 맞출 필요가 없다 — 두 점을 찍으면 저절로 정해진다.
+    /// ★<b>지움</b>: 위아래 성분을 버린다(ProjectOnPlane). 미간이 대추보다 얼마나 높든 정면 방향은
+    ///   수평이어야 하므로 의도한 것이다. 대신 <b>환자가 고개를 숙이거나 든 채로 찍으면</b>
+    ///   수평 성분이 짧아져 정면이 흔들린다 — 그래서 중립에서 찍으라 하고, ↺↻로 다듬게 남긴다.
+    /// ★부호를 추론으로 정하지 않았다(규칙 9). 두 점의 차라 뒤집힐 여지가 없다.
+    ///   그래도 <b>Play에서 '환자 앞' 글자가 실제 환자 앞을 가리키는지 눈으로 봐야 한다.</b>
+    /// </summary>
+    private void AimFrontFromLandmarks()
+    {
+        if (!hasC7 || !hasGlab) return;
+        Vector3 flat = Vector3.ProjectOnPlane(glab - c7, Vector3.up);
+        if (flat.sqrMagnitude < 1e-4f)
+        {
+            Debug.Log("[실측기록] ★대추와 미간이 거의 수직으로 겹쳐 정면을 못 잡았다 — ↺↻로 맞춘다.");
+            return;
+        }
+        float before = yaw;
+        yaw = Quaternion.LookRotation(flat.normalized, Vector3.up).eulerAngles.y;
+        Debug.Log($"[실측기록] 환자 정면을 대추→미간으로 잡았다 — {before:F0}° → {yaw:F0}° " +
+                  $"(수평 거리 {flat.magnitude * 100f:F0}cm · ↺↻로 다듬는다)");
+    }
+
     private void SetTarget(int t)
     {
         if (landmarkTarget == t) return;
@@ -979,6 +1009,7 @@ public class RomRecordSession : MonoBehaviour
                     glab = p; hasGlab = true;
                     Play(sndPinch);
                     Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
+                    AimFrontFromLandmarks();
                 }
                 else { Play(sndDeny); Debug.Log("[실측기록] 대상이 목 중앙일 때는 앞·뒤 버튼으로 옮긴다(찍지 않는다)."); }
                 dirty = true;
@@ -1117,6 +1148,9 @@ public class RomRecordSession : MonoBehaviour
         Vector3 pivot = Pivot;
         view.SetFrame(pivot, yaw, axisLength);
         view.SetLandmarks(hasC7, c7, hasGlab, glab, pivot);
+        // ★대추를 찍기 전에는 3축을 숨긴다(09-21) — 그때 3축은 눈앞 허공의 임시 자리일 뿐이라
+        //   보여 봐야 시야만 가린다. 대추를 찍으면 그 자리로 와서 그때부터 뜻이 생긴다.
+        view.SetAxesVisible(hasC7 || step == RomRecordStep.Setup);
 
         // 손목 판 머리줄 — 지금까지 찍은 값(값이 바뀔 때만)
         string head = MenuHeader();
@@ -1160,7 +1194,9 @@ public class RomRecordSession : MonoBehaviour
                 sb.Append("축을 손으로 잡아 끌어 목 높이에 두고, ↺↻로 '환자 앞'을 맞춘 뒤 [다음]\n");
                 break;
             case RomRecordStep.Landmarks:
-                sb.Append(!hasC7 ? "대추에 핀치하세요\n" : !hasGlab ? "미간(중립)에 핀치하세요\n" : "점을 잡아 끌거나 버튼으로 다듬고 [다음]\n");
+                sb.Append(!hasC7 ? "대추에 핀치하세요 (여기가 기준점이 됩니다)\n"
+                        : !hasGlab ? "중립 자세에서 미간에 핀치하세요 (정면이 함께 정해집니다)\n"
+                        : "점을 잡아 끌거나 버튼으로 다듬고 [다음]\n");
                 sb.Append(landmarkTarget == 0 ? "대상: 대추" : landmarkTarget == 1 ? "대상: 미간" : "대상: 목중앙").Append(" · 목 중앙 보정 ").Append(neckOffsetMm.ToString("F0")).Append("mm\n");
                 break;
             case RomRecordStep.Done:
