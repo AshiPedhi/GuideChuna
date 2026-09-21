@@ -437,7 +437,21 @@ public class RomRecordSession : MonoBehaviour
             ReportNotReady(waited);
             if (waited < trackingWaitSeconds) return;
         }
-        else trackingWaitStart = -1f;
+        else
+        {
+            trackingWaitStart = -1f;
+            // ★★09-21 실측: Start에서 물으면 <b>XR이 아직 안 붙어</b> 깊이 서브시스템이 없다
+            //   (로그 순서로 확인 — 표시 머티리얼 줄이 시작 줄보다 앞이고, 그 직후 눈 높이가 0.00m다).
+            //   그래서 추적이 붙은 뒤에 <b>한 번 더</b> 켜 본다.
+            if (useDepthOcclusion && !depthRetried)
+            {
+                depthRetried = true;
+                if (EnableDepthOcclusion())
+                    Debug.Log("[실측기록] ★추적이 붙은 뒤 폐색을 켰다 — 이제 현실에 가려진다.");
+                else
+                    Debug.Log("[실측기록] 추적이 붙은 뒤에도 환경 깊이가 없다 — 이 실행에서는 폐색 없이 간다.");
+            }
+        }
 
         if (!placed)
         {
@@ -473,6 +487,7 @@ public class RomRecordSession : MonoBehaviour
     private float nextNotReadyLog;
     private float trackingWaitStart = -1f;
     private bool trackingGaveUp;
+    private bool depthRetried;   // 추적이 붙은 뒤 폐색을 한 번 더 켜 봤나
     // ★이만큼 기다려도 추적이 안 붙으면 그냥 놓는다. 화면이 계속 비어 있는 것보다 낫다(09-21).
     private const float trackingWaitSeconds = 8f;
 
