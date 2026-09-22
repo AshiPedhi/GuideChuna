@@ -14,7 +14,8 @@ using UnityEngine;
 ///   · 4단계: 굴곡·신전(1회째 능동, 2회째 수동), 측굴·회전(4회, 좌우 자동, 홀수 능동·짝수 수동).
 ///   · 값 = 중립선에서 움직인 양(양수). 각도기 눈금 0은 단면 연직(회전은 정면).
 ///   · 마커: 핀치를 오므리면 생기고 펴면 고정. 동작 마커는 1° 단위 수정, 대추·미간은 mm 단위.
-///   · ★09-22: 기준점은 대추·풍부·미간 셋(목중앙 보정 폐지). 굴곡·신전·회전은 <b>풍부</b>, 측굴은 대추를 축으로 잰다.
+///   · ★09-22: 기준점은 대추·외이도·미간 셋(목중앙 보정 폐지). 굴곡·신전·회전은 <b>외이도(정중면으로 옮긴 점)</b>,
+///     측굴은 대추를 축으로 잰다(교과서 각도계 축과 같다 — Norkin & White: 굴곡·신전 외이도, 측굴 C7).
 ///     대추 기준 각도 <b>같이</b> 기록한다 — 축에 따라 값이 얼마나 흔들리는지 나중에 비교한다.
 ///
 /// ★기존 실측(경추ROM실측 시나리오)·실측랩과 <b>서로 참조하지 않는다</b>. 이 씬 전용이다.
@@ -152,7 +153,8 @@ public class RomRecordSession : MonoBehaviour
 
     // ★목중앙 보정(neckOffsetMm)은 09-22에 없앴다(사용자 제안 «목중앙을 없애고 대추·풍부·미간»).
     //   대추에서 앞으로 몇 mm라는 값은 사람마다 정할 근거가 없었고, 09-21 로그에서 35mm가 회전 각을 30° 바꿨다.
-    //   대신 풍부(GV16 — 외후두융기 아래 오목한 곳)를 손으로 짚어 찍어 축으로 쓴다. 씬에 남은 옛 값은 읽히지 않는다.
+    //   대신 손으로 짚어 찍는 점을 축으로 쓴다 — 처음엔 풍부(GV16)였고 같은 날 <b>외이도</b>로 바꿨다(사용자).
+    //   씬에 남은 옛 값은 읽히지 않는다.
 
     [Header("=== 좌우 ===")]
     [Tooltip("측굴·회전의 좌우가 반대로 기록되면 켠다. ★Play에서 환자 오른쪽으로 기울여 '우'가 찍히는지 먼저 본다.")]
@@ -191,9 +193,9 @@ public class RomRecordSession : MonoBehaviour
     private RomRecordStep step = RomRecordStep.Landmarks;
     private float yaw;
     private Vector3 frameOrigin;           // 대추를 찍기 전 3축 자리
-    private bool hasC7, hasGlab, hasFengfu;
-    private Vector3 c7, glab, fengfu;
-    private int landmarkTarget;            // 0 대추 · 1 미간 · 2 풍부(09-22 — 목중앙 자리를 이어받았다)
+    private bool hasC7, hasGlab, hasEar;
+    private Vector3 c7, glab, ear;
+    private int landmarkTarget;            // 0 대추 · 1 미간 · 2 외이도(09-22 — 목중앙 자리를 이어받았다)
     private readonly List<RomRecordMark>[] marks =
     {
         new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(),
@@ -218,7 +220,7 @@ public class RomRecordSession : MonoBehaviour
     private readonly bool[] needlePlaced = new bool[4 * NeedlePerStep];
     private readonly bool[] needleMoved = new bool[4 * NeedlePerStep];   // 0°에서 끌어냈나 = 기록됐나
     private bool needleOn = true;
-    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 풍부 · 9 조작 판 · -1 아무것도 안 잡음(«찍기»로 간다)
+    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 조작 판 · -1 아무것도 안 잡음(«찍기»로 간다)
     private int dragTarget = -1;
     private Vector3 dragGrabbedAt, dragStartValue;
     // ★진단 로그 자기 침묵 — <b>손별로</b> 따로 센다(09-21 수정).
@@ -523,19 +525,33 @@ public class RomRecordSession : MonoBehaviour
     }
 
     // ── 계산 ─────────────────────────────────────────────────────────
-    // ★축은 단계마다 다르다(09-22 사용자 결정): 굴곡·신전·회전 = 풍부, 측굴 = 대추.
+    // ★축은 단계마다 다르다(09-22 사용자 결정): 굴곡·신전·회전 = 외이도, 측굴 = 대추.
     //   대추를 축으로 신전을 재면 90°를 젖혀도 절반쯤으로 나왔다(사용자 지적) — 머리는 대추보다 훨씬 위를 중심으로 돈다.
-    //   ★풍부도 뒤통수 <b>표면</b> 점이라 실제 관절보다 뒤쪽이다(추정) — 그래서 대추 기준 각을 로그에 같이 남긴다.
-    //   풍부를 아직 안 찍었으면 대추로 대신 잰다(안내 줄이 말한다).
+    //   처음엔 풍부였고 같은 날 외이도로 바꿨다(사용자). 교과서 각도계도 굴곡·신전 축을 외이도에 둔다.
+    //   ★외이도는 머리 <b>옆면</b> 점이다. 굴곡·신전(시상면)은 투영하면 좌우 성분이 사라져 상관없지만,
+    //   회전(횡단면)은 축이 한쪽 귀에 있으면 좌·우 회전이 비대칭으로 틀어진다(계산).
+    //   → 찍은 외이도를 <b>정중면</b>(대추를 지나고 법선이 환자 오른쪽인 연직면)으로 옮긴 점을 축으로 쓴다.
+    //   귀의 높이·앞뒤는 그대로, 좌우만 가운데로 — 왼귀·오른귀 어느 쪽을 찍어도 같은 축이 된다.
+    //   외이도를 아직 안 찍었으면 대추로 대신 잰다(안내 줄이 말한다). 대추 기준 각은 로그에 늘 같이 남긴다.
     private Vector3 Pivot => PivotFor(step);
 
     private Vector3 PivotFor(RomRecordStep s) =>
-        !hasC7 ? frameOrigin : hasFengfu && UsesFengfu(s) ? fengfu : c7;
+        !hasC7 ? frameOrigin : hasEar && UsesEar(s) ? EarAxis : c7;
 
-    private static bool UsesFengfu(RomRecordStep s) =>
+    /// <summary>외이도를 정중면으로 옮긴 점. ★정면(yaw)이 바뀌면 같이 바뀐다 — 대추→미간으로 정면을 잡은 뒤가 맞다.</summary>
+    private Vector3 EarAxis
+    {
+        get
+        {
+            Vector3 r = RomRecordGeometry.Right(yaw);
+            return ear - r * Vector3.Dot(ear - c7, r);   // 지움: 좌우 성분(정중면에서 벗어난 양)만
+        }
+    }
+
+    private static bool UsesEar(RomRecordStep s) =>
         s == RomRecordStep.Flexion || s == RomRecordStep.Extension || s == RomRecordStep.Rotation;
 
-    private string PivotName(RomRecordStep s) => hasC7 && hasFengfu && UsesFengfu(s) ? "풍부" : "대추";
+    private string PivotName(RomRecordStep s) => hasC7 && hasEar && UsesEar(s) ? "외이도" : "대추";
 
     /// <summary>
     /// 각도기·바늘이 함께 쓰는 기하(2026-09-21). ★표시·드래그·기록이 <b>같은 함수</b>를 탄다(규칙 9 —
@@ -675,7 +691,7 @@ public class RomRecordSession : MonoBehaviour
 
     // 탭 아래 값 색 — 바늘·마커와 같은 색(RomRecordVisual.ActiveColor·PassiveColor). 대추 하늘 · 미간 흰색.
     private const string HexActive = "#FFD199", HexPassive = "#FF6B05", HexC7 = "#4DE6FF", HexGlab = "#FFFFFF";
-    private const string HexFengfu = "#73FF99";   // RomRecordVisual.FengfuColor와 같다
+    private const string HexEar = "#73FF99";   // RomRecordVisual.EarColor와 같다
 
     // 칸 치수(판 칸 단위). ★Meta 판은 칸 4.9cm·줄 4.1cm(씬 값)라 판 폭 6.5칸 ≈ 33cm다 — 설정 팝업(33cm)과 같다.
     private const float BoardSpan = 6.5f, TabRows = 1.8f, ValueBand = 0.7f, ValueScale = 0.95f;
@@ -771,7 +787,7 @@ public class RomRecordSession : MonoBehaviour
         if (step == RomRecordStep.Landmarks)
         {
             Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkTarget == 0));
-            Ctl(RomMenuItem.Button("t2", "풍부", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
+            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
             Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkTarget == 1));
             // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
             Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
@@ -827,7 +843,7 @@ public class RomRecordSession : MonoBehaviour
         {
             int h = (int)step;
             h = h * 31 + landmarkTarget;
-            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasFengfu ? 8 : 0);
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0);
             return h;
         }
     }
@@ -844,7 +860,7 @@ public class RomRecordSession : MonoBehaviour
         if (s == RomRecordStep.Landmarks)
         {
             sb.Append("<color=").Append(HexC7).Append(hasC7 ? ">●" : "70>○").Append("</color> ");
-            sb.Append("<color=").Append(HexFengfu).Append(hasFengfu ? ">●" : "70>○").Append("</color> ");
+            sb.Append("<color=").Append(HexEar).Append(hasEar ? ">●" : "70>○").Append("</color> ");
             sb.Append("<color=").Append(HexGlab).Append(hasGlab ? ">●" : "70>○").Append("</color>");
             return sb.ToString();
         }
@@ -916,9 +932,9 @@ public class RomRecordSession : MonoBehaviour
     {
         if (step == RomRecordStep.Landmarks)
         {
-            // ★지금 고른 대상을 말한다 — 대추 → 풍부 → 미간 순으로 저절로 넘어간다.
+            // ★지금 고른 대상을 말한다 — 대추 → 외이도 → 미간 순으로 저절로 넘어간다.
             if (landmarkTarget == 0 && !hasC7) return "대추에 핀치하세요 (기준점)";
-            if (landmarkTarget == 2 && !hasFengfu) return "풍부에 핀치하세요 (뒤통수 아래 오목한 곳)";
+            if (landmarkTarget == 2 && !hasEar) return "외이도에 핀치하세요 (귓구멍 입구, 어느 쪽이든)";
             if (landmarkTarget == 1 && !hasGlab) return "중립 자세에서 미간에 핀치하세요";
             return "다시 찍거나 점을 잡아 끌어 다듬습니다";
         }
@@ -928,17 +944,17 @@ public class RomRecordSession : MonoBehaviour
         {
             int cnt = NeedleCountOf(step), done = 0;
             for (int k = 0; k < cnt; k++) if (needleMoved[mi * NeedlePerStep + k]) done++;
-            return $"0°의 바늘을 끌어 맞추세요 ({done}/{cnt}){NoFengfuNote(step)}";
+            return $"0°의 바늘을 끌어 맞추세요 ({done}/{cnt}){NoEarNote(step)}";
         }
         // ★점찍기 각은 중립선(대추→미간) 기준이라 미간이 없으면 안 나온다.
         if (!hasGlab) return "점찍기는 미간이 있어야 각이 나옵니다";
         var list = marks[mi];
-        if (list.Count >= Capacity(step)) return "다 찍었습니다" + NoFengfuNote(step);
-        return $"{(list.Count % 2 == 0 ? "능동" : "압박")} {list.Count + 1}/{Capacity(step)} — 미간에 핀치하세요{NoFengfuNote(step)}";
+        if (list.Count >= Capacity(step)) return "다 찍었습니다" + NoEarNote(step);
+        return $"{(list.Count % 2 == 0 ? "능동" : "압박")} {list.Count + 1}/{Capacity(step)} — 미간에 핀치하세요{NoEarNote(step)}";
     }
 
-    /// <summary>풍부를 축으로 써야 하는 단계인데 풍부가 없으면 짧게 알린다(대추로 대신 잰다).</summary>
-    private string NoFengfuNote(RomRecordStep s) => UsesFengfu(s) && !hasFengfu ? " · 대추 축" : "";
+    /// <summary>외이도를 축으로 써야 하는 단계인데 외이도가 없으면 짧게 알린다(대추로 대신 잰다).</summary>
+    private string NoEarNote(RomRecordStep s) => UsesEar(s) && !hasEar ? " · 대추 축" : "";
 
     /// <summary>
     /// 요약 줄에 쓸 각 하나. ★바늘은 눈금 각, 점은 중립선 기준 각이다 — <b>다른 수</b>라서 섞어 적으면 안 된다.
@@ -1075,7 +1091,7 @@ public class RomRecordSession : MonoBehaviour
     {
         if (landmarkTarget == 0 && hasC7) c7 += d;
         else if (landmarkTarget == 1 && hasGlab) glab += d;
-        else if (landmarkTarget == 2 && hasFengfu) fengfu += d;
+        else if (landmarkTarget == 2 && hasEar) ear += d;
     }
 
     private void GoTo(RomRecordStep s)
@@ -1194,7 +1210,7 @@ public class RomRecordSession : MonoBehaviour
 
     // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
     private static string DragName(int t) =>
-        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "풍부" : t == 9 ? "조작 판" : "바늘";
+        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "외이도" : t == 9 ? "조작 판" : "바늘";
 
     /// <summary>
     /// 이 자리에서 오므리면 조작 판이 잡히나. ★잡기(<see cref="FindDragTarget"/>)와 하이라이트가 <b>같은 함수</b>를 탄다 —
@@ -1274,14 +1290,14 @@ public class RomRecordSession : MonoBehaviour
         if (step != RomRecordStep.Landmarks) return -1;
 
         // 찍혀 있는 점만 잡는다. 아직 안 찍은 것은 종전대로 핀치로 찍는다.
-        // ★가장 가까운 점을 잡는다(대추·풍부·미간 — 09-22 풍부 추가).
+        // ★가장 가까운 점을 잡는다(대추·외이도·미간 — 09-22 추가).
         float dC7 = hasC7 ? Vector3.Distance(p, c7) : float.MaxValue;
         float dGl = hasGlab ? Vector3.Distance(p, glab) : float.MaxValue;
-        float dFf = hasFengfu ? Vector3.Distance(p, fengfu) : float.MaxValue;
+        float dFf = hasEar ? Vector3.Distance(p, ear) : float.MaxValue;
         float nearest = Mathf.Min(dC7, Mathf.Min(dGl, dFf));
         if (nearest > dotGrabRadius) return -1;
         if (nearest == dC7) { startValue = c7; return 1; }
-        if (nearest == dFf) { startValue = fengfu; return 8; }
+        if (nearest == dFf) { startValue = ear; return 8; }
         startValue = glab;
         return 2;
     }
@@ -1344,13 +1360,13 @@ public class RomRecordSession : MonoBehaviour
             // ★미간을 대추보다 낮게 끌 수 없다(2026-09-22 사용자 지시, 마진 없음) — 마커 생성과 같은 규칙이다.
             //   대추(dragTarget==1) 자신은 기준점이라 이 게이트를 안 건다.
             case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; break;
-            case 8: fengfu = v; break;
+            case 8: ear = v; break;
             case 9: leftMenu.MoveTo(v); return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
         Vector3 pivot = Pivot;
         view.SetFrame(pivot, yaw, axisLength);
-        view.SetLandmarks(hasC7, c7, hasFengfu, fengfu, hasGlab, glab, pivot);
+        view.SetLandmarks(hasC7, c7, hasEar, ear, hasGlab, glab, pivot);
     }
 
     private void EndDrag()
@@ -1369,7 +1385,7 @@ public class RomRecordSession : MonoBehaviour
         {
             Vector3 at = dragTarget == 0 ? frameOrigin
                        : dragTarget == 1 ? c7
-                       : dragTarget == 8 ? fengfu
+                       : dragTarget == 8 ? ear
                        : dragTarget == 9 ? leftMenu.Position : glab;
             Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
         }
@@ -1456,25 +1472,28 @@ public class RomRecordSession : MonoBehaviour
                 return;
 
             case RomRecordStep.Landmarks:
-                // ★순서: 대추 → 풍부 → 미간(09-22). 찍으면 아직 안 찍은 다음 대상으로 저절로 넘어간다.
+                // ★순서: 대추 → 외이도 → 미간(09-22). 찍으면 아직 안 찍은 다음 대상으로 저절로 넘어간다.
                 if (landmarkTarget == 0)
                 {
                     c7 = p; hasC7 = true;
-                    landmarkTarget = !hasFengfu ? 2 : !hasGlab ? 1 : 0;
+                    landmarkTarget = !hasEar ? 2 : !hasGlab ? 1 : 0;
                     ApplyStepButtons();
                     Play(sndPinch);
                     Debug.Log($"[실측기록] 대추 {Fmt(c7)}");
                 }
                 else if (landmarkTarget == 2)
                 {
-                    fengfu = p; hasFengfu = true;
+                    ear = p; hasEar = true;
                     landmarkTarget = !hasGlab ? 1 : 2;
                     ApplyStepButtons();
                     Play(sndPinch);
-                    // ★대추보다 낮거나 너무 멀면 잘못 찍었을 가능성이 크다(풍부는 대추 위 뒤통수 아래다).
-                    string warn = hasC7 && fengfu.y < c7.y ? " ★대추보다 낮다 — 잘못 찍었는지 본다" : "";
-                    Debug.Log($"[실측기록] 풍부 {Fmt(fengfu)}" +
-                              (hasC7 ? $" · 대추에서 위로 {(fengfu.y - c7.y) * 100f:F1}cm · 거리 {Vector3.Distance(fengfu, c7) * 100f:F1}cm" : "") + warn);
+                    // ★외이도는 대추보다 위다 — 낮으면 잘못 찍었을 가능성이 크다.
+                    //   정중면에서 옆으로 얼마나 떨어졌나도 남긴다(한쪽 귀라 6~8cm쯤이어야 한다 — 추정. 정면을 잡은 뒤라야 뜻이 있다).
+                    string warn = hasC7 && ear.y < c7.y ? " ★대추보다 낮다 — 잘못 찍었는지 본다" : "";
+                    Debug.Log($"[실측기록] 외이도 {Fmt(ear)}" +
+                              (hasC7 ? $" · 대추에서 위로 {(ear.y - c7.y) * 100f:F1}cm" +
+                                       $" · 정중면에서 옆으로 {Mathf.Abs(Vector3.Dot(ear - c7, RomRecordGeometry.Right(yaw))) * 100f:F1}cm" +
+                                       $" · 축 {Fmt(EarAxis)}" : "") + warn);
                 }
                 else
                 {
@@ -1587,7 +1606,7 @@ public class RomRecordSession : MonoBehaviour
         }
         float atPivot = AngleOf(s, m, PivotFor(s));
         float atC7 = Mathf.Max(0f, RomRecordGeometry.PlaneAngle(c7, glab, m.raw, RomRecordGeometry.PlaneNormal(s, yaw)) + m.adjustDeg);
-        // ★두 기준을 같이 남긴다 — 축(풍부/대추)과 대추 기준을 비교한다(09-18 방침 · 09-22 목중앙→풍부).
+        // ★두 기준을 같이 남긴다 — 축(외이도/대추)과 대추 기준을 비교한다(09-18 방침 · 09-22 목중앙→외이도).
         Debug.Log($"[실측기록] 기록 {StepTitle[(int)s]} {Kind(s, m)} ({how}) {atPivot:F1}° ({PivotName(s)} 축) · " +
                   $"대추 기준 {atC7:F1}°{(m.byNeedle ? $" · 눈금 {m.dialDeg:F1}°" : "")} · " +
                   $"자리 {Fmt(m.raw)} · 수정 {m.adjustDeg:+0;-0;0}°");
@@ -1597,7 +1616,7 @@ public class RomRecordSession : MonoBehaviour
     {
         sb.Clear();
         sb.Append("[실측기록] 요약 — 대추 ").Append(hasC7 ? Fmt(c7) : "없음")
-          .Append(" · 풍부 ").Append(hasFengfu ? Fmt(fengfu) : "없음(대추 축으로 잼)")
+          .Append(" · 외이도 ").Append(hasEar ? Fmt(ear) + " → 축 " + Fmt(EarAxis) : "없음(대추 축으로 잼)")
           .Append(" · 미간 ").Append(hasGlab ? Fmt(glab) : "없음").Append('\n');
         for (RomRecordStep s = RomRecordStep.Flexion; s <= RomRecordStep.Rotation; s++)
         {
@@ -1646,7 +1665,7 @@ public class RomRecordSession : MonoBehaviour
     {
         Vector3 pivot = Pivot;
         view.SetFrame(pivot, yaw, axisLength);
-        view.SetLandmarks(hasC7, c7, hasFengfu, fengfu, hasGlab, glab, pivot);
+        view.SetLandmarks(hasC7, c7, hasEar, ear, hasGlab, glab, pivot);
         // ★대추를 찍기 전에는 3축을 숨긴다(09-21) — 그때 3축은 눈앞 허공의 임시 자리일 뿐이라
         //   보여 봐야 시야만 가린다. 대추를 찍으면 그 자리로 와서 그때부터 뜻이 생긴다.
         view.SetAxesVisible(hasC7 || step == RomRecordStep.Setup);

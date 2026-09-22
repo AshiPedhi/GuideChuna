@@ -37,7 +37,7 @@ public class RomRecordVisual
     private readonly Transform[] needleGrips = new Transform[NeedleCount];
     private readonly TextMeshPro[] needleLabels = new TextMeshPro[NeedleCount];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
-    private Transform c7Dot, glabDot, liveDot, pivotDot, fengfuDot;
+    private Transform c7Dot, glabDot, liveDot, pivotDot, earDot;
     // ★눈금은 선분 메시 하나다(LineRenderer 배열이 아니다). 정점·인덱스는 미리 잡아 재활용한다.
     private Mesh tickMesh;
     private Renderer tickRenderer;
@@ -148,7 +148,7 @@ public class RomRecordVisual
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
     public static readonly Color RightColor = new Color(1f, 0.4f, 0.4f);
     public static readonly Color PivotColor = new Color(1f, 0.85f, 0.2f);
-    public static readonly Color FengfuColor = new Color(0.45f, 1f, 0.6f);   // 풍부 — 대추(하늘)·미간(흰)과 겹치지 않게 연두
+    public static readonly Color EarColor = new Color(0.45f, 1f, 0.6f);   // 외이도 — 대추(하늘)·미간(흰)과 겹치지 않게 연두
     // ★능동·압박은 <b>같은 주황 계열의 밝기·채도</b>로 가른다(2026-09-22 사용자: "각도 색상 밝기나 채도로").
     //   능동 = 연하게(밝고 채도 낮게), 압박 = 진하게. 압박이 더 많이 간 값이라 «더 진함»으로 읽힌다.
     //   종전엔 주황·자홍 두 색이었다. 바늘·마커 글자에서 한글(능동·압박)을 빼서 색이 유일한 구분이다.
@@ -185,7 +185,7 @@ public class RomRecordVisual
         pivotDot = Dot("기준점", PivotColor, 0.012f);
         c7Dot = Dot("대추", new Color(0.3f, 0.9f, 1f), 0.016f);
         glabDot = Dot("미간(중립)", Color.white, 0.016f);
-        fengfuDot = Dot("풍부", FengfuColor, 0.016f);   // ★09-22 — 굴곡·신전·회전의 축
+        earDot = Dot("외이도", EarColor, 0.016f);   // ★09-22 — 찍은 자리(실제 축은 정중면으로 옮긴 점 — 노란 기준점)
         liveDot = Dot("핀치 중", new Color(1f, 1f, 0.3f), 0.014f);
 
         dialRoot = new GameObject("각도기");
@@ -267,12 +267,12 @@ public class RomRecordVisual
         labLeft.transform.position = pivot - r * (len + 0.04f);
     }
 
-    public void SetLandmarks(bool hasC7, Vector3 c7, bool hasFengfu, Vector3 fengfu, bool hasGlab, Vector3 glab, Vector3 pivot)
+    public void SetLandmarks(bool hasC7, Vector3 c7, bool hasEar, Vector3 ear, bool hasGlab, Vector3 glab, Vector3 pivot)
     {
         Show(c7Dot, hasC7);
         if (hasC7) c7Dot.position = c7;
-        Show(fengfuDot, hasFengfu);
-        if (hasFengfu) fengfuDot.position = fengfu;
+        Show(earDot, hasEar);
+        if (hasEar) earDot.position = ear;
         Show(glabDot, hasGlab);
         Show(neutralLine, hasGlab);
         if (hasGlab)
