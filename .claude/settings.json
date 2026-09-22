@@ -12,6 +12,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PYTHONIOENCODING=utf-8 \"C:/Users/USER/AppData/Local/Python/pythoncore-3.14-64/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/skills/play-record/record.py\" ensure 2>/dev/null || true",
+            "timeout": 20,
+            "statusMessage": "플레이 녹화 상주 확인 중"
+          }
+        ]
+      }
     ]
   }
 }

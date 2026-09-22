@@ -35,6 +35,15 @@ BRIDGE_PY = os.path.join(ROOT, ".claude", "skills", "unity-live", "bridge.py")
 STATE_DIR = os.path.join(ROOT, "Temp", "play-record")
 STATE = os.path.join(STATE_DIR, "state.json")
 STOP_FLAG = os.path.join(STATE_DIR, "stop")
+# ★상주 모드(2026-09-22). 사용자 지시 09-21 "Play하면 자동으로 녹화" — 에이전트가 세션마다 watch를
+#   띄우는 방식이라 09-22에 하루 종일 안 띄웠다(사용자: "플레이하면 자동으로 녹화하게끔 하라고 했잖아").
+#   → Claude Code 세션 시작 훅이 `ensure`를 부르고, ensure가 상주 녹화(daemon)를 하나만 띄운다.
+HEARTBEAT = os.path.join(STATE_DIR, "heartbeat")     # daemon이 확인할 때마다 고치는 파일 — 살아 있다는 표시
+DAEMON_LOG = os.path.join(STATE_DIR, "daemon.log")
+HEARTBEAT_STALE = 120   # 초. ★브리지가 컴파일 중이면 ping 하나가 30초까지 걸린다 — 넉넉히 둔다
+# ★콘솔 없이 도는 daemon이 powershell·ffmpeg·python을 부르면 부를 때마다 검은 창이 번쩍인다.
+#   모든 하위 프로세스에 «창 만들지 않기»를 건다(Windows 전용 플래그).
+NOWIN = 0x08000000 if os.name == "nt" else 0          # CREATE_NO_WINDOW
 
 DEFAULT_OUT = r"D:\추나녹화"
 FFMPEG = r"C:\Users\USER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
@@ -52,7 +61,7 @@ def unity_window_title():
           "Select-Object -First 1 -ExpandProperty MainWindowTitle")
     try:
         # ★encoding을 안 주면 파이썬이 콘솔 기본(cp949)으로 풀려다 한글에서 터진다(09-21에 밟음)
-        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
+        out = subprocess.run(creationflags=NOWIN, args=["powershell", "-NoProfile", "-NonInteractive", "-Command", ps],
                              capture_output=True, text=True, timeout=20,
                              encoding="utf-8", errors="replace")
         t = (out.stdout or "").strip()
@@ -110,7 +119,7 @@ def window_metrics(title=""):
     """
     env = dict(os.environ, CHUNA_WIN_TITLE=title or "")
     try:
-        out = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", _WIN_PS],
+        out = subprocess.run(creationflags=NOWIN, args=["powershell", "-NoProfile", "-NonInteractive", "-Command", _WIN_PS],
                              capture_output=True, text=True, timeout=40, env=env,
                              encoding="utf-8", errors="replace")
     except Exception:
@@ -154,7 +163,7 @@ def game_view_rect(timeout=20, toolbar=GAME_TOOLBAR_PX):
     """
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     try:
-        out = subprocess.run([sys.executable, BRIDGE_PY, "gameview",
+        out = subprocess.run(creationflags=NOWIN, args=[sys.executable, BRIDGE_PY, "gameview",
                               "--toolbar=%d" % toolbar, "--timeout=%d" % timeout],
                              capture_output=True, text=True, timeout=timeout + 10, env=env,
                              encoding="utf-8", errors="replace")
@@ -216,7 +225,7 @@ def is_playing(timeout=20):
     """브리지에 물어 Play 중인지 본다. (재생중, 브리지응답여부)"""
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     try:
-        subprocess.run([sys.executable, BRIDGE_PY, "ping", "--timeout=%d" % timeout],
+        subprocess.run(creationflags=NOWIN, args=[sys.executable, BRIDGE_PY, "ping", "--timeout=%d" % timeout],
                        capture_output=True, text=True, timeout=timeout + 10, env=env,
                        encoding="utf-8", errors="replace")
     except Exception:
@@ -268,7 +277,7 @@ def start_ffmpeg(title, path, fps, crop, region=None):
     cmd = [FFMPEG, "-y", "-hide_banner", "-loglevel", "warning"] + src + \
           ["-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
            "-pix_fmt", "yuv420p", path]
-    return subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+    return subprocess.Popen(cmd, creationflags=NOWIN, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE)
 
 
@@ -313,6 +322,7 @@ def cmd_watch(a):
                 break
 
             playing, alive = is_playing()
+            beat()
             if not alive and not warned_bridge:
                 warned_bridge = True
                 log("[녹화] ★브리지가 응답하지 않는다 — Unity가 닫혔거나 컴파일 중이다. 계속 기다린다")
@@ -366,6 +376,67 @@ def cmd_watch(a):
     return 0
 
 
+def beat():
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with open(HEARTBEAT, "w", encoding="utf-8") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def daemon_alive():
+    try:
+        return time.time() - os.path.getmtime(HEARTBEAT) < HEARTBEAT_STALE
+    except OSError:
+        return False
+
+
+def cmd_daemon(a):
+    """상주 녹화 — Play를 기다려 찍고, 끝나면 다시 기다리기를 멈춤 신호가 올 때까지 되풀이한다."""
+    a.repeat = True
+    a.timeout = 10 ** 9          # ★기다리는 시간 제한 없음
+    if not a.label:
+        a.label = "플레이"
+    log("[녹화] %s 상주 녹화 시작 — pid %d" % (time.strftime("%Y-%m-%d %H:%M:%S"), os.getpid()))
+    while True:
+        try:
+            cmd_watch(a)
+        except Exception as e:   # ★한 판에서 무엇이 터져도 상주는 죽지 않는다 — 다음 Play를 또 찍어야 한다
+            log("[녹화] ★watch 예외 — %r · 5초 뒤 다시 기다린다" % (e,))
+        if os.path.exists(STOP_FLAG):
+            log("[녹화] 멈춤 신호 — 상주 녹화를 끝낸다")
+            break
+        time.sleep(5)
+    try:
+        os.remove(HEARTBEAT)
+    except OSError:
+        pass
+    return 0
+
+
+def cmd_ensure(a):
+    """상주 녹화가 없으면 띄운다. 있으면 아무것도 안 한다 — 세션 시작 훅이 부른다(빨리 끝나야 한다)."""
+    if daemon_alive():
+        log("[녹화] 상주 녹화가 이미 돈다 — 로그 %s" % DAEMON_LOG)
+        return 0
+    os.makedirs(STATE_DIR, exist_ok=True)
+    if os.path.exists(STOP_FLAG):
+        os.remove(STOP_FLAG)
+    beat()   # ★곧바로 다시 불려도 두 개가 뜨지 않게 먼저 박동을 남긴다
+    logf = open(DAEMON_LOG, "a", encoding="utf-8")
+    # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP — 훅·셸이 끝나도 같이 죽지 않는다
+    flags = (0x00000008 | 0x00000200) if os.name == "nt" else 0
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    args = [sys.executable, os.path.abspath(__file__), "daemon", "--out", a.out]
+    if a.label:
+        args += ["--label", a.label]
+    subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=logf, stderr=subprocess.STDOUT,
+                     creationflags=flags, close_fds=True, env=env, cwd=ROOT)
+    log("[녹화] 상주 녹화를 띄웠다 — Play하면 저절로 찍힌다(%s) · 로그 %s" % (a.out, DAEMON_LOG))
+    return 0
+
+
 def cmd_stop(a):
     os.makedirs(STATE_DIR, exist_ok=True)
     with open(STOP_FLAG, "w", encoding="utf-8") as f:
@@ -375,6 +446,7 @@ def cmd_stop(a):
 
 
 def cmd_status(a):
+    log("상주 녹화 %s" % ("O (돌고 있다)" if daemon_alive() else "★없음 — `ensure`로 띄운다"))
     playing, alive = is_playing()
     title = unity_window_title()
     st = load_state()
@@ -410,7 +482,7 @@ def cmd_crop(a):
     if x is None:
         return 1
     if a.png:
-        r = subprocess.run([FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+        r = subprocess.run(creationflags=NOWIN, args=[FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
                             "-f", "gdigrab", "-framerate", "5",
                             "-offset_x", str(x), "-offset_y", str(y),
                             "-video_size", "%dx%d" % (w, h), "-i", "desktop",
@@ -456,7 +528,7 @@ def cmd_clip(a):
     if a.scale:
         cmd += ["-vf", "scale=%s:-2" % a.scale]
     cmd.append(dst)
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=NOWIN)
     if r.returncode != 0 or not os.path.exists(dst):
         log("★잘라내기 실패 — %s" % (r.stderr or "")[-400:])
         return 1
@@ -476,7 +548,7 @@ def cmd_rm(a):
 
 def main():
     p = argparse.ArgumentParser(description="테스트 플레이를 영상으로 남긴다")
-    p.add_argument("cmd", choices=["watch", "stop", "status", "crop", "list", "clip", "rm"])
+    p.add_argument("cmd", choices=["watch", "daemon", "ensure", "stop", "status", "crop", "list", "clip", "rm"])
     p.add_argument("--out", default=DEFAULT_OUT, help="녹화를 둘 폴더(기본 %s)" % DEFAULT_OUT)
     p.add_argument("--label", default="", help="파일 이름에 붙일 말")
     p.add_argument("--fps", type=int, default=20)
@@ -499,7 +571,7 @@ def main():
     if not os.path.exists(FFMPEG):
         log("★ffmpeg가 없다 — %s" % FFMPEG)
         return 1
-    return {"watch": cmd_watch, "stop": cmd_stop, "status": cmd_status, "crop": cmd_crop,
+    return {"watch": cmd_watch, "daemon": cmd_daemon, "ensure": cmd_ensure, "stop": cmd_stop, "status": cmd_status, "crop": cmd_crop,
             "list": cmd_list, "clip": cmd_clip, "rm": cmd_rm}[a.cmd](a)
 
 
