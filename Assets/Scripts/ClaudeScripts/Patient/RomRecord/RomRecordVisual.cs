@@ -148,8 +148,12 @@ public class RomRecordVisual
     public static readonly Color FwdColor = new Color(0.35f, 0.65f, 1f);
     public static readonly Color RightColor = new Color(1f, 0.4f, 0.4f);
     public static readonly Color PivotColor = new Color(1f, 0.85f, 0.2f);
-    public static readonly Color ActiveColor = new Color(1f, 0.6f, 0.15f);
-    public static readonly Color PassiveColor = new Color(0.95f, 0.35f, 0.95f);
+    // ★능동·압박은 <b>같은 주황 계열의 밝기·채도</b>로 가른다(2026-09-22 사용자: "각도 색상 밝기나 채도로").
+    //   능동 = 연하게(밝고 채도 낮게), 압박 = 진하게. 압박이 더 많이 간 값이라 «더 진함»으로 읽힌다.
+    //   종전엔 주황·자홍 두 색이었다. 바늘·마커 글자에서 한글(능동·압박)을 빼서 색이 유일한 구분이다.
+    //   ★판의 탭 아래 숫자도 같은 색이다(RomRecordSession.HexActive/HexPassive) — 바꾸면 둘 다 바꾼다.
+    public static readonly Color ActiveColor = new Color(1f, 0.82f, 0.60f);
+    public static readonly Color PassiveColor = new Color(1f, 0.42f, 0.02f);
     // ★단면 사각형·삼각면(2026-09-21). 표시물이지 판독값이 아니라 눈에 덜 띄게 둔다.
     public static readonly Color SectionColor = new Color(0.45f, 0.55f, 0.70f, 0.45f);
     public static readonly Color SectionGridColor = new Color(0.45f, 0.55f, 0.70f, 0.22f);

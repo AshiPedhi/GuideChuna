@@ -52,7 +52,6 @@ public class RomRecordMenuUI : IRomRecordMenu
         // ★탭 판(2026-09-22)
         public string key;         // SetText로 찾는 이름(글자 칸)
         public RawImage icon;      // 버튼 위쪽 그림 — 없으면 꺼 둔다
-        public TextMeshProUGUI dots;   // 버튼 아래 진행 점
     }
 
     // ── 모양(캔버스 픽셀. 캔버스 스케일 0.0005라 1px = 0.5mm) ──────────
@@ -346,14 +345,6 @@ public class RomRecordMenuUI : IRomRecordMenu
         b.icon.raycastTarget = false;
         iconGo.SetActive(false);
 
-        // ★진행 점(2026-09-22) — 버튼 <b>밖</b> 아래에 붙는다. 자리는 배치하는 쪽이 비워 둔다.
-        b.dots = MakeLabel(b.rt, labelPt, TextAlignmentOptions.Top, "진행점");
-        var dRt = b.dots.rectTransform;
-        dRt.anchorMin = dRt.anchorMax = new Vector2(0.5f, 0f);
-        dRt.pivot = new Vector2(0.5f, 1f);
-        b.dots.richText = true;
-        b.dots.gameObject.SetActive(false);
-
         b.press = go.AddComponent<RomMenuButtonUI>();
         b.press.owner = this;
         b.press.Setup(b.background, b.fill);
@@ -440,7 +431,9 @@ public class RomRecordMenuUI : IRomRecordMenu
                                   : TextAlignmentOptions.Center;
                 b.label.margin = hasIcon ? new Vector4(0f, 0f, 0f, 6f) : Vector4.zero;
                 b.label.richText = b.isText;   // 값 표시에서 지금 단계만 밝힌다
-                Color lc = b.isText ? (it.alignLeft ? labelColor : captionColor)
+                // ★key가 붙은 글자 칸(안내·탭 아래 값)은 밝은 글자다 — TMP 색 태그의 알파가 바탕 알파를 못 넘어서
+                //   흐린 caption 색이면 값 색이 다 죽는다. key 없는 설명 글자만 흐리게 둔다.
+                Color lc = b.isText ? (it.key != null ? labelColor : captionColor)
                          : it.selected ? selectedLabelColor : labelColor;
                 if (it.locked) lc.a *= 0.35f;
                 b.label.color = lc;
@@ -472,18 +465,6 @@ public class RomRecordMenuUI : IRomRecordMenu
                     b.icon.color = it.selected ? new Color(0.153f, 0.153f, 0.153f, 1f)
                                  : it.locked ? new Color(1f, 1f, 1f, 0.3f)
                                  : new Color(1f, 1f, 1f, 0.9f);
-                }
-            }
-            if (b.dots != null)
-            {
-                bool hasDots = !string.IsNullOrEmpty(it.dots);
-                if (b.dots.gameObject.activeSelf != hasDots) b.dots.gameObject.SetActive(hasDots);
-                if (hasDots)
-                {
-                    b.dots.text = it.dots;
-                    b.dots.fontSize = labelPt * 0.9f;
-                    b.dots.rectTransform.sizeDelta = new Vector2(w, labelPt * 1.4f);
-                    b.dots.rectTransform.anchoredPosition = new Vector2(0f, -2f);
                 }
             }
             b.press.Setup(b.background, b.fill);   // ★색을 정한 뒤에 부른다 — 여기서 되돌릴 색을 기억한다

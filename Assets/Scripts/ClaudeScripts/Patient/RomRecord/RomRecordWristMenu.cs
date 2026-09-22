@@ -23,8 +23,7 @@ public struct RomMenuItem
     public Texture2D icon;      // 버튼 위쪽에 그림, 글자는 아래로 내린다
     public string key;          // 글자 칸을 나중에 SetText로 바꿀 때 찾는 이름
     public float textScale;     // 글자 크기 배수(0이면 1)
-    public bool alignLeft;      // 글자 칸을 왼쪽 정렬(여러 줄 값 표시용)
-    public string dots;         // 버튼 아래에 붙는 진행 점(TMP 서식 문자열). 배치 때만 만든다
+    public bool alignLeft;      // 글자 칸을 왼쪽 정렬
 
     public static RomMenuItem Button(string id, string label, float col, float row, float span, Color tint,
                                      bool repeat = false, bool selected = false, float holdSeconds = 0f)
@@ -228,7 +227,7 @@ public class RomRecordWristMenu : IRomRecordMenu
         // ★판 폭을 <b>내용에 맞춘다</b>(09-21). 종전엔 columns(6칸)로 고정이라 항목이 적어도
         //   판이 안 줄었다 — 사용자가 "빈 공간이 너무 많다"고 한 것이 이것이다.
         // ★09-22 탭 판: 여러 줄짜리 칸이 생겨 높이는 <b>가장 아래 칸의 바닥</b>이 정한다.
-        //   ★이 판은 그림(icon)·진행 점(dots)을 그리지 않는다 — 지금 쓰는 판은 Meta 판(useMetaUI)이다.
+        //   ★이 판은 그림(icon)을 그리지 않는다 — 지금 쓰는 판은 Meta 판(씬 useMetaUI=true)이다.
         float maxBottom = 1f, maxCol = 1f;
         for (int i = 0; i < activeCount; i++)
         {
@@ -301,7 +300,7 @@ public class RomRecordWristMenu : IRomRecordMenu
             }
             else
             {
-                b.label.color = it.alignLeft ? labelColor : captionColor;
+                b.label.color = it.key != null ? labelColor : captionColor;   // key 칸은 값이라 밝게
                 b.label.fontStyle = FontStyles.Normal;
             }
             b.local = new Vector3(x, y, 0f);

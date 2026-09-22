@@ -5,8 +5,8 @@ public enum RomRecordStep
 {
     Setup = 0,          // 기준선 세팅 — 3축의 Y 회전·높이
     Landmarks = 1,      // 대추·미간(중립)·목 중앙 보정
-    Flexion = 2,        // 굴곡 — 1회째 능동, 2회째 수동
-    Extension = 3,      // 신전 — 같음
+    Flexion = 2,        // ★09-22부터 «굴곡·신전» 한 단계 — 4회, 앞(굴곡)·뒤(신전) 자동, 홀수 능동·짝수 수동
+    Extension = 3,      // ★09-22부터 안 쓴다(굴곡과 합쳤다). 값은 남겨 둔다 — 뒤 값이 밀리지 않게
     LateralFlexion = 4, // 측굴 — 4회, 좌우 자동, 홀수 능동·짝수 수동
     Rotation = 5,       // 회전 — 같음
     Done = 6,
@@ -21,7 +21,7 @@ public class RomRecordMark
     public bool byNeedle;
     public float dialDeg;      // 각도기 눈금으로 읽은 각(연직 0 · 회전은 정면 0). 육안 판독값과 같은 수다.
     public bool passive;       // false = 능동, true = 수동
-    public int side;           // 측굴·회전: +1 환자 오른쪽, -1 환자 왼쪽, 0 = 해당 없음
+    public int side;           // 측굴·회전: +1 환자 오른쪽, -1 환자 왼쪽 / 굴곡·신전(09-22): +1 앞(굴곡), -1 뒤(신전)
     public Transform visual;   // 표시용 구체
 }
 
@@ -98,6 +98,18 @@ public static class RomRecordGeometry
         int s = Vector3.Dot(dir, Right(yawDeg)) >= 0f ? 1 : -1;
         return flip ? -s : s;
     }
+
+    /// <summary>
+    /// 마커가 중립에서 환자 앞(+1, 굴곡)으로 갔나 뒤(-1, 신전)로 갔나(2026-09-22 굴곡·신전을 한 단계로 합치며 신설).
+    /// 고개를 숙이면 미간이 앞으로 간다 — 그 이동 성분의 부호다. ★앞은 대추→미간으로 잡은 정면이라
+    ///   두 점의 차에서 나온다(추론한 부호가 아니다). 좌우와 달리 뒤집기 손잡이를 두지 않는다.
+    /// </summary>
+    public static int FrontBack(Vector3 neutral, Vector3 mark, float yawDeg)
+        => Vector3.Dot(mark - neutral, Forward(yawDeg)) >= 0f ? 1 : -1;
+
+    /// <summary>바늘이 앞(+1, 굴곡)을 가리키나 뒤(-1, 신전)를 가리키나. 미간이 없어도 된다.</summary>
+    public static int FrontBackOfDirection(Vector3 dir, float yawDeg)
+        => Vector3.Dot(dir, Forward(yawDeg)) >= 0f ? 1 : -1;
 
     /// <summary>
     /// 단면에 투영한 단위 방향. 단면에 거의 안 걸리면 <paramref name="fallback"/>을 돌려준다.
