@@ -1835,7 +1835,7 @@ MonoBehaviour:
   startDistance: 0.7
   startBelowEye: 0.3
   axisLength: 0.25
-  textSize: 0.05
+  textSize: 0.08
   panelTextSize: 0.045
   buttonLabelSize: 0.09
   useMetaUI: 1
