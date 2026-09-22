@@ -1857,7 +1857,7 @@ MonoBehaviour:
   menuFixedDistance: 0.55
   menuFixedBelowEye: 0.14
   menuFixedSide: -0.38
-  menuGrabRadius: 0.16
+  menuGrabMargin: 0.04
   menuCellWidth: 0.049
   menuRowHeight: 0.041
   menuButtonHeight: 0.034
@@ -1867,7 +1867,6 @@ MonoBehaviour:
   yawStepDeg: 1
   heightStepMm: 5
   nudgeStepMm: 1
-  neckStepMm: 5
   adjustStepDeg: 1
   axesGrabRadius: 0.25
   dotGrabRadius: 0.08
@@ -1876,7 +1875,6 @@ MonoBehaviour:
   needleHandleOut: 0.16
   needleFallbackRadius: 0.18
   exitHoldSeconds: 1
-  neckOffsetMm: 0
   flipSides: 0
   showSectionPlane: 1
   showOffPlaneTriangle: 1

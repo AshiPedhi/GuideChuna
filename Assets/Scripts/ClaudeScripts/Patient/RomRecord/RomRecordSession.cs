@@ -98,13 +98,13 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float menuFixedBelowEye = 0.14f;
     [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
     [SerializeField] private float menuFixedSide = -0.38f;
-    [Tooltip("고정 판을 잡아 끌 수 있는 반경(m). 판 중심에서 이 안을 핀치로 오므리면 판이 따라온다.")]
-    [SerializeField] private float menuGrabRadius = 0.16f;
     // ★09-22 로그 실측: 판을 옮기려고 가장자리를 집었더니 <b>기준점이 찍혔다</b>(대추·미간이 판 중심에서 18~23cm).
     //   판 폭이 약 33cm라 중심 반경(0.16)으로는 가장자리가 안 잡히고, 못 잡은 핀치가 «찍기»로 빠졌다.
     //   «잡았다 — 조작 판» 로그는 한 번도 없었다. → 판 사각형 전체를 이 여유만큼 넓혀 잡는다.
+    // ★같은 날 반대 지적: "놓은 줄 알았는데 꽤 멀리서 잡힌다"(사용자 확인 — 잡는 범위가 넓다는 뜻).
+    //   옛 중심 반경 0.16m(menuGrabRadius)이 판 <b>앞 16cm</b>까지 구로 튀어나와 있었다 → 반경을 없애고 여유를 0.08→0.04로.
     [Tooltip("고정 판을 잡는 여유(m). 판 사각형 가장자리에서 이만큼 밖·앞뒤로 이만큼 안에서 오므리면 판이 잡힌다.")]
-    [SerializeField] private float menuGrabMargin = 0.08f;
+    [SerializeField] private float menuGrabMargin = 0.04f;
 
     [Header("=== 손목 판(종전 Quad 판) ===")]
     [Tooltip("판의 칸 너비(m). 판은 6칸 너비다.")]
@@ -1218,7 +1218,7 @@ public class RomRecordSession : MonoBehaviour
     /// </summary>
     private bool InMenuGrabZone(Vector3 p) =>
         menuFixedInSpace && leftMenu != null && leftMenu.Placed
-        && (leftMenu.Near(p, menuGrabMargin) || Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius);
+        && leftMenu.Near(p, menuGrabMargin);
 
     // ★판 잡기 하이라이트(09-22 사용자: "잡을 수 있는 상태에 들어왔다는 하이라이트가 있으면").
     //   09-22 로그: 판을 잡으러 가다 조금 일찍(판 앞 10~26cm) 오므린 핀치가 대추·미간을 덮어썼다.
