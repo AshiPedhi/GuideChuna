@@ -481,6 +481,7 @@ public class RomRecordSession : MonoBehaviour
         HandleMenus();
         HandlePinch(true);
         HandlePinch(false);
+        UpdateMenuHighlight();
 
         if (dirty)
         {
@@ -1186,6 +1187,38 @@ public class RomRecordSession : MonoBehaviour
     private static string DragName(int t) =>
         t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 9 ? "조작 판" : "바늘";
 
+    /// <summary>
+    /// 이 자리에서 오므리면 조작 판이 잡히나. ★잡기(<see cref="FindDragTarget"/>)와 하이라이트가 <b>같은 함수</b>를 탄다 —
+    /// 따로 계산하면 «테두리는 켜졌는데 안 잡힌다»가 생긴다(규칙 9: 미리보기는 실제와 같은 함수를 탄다).
+    /// </summary>
+    private bool InMenuGrabZone(Vector3 p) =>
+        menuFixedInSpace && leftMenu != null && leftMenu.Placed
+        && (leftMenu.Near(p, menuGrabMargin) || Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius);
+
+    // ★판 잡기 하이라이트(09-22 사용자: "잡을 수 있는 상태에 들어왔다는 하이라이트가 있으면").
+    //   09-22 로그: 판을 잡으러 가다 조금 일찍(판 앞 10~26cm) 오므린 핀치가 대추·미간을 덮어썼다.
+    //   테두리가 켜진 뒤에 오므리면 된다는 것을 눈으로 알게 한다.
+    private int menuHighlight = -1;
+    private int menuHoverCount;   // 잡기 준비에 들어간 횟수 — 요약에 남긴다
+
+    private void UpdateMenuHighlight()
+    {
+        int level = dragTarget == 9 ? 2
+                  : !liveActive && (HandInMenuGrabZone(true) || HandInMenuGrabZone(false)) ? 1
+                  : 0;
+        if (level == menuHighlight) return;
+        if (level == 1 && menuHighlight == 0) menuHoverCount++;
+        menuHighlight = level;
+        leftMenu.SetHighlight(level);
+        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetHighlight(level);
+    }
+
+    /// <summary>그 손의 엄지·검지 사이(오므리면 핀치가 생기는 자리)가 판 잡는 범위 안인가.</summary>
+    private bool HandInMenuGrabZone(bool left) =>
+        hands.TryJoint(left, HandJointId.HandThumbTip, out Vector3 t)
+        && hands.TryJoint(left, HandJointId.HandIndexTip, out Vector3 i)
+        && InMenuGrabZone((t + i) * 0.5f);
+
     /// <summary>핀치를 오므린 자리에서 잡을 수 있는 것을 고른다. 없으면 -1(그러면 «찍기»로 간다).</summary>
     private int FindDragTarget(Vector3 p, out Vector3 startValue)
     {
@@ -1218,8 +1251,7 @@ public class RomRecordSession : MonoBehaviour
             if (best >= 0) return 3 + best;   // 3·4·5·6 = 바늘 0·1·2·3
         }
         // ★조작 판도 잡아 끈다(09-21 고정 모드) — 자리가 마음에 안 들면 옮긴다.
-        if (menuFixedInSpace && leftMenu != null && leftMenu.Placed
-            && (leftMenu.Near(p, menuGrabMargin) || Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius))
+        if (InMenuGrabZone(p))
         {
             startValue = leftMenu.Position;
             return 9;   // ★바늘이 3~6을 쓴다
@@ -1567,6 +1599,7 @@ public class RomRecordSession : MonoBehaviour
             sb.Append('\n');
         }
         // ★조용히 버려진 핀치를 여기서 한 번 센다(09-21) — 얼마나 걸러졌는지 판마다 남는다.
+        sb.Append("  판 잡기 준비(테두리 켜짐) ").Append(menuHoverCount).Append("회\n");
         sb.Append("  무시된 핀치: 너무 짧음 ").Append(hands.IgnoredShort)
           .Append(" · 추적 신뢰 낮음 ").Append(hands.IgnoredLowConfidence).Append('\n');
         if (pinchBlockCount.Count > 0)

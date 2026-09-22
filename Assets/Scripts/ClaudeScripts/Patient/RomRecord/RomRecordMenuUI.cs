@@ -73,6 +73,10 @@ public class RomRecordMenuUI : IRomRecordMenu
     public Color captionColor = new Color(1f, 1f, 1f, 0.698f);        // 누를 수 없는 글자 칸
     public Color fillColor = new Color(1f, 1f, 1f, 0.92f);            // 길게 누르기 막대
     public float selectedMix = 0.35f;                                  // 고른 버튼을 흰색 쪽으로 섞는 정도
+    // ★판 잡기 하이라이트(09-22) — 판 둘레의 둥근 테두리. 표시물(대추 점) 하늘색 계열로 맞췄다(실측 아님 — 눈으로 맞출 값).
+    public Color grabReadyColor = new Color(0.30f, 0.90f, 1f, 0.55f);   // 지금 오므리면 잡힌다
+    public Color grabHeldColor = new Color(0.30f, 0.90f, 1f, 1f);       // 잡는 중
+    public float glowPx = 10f;                                          // 테두리를 판 밖으로 내미는 양(px, 1px = 0.5mm)
 
     // ── 자리 ─────────────────────────────────────────────────────────
     public float lift = 0.06f;
@@ -117,6 +121,8 @@ public class RomRecordMenuUI : IRomRecordMenu
     private float panelW, panelH;          // 월드 크기(m)
     private string pendingId;
     private bool pendingRepeat;
+    private Image glow;                 // 판 잡기 테두리(09-22)
+    private int highlight = -1;
 
     public bool Visible => root != null && root.gameObject.activeSelf;
     public bool LastRepeat { get; private set; }
@@ -221,6 +227,7 @@ public class RomRecordMenuUI : IRomRecordMenu
         if (backdrop == null) Debug.LogWarning($"[실측기록] ★{displayName} — 판 배경(UIBackplate)을 못 찾았다. 배경이 안 따라온다.");
         Stretch(backdrop);
         Stretch(pokeArea);
+        glow = MakeGlow(canvasRoot);
 
         SetupPoke();
 
@@ -477,6 +484,68 @@ public class RomRecordMenuUI : IRomRecordMenu
     }
 
     private static float RowsOf(RomMenuItem it) => it.rows > 0f ? it.rows : 1f;
+
+    public void SetHighlight(int level)
+    {
+        if (glow == null || level == highlight) return;
+        highlight = level;
+        bool on = level > 0;
+        if (glow.gameObject.activeSelf != on) glow.gameObject.SetActive(on);
+        if (on) glow.color = level >= 2 ? grabHeldColor : grabReadyColor;
+    }
+
+    /// <summary>
+    /// 판 둘레 테두리를 만든다. 판에 늘어붙어 판 크기가 바뀌면 따라오고, glowPx만큼 밖으로 나온다.
+    /// ★둥근 테두리 스프라이트가 프로젝트에 없어(09-21 실측) 런타임에 한 장 굽는다 — 9분할이라 늘여도 모서리가 안 찌그러진다.
+    /// </summary>
+    private Image MakeGlow(RectTransform parent)
+    {
+        var go = new GameObject("잡기 테두리", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(LayoutElement));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(-glowPx, -glowPx);
+        rt.offsetMax = new Vector2(glowPx, glowPx);
+        go.GetComponent<LayoutElement>().ignoreLayout = true;
+        var img = go.GetComponent<Image>();
+        img.sprite = RingSprite();
+        img.type = Image.Type.Sliced;
+        img.raycastTarget = false;   // ★누름을 가로채지 않는다
+        go.SetActive(false);
+        return img;
+    }
+
+    private static Sprite ringSprite;
+
+    /// <summary>둥근 사각형 테두리(안은 비었다). 한 번만 굽고 모든 판이 같이 쓴다.</summary>
+    private static Sprite RingSprite()
+    {
+        if (ringSprite != null) return ringSprite;
+        const int size = 96, radius = 30;
+        const float thick = 10f;
+        var tex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "잡기 테두리" };
+        var px = new Color32[size * size];
+        Vector2 c = new Vector2(size * 0.5f, size * 0.5f);
+        Vector2 h = c - new Vector2(radius, radius);
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                // 둥근 사각형까지의 부호 거리(안이 음수). 테두리 = 가장자리에서 안쪽으로 thick까지.
+                Vector2 q = new Vector2(Mathf.Abs(x + 0.5f - c.x), Mathf.Abs(y + 0.5f - c.y)) - h;
+                float d = new Vector2(Mathf.Max(q.x, 0f), Mathf.Max(q.y, 0f)).magnitude + Mathf.Min(Mathf.Max(q.x, q.y), 0f) - radius;
+                float a = Mathf.Clamp01(0.5f - d) * Mathf.Clamp01(d + thick + 0.5f);
+                px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+        }
+        tex.SetPixels32(px);
+        tex.Apply(false, true);
+        float b = radius + 2f;
+        ringSprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
+                                   SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+        return ringSprite;
+    }
 
     /// <summary>부모에 늘어붙게 만든다 — 판·버튼 크기를 바꾸면 따라오게.</summary>
     private static void Stretch(RectTransform r) => StretchInset(r, 0f, 0f);

@@ -100,6 +100,8 @@ public class RomRecordWristMenu : IRomRecordMenu
     private float panelW, panelH;
     private bool placedOnce;
     private float lastValidTime = -99f;
+    private int highlight = -1;
+    public Color grabReadyColor = new Color(0.30f, 0.90f, 1f, 1f);   // ★이 판은 테두리가 얇아(0.8mm) 색만 바꾼다
     private string displayName;
 
     // 모양 — 크기
@@ -332,6 +334,13 @@ public class RomRecordWristMenu : IRomRecordMenu
     }
 
     private static float RowsOf(RomMenuItem it) => it.rows > 0f ? it.rows : 1f;
+
+    public void SetHighlight(int level)
+    {
+        if (border == null || level == highlight) return;
+        highlight = level;
+        border.GetComponent<Renderer>().material.color = level > 0 ? grabReadyColor : Color.white;
+    }
 
     /// <summary>
     /// 판을 손목 위에 둔다. <paramref name="hold"/>가 참이면(누르는 손이 다가옴) <b>그 자리에 멈춘다</b>.

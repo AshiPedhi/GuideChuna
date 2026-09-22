@@ -30,6 +30,12 @@ public interface IRomRecordMenu
     /// </summary>
     void SetText(string key, string text);
 
+    /// <summary>
+    /// 판 잡기 하이라이트(2026-09-22 사용자: "옮길 수 있는 상태에 들어왔다, 이대로 잡으면 잡힌다를 알려 달라").
+    /// 0 없음 · 1 지금 오므리면 판이 잡힌다 · 2 잡는 중. 같은 값이면 아무것도 안 한다(매 프레임 불러도 된다).
+    /// </summary>
+    void SetHighlight(int level);
+
     /// <summary>판을 손목 위에 둔다. <paramref name="hold"/>면 그 자리에 멈춘다(가림으로 튀지 않게).</summary>
     void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold);
 
