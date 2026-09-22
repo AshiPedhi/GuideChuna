@@ -18,6 +18,11 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")
 DIR = os.path.join(ROOT, "Temp", "chuna-bridge")
 REQ = os.path.join(DIR, "req.txt")
 RESP = os.path.join(DIR, "resp.json")
+# ★요청·응답 파일이 하나뿐이라 두 호출이 겹치면 서로의 응답을 지우거나 요청을 덮어쓴다.
+#   2026-09-22 상주 녹화(play-record daemon)가 1.5초마다 ping을 보내기 시작하자 내 refresh가 «응답 없음»이 됐다.
+#   → 한 번에 한 요청만 오가게 잠근다. 죽은 프로세스가 남긴 잠금은 LOCK_STALE초 뒤 걷어 낸다.
+LOCK = os.path.join(DIR, "lock")
+LOCK_STALE = 200
 
 USAGE = """쓰는 법 — 조회
   bridge.py ping
@@ -61,8 +66,45 @@ USAGE = """쓰는 법 — 조회
 """
 
 
+def acquire_lock(timeout):
+    deadline = time.time() + timeout
+    while True:
+        try:
+            fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            try:
+                if time.time() - os.path.getmtime(LOCK) > LOCK_STALE:
+                    os.remove(LOCK)
+                    continue
+            except OSError:
+                continue
+            if time.time() > deadline:
+                return False
+            time.sleep(0.05)
+
+
+def release_lock():
+    try:
+        os.remove(LOCK)
+    except OSError:
+        pass
+
+
 def send(cmd, args, items, timeout):
     os.makedirs(DIR, exist_ok=True)
+    if not acquire_lock(timeout):
+        print("★다른 브리지 호출이 %d초 넘게 잠금을 쥐고 있다(%s)" % (timeout, LOCK))
+        return None
+    try:
+        return _send(cmd, args, items, timeout)
+    finally:
+        release_lock()
+
+
+def _send(cmd, args, items, timeout):
     rid = str(int(time.time() * 1000))
     body = ["id=" + rid, "cmd=" + cmd]
     for k, v in args.items():

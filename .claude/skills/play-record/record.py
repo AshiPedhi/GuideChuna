@@ -225,17 +225,16 @@ def is_playing(timeout=20):
     """브리지에 물어 Play 중인지 본다. (재생중, 브리지응답여부)"""
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     try:
-        subprocess.run(creationflags=NOWIN, args=[sys.executable, BRIDGE_PY, "ping", "--timeout=%d" % timeout],
-                       capture_output=True, text=True, timeout=timeout + 10, env=env,
-                       encoding="utf-8", errors="replace")
+        r = subprocess.run(creationflags=NOWIN, args=[sys.executable, BRIDGE_PY, "ping", "--timeout=%d" % timeout],
+                           capture_output=True, text=True, timeout=timeout + 10, env=env,
+                           encoding="utf-8", errors="replace")
     except Exception:
         return False, False
-    try:
-        with open(BRIDGE_RESP, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return bool(data.get("playing")), True
-    except Exception:
-        return False, False
+    # ★공유 응답 파일(resp.json)을 다시 읽지 않는다 — 그새 다른 호출이 덮어썼을 수 있다(09-22).
+    #   자기 ping의 출력으로 판단한다: Play 중이면 «재생중 예»가 찍힌다.
+    out = r.stdout or ""
+    alive = r.returncode == 0 and "Unity" in out
+    return alive and "재생중 예" in out, alive
 
 
 # ── 상태 파일 ─────────────────────────────────────────────────────────
