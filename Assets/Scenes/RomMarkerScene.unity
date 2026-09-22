@@ -1864,6 +1864,7 @@ MonoBehaviour:
   menuLift: 0.06
   menuHoldDistance: 0.15
   soundVolume: 0.6
+  voiceVolume: 1
   yawStepDeg: 1
   heightStepMm: 5
   nudgeStepMm: 1

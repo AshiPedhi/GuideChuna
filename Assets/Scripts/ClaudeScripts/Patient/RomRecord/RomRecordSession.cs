@@ -119,6 +119,8 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float menuHoldDistance = 0.15f;
     [Tooltip("버튼·핀치 소리 크기(0이면 무음).")]
     [Range(0f, 1f)] [SerializeField] private float soundVolume = 0.6f;
+    [Tooltip("기준점 안내 음성 크기(0이면 무음). 음성은 Resources/RomRecordUI/Voice — .claude/tools/rom_record_voice.py로 만든다.")]
+    [Range(0f, 1f)] [SerializeField] private float voiceVolume = 1f;
 
     [Header("=== 조정 단위 ===")]
     [SerializeField] private float yawStepDeg = 1f;
@@ -196,6 +198,11 @@ public class RomRecordSession : MonoBehaviour
     private bool hasC7, hasGlab, hasEar;
     private Vector3 c7, glab, ear;
     private int landmarkTarget;            // 0 대추 · 1 미간 · 2 외이도(09-22 — 목중앙 자리를 이어받았다)
+    // ★찍기 대기(09-22 사용자): 버튼을 눌러야 그 기준점을 찍을 수 있고, 한 번 찍으면 대기가 풀린다.
+    //   "모든 기준점은 한번 지정하면 내가 다시 탭을 누르기 전까지는 설정이 안 되게. 잡아서 이동은 괜찮아."
+    //   09-22 로그: 판을 잡으러 가다 일찍 오므린 핀치가 대추·미간을 조용히 덮어썼다 — 그걸 막는 문이다.
+    //   처음엔 대추만 대기다(시작하자마자 찍을 수 있게).
+    private bool landmarkArmed = true;
     private readonly List<RomRecordMark>[] marks =
     {
         new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(),
@@ -232,6 +239,17 @@ public class RomRecordSession : MonoBehaviour
     private float lastPressTime = -99f;
     private bool menuHoldL, menuHoldR;
     private AudioSource audioSrc;
+    // ★기준점 안내 음성(2026-09-22 사용자 "다음 기준점은 뭘 설정해야 할지 나레이션으로"). 차례로 들려준다 —
+    //   새 안내가 오면 하던 말을 끊는다(빨리 누르는 사람에게 지난 안내가 늦게 나오지 않게).
+    private AudioSource voiceSrc;
+    private readonly Queue<AudioClip> voiceQueue = new Queue<AudioClip>(4);
+    private readonly Dictionary<string, AudioClip> voices = new Dictionary<string, AudioClip>(16);
+    private static readonly string[] VoiceNames =
+    {
+        "arm_c7", "arm_ear", "arm_glab", "done_c7", "done_ear", "done_glab",
+        "next_c7", "next_ear", "next_glab", "all_done", "locked",
+    };
+    private float nextLockedVoice;
     private AudioClip sndPress, sndRepeat, sndPinch, sndUndo, sndDeny;
 
     // ★Flexion은 09-22부터 «굴곡·신전» 한 단계다. Extension(신전)은 더 안 쓰지만 자리는 남긴다(enum 값과 짝).
@@ -313,6 +331,7 @@ public class RomRecordSession : MonoBehaviour
         LoadTabIcons();
         ApplyStepButtons();
         BuildSounds();
+        Say(ArmVoice(landmarkTarget));   // ★처음엔 대추가 찍기 대기다
 
         Debug.Log("[실측기록] 시작 — 기준점 설정부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + " · " +
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
@@ -384,6 +403,39 @@ public class RomRecordSession : MonoBehaviour
         sndPinch = Tone("찍음", 880f, 1320f, 0.11f);      // 올라가는 두 음 — 기록됐다
         sndUndo = Tone("취소", 700f, 440f, 0.09f);        // 내려가는 음 — 지웠다
         sndDeny = Tone("거부", 300f, 300f, 0.12f);        // 낮은 음 — 받지 않았다
+
+        voiceSrc = gameObject.AddComponent<AudioSource>();
+        voiceSrc.playOnAwake = false;
+        voiceSrc.spatialBlend = 0f;
+        int missing = 0;
+        foreach (string n in VoiceNames)
+        {
+            var c = Resources.Load<AudioClip>("RomRecordUI/Voice/" + n);
+            if (c != null) voices[n] = c;
+            else missing++;
+        }
+        if (missing > 0)
+            Debug.LogWarning($"[실측기록] ★안내 음성 {missing}개를 못 찾았다(Resources/RomRecordUI/Voice) — 그 안내는 무음이다. " +
+                             ".claude/tools/rom_record_voice.py로 만든다.");
+    }
+
+    /// <summary>안내 음성을 차례로 말한다. ★하던 말은 끊는다.</summary>
+    private void Say(string a, string b = null)
+    {
+        if (voiceSrc == null) return;
+        voiceQueue.Clear();
+        voiceSrc.Stop();
+        if (voices.TryGetValue(a, out AudioClip ca)) voiceQueue.Enqueue(ca);
+        if (b != null && voices.TryGetValue(b, out AudioClip cb)) voiceQueue.Enqueue(cb);
+    }
+
+    /// <summary>매 프레임 — 말이 끝났으면 다음 말을 꺼낸다. 할당 없음.</summary>
+    private void UpdateVoice()
+    {
+        if (voiceSrc == null || voiceSrc.isPlaying || voiceQueue.Count == 0) return;
+        voiceSrc.clip = voiceQueue.Dequeue();
+        voiceSrc.volume = voiceVolume;
+        voiceSrc.Play();
     }
 
     private static AudioClip Tone(string name, float f0, float f1, float seconds)
@@ -482,6 +534,7 @@ public class RomRecordSession : MonoBehaviour
         HandlePinch(true);
         HandlePinch(false);
         UpdateMenuHighlight();
+        UpdateVoice();
 
         if (dirty)
         {
@@ -786,9 +839,10 @@ public class RomRecordSession : MonoBehaviour
         }
         if (step == RomRecordStep.Landmarks)
         {
-            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkTarget == 0));
-            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
-            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkTarget == 1));
+            // ★밝은 버튼 = 지금 찍기 대기인 점. 찍고 나면 어느 것도 밝지 않다(다시 누르기 전까지 안 바뀐다).
+            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 0));
+            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 2));
+            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 1));
             // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
             Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
             Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
@@ -843,7 +897,7 @@ public class RomRecordSession : MonoBehaviour
         {
             int h = (int)step;
             h = h * 31 + landmarkTarget;
-            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0);
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (landmarkArmed ? 16 : 0);
             return h;
         }
     }
@@ -932,11 +986,14 @@ public class RomRecordSession : MonoBehaviour
     {
         if (step == RomRecordStep.Landmarks)
         {
-            // ★지금 고른 대상을 말한다 — 대추 → 외이도 → 미간 순으로 저절로 넘어간다.
-            if (landmarkTarget == 0 && !hasC7) return "대추에 핀치하세요 (기준점)";
-            if (landmarkTarget == 2 && !hasEar) return "외이도에 핀치하세요 (귓구멍 입구, 어느 쪽이든)";
-            if (landmarkTarget == 1 && !hasGlab) return "중립 자세에서 미간에 핀치하세요";
-            return "다시 찍거나 점을 잡아 끌어 다듬습니다";
+            // ★대기 중이면 그 점을, 아니면 다음에 누를 버튼을 말한다(자동으로 넘어가지 않는다 — 09-22 사용자).
+            if (landmarkArmed)
+                return landmarkTarget == 0 ? "대추에 핀치하세요 (기준점)"
+                     : landmarkTarget == 2 ? "외이도에 핀치하세요 (귓구멍 입구, 어느 쪽이든)"
+                     : "중립 자세에서 미간에 핀치하세요";
+            int next = NextUnsetLandmark();
+            return next >= 0 ? $"다음: {LandmarkName(next)} — [{LandmarkName(next)}] 버튼을 누르세요"
+                             : "기준점 완료 — 다시 찍으려면 버튼을 누르세요";
         }
         if (!IsMotion(step)) return "";
         int mi = MotionIndex(step);
@@ -1080,12 +1137,23 @@ public class RomRecordSession : MonoBehaviour
                   $"(수평 거리 {flat.magnitude * 100f:F0}cm · ↺↻로 다듬는다){warn}");
     }
 
+    /// <summary>기준점 버튼 — 그 점을 찍기 대기로 둔다. ★같은 버튼을 다시 눌러도 대기가 된다(다시 찍고 싶을 때).</summary>
     private void SetTarget(int t)
     {
-        if (landmarkTarget == t) return;
         landmarkTarget = t;
-        ApplyStepButtons();   // 고른 버튼을 밝힌다
+        landmarkArmed = true;
+        ApplyStepButtons();   // 대기 중인 버튼만 밝힌다
+        Say(ArmVoice(t));
+        Debug.Log($"[실측기록] 찍기 대기 — {LandmarkName(t)}");
     }
+
+    private static string LandmarkName(int t) => t == 0 ? "대추" : t == 2 ? "외이도" : "미간";
+    private static string ArmVoice(int t) => t == 0 ? "arm_c7" : t == 2 ? "arm_ear" : "arm_glab";
+    private static string DoneVoice(int t) => t == 0 ? "done_c7" : t == 2 ? "done_ear" : "done_glab";
+    private static string NextVoice(int t) => t == 0 ? "next_c7" : t == 2 ? "next_ear" : "next_glab";
+
+    /// <summary>아직 안 찍은 기준점 중 첫째(대추 → 외이도 → 미간). 다 찍었으면 -1.</summary>
+    private int NextUnsetLandmark() => !hasC7 ? 0 : !hasEar ? 2 : !hasGlab ? 1 : -1;
 
     private void Nudge(Vector3 d)
     {
@@ -1472,20 +1540,30 @@ public class RomRecordSession : MonoBehaviour
                 return;
 
             case RomRecordStep.Landmarks:
-                // ★순서: 대추 → 외이도 → 미간(09-22). 찍으면 아직 안 찍은 다음 대상으로 저절로 넘어간다.
+                // ★버튼을 눌러 대기인 점만 찍는다(09-22 사용자). 대기가 아니면 받지 않는다 — 잡아 끌기는 FindDragTarget이
+                //   먼저 가로채므로 여기까지 오지 않는다(이동은 언제든 된다).
+                if (!landmarkArmed)
+                {
+                    Play(sndDeny);
+                    if (Time.unscaledTime >= nextLockedVoice)
+                    {
+                        nextLockedVoice = Time.unscaledTime + 8f;   // ★8초에 한 번만 말한다 — 스친 손마다 말하면 시끄럽다
+                        Say("locked");
+                    }
+                    Debug.Log($"[실측기록] 기준점 핀치 무시 — 찍기 대기인 점이 없다(버튼을 먼저 누른다) · 자리 {Fmt(p)}");
+                    return;
+                }
+                int setTarget = landmarkTarget;
+                landmarkArmed = false;
                 if (landmarkTarget == 0)
                 {
                     c7 = p; hasC7 = true;
-                    landmarkTarget = !hasEar ? 2 : !hasGlab ? 1 : 0;
-                    ApplyStepButtons();
                     Play(sndPinch);
                     Debug.Log($"[실측기록] 대추 {Fmt(c7)}");
                 }
                 else if (landmarkTarget == 2)
                 {
                     ear = p; hasEar = true;
-                    landmarkTarget = !hasGlab ? 1 : 2;
-                    ApplyStepButtons();
                     Play(sndPinch);
                     // ★외이도는 대추보다 위다 — 낮으면 잘못 찍었을 가능성이 크다.
                     //   정중면에서 옆으로 얼마나 떨어졌나도 남긴다(한쪽 귀라 6~8cm쯤이어야 한다 — 추정. 정면을 잡은 뒤라야 뜻이 있다).
@@ -1502,6 +1580,10 @@ public class RomRecordSession : MonoBehaviour
                     Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
                     AimFrontFromLandmarks();
                 }
+                // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
+                int nextT = NextUnsetLandmark();
+                Say(DoneVoice(setTarget), nextT >= 0 ? NextVoice(nextT) : "all_done");
+                ApplyStepButtons();
                 dirty = true;
                 return;
 
