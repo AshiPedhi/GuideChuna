@@ -371,6 +371,10 @@ public class RomRecordMenuUI : IRomRecordMenu
         cooldownUntil = Time.unscaledTime + cooldown;
         pendingId = null;              // ★앞 배치에서 들어온 눌림을 새 배치로 넘기지 않는다
         activeCount = Mathf.Min(items.Length, pool.Count);
+        // ★칸이 모자라면 뒤쪽 항목이 <b>조용히 잘린다</b> — 09-22에 [정면 ▶]·[정면 다시]가 그렇게 사라졌다.
+        if (items.Length > pool.Count)
+            Debug.LogWarning($"[실측기록] ★{displayName} — 항목 {items.Length}개인데 칸이 {pool.Count}개다. " +
+                             $"뒤쪽 {items.Length - pool.Count}개(첫째 '{items[pool.Count].label}')가 안 보인다 — MenuCapacity를 올린다.");
 
         // ★판 폭을 내용에 맞춘다 — 빈 칸이 남지 않게(09-21 "빈 공간이 많다").
         // ★판 높이는 <b>가장 아래 칸의 바닥</b>이 정한다(09-22) — 탭처럼 여러 줄짜리 칸이 생겼다.

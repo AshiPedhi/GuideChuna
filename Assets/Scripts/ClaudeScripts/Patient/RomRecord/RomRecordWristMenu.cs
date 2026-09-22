@@ -223,6 +223,10 @@ public class RomRecordWristMenu : IRomRecordMenu
     {
         cooldownUntil = Time.unscaledTime + cooldown;   // ★방금 누른 손가락이 새 버튼 위에 남아 곧바로 눌리지 않게
         activeCount = Mathf.Min(items.Length, pool.Count);
+        // ★칸이 모자라면 뒤쪽 항목이 <b>조용히 잘린다</b> — 09-22에 [정면 ▶]·[정면 다시]가 그렇게 사라졌다.
+        if (items.Length > pool.Count)
+            Debug.LogWarning($"[실측기록] ★{displayName} — 항목 {items.Length}개인데 칸이 {pool.Count}개다. " +
+                             $"뒤쪽 {items.Length - pool.Count}개(첫째 '{items[pool.Count].label}')가 안 보인다 — MenuCapacity를 올린다.");
 
         // ★판 폭을 <b>내용에 맞춘다</b>(09-21). 종전엔 columns(6칸)로 고정이라 항목이 적어도
         //   판이 안 줄었다 — 사용자가 "빈 공간이 너무 많다"고 한 것이 이것이다.

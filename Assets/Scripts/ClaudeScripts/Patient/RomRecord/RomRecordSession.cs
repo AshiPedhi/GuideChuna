@@ -296,7 +296,7 @@ public class RomRecordSession : MonoBehaviour
             rightMenu = rm;
         }
         leftMenu.FixedInSpace = menuFixedInSpace;
-        leftMenu.Build(transform, menuFixedInSpace ? "조작 판" : "왼손목 메뉴", 14, font, mat);
+        leftMenu.Build(transform, menuFixedInSpace ? "조작 판" : "왼손목 메뉴", MenuCapacity, font, mat);
         // ★고정 모드면 판은 <b>하나</b>다(둘을 허공에 띄우면 서로 가린다). 그때는 오른쪽 자리에
         //   같은 판을 다시 가리켜 둔다 — SetLayout·Near 같은 곳에서 널을 만지지 않게.
         if (menuFixedInSpace)
@@ -306,7 +306,7 @@ public class RomRecordSession : MonoBehaviour
         else
         {
             rightMenu.FixedInSpace = false;
-            rightMenu.Build(transform, "오른손목 메뉴", 14, font, mat);
+            rightMenu.Build(transform, "오른손목 메뉴", MenuCapacity, font, mat);
         }
         Debug.Log($"[실측기록] 판 — {(useMetaUI ? "Meta UI Set" : "Quad")} · " +
                   $"{(menuFixedInSpace ? "허공 고정(진행Root 방식)" : "양 손목 추종")}");
@@ -669,6 +669,10 @@ public class RomRecordSession : MonoBehaviour
     private const float BoardSpan = 6.5f, TabRows = 1.8f, ValueBand = 0.7f, ValueScale = 0.95f;
     private const float CtlSpan = 1.55f, CtlGap = 0.1f, RefRows = 1.8f, RefStatusRows = 0.5f;
     private static float TabSpan => BoardSpan / TabSteps.Length;
+    // ★판이 미리 만들어 두는 칸 수. 글자 칸(탭 아래 값·상태)도 한 칸씩 먹는다.
+    //   09-22에 14로 두었다가 기준점 단계(최대 18칸)에서 [정면 ▶]·[정면 다시]가 <b>조용히 잘렸다</b>(사용자 발견).
+    //   넘치면 판이 경고를 남긴다.
+    private const int MenuCapacity = 24;
 
     private void LoadTabIcons()
     {
