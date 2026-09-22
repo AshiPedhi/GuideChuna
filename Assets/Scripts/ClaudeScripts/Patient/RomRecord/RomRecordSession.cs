@@ -31,9 +31,10 @@ public class RomRecordSession : MonoBehaviour
 
     [Header("=== 크기(글자는 TMP 폰트 크기, 스케일 1) ===")]
     [Tooltip("축 끝 글자·마커 각도 글자·눈금 숫자(0.8배). ★기존 각도기 판독 0.05(기기 확인값).\n" +
-             "09-18: 1.1(너무 큼) → 0.03(\"각도기도 텍스트도 너무 줄였다\") → 0.05.")]
-    [SerializeField] private float textSize = 0.05f;
-    [Tooltip("안내판(단계·지시·기록 요약) 글자.")]
+             "09-18: 1.1(너무 큼) → 0.03(\"각도기도 텍스트도 너무 줄였다\") → 0.05.\n" +
+             "09-22: 0.08(사용자: 작은 글씨가 잘 안 보인다 — 씬 값을 브리지로 바꿨다).")]
+    [SerializeField] private float textSize = 0.08f;
+    [Tooltip("★09-22부터 안 쓴다 — 떠 있던 안내판을 없애고 측정값을 조작 판으로 옮겼다. 옛 안내판 글자 크기.")]
     [SerializeField] private float panelTextSize = 0.045f;
     [Tooltip("손목 판의 버튼 글자·머리줄 글자.")]
     [SerializeField] private float buttonLabelSize = 0.03f;
@@ -303,10 +304,11 @@ public class RomRecordSession : MonoBehaviour
         }
         Debug.Log($"[실측기록] 판 — {(useMetaUI ? "Meta UI Set" : "Quad")} · " +
                   $"{(menuFixedInSpace ? "허공 고정(진행Root 방식)" : "양 손목 추종")}");
+        LoadTabIcons();
         ApplyStepButtons();
         BuildSounds();
 
-        Debug.Log("[실측기록] 시작 — 기준선 세팅부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
+        Debug.Log("[실측기록] 시작 — 대추·미간부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
     }
 
@@ -634,117 +636,222 @@ public class RomRecordSession : MonoBehaviour
     private static readonly Color PressTint = new Color(0.32f, 0.20f, 0.32f);    // 압박 — 마커 자홍의 어두운 쪽
     private static readonly Color NeedleTint = new Color(0.18f, 0.29f, 0.30f);   // 바늘 — 표시물 청록의 어두운 쪽
 
+    // ★탭(2026-09-22) — 단계 순서대로 다섯 개. 기준선 세팅(Setup)은 대추·미간 탭에 합쳤다(사용자 결정):
+    //   대추를 찍으면 3축이 그 자리로 가고 정면은 대추→미간으로 잡히므로, 남는 조절은 정면 ◀▶뿐이다.
+    //   완료(Done)도 탭이 없다 — 요약은 [나가기]가 남긴다.
+    private static readonly RomRecordStep[] TabSteps =
+    {
+        RomRecordStep.Landmarks, RomRecordStep.Flexion, RomRecordStep.Extension,
+        RomRecordStep.LateralFlexion, RomRecordStep.Rotation,
+    };
+    private static readonly string[] TabIds = { "tab1", "tab2", "tab3", "tab4", "tab5" };
+    private static readonly string[] TabIconNames = { "landmarks", "flexion", "extension", "lateral", "rotation" };
+    private readonly Texture2D[] tabIcons = new Texture2D[5];
+    private int layoutSig = int.MinValue;   // 배치를 다시 짜야 하는 상태의 지문 — 같으면 글자만 바꾼다
+
+    // 진행 점 색 — 표시물과 같은 색(RomRecordVisual): 능동 주황 · 압박 자홍 · 대추 하늘 · 미간 흰색
+    private const string DotActive = "#FF9926", DotPassive = "#F259F2", DotC7 = "#4DE6FF", DotGlab = "#FFFFFF";
+
+    // 칸 치수(판 칸 단위). ★Meta 판은 칸 4.9cm·줄 4.1cm(씬 값)라 판 폭 6.5칸 ≈ 33cm다 — 설정 팝업(33cm)과 같다.
+    private const float TabSpan = 1.3f, TabRows = 1.8f, DotBand = 0.35f;
+    private const float CtlSpan = 1.55f, CtlGap = 0.1f;
+    private const float BoardSpan = TabSpan * 5f;
+    private const float ValueRows = 1.15f, ValueScale = 0.9f;
+
+    private void LoadTabIcons()
+    {
+        for (int i = 0; i < tabIcons.Length; i++)
+        {
+            tabIcons[i] = Resources.Load<Texture2D>("RomRecordUI/Icons/" + TabIconNames[i]);
+            if (tabIcons[i] == null)
+                Debug.LogWarning($"[실측기록] ★탭 그림을 못 찾았다(Resources/RomRecordUI/Icons/{TabIconNames[i]}) — 그 탭은 글자만 나온다.");
+        }
+    }
+
     /// <summary>
-    /// 단계별 판 배치. 0행은 머리줄이고, 판 <b>폭은 쓴 칸 수만큼만</b> 잡힌다(09-21).
+    /// 판 배치(2026-09-22 탭 판). 위에서부터 탭 다섯 · 진행 점 · 안내 한 줄+[나가기] · 그 단계 조작 · 측정값.
     ///
-    /// ★09-21 사용자: "빈 공간이 너무 많다 · 패널 크기 자체를 줄여라."
-    ///   그래서 ①줄마다 가로를 꽉 채우고 ②줄 수를 줄이고 ③라벨을 짧게 했다.
-    ///   ★<b>라벨 길이가 곧 판 폭이다</b> — 한글 한 글자가 대략 글자 크기 하나만큼 넓어서,
-    ///   "능동 기록"(4자)은 "능동"(2자)의 두 배 칸을 먹는다. 긴 이름을 쓰면 판이 그만큼 커진다.
-    /// ★[나가기]는 모서리를 피해 <b>가운데</b>에 두고 길게 눌러야 먹는다(09-21) — 스친 손에 눌리지 않게.
+    /// ★사용자 09-22: "다음을 눌러야 하는 것도 번거롭고, 테스트하려고 되돌아갈 때 이전을 몇 번 눌러야 한다 ·
+    ///   텍스트로만 돼 있어 직관적이지 않다 · 측정 정보 글씨가 안 보이고 기준선에서 너무 높다."
+    ///   → [이전]/[다음]을 없애고 탭 하나로 바로 간다(자동 넘김 없음 — 사용자 선택). 탭은 그림+글자.
+    ///   떠 있던 안내판(대추 위 43cm·글자 0.045)은 없애고 측정값을 이 판 맨 아래로 옮겼다.
+    /// ★동작 탭은 <b>대추</b>를 찍어야 풀린다 — GoTo와 같은 조건이다(바늘은 미간 없이도 잰다. 09-22 사용자 확인).
+    /// ★[나가기]는 길게 눌러야 먹는다(09-21) — 안내 줄 오른쪽 끝에 둔다.
+    /// ★배치는 <see cref="LayoutSignature"/>가 바뀔 때만 다시 짠다. 글자만 바뀌면 SetText로 끝낸다 —
+    ///   SetLayout은 쿨다운을 다시 걸어 누르고 있던 반복 버튼(±1°·정면 ◀▶)을 끊기 때문이다.
     /// </summary>
     private void ApplyStepButtons()
     {
-        var items = new List<RomMenuItem>(14);
-        const float w2 = 1.8f, gap = 0.1f;     // 두 글자 버튼 폭과 사이
-        float c1 = 0f, c2 = w2 + gap;      // 두 열이면 충분하다 — 셋째 열을 쓰면 판이 그만큼 넓어진다
-        float navRow;
+        var items = new List<RomMenuItem>(20);
 
-        switch (step)
+        // ── 탭 ──
+        for (int i = 0; i < TabSteps.Length; i++)
         {
-            case RomRecordStep.Setup:
-                items.Add(RomMenuItem.Text("정면", c1, 1, 1.4f));
-                items.Add(RomMenuItem.Button("yaw-", "↺", 1.5f, 1, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("yaw+", "↻", 2.6f, 1, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Text("높이", c1, 2, 1.4f));
-                items.Add(RomMenuItem.Button("h+", "▲", 1.5f, 2, 1f, AdjTint, repeat: true));
-                items.Add(RomMenuItem.Button("h-", "▼", 2.6f, 2, 1f, AdjTint, repeat: true));
-                navRow = 3;
-                break;
-
-            case RomRecordStep.Landmarks:
-                items.Add(RomMenuItem.Button("t0", "대추", c1, 1, w2, TargetTint, selected: landmarkTarget == 0));
-                items.Add(RomMenuItem.Button("t1", "미간", c2, 1, w2, TargetTint, selected: landmarkTarget == 1));
-                items.Add(RomMenuItem.Button("t2", "목중앙", c1, 2, w2, TargetTint, selected: landmarkTarget == 2));
-                // ★정면을 다시 잡는 버튼(09-21) — 자동은 처음 한 번뿐이라 여기서 고쳐 잡는다.
-                if (hasC7 && hasGlab) items.Add(RomMenuItem.Button("aim", "정면", c2, 2, w2, NavTint));
-                if (landmarkTarget == 2)
-                {
-                    // 목 중앙은 앞·뒤로만 옮긴다(미간은 그대로)
-                    items.Add(RomMenuItem.Button("fwd", "앞", c1, 3, w2, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("back", "뒤", c2, 3, w2, AdjTint, repeat: true));
-                    navRow = 4;
-                }
-                else
-                {
-                    // ★★방향 버튼 여섯 개를 없앴다(09-21 "손이 너무 많이 가면 안 돼").
-                    //   점은 <b>손으로 잡아 끌면</b> 되므로 그 여섯 줄은 판만 세로로 길게 만들고 시야를 가렸다.
-                    navRow = 3;
-                }
-                break;
-
-            case RomRecordStep.Done:
-                navRow = 1;
-                break;
-
-            default:   // 굴곡·신전·측굴·회전
-                // ★★바늘을 쓰면 버튼이 거의 필요 없다(09-21 "손이 너무 많이 가면 안 돼").
-                //   끌어낸 자리가 곧 기록이라 [기록]이 없고, ±1°도 바늘을 다시 끌면 된다.
-                items.Add(RomMenuItem.Button("needle", "바늘", c1, 1, w2, NeedleTint, selected: needleOn));
-                if (needleOn)
-                {
-                    items.Add(RomMenuItem.Button("nreset", "다시", c2, 1, w2, UndoTint));
-                    navRow = 2;
-                }
-                else
-                {
-                    // 점찍기로 쓸 때만 다듬기 버튼을 낸다.
-                    items.Add(RomMenuItem.Button("undo", "취소", c2, 1, w2, UndoTint));
-                    items.Add(RomMenuItem.Button("adj-", "-1°", c1, 2, w2, AdjTint, repeat: true));
-                    items.Add(RomMenuItem.Button("adj+", "+1°", c2, 2, w2, AdjTint, repeat: true));
-                    navRow = 3;
-                }
-                break;
+            RomRecordStep s = TabSteps[i];
+            items.Add(new RomMenuItem
+            {
+                id = TabIds[i], label = StepTitle[(int)s],
+                col = i * TabSpan, row = 0f, span = TabSpan, rows = TabRows,
+                tint = NavTint, selected = step == s,
+                locked = IsMotion(s) && !hasC7,
+                icon = tabIcons[i],
+                dots = TabDots(s),
+            });
         }
 
-        // ★[이전][다음]을 한 줄에 두고 [나가기]는 그 아래 가운데다(09-21).
-        //   한 줄에 셋을 넣으면 판이 6칸을 넘어 오히려 넓어진다 — 판 폭은 <b>가장 넓은 줄</b>이 정한다.
-        if (step > RomRecordStep.Setup) items.Add(RomMenuItem.Button("prev", "이전", c1, navRow, w2, NavTint));
-        if (step < RomRecordStep.Done) items.Add(RomMenuItem.Button("next", "다음", c2, navRow, w2, NavTint));
-        items.Add(RomMenuItem.Button("exit", "나가기", 0.55f, navRow + 1f, 2.6f, ExitTint, holdSeconds: exitHoldSeconds));
+        // ── 안내 한 줄 + [나가기] ──
+        float r = TabRows + DotBand;
+        items.Add(new RomMenuItem { id = null, key = "guide", label = GuideText(), col = 0f, row = r,
+                                    span = BoardSpan - CtlSpan, alignLeft = true });
+        items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
+        r += 1f;
 
-        var arr = items.ToArray();
-        string head = MenuHeader();
-        leftMenu.SetLayout(head, arr);
-        // ★고정 모드에서는 둘이 같은 판이다 — 두 번 짜지 않는다.
-        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetLayout(head, arr);
-    }
-
-    /// <summary>판 머리줄 — 단계·진행, 동작 단계면 지금까지 찍은 값. 값이 바뀔 때만 만든다.</summary>
-    private string MenuHeader()
-    {
-        sb.Clear();
-        sb.Append((int)step + 1).Append("/7  ").Append(StepTitle[(int)step]);
-        if (IsMotion(step))
+        // ── 그 단계 조작(한 줄에 넷) ──
+        int n = 0;
+        void Ctl(RomMenuItem it)
         {
-            sb.Append("   ");
-            if (needleOn) AppendNeedleValues(sb, step);
+            it.col = (n % 4) * (CtlSpan + CtlGap);
+            it.row = r + n / 4;
+            it.span = CtlSpan;
+            items.Add(it);
+            n++;
+        }
+        if (step == RomRecordStep.Landmarks)
+        {
+            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkTarget == 0));
+            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkTarget == 1));
+            Ctl(RomMenuItem.Button("t2", "목중앙", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
+            // ★정면을 다시 잡는 버튼(09-21) — 자동은 처음 한 번뿐이라 여기서 고쳐 잡는다.
+            if (hasC7 && hasGlab) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
+            else n++;   // 자리를 비워 둔다 — 미간을 찍는 순간 아랫줄 버튼이 옆으로 밀리지 않게
+            if (landmarkTarget == 2)
+            {
+                // 목 중앙은 앞·뒤로만 옮긴다(미간은 그대로)
+                Ctl(RomMenuItem.Button("fwd", "앞", 0, 0, 0, AdjTint, repeat: true));
+                Ctl(RomMenuItem.Button("back", "뒤", 0, 0, 0, AdjTint, repeat: true));
+            }
+            // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
+            Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
+        }
+        else if (IsMotion(step))
+        {
+            // ★★바늘을 쓰면 버튼이 거의 필요 없다(09-21 "손이 너무 많이 가면 안 돼").
+            //   끌어낸 자리가 곧 기록이라 [기록]이 없고, ±1°도 바늘을 다시 끌면 된다.
+            Ctl(RomMenuItem.Button("needle", "바늘", 0, 0, 0, NeedleTint, selected: needleOn));
+            if (needleOn) Ctl(RomMenuItem.Button("nreset", "다시", 0, 0, 0, UndoTint));
             else
             {
-                var list = marks[MotionIndex(step)];
-                Vector3 pivot = Pivot;
-                for (int i = 0; i < list.Count; i++)
-                {
-                    if (i > 0) sb.Append(" · ");
-                    sb.Append(Kind(list[i])).Append(' ');
-                    AppendDeg(sb, step, list[i], pivot);
-                }
-                if (list.Count == 0) sb.Append('—');
+                // 점찍기로 쓸 때만 다듬기 버튼을 낸다.
+                Ctl(RomMenuItem.Button("undo", "취소", 0, 0, 0, UndoTint));
+                Ctl(RomMenuItem.Button("adj-", "-1°", 0, 0, 0, AdjTint, repeat: true));
+                Ctl(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, AdjTint, repeat: true));
             }
         }
-        else if (step == RomRecordStep.Landmarks && landmarkTarget == 2)
+        r += Mathf.Ceil(n / 4f);
+
+        // ── 측정값(네 동작 전부 · 지금 단계만 밝게) ──
+        items.Add(new RomMenuItem { id = null, key = "values", label = ValuesText(), col = 0f, row = r, span = BoardSpan,
+                                    rows = ValueRows, alignLeft = true, textScale = ValueScale });
+
+        var arr = items.ToArray();
+        leftMenu.SetLayout("", arr);
+        // ★고정 모드에서는 둘이 같은 판이다 — 두 번 짜지 않는다.
+        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetLayout("", arr);
+        layoutSig = LayoutSignature();
+    }
+
+    /// <summary>
+    /// 배치를 다시 짜야 하는 상태의 지문 — 단계·대상·바늘·대추·미간·찍은 개수·끌어낸 바늘.
+    /// ★각도 값은 넣지 않는다 — 값만 바뀌면 SetText로 충분하다.
+    /// </summary>
+    private int LayoutSignature()
+    {
+        unchecked
         {
-            sb.Append("   목중앙 ").Append(neckOffsetMm.ToString("F0")).Append("mm");
+            int h = (int)step;
+            h = h * 31 + landmarkTarget;
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0);
+            for (int i = 0; i < marks.Length; i++) h = h * 31 + marks[i].Count;
+            for (int i = 0; i < needleMoved.Length; i++) if (needleMoved[i]) h = h * 31 + i + 1;
+            return h;
+        }
+    }
+
+    /// <summary>탭 아래 진행 점. ●은 찍음, 흐린 ○은 아직. 짝수가 능동(주황)·홀수가 압박(자홍)이다.</summary>
+    private string TabDots(RomRecordStep s)
+    {
+        sb.Clear();
+        if (s == RomRecordStep.Landmarks)
+        {
+            AppendDot(sb, DotC7, hasC7);
+            AppendDot(sb, DotGlab, hasGlab);
+        }
+        else
+        {
+            int mi = MotionIndex(s);
+            int cap = needleOn ? NeedleCountOf(s) : Capacity(s);
+            var list = marks[mi];
+            for (int k = 0; k < cap; k++)
+            {
+                bool got = needleOn ? needleMoved[mi * NeedlePerStep + k] : k < list.Count;
+                AppendDot(sb, k % 2 == 0 ? DotActive : DotPassive, got);
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static void AppendDot(StringBuilder b, string color, bool filled) =>
+        b.Append("<color=").Append(color).Append(filled ? ">●" : "70>○").Append("</color> ");
+
+    /// <summary>안내 한 줄. ★판 폭(약 24cm)을 넘지 않게 짧게 쓴다 — 넘치면 [나가기]를 덮는다.</summary>
+    private string GuideText()
+    {
+        if (step == RomRecordStep.Landmarks)
+        {
+            if (landmarkTarget == 2) return $"목중앙 보정 {neckOffsetMm:F0}mm — 앞·뒤로 맞춥니다";
+            return !hasC7 ? "대추에 핀치하세요 (기준점)"
+                 : !hasGlab ? "중립 자세에서 미간에 핀치하세요"
+                 : "점을 잡아 끌어 다듬을 수 있습니다";
+        }
+        if (!IsMotion(step)) return "";
+        int mi = MotionIndex(step);
+        if (needleOn)
+        {
+            int cnt = NeedleCountOf(step), done = 0;
+            for (int k = 0; k < cnt; k++) if (needleMoved[mi * NeedlePerStep + k]) done++;
+            return $"0°의 바늘을 끌어 맞추세요 ({done}/{cnt})";
+        }
+        // ★점찍기 각은 중립선(대추→미간) 기준이라 미간이 없으면 안 나온다.
+        if (!hasGlab) return "점찍기는 미간이 있어야 각이 나옵니다";
+        var list = marks[mi];
+        if (list.Count >= Capacity(step)) return "다 찍었습니다";
+        return $"{(list.Count % 2 == 0 ? "능동" : "압박")} {list.Count + 1}/{Capacity(step)} — 미간에 핀치하세요";
+    }
+
+    /// <summary>측정값 네 줄. 지금 단계만 굵고 밝게, 나머지는 흐리게(TMP 서식).</summary>
+    private string ValuesText()
+    {
+        Vector3 pivot = Pivot;
+        sb.Clear();
+        for (RomRecordStep s = RomRecordStep.Flexion; s <= RomRecordStep.Rotation; s++)
+        {
+            bool cur = s == step;
+            sb.Append(cur ? "<alpha=#FF><b>" : "<alpha=#80>");
+            sb.Append(StepTitle[(int)s]).Append("   ");
+            if (needleOn) AppendNeedleValues(sb, s);
+            else
+            {
+                var list = marks[MotionIndex(s)];
+                if (list.Count == 0) sb.Append('—');
+                for (int i = 0; i < list.Count; i++)
+                {
+                    sb.Append(i > 0 ? " · " : "").Append(Kind(list[i])).Append(' ');
+                    AppendDeg(sb, s, list[i], pivot);
+                }
+            }
+            if (cur) sb.Append("</b>");
+            if (s < RomRecordStep.Rotation) sb.Append('\n');
         }
         return sb.ToString();
     }
@@ -821,8 +928,12 @@ public class RomRecordSession : MonoBehaviour
                 ApplyStepButtons();
                 break;
             case "nreset": ResetNeedles(); break;
-            case "prev": GoTo(step - 1); break;
-            case "next": GoTo(step + 1); break;
+            // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.
+            case "tab1": GoTo(RomRecordStep.Landmarks); break;
+            case "tab2": GoTo(RomRecordStep.Flexion); break;
+            case "tab3": GoTo(RomRecordStep.Extension); break;
+            case "tab4": GoTo(RomRecordStep.LateralFlexion); break;
+            case "tab5": GoTo(RomRecordStep.Rotation); break;
             case "exit": Exit(); break;
         }
         if (id == "fwd" || id == "back")
@@ -886,6 +997,7 @@ public class RomRecordSession : MonoBehaviour
     private void GoTo(RomRecordStep s)
     {
         if (s < RomRecordStep.Setup || s > RomRecordStep.Done) return;
+        if (s == step) return;   // ★지금 탭을 다시 누른 것 — 배치를 다시 짜면 쿨다운만 걸린다
         // ★대추만 필수로 바꿨다(09-21). 바늘은 미간 없이도 재는 수단이라 미간으로 막으면 그 길이 닫힌다.
         //   미간이 없으면 점찍기 각(중립선 기준)은 못 내고 바늘 눈금 각만 남는다 — 안내판이 그것을 말한다.
         if (IsMotion(s) && !hasC7)
@@ -1400,10 +1512,20 @@ public class RomRecordSession : MonoBehaviour
         //   보여 봐야 시야만 가린다. 대추를 찍으면 그 자리로 와서 그때부터 뜻이 생긴다.
         view.SetAxesVisible(hasC7 || step == RomRecordStep.Setup);
 
-        // 손목 판 머리줄 — 지금까지 찍은 값(값이 바뀔 때만)
-        string head = MenuHeader();
-        leftMenu.SetHeader(head);
-        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetHeader(head);
+        // ★판(09-22): 진행 점·잠금이 바뀌었으면 다시 짜고, 아니면 글자 칸 둘만 바꾼다.
+        //   ★SetLayout은 쿨다운을 다시 걸어 누르고 있던 반복 버튼(±1°·정면 ◀▶)을 끊는다 — 매번 부르면 안 된다.
+        if (LayoutSignature() != layoutSig) ApplyStepButtons();
+        else
+        {
+            string guide = GuideText(), values = ValuesText();
+            leftMenu.SetText("guide", guide);
+            leftMenu.SetText("values", values);
+            if (!ReferenceEquals(rightMenu, leftMenu))
+            {
+                rightMenu.SetText("guide", guide);
+                rightMenu.SetText("values", values);
+            }
+        }
 
         // ★각도기와 바늘은 같은 기하를 쓴다(DialFrame) — 따로 계산하면 미리보기가 거짓말을 한다(규칙 9).
         bool hasDial = DialFrame(out Vector3 dc, out Vector3 dn, out Vector3 dz, out float dr);
@@ -1439,63 +1561,8 @@ public class RomRecordSession : MonoBehaviour
                          m.passive ? RomRecordVisual.PassiveColor : RomRecordVisual.ActiveColor, triC, triN);
         }
 
-        view.SetPanel(pivot + Vector3.up * (axisLength + 0.18f), PanelText(pivot));
+        // ★떠 있던 안내판(대추 위 43cm)은 없앴다(09-22 사용자: "있는지도 몰랐다 · 고개를 드니까 작게 보였다").
+        //   측정값은 조작 판 맨 아래(ValuesText)로 옮겼다. 안내판 글자 객체는 빈 채로 남는다.
     }
 
-    private string PanelText(Vector3 pivot)
-    {
-        sb.Clear();
-        sb.Append('[').Append((int)step + 1).Append("/7] ").Append(StepTitle[(int)step]).Append('\n');
-        switch (step)
-        {
-            case RomRecordStep.Setup:
-                sb.Append("축을 손으로 잡아 끌어 목 높이에 두고, ↺↻로 '환자 앞'을 맞춘 뒤 [다음]\n");
-                break;
-            case RomRecordStep.Landmarks:
-                sb.Append(!hasC7 ? "대추에 핀치하세요 (여기가 기준점이 됩니다)\n"
-                        : !hasGlab ? "중립 자세에서 미간에 핀치하세요 (정면이 함께 정해집니다)\n"
-                        : "점을 잡아 끌거나 버튼으로 다듬고 [다음]\n");
-                sb.Append(landmarkTarget == 0 ? "대상: 대추" : landmarkTarget == 1 ? "대상: 미간" : "대상: 목중앙").Append(" · 목 중앙 보정 ").Append(neckOffsetMm.ToString("F0")).Append("mm\n");
-                break;
-            case RomRecordStep.Done:
-                sb.Append("기록을 마쳤습니다\n");
-                break;
-            default:
-                if (needleOn)
-                {
-                    // ★바늘은 끌어낸 자리가 곧 기록이다 — 누를 것이 없다(09-21).
-                    int mi2 = MotionIndex(step), cnt = NeedleCountOf(step), done = 0;
-                    for (int k = 0; k < cnt; k++) if (needleMoved[mi2 * NeedlePerStep + k]) done++;
-                    sb.Append("0°의 바늘을 끌어 각을 맞추세요 (").Append(done).Append('/').Append(cnt).Append(")\n");
-                }
-                else
-                {
-                    var list = marks[MotionIndex(step)];
-                    int next = list.Count;
-                    if (next >= Capacity(step)) sb.Append("다 찍었습니다 — [다음]\n");
-                    else sb.Append(next % 2 == 0 ? "능동" : "압박").Append(' ').Append(next + 1)
-                           .Append('/').Append(Capacity(step)).Append(" 위치의 미간에 핀치하세요\n");
-                }
-                if (!hasGlab) sb.Append("★미간 없음 — 바늘 눈금 각만 기록됩니다\n");
-                break;
-        }
-        sb.Append('\n');
-        for (RomRecordStep s = RomRecordStep.Flexion; s <= RomRecordStep.Rotation; s++)
-        {
-            sb.Append(StepTitle[(int)s]).Append("  ");
-            if (needleOn) AppendNeedleValues(sb, s);
-            else
-            {
-                var list = marks[MotionIndex(s)];
-                if (list.Count == 0) sb.Append('—');
-                for (int i = 0; i < list.Count; i++)
-                {
-                    sb.Append(i > 0 ? " · " : "").Append(Kind(list[i])).Append(' ');
-                    AppendDeg(sb, s, list[i], pivot);
-                }
-            }
-            sb.Append('\n');
-        }
-        return sb.ToString();
-    }
 }

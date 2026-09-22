@@ -49,6 +49,10 @@ public class RomRecordMenuUI : IRomRecordMenu
         public Image fill;
         public TextMeshProUGUI label;
         public bool isText;        // 누를 수 없는 글자 칸
+        // ★탭 판(2026-09-22)
+        public string key;         // SetText로 찾는 이름(글자 칸)
+        public RawImage icon;      // 버튼 위쪽 그림 — 없으면 꺼 둔다
+        public TextMeshProUGUI dots;   // 버튼 아래 진행 점
     }
 
     // ── 모양(캔버스 픽셀. 캔버스 스케일 0.0005라 1px = 0.5mm) ──────────
@@ -331,12 +335,43 @@ public class RomRecordMenuUI : IRomRecordMenu
         b.fill.raycastTarget = false;
         fillGo.SetActive(false);
 
+        // ★탭 그림(2026-09-22). 루트의 마지막 자식이라 배경 위에 그려진다. 누름은 배경이 받는다.
+        var iconGo = new GameObject("아이콘", typeof(RectTransform), typeof(CanvasRenderer), typeof(RawImage), typeof(LayoutElement));
+        var iconRt = (RectTransform)iconGo.transform;
+        iconRt.SetParent(b.rt, false);
+        iconRt.anchorMin = iconRt.anchorMax = new Vector2(0.5f, 1f);
+        iconRt.pivot = new Vector2(0.5f, 1f);
+        iconGo.GetComponent<LayoutElement>().ignoreLayout = true;
+        b.icon = iconGo.GetComponent<RawImage>();
+        b.icon.raycastTarget = false;
+        iconGo.SetActive(false);
+
+        // ★진행 점(2026-09-22) — 버튼 <b>밖</b> 아래에 붙는다. 자리는 배치하는 쪽이 비워 둔다.
+        b.dots = MakeLabel(b.rt, labelPt, TextAlignmentOptions.Top, "진행점");
+        var dRt = b.dots.rectTransform;
+        dRt.anchorMin = dRt.anchorMax = new Vector2(0.5f, 0f);
+        dRt.pivot = new Vector2(0.5f, 1f);
+        b.dots.richText = true;
+        b.dots.gameObject.SetActive(false);
+
         b.press = go.AddComponent<RomMenuButtonUI>();
         b.press.owner = this;
         b.press.Setup(b.background, b.fill);
 
         go.SetActive(false);
         return b;
+    }
+
+    public void SetText(string key, string text)
+    {
+        if (key == null) return;
+        for (int i = 0; i < activeCount; i++)
+        {
+            Btn b = pool[i];
+            if (b.key != key || b.label == null) continue;
+            if (b.label.text != text) b.label.text = text;
+            return;
+        }
     }
 
     public void SetLayout(string headerText, RomMenuItem[] items)
@@ -347,14 +382,15 @@ public class RomRecordMenuUI : IRomRecordMenu
         activeCount = Mathf.Min(items.Length, pool.Count);
 
         // ★판 폭을 내용에 맞춘다 — 빈 칸이 남지 않게(09-21 "빈 공간이 많다").
-        float maxCol = 1f, maxRow = 0f;
+        // ★판 높이는 <b>가장 아래 칸의 바닥</b>이 정한다(09-22) — 탭처럼 여러 줄짜리 칸이 생겼다.
+        float maxCol = 1f, maxBottom = 1f;
         for (int i = 0; i < activeCount; i++)
         {
             maxCol = Mathf.Max(maxCol, items[i].col + items[i].span);
-            maxRow = Mathf.Max(maxRow, items[i].row);
+            maxBottom = Mathf.Max(maxBottom, items[i].row + RowsOf(items[i]));
         }
         float wPx = maxCol * cellPx + padPx * 2f;
-        float hPx = (maxRow + 1f) * rowPx + padPx * 2f;
+        float hPx = maxBottom * rowPx + padPx * 2f;
         Resize(wPx, hPx);
 
         header.text = headerText;
@@ -374,39 +410,88 @@ public class RomRecordMenuUI : IRomRecordMenu
 
             RomMenuItem it = items[i];
             b.isText = it.id == null;
-            b.press.id = it.id;
+            b.key = it.key;
+            // ★잠긴 탭은 id를 비워 둔다 — 눌림이 들어와도 OnPressed에서 null이라 아무 일도 안 난다.
+            bool pressable = !b.isText && !it.locked;
+            b.press.id = pressable ? it.id : null;
             b.press.repeat = it.repeat;
             b.press.holdSeconds = it.holdSeconds;
 
+            float rows = RowsOf(it);
             float w = it.span * cellPx - gapPx;
-            float h = b.isText ? rowPx : buttonPx;
+            // ★여러 줄짜리 버튼은 줄 사이 틈(rowPx - buttonPx)을 한 번만 뺀다 — 한 줄이면 종전과 같다.
+            float h = b.isText ? rows * rowPx : buttonPx + (rows - 1f) * rowPx;
             b.rt.anchorMin = b.rt.anchorMax = new Vector2(0f, 1f);
             b.rt.pivot = new Vector2(0f, 1f);
             b.rt.sizeDelta = new Vector2(w, h);
-            // 칸 안에서 위아래 가운데에 둔다(칸 높이 rowPx, 버튼 높이 h).
+            // 칸 안에서 위아래 가운데에 둔다(칸 높이 rows*rowPx, 버튼 높이 h).
             b.rt.anchoredPosition = new Vector2(padPx + it.col * cellPx,
-                                                -(padPx + it.row * rowPx + (rowPx - h) * 0.5f));
+                                                -(padPx + it.row * rowPx + (rows * rowPx - h) * 0.5f));
 
+            bool hasIcon = it.icon != null && !b.isText;
             if (b.label != null)
             {
                 b.label.text = it.label;
-                b.label.fontSize = labelPt;
+                b.label.fontSize = labelPt * (it.textScale > 0f ? it.textScale : 1f);
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
-                b.label.color = b.isText ? captionColor : (it.selected ? selectedLabelColor : labelColor);
+                // ★그림이 있으면 글자를 아래로 내린다. 글자 칸은 왼쪽 정렬을 고를 수 있다(값 여러 줄).
+                b.label.alignment = hasIcon ? TextAlignmentOptions.Bottom
+                                  : it.alignLeft ? TextAlignmentOptions.MidlineLeft
+                                  : TextAlignmentOptions.Center;
+                b.label.margin = hasIcon ? new Vector4(0f, 0f, 0f, 6f) : Vector4.zero;
+                b.label.richText = b.isText;   // 값 표시에서 지금 단계만 밝힌다
+                Color lc = b.isText ? (it.alignLeft ? labelColor : captionColor)
+                         : it.selected ? selectedLabelColor : labelColor;
+                if (it.locked) lc.a *= 0.35f;
+                b.label.color = lc;
             }
             if (b.background != null)
             {
                 // 글자 칸은 배경을 지운다 — 누를 수 없는 것이 버튼처럼 보이면 안 된다.
-                b.background.color = b.isText ? new Color(0f, 0f, 0f, 0f)
-                                   : it.selected ? Color.Lerp(it.tint, Color.white, selectedMix)
-                                   : it.tint;
-                b.background.raycastTarget = !b.isText;
+                Color bg = b.isText ? new Color(0f, 0f, 0f, 0f)
+                         : it.selected ? Color.Lerp(it.tint, Color.white, selectedMix)
+                         : it.tint;
+                if (it.locked) bg.a *= 0.45f;
+                b.background.color = bg;
+                b.background.raycastTarget = pressable;
             }
-            b.press.enabled = !b.isText;
+            b.press.enabled = pressable;
+
+            if (b.icon != null)
+            {
+                if (b.icon.gameObject.activeSelf != hasIcon) b.icon.gameObject.SetActive(hasIcon);
+                if (hasIcon)
+                {
+                    // 그림 칸 = 버튼 높이에서 글자 한 줄을 뺀 정사각형
+                    float labelBand = labelPt * 1.6f;
+                    float s = Mathf.Max(8f, Mathf.Min(w - 12f, h - labelBand - 10f));
+                    b.icon.texture = it.icon;
+                    b.icon.rectTransform.sizeDelta = new Vector2(s, s);
+                    b.icon.rectTransform.anchoredPosition = new Vector2(0f, -6f);
+                    // ★고른 탭은 흰 바탕이라 그림을 어둡게, 잠긴 탭은 흐리게.
+                    b.icon.color = it.selected ? new Color(0.153f, 0.153f, 0.153f, 1f)
+                                 : it.locked ? new Color(1f, 1f, 1f, 0.3f)
+                                 : new Color(1f, 1f, 1f, 0.9f);
+                }
+            }
+            if (b.dots != null)
+            {
+                bool hasDots = !string.IsNullOrEmpty(it.dots);
+                if (b.dots.gameObject.activeSelf != hasDots) b.dots.gameObject.SetActive(hasDots);
+                if (hasDots)
+                {
+                    b.dots.text = it.dots;
+                    b.dots.fontSize = labelPt * 0.9f;
+                    b.dots.rectTransform.sizeDelta = new Vector2(w, labelPt * 1.4f);
+                    b.dots.rectTransform.anchoredPosition = new Vector2(0f, -2f);
+                }
+            }
             b.press.Setup(b.background, b.fill);   // ★색을 정한 뒤에 부른다 — 여기서 되돌릴 색을 기억한다
             if (b.fill != null) b.fill.gameObject.SetActive(false);
         }
     }
+
+    private static float RowsOf(RomMenuItem it) => it.rows > 0f ? it.rows : 1f;
 
     /// <summary>부모에 늘어붙게 만든다 — 판·버튼 크기를 바꾸면 따라오게.</summary>
     private static void Stretch(RectTransform r) => StretchInset(r, 0f, 0f);

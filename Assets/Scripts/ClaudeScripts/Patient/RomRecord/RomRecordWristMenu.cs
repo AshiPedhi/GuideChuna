@@ -16,6 +16,16 @@ public struct RomMenuItem
     //   09-21 증상: "양손으로 환자를 지탱하다가 [나가기]가 눌린다" — 스쳐 지나간 손이 곧바로 실행시켰다.
     public float holdSeconds;
 
+    // ── 탭 판(2026-09-22 사용자 지시 "다음·이전 누르는 게 번거롭다 · 텍스트뿐이라 직관적이지 않다") ──
+    // ★전부 0/null이면 종전 항목과 똑같이 그려진다 — 기존 배치는 손대지 않아도 된다.
+    public float rows;          // 세로 줄 수(0이면 1). 탭은 그림이 들어가 두 줄 가까이 쓴다
+    public bool locked;         // 보이되 못 누른다(대추를 찍기 전의 동작 탭)
+    public Texture2D icon;      // 버튼 위쪽에 그림, 글자는 아래로 내린다
+    public string key;          // 글자 칸을 나중에 SetText로 바꿀 때 찾는 이름
+    public float textScale;     // 글자 크기 배수(0이면 1)
+    public bool alignLeft;      // 글자 칸을 왼쪽 정렬(여러 줄 값 표시용)
+    public string dots;         // 버튼 아래에 붙는 진행 점(TMP 서식 문자열). 배치 때만 만든다
+
     public static RomMenuItem Button(string id, string label, float col, float row, float span, Color tint,
                                      bool repeat = false, bool selected = false, float holdSeconds = 0f)
         => new RomMenuItem { id = id, label = label, col = col, row = row, span = span, tint = tint, repeat = repeat, selected = selected, holdSeconds = holdSeconds };
@@ -78,6 +88,8 @@ public class RomRecordWristMenu : IRomRecordMenu
         public bool holdFired;    // 이번 접촉에서 이미 실행했다 — 손이 나갈 때까지 다시 안 쏜다
         public Transform fill;    // 차오르는 막대(hold 버튼에만 보인다)
         public Renderer fillRend;
+        public string key;        // SetText로 찾는 이름(09-22)
+        public bool locked;       // 보이되 못 누른다(09-22)
     }
 
     private readonly List<Btn> pool = new List<Btn>();
@@ -215,14 +227,16 @@ public class RomRecordWristMenu : IRomRecordMenu
 
         // ★판 폭을 <b>내용에 맞춘다</b>(09-21). 종전엔 columns(6칸)로 고정이라 항목이 적어도
         //   판이 안 줄었다 — 사용자가 "빈 공간이 너무 많다"고 한 것이 이것이다.
-        float maxRow = 0f, maxCol = 1f;
+        // ★09-22 탭 판: 여러 줄짜리 칸이 생겨 높이는 <b>가장 아래 칸의 바닥</b>이 정한다.
+        //   ★이 판은 그림(icon)·진행 점(dots)을 그리지 않는다 — 지금 쓰는 판은 Meta 판(useMetaUI)이다.
+        float maxBottom = 1f, maxCol = 1f;
         for (int i = 0; i < activeCount; i++)
         {
-            maxRow = Mathf.Max(maxRow, items[i].row);
+            maxBottom = Mathf.Max(maxBottom, items[i].row + RowsOf(items[i]));
             maxCol = Mathf.Max(maxCol, items[i].col + items[i].span);
         }
         panelW = maxCol * cellW + padding * 2f;
-        panelH = (maxRow + 1f) * rowH + padding * 2f;
+        panelH = maxBottom * rowH + padding * 2f;
         // ★판·테두리는 <b>제 크기로 구운 메시</b>다. 스케일로 늘리면 모서리가 타원이 된다.
         FillRoundedRect(plateMesh, panelW, panelH, plateRadius, cornerSegments, plateBottomColor, plateTopColor);
         FillRoundedRect(borderMesh, panelW + borderWidth * 2f, panelH + borderWidth * 2f,
@@ -244,7 +258,9 @@ public class RomRecordWristMenu : IRomRecordMenu
             bool isButton = it.id != null;
             b.quad.gameObject.SetActive(isButton);
             b.fill.gameObject.SetActive(false);
-            b.id = it.id;
+            b.id = it.locked ? null : it.id;   // ★잠긴 칸은 못 누른다 — Poll·Tick이 id null을 건너뛴다
+            b.key = it.key;
+            b.locked = it.locked;
             b.repeat = it.repeat;
             b.selected = it.selected;
             b.holdSeconds = it.holdSeconds;
@@ -254,9 +270,14 @@ public class RomRecordWristMenu : IRomRecordMenu
             b.pressedAt = -99f;
             b.label.text = it.label;
 
+            float rows = RowsOf(it);
             float x = -panelW * 0.5f + padding + (it.col + it.span * 0.5f) * cellW;
-            float y = panelH * 0.5f - padding - (it.row + 0.5f) * rowH;
+            float y = panelH * 0.5f - padding - (it.row + rows * 0.5f) * rowH;
             float w = it.span * cellW - buttonGap;
+            float bh = isButton ? buttonH + (rows - 1f) * rowH : rows * rowH;
+            b.label.fontSize = labelSize * (it.textScale > 0f ? it.textScale : 1f);
+            b.label.alignment = it.alignLeft ? TextAlignmentOptions.MidlineLeft : TextAlignmentOptions.Center;
+            b.label.richText = !isButton;
             if (isButton)
             {
                 // 글자가 칸보다 넓으면 버튼을 넓힌다(옆과 겹칠 수 있어 로그로 알린다)
@@ -268,22 +289,24 @@ public class RomRecordWristMenu : IRomRecordMenu
                 }
                 // ★색 실측: 고르지 않은 버튼은 0.294 회색에 항목 색을 섞고, 고른 버튼은 흰색 a=0.698이다.
                 b.baseColor = it.selected ? selectedColor : MixTint(it.tint);
-                b.scale = new Vector3(w, buttonH, 1f);
+                b.scale = new Vector3(w, bh, 1f);
                 b.quad.localPosition = new Vector3(x, y, 0f);
                 b.quad.localScale = Vector3.one;     // ★크기는 메시가 들고 있다. 스케일은 눌림 연출에만 쓴다
-                FillRoundedRect(b.mesh, w, buttonH, buttonRadius, cornerSegments, Color.white, Color.white);
+                if (it.locked) b.baseColor.a *= 0.45f;
+                FillRoundedRect(b.mesh, w, bh, buttonRadius, cornerSegments, Color.white, Color.white);
                 b.rend.material.color = b.baseColor;
                 b.label.color = it.selected ? selectedLabelColor : labelColor;
+                if (it.locked) b.label.color = new Color(labelColor.r, labelColor.g, labelColor.b, labelColor.a * 0.35f);
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
             }
             else
             {
-                b.label.color = captionColor;
+                b.label.color = it.alignLeft ? labelColor : captionColor;
                 b.label.fontStyle = FontStyles.Normal;
             }
             b.local = new Vector3(x, y, 0f);
-            b.half = new Vector2(w * 0.5f, buttonH * 0.5f);
-            b.label.rectTransform.sizeDelta = new Vector2(Mathf.Max(w, 0.02f), buttonH);
+            b.half = new Vector2(w * 0.5f, bh * 0.5f);
+            b.label.rectTransform.sizeDelta = new Vector2(Mathf.Max(w, 0.02f), bh);
             b.label.transform.localPosition = new Vector3(x, y, -0.001f);   // 버튼보다 조금 앞(눈 쪽)
         }
     }
@@ -292,6 +315,20 @@ public class RomRecordWristMenu : IRomRecordMenu
     {
         if (header != null && header.text != text) header.text = text;
     }
+
+    public void SetText(string key, string text)
+    {
+        if (key == null) return;
+        for (int i = 0; i < activeCount; i++)
+        {
+            Btn b = pool[i];
+            if (b.key != key) continue;
+            if (b.label.text != text) b.label.text = text;
+            return;
+        }
+    }
+
+    private static float RowsOf(RomMenuItem it) => it.rows > 0f ? it.rows : 1f;
 
     /// <summary>
     /// 판을 손목 위에 둔다. <paramref name="hold"/>가 참이면(누르는 손이 다가옴) <b>그 자리에 멈춘다</b>.

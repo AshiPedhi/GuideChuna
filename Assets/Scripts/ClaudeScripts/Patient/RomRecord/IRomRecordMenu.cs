@@ -24,6 +24,12 @@ public interface IRomRecordMenu
 
     void SetHeader(string text);
 
+    /// <summary>
+    /// key가 붙은 글자 칸 하나의 글자만 바꾼다(2026-09-22). ★배치를 다시 짜지 않는다 —
+    /// SetLayout은 쿨다운을 다시 걸어 반복 버튼(±1°)을 끊으므로, 값이 바뀔 때마다 부르면 안 된다.
+    /// </summary>
+    void SetText(string key, string text);
+
     /// <summary>판을 손목 위에 둔다. <paramref name="hold"/>면 그 자리에 멈춘다(가림으로 튀지 않게).</summary>
     void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold);
 
