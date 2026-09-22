@@ -1110,7 +1110,9 @@ public class RomRecordSession : MonoBehaviour
         {
             case 0: frameOrigin = v; break;
             case 1: c7 = v; break;
-            case 2: glab = v; break;
+            // ★미간을 대추보다 낮게 끌 수 없다(2026-09-22 사용자 지시, 마진 없음) — 마커 생성과 같은 규칙이다.
+            //   대추(dragTarget==1) 자신은 기준점이라 이 게이트를 안 건다.
+            case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; break;
             case 9: leftMenu.MoveTo(v); return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
@@ -1248,6 +1250,16 @@ public class RomRecordSession : MonoBehaviour
         {
             Play(sndDeny);
             Debug.Log("[실측기록] 바늘 모드다 — 0°의 바늘을 끌어 맞춘다(점으로 찍으려면 [바늘]을 끈다).");
+            return;
+        }
+
+        // ★대추보다 낮은 자리는 마커로 찍지 않는다(2026-09-22 사용자 지시). 목이 그 위치로 꺾이면
+        //   해부학적으로 불가능하다 — 의식하지 않은 손동작이 아래에서 핀치로 오인되던 것을 막는다.
+        //   마진 없음(사용자 확정): 대추보다 조금이라도 낮으면 컷.
+        if (hasC7 && p.y < c7.y)
+        {
+            Play(sndDeny);
+            Debug.Log($"[실측기록] 대추보다 낮은 자리 {Fmt(p)}(대추 {Fmt(c7)}) — 마커로 찍지 않는다.");
             return;
         }
 
