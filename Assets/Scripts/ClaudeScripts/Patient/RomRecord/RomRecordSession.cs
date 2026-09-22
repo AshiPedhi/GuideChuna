@@ -98,6 +98,11 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float menuFixedSide = -0.38f;
     [Tooltip("고정 판을 잡아 끌 수 있는 반경(m). 판 중심에서 이 안을 핀치로 오므리면 판이 따라온다.")]
     [SerializeField] private float menuGrabRadius = 0.16f;
+    // ★09-22 로그 실측: 판을 옮기려고 가장자리를 집었더니 <b>기준점이 찍혔다</b>(대추·미간이 판 중심에서 18~23cm).
+    //   판 폭이 약 33cm라 중심 반경(0.16)으로는 가장자리가 안 잡히고, 못 잡은 핀치가 «찍기»로 빠졌다.
+    //   «잡았다 — 조작 판» 로그는 한 번도 없었다. → 판 사각형 전체를 이 여유만큼 넓혀 잡는다.
+    [Tooltip("고정 판을 잡는 여유(m). 판 사각형 가장자리에서 이만큼 밖·앞뒤로 이만큼 안에서 오므리면 판이 잡힌다.")]
+    [SerializeField] private float menuGrabMargin = 0.08f;
 
     [Header("=== 손목 판(종전 Quad 판) ===")]
     [Tooltip("판의 칸 너비(m). 판은 6칸 너비다.")]
@@ -230,7 +235,7 @@ public class RomRecordSession : MonoBehaviour
     private AudioClip sndPress, sndRepeat, sndPinch, sndUndo, sndDeny;
 
     // ★Flexion은 09-22부터 «굴곡·신전» 한 단계다. Extension(신전)은 더 안 쓰지만 자리는 남긴다(enum 값과 짝).
-    private static readonly string[] StepTitle = { "기준선 세팅", "대추·미간", "굴곡·신전", "신전", "측굴", "회전", "완료" };
+    private static readonly string[] StepTitle = { "기준선 세팅", "기준점 설정", "굴곡·신전", "신전", "측굴", "회전", "완료" };
 
     private void Start()
     {
@@ -309,7 +314,7 @@ public class RomRecordSession : MonoBehaviour
         ApplyStepButtons();
         BuildSounds();
 
-        Debug.Log("[실측기록] 시작 — 대추·미간부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
+        Debug.Log("[실측기록] 시작 — 기준점 설정부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + $" · 목 중앙 보정 {neckOffsetMm:F0}mm · " +
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
     }
 
@@ -639,19 +644,22 @@ public class RomRecordSession : MonoBehaviour
     private static readonly Color PressTint = new Color(0.32f, 0.20f, 0.32f);    // 압박 — 마커 자홍의 어두운 쪽
     private static readonly Color NeedleTint = new Color(0.18f, 0.29f, 0.30f);   // 바늘 — 표시물 청록의 어두운 쪽
 
-    // ★탭(2026-09-22) — 네 개. 기준선 세팅(Setup)은 대추·미간 탭에 합쳤고(정면 ◀▶),
-    //   ★굴곡·신전은 한 탭·한 단계다(09-22 2차 사용자 피드백 "굴곡 신전 한 단위로 묶기"):
+    // ★위쪽 탭(2026-09-22) — <b>측정값이 있는 것만</b> 셋. 기준점 설정(대추·미간)은 아래 설정 칸으로 내렸다
+    //   (09-22 3차 — 교수님 지시 "위쪽 탭에는 측정값 있는 애들만, 기준점 설정은 설정 칸 쪽에").
+    //   ★굴곡·신전은 한 탭·한 단계다(09-22 2차 "굴곡 신전 한 단위로 묶기"):
     //   둘은 같은 시상면(법선 Right·눈금 0 연직)이라 각도기 하나에 바늘 넷을 두고 앞=굴곡·뒤=신전으로 저절로 가른다 —
     //   측굴이 좌우를 가르는 것과 같은 얼개다. 단계 값은 Flexion을 쓰고 Extension은 더 안 쓴다.
-    //   완료(Done)도 탭이 없다 — 요약은 [나가기]가 남긴다.
+    //   기준선 세팅(Setup)은 기준점 설정에 합쳤고(정면 ◀▶), 완료(Done)는 탭이 없다 — 요약은 [나가기]가 남긴다.
     private static readonly RomRecordStep[] TabSteps =
     {
-        RomRecordStep.Landmarks, RomRecordStep.Flexion, RomRecordStep.LateralFlexion, RomRecordStep.Rotation,
+        RomRecordStep.Flexion, RomRecordStep.LateralFlexion, RomRecordStep.Rotation,
     };
-    private static readonly string[] TabIds = { "tab1", "tab2", "tab3", "tab4" };
-    private static readonly string[] TabValueKeys = { "v1", "v2", "v3", "v4" };
-    private static readonly string[] TabIconNames = { "landmarks", "flexext", "lateral", "rotation" };
-    private readonly Texture2D[] tabIcons = new Texture2D[4];
+    private static readonly string[] TabIds = { "tab2", "tab3", "tab4" };
+    private static readonly string[] TabValueKeys = { "v2", "v3", "v4" };
+    private static readonly string[] TabIconNames = { "flexext", "lateral", "rotation" };
+    private readonly Texture2D[] tabIcons = new Texture2D[3];
+    private Texture2D refIcon;              // 기준점 설정 타일 그림
+    private const string RefId = "tab1", RefStatusKey = "v1";
     private int layoutSig = int.MinValue;   // 배치를 다시 짜야 하는 상태의 지문 — 같으면 글자만 바꾼다
 
     // 탭 아래 값 색 — 바늘·마커와 같은 색(RomRecordVisual.ActiveColor·PassiveColor). 대추 하늘 · 미간 흰색.
@@ -659,29 +667,33 @@ public class RomRecordSession : MonoBehaviour
 
     // 칸 치수(판 칸 단위). ★Meta 판은 칸 4.9cm·줄 4.1cm(씬 값)라 판 폭 6.5칸 ≈ 33cm다 — 설정 팝업(33cm)과 같다.
     private const float BoardSpan = 6.5f, TabRows = 1.8f, ValueBand = 0.7f, ValueScale = 0.95f;
-    private const float CtlSpan = 1.55f, CtlGap = 0.1f;
+    private const float CtlSpan = 1.55f, CtlGap = 0.1f, RefRows = 1.8f, RefStatusRows = 0.5f;
     private static float TabSpan => BoardSpan / TabSteps.Length;
 
     private void LoadTabIcons()
     {
         for (int i = 0; i < tabIcons.Length; i++)
-        {
-            tabIcons[i] = Resources.Load<Texture2D>("RomRecordUI/Icons/" + TabIconNames[i]);
-            if (tabIcons[i] == null)
-                Debug.LogWarning($"[실측기록] ★탭 그림을 못 찾았다(Resources/RomRecordUI/Icons/{TabIconNames[i]}) — 그 탭은 글자만 나온다.");
-        }
+            tabIcons[i] = LoadIcon(TabIconNames[i]);
+        refIcon = LoadIcon("landmarks");
+    }
+
+    private static Texture2D LoadIcon(string name)
+    {
+        var t = Resources.Load<Texture2D>("RomRecordUI/Icons/" + name);
+        if (t == null)
+            Debug.LogWarning($"[실측기록] ★탭 그림을 못 찾았다(Resources/RomRecordUI/Icons/{name}) — 그 칸은 글자만 나온다.");
+        return t;
     }
 
     /// <summary>
-    /// 판 배치(2026-09-22 탭 판). 위에서부터 탭 넷 · 탭마다 그 아래 측정값 · 안내 한 줄+[나가기] · 그 단계 조작.
+    /// 판 배치. 위에서부터 ① 측정 탭 셋과 그 아래 값 ② 안내 한 줄 + [나가기] ③ 설정 칸 —
+    /// 왼쪽에 [기준점 설정] 타일(그림 + 대추·미간 ●●), 오른쪽에 지금 단계의 조작 버튼 세 줄.
     ///
-    /// ★사용자 09-22 1차: "다음을 눌러야 하는 것도 번거롭고, 되돌아갈 때 이전을 몇 번 눌러야 한다 ·
-    ///   텍스트로만 돼 있어 직관적이지 않다 · 측정 정보 글씨가 안 보이고 기준선에서 너무 높다."
-    ///   → [이전]/[다음]을 없애고 탭 하나로 바로 간다(자동 넘김 없음 — 사용자 선택). 탭은 그림+글자.
-    ///   떠 있던 안내판(대추 위 43cm·글자 0.045)은 없앴다.
-    /// ★09-22 2차: "굴곡 신전 한 단위로 · 정보를 탭 아래에 · 각도 색은 밝기·채도로."
-    ///   → 측정값을 판 맨 아래 한 덩어리가 아니라 <b>각 탭 바로 아래</b> 두 줄(굴·신 / 좌·우)로 둔다.
-    /// ★동작 탭은 <b>대추</b>를 찍어야 풀린다 — GoTo와 같은 조건이다(바늘은 미간 없이도 잰다. 사용자 확인).
+    /// ★사용자 09-22 1차: 다음·이전이 번거롭다 · 글자뿐이라 직관적이지 않다 · 떠 있던 측정 정보가 안 보인다.
+    ///   → 탭으로 바로 간다(자동 넘김 없음). 탭은 그림+글자. 떠 있던 안내판은 없앴다.
+    /// ★09-22 2차: 굴곡·신전 한 단위 · 정보를 탭 아래에 · 각도 색은 밝기·채도로.
+    /// ★09-22 3차(교수님): 대추·미간 → «기준점 설정»으로 이름을 바꾸고 위쪽 탭에서 빼 설정 칸에 둔다.
+    /// ★동작 탭은 <b>대추</b>를 찍어야 풀린다 — GoTo와 같은 조건이다(바늘은 미간 없이도 잰다).
     /// ★배치는 <see cref="LayoutSignature"/>가 바뀔 때만 다시 짠다. 값만 바뀌면 SetText로 끝낸다 —
     ///   SetLayout은 쿨다운을 다시 걸어 누르고 있던 반복 버튼(±1°·정면 ◀▶)을 끊기 때문이다.
     /// </summary>
@@ -690,7 +702,7 @@ public class RomRecordSession : MonoBehaviour
         var items = new List<RomMenuItem>(24);
         float tabSpan = TabSpan;
 
-        // ── 탭과 그 아래 값 ──
+        // ── ① 측정 탭과 그 아래 값 ──
         for (int i = 0; i < TabSteps.Length; i++)
         {
             RomRecordStep s = TabSteps[i];
@@ -699,7 +711,7 @@ public class RomRecordSession : MonoBehaviour
                 id = TabIds[i], label = StepTitle[(int)s],
                 col = i * tabSpan, row = 0f, span = tabSpan, rows = TabRows,
                 tint = NavTint, selected = step == s,
-                locked = IsMotion(s) && !hasC7,
+                locked = !hasC7,
                 icon = tabIcons[i],
             });
             items.Add(new RomMenuItem
@@ -709,19 +721,33 @@ public class RomRecordSession : MonoBehaviour
             });
         }
 
-        // ── 안내 한 줄 + [나가기] ──
+        // ── ② 안내 한 줄 + [나가기] ──
         float r = TabRows + ValueBand;
         items.Add(new RomMenuItem { id = null, key = "guide", label = GuideText(), col = 0f, row = r,
                                     span = BoardSpan - CtlSpan, alignLeft = true });
         items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
         r += 1f;
 
-        // ── 그 단계 조작(한 줄에 넷) ──
+        // ── ③ 설정 칸: 왼쪽 [기준점 설정] 타일 ──
+        items.Add(new RomMenuItem
+        {
+            id = RefId, label = StepTitle[(int)RomRecordStep.Landmarks],
+            col = 0f, row = r, span = CtlSpan, rows = RefRows,
+            tint = TargetTint, selected = step == RomRecordStep.Landmarks,
+            icon = refIcon,
+        });
+        items.Add(new RomMenuItem
+        {
+            id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
+            col = 0f, row = r + RefRows, span = CtlSpan, rows = RefStatusRows, textScale = ValueScale,
+        });
+
+        // ── ③ 설정 칸: 오른쪽 조작 버튼(한 줄에 셋) ──
         int n = 0;
         void Ctl(RomMenuItem it)
         {
-            it.col = (n % 4) * (CtlSpan + CtlGap);
-            it.row = r + n / 4;
+            it.col = CtlSpan + CtlGap + (n % 3) * (CtlSpan + CtlGap);
+            it.row = r + n / 3;
             it.span = CtlSpan;
             items.Add(it);
             n++;
@@ -731,18 +757,18 @@ public class RomRecordSession : MonoBehaviour
             Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkTarget == 0));
             Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkTarget == 1));
             Ctl(RomMenuItem.Button("t2", "목중앙", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
+            // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
+            Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
             // ★정면을 다시 잡는 버튼(09-21) — 자동은 처음 한 번뿐이라 여기서 고쳐 잡는다.
             if (hasC7 && hasGlab) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
-            else n++;   // 자리를 비워 둔다 — 미간을 찍는 순간 아랫줄 버튼이 옆으로 밀리지 않게
+            else n++;   // 자리를 비워 둔다 — 미간을 찍는 순간 아랫줄 버튼이 밀리지 않게
             if (landmarkTarget == 2)
             {
                 // 목 중앙은 앞·뒤로만 옮긴다(미간은 그대로)
                 Ctl(RomMenuItem.Button("fwd", "앞", 0, 0, 0, AdjTint, repeat: true));
                 Ctl(RomMenuItem.Button("back", "뒤", 0, 0, 0, AdjTint, repeat: true));
             }
-            // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
-            Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
         }
         else if (IsMotion(step))
         {
@@ -766,18 +792,19 @@ public class RomRecordSession : MonoBehaviour
         layoutSig = LayoutSignature();
     }
 
-    /// <summary>값 글자 칸(안내 + 탭 아래 넷)만 새로 쓴다. 배치는 그대로다.</summary>
+    /// <summary>값 글자 칸(안내 + 탭 아래 셋 + 기준점 상태)만 새로 쓴다. 배치는 그대로다.</summary>
     private void RefreshMenuTexts()
     {
-        string guide = GuideText();
-        leftMenu.SetText("guide", guide);
-        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetText("guide", guide);
+        SetMenuText("guide", GuideText());
+        SetMenuText(RefStatusKey, TabValues(RomRecordStep.Landmarks));
         for (int i = 0; i < TabSteps.Length; i++)
-        {
-            string v = TabValues(TabSteps[i]);
-            leftMenu.SetText(TabValueKeys[i], v);
-            if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetText(TabValueKeys[i], v);
-        }
+            SetMenuText(TabValueKeys[i], TabValues(TabSteps[i]));
+    }
+
+    private void SetMenuText(string key, string text)
+    {
+        leftMenu.SetText(key, text);
+        if (!ReferenceEquals(rightMenu, leftMenu)) rightMenu.SetText(key, text);
     }
 
     /// <summary>
@@ -973,7 +1000,7 @@ public class RomRecordSession : MonoBehaviour
                 break;
             case "nreset": ResetNeedles(); break;
             // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.
-            case "tab1": GoTo(RomRecordStep.Landmarks); break;
+            case "tab1": GoTo(RomRecordStep.Landmarks); break;         // 기준점 설정 타일(설정 칸)
             case "tab2": GoTo(RomRecordStep.Flexion); break;          // 굴곡·신전
             case "tab3": GoTo(RomRecordStep.LateralFlexion); break;
             case "tab4": GoTo(RomRecordStep.Rotation); break;
@@ -1188,7 +1215,7 @@ public class RomRecordSession : MonoBehaviour
         }
         // ★조작 판도 잡아 끈다(09-21 고정 모드) — 자리가 마음에 안 들면 옮긴다.
         if (menuFixedInSpace && leftMenu != null && leftMenu.Placed
-            && Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius)
+            && (leftMenu.Near(p, menuGrabMargin) || Vector3.Distance(p, leftMenu.Position) <= menuGrabRadius))
         {
             startValue = leftMenu.Position;
             return 9;   // ★바늘이 3~6을 쓴다
