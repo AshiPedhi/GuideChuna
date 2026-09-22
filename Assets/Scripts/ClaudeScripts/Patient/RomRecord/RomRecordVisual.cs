@@ -236,6 +236,9 @@ public class RomRecordVisual
         panel = Label("", panelSize, Color.white);
         panel.alignment = TextAlignmentOptions.TopLeft;
         panel.rectTransform.sizeDelta = new Vector2(panelSize * 16f, panelSize * 12f);
+        // ★09-22부터 안내판을 안 쓴다(측정값은 조작 판 탭 아래로). 꺼 둔다 — 켜 두면 월드 원점에 남아
+        //   추적 전(눈도 원점)에 FaceCamera가 영벡터를 돌려 «viewing vector is zero»를 매 프레임 34만 번 찍었다(09-22 로그).
+        panel.gameObject.SetActive(false);
 
         SetLive(false, Vector3.zero);
         for (int i = 0; i < NeedleCount; i++) SetNeedle(i, false, Vector3.zero, Vector3.up, 0.15f, 0.2f, null, false);
@@ -590,6 +593,7 @@ public class RomRecordVisual
 
     public void SetPanel(Vector3 pos, string text)
     {
+        if (!panel.gameObject.activeSelf) panel.gameObject.SetActive(true);
         panel.transform.position = pos;
         if (text != null) panel.text = text;
     }
@@ -627,7 +631,9 @@ public class RomRecordVisual
         {
             var t = facing[i];
             if (!t.gameObject.activeInHierarchy) continue;
-            t.transform.rotation = Quaternion.LookRotation(t.transform.position - eye.position, Vector3.up);
+            Vector3 away = t.transform.position - eye.position;
+            if (away.sqrMagnitude < 1e-8f) continue;   // ★눈과 같은 자리면 돌릴 방향이 없다(추적 전 원점 — 09-22)
+            t.transform.rotation = Quaternion.LookRotation(away, Vector3.up);
         }
     }
 
