@@ -1313,7 +1313,10 @@ public class RomRecordSession : MonoBehaviour
             if (st.closed)
             {
                 if (dragTarget >= 0) ApplyDrag(st.current);
-                else view.SetLive(true, st.current);
+                // ★바늘 모드에서는 «찍는 중» 표시를 아예 안 낸다(2026-09-23 사용자: "바늘 모드일 때
+                //   핀치로 마커 포인트 생기는 거 끄고"). 점은 종전에도 안 찍혔지만 노란 구가 떠서
+                //   <b>찍히는 것처럼 보였다</b> — 핀치는 잡아 끌기 전용이다.
+                else if (!needleOn) view.SetLive(true, st.current);
             }
             if (ev == 2)
             {
@@ -1784,9 +1787,9 @@ public class RomRecordSession : MonoBehaviour
         //   점이 찍혀 "굴곡은 2개까지다"까지 떴다 — 사용자는 바늘을 맞추려던 참이었다. 둘이 섞이면 안 된다.
         if (needleOn)
         {
-            Play(sndDeny);
-            CountMiss(Miss.MarkWhileNeedle, "바늘 모드인데 점을 찍으려 했다");
-            Debug.Log("[실측기록] 바늘 모드다 — 0°의 바늘을 끌어 맞춘다(점으로 찍으려면 [바늘]을 끈다).");
+            // ★거부음도 내지 않는다(09-23) — 바늘 모드에서 핀치는 «잡아 끌기»일 뿐이라,
+            //   아무것도 안 잡힌 핀치는 <b>실수가 아니라 그냥 빈손</b>이다. 수는 계속 센다.
+            CountMiss(Miss.MarkWhileNeedle, "바늘 모드에서 빈 핀치(점은 안 찍힌다)");
             return;
         }
 

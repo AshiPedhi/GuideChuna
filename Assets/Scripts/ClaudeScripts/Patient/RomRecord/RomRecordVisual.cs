@@ -719,9 +719,14 @@ public class RomRecordVisual
         //   ① 수직 비킴 — 능동(짝수) +쪽 · 압박(홀수) −쪽. 한 쌍(좌 또는 우) 안에서 갈라 준다.
         //   ② 반지름 어긋냄 — 쌍 번호(i/2)만큼 밖으로 더 민다. 좌우 바늘이 <b>둘 다 0°에 가까우면</b>
         //      각으로는 안 갈라지므로 ①만으로는 0과 2, 1과 3이 겹친다. 그때를 ②가 막는다.
-        Vector3 side = Vector3.Cross(normal, dir);
-        if (side.sqrMagnitude < 1e-8f) side = Vector3.Cross(Vector3.up, dir);   // 법선∥바늘인 퇴화 상황 대비
-        if (side.sqrMagnitude < 1e-8f) side = Vector3.right;
+        // ★★비키는 방향은 <b>바늘 방향과 무관</b>해야 한다(2026-09-23 사용자: "측굴 보는데 능동이 밑에 있고
+        //   압박이 위로 가 있어서 뒤집어진 것처럼 보여서 헷갈려").
+        //   종전엔 Cross(법선, 바늘방향)이라 <b>바늘이 어디를 가리키느냐에 따라 부호가 뒤집혔다</b> —
+        //   좌 바늘과 우 바늘에서 능동·압박의 위아래가 서로 반대가 됐다.
+        //   → 그 단면 안의 <b>연직</b>으로 고정한다. 능동은 늘 위, 압박은 늘 아래다.
+        //   ★회전(수평 단면)은 면 안에 연직이 없다 — 그때는 월드 연직으로 비킨다(면 밖이어도 위아래가 갈린다).
+        Vector3 side = Vector3.ProjectOnPlane(Vector3.up, normal);
+        if (side.sqrMagnitude < 1e-6f) side = Vector3.up;
         side = side.normalized * (i % 2 == 0 ? 1f : -1f);
         float along = needleLabelAlong + (i / 2) * needleLabelAlongStep;        // i/2는 정수 나눗셈(쌍 번호 0·1)
         needleLabels[i].transform.position =
