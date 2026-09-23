@@ -148,6 +148,9 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float needleHandleOut = 0.16f;
     [Tooltip("미간을 아직 안 찍었을 때 쓸 각도기 반지름(m). 미간이 있으면 중심에서 미간까지를 쓴다.")]
     [SerializeField] private float needleFallbackRadius = 0.18f;
+    // ★바늘 면의 크기(2026-09-23 사용자: "너무 크지 않게 환자 머리 크기 정도만"). 사람 머리 높이 어림이다.
+    //   ★추정값이다 — 기기에서 보고 맞춘다. 회전은 이만큼 <b>아래로</b>, 나머지는 바늘을 가운데 두고 위아래로 벌어진다.
+    [SerializeField] private float needleFinSize = 0.2f;
 
     [Header("=== 나가기 ===")]
     [Tooltip("[나가기]를 이만큼(초) 누르고 있어야 나간다. ★09-21: 지탱하던 손이 스쳐 나가기가 눌렸다.")]
@@ -1376,13 +1379,13 @@ public class RomRecordSession : MonoBehaviour
         // ① 잠근 바늘을 잡으려 했나 = [홀드]가 실제로 막아 준 횟수다.
         if (needleOn && NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
         {
-            float fin = NeedleFin(step);
+            bool hang = NeedleFinHangs(step);
             int count = NeedleCountOf(step);
             for (int k = 0; k < count; k++)
             {
                 int n = mi * NeedlePerStep + k;
                 if (!needleLocked[n]) continue;
-                if (NeedleDistance(p, nc, needleDir[n], nh, fin) <= needleGrabRadius)
+                if (NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang) <= needleGrabRadius)
                 {
                     CountMiss(Miss.LockedNeedle, $"{NeedleName(k)}는 잠겨 있다(홀드가 막았다)");
                     return;
@@ -1452,7 +1455,7 @@ public class RomRecordSession : MonoBehaviour
         if (NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
         {
             int count = NeedleCountOf(step);
-            float fin = NeedleFin(step);
+            bool hang = NeedleFinHangs(step);
             // ★이미 끌어낸 바늘부터 본다 — 손잡이가 흩어져 있어 어느 것을 집는지 분명하다.
             int best = -1;
             float bestD = needleGrabRadius;
@@ -1460,7 +1463,7 @@ public class RomRecordSession : MonoBehaviour
             {
                 int n = mi * NeedlePerStep + k;
                 if (!needleMoved[n] || needleLocked[n]) continue;   // ★잠근 바늘은 안 잡힌다([홀드])
-                float d = NeedleDistance(p, nc, needleDir[n], nh, fin);
+                float d = NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang);
                 if (d <= bestD) { bestD = d; best = k; }
             }
             // ★아직 안 끌어낸 것들은 0°에 포개져 있다 — 그중 <b>첫째</b>를 집는다. 그래서 하나씩 꺼내진다.
@@ -1470,7 +1473,8 @@ public class RomRecordSession : MonoBehaviour
                 {
                     int n = mi * NeedlePerStep + k;
                     if (needleMoved[n] || needleLocked[n]) continue;
-                    if (NeedleDistance(p, nc, needleDir[n], nh, fin) <= needleGrabRadius) { best = k; break; }
+                    if (NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang) <= needleGrabRadius)
+                    { best = k; break; }
                 }
             }
             if (best >= 0) return 3 + best;   // 3·4·5·6 = 바늘 0·1·2·3
@@ -1544,8 +1548,22 @@ public class RomRecordSession : MonoBehaviour
     /// <summary>회전 바늘을 원통 윗 테두리까지 올리는 높이. 다른 단면은 0이다(평면 눈금판이라 가릴 것이 없다).</summary>
     private float NeedleRise(RomRecordStep s) => s == RomRecordStep.Rotation ? cylinderHeight * 0.5f : 0f;
 
-    /// <summary>회전 바늘이 아래로 늘어뜨리는 면의 높이(=원통 높이). 0이면 종전처럼 가는 선이다.</summary>
-    private float NeedleFin(RomRecordStep s) => s == RomRecordStep.Rotation ? cylinderHeight : 0f;
+    /// <summary>
+    /// 바늘 면이 <b>뻗는 방향 × 크기</b>. 0이면 종전처럼 가는 선이다.
+    /// ★회전은 연직으로 선다(수평 단면이라 면을 눕히면 납작해져 안 보인다 — 09-21에 원통으로 바꾼 것과 같은 이유).
+    /// ★나머지는 <b>그 단면 안</b>에서 바늘에 수직이다(09-23 사용자: "측정 단면 안에 눕게").
+    ///   굴곡·신전은 환자 옆에서, 측굴은 앞뒤에서 보므로 단면이 곧 보는 면이다.
+    /// </summary>
+    private Vector3 NeedleFin(RomRecordStep s, Vector3 dir)
+    {
+        if (!IsMotion(s)) return Vector3.zero;
+        if (s == RomRecordStep.Rotation) return Vector3.up * needleFinSize;
+        Vector3 a = Vector3.Cross(RomRecordGeometry.PlaneNormal(s, yaw), dir);
+        return a.sqrMagnitude < 1e-8f ? Vector3.zero : a.normalized * needleFinSize;
+    }
+
+    /// <summary>회전만 면이 한쪽으로 쏠린다 — 원통 윗 테두리에 걸고 아래로 늘어뜨린다.</summary>
+    private static bool NeedleFinHangs(RomRecordStep s) => s == RomRecordStep.Rotation;
 
     /// <summary>바늘 선의 <b>어디서부터</b> 잡히나(손잡이 반지름 배수). 0.35 = 안쪽 1/3은 안 잡힌다.</summary>
     private const float NeedleGrabFrom = 0.35f;
@@ -1556,13 +1574,17 @@ public class RomRecordSession : MonoBehaviour
     /// 빼 둔다 — 중심 근처는 머리 속이라 잡을 일이 없고, 거기까지 열면 마커 찍기를 가로챈다.
     /// 회전은 바늘이 <b>면</b>이라 그 높이 안이면 세로 어디를 잡아도 같게 친다.
     /// </summary>
-    private float NeedleDistance(Vector3 p, Vector3 center, Vector3 dir, float handleRadius, float fin)
+    private float NeedleDistance(Vector3 p, Vector3 center, Vector3 dir, float handleRadius, Vector3 fin, bool hang)
     {
-        if (fin > 0f)
+        float finLen = fin.magnitude;
+        if (finLen > 1e-4f)
         {
-            // 지움: 면 <b>높이 안</b>의 세로 차이만. 면 밖으로 벗어난 세로 거리는 그대로 남는다.
-            float dy = Mathf.Clamp(p.y - center.y, -fin, 0f);
-            p.y = center.y + dy;
+            // 지움: 면 <b>안</b>의 면방향 차이만. 면 밖으로 벗어난 거리는 그대로 남는다.
+            //   회전은 한쪽(아래)으로만 뻗고, 나머지는 바늘을 가운데 두고 양쪽으로 벌어진다.
+            Vector3 u = fin / finLen;
+            float along = Vector3.Dot(p - center, u);
+            float cl = hang ? Mathf.Clamp(along, -finLen, 0f) : Mathf.Clamp(along, -finLen * 0.5f, finLen * 0.5f);
+            p -= u * (along - cl);
         }
         Vector3 a = center + dir * (handleRadius * NeedleGrabFrom);
         Vector3 ab = center + dir * handleRadius - a;
@@ -1676,7 +1698,8 @@ public class RomRecordSession : MonoBehaviour
                 //   종전엔 이름(능1·압1)을 띄웠지만 한글을 뺐고, 능동·압박은 바늘 색의 밝기로 가른다.
                 label = needleMoved[nk] ? d + "°" : "";
             }
-            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k, NeedleFin(step), needleLocked[nk]);
+            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k,
+                           NeedleFin(step, dir), NeedleFinHangs(step), needleLocked[nk]);
         }
     }
 

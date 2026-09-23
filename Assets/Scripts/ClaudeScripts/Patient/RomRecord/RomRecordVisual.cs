@@ -39,6 +39,7 @@ public class RomRecordVisual
     // ★손잡이 크기는 <b>세 상태</b>에서 온다(잡는 중 · 잡히는 자리 · 잠김). SetNeedle과 SetGrabHover가
     //   서로 다른 때에 불려서, 마지막에 부른 쪽이 크기를 덮어쓰면 하이라이트가 조용히 사라진다.
     //   → 상태를 기억해 두고 <see cref="NeedleGripSizeOf"/> 한 곳에서만 크기를 낸다.
+    private readonly LineRenderer[] needleFinEdges = new LineRenderer[NeedleCount];   // 면의 테두리(사각형 네 변)
     private readonly bool[] needleHeld = new bool[NeedleCount];
     private readonly bool[] needleLockedShown = new bool[NeedleCount];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
@@ -118,6 +119,9 @@ public class RomRecordVisual
     public bool hideFarCylinderLabels = true;
 
     public float tickLabelOut = 1.20f;      // 눈금 숫자를 원 밖으로 미는 배수(옛 1.12 — 원에 붙어 있었다)
+    // ★면 안은 반투명이다(2026-09-23 사용자: "면 전체가 진하게 차 있어서 환자 얼굴이 안 보여").
+    //   테두리는 불투명이라 모양과 각은 그대로 읽힌다. 0.16은 <b>기기 미검증 추정</b>이다.
+    public float finFillAlpha = 0.16f;
     public float needleLabelAlong = 0.55f;  // 바늘 방향으로 나가는 거리(반지름 배수)
     public float needleLabelSide = 0.34f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수). 09-21에 0.24에서 넓혔다.
                                             //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.
@@ -222,6 +226,8 @@ public class RomRecordVisual
             Color c = act ? ActiveColor : PassiveColor;
             // 이름은 Build에서 한 번만 만든다(매 프레임 문자열 결합 금지 — 코드 컨벤션).
             needles[i] = Line(act ? "바늘(능동)" + i : "바늘(압박)" + i, c, needleWidth);
+            needleFinEdges[i] = Line(act ? "바늘 면 테두리(능동)" + i : "바늘 면 테두리(압박)" + i, c, needleWidth);
+            needleFinEdges[i].positionCount = 5;   // 사각형 네 귀퉁이 + 처음으로 돌아오기
             needleGrips[i] = Dot("바늘 손잡이" + i, c, needleGripSize);
             needleLabels[i] = Label("", textSize * 1.4f, c);
         }
@@ -617,16 +623,18 @@ public class RomRecordVisual
     /// ★손잡이는 <b>바늘보다 조금 더 밖</b>에 둔다 — 눈금과 겹치면 잡으려다 눈금을 가린다.
     /// </summary>
     public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, float dialRadius, float handleRadius,
-                          string label, bool held, float finHeight = 0f, bool locked = false)
-        => SetNeedle(i, on, center, dir, dialNormal, dialRadius, handleRadius, label, held, finHeight, locked);
+                          string label, bool held, Vector3 fin = default, bool finHang = false, bool locked = false)
+        => SetNeedle(i, on, center, dir, dialNormal, dialRadius, handleRadius, label, held, fin, finHang, locked);
 
     /// <summary>단면 법선을 직접 주는 판. 기억해 둔 법선(<see cref="SetDial"/>)을 안 믿고 싶을 때 쓴다.</summary>
     public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, Vector3 normal, float dialRadius,
-                          float handleRadius, string label, bool held, float finHeight = 0f, bool locked = false)
+                          float handleRadius, string label, bool held, Vector3 fin = default,
+                          bool finHang = false, bool locked = false)
     {
         if (i < 0 || i >= NeedleCount) return;
         Show(needles[i], on);
         Show(needleGrips[i], on);
+        if (!on) Show(needleFinEdges[i], false);
         if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
         needleHeld[i] = held;
         needleLockedShown[i] = locked;
@@ -637,30 +645,56 @@ public class RomRecordVisual
         // ★손잡이는 눈금판보다 <b>더 밖</b>에 둔다. 눈금 반지름에 두면 실제 사람 머리 안에 묻혀
         //   잡을 수가 없다(09-21 사용자 지적 — 내 설계 오류였다).
         Vector3 tip = center + dir * handleRadius;
-        if (finHeight > 0f)
+        float finLen = fin.magnitude;
+        if (finLen > 1e-4f)
         {
-            // ★회전 바늘은 <b>세로 면</b>이다(2026-09-23 사용자) — 원통 윗 테두리에 걸고 원통 높이만큼
-            //   아래로 늘어뜨린다. 선의 폭을 세워 면으로 쓴다(새 메시를 만들지 않는다).
-            //   ★들어오는 center가 이미 윗 테두리다(Session.NeedleVisible이 올려 준다) — 각 계산은 안 바뀐다
-            //     (회전은 단면 법선이 연직이라 투영이 높이 성분을 지운다).
-            Vector3 half = Vector3.up * (finHeight * 0.5f);
-            Seg(needles[i], center - half, tip - half);
+            // ★바늘은 <b>사각형 면</b>이다(2026-09-23 사용자 2차 지시).
+            //   "크고 넓은 모양 말고 그냥 사각형 · 면 전체가 진하게 차 있어서 환자 얼굴이 안 보여 ·
+            //    반투명하게 그리고 테두리만 진하게 · 회전 말고 모든 측정 과정 전부 · 환자 머리 크기 정도만"
+            //   → 채움은 선 폭을 눕혀 쓰고(새 메시를 안 만든다) <b>알파만 낮춘다</b>. 테두리는 따로 그린 네 변이다.
+            //   ★fin은 <b>면이 뻗는 방향×크기</b>다. 회전은 연직(윗 테두리에서 아래로),
+            //     나머지는 그 단면 <b>안</b>에서 바늘에 수직이다(사용자: "측정 단면 안에 눕게").
+            Vector3 half = fin * 0.5f;
+            Vector3 off = finHang ? -half : Vector3.zero;   // 회전만 한쪽으로 쏠린다(윗 테두리에 건다)
+            Vector3 a = center + off, b = tip + off;
+            Seg(needles[i], a, b);
             needles[i].alignment = LineAlignment.TransformZ;
-            Vector3 fnrm = Vector3.Cross(dir, Vector3.up);   // 이 법선이면 면이 세로로 선다
+            Vector3 fnrm = Vector3.Cross(dir, fin);   // 이 법선이면 면이 fin 쪽으로 눕는다
             if (fnrm.sqrMagnitude > 1e-8f)
                 needles[i].transform.rotation = Quaternion.LookRotation(fnrm.normalized, Vector3.up);
-            needles[i].widthMultiplier = finHeight;
+            needles[i].widthMultiplier = finLen;
+
+            // 테두리 — 네 귀퉁이를 한 선으로 돈다(진하게).
+            var e = needleFinEdges[i];
+            Show(e, true);
+            e.SetPosition(0, a - half); e.SetPosition(1, b - half);
+            e.SetPosition(2, b + half); e.SetPosition(3, a + half); e.SetPosition(4, a - half);
+            e.startColor = e.endColor = c;
+            e.widthMultiplier = needleWidth;
+
+            Color fill = c;
+            fill.a = finFillAlpha;   // ★안은 반투명 — 환자 얼굴이 비쳐야 한다
+            needles[i].startColor = needles[i].endColor = fill;
+            needleGrips[i].position = tip + off;
+            needleGrips[i].GetComponent<Renderer>().material.color = c;
+            needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
+            SetNeedleLabel(i, c, label, center + off, dir, dialRadius, normal);
+            return;
         }
-        else
-        {
-            Seg(needles[i], center, tip);
-            needles[i].alignment = LineAlignment.View;
-            needles[i].widthMultiplier = needleWidth;
-        }
+        Show(needleFinEdges[i], false);
+        Seg(needles[i], center, tip);
+        needles[i].alignment = LineAlignment.View;
+        needles[i].widthMultiplier = needleWidth;
         needles[i].startColor = needles[i].endColor = c;
         needleGrips[i].position = tip;
         needleGrips[i].GetComponent<Renderer>().material.color = c;
         needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
+        SetNeedleLabel(i, c, label, center, dir, dialRadius, normal);
+    }
+
+    private void SetNeedleLabel(int i, Color c, string label, Vector3 center, Vector3 dir,
+                                float dialRadius, Vector3 normal)
+    {
         needleLabels[i].color = c;
         if (label != null) needleLabels[i].text = label;
         // ★글자를 바늘 선 위에 그대로 얹으면 선과 겹쳐 둘 다 안 읽힌다(09-21 사용자 지적).
