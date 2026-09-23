@@ -119,9 +119,10 @@ public class RomRecordVisual
     public bool hideFarCylinderLabels = true;
 
     public float tickLabelOut = 1.20f;      // 눈금 숫자를 원 밖으로 미는 배수(옛 1.12 — 원에 붙어 있었다)
-    // ★면 안은 반투명이다(2026-09-23 사용자: "면 전체가 진하게 차 있어서 환자 얼굴이 안 보여").
-    //   테두리는 불투명이라 모양과 각은 그대로 읽힌다. 0.16은 <b>기기 미검증 추정</b>이다.
-    public float finFillAlpha = 0.16f;
+    // ★면 안은 <b>색이 거의 없다</b>(2026-09-23 사용자 정정: "단면 내부 색 거의 없이 반투명하게").
+    //   면이 어디 있는지만 알면 되고, 모양과 각은 <b>테두리</b>가 말한다 — 채움이 진하면 환자가 가린다.
+    //   0.05는 기기 미검증 추정이다(처음 0.16은 아직 진했다).
+    public float finFillAlpha = 0.05f;
     public float needleLabelAlong = 0.55f;  // 바늘 방향으로 나가는 거리(반지름 배수)
     public float needleLabelSide = 0.34f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수). 09-21에 0.24에서 넓혔다.
                                             //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.

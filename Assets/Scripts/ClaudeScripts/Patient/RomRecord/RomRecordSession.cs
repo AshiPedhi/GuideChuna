@@ -1550,17 +1550,13 @@ public class RomRecordSession : MonoBehaviour
 
     /// <summary>
     /// 바늘 면이 <b>뻗는 방향 × 크기</b>. 0이면 종전처럼 가는 선이다.
-    /// ★회전은 연직으로 선다(수평 단면이라 면을 눕히면 납작해져 안 보인다 — 09-21에 원통으로 바꾼 것과 같은 이유).
-    /// ★나머지는 <b>그 단면 안</b>에서 바늘에 수직이다(09-23 사용자: "측정 단면 안에 눕게").
-    ///   굴곡·신전은 환자 옆에서, 측굴은 앞뒤에서 보므로 단면이 곧 보는 면이다.
+    /// ★★<b>면은 그 단계의 각도기와 수직이다</b>(2026-09-23 사용자 정정):
+    ///   "측정하는 축이랑 같은 단면 말고 수직인 면 … 회전할 때 회전 각도기랑 수직인 단면이잖아, 그거랑 같은 구조."
+    ///   → 면이 뻗는 방향 = 그 단면의 <b>법선</b>이다. 회전은 연직, 굴곡·신전은 환자 좌우, 측굴은 환자 앞뒤.
+    ///   ★한 번 «단면 안에 눕게» 만들었다가 정정받았다 — 그러면 바늘과 같은 면이라 각도기에 묻힌다.
     /// </summary>
     private Vector3 NeedleFin(RomRecordStep s, Vector3 dir)
-    {
-        if (!IsMotion(s)) return Vector3.zero;
-        if (s == RomRecordStep.Rotation) return Vector3.up * needleFinSize;
-        Vector3 a = Vector3.Cross(RomRecordGeometry.PlaneNormal(s, yaw), dir);
-        return a.sqrMagnitude < 1e-8f ? Vector3.zero : a.normalized * needleFinSize;
-    }
+        => IsMotion(s) ? RomRecordGeometry.PlaneNormal(s, yaw).normalized * needleFinSize : Vector3.zero;
 
     /// <summary>회전만 면이 한쪽으로 쏠린다 — 원통 윗 테두리에 걸고 아래로 늘어뜨린다.</summary>
     private static bool NeedleFinHangs(RomRecordStep s) => s == RomRecordStep.Rotation;
