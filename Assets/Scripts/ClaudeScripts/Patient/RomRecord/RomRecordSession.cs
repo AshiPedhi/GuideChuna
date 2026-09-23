@@ -1201,6 +1201,7 @@ public class RomRecordSession : MonoBehaviour
             Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
             AimFrontFromLandmarks();
         }
+        landmarkPlacedTime[t == 0 ? 0 : t == 1 ? 1 : 2] = Time.unscaledTime;   // 즉시 고침을 재는 기준
         // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
         int nextT = NextUnsetLandmark();
         Say(DoneVoice(t), nextT >= 0 ? NextVoice(nextT) : "all_done");
@@ -1237,7 +1238,10 @@ public class RomRecordSession : MonoBehaviour
         }
         if (IsMotion(s) && !hasGlab)
             Debug.Log("[실측기록] ★미간이 없다 — 점찍기는 각이 안 나온다. 바늘로 눈금 각만 기록된다.");
+        // ★단계를 넘길 때마다 오조작을 쏟는다 — 어느 단계에서 얼마나 헛손질했는지 갈리게(09-23).
+        DumpMisses($"{StepTitle[(int)step]} 떠남");
         step = s;
+        lastNeedleTouched = -1;   // ★[홀드]가 <b>다른 단계</b>의 바늘을 잠그지 않게 한다
         ApplyStepButtons();
         Debug.Log($"[실측기록] 단계 → {StepTitle[(int)step]}");
         if (step == RomRecordStep.Done) LogSummary();
@@ -1247,6 +1251,7 @@ public class RomRecordSession : MonoBehaviour
     {
         LogSummary();
         Debug.Log("[실측기록] 나가기 → " + lobbySceneName);
+        DumpMisses("나가기");
         SceneLoader.LoadScene(lobbySceneName);
     }
 
@@ -1283,8 +1288,21 @@ public class RomRecordSession : MonoBehaviour
             if (dragTarget >= 0)
             {
                 dragGrabbedAt = st.current;
+                dragStartTime = Time.unscaledTime;
                 Play(sndPress);
                 Debug.Log($"[실측기록] 잡았다 — {DragName(dragTarget)}");
+                // ★놓은 지 얼마 안 된 것을 다시 잡았다 = 직전에 놓은 자리가 틀렸다는 신호다.
+                if (dragTarget >= 3 && dragTarget <= 6
+                    && Time.unscaledTime - needleEndTime[dragTarget - 3] < 3f)
+                    CountMiss(Miss.QuickRedoNeedle, $"{NeedleName(dragTarget - 3)}를 놓자마자 다시 잡았다");
+                int lm = dragTarget == 1 ? 0 : dragTarget == 2 ? 1 : dragTarget == 8 ? 2 : -1;
+                if (lm >= 0 && Time.unscaledTime - landmarkPlacedTime[lm] < 5f)
+                    CountMiss(Miss.QuickFixLandmark, $"{LandmarkName(lm == 1 ? 1 : lm == 2 ? 2 : 0)}를 찍자마자 옮긴다");
+            }
+            else
+            {
+                // ★잡을 것이 없었다 — <b>왜</b> 없었는지를 센다(핀치는 여기서 «찍기»로 넘어간다).
+                CountNearMiss(st.current);
             }
         }
         if (liveActive && livePinchLeft == isLeft)
@@ -1348,6 +1366,36 @@ public class RomRecordSession : MonoBehaviour
     private bool InMenuGrabZone(Vector3 p) =>
         menuFixedInSpace && leftMenu != null && leftMenu.Placed
         && leftMenu.Near(p, menuGrabMargin);
+
+    /// <summary>
+    /// 잡을 것이 없이 오므렸을 때, <b>거의 잡힐 뻔한 것</b>을 센다(2026-09-23).
+    /// ★여기서만 센다 — <see cref="FindDragTarget"/> 안에서 세면 하이라이트 때문에 매 프레임 불려 수가 터진다.
+    /// </summary>
+    private void CountNearMiss(Vector3 p)
+    {
+        // ① 잠근 바늘을 잡으려 했나 = [홀드]가 실제로 막아 준 횟수다.
+        if (needleOn && NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
+        {
+            float fin = NeedleFin(step);
+            int count = NeedleCountOf(step);
+            for (int k = 0; k < count; k++)
+            {
+                int n = mi * NeedlePerStep + k;
+                if (!needleLocked[n]) continue;
+                if (NeedleDistance(p, nc, needleDir[n], nh, fin) <= needleGrabRadius)
+                {
+                    CountMiss(Miss.LockedNeedle, $"{NeedleName(k)}는 잠겨 있다(홀드가 막았다)");
+                    return;
+                }
+            }
+        }
+        // ② 판 <b>언저리</b>에서 오므렸나. 09-22의 진범이 이 형태였다(판 앞 10~26cm의 조기 핀치).
+        if (menuFixedInSpace && leftMenu != null && leftMenu.Placed
+            && leftMenu.Near(p, menuGrabMargin + 0.12f))
+        {
+            CountMiss(Miss.NearPlate, "판을 잡으려다 조금 일찍 오므렸다(테두리가 켜진 뒤에 오므린다)");
+        }
+    }
 
     // ★판 잡기 하이라이트(09-22 사용자: "잡을 수 있는 상태에 들어왔다는 하이라이트가 있으면").
     //   09-22 로그: 판을 잡으러 가다 조금 일찍(판 앞 10~26cm) 오므린 핀치가 대추·미간을 덮어썼다.
@@ -1559,6 +1607,11 @@ public class RomRecordSession : MonoBehaviour
 
     private void EndDrag()
     {
+        // ★잡자마자 놓았다 = 잡을 뜻이 없었을 가능성이 크다(2026-09-23 계수).
+        if (Time.unscaledTime - dragStartTime < 0.25f)
+            CountMiss(Miss.ShortGrab, $"{DragName(dragTarget)}를 {(Time.unscaledTime - dragStartTime) * 1000f:F0}ms 만에 놓았다");
+        if (dragTarget >= 3 && dragTarget <= 6) needleEndTime[dragTarget - 3] = Time.unscaledTime;
+
         if (dragTarget >= 3 && dragTarget <= 6 && NeedleVisible(out _, out _, out Vector3 z, out _, out _, out int mi))
         {
             int k = dragTarget - 3;
@@ -1700,6 +1753,7 @@ public class RomRecordSession : MonoBehaviour
                     nextLockedVoice = Time.unscaledTime + 8f;   // ★8초에 한 번만 말한다 — 스친 손마다 말하면 시끄럽다
                     Say("locked");
                 }
+                CountMiss(Miss.PinchIgnored, "기준점은 버튼으로 찍는다(핀치로는 안 찍힌다)");
                 Debug.Log($"[실측기록] 기준점 핀치 무시 — 손가락을 대고 버튼을 누른다 · 자리 {Fmt(p)}");
                 return;
 
@@ -1712,6 +1766,7 @@ public class RomRecordSession : MonoBehaviour
         if (needleOn)
         {
             Play(sndDeny);
+            CountMiss(Miss.MarkWhileNeedle, "바늘 모드인데 점을 찍으려 했다");
             Debug.Log("[실측기록] 바늘 모드다 — 0°의 바늘을 끌어 맞춘다(점으로 찍으려면 [바늘]을 끈다).");
             return;
         }
@@ -1722,6 +1777,7 @@ public class RomRecordSession : MonoBehaviour
         if (hasC7 && p.y < c7.y)
         {
             Play(sndDeny);
+            CountMiss(Miss.BelowC7, "대추보다 낮은 자리라 안 찍는다");
             Debug.Log($"[실측기록] 대추보다 낮은 자리 {Fmt(p)}(대추 {Fmt(c7)}) — 마커로 찍지 않는다.");
             return;
         }
@@ -1810,6 +1866,62 @@ public class RomRecordSession : MonoBehaviour
                   $"자리 {Fmt(m.raw)} · 수정 {m.adjustDeg:+0;-0;0}°");
     }
 
+    // ── 오조작 계수(2026-09-23 신설) ──────────────────────────────────
+    // ★★왜 세는가: 09-22에 «어느 오조작이 진범인지»를 셋 다 의심하다가, 로그를 <b>종류별로 세고</b>
+    //   나서야 «판 앞 10~26cm의 조기 핀치»라는 답이 나왔다. 지금 입력 구조를 고치자는 이야기가 있는데,
+    //   무엇이 실제로 많은지는 <b>아직 안 세어 봤다</b>. 고치기 전에 한 판 세어 본다.
+    // ★자기 침묵이다(log-first §②ⓑ) — 잘 돌면 한 줄도 안 남기고, 막힐 때만 종류별로 2초에 한 번 말한다.
+    //   ★대신 <b>세는 것은 매번</b> 센다. 말하지 않은 것도 수에는 들어간다.
+    private enum Miss
+    {
+        PinchIgnored = 0,   // 기준점 단계에서 핀치했는데 아무것도 안 잡혔다(찍으려던 손으로 본다)
+        NearPlate,          // 판 잡기 범위 <b>언저리</b>에서 오므렸는데 판이 안 잡혔다
+        LockedNeedle,       // 잠근 바늘(홀드)을 잡으려 했다 = 홀드가 실제로 막아 준 횟수
+        ShortGrab,          // 잡자마자(0.25초 안에) 놓았다 — 의도한 잡기가 아니었을 가능성
+        MarkWhileNeedle,    // 바늘 모드인데 마커를 찍으려 했다(모드 경합)
+        BelowC7,            // 대추보다 낮은 자리를 찍으려 했다
+        QuickRedoNeedle,    // 바늘을 놓고 3초 안에 같은 바늘을 다시 끌었다 = 놓은 자리가 틀렸다
+        QuickFixLandmark,   // 기준점을 찍고 5초 안에 그 점을 잡아 끌었다 = 찍힌 자리가 틀렸다
+        Count,
+    }
+
+    private static readonly string[] MissName =
+    {
+        "기준점 핀치 무시", "판 언저리 헛핀치", "잠긴 바늘 건드림", "스친 잡기",
+        "바늘 모드에서 찍기", "대추보다 낮은 자리", "바늘 즉시 고침", "기준점 즉시 고침",
+    };
+
+    private readonly int[] missCount = new int[(int)Miss.Count];
+    private readonly float[] nextMissLog = new float[(int)Miss.Count];
+    private float dragStartTime;                                   // 스친 잡기를 재는 시각
+    private readonly float[] needleEndTime = new float[NeedlePerStep];      // 그 바늘을 놓은 시각
+    private readonly float[] landmarkPlacedTime = new float[3];            // 0 대추 · 1 미간 · 2 외이도
+
+    private void CountMiss(Miss m, string detail)
+    {
+        int i = (int)m;
+        missCount[i]++;
+        if (Time.unscaledTime < nextMissLog[i]) return;
+        nextMissLog[i] = Time.unscaledTime + 2f;
+        Debug.Log($"<color=orange>[실측기록·오조작] {MissName[i]} {missCount[i]}회 — {detail}</color>");
+    }
+
+    /// <summary>지금까지의 오조작을 한 줄로 쏟는다. ★0인 종류는 안 적는다 — 0이 줄줄이 있으면 안 읽힌다.</summary>
+    private void DumpMisses(string when)
+    {
+        sb.Clear();
+        int total = 0;
+        for (int i = 0; i < (int)Miss.Count; i++)
+        {
+            if (missCount[i] == 0) continue;
+            total += missCount[i];
+            sb.Append(MissName[i]).Append(' ').Append(missCount[i]).Append("회 · ");
+        }
+        Debug.Log(total == 0
+            ? $"[실측기록·오조작] {when} — 없음"
+            : $"[실측기록·오조작] {when} 합 {total}회 — {sb}");
+    }
+
     private void LogSummary()
     {
         sb.Clear();
@@ -1854,6 +1966,7 @@ public class RomRecordSession : MonoBehaviour
             sb.Append('\n');
         }
         Debug.Log(sb.ToString());
+        DumpMisses("이번 판 전체");   // ★요약 끝에 오조작 집계를 붙인다(09-23)
     }
 
     private static string Fmt(Vector3 v) => $"({v.x:F3}, {v.y:F3}, {v.z:F3})";
