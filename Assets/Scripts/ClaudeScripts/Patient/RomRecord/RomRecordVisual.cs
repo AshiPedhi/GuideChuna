@@ -41,6 +41,7 @@ public class RomRecordVisual
     //   → 상태를 기억해 두고 <see cref="NeedleGripSizeOf"/> 한 곳에서만 크기를 낸다.
     private readonly LineRenderer[] needleFinEdges = new LineRenderer[NeedleCount];   // 면의 테두리(사각형 네 변)
     private readonly bool[] needleHeld = new bool[NeedleCount];
+    private readonly bool[] needleFinShown = new bool[NeedleCount];   // 지금 면으로 그렸나(하이라이트가 알파를 지켜야 한다)
     private readonly bool[] needleLockedShown = new bool[NeedleCount];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
     private Transform c7Dot, glabDot, liveDot, pivotDot, earDot;
@@ -315,7 +316,21 @@ public class RomRecordVisual
                     : on ? GrabHoverColor
                     : i % 2 == 0 ? ActiveColor : PassiveColor;
             needleGrips[i].GetComponent<Renderer>().material.color = c;
-            needles[i].startColor = needles[i].endColor = c;
+            // ★★면으로 그린 바늘은 <b>채움 알파를 지키면서</b> 색만 바꾼다(2026-09-23 사용자:
+            //   "하이라이트 할 때 단면이 불투명하게 꽉 차 버려서"). 종전엔 여기서 불투명한 하이라이트 색을
+            //   그대로 덮어써, 손을 가져가는 순간 면이 꽉 찼다 — <b>SetNeedle이 준 알파를 잃은 것</b>이다.
+            //   밝아지는 것은 <b>테두리와 손잡이</b>가 맡는다. 그것만으로 "잡힌다"가 읽힌다.
+            if (needleFinShown[i])
+            {
+                Color fill = c;
+                fill.a = finFillAlpha;
+                needles[i].startColor = needles[i].endColor = fill;
+                needleFinEdges[i].startColor = needleFinEdges[i].endColor = c;
+            }
+            else
+            {
+                needles[i].startColor = needles[i].endColor = c;
+            }
             return;
         }
         Transform dot = t == 0 ? pivotDot : t == 1 ? c7Dot : t == 2 ? glabDot : t == 8 ? earDot : null;
@@ -639,6 +654,7 @@ public class RomRecordVisual
         if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
         needleHeld[i] = held;
         needleLockedShown[i] = locked;
+        needleFinShown[i] = on && fin.sqrMagnitude > 1e-8f;
         if (!on) return;
 
         Color baseC = i % 2 == 0 ? ActiveColor : PassiveColor;   // 짝수 능동 · 홀수 압박(좌우는 방향이 가른다)
