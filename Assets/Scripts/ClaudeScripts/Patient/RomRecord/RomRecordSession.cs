@@ -198,11 +198,11 @@ public class RomRecordSession : MonoBehaviour
     private bool hasC7, hasGlab, hasEar;
     private Vector3 c7, glab, ear;
     private int landmarkTarget;            // 0 대추 · 1 미간 · 2 외이도(09-22 — 목중앙 자리를 이어받았다)
-    // ★찍기 대기(09-22 사용자): 버튼을 눌러야 그 기준점을 찍을 수 있고, 한 번 찍으면 대기가 풀린다.
-    //   "모든 기준점은 한번 지정하면 내가 다시 탭을 누르기 전까지는 설정이 안 되게. 잡아서 이동은 괜찮아."
-    //   09-22 로그: 판을 잡으러 가다 일찍 오므린 핀치가 대추·미간을 조용히 덮어썼다 — 그걸 막는 문이다.
-    //   처음엔 대추만 대기다(시작하자마자 찍을 수 있게).
-    private bool landmarkArmed = true;
+    // ★★기준점은 <b>버튼을 누르는 순간</b> 찍힌다(2026-09-23 사용자: "핀치는 너무 흔들린다").
+    //   손가락을 목표 자리에 대고 반대 손으로 [대추]·[외이도]·[미간]을 누른다.
+    //   09-22의 «찍기 대기(landmarkArmed)»는 없앴다 — 핀치로 찍지 않으니 덮어쓸 일 자체가 없어졌다.
+    //   (그 대기는 «판을 잡으러 가다 일찍 오므린 핀치가 기준점을 덮어쓰는» 것을 막으려던 문이었다.)
+    private bool lastPressWasRight = true;   // 방금 버튼을 누른 손 — 반대 손 검지끝이 목표점이다
     private readonly List<RomRecordMark>[] marks =
     {
         new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(), new List<RomRecordMark>(),
@@ -226,6 +226,11 @@ public class RomRecordSession : MonoBehaviour
     private readonly Vector3[] needleDir = new Vector3[4 * NeedlePerStep];
     private readonly bool[] needlePlaced = new bool[4 * NeedlePerStep];
     private readonly bool[] needleMoved = new bool[4 * NeedlePerStep];   // 0°에서 끌어냈나 = 기록됐나
+    // ★[홀드](2026-09-23 사용자: "니들 위치 조정하고 나면 홀드 버튼 기능이 있어야겠어") —
+    //   맞춰 놓은 바늘을 잠가 스쳐도 안 끌리게 한다. 잠긴 바늘은 FindDragTarget이 아예 건너뛴다.
+    //   ★값(needleMoved)은 안 지운다 — 잠금은 «안 움직임»이지 «안 셈»이 아니다.
+    private readonly bool[] needleLocked = new bool[4 * NeedlePerStep];
+    private int lastNeedleTouched = -1;   // 이 단계에서 마지막으로 만진 바늘(k). [홀드]가 이것을 잠근다
     private bool needleOn = true;
     // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 조작 판 · -1 아무것도 안 잡음(«찍기»로 간다)
     private int dragTarget = -1;
@@ -601,8 +606,10 @@ public class RomRecordSession : MonoBehaviour
         }
     }
 
+    // ★2026-09-23 사용자 지시로 <b>회전은 다시 대추 축</b>이다. 외이도 축은 굴곡·신전에만 쓴다.
+    //   (09-22엔 회전도 외이도를 정중면으로 옮긴 점을 축으로 썼다 — 두 축의 차이는 녹화에서 8~9°였다.)
     private static bool UsesEar(RomRecordStep s) =>
-        s == RomRecordStep.Flexion || s == RomRecordStep.Extension || s == RomRecordStep.Rotation;
+        s == RomRecordStep.Flexion || s == RomRecordStep.Extension;
 
     private string PivotName(RomRecordStep s) => hasC7 && hasEar && UsesEar(s) ? "외이도" : "대추";
 
@@ -681,6 +688,8 @@ public class RomRecordSession : MonoBehaviour
             if (fid != null)
             {
                 lastPressTime = Time.unscaledTime;
+                // ★누른 손을 남긴다 — 기준점 버튼이 <b>반대 손</b> 검지끝을 목표점으로 쓴다(09-23).
+                lastPressWasRight = useRight;
                 Play(fid == "undo" ? sndUndo : frep ? sndRepeat : sndPress);
                 OnButton(fid);
             }
@@ -698,11 +707,14 @@ public class RomRecordSession : MonoBehaviour
         leftMenu.Follow(lw, lwp.position, eye, menuHoldL);
         rightMenu.Follow(rw, rwp.position, eye, menuHoldR);
 
+        // ★왼손목 판은 오른 검지가, 오른손목 판은 왼 검지가 누른다 — 누른 손이 판으로 갈린다(09-23).
         string id = leftMenu.Poll(rIdx, rTip);
         bool repeat = leftMenu.LastRepeat;
-        if (id == null) { id = rightMenu.Poll(lIdx, lTip); repeat = rightMenu.LastRepeat; }
+        bool pressedRight = true;
+        if (id == null) { id = rightMenu.Poll(lIdx, lTip); repeat = rightMenu.LastRepeat; pressedRight = false; }
         if (id != null)
         {
+            lastPressWasRight = pressedRight;
             lastPressTime = Time.unscaledTime;
             Play(id == "undo" ? sndUndo : repeat ? sndRepeat : sndPress);
             OnButton(id);
@@ -840,9 +852,9 @@ public class RomRecordSession : MonoBehaviour
         if (step == RomRecordStep.Landmarks)
         {
             // ★밝은 버튼 = 지금 찍기 대기인 점. 찍고 나면 어느 것도 밝지 않다(다시 누르기 전까지 안 바뀐다).
-            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 0));
-            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 2));
-            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkArmed && landmarkTarget == 1));
+            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: hasC7));
+            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: hasEar));
+            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: hasGlab));
             // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
             Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
             Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
@@ -855,7 +867,12 @@ public class RomRecordSession : MonoBehaviour
             // ★★바늘을 쓰면 버튼이 거의 필요 없다(09-21 "손이 너무 많이 가면 안 돼").
             //   끌어낸 자리가 곧 기록이라 [기록]이 없고, ±1°도 바늘을 다시 끌면 된다.
             Ctl(RomMenuItem.Button("needle", "바늘", 0, 0, 0, NeedleTint, selected: needleOn));
-            if (needleOn) Ctl(RomMenuItem.Button("nreset", "다시", 0, 0, 0, UndoTint));
+            if (needleOn)
+            {
+                // ★[홀드](09-23) — 마지막으로 맞춘 바늘을 잠가 스쳐도 안 끌리게 한다. 다시 누르면 풀린다.
+                Ctl(RomMenuItem.Button("nhold", "홀드", 0, 0, 0, NeedleTint, selected: IsLastNeedleLocked));
+                Ctl(RomMenuItem.Button("nreset", "다시", 0, 0, 0, UndoTint));
+            }
             else
             {
                 // 점찍기로 쓸 때만 다듬기 버튼을 낸다.
@@ -897,7 +914,7 @@ public class RomRecordSession : MonoBehaviour
         {
             int h = (int)step;
             h = h * 31 + landmarkTarget;
-            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (landmarkArmed ? 16 : 0);
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (IsLastNeedleLocked ? 16 : 0);
             return h;
         }
     }
@@ -986,14 +1003,10 @@ public class RomRecordSession : MonoBehaviour
     {
         if (step == RomRecordStep.Landmarks)
         {
-            // ★대기 중이면 그 점을, 아니면 다음에 누를 버튼을 말한다(자동으로 넘어가지 않는다 — 09-22 사용자).
-            if (landmarkArmed)
-                return landmarkTarget == 0 ? "대추에 핀치하세요 (기준점)"
-                     : landmarkTarget == 2 ? "외이도에 핀치하세요 (귓구멍 입구, 어느 쪽이든)"
-                     : "중립 자세에서 미간에 핀치하세요";
+            // ★손가락을 대고 버튼을 누른다(09-23) — 핀치로는 안 찍힌다. 자동으로 넘어가지 않는다(09-22 사용자).
             int next = NextUnsetLandmark();
-            return next >= 0 ? $"다음: {LandmarkName(next)} — [{LandmarkName(next)}] 버튼을 누르세요"
-                             : "기준점 완료 — 다시 찍으려면 버튼을 누르세요";
+            return next >= 0 ? $"{LandmarkName(next)}에 손가락을 대고 [{LandmarkName(next)}]를 누르세요"
+                             : "기준점 완료 — 다시 찍으려면 대고 누르세요";
         }
         if (!IsMotion(step)) return "";
         int mi = MotionIndex(step);
@@ -1087,6 +1100,7 @@ public class RomRecordSession : MonoBehaviour
                 ApplyStepButtons();
                 break;
             case "nreset": ResetNeedles(); break;
+            case "nhold": ToggleNeedleHold(); break;
             // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.
             case "tab1": GoTo(RomRecordStep.Landmarks); break;         // 기준점 설정 타일(설정 칸)
             case "tab2": GoTo(RomRecordStep.Flexion); break;          // 굴곡·신전
@@ -1137,14 +1151,61 @@ public class RomRecordSession : MonoBehaviour
                   $"(수평 거리 {flat.magnitude * 100f:F0}cm · ↺↻로 다듬는다){warn}");
     }
 
-    /// <summary>기준점 버튼 — 그 점을 찍기 대기로 둔다. ★같은 버튼을 다시 눌러도 대기가 된다(다시 찍고 싶을 때).</summary>
+    /// <summary>
+    /// 기준점 버튼 — ★<b>누르는 순간</b> 그 자리에 찍는다(2026-09-23 사용자: "핀치는 너무 흔들린다").
+    /// 자리는 <b>버튼을 누른 손의 반대 손</b> 검지끝이다. 오른손으로 누르면 왼손 검지끝이 목표점이다.
+    /// ★반대 손을 쓰는 이유: 누르는 손 자신을 목표점으로 삼으면 판 앞에 점이 찍힌다.
+    /// </summary>
     private void SetTarget(int t)
     {
-        landmarkTarget = t;
-        landmarkArmed = true;
-        ApplyStepButtons();   // 대기 중인 버튼만 밝힌다
-        Say(ArmVoice(t));
-        Debug.Log($"[실측기록] 찍기 대기 — {LandmarkName(t)}");
+        bool pointerLeft = lastPressWasRight;   // 오른손으로 눌렀으면 왼손이 가리키는 손이다
+        if (!hands.TryJoint(pointerLeft, HandJointId.HandIndexTip, out Vector3 p))
+        {
+            Play(sndDeny);
+            Debug.Log($"[실측기록] {LandmarkName(t)}를 못 찍는다 — " +
+                      $"{(pointerLeft ? "왼손" : "오른손")} 검지가 안 잡힌다(그 손을 목표 자리에 두고 누른다).");
+            return;
+        }
+        landmarkTarget = t;   // ±1mm 다듬기(Nudge)가 이 점을 본다
+        PlaceLandmark(t, p);
+    }
+
+    /// <summary>
+    /// 기준점 하나를 그 자리에 세운다. ★찍는 <b>수단</b>(버튼·핀치)과 <b>결과</b>를 갈라 둔다 —
+    /// 2026-09-23에 핀치에서 버튼으로 옮기면서, 로그·음성·정면 재계산이 딸려 오도록 한 곳에 모았다.
+    /// </summary>
+    private void PlaceLandmark(int t, Vector3 p)
+    {
+        if (t == 0)
+        {
+            c7 = p; hasC7 = true;
+            Play(sndPinch);
+            Debug.Log($"[실측기록] 대추 {Fmt(c7)}");
+        }
+        else if (t == 2)
+        {
+            ear = p; hasEar = true;
+            Play(sndPinch);
+            // ★외이도는 대추보다 위다 — 낮으면 잘못 찍었을 가능성이 크다.
+            //   정중면에서 옆으로 얼마나 떨어졌나도 남긴다(한쪽 귀라 6~8cm쯤이어야 한다 — 추정. 정면을 잡은 뒤라야 뜻이 있다).
+            string warn = hasC7 && ear.y < c7.y ? " ★대추보다 낮다 — 잘못 찍었는지 본다" : "";
+            Debug.Log($"[실측기록] 외이도 {Fmt(ear)}" +
+                      (hasC7 ? $" · 대추에서 위로 {(ear.y - c7.y) * 100f:F1}cm" +
+                               $" · 정중면에서 옆으로 {Mathf.Abs(Vector3.Dot(ear - c7, RomRecordGeometry.Right(yaw))) * 100f:F1}cm" +
+                               $" · 축 {Fmt(EarAxis)}" : "") + warn);
+        }
+        else
+        {
+            glab = p; hasGlab = true;
+            Play(sndPinch);
+            Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
+            AimFrontFromLandmarks();
+        }
+        // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
+        int nextT = NextUnsetLandmark();
+        Say(DoneVoice(t), nextT >= 0 ? NextVoice(nextT) : "all_done");
+        ApplyStepButtons();
+        dirty = true;
     }
 
     private static string LandmarkName(int t) => t == 0 ? "대추" : t == 2 ? "외이도" : "미간";
@@ -1294,8 +1355,30 @@ public class RomRecordSession : MonoBehaviour
     private int menuHighlight = -1;
     private int menuHoverCount;   // 잡기 준비에 들어간 횟수 — 요약에 남긴다
 
+    /// <summary>
+    /// ★★"모든 오브젝트는 그랩되기 전에 «지금 잡으면 잡힌다»는 하이라이트가 필수다"(2026-09-23 사용자).
+    /// ★판정은 <b>실제로 잡을 때 쓰는 <see cref="FindDragTarget"/> 그대로</b>를 태운다 —
+    ///   따로 계산하면 하이라이트가 거짓말을 한다(규칙 9. 09-01에 실제로 밟았다).
+    /// 잡는 자리는 엄지·검지 사이(오므리면 핀치가 생기는 자리)다 — 핀치 판정과 같은 점이다.
+    /// </summary>
+    private int HoverTargetNow()
+    {
+        if (dragTarget >= 0) return dragTarget;      // 잡고 있는 동안은 그것이 계속 밝다
+        int t = HoverOfHand(false);                  // 오른손 먼저
+        return t >= 0 ? t : HoverOfHand(true);
+    }
+
+    private int HoverOfHand(bool left)
+    {
+        if (!hands.TryJoint(left, HandJointId.HandThumbTip, out Vector3 th)
+            || !hands.TryJoint(left, HandJointId.HandIndexTip, out Vector3 ix)) return -1;
+        return FindDragTarget((th + ix) * 0.5f, out _);
+    }
+
     private void UpdateMenuHighlight()
     {
+        view.SetGrabHover(HoverTargetNow());
+
         int level = dragTarget == 9 ? 2
                   : !liveActive && (HandInMenuGrabZone(true) || HandInMenuGrabZone(false)) ? 1
                   : 0;
@@ -1321,14 +1404,15 @@ public class RomRecordSession : MonoBehaviour
         if (NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
         {
             int count = NeedleCountOf(step);
+            float fin = NeedleFin(step);
             // ★이미 끌어낸 바늘부터 본다 — 손잡이가 흩어져 있어 어느 것을 집는지 분명하다.
             int best = -1;
             float bestD = needleGrabRadius;
             for (int k = 0; k < count; k++)
             {
                 int n = mi * NeedlePerStep + k;
-                if (!needleMoved[n]) continue;
-                float d = Vector3.Distance(p, nc + needleDir[n] * nh);
+                if (!needleMoved[n] || needleLocked[n]) continue;   // ★잠근 바늘은 안 잡힌다([홀드])
+                float d = NeedleDistance(p, nc, needleDir[n], nh, fin);
                 if (d <= bestD) { bestD = d; best = k; }
             }
             // ★아직 안 끌어낸 것들은 0°에 포개져 있다 — 그중 <b>첫째</b>를 집는다. 그래서 하나씩 꺼내진다.
@@ -1337,8 +1421,8 @@ public class RomRecordSession : MonoBehaviour
                 for (int k = 0; k < count; k++)
                 {
                     int n = mi * NeedlePerStep + k;
-                    if (needleMoved[n]) continue;
-                    if (Vector3.Distance(p, nc + needleDir[n] * nh) <= needleGrabRadius) { best = k; break; }
+                    if (needleMoved[n] || needleLocked[n]) continue;
+                    if (NeedleDistance(p, nc, needleDir[n], nh, fin) <= needleGrabRadius) { best = k; break; }
                 }
             }
             if (best >= 0) return 3 + best;   // 3·4·5·6 = 바늘 0·1·2·3
@@ -1357,7 +1441,7 @@ public class RomRecordSession : MonoBehaviour
         }
         if (step != RomRecordStep.Landmarks) return -1;
 
-        // 찍혀 있는 점만 잡는다. 아직 안 찍은 것은 종전대로 핀치로 찍는다.
+        // 찍혀 있는 점만 잡는다. 아직 안 찍은 것은 [대추]·[외이도]·[미간] 버튼으로 찍는다(09-23).
         // ★가장 가까운 점을 잡는다(대추·외이도·미간 — 09-22 추가).
         float dC7 = hasC7 ? Vector3.Distance(p, c7) : float.MaxValue;
         float dGl = hasGlab ? Vector3.Distance(p, glab) : float.MaxValue;
@@ -1386,6 +1470,10 @@ public class RomRecordSession : MonoBehaviour
             return false;
         }
         handleRadius = radius + needleHandleOut;
+        // ★회전 바늘은 원통 <b>윗 테두리</b> 높이에 건다(2026-09-23 사용자) — 눈금판 높이에 두면 머리에 가린다.
+        //   ★각은 안 바뀐다: 회전은 단면 법선이 연직이라 ProjectOnPlane이 높이 성분을 지운다(실측 아님·계산).
+        //   ★여기서 한 번만 올린다 — 잡기(FindDragTarget)·끌기(ApplyDrag)·그리기(DrawNeedle)가 다 이 center를 쓴다.
+        center += Vector3.up * NeedleRise(step);
         mi = MotionIndex(step);
         for (int k = 0; k < NeedlePerStep; k++)
         {
@@ -1405,6 +1493,37 @@ public class RomRecordSession : MonoBehaviour
     // ★이름을 짧게 쓴다(09-21 녹화 실측) — "능동2/압박2"는 네 글자가 서로 겹쳐 읽을 수가 없었다.
     private static string NeedleName(int k) => k == 0 ? "능1" : k == 1 ? "압1" : k == 2 ? "능2" : "압2";
 
+    /// <summary>회전 바늘을 원통 윗 테두리까지 올리는 높이. 다른 단면은 0이다(평면 눈금판이라 가릴 것이 없다).</summary>
+    private float NeedleRise(RomRecordStep s) => s == RomRecordStep.Rotation ? cylinderHeight * 0.5f : 0f;
+
+    /// <summary>회전 바늘이 아래로 늘어뜨리는 면의 높이(=원통 높이). 0이면 종전처럼 가는 선이다.</summary>
+    private float NeedleFin(RomRecordStep s) => s == RomRecordStep.Rotation ? cylinderHeight : 0f;
+
+    /// <summary>바늘 선의 <b>어디서부터</b> 잡히나(손잡이 반지름 배수). 0.35 = 안쪽 1/3은 안 잡힌다.</summary>
+    private const float NeedleGrabFrom = 0.35f;
+
+    /// <summary>
+    /// 그 손이 바늘에서 얼마나 떨어져 있나. ★꼭지 끝만이 아니라 <b>선 중간 어디를 잡아도</b> 끌린다
+    /// (2026-09-23 사용자: "니들 원형 꼭지 끝 말고 중간을 잡아도"). 안쪽 <see cref="NeedleGrabFrom"/>까지는
+    /// 빼 둔다 — 중심 근처는 머리 속이라 잡을 일이 없고, 거기까지 열면 마커 찍기를 가로챈다.
+    /// 회전은 바늘이 <b>면</b>이라 그 높이 안이면 세로 어디를 잡아도 같게 친다.
+    /// </summary>
+    private float NeedleDistance(Vector3 p, Vector3 center, Vector3 dir, float handleRadius, float fin)
+    {
+        if (fin > 0f)
+        {
+            // 지움: 면 <b>높이 안</b>의 세로 차이만. 면 밖으로 벗어난 세로 거리는 그대로 남는다.
+            float dy = Mathf.Clamp(p.y - center.y, -fin, 0f);
+            p.y = center.y + dy;
+        }
+        Vector3 a = center + dir * (handleRadius * NeedleGrabFrom);
+        Vector3 ab = center + dir * handleRadius - a;
+        float len2 = ab.sqrMagnitude;
+        if (len2 < 1e-8f) return Vector3.Distance(p, a);
+        float t = Mathf.Clamp01(Vector3.Dot(p - a, ab) / len2);
+        return Vector3.Distance(p, a + ab * t);
+    }
+
     private void ApplyDrag(Vector3 p)
     {
         // ★바늘은 델타가 아니라 <b>손이 있는 쪽</b>을 향한다. 단면에 투영해 그 면에서만 돌게 한다.
@@ -1415,6 +1534,7 @@ public class RomRecordSession : MonoBehaviour
                 int n = mi * NeedlePerStep + (dragTarget - 3);
                 needleDir[n] = RomRecordGeometry.OnPlane(p - nc, nn, needleDir[n]);
                 needleMoved[n] = true;   // ★끌어낸 순간부터 값이다 — 따로 [기록]을 누르지 않는다
+                lastNeedleTouched = dragTarget - 3;   // [홀드]가 잠글 대상
                 DrawNeedle();
             }
             return;
@@ -1492,7 +1612,8 @@ public class RomRecordSession : MonoBehaviour
                 view.SetNeedle(k, false, Vector3.zero, Vector3.up, 0.1f, 0.2f, null, false);
                 continue;
             }
-            Vector3 dir = needleDir[mi * NeedlePerStep + k];
+            int nk = mi * NeedlePerStep + k;
+            Vector3 dir = needleDir[nk];
             int d = Mathf.RoundToInt(Vector3.Angle(z, dir));
             string label = null;
             if (d != lastNeedleDegShown[k])
@@ -1500,10 +1621,38 @@ public class RomRecordSession : MonoBehaviour
                 lastNeedleDegShown[k] = d;
                 // ★바늘 위에는 각도만 쓴다(09-22 사용자). 아직 0°에 있는 바늘은 글자를 비운다 —
                 //   종전엔 이름(능1·압1)을 띄웠지만 한글을 뺐고, 능동·압박은 바늘 색의 밝기로 가른다.
-                label = needleMoved[mi * NeedlePerStep + k] ? d + "°" : "";
+                label = needleMoved[nk] ? d + "°" : "";
             }
-            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k);
+            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k, NeedleFin(step), needleLocked[nk]);
         }
+    }
+
+    /// <summary>마지막으로 만진 바늘이 잠겨 있나 — [홀드] 버튼이 켜져 보이는 조건이다.</summary>
+    private bool IsLastNeedleLocked =>
+        lastNeedleTouched >= 0 && IsMotion(step)
+        && needleLocked[MotionIndex(step) * NeedlePerStep + lastNeedleTouched];
+
+    /// <summary>
+    /// [홀드] — 마지막으로 맞춘 바늘을 잠그거나 푼다(2026-09-23 사용자).
+    /// ★잠긴 바늘은 <see cref="FindDragTarget"/>이 건너뛴다. 값은 그대로 남는다.
+    /// </summary>
+    private void ToggleNeedleHold()
+    {
+        if (!IsMotion(step) || !needleOn || lastNeedleTouched < 0)
+        {
+            Play(sndDeny);
+            Debug.Log("[실측기록] 홀드할 바늘이 없다 — 바늘을 먼저 맞춘다.");
+            return;
+        }
+        int k = lastNeedleTouched;
+        int n = MotionIndex(step) * NeedlePerStep + k;
+        needleLocked[n] = !needleLocked[n];
+        Play(needleLocked[n] ? sndPress : sndUndo);
+        Debug.Log($"[실측기록] 홀드 — {StepTitle[(int)step]} {NeedleName(k)} " +
+                  (needleLocked[n] ? "잠금(이제 안 끌린다)" : "풀림"));
+        DrawNeedle();
+        ApplyStepButtons();
+        dirty = true;
     }
 
     /// <summary>
@@ -1522,8 +1671,10 @@ public class RomRecordSession : MonoBehaviour
             int n = mi * NeedlePerStep + k;
             needleDir[n] = z;
             needleMoved[n] = false;
+            needleLocked[n] = false;   // ★[다시]는 잠금도 푼다 — 안 그러면 되돌려 놓고 못 만진다
             lastNeedleDegShown[k] = -999;
         }
+        lastNeedleTouched = -1;
         Play(sndUndo);
         Debug.Log($"[실측기록] {StepTitle[(int)step]} 바늘을 모두 0°로 되돌렸다.");
         dirty = true;
@@ -1540,51 +1691,16 @@ public class RomRecordSession : MonoBehaviour
                 return;
 
             case RomRecordStep.Landmarks:
-                // ★버튼을 눌러 대기인 점만 찍는다(09-22 사용자). 대기가 아니면 받지 않는다 — 잡아 끌기는 FindDragTarget이
-                //   먼저 가로채므로 여기까지 오지 않는다(이동은 언제든 된다).
-                if (!landmarkArmed)
+                // ★핀치로는 더 이상 찍지 않는다(2026-09-23 사용자: "핀치는 너무 흔들린다").
+                //   기준점은 버튼으로 찍는다 — 핀치는 <b>이미 찍은 점을 잡아 끄는</b> 데만 쓴다
+                //   (끌기는 FindDragTarget이 먼저 가로채므로 여기까지 오지 않는다).
+                Play(sndDeny);
+                if (Time.unscaledTime >= nextLockedVoice)
                 {
-                    Play(sndDeny);
-                    if (Time.unscaledTime >= nextLockedVoice)
-                    {
-                        nextLockedVoice = Time.unscaledTime + 8f;   // ★8초에 한 번만 말한다 — 스친 손마다 말하면 시끄럽다
-                        Say("locked");
-                    }
-                    Debug.Log($"[실측기록] 기준점 핀치 무시 — 찍기 대기인 점이 없다(버튼을 먼저 누른다) · 자리 {Fmt(p)}");
-                    return;
+                    nextLockedVoice = Time.unscaledTime + 8f;   // ★8초에 한 번만 말한다 — 스친 손마다 말하면 시끄럽다
+                    Say("locked");
                 }
-                int setTarget = landmarkTarget;
-                landmarkArmed = false;
-                if (landmarkTarget == 0)
-                {
-                    c7 = p; hasC7 = true;
-                    Play(sndPinch);
-                    Debug.Log($"[실측기록] 대추 {Fmt(c7)}");
-                }
-                else if (landmarkTarget == 2)
-                {
-                    ear = p; hasEar = true;
-                    Play(sndPinch);
-                    // ★외이도는 대추보다 위다 — 낮으면 잘못 찍었을 가능성이 크다.
-                    //   정중면에서 옆으로 얼마나 떨어졌나도 남긴다(한쪽 귀라 6~8cm쯤이어야 한다 — 추정. 정면을 잡은 뒤라야 뜻이 있다).
-                    string warn = hasC7 && ear.y < c7.y ? " ★대추보다 낮다 — 잘못 찍었는지 본다" : "";
-                    Debug.Log($"[실측기록] 외이도 {Fmt(ear)}" +
-                              (hasC7 ? $" · 대추에서 위로 {(ear.y - c7.y) * 100f:F1}cm" +
-                                       $" · 정중면에서 옆으로 {Mathf.Abs(Vector3.Dot(ear - c7, RomRecordGeometry.Right(yaw))) * 100f:F1}cm" +
-                                       $" · 축 {Fmt(EarAxis)}" : "") + warn);
-                }
-                else
-                {
-                    glab = p; hasGlab = true;
-                    Play(sndPinch);
-                    Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
-                    AimFrontFromLandmarks();
-                }
-                // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
-                int nextT = NextUnsetLandmark();
-                Say(DoneVoice(setTarget), nextT >= 0 ? NextVoice(nextT) : "all_done");
-                ApplyStepButtons();
-                dirty = true;
+                Debug.Log($"[실측기록] 기준점 핀치 무시 — 손가락을 대고 버튼을 누른다 · 자리 {Fmt(p)}");
                 return;
 
             case RomRecordStep.Done:

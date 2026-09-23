@@ -36,6 +36,11 @@ public class RomRecordVisual
     private readonly LineRenderer[] needles = new LineRenderer[NeedleCount];
     private readonly Transform[] needleGrips = new Transform[NeedleCount];
     private readonly TextMeshPro[] needleLabels = new TextMeshPro[NeedleCount];
+    // ★손잡이 크기는 <b>세 상태</b>에서 온다(잡는 중 · 잡히는 자리 · 잠김). SetNeedle과 SetGrabHover가
+    //   서로 다른 때에 불려서, 마지막에 부른 쪽이 크기를 덮어쓰면 하이라이트가 조용히 사라진다.
+    //   → 상태를 기억해 두고 <see cref="NeedleGripSizeOf"/> 한 곳에서만 크기를 낸다.
+    private readonly bool[] needleHeld = new bool[NeedleCount];
+    private readonly bool[] needleLockedShown = new bool[NeedleCount];
     private TextMeshPro labUp, labDown, labFwd, labBack, labRight, labLeft, panel;
     private Transform c7Dot, glabDot, liveDot, pivotDot, earDot;
     // ★눈금은 선분 메시 하나다(LineRenderer 배열이 아니다). 정점·인덱스는 미리 잡아 재활용한다.
@@ -153,8 +158,11 @@ public class RomRecordVisual
     //   능동 = 연하게(밝고 채도 낮게), 압박 = 진하게. 압박이 더 많이 간 값이라 «더 진함»으로 읽힌다.
     //   종전엔 주황·자홍 두 색이었다. 바늘·마커 글자에서 한글(능동·압박)을 빼서 색이 유일한 구분이다.
     //   ★판의 탭 아래 숫자도 같은 색이다(RomRecordSession.HexActive/HexPassive) — 바꾸면 둘 다 바꾼다.
-    public static readonly Color ActiveColor = new Color(1f, 0.82f, 0.60f);
-    public static readonly Color PassiveColor = new Color(1f, 0.42f, 0.02f);
+    // ★2026-09-23 정정: 종전 능동색(1, 0.82, 0.60)은 <b>채도가 0.4로 떨어져</b> 다른 색(살구)으로 보였다.
+    //   사용자: "같은 색상에서 명도를 조절하라는 거였는데." → 색상 H=24.5°·채도 S=0.98을 <b>고정</b>하고
+    //   명도 V만 1.00 ↔ 0.62로 가른다. 압박이 어두운 쪽이다(더 많이 간 값 = 더 진하다).
+    public static readonly Color ActiveColor = new Color(1f, 0.42f, 0.02f);        // #FF6B05 · V=1.00
+    public static readonly Color PassiveColor = new Color(0.62f, 0.26f, 0.012f);   // #9E4203 · V=0.62
     // ★단면 사각형·삼각면(2026-09-21). 표시물이지 판독값이 아니라 눈에 덜 띄게 둔다.
     public static readonly Color SectionColor = new Color(0.45f, 0.55f, 0.70f, 0.45f);
     public static readonly Color SectionGridColor = new Color(0.45f, 0.55f, 0.70f, 0.22f);
@@ -266,6 +274,60 @@ public class RomRecordVisual
         labRight.transform.position = pivot + r * (len + 0.04f);
         labLeft.transform.position = pivot - r * (len + 0.04f);
     }
+
+    // ── 잡기 하이라이트(2026-09-23 사용자 지시) ──────────────────────
+    // ★★"모든 오브젝트는 그랩되기 전에 «지금 잡으면 잡힌다»는 하이라이트가 필수다."
+    //   ★판정은 여기서 새로 하지 않는다 — Session이 <b>실제로 잡을 때 쓰는 FindDragTarget</b>을 그대로
+    //   태워 번호만 넘겨 준다(규칙 9 — 따로 계산하면 하이라이트가 거짓말을 한다).
+    //   번호 약속은 Session.FindDragTarget과 같다: 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 판 · -1 없음.
+    public static readonly Color GrabHoverColor = new Color(1f, 1f, 0.55f);
+    public float grabHoverScale = 1.7f;
+
+    private int hoverTarget = -1;
+
+    /// <summary>지금 손을 오므리면 잡힐 것을 밝힌다. ★값이 <b>바뀔 때만</b> 손댄다(매 프레임 불린다).</summary>
+    public void SetGrabHover(int target)
+    {
+        if (target == hoverTarget) return;
+        int old = hoverTarget;
+        hoverTarget = target;     // ★먼저 바꾼다 — ApplyHover가 이 값을 보고 색을 고른다
+        ApplyHover(old);
+        ApplyHover(target);
+    }
+
+    private void ApplyHover(int t)
+    {
+        if (t < 0) return;
+        bool on = t == hoverTarget;
+        if (t >= 3 && t <= 6)
+        {
+            int i = t - 3;
+            if (needleGrips[i] == null) return;
+            needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
+            Color c = needleHeld[i] ? NeedleHeldColor
+                    : on ? GrabHoverColor
+                    : i % 2 == 0 ? ActiveColor : PassiveColor;
+            needleGrips[i].GetComponent<Renderer>().material.color = c;
+            needles[i].startColor = needles[i].endColor = c;
+            return;
+        }
+        Transform dot = t == 0 ? pivotDot : t == 1 ? c7Dot : t == 2 ? glabDot : t == 8 ? earDot : null;
+        if (dot == null) return;                      // 9(판)는 판 자신이 테두리로 말한다 — Session이 부른다
+        float baseSize = t == 0 ? 0.012f : 0.016f;    // Build에서 만든 크기와 같다
+        dot.localScale = Vector3.one * (on ? baseSize * grabHoverScale : baseSize);
+        dot.GetComponent<Renderer>().material.color =
+            on ? GrabHoverColor
+            : t == 0 ? PivotColor
+            : t == 1 ? new Color(0.3f, 0.9f, 1f)
+            : t == 2 ? Color.white
+            : EarColor;
+    }
+
+    private float NeedleGripSizeOf(int i)
+        => needleHeld[i] ? needleGripHeldSize
+         : hoverTarget == 3 + i ? needleGripSize * grabHoverScale
+         : needleLockedShown[i] ? needleGripSize * 0.55f    // 잠긴 바늘은 작게 — 더 안 잡힌다는 표시다
+         : needleGripSize;
 
     public void SetLandmarks(bool hasC7, Vector3 c7, bool hasEar, Vector3 ear, bool hasGlab, Vector3 glab, Vector3 pivot)
     {
@@ -555,30 +617,50 @@ public class RomRecordVisual
     /// ★손잡이는 <b>바늘보다 조금 더 밖</b>에 둔다 — 눈금과 겹치면 잡으려다 눈금을 가린다.
     /// </summary>
     public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, float dialRadius, float handleRadius,
-                          string label, bool held)
-        => SetNeedle(i, on, center, dir, dialNormal, dialRadius, handleRadius, label, held);
+                          string label, bool held, float finHeight = 0f, bool locked = false)
+        => SetNeedle(i, on, center, dir, dialNormal, dialRadius, handleRadius, label, held, finHeight, locked);
 
     /// <summary>단면 법선을 직접 주는 판. 기억해 둔 법선(<see cref="SetDial"/>)을 안 믿고 싶을 때 쓴다.</summary>
     public void SetNeedle(int i, bool on, Vector3 center, Vector3 dir, Vector3 normal, float dialRadius,
-                          float handleRadius, string label, bool held)
+                          float handleRadius, string label, bool held, float finHeight = 0f, bool locked = false)
     {
         if (i < 0 || i >= NeedleCount) return;
         Show(needles[i], on);
         Show(needleGrips[i], on);
         if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
+        needleHeld[i] = held;
+        needleLockedShown[i] = locked;
         if (!on) return;
 
         Color baseC = i % 2 == 0 ? ActiveColor : PassiveColor;   // 짝수 능동 · 홀수 압박(좌우는 방향이 가른다)
-        Color c = held ? NeedleHeldColor : baseC;
+        Color c = held ? NeedleHeldColor : hoverTarget == 3 + i ? GrabHoverColor : baseC;
         // ★손잡이는 눈금판보다 <b>더 밖</b>에 둔다. 눈금 반지름에 두면 실제 사람 머리 안에 묻혀
         //   잡을 수가 없다(09-21 사용자 지적 — 내 설계 오류였다).
         Vector3 tip = center + dir * handleRadius;
-        Seg(needles[i], center, tip);
+        if (finHeight > 0f)
+        {
+            // ★회전 바늘은 <b>세로 면</b>이다(2026-09-23 사용자) — 원통 윗 테두리에 걸고 원통 높이만큼
+            //   아래로 늘어뜨린다. 선의 폭을 세워 면으로 쓴다(새 메시를 만들지 않는다).
+            //   ★들어오는 center가 이미 윗 테두리다(Session.NeedleVisible이 올려 준다) — 각 계산은 안 바뀐다
+            //     (회전은 단면 법선이 연직이라 투영이 높이 성분을 지운다).
+            Vector3 half = Vector3.up * (finHeight * 0.5f);
+            Seg(needles[i], center - half, tip - half);
+            needles[i].alignment = LineAlignment.TransformZ;
+            Vector3 fnrm = Vector3.Cross(dir, Vector3.up);   // 이 법선이면 면이 세로로 선다
+            if (fnrm.sqrMagnitude > 1e-8f)
+                needles[i].transform.rotation = Quaternion.LookRotation(fnrm.normalized, Vector3.up);
+            needles[i].widthMultiplier = finHeight;
+        }
+        else
+        {
+            Seg(needles[i], center, tip);
+            needles[i].alignment = LineAlignment.View;
+            needles[i].widthMultiplier = needleWidth;
+        }
         needles[i].startColor = needles[i].endColor = c;
-        needles[i].widthMultiplier = needleWidth;
         needleGrips[i].position = tip;
         needleGrips[i].GetComponent<Renderer>().material.color = c;
-        needleGrips[i].localScale = Vector3.one * (held ? needleGripHeldSize : needleGripSize);
+        needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
         needleLabels[i].color = c;
         if (label != null) needleLabels[i].text = label;
         // ★글자를 바늘 선 위에 그대로 얹으면 선과 겹쳐 둘 다 안 읽힌다(09-21 사용자 지적).
