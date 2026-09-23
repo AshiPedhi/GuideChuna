@@ -1860,7 +1860,7 @@ MonoBehaviour:
   menuFixedInSpace: 1
   menuFixedDistance: 0.55
   menuFixedBelowEye: 0.14
-  menuFixedSide: -0.38
+  menuFixedSide: 0.38
   menuGrabMargin: 0.04
   menuCellWidth: 0.049
   menuRowHeight: 0.041

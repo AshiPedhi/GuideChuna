@@ -97,7 +97,9 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m). ★09-21: 0.3은 너무 낮아 조작이 힘들었다.")]
     [SerializeField] private float menuFixedBelowEye = 0.14f;
     [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
-    [SerializeField] private float menuFixedSide = -0.38f;
+    // ★판 기본 자리는 <b>우측 대각선</b>이다(2026-09-23 사용자). 양수 = 보는 방향의 오른쪽.
+    //   ★씬에 값이 굳어 있어 코드 기본값은 새 씬에만 먹는다 — 지금 씬은 인스펙터 값을 직접 바꿨다(규칙 7).
+    [SerializeField] private float menuFixedSide = 0.38f;
     // ★09-22 로그 실측: 판을 옮기려고 가장자리를 집었더니 <b>기준점이 찍혔다</b>(대추·미간이 판 중심에서 18~23cm).
     //   판 폭이 약 33cm라 중심 반경(0.16)으로는 가장자리가 안 잡히고, 못 잡은 핀치가 «찍기»로 빠졌다.
     //   «잡았다 — 조작 판» 로그는 한 번도 없었다. → 판 사각형 전체를 이 여유만큼 넓혀 잡는다.
@@ -768,7 +770,8 @@ public class RomRecordSession : MonoBehaviour
     // ★판이 미리 만들어 두는 칸 수. 글자 칸(탭 아래 값·상태)도 한 칸씩 먹는다.
     //   09-22에 14로 두었다가 기준점 단계(최대 18칸)에서 [정면 ▶]·[정면 다시]가 <b>조용히 잘렸다</b>(사용자 발견).
     //   넘치면 판이 경고를 남긴다.
-    private const int MenuCapacity = 24;
+    // ★24 → 32(09-23): 기준점 단계에 위치 이동 버튼 여섯이 늘어 칸이 모자라면 <b>조용히 잘린다</b>(09-22 전례).
+    private const int MenuCapacity = 32;
 
     private void LoadTabIcons()
     {
@@ -854,16 +857,26 @@ public class RomRecordSession : MonoBehaviour
         }
         if (step == RomRecordStep.Landmarks)
         {
-            // ★밝은 버튼 = 지금 찍기 대기인 점. 찍고 나면 어느 것도 밝지 않다(다시 누르기 전까지 안 바뀐다).
-            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: hasC7));
-            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: hasEar));
-            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: hasGlab));
+            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(아래 이동 버튼이 이 점을 옮긴다).
+            //   찍혔는지 여부는 기준점 타일의 ●●●가 말한다 — 두 정보를 한 버튼에 겹치지 않는다.
+            Ctl(RomMenuItem.Button("t0", "대추", 0, 0, 0, TargetTint, selected: landmarkTarget == 0));
+            Ctl(RomMenuItem.Button("t2", "외이도", 0, 0, 0, TargetTint, selected: landmarkTarget == 2));
+            Ctl(RomMenuItem.Button("t1", "미간", 0, 0, 0, TargetTint, selected: landmarkTarget == 1));
             // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
             Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
             Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
             // ★정면을 다시 잡는 버튼(09-21) — 자동은 처음 한 번뿐이라 여기서 고쳐 잡는다.
             if (hasC7 && hasGlab) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
             else n++;   // 자리를 비워 둔다 — 미간을 찍는 순간 아랫줄 버튼이 밀리지 않게
+            // ★기준점을 1mm씩 <b>옮기는</b> 버튼(2026-09-23 사용자: "좌우 회전 버튼 말고 위치 이동이 필요해").
+            //   ★Nudge 기능은 09-21부터 코드에 있었는데 판에 버튼이 없어 쓸 수가 없었다 — 버튼만 얹는다.
+            //   옮기는 대상은 <b>마지막으로 누른 기준점</b>이다(밝은 버튼이 그것이다).
+            Ctl(RomMenuItem.Button("up", "위", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("down", "아래", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("fwd", "앞", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("back", "뒤", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("left", "왼쪽", 0, 0, 0, AdjTint, repeat: true));
+            Ctl(RomMenuItem.Button("right", "오른쪽", 0, 0, 0, AdjTint, repeat: true));
         }
         else if (IsMotion(step))
         {
@@ -1008,8 +1021,9 @@ public class RomRecordSession : MonoBehaviour
         {
             // ★손가락을 대고 버튼을 누른다(09-23) — 핀치로는 안 찍힌다. 자동으로 넘어가지 않는다(09-22 사용자).
             int next = NextUnsetLandmark();
+            string moving = $" · 이동 버튼은 [{LandmarkName(landmarkTarget)}]를 1mm씩 옮깁니다";
             return next >= 0 ? $"{LandmarkName(next)}에 손가락을 대고 [{LandmarkName(next)}]를 누르세요"
-                             : "기준점 완료 — 다시 찍으려면 대고 누르세요";
+                             : "기준점 완료 — 다시 찍으려면 대고 누르세요" + moving;
         }
         if (!IsMotion(step)) return "";
         int mi = MotionIndex(step);
