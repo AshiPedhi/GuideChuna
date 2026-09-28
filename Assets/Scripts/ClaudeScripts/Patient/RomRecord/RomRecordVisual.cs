@@ -9,11 +9,18 @@ using UnityEngine;
 /// </summary>
 public class RomRecordVisual
 {
-    private const int RingSegments = 72;
+    private const int RingSegments = 72;   // 반원 180°를 72조각(2.5°마다)
     // ★★눈금을 1°마다 긋는다(09-21 사용자 지시). 360개를 LineRenderer로 두면 드로콜이 그만큼 늘어난다 —
-    //   <b>선분 메시 하나</b>로 굽는다(정점 720). 굽는 것은 SetDial 때뿐이고 매 프레임 하는 일은 없다.
-    private const int TickCount = 360;     // 1°마다
-    private const int TickLabelCount = 12; // 30°마다 숫자
+    //   <b>선분 메시 하나</b>로 굽는다. 굽는 것은 SetDial 때뿐이고 매 프레임 하는 일은 없다.
+    // ★★각도기는 <b>반원 180°</b>만 그린다(2026-09-28 사용자: "360도 면 중에 180도 표시를
+    //   목 위쪽 환자 시선 방향 부분만 남기라"). 눈금 0을 가운데 두고 양쪽 90°까지다 —
+    //   굴곡·신전·측굴은 0이 연직이라 <b>위쪽 반원</b>, 회전은 0이 정면이라 <b>얼굴 쪽 반원</b>이 된다.
+    //   한계 각도(굴곡 45·신전 90·측굴 45·회전 90)가 전부 이 안에 든다.
+    //   종전(09-21~09-23)은 온전한 원·30°마다 숫자였다.
+    private const int HalfSpanDeg = 90;
+    private const int TickCount = HalfSpanDeg * 2 + 1;          // -90° … +90°, 1°마다 181개
+    private const int TickLabelStep = 10;                       // ★숫자는 10°마다(09-28 사용자)
+    private const int TickLabelCount = HalfSpanDeg * 2 / TickLabelStep + 1;   // 19개(90 … 0 … 90)
     public const int MaxMarks = 4;
     /// <summary>
     /// 바늘 개수(2026-09-21에 2 → 4). 측굴·회전은 <b>좌 능동·좌 압박·우 능동·우 압박</b> 넷이 필요한데
@@ -49,8 +56,6 @@ public class RomRecordVisual
     private Mesh tickMesh;
     private Renderer tickRenderer;
     private Vector3[] tickVerts;
-    private bool cylinderLabelsActive;   // 지금 원통 모드인가(뒤쪽 숫자를 가릴지 판단)
-    private Vector3 dialCenterForLabels; // 원통 중심 — 숫자가 앞쪽인지 재는 기준
     private readonly TextMeshPro[] tickLabels = new TextMeshPro[TickLabelCount];
     private readonly Transform[] markDots = new Transform[MaxMarks];
     private readonly LineRenderer[] markLines = new LineRenderer[MaxMarks];
@@ -116,18 +121,17 @@ public class RomRecordVisual
     public float tickLen30 = 0.14f;
     [Tooltip("눈금 숫자 크기 = textSize × 이 값. ★09-21에 0.8에서 키웠다.")]
     public float tickLabelScale = 1.3f;
-    [Tooltip("원통에서 <b>카메라 반대편</b> 숫자를 숨긴다 — 앞뒤가 겹쳐 읽을 수가 없었다(09-21).")]
-    public bool hideFarCylinderLabels = true;
+    // ★hideFarCylinderLabels(09-21)는 09-28에 없앴다 — 반원만 그려 앞뒤로 겹칠 숫자가 없다.
 
     public float tickLabelOut = 1.20f;      // 눈금 숫자를 원 밖으로 미는 배수(옛 1.12 — 원에 붙어 있었다)
     // ★면 안은 <b>색이 거의 없다</b>(2026-09-23 사용자 정정: "단면 내부 색 거의 없이 반투명하게").
     //   면이 어디 있는지만 알면 되고, 모양과 각은 <b>테두리</b>가 말한다 — 채움이 진하면 환자가 가린다.
     //   0.05는 기기 미검증 추정이다(처음 0.16은 아직 진했다).
     public float finFillAlpha = 0.05f;
-    public float needleLabelAlong = 0.55f;  // 바늘 방향으로 나가는 거리(반지름 배수)
-    public float needleLabelSide = 0.34f;   // ★바늘에 <b>수직</b>으로 비키는 거리(반지름 배수). 09-21에 0.24에서 넓혔다.
-                                            //   능동(짝수)은 +쪽, 압박(홀수)은 -쪽으로 갈라 쌍끼리 안 겹친다.
-    // ★09-21 녹화 실측: 0.22로는 네 이름표가 위아래로 거의 붙어 못 읽었다 — 넓힌다(여전히 기기 미검증).
+    // ★바늘 각도 글자를 구체보다 이만큼(m) 위에 둔다(09-28). 글자 높이 ≒ 글자 크기의 1/8(09-21 녹화 실측)이라
+    //   0.028이면 구체(지름 1.8cm) 위에 글자 한 줄이 떨어져 앉는다 — 기기 미검증 추정값.
+    //   ★옛 needleLabelAlong·needleLabelSide·needleLabelAlongStep(바늘 선에서 옆으로 비키기)은 이것으로 대체했다.
+    public float needleLabelRise = 0.028f;
     // ── 단면 사각형(2026-09-21) ──────────────────────────────────────
     [Tooltip("단면 사각형의 가로 반폭(m). 사람 어깨~몸통 범위를 덮게 잡는다.")]
     public float sectionHalfWidth = 0.35f;
@@ -136,10 +140,6 @@ public class RomRecordVisual
     public float sectionLineWidth = 0.002f;
     [Tooltip("단면에서 이만큼(m) 넘게 벗어나면 벗어난 양을 숫자로 적는다. ★각은 단면에 투영해 재므로 그만큼이 «못 잰 성분»이다.")]
     public float offPlaneWarnMeters = 0.02f;
-
-    public float needleLabelAlongStep = 0.42f; // ★좌우 쌍(0·1 / 2·3)을 <b>반지름으로도</b> 어긋나게 하는 양.
-                                               //   좌우 바늘이 둘 다 0°에 가까우면 각으로는 안 갈라져서
-                                               //   수직 비킴만으로는 넷 중 둘이 겹친다(09-21 개정).
 
     // 회전(횡단면) 각도기를 <b>원통 벽</b>으로 세운다 — 수평 원판은 보는 높이에 따라 납작해져 안 보인다.
     // ★보이는 모양만 바꾸는 것이다. 각 계산(RomRecordGeometry.PlaneAngle)은 그대로 횡단면 투영이다.
@@ -214,9 +214,9 @@ public class RomRecordVisual
         BuildTickMesh();
         for (int i = 0; i < TickLabelCount; i++)
         {
-            int deg = i * 30;
+            // ★부호 없이 크기만 쓴다(0에서 양쪽으로 90까지 — 09-16 각도 정의).
             // ★09-21에 0.8배에서 키웠다(사용자: "각도기 숫자 좀 키워 주고"). ApplyDialStyle이 매번 다시 입힌다.
-            tickLabels[i] = Label((deg <= 180 ? deg : 360 - deg).ToString(), textSize * tickLabelScale, dialLabelColor, dialRoot.transform);
+            tickLabels[i] = Label(Mathf.Abs(LabelDeg(i)).ToString(), textSize * tickLabelScale, dialLabelColor, dialRoot.transform);
         }
 
         // ★바늘(2026-09-21) — 각도기 중심에서 뻗은 지침. 끝의 손잡이를 잡아 그 단면 안에서만 돌린다.
@@ -461,31 +461,39 @@ public class RomRecordVisual
         tickMesh.RecalculateBounds();
     }
 
+    /// <summary>반원 위 k번째 조각의 각(라디안). -90° … +90°.</summary>
+    private static float RingAngle(int k) => (-HalfSpanDeg + k * (2f * HalfSpanDeg / RingSegments)) * Mathf.Deg2Rad;
+
+    /// <summary>i번째 눈금의 각(도). -90 … +90.</summary>
+    private static int TickDeg(int i) => i - HalfSpanDeg;
+
+    /// <summary>i번째 눈금 숫자의 각(도). -90 … +90, 10°마다.</summary>
+    private static int LabelDeg(int i) => -HalfSpanDeg + i * TickLabelStep;
+
     private void DrawFlatDial(Vector3 center, Vector3 z, Vector3 o, float radius)
     {
-        cylinderLabelsActive = false;
         Show(ringLower, false);
         Show(zeroRadial, false);
         for (int k = 0; k <= RingSegments; k++)
         {
-            float a = k * (2f * Mathf.PI / RingSegments);
+            float a = RingAngle(k);
             ring.SetPosition(k, center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * radius);
         }
         // ★1°마다 긋는다. 5°·10°·30°로 길이를 달리해 눈이 단위를 읽을 수 있게 한다.
         for (int i = 0; i < TickCount; i++)
         {
-            float a = i * Mathf.Deg2Rad;
+            int deg = TickDeg(i);
+            float a = deg * Mathf.Deg2Rad;
             Vector3 d = z * Mathf.Cos(a) + o * Mathf.Sin(a);
-            float inner = 1f - TickLengthOf(i);
+            float inner = 1f - TickLengthOf(Mathf.Abs(deg));
             tickVerts[i * 2] = center + d * (radius * inner);
             tickVerts[i * 2 + 1] = center + d * radius;
         }
         UploadTickMesh();
         for (int i = 0; i < TickLabelCount; i++)
         {
-            float a = i * 30f * Mathf.Deg2Rad;
+            float a = LabelDeg(i) * Mathf.Deg2Rad;
             tickLabels[i].transform.position = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * (radius * tickLabelOut);
-            if (!tickLabels[i].gameObject.activeSelf) tickLabels[i].gameObject.SetActive(true);
         }
         Seg(zeroLine, center, center + z * radius);
     }
@@ -509,7 +517,7 @@ public class RomRecordVisual
 
         for (int k = 0; k <= RingSegments; k++)
         {
-            float a = k * (2f * Mathf.PI / RingSegments);
+            float a = RingAngle(k);
             Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             ring.SetPosition(k, p + top);
             ringLower.SetPosition(k, p + bot);
@@ -517,22 +525,23 @@ public class RomRecordVisual
         // ★1°마다 세로선. 5°·10°·30°로 길이를 달리한다(길이 비율은 평면과 같은 표를 쓴다).
         for (int i = 0; i < TickCount; i++)
         {
-            float a = i * Mathf.Deg2Rad;
+            int deg = TickDeg(i);
+            float a = deg * Mathf.Deg2Rad;
             Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
-            float h = half * Mathf.Clamp01(TickLengthOf(i) / 0.14f) * cylinderMinorHeightRatio;
-            if (i % 30 == 0) h = half;                       // 30°는 위아래 테두리까지 꽉
+            float h = half * Mathf.Clamp01(TickLengthOf(Mathf.Abs(deg)) / 0.14f) * cylinderMinorHeightRatio;
+            if (deg % 30 == 0) h = half;                     // 30°는 위아래 테두리까지 꽉
             tickVerts[i * 2] = p - up * h;
             tickVerts[i * 2 + 1] = p + up * h;
         }
         UploadTickMesh();
         for (int i = 0; i < TickLabelCount; i++)
         {
-            float a = i * 30f * Mathf.Deg2Rad;
+            float a = LabelDeg(i) * Mathf.Deg2Rad;
             Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             tickLabels[i].transform.position = p + up * (half + cylinderLabelRise);
         }
-        cylinderLabelsActive = true;   // ★뒤쪽 숫자는 FaceCamera에서 가린다(원통은 앞뒤가 겹친다)
-        dialCenterForLabels = center;
+        // ★뒤쪽 숫자 숨기기(09-21)는 없앴다(09-28) — 이제 얼굴 쪽 반원만 있어 앞뒤로 겹칠 숫자가 없다.
+        //   그대로 두면 <b>환자 뒤에서 볼 때</b>(측굴·회전은 뒤통수 쪽에 선다) 숫자가 전부 «반대편»이라 다 꺼진다.
         // 0°는 벽에 세운 기둥 하나로 또렷하게, 중심에서 벽까지 한 줄을 더 그어 어느 쪽이 0인지 보이게 한다.
         Vector3 zp = center + z * wall;
         Seg(zeroLine, zp + bot, zp + top);
@@ -695,7 +704,7 @@ public class RomRecordVisual
             needleGrips[i].position = tip + off;
             needleGrips[i].GetComponent<Renderer>().material.color = c;
             needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
-            SetNeedleLabel(i, c, label, center + off, dir, dialRadius, normal);
+            SetNeedleLabel(i, c, label);
             return;
         }
         Show(needleFinEdges[i], false);
@@ -706,31 +715,31 @@ public class RomRecordVisual
         needleGrips[i].position = tip;
         needleGrips[i].GetComponent<Renderer>().material.color = c;
         needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
-        SetNeedleLabel(i, c, label, center, dir, dialRadius, normal);
+        SetNeedleLabel(i, c, label);
     }
 
-    private void SetNeedleLabel(int i, Color c, string label, Vector3 center, Vector3 dir,
-                                float dialRadius, Vector3 normal)
+    /// <summary>
+    /// 각도 글자를 <b>그 바늘의 구체 바로 위</b>에 둔다(2026-09-28 사용자 메모 «각도 표시 위치는 바늘 구체 위»).
+    /// ★종전(09-21~09-23)엔 바늘 선에서 옆으로 비켜 «능동 위·압박 아래»로 고정했다. 이제 글자가 각자 제 구체를
+    ///   따라가므로 뒤집혀 보일 일이 없다. 대신 능동·압박 구체가 붙어 있으면(값이 몇 도 차이) 글자끼리 가까워진다.
+    /// </summary>
+    private void SetNeedleLabel(int i, Color c, string label)
     {
         needleLabels[i].color = c;
         if (label != null) needleLabels[i].text = label;
-        // ★글자를 바늘 선 위에 그대로 얹으면 선과 겹쳐 둘 다 안 읽힌다(09-21 사용자 지적).
-        //   단면 안에서 바늘에 <b>수직</b>으로 비킨다. 넷이 서로 안 겹치게 두 손잡이를 같이 쓴다:
-        //   ① 수직 비킴 — 능동(짝수) +쪽 · 압박(홀수) −쪽. 한 쌍(좌 또는 우) 안에서 갈라 준다.
-        //   ② 반지름 어긋냄 — 쌍 번호(i/2)만큼 밖으로 더 민다. 좌우 바늘이 <b>둘 다 0°에 가까우면</b>
-        //      각으로는 안 갈라지므로 ①만으로는 0과 2, 1과 3이 겹친다. 그때를 ②가 막는다.
-        // ★★비키는 방향은 <b>바늘 방향과 무관</b>해야 한다(2026-09-23 사용자: "측굴 보는데 능동이 밑에 있고
-        //   압박이 위로 가 있어서 뒤집어진 것처럼 보여서 헷갈려").
-        //   종전엔 Cross(법선, 바늘방향)이라 <b>바늘이 어디를 가리키느냐에 따라 부호가 뒤집혔다</b> —
-        //   좌 바늘과 우 바늘에서 능동·압박의 위아래가 서로 반대가 됐다.
-        //   → 그 단면 안의 <b>연직</b>으로 고정한다. 능동은 늘 위, 압박은 늘 아래다.
-        //   ★회전(수평 단면)은 면 안에 연직이 없다 — 그때는 월드 연직으로 비킨다(면 밖이어도 위아래가 갈린다).
-        Vector3 side = Vector3.ProjectOnPlane(Vector3.up, normal);
-        if (side.sqrMagnitude < 1e-6f) side = Vector3.up;
-        side = side.normalized * (i % 2 == 0 ? 1f : -1f);
-        float along = needleLabelAlong + (i / 2) * needleLabelAlongStep;        // i/2는 정수 나눗셈(쌍 번호 0·1)
-        needleLabels[i].transform.position =
-            center + dir * (dialRadius * along) + side * (dialRadius * needleLabelSide);
+        needleLabels[i].transform.position = needleGrips[i].position + Vector3.up * needleLabelRise;
+    }
+
+    /// <summary>
+    /// 그 바늘 구체가 <b>지금 그려진</b> 자리(2026-09-28). ★구체 터치 판정·미세 조정 판 자리가 이것을 쓴다 —
+    /// 따로 계산하면 «보이는 구체»와 «눌리는 구체»가 어긋난다(규칙 9).
+    /// </summary>
+    public bool TryNeedleGrip(int i, out Vector3 pos)
+    {
+        pos = default;
+        if (i < 0 || i >= NeedleCount || needleGrips[i] == null || !needleGrips[i].gameObject.activeSelf) return false;
+        pos = needleGrips[i].position;
+        return true;
     }
 
     public void SetPanel(Vector3 pos, string text)
@@ -752,22 +761,7 @@ public class RomRecordVisual
     {
         if (eye == null) return;
 
-        // ★★원통에서는 앞뒤 숫자가 한 줄에 겹쳐 «90 120 30 0 150»처럼 읽을 수가 없었다(09-21 녹화 실측).
-        //   <b>카메라 반대편 숫자를 끈다</b> — 어차피 벽 너머라 읽을 일이 없다.
-        //   ★매 프레임 도는 자리라 새로 할당하지 않는다(내적 하나와 SetActive뿐이다).
-        if (cylinderLabelsActive && hideFarCylinderLabels)
-        {
-            Vector3 toEye = eye.position - dialCenterForLabels;
-            toEye.y = 0f;   // 지움: 위아래 성분. 원통은 세로로 서 있어 «앞뒤»는 수평에서만 갈린다.
-            for (int i = 0; i < TickLabelCount; i++)
-            {
-                var lab = tickLabels[i];
-                Vector3 d = lab.transform.position - dialCenterForLabels;
-                d.y = 0f;
-                bool near = Vector3.Dot(d, toEye) > 0f;   // 카메라와 같은 쪽이면 보인다
-                if (lab.gameObject.activeSelf != near) lab.gameObject.SetActive(near);
-            }
-        }
+        // ★09-21의 «원통 뒤쪽 숫자 끄기»는 09-28에 없앴다 — 반원만 그리니 앞뒤로 겹칠 숫자가 없다(DrawCylinderDial 참고).
 
         for (int i = 0; i < facing.Count; i++)
         {

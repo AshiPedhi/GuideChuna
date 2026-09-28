@@ -146,6 +146,14 @@ public class RomRecordMenuUI : IRomRecordMenu
         if (root != null) root.position = pos;
     }
 
+    public void Hide()
+    {
+        if (root == null) return;
+        if (root.gameObject.activeSelf) root.gameObject.SetActive(false);
+        placedOnce = false;   // ★FaceEye가 도로 켜지 않게 — PlaceAt이 다시 켠다
+        pendingId = null;
+    }
+
     /// <summary>판을 눈 쪽으로 돌린다. ★누르는 중에는 돌리지 않는다 — 표면이 움직이면 Poke 깊이가 흔들린다.</summary>
     private void FaceEye(Transform eye)
     {
@@ -418,6 +426,7 @@ public class RomRecordMenuUI : IRomRecordMenu
             b.press.id = pressable ? it.id : null;
             b.press.repeat = it.repeat;
             b.press.holdSeconds = it.holdSeconds;
+            b.press.tapThenHold = it.tapThenHold && it.holdSeconds > 0f;
 
             float rows = RowsOf(it);
             float w = it.span * cellPx - gapPx;

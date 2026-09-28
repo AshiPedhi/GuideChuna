@@ -15,6 +15,11 @@ public struct RomMenuItem
     // ★길게 눌러야 먹는 버튼(2026-09-21 사용자 지시). 0이면 닿는 즉시 실행된다.
     //   09-21 증상: "양손으로 환자를 지탱하다가 [나가기]가 눌린다" — 스쳐 지나간 손이 곧바로 실행시켰다.
     public float holdSeconds;
+    // ★짧게 누르면 <c>id</c>를 바로 내고, 계속 누르고 있으면 <see cref="holdSeconds"/> 뒤에 <c>id + HoldSuffix</c>를
+    //   한 번 더 낸다(2026-09-28 — 이미 찍은 기준점: 누르면 대상만 고르고, 길게 누르면 다시 찍는다).
+    //   ★그래서 짧은 쪽 동작은 <b>되돌릴 필요가 없는 것</b>(고르기)이어야 한다 — 길게 눌러도 먼저 한 번 나간다.
+    public bool tapThenHold;
+    public const string HoldSuffix = "!hold";
 
     // ── 탭 판(2026-09-22 사용자 지시 "다음·이전 누르는 게 번거롭다 · 텍스트뿐이라 직관적이지 않다") ──
     // ★전부 0/null이면 종전 항목과 똑같이 그려진다 — 기존 배치는 손대지 않아도 된다.
@@ -83,6 +88,7 @@ public class RomRecordWristMenu : IRomRecordMenu
         public Vector3 scale;     // 논리 크기(가로·세로). ★그리기는 메시가 하고, 이 값은 판정·막대에 쓴다
         // ★길게 누르기(09-21). holdSeconds가 0보다 크면 닿아 있는 시간이 그만큼 쌓여야 실행된다.
         public float holdSeconds;
+        public bool tapThenHold;  // 닿는 즉시 id, 계속 닿아 있으면 id+HoldSuffix(09-28)
         public float holdStart;   // 닿기 시작한 시각
         public bool holdFired;    // 이번 접촉에서 이미 실행했다 — 손이 나갈 때까지 다시 안 쏜다
         public Transform fill;    // 차오르는 막대(hold 버튼에만 보인다)
@@ -269,6 +275,7 @@ public class RomRecordWristMenu : IRomRecordMenu
             b.repeat = it.repeat;
             b.selected = it.selected;
             b.holdSeconds = it.holdSeconds;
+            b.tapThenHold = it.tapThenHold && it.holdSeconds > 0f;
             b.holdStart = -99f;
             b.holdFired = false;
             b.inside = false;
@@ -378,6 +385,13 @@ public class RomRecordWristMenu : IRomRecordMenu
         if (root != null) root.position = pos;
     }
 
+    public void Hide()
+    {
+        if (root == null) return;
+        if (root.gameObject.activeSelf) root.gameObject.SetActive(false);
+        placedOnce = false;   // ★FaceEye가 도로 켜지 않게 — PlaceAt이 다시 켠다
+    }
+
     public Vector3 Position => root != null ? root.position : Vector3.zero;
 
     public void Follow(bool wristValid, Vector3 wrist, Transform eye, bool hold)
@@ -482,7 +496,7 @@ public class RomRecordWristMenu : IRomRecordMenu
                 b.holdStart = now;
                 b.holdFired = false;
                 b.nextRepeat = now + holdDelay;
-                if (b.holdSeconds > 0f) continue;   // ★길게 누르는 버튼은 닿는 것만으로는 안 먹는다
+                if (b.holdSeconds > 0f && !b.tapThenHold) continue;   // ★길게 누르는 버튼은 닿는 것만으로는 안 먹는다
                 b.pressedAt = now;
                 if (!b.repeat) cooldownUntil = now + cooldown;
                 LastRepeat = false;
@@ -497,7 +511,7 @@ public class RomRecordWristMenu : IRomRecordMenu
                 b.pressedAt = now;
                 cooldownUntil = now + cooldown;
                 LastRepeat = false;
-                return b.id;
+                return b.tapThenHold ? b.id + RomMenuItem.HoldSuffix : b.id;
             }
             if (b.repeat && now >= b.nextRepeat)
             {

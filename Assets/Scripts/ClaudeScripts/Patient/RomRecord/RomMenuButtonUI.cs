@@ -20,6 +20,8 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     public string id;
     public bool repeat;
     public float holdSeconds;
+    // ★누르는 즉시 id, 계속 누르고 있으면 holdSeconds 뒤에 id + HoldSuffix(2026-09-28 — RomMenuItem.tapThenHold).
+    public bool tapThenHold;
     public RomRecordMenuUI owner;
 
     public float holdDelay = 0.5f;
@@ -49,7 +51,7 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         holdFired = false;
         Tint(0.35f);
         // ★길게 누르는 버튼은 여기서 쏘지 않는다 — 그게 오눌림을 막는 전부다.
-        if (holdSeconds <= 0f && owner != null) owner.OnPressed(id, false);
+        if ((holdSeconds <= 0f || tapThenHold) && owner != null) owner.OnPressed(id, false);
     }
 
     public void OnPointerUp(PointerEventData e) => Release();
@@ -81,7 +83,7 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
             {
                 holdFired = true;
                 Tint(0.8f);
-                if (owner != null) owner.OnPressed(id, false);
+                if (owner != null) owner.OnPressed(tapThenHold && id != null ? id + RomMenuItem.HoldSuffix : id, false);
             }
             return;
         }

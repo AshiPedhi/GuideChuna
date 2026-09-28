@@ -51,6 +51,12 @@ public interface IRomRecordMenu
     /// <summary>판을 통째로 옮긴다(잡아 끌기).</summary>
     void MoveTo(Vector3 pos);
 
+    /// <summary>
+    /// 판을 숨긴다(2026-09-28 — 바늘 미세 조정 판이 고른 바늘이 없을 때 사라져야 한다).
+    /// 다시 보이게 하려면 <see cref="PlaceAt"/>을 부른다.
+    /// </summary>
+    void Hide();
+
     /// <summary>매 프레임. 눌림 표시·반복·길게 누르기 진행을 돌린다.</summary>
     void Tick();
 
