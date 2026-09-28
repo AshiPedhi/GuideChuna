@@ -27,6 +27,11 @@ Shader "GuideChuna/RomRecord/Occluded"
         _Color ("Color", Color) = (1,1,1,1)
         // ★가려진 곳에 남길 밝기·투명도. 0이면 완전히 사라지고 1이면 폐색이 없는 것과 같다.
         _OccludedAlpha ("Occluded Alpha", Range(0,1)) = 0.18
+        // ★가려진 부분을 <b>점선</b>으로(2026-09-28 사용자: 팔에 가려지면 연해지는 건 되는데 "몸통에 선이 파고들었다는
+        //   느낌이 더 확 보이게"). 도면의 숨은 선 약속과 같다 — 연해지기만 하면 «흐린 선», 끊기면 «뒤에 있는 선»으로 읽힌다.
+        //   화면 픽셀 기준 대각 줄무늬로 끊는다(선 길이·방향과 무관하게 끊김 간격이 같다). 0이면 종전처럼 연해지기만.
+        _OccludedDash ("Occluded Dash (0/1)", Range(0,1)) = 1
+        _DashPeriodPx ("Dash Period (px)", Float) = 10
         _EnvironmentDepthBias ("Environment Depth Bias", Float) = 0.0
     }
 
@@ -71,6 +76,8 @@ Shader "GuideChuna/RomRecord/Occluded"
             float4 _MainTex_ST;
             fixed4 _Color;
             float _OccludedAlpha;
+            float _OccludedDash;
+            float _DashPeriodPx;
             float _EnvironmentDepthBias;
 
             v2f vert (appdata v)
@@ -96,7 +103,11 @@ Shader "GuideChuna/RomRecord/Occluded"
                 float occ = META_DEPTH_GET_OCCLUSION_VALUE(i, _EnvironmentDepthBias);
 
                 // 가려진 곳을 0으로 만들지 않고 _OccludedAlpha까지만 낮춘다 — 그래야 "관통"으로 읽힌다.
-                c.a *= lerp(_OccludedAlpha, 1.0, saturate(occ));
+                // ★09-28: 거기에 점선을 얹는다. SV_POSITION.xy는 픽셀 좌표라 (x+y)로 대각 줄무늬가 된다 —
+                //   가는 선 위에서는 그것이 곧 «끊어진 선»이다. 양눈이 각자 자기 화면에서 끊는다.
+                float stripe = step(0.5, frac((i.vertex.x + i.vertex.y) / max(_DashPeriodPx, 2.0)));
+                float hidden = _OccludedAlpha * lerp(1.0, stripe, _OccludedDash);
+                c.a *= lerp(hidden, 1.0, saturate(occ));
                 return c;
             }
             ENDCG

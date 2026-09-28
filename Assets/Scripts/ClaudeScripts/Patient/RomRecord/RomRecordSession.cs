@@ -64,14 +64,19 @@ public class RomRecordSession : MonoBehaviour
     // ★사용자 지시 09-21: "각도기도 하얀색 말고 회색 계열로 조금 시선 분산 덜 되게 · 바늘 선 얇게 ·
     //   각도 텍스트는 직선이나 원이 안 겹치게 · 회전 각도는 원통형으로 머리 둘레에 벽면처럼."
     // ★여기 값은 전부 <b>눈으로 맞출 것</b>이라 인스펙터로 뺀다(기기 미검증).
+    // ★★09-28 사용자(기기 빌드로 폐색 확인 뒤): "선이랑 각도기 눈금 같은 걸 훨씬 선명하게 — 몸통에 선이 파고들었다는
+    //   느낌이 더 잘 보이게". 보이는 부분이 또렷해야 가려진 부분(점선)과 대비가 난다.
+    //   ★09-21엔 반대로 "회색 계열로 시선 분산 덜 되게"였다 — 최신 지시를 따른다. 옛 값: 원 (0.60,0.62,0.65,0.55) ·
+    //   눈금 (0.64,0.66,0.69,0.60) · 0 (0.88,0.90,0.93,0.95) · 숫자 (0.80,0.82,0.85,0.95).
+    //   ★씬에 값이 굳어 있다(규칙 7) — 코드 기본값과 같은 값을 브리지로 씬에 넣었다(09-28).
     [Tooltip("눈금판 원·원통 테두리 색.")]
-    [SerializeField] private Color dialColor = new Color(0.60f, 0.62f, 0.65f, 0.55f);
+    [SerializeField] private Color dialColor = new Color(0.94f, 0.95f, 0.97f, 0.95f);
     [Tooltip("눈금 색.")]
-    [SerializeField] private Color dialTickColor = new Color(0.64f, 0.66f, 0.69f, 0.60f);
+    [SerializeField] private Color dialTickColor = new Color(0.94f, 0.95f, 0.97f, 1f);
     [Tooltip("눈금 0 색. ★기준선이라 다른 눈금보다 또렷하게 둔다.")]
-    [SerializeField] private Color dialZeroColor = new Color(0.88f, 0.90f, 0.93f, 0.95f);
+    [SerializeField] private Color dialZeroColor = new Color(1f, 1f, 1f, 1f);
     [Tooltip("눈금 숫자 색.")]
-    [SerializeField] private Color dialLabelColor = new Color(0.80f, 0.82f, 0.85f, 0.95f);
+    [SerializeField] private Color dialLabelColor = new Color(1f, 1f, 1f, 1f);
     [Tooltip("바늘 선 굵기(m). 09-21에 0.007에서 줄였다.")]
     [SerializeField] private float needleWidth = 0.003f;
     [Tooltip("눈금 숫자를 원 밖으로 미는 배수(반지름 기준).")]
@@ -227,7 +232,14 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private bool useDepthOcclusion = true;
     [Tooltip("가려진 부분에 남길 진하기. 0이면 완전히 사라지고, 1이면 폐색이 없는 것과 같다.\n" +
              "★0.15~0.25가 «몸 안을 지나간다»로 읽히는 구간이다(추정 — 눈으로 맞출 값).")]
-    [Range(0f, 1f)] [SerializeField] private float occludedAlpha = 0.18f;
+    [Range(0f, 1f)] [SerializeField] private float occludedAlpha = 0.5f;
+    // ★09-28(기기 확인 뒤 사용자: "연해지던데 더 확 눈에 보이게"): 가려진 부분을 <b>점선</b>으로 끊는다.
+    //   연하게만 하면 «흐린 선»이고, 끊겨야 «뒤에 있는 선»으로 읽힌다(도면의 숨은 선). 점선이 있으니
+    //   진하기는 0.18 → 0.5로 올렸다 — 너무 연하면 점선이 안 보인다. ★기기에서 보고 맞출 값(추정).
+    [Tooltip("가려진 부분을 점선으로 끊는다. 끄면 종전처럼 연해지기만 한다.")]
+    [SerializeField] private bool occludedDashed = true;
+    [Tooltip("점선 한 주기의 화면 픽셀 수(선 반 · 틈 반).")]
+    [SerializeField] private float occludedDashPeriodPx = 10f;
 
     [Header("=== 씬 ===")]
     [Tooltip("시작할 때 패스스루를 켠다. 이 씬은 패스스루 전용이다.")]
@@ -473,8 +485,11 @@ public class RomRecordSession : MonoBehaviour
             {
                 var m = new Material(src);   // ★에셋 원본을 건드리지 않게 복제한다
                 m.SetFloat("_OccludedAlpha", occludedAlpha);
+                m.SetFloat("_OccludedDash", occludedDashed ? 1f : 0f);
+                m.SetFloat("_DashPeriodPx", occludedDashPeriodPx);
                 bool supported = EnableDepthOcclusion();
-                Debug.Log($"[실측기록] 표시 머티리얼 — 폐색 셰이더 · 가려진 곳 {occludedAlpha:F2} · " +
+                Debug.Log($"[실측기록] 표시 머티리얼 — 폐색 셰이더 · 가려진 곳 {occludedAlpha:F2}" +
+                          $"{(occludedDashed ? $" 점선({occludedDashPeriodPx:F0}px)" : "")} · " +
                           $"기기 지원 {(supported ? "O" : "★없음(종전처럼 늘 덧그려진다)")}");
                 return m;
             }
