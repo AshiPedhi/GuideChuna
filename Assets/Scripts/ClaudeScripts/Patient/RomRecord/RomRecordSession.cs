@@ -192,7 +192,7 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("대추 기본 자리 — 헤드셋에서 앞으로(m).")]
     [SerializeField] private float defaultC7Distance = 0.6f;
     [Tooltip("대추 기본 자리 — 눈높이보다 아래로(m).")]
-    [SerializeField] private float defaultC7BelowEye = 0.10f;
+    [SerializeField] private float defaultC7BelowEye = 0.15f;   // 09-28 저녁 0.10 → 0.15(사용자: "기준선 생성 위치가 조금 높다")
     // ★위치 조정 판 자리(09-28 오후 사용자: "환자의 뒤, 사용자가 쓰기 편한 위치에"). 오전엔 조작 판 옆에 붙였다.
     //   대추를 기준으로 <b>환자 뒤(=내 쪽)</b>·아래·오른쪽으로 비킨다 — 목을 가리지 않고 손이 닿는 자리(추정값, 기기에서 맞출 것).
     //   ★자리는 기준점 단계에 들어올 때 한 번만 정한다 — 버튼으로 대추를 옮길 때 판이 따라 움직이면 누르던 손가락이 헛짚는다.
