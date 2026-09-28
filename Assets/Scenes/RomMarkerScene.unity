@@ -1847,7 +1847,7 @@ MonoBehaviour:
   metaRowPx: 82
   metaButtonPx: 68
   metaLabelPt: 15
-  dialColor: {r: 0.94, g: 0.95, b: 0.97, a: 1}
+  dialColor: {r: 0.94, g: 0.95, b: 0.97, a: 0.95}
   dialTickColor: {r: 0.94, g: 0.95, b: 0.97, a: 1}
   dialZeroColor: {r: 1, g: 1, b: 1, a: 1}
   dialLabelColor: {r: 1, g: 1, b: 1, a: 1}

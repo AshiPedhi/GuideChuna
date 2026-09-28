@@ -175,11 +175,9 @@ public class RomRecordVisual
     public static readonly Color ActiveColor = new Color(1f, 0.42f, 0.02f);        // #FF6B05 · V=1.00
     public static readonly Color PassiveColor = new Color(0.62f, 0.26f, 0.012f);   // #9E4203 · V=0.62
     // ★단면 사각형·삼각면(2026-09-21). 표시물이지 판독값이 아니라 눈에 덜 띄게 둔다.
-    // ★09-28 저녁 사용자: "원래 불투명도 자체를 높여서 더 선명하게 대비" — 가려진 부분(0.08)과의 차이를 키우려고 반투명 선을 전부 올렸다.
-    //   옛 값: 단면 테두리 0.45 · 격자 0.22 · 벗어남 0.85 · 드롭라인 0.35. 바늘 면 채움(0.05)은 09-23 지시("내부 색 거의 없이")라 그대로.
-    public static readonly Color SectionColor = new Color(0.45f, 0.55f, 0.70f, 1f);
-    public static readonly Color SectionGridColor = new Color(0.45f, 0.55f, 0.70f, 0.7f);
-    public static readonly Color OffPlaneColor = new Color(1f, 0.85f, 0.35f, 1f);     // 단면에서 벗어난 양 — 노랑 경고 계열
+    public static readonly Color SectionColor = new Color(0.45f, 0.55f, 0.70f, 0.45f);
+    public static readonly Color SectionGridColor = new Color(0.45f, 0.55f, 0.70f, 0.22f);
+    public static readonly Color OffPlaneColor = new Color(1f, 0.85f, 0.35f, 0.85f);   // 단면에서 벗어난 양 — 노랑 경고 계열
     public static readonly Color NeedleColor = new Color(0.2f, 1f, 0.85f);      // 바늘 — 마커 색과 겹치지 않게 청록
     public static readonly Color NeedleHeldColor = new Color(1f, 1f, 0.35f);    // 잡고 있는 동안
 
@@ -385,7 +383,7 @@ public class RomRecordVisual
 
     public float floorY = 0f;                 // 바닥 높이(월드 y)
     public float dropLineWidth = 0.0015f;     // ★가늘게 — 주 표시물보다 튀면 안 된다(기기 미검증 추정)
-    public float dropLineAlpha = 1f;   // 09-28 저녁 0.35 → 1(불투명도로 대비)
+    public float dropLineAlpha = 0.35f;
     public float blobRadius = 0.035f;         // 바닥 원 반지름(m). 지름 7cm — 기기 미검증 추정
     public float blobAlpha = 0.6f;            // ★셰이더가 알파를 두 번 곱해(SrcAlpha 블렌드) 실제로 바닥을 약 36% 어둡게 한다(계산)
 
