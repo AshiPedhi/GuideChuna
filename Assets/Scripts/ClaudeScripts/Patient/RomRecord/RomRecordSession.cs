@@ -193,8 +193,16 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float defaultC7Distance = 0.6f;
     [Tooltip("대추 기본 자리 — 눈높이보다 아래로(m).")]
     [SerializeField] private float defaultC7BelowEye = 0.10f;
-    [Tooltip("위치 조정 판을 조작 판에서 이만큼(m) 옆(눈 쪽에서 보아 왼쪽)에 붙인다. 조작 판 반폭 + 이 판 반폭 + 틈.")]
-    [SerializeField] private float nudgePanelOffset = 0.25f;
+    // ★위치 조정 판 자리(09-28 오후 사용자: "환자의 뒤, 사용자가 쓰기 편한 위치에"). 오전엔 조작 판 옆에 붙였다.
+    //   대추를 기준으로 <b>환자 뒤(=내 쪽)</b>·아래·오른쪽으로 비킨다 — 목을 가리지 않고 손이 닿는 자리(추정값, 기기에서 맞출 것).
+    //   ★자리는 기준점 단계에 들어올 때 한 번만 정한다 — 버튼으로 대추를 옮길 때 판이 따라 움직이면 누르던 손가락이 헛짚는다.
+    //   ★옛 필드 nudgePanelOffset(조작 판에서 옆으로)은 없앴다 — 씬에 남은 값은 안 읽힌다.
+    [Tooltip("위치 조정 판 — 대추에서 환자 뒤쪽(내 쪽)으로(m).")]
+    [SerializeField] private float nudgePanelBehind = 0.25f;
+    [Tooltip("위치 조정 판 — 대추보다 아래로(m).")]
+    [SerializeField] private float nudgePanelBelow = 0.15f;
+    [Tooltip("위치 조정 판 — 환자 오른쪽으로(m). 음수면 왼쪽.")]
+    [SerializeField] private float nudgePanelSide = 0.15f;
 
     [Header("=== 기준점 다시 찍기(2026-09-28) ===")]
     [Tooltip("이미 찍은 기준점 버튼을 이만큼(초) 누르고 있으면 검지끝 자리로 다시 찍힌다. 짧게 누르면 이동 대상만 바뀐다.\n" +
@@ -296,9 +304,8 @@ public class RomRecordSession : MonoBehaviour
     private bool finePlacePending;   // 고른 바늘이 바뀌었다 — 바늘을 그린 뒤(Redraw) 판을 그 구체 위에 세운다
     private IRomRecordMenu fineMenu;
     private float nextFineLog;
-    // ★기준점 위치 조정 판(09-28) — 조작 판 옆에 붙는다. 조작 판을 끌면 같이 따라간다(그 사이 벡터를 기억한다).
+    // ★기준점 위치 조정 판(09-28) — 환자 뒤, 내가 쓰기 편한 자리(UpdateNudgeMenu).
     private IRomRecordMenu nudgeMenu;
-    private Vector3 nudgeOffset;
     // ★기준점을 손가락으로 «찍었나»(09-28). 시작하면 세 점 모두 헤드셋 앞 기본 자리에 서 있으므로(hasC7 등은 참)
     //   «있나»와 «실제로 찍었나»를 가른다. 기본 자리 그대로면 판에서 ○로 보인다. 0 대추 · 1 미간 · 2 외이도.
     private readonly bool[] landmarkCaptured = new bool[3];
@@ -398,7 +405,7 @@ public class RomRecordSession : MonoBehaviour
         fineMenu.Hide();
 
         // ★기준점 위치 조정 판(2026-09-28 사용자: "위치 조정하는 버튼 UI 따로 빼 주고, 버튼도 글씨 말고 아이콘으로").
-        //   조작 판 옆에 붙는 3×3 판이다. 가운데 칸은 지금 옮기는 기준점 이름.
+        //   환자 뒤(내가 쓰기 편한 자리)에 서는 3×3 판이다(09-28 오후 — 오전엔 조작 판 옆). 가운데 칸은 지금 옮기는 기준점 이름.
         //     ↺  ▲  ↻        ↺↻ = 환자 정면 돌리기(종전 «정면 ◀▶»)
         //     ◀ 이름 ▶        ▲▼◀▶ = 위·아래·환자 왼쪽·오른쪽
         //     앞  ▼  뒤        앞·뒤 = 환자 앞·뒤(바닥 사다리꼴 그림으로 위·아래와 가른다)
@@ -900,13 +907,13 @@ public class RomRecordSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 위치 조정 판을 기준점 설정 단계에서만 보인다(09-28). 조작 판 옆(눈 쪽에서 보아 왼쪽 — 조작 판이 오른쪽 대각선에 선다)에 붙인다.
-    /// ★자리는 보일 때 한 번만 정한다 — 조작 판을 끌면 ApplyDrag가 같이 옮긴다.
+    /// 위치 조정 판을 기준점 설정 단계에서만 보인다(09-28). 자리는 <b>환자 뒤, 내가 쓰기 편한 곳</b> — 대추에서
+    /// 환자 뒤(내 쪽)·아래·오른쪽으로 비킨 곳이다(09-28 오후 사용자). ★보일 때 한 번만 정한다.
     /// </summary>
     private void UpdateNudgeMenu()
     {
         if (nudgeMenu == null) return;
-        bool want = step == RomRecordStep.Landmarks && leftMenu != null && leftMenu.Placed && eye != null;
+        bool want = step == RomRecordStep.Landmarks && hasC7 && eye != null;
         if (!want)
         {
             if (nudgeMenu.Visible) nudgeMenu.Hide();
@@ -914,14 +921,12 @@ public class RomRecordSession : MonoBehaviour
         }
         if (!nudgeMenu.Visible)
         {
-            Vector3 board = leftMenu.Position;
-            Vector3 toBoard = Vector3.ProjectOnPlane(board - eye.position, Vector3.up);
-            if (toBoard.sqrMagnitude < 1e-4f) toBoard = Vector3.forward;
-            Vector3 side = Vector3.Cross(Vector3.up, toBoard.normalized);   // 판을 볼 때 오른쪽
-            Vector3 pos = board - side * nudgePanelOffset;
-            nudgeOffset = pos - board;
+            Vector3 f = RomRecordGeometry.Forward(yaw), r = RomRecordGeometry.Right(yaw);
+            Vector3 pos = c7 - f * nudgePanelBehind - Vector3.up * nudgePanelBelow + r * nudgePanelSide;
             nudgeMenu.PlaceAt(pos, eye);
-            Debug.Log($"[실측기록] 위치 조정 판을 세웠다 — {Fmt(pos)}(조작 판 왼쪽 {nudgePanelOffset * 100f:F0}cm)");
+            Debug.Log($"[실측기록] 위치 조정 판을 세웠다 — {Fmt(pos)}(대추에서 뒤 {nudgePanelBehind * 100f:F0} · " +
+                      $"아래 {nudgePanelBelow * 100f:F0} · 오른쪽 {nudgePanelSide * 100f:F0}cm · 눈까지 " +
+                      $"{Vector3.Distance(pos, eye.position) * 100f:F0}cm)");
         }
         nudgeMenu.SetText(NudgeTargetKey,
             $"<color={LandmarkHex(landmarkTarget)}>{LandmarkName(landmarkTarget)}</color>");
@@ -1070,7 +1075,7 @@ public class RomRecordSession : MonoBehaviour
             Ctl(LandmarkButton("t1", "미간", 1, hasGlab));
             // ★정면을 다시 잡는 버튼(09-21) — 대추·미간을 둘 다 <b>찍은</b> 뒤에만 뜻이 있다(기본 자리끼리는 내 시선 방향 그대로다).
             if (landmarkCaptured[0] && landmarkCaptured[1]) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
-            // ★정면 ◀▶와 위·아래·앞·뒤·좌·우 이동 버튼은 09-28에 <b>위치 조정 판</b>(조작 판 옆, 그림 버튼)으로 옮겼다
+            // ★정면 ◀▶와 위·아래·앞·뒤·좌·우 이동 버튼은 09-28에 <b>위치 조정 판</b>(환자 뒤에 따로 서는 그림 버튼 판)으로 옮겼다
             //   (사용자: "위치 조정하는 버튼 UI 따로 빼 주고 버튼도 글씨 말고 아이콘으로").
         }
         else if (IsMotion(step))
@@ -1757,10 +1762,13 @@ public class RomRecordSession : MonoBehaviour
         {
             int n = mi * NeedlePerStep + k;
             if (needleMoved[n]) continue;
-            // ★아직 안 끌어낸 바늘은 <b>그 방향의 한계 각도</b>에 세운다(2026-09-28 사용자).
-            //   ★매번 다시 세운다 — 정면(yaw)을 다듬으면 한계 자리도 따라가야 한다. 값이 아니라 출발점이라 괜찮다.
-            //   (09-21~09-23엔 전부 눈금 0에 포개 세웠다.)
-            needleDir[n] = LimitDir(step, k);
+            // ★아직 안 움직인 바늘의 출발점(값이 아니다 — 매번 다시 세운다. 정면(yaw)을 다듬으면 따라가야 한다).
+            //   · 능동(짝수) = 그 방향의 <b>한계 각도</b>(2026-09-28 사용자).
+            //   · 압박(홀수) = <b>능동을 기록한 자리</b>(09-28 오후 사용자: "능동을 완료하면 체크를 눌러 기록하고
+            //     그 위치에서 다시 버튼을 눌러 조작하게 — 새 바늘을 옮기는 게 아니라, 그래야 면에 기록만 남고 깔끔").
+            //     그래서 한 방향에 움직이는 바늘은 늘 하나이고, 능동 자리에는 기록(면)만 남는다.
+            //   (09-21~09-23엔 전부 눈금 0에 포개 세웠고, 09-28 오전엔 둘 다 한계에 포개 세웠다.)
+            needleDir[n] = k % 2 == 1 ? needleDir[n - 1] : LimitDir(step, k);
         }
         return true;
     }
@@ -1805,6 +1813,12 @@ public class RomRecordSession : MonoBehaviour
     /// </summary>
     private bool NeedleInPlay(int mi, int k)
     {
+        // ★압박 바늘은 그 방향의 능동을 [✓]한 뒤에 나타난다(09-28 오후) — 그 전엔 능동 자리와 포개져 있어 보일 까닭이 없다.
+        if (k % 2 == 1)
+        {
+            int n = mi * NeedlePerStep + k;
+            if (!needleLocked[n - 1] && !NeedleRecorded(n)) return false;
+        }
         if (k / 2 == 0) return true;
         int b = mi * NeedlePerStep;
         // ★09-28 오후: «다 맞췄다» = 둘 다 [✓] 확정(버튼으로만 움직이니 «움직였나»로는 순서를 못 가른다).
@@ -1848,9 +1862,7 @@ public class RomRecordSession : MonoBehaviour
             case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; break;
             case 8: ear = v; break;
             case 9:
-                leftMenu.MoveTo(v);
-                // ★위치 조정 판은 조작 판 옆에 붙어 있다 — 같이 옮긴다(09-28).
-                if (nudgeMenu != null && nudgeMenu.Visible) nudgeMenu.MoveTo(v + nudgeOffset);
+                leftMenu.MoveTo(v);   // ★위치 조정 판은 09-28 오후부터 환자 뒤에 따로 선다 — 같이 옮기지 않는다
                 return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
