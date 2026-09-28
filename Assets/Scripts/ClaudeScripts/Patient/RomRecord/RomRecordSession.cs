@@ -71,7 +71,7 @@ public class RomRecordSession : MonoBehaviour
     //   눈금 (0.64,0.66,0.69,0.60) · 0 (0.88,0.90,0.93,0.95) · 숫자 (0.80,0.82,0.85,0.95).
     //   ★씬에 값이 굳어 있다(규칙 7) — 코드 기본값과 같은 값을 브리지로 씬에 넣었다(09-28).
     [Tooltip("눈금판 원·원통 테두리 색.")]
-    [SerializeField] private Color dialColor = new Color(0.94f, 0.95f, 0.97f, 0.95f);
+    [SerializeField] private Color dialColor = new Color(0.94f, 0.95f, 0.97f, 1f);   // 09-28 저녁 알파 0.95 → 1
     [Tooltip("눈금 색.")]
     [SerializeField] private Color dialTickColor = new Color(0.94f, 0.95f, 0.97f, 1f);
     [Tooltip("눈금 0 색. ★기준선이라 다른 눈금보다 또렷하게 둔다.")]
