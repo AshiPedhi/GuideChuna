@@ -440,9 +440,10 @@ public class RomRecordMenuUI : IRomRecordMenu
                                                 -(padPx + it.row * rowPx + (rows * rowPx - h) * 0.5f));
 
             bool hasIcon = it.icon != null && !b.isText;
+            bool iconOnly = hasIcon && it.iconOnly;   // ★그림만(09-28) — 글자를 숨기고 그림을 가운데 크게
             if (b.label != null)
             {
-                b.label.text = it.label;
+                b.label.text = iconOnly ? "" : it.label;
                 b.label.fontSize = labelPt * (it.textScale > 0f ? it.textScale : 1f);
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
                 // ★그림이 있으면 글자를 아래로 내린다. 글자 칸은 왼쪽 정렬을 고를 수 있다(값 여러 줄).
@@ -475,12 +476,26 @@ public class RomRecordMenuUI : IRomRecordMenu
                 if (b.icon.gameObject.activeSelf != hasIcon) b.icon.gameObject.SetActive(hasIcon);
                 if (hasIcon)
                 {
-                    // 그림 칸 = 버튼 높이에서 글자 한 줄을 뺀 정사각형
-                    float labelBand = labelPt * 1.6f;
-                    float s = Mathf.Max(8f, Mathf.Min(w - 12f, h - labelBand - 10f));
+                    RectTransform irt = b.icon.rectTransform;
                     b.icon.texture = it.icon;
-                    b.icon.rectTransform.sizeDelta = new Vector2(s, s);
-                    b.icon.rectTransform.anchoredPosition = new Vector2(0f, -6f);
+                    if (iconOnly)
+                    {
+                        // 그림만 — 버튼 한가운데, 여백 조금만 남기고 꽉 차게
+                        float s = Mathf.Max(8f, Mathf.Min(w, h) - 12f);
+                        irt.anchorMin = irt.anchorMax = irt.pivot = new Vector2(0.5f, 0.5f);
+                        irt.sizeDelta = new Vector2(s, s);
+                        irt.anchoredPosition = Vector2.zero;
+                    }
+                    else
+                    {
+                        // 그림 칸 = 버튼 높이에서 글자 한 줄을 뺀 정사각형
+                        float labelBand = labelPt * 1.6f;
+                        float s = Mathf.Max(8f, Mathf.Min(w - 12f, h - labelBand - 10f));
+                        irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 1f);
+                        irt.pivot = new Vector2(0.5f, 1f);
+                        irt.sizeDelta = new Vector2(s, s);
+                        irt.anchoredPosition = new Vector2(0f, -6f);
+                    }
                     // ★고른 탭은 흰 바탕이라 그림을 어둡게, 잠긴 탭은 흐리게.
                     b.icon.color = it.selected ? new Color(0.153f, 0.153f, 0.153f, 1f)
                                  : it.locked ? new Color(1f, 1f, 1f, 0.3f)

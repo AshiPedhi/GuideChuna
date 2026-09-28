@@ -148,8 +148,7 @@ public class RomRecordSession : MonoBehaviour
     //   그 면에서만 회전하도록". ★점찍기를 <b>대체하지 않는다</b> — 둘 다 두고 따로 테스트한다.
     [Tooltip("동작 단계에서 바늘을 띄운다. 손목 판의 [바늘] 버튼으로도 껐다 켤 수 있다.")]
     [SerializeField] private bool needleEnabled = true;
-    [Tooltip("바늘 손잡이를 잡을 수 있는 반경(m).")]
-    [SerializeField] private float needleGrabRadius = 0.1f;
+    // ★needleGrabRadius(바늘 잡기 반경 0.1m)는 09-28에 없앴다 — 바늘을 손으로 잡지 않는다(버튼으로만). 씬에 남은 값은 안 읽힌다.
     [Tooltip("손잡이를 눈금판보다 이만큼(m) 더 밖에 둔다. ★0이면 손잡이가 머리 표면에 놓여 사람 머리에 묻힌다(09-21 사용자 지적).")]
     [SerializeField] private float needleHandleOut = 0.16f;
     [Tooltip("미간을 아직 안 찍었을 때 쓸 각도기 반지름(m). 미간이 있으면 중심에서 미간까지를 쓴다.")]
@@ -178,6 +177,18 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float fineStepDeg = 0.1f;
     [Tooltip("미세 조정 판을 바늘 구체보다 이만큼(m) 위에 띄운다(손과 환자 머리가 한 시선에 들게).")]
     [SerializeField] private float finePanelRise = 0.08f;
+
+    [Header("=== 기준점 기본 자리·위치 조정 판(2026-09-28) ===")]
+    // ★사용자 09-28: "기준점 최초에 대추·미간·외이도 안 찍어도 헤드셋 눈높이에서 디폴트값으로 일정 위치에 생성되게".
+    //   환자가 <b>나와 같은 쪽을 본다</b>(내가 환자 뒤에 선다 — 사용자 선택). 대추가 내 쪽, 미간이 안쪽이다.
+    //   대추→미간·외이도 간격은 09-28 오전 녹화 판의 실측 한 번에서 가져왔다(미간: 앞 12·위 11cm / 외이도: 앞 8·위 11·옆 4cm).
+    //   ★사람마다 다르다 — 출발점일 뿐이고, 판의 화살표로 옮기거나 손가락을 대고 길게 눌러 찍는다.
+    [Tooltip("대추 기본 자리 — 헤드셋에서 앞으로(m).")]
+    [SerializeField] private float defaultC7Distance = 0.6f;
+    [Tooltip("대추 기본 자리 — 눈높이보다 아래로(m).")]
+    [SerializeField] private float defaultC7BelowEye = 0.10f;
+    [Tooltip("위치 조정 판을 조작 판에서 이만큼(m) 옆(눈 쪽에서 보아 왼쪽)에 붙인다. 조작 판 반폭 + 이 판 반폭 + 틈.")]
+    [SerializeField] private float nudgePanelOffset = 0.25f;
 
     [Header("=== 기준점 다시 찍기(2026-09-28) ===")]
     [Tooltip("이미 찍은 기준점 버튼을 이만큼(초) 누르고 있으면 검지끝 자리로 다시 찍힌다. 짧게 누르면 이동 대상만 바뀐다.\n" +
@@ -269,8 +280,15 @@ public class RomRecordSession : MonoBehaviour
     private readonly bool[] needleLocked = new bool[4 * NeedlePerStep];
     // ★미세 조정 판이 다루는 바늘(k) — 마지막으로 놓았거나 구체를 쳐서 푼 바늘. -1이면 판을 숨긴다.
     private int fineTarget = -1;
+    private bool finePlacePending;   // 고른 바늘이 바뀌었다 — 바늘을 그린 뒤(Redraw) 판을 그 구체 위에 세운다
     private IRomRecordMenu fineMenu;
     private float nextFineLog;
+    // ★기준점 위치 조정 판(09-28) — 조작 판 옆에 붙는다. 조작 판을 끌면 같이 따라간다(그 사이 벡터를 기억한다).
+    private IRomRecordMenu nudgeMenu;
+    private Vector3 nudgeOffset;
+    // ★기준점을 손가락으로 «찍었나»(09-28). 시작하면 세 점 모두 헤드셋 앞 기본 자리에 서 있으므로(hasC7 등은 참)
+    //   «있나»와 «실제로 찍었나»를 가른다. 기본 자리 그대로면 판에서 ○로 보인다. 0 대추 · 1 미간 · 2 외이도.
+    private readonly bool[] landmarkCaptured = new bool[3];
     // ★구체 터치는 <b>밖에서 안으로 들어오는 순간</b>만 센다(손별로 지금 안에 있는 바늘 k, 없으면 -1).
     //   놓는 순간 그 손가락은 이미 구체 안에 있다 — 들어옴만 세면 놓자마자 도로 풀리는 일이 없다.
     private readonly int[] touchInside = { -1, -1 };
@@ -341,27 +359,68 @@ public class RomRecordSession : MonoBehaviour
         Debug.Log($"[실측기록] 판 — {(useMetaUI ? "Meta UI Set" : "Quad")} · " +
                   $"{(menuFixedInSpace ? "허공 고정(진행Root 방식)" : "양 손목 추종")}");
 
-        // ★바늘 위 미세 조정 판(2026-09-28 사용자: "0.1도 간격으로 버튼 UI가 바늘 위 손과 환자 머리가
-        //   한 시선 안에 들어오는 위치에"). 조작 판과 같은 종류의 판을 하나 더 띄운다 — 누름 판정이 같다.
-        //   바늘을 놓거나 구체를 쳐서 풀면 그 바늘 위에 서고, 고른 바늘이 없으면 숨는다.
+        LoadTabIcons();
+
+        // ★바늘 각도 판(2026-09-28 — 오전에 ±0.1° 둘로 만들고, 오후에 사용자 선택으로 5단 + 확정):
+        //   "각도기 바늘 옮기는 거 손으로 잡고 옮기는 기능은 빼고 그냥 버튼으로 각도 조절하게 하자."
+        //   한계 각도(예: 신전 90°)에서 실제 값까지 버튼만으로 가야 하므로 5° · 1° · 0.1° 셋을 둔다(누르고 있으면 반복).
+        //   [✓]는 이 바늘을 확정하고 순서상 다음 바늘로 넘어간다. 판은 고른 바늘 구체 위에 선다 —
+        //   "손과 환자 머리가 한 시선 안에"(09-23 사용자 메모). 글자 대신 그림이다(화살표 개수 = 크기).
+        //   ★label은 그림을 못 그리는 Quad 판용 대체 글자다(Meta 판은 iconOnly라 그림만 보인다).
         fineMenu = NewMenu();
         fineMenu.FixedInSpace = true;
-        fineMenu.Build(transform, "바늘 미세 조정", 4, font, mat);
+        fineMenu.Build(transform, "바늘 각도", 8, font, mat);
+        const float fs = 0.8f;   // 버튼 한 칸 폭(판 칸 단위) — 7개 + 값이면 판 폭 약 29cm
         fineMenu.SetLayout("", new[]
         {
-            // ★글자는 ASCII '-'다 — 앱 폰트(NotoSansKR-Bold)에 없는 글리프는 네모로 나온다(09-22 ↺↻ 전례).
-            RomMenuItem.Button("fine-", "-" + fineStepDeg.ToString("0.0#") + "°", 0f, 0f, 1.4f, AdjTint, repeat: true),
-            new RomMenuItem { id = null, key = FineValueKey, label = "", col = 1.4f, row = 0f, span = 1.4f },
-            RomMenuItem.Button("fine+", "+" + fineStepDeg.ToString("0.0#") + "°", 2.8f, 0f, 1.4f, AdjTint, repeat: true),
+            IconButton("deg-5", "-5", "deg_dec3", 0f * fs, 0f, fs, true),
+            IconButton("deg-1", "-1", "deg_dec2", 1f * fs, 0f, fs, true),
+            IconButton("deg-0.1", "-.1", "deg_dec1", 2f * fs, 0f, fs, true),
+            new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = 1.4f },
+            IconButton("deg+0.1", "+.1", "deg_inc1", 3f * fs + 1.4f, 0f, fs, true),
+            IconButton("deg+1", "+1", "deg_inc2", 4f * fs + 1.4f, 0f, fs, true),
+            IconButton("deg+5", "+5", "deg_inc3", 5f * fs + 1.4f, 0f, fs, true),
+            IconButton("degok", "OK", "confirm", 6f * fs + 1.5f, 0f, fs, false),
         });
         fineMenu.Hide();
-        LoadTabIcons();
+
+        // ★기준점 위치 조정 판(2026-09-28 사용자: "위치 조정하는 버튼 UI 따로 빼 주고, 버튼도 글씨 말고 아이콘으로").
+        //   조작 판 옆에 붙는 3×3 판이다. 가운데 칸은 지금 옮기는 기준점 이름.
+        //     ↺  ▲  ↻        ↺↻ = 환자 정면 돌리기(종전 «정면 ◀▶»)
+        //     ◀ 이름 ▶        ▲▼◀▶ = 위·아래·환자 왼쪽·오른쪽
+        //     앞  ▼  뒤        앞·뒤 = 환자 앞·뒤(바닥 사다리꼴 그림으로 위·아래와 가른다)
+        //   기준점 설정 단계에서만 보인다.
+        nudgeMenu = NewMenu();
+        nudgeMenu.FixedInSpace = true;
+        nudgeMenu.Build(transform, "기준점 위치", 10, font, mat);
+        nudgeMenu.SetLayout("", new[]
+        {
+            IconButton("yaw-", "<-", "yaw_left", 0f, 0f, 1f, true),
+            IconButton("up", "^", "nudge_up", 1f, 0f, 1f, true),
+            IconButton("yaw+", "->", "yaw_right", 2f, 0f, 1f, true),
+            IconButton("left", "<", "nudge_left", 0f, 1f, 1f, true),
+            new RomMenuItem { id = null, key = NudgeTargetKey, label = "", col = 1f, row = 1f, span = 1f },
+            IconButton("right", ">", "nudge_right", 2f, 1f, 1f, true),
+            IconButton("fwd", "F", "nudge_fwd", 0f, 2f, 1f, true),
+            IconButton("down", "v", "nudge_down", 1f, 2f, 1f, true),
+            IconButton("back", "B", "nudge_back", 2f, 2f, 1f, true),
+        });
+        nudgeMenu.Hide();
         ApplyStepButtons();
         BuildSounds();
         Say(ArmVoice(landmarkTarget));   // ★처음엔 대추가 찍기 대기다
 
         Debug.Log("[실측기록] 시작 — 기준점 설정부터. 좌우 뒤집기 " + (flipSides ? "켬" : "끔") + " · " +
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
+    }
+
+    /// <summary>그림 버튼 하나(09-28). 그림을 못 찾으면 대체 글자로 보인다(LoadIcon이 경고를 남긴다).</summary>
+    private static RomMenuItem IconButton(string id, string fallback, string icon, float col, float row, float span, bool repeat)
+    {
+        var it = RomMenuItem.Button(id, fallback, col, row, span, AdjTint, repeat: repeat);
+        it.icon = LoadIcon(icon);
+        it.iconOnly = it.icon != null;
+        return it;
     }
 
     /// <summary>
@@ -587,6 +646,7 @@ public class RomRecordSession : MonoBehaviour
             f.Normalize();
             frameOrigin = eye.position + f * startDistance - Vector3.up * startBelowEye;
             yaw = Quaternion.LookRotation(f, Vector3.up).eulerAngles.y;
+            PlaceDefaultLandmarks(f);
             placed = true;
             dirty = true;
         }
@@ -606,6 +666,23 @@ public class RomRecordSession : MonoBehaviour
             Redraw();
         }
         view.FaceCamera(eye);
+    }
+
+    /// <summary>
+    /// 기준점 셋을 헤드셋 앞 기본 자리에 세운다(2026-09-28 사용자). ★«찍은» 것이 아니다 — landmarkCaptured는 거짓으로 둔다.
+    /// 환자가 나와 같은 쪽을 본다고 놓는다(사용자 선택): 정면(yaw) = 내 시선의 수평 방향, 대추가 내 쪽.
+    /// ★첫 프레임에 부르지 않는다 — 추적이 붙은 뒤(EyeReady)라야 눈높이가 맞다(09-21 «발밑에 선다» 전례).
+    /// </summary>
+    private void PlaceDefaultLandmarks(Vector3 f)
+    {
+        Vector3 up = Vector3.up, r = RomRecordGeometry.Right(yaw);
+        c7 = eye.position + f * defaultC7Distance - up * defaultC7BelowEye;
+        glab = c7 + f * 0.12f + up * 0.11f;
+        ear = c7 + f * 0.08f + up * 0.11f + r * 0.04f;   // 오른쪽 귀 쪽(축은 정중면으로 옮긴 점이라 좌우는 각에 영향 없다)
+        hasC7 = hasGlab = hasEar = true;
+        frontAimed = false;   // ★실제 대추·미간을 찍으면 그때 한 번 정면을 다시 잡게 둔다
+        Debug.Log($"[실측기록] 기준점 기본 자리 — 대추 {Fmt(c7)} · 외이도 {Fmt(ear)} · 미간 {Fmt(glab)} " +
+                  $"(눈 {Fmt(eye.position)} 앞 {defaultC7Distance * 100f:F0}cm · 아래 {defaultC7BelowEye * 100f:F0}cm · 정면 {yaw:F0}°)");
     }
 
     /// <summary>
@@ -753,7 +830,8 @@ public class RomRecordSession : MonoBehaviour
                 OnButton(fid);
             }
             leftMenu.Tick();
-            PollFineMenu(rTip, rIdx, lTip, lIdx);
+            PollSubMenu(fineMenu, rTip, rIdx, lTip, lIdx);
+            PollSubMenu(nudgeMenu, rTip, rIdx, lTip, lIdx);
             return;
         }
 
@@ -781,27 +859,59 @@ public class RomRecordSession : MonoBehaviour
         }
         leftMenu.Tick();
         rightMenu.Tick();
-        PollFineMenu(rTip, rIdx, lTip, lIdx);
+        PollSubMenu(fineMenu, rTip, rIdx, lTip, lIdx);
+        PollSubMenu(nudgeMenu, rTip, rIdx, lTip, lIdx);
     }
 
     /// <summary>
-    /// 바늘 위 미세 조정 판을 돌린다(2026-09-28). ★조작 판과 같은 얼개다 — 판에 더 가까운 손 하나만 본다.
-    /// 자리는 <see cref="ShowFineMenu"/>가 한 번 정하고, 여기서는 눈 쪽으로 돌리기만 한다(누르는 중에 판이 움직이면 헛짚는다).
+    /// 떠 있는 작은 판(바늘 각도 판 · 기준점 위치 판)을 돌린다(2026-09-28). ★조작 판과 같은 얼개다 — 판에 더 가까운 손 하나만 본다.
+    /// 자리는 여는 쪽이 한 번 정하고, 여기서는 눈 쪽으로 돌리기만 한다(누르는 중에 판이 움직이면 헛짚는다).
     /// </summary>
-    private void PollFineMenu(bool rTip, Vector3 rIdx, bool lTip, Vector3 lIdx)
+    private void PollSubMenu(IRomRecordMenu m, bool rTip, Vector3 rIdx, bool lTip, Vector3 lIdx)
     {
-        if (fineMenu == null || !fineMenu.Visible) return;
-        fineMenu.Follow(false, Vector3.zero, eye, false);
-        bool useRight = rTip && (!lTip || fineMenu.Distance(rIdx) <= fineMenu.Distance(lIdx));
-        string id = fineMenu.Poll(useRight ? rIdx : lIdx, useRight ? rTip : lTip);
+        if (m == null || !m.Visible) return;
+        m.Follow(false, Vector3.zero, eye, false);
+        bool useRight = rTip && (!lTip || m.Distance(rIdx) <= m.Distance(lIdx));
+        string id = m.Poll(useRight ? rIdx : lIdx, useRight ? rTip : lTip);
         if (id != null)
         {
             lastPressTime = Time.unscaledTime;   // ★누른 직후 핀치를 막는다 — 조작 판과 같다
-            Play(fineMenu.LastRepeat ? sndRepeat : sndPress);
+            lastPressWasRight = useRight;
+            Play(m.LastRepeat ? sndRepeat : sndPress);
             OnButton(id);
         }
-        fineMenu.Tick();
+        m.Tick();
     }
+
+    /// <summary>
+    /// 위치 조정 판을 기준점 설정 단계에서만 보인다(09-28). 조작 판 옆(눈 쪽에서 보아 왼쪽 — 조작 판이 오른쪽 대각선에 선다)에 붙인다.
+    /// ★자리는 보일 때 한 번만 정한다 — 조작 판을 끌면 ApplyDrag가 같이 옮긴다.
+    /// </summary>
+    private void UpdateNudgeMenu()
+    {
+        if (nudgeMenu == null) return;
+        bool want = step == RomRecordStep.Landmarks && leftMenu != null && leftMenu.Placed && eye != null;
+        if (!want)
+        {
+            if (nudgeMenu.Visible) nudgeMenu.Hide();
+            return;
+        }
+        if (!nudgeMenu.Visible)
+        {
+            Vector3 board = leftMenu.Position;
+            Vector3 toBoard = Vector3.ProjectOnPlane(board - eye.position, Vector3.up);
+            if (toBoard.sqrMagnitude < 1e-4f) toBoard = Vector3.forward;
+            Vector3 side = Vector3.Cross(Vector3.up, toBoard.normalized);   // 판을 볼 때 오른쪽
+            Vector3 pos = board - side * nudgePanelOffset;
+            nudgeOffset = pos - board;
+            nudgeMenu.PlaceAt(pos, eye);
+            Debug.Log($"[실측기록] 위치 조정 판을 세웠다 — {Fmt(pos)}(조작 판 왼쪽 {nudgePanelOffset * 100f:F0}cm)");
+        }
+        nudgeMenu.SetText(NudgeTargetKey,
+            $"<color={LandmarkHex(landmarkTarget)}>{LandmarkName(landmarkTarget)}</color>");
+    }
+
+    private static string LandmarkHex(int t) => t == 0 ? HexC7 : t == 2 ? HexEar : HexGlab;
 
     // ★09-21 사용자: "UI 너무 조잡해 · 버튼 디자인도 투박하고."
     //   녹화 프레임에서 보니 채도 높은 초록·노랑·파랑이 나란히 있어 눈이 아팠다.
@@ -833,6 +943,7 @@ public class RomRecordSession : MonoBehaviour
     private Texture2D refIcon;              // 기준점 설정 타일 그림
     private const string RefId = "tab1", RefStatusKey = "v1";
     private const string FineValueKey = "finev";   // 미세 조정 판 가운데 값 칸
+    private const string NudgeTargetKey = "nudget"; // 위치 조정 판 가운데 칸 — 지금 옮기는 기준점
     private int layoutSig = int.MinValue;   // 배치를 다시 짜야 하는 상태의 지문 — 같으면 글자만 바꾼다
 
     // 탭 아래 값 색 — 바늘·마커와 같은 색(RomRecordVisual.ActiveColor·PassiveColor). 대추 하늘 · 미간 흰색.
@@ -941,21 +1052,10 @@ public class RomRecordSession : MonoBehaviour
             Ctl(LandmarkButton("t0", "대추", 0, hasC7));
             Ctl(LandmarkButton("t2", "외이도", 2, hasEar));
             Ctl(LandmarkButton("t1", "미간", 1, hasGlab));
-            // ★기준선 세팅에서 옮겨 왔다(09-22). ↺↻는 앱 폰트(NotoSansKR-Bold)에 없어 ◀▶로 쓴다(글리프 표 실측).
-            Ctl(RomMenuItem.Button("yaw-", "정면 ◀", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("yaw+", "정면 ▶", 0, 0, 0, AdjTint, repeat: true));
-            // ★정면을 다시 잡는 버튼(09-21) — 자동은 처음 한 번뿐이라 여기서 고쳐 잡는다.
-            if (hasC7 && hasGlab) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
-            else n++;   // 자리를 비워 둔다 — 미간을 찍는 순간 아랫줄 버튼이 밀리지 않게
-            // ★기준점을 1mm씩 <b>옮기는</b> 버튼(2026-09-23 사용자: "좌우 회전 버튼 말고 위치 이동이 필요해").
-            //   ★Nudge 기능은 09-21부터 코드에 있었는데 판에 버튼이 없어 쓸 수가 없었다 — 버튼만 얹는다.
-            //   옮기는 대상은 <b>마지막으로 누른 기준점</b>이다(밝은 버튼이 그것이다).
-            Ctl(RomMenuItem.Button("up", "위", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("down", "아래", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("fwd", "앞", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("back", "뒤", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("left", "왼쪽", 0, 0, 0, AdjTint, repeat: true));
-            Ctl(RomMenuItem.Button("right", "오른쪽", 0, 0, 0, AdjTint, repeat: true));
+            // ★정면을 다시 잡는 버튼(09-21) — 대추·미간을 둘 다 <b>찍은</b> 뒤에만 뜻이 있다(기본 자리끼리는 내 시선 방향 그대로다).
+            if (landmarkCaptured[0] && landmarkCaptured[1]) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
+            // ★정면 ◀▶와 위·아래·앞·뒤·좌·우 이동 버튼은 09-28에 <b>위치 조정 판</b>(조작 판 옆, 그림 버튼)으로 옮겼다
+            //   (사용자: "위치 조정하는 버튼 UI 따로 빼 주고 버튼도 글씨 말고 아이콘으로").
         }
         else if (IsMotion(step))
         {
@@ -1023,7 +1123,8 @@ public class RomRecordSession : MonoBehaviour
         {
             int h = (int)step;
             h = h * 31 + landmarkTarget;
-            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (view.DropCuesOn ? 16 : 0);
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (view.DropCuesOn ? 16 : 0)
+                  + (landmarkCaptured[0] ? 32 : 0) + (landmarkCaptured[1] ? 64 : 0) + (landmarkCaptured[2] ? 128 : 0);
             return h;
         }
     }
@@ -1039,9 +1140,10 @@ public class RomRecordSession : MonoBehaviour
         sb.Clear();
         if (s == RomRecordStep.Landmarks)
         {
-            sb.Append("<color=").Append(HexC7).Append(hasC7 ? ">●" : "70>○").Append("</color> ");
-            sb.Append("<color=").Append(HexEar).Append(hasEar ? ">●" : "70>○").Append("</color> ");
-            sb.Append("<color=").Append(HexGlab).Append(hasGlab ? ">●" : "70>○").Append("</color>");
+            // ● 손가락으로 찍었다 · ○ 기본 자리(09-28 — 시작하면 셋 다 헤드셋 앞 기본 자리에 서 있다)
+            sb.Append("<color=").Append(HexC7).Append(landmarkCaptured[0] ? ">●" : "70>○").Append("</color> ");
+            sb.Append("<color=").Append(HexEar).Append(landmarkCaptured[2] ? ">●" : "70>○").Append("</color> ");
+            sb.Append("<color=").Append(HexGlab).Append(landmarkCaptured[1] ? ">●" : "70>○").Append("</color>");
             return sb.ToString();
         }
         // ★윗줄이 재는 순서의 첫 방향이다(09-28) — 굴곡(앞) / 우측굴 / 우회전. 종전엔 측굴·회전이 좌가 윗줄이었다.
@@ -1061,7 +1163,7 @@ public class RomRecordSession : MonoBehaviour
                 for (int k = 0; k < count; k++)
                 {
                     int nIdx = mi * NeedlePerStep + k;
-                    if (!needleMoved[nIdx] || NeedleSideOf(k) != side) continue;
+                    if (!NeedleRecorded(nIdx) || NeedleSideOf(k) != side) continue;
                     AppendValue(sb, k % 2 == 1, Vector3.Angle(z, needleDir[nIdx]));
                     any = true;
                 }
@@ -1117,26 +1219,24 @@ public class RomRecordSession : MonoBehaviour
     {
         if (step == RomRecordStep.Landmarks)
         {
-            // ★손가락을 대고 버튼을 누른다(09-23) — 핀치로는 안 찍힌다. 자동으로 넘어가지 않는다(09-22 사용자).
+            // ★09-28: 셋 다 기본 자리에 서 있다. 누르면 옮길 대상을 고르고(옆 판의 화살표로 옮긴다),
+            //   손가락을 대고 길게 누르면 그 자리에 찍힌다. 자동으로 넘어가지 않는다(09-22 사용자).
             int next = NextUnsetLandmark();
-            string moving = $" · 이동 버튼은 [{LandmarkName(landmarkTarget)}]를 1mm씩 옮깁니다";
-            return next >= 0 ? $"{LandmarkName(next)}에 손가락을 대고 [{LandmarkName(next)}]를 누르세요"
-                             : "기준점 완료 — 다시 찍으려면 대고 길게 누르세요" + moving;
+            return next >= 0 ? $"{LandmarkName(next)}: 화살표로 옮기거나, 손가락을 대고 [{LandmarkName(next)}] 길게"
+                             : "기준점 완료 — 다시 찍으려면 손가락을 대고 길게 누르세요";
         }
         if (!IsMotion(step)) return "";
         int mi = MotionIndex(step);
         if (needleOn)
         {
-            // ★순서대로 다음에 맞출 바늘을 말한다(09-28) — 굴곡→신전 / 우측굴→좌측굴 / 우회전→좌회전, 방향마다 능동→압박.
-            int cnt = NeedleCountOf(step), done = 0, next = -1;
-            for (int k = 0; k < cnt; k++)
-            {
-                if (needleMoved[mi * NeedlePerStep + k]) done++;
-                else if (next < 0) next = k;
-            }
-            return next >= 0
-                ? $"{DirName(step, next / 2)} {(next % 2 == 0 ? "능동" : "압박")} — 바늘을 끌어 맞추세요 ({done}/{cnt}){NoEarNote(step)}"
-                : $"다 맞췄습니다 · 구체를 치면 잠금이 풀립니다{NoEarNote(step)}";
+            // ★순서대로 지금 맞추는 바늘을 말한다(09-28) — 굴곡→신전 / 우측굴→좌측굴 / 우회전→좌회전, 방향마다 능동→압박.
+            //   ★오후부터 손으로 안 끈다 — 바늘 위 판의 화살표로 맞추고 ✓로 확정한다.
+            int cnt = NeedleCountOf(step), done = 0;
+            for (int k = 0; k < cnt; k++) if (needleLocked[mi * NeedlePerStep + k]) done++;
+            int k0 = fineTarget;
+            return k0 >= 0
+                ? $"{DirName(step, k0 / 2)} {(k0 % 2 == 0 ? "능동" : "압박")} — 화살표로 맞추고 체크 ({done}/{cnt}){NoEarNote(step)}"
+                : $"다 확정했습니다 · 고치려면 구체를 치세요{NoEarNote(step)}";
         }
         // ★점찍기 각은 중립선(대추→미간) 기준이라 미간이 없으면 안 나온다.
         if (!hasGlab) return "점찍기는 미간이 있어야 각이 나옵니다";
@@ -1165,7 +1265,7 @@ public class RomRecordSession : MonoBehaviour
         for (int k = 0; k < count; k++)
         {
             int n = mi * NeedlePerStep + k;
-            if (!needleMoved[n]) continue;
+            if (!NeedleRecorded(n)) continue;
             b.Append(any ? " · " : "");
             b.Append(DirName(s, k / 2)).Append(' ');
             b.Append(NeedleName(k)).Append(' ')
@@ -1188,7 +1288,7 @@ public class RomRecordSession : MonoBehaviour
         //   5분짜리 판에서 왜 동작 단계로 못 갔는지를 로그로 가를 수가 없었다.
         if (id != "yaw-" && id != "yaw+" && id != "h+" && id != "h-" &&
             id != "fwd" && id != "back" && id != "left" && id != "right" && id != "up" && id != "down" &&
-            id != "adj+" && id != "adj-" && id != "fine+" && id != "fine-")
+            id != "adj+" && id != "adj-" && !id.StartsWith("deg+") && !id.StartsWith("deg-"))
             Debug.Log($"[실측기록] 버튼 [{id}] — 단계 {StepTitle[(int)step]}");
 
         Vector3 f = RomRecordGeometry.Forward(yaw), r = RomRecordGeometry.Right(yaw), u = Vector3.up;
@@ -1223,6 +1323,7 @@ public class RomRecordSession : MonoBehaviour
                 needleOn = !needleOn;
                 for (int k = 0; k < NeedlePerStep; k++) lastNeedleDegShown[k] = -999;
                 if (!needleOn) HideFineMenu();
+                else if (IsMotion(step)) SelectNeedle(FirstPendingNeedle());
                 Debug.Log("[실측기록] 바늘 " + (needleOn ? "켬" : "끔"));
                 ApplyStepButtons();
                 break;
@@ -1232,8 +1333,14 @@ public class RomRecordSession : MonoBehaviour
                 Debug.Log("[실측기록] 바닥 단서(드롭라인·그림자) " + (view.DropCuesOn ? "켬" : "끔"));
                 ApplyStepButtons();
                 break;
-            case "fine+": FineAdjust(+fineStepDeg); break;
-            case "fine-": FineAdjust(-fineStepDeg); break;
+            // ★바늘 각도 판(09-28) — 손으로 끌지 않는다. 5° · 1° · 0.1°(fineStepDeg), [✓]는 확정 후 다음 바늘.
+            case "deg+5": FineAdjust(+5f); break;
+            case "deg-5": FineAdjust(-5f); break;
+            case "deg+1": FineAdjust(+1f); break;
+            case "deg-1": FineAdjust(-1f); break;
+            case "deg+0.1": FineAdjust(+fineStepDeg); break;
+            case "deg-0.1": FineAdjust(-fineStepDeg); break;
+            case "degok": ConfirmNeedle(); break;
             // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.
             case "tab1": GoTo(RomRecordStep.Landmarks); break;         // 기준점 설정 타일(설정 칸)
             case "tab2": GoTo(RomRecordStep.Flexion); break;          // 굴곡·신전
@@ -1341,8 +1448,11 @@ public class RomRecordSession : MonoBehaviour
             glab = p; hasGlab = true;
             Play(sndPinch);
             Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
-            AimFrontFromLandmarks();
         }
+        landmarkCaptured[t] = true;
+        // ★정면은 대추·미간을 <b>둘 다 찍은</b> 뒤에 한 번 잡는다(09-28) — 하나가 기본 자리면
+        //   «기본 대추 → 실제 미간»처럼 엉뚱한 방향이 나온다. 기본 자리끼리는 내 시선 방향 그대로다.
+        if ((t == 0 || t == 1) && landmarkCaptured[0] && landmarkCaptured[1]) AimFrontFromLandmarks();
         landmarkPlacedTime[t == 0 ? 0 : t == 1 ? 1 : 2] = Time.unscaledTime;   // 즉시 고침을 재는 기준
         // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
         int nextT = NextUnsetLandmark();
@@ -1357,7 +1467,7 @@ public class RomRecordSession : MonoBehaviour
     private static string NextVoice(int t) => t == 0 ? "next_c7" : t == 2 ? "next_ear" : "next_glab";
 
     /// <summary>아직 안 찍은 기준점 중 첫째(대추 → 외이도 → 미간). 다 찍었으면 -1.</summary>
-    private int NextUnsetLandmark() => !hasC7 ? 0 : !hasEar ? 2 : !hasGlab ? 1 : -1;
+    private int NextUnsetLandmark() => !landmarkCaptured[0] ? 0 : !landmarkCaptured[2] ? 2 : !landmarkCaptured[1] ? 1 : -1;
 
     private void Nudge(Vector3 d)
     {
@@ -1384,6 +1494,8 @@ public class RomRecordSession : MonoBehaviour
         DumpMisses($"{StepTitle[(int)step]} 떠남");
         step = s;
         HideFineMenu();   // ★미세 조정 판이 <b>다른 단계</b>의 바늘을 움직이지 않게 한다
+        // ★동작 단계에 들어오면 순서상 첫 미확정 바늘을 바로 고른다(09-28 — 손으로 안 잡으니 고르는 것이 곧 시작이다).
+        if (IsMotion(step) && needleOn) SelectNeedle(FirstPendingNeedle());
         ApplyStepButtons();
         Debug.Log($"[실측기록] 단계 → {StepTitle[(int)step]}");
         if (step == RomRecordStep.Done) LogSummary();
@@ -1433,12 +1545,7 @@ public class RomRecordSession : MonoBehaviour
                 dragStartTime = Time.unscaledTime;
                 Play(sndPress);
                 Debug.Log($"[실측기록] 잡았다 — {DragName(dragTarget)}");
-                // ★바늘을 끄는 동안 미세 조정 판은 숨긴다 — 놓으면 새 자리 위에 다시 선다.
-                if (dragTarget >= 3 && dragTarget <= 6) HideFineMenu();
-                // ★놓은 지 얼마 안 된 것을 다시 잡았다 = 직전에 놓은 자리가 틀렸다는 신호다.
-                if (dragTarget >= 3 && dragTarget <= 6
-                    && Time.unscaledTime - needleEndTime[dragTarget - 3] < 3f)
-                    CountMiss(Miss.QuickRedoNeedle, $"{NeedleName(dragTarget - 3)}를 놓자마자 다시 잡았다");
+                // ★바늘은 09-28부터 손으로 안 잡는다(버튼으로만) — «바늘 즉시 고침» 계수는 이제 안 센다.
                 int lm = dragTarget == 1 ? 0 : dragTarget == 2 ? 1 : dragTarget == 8 ? 2 : -1;
                 if (lm >= 0 && Time.unscaledTime - landmarkPlacedTime[lm] < 5f)
                     CountMiss(Miss.QuickFixLandmark, $"{LandmarkName(lm == 1 ? 1 : lm == 2 ? 2 : 0)}를 찍자마자 옮긴다");
@@ -1520,22 +1627,7 @@ public class RomRecordSession : MonoBehaviour
     /// </summary>
     private void CountNearMiss(Vector3 p)
     {
-        // ① 잠근 바늘을 잡으려 했나 = [홀드]가 실제로 막아 준 횟수다.
-        if (needleOn && NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
-        {
-            bool hang = NeedleFinHangs(step);
-            int count = NeedleCountOf(step);
-            for (int k = 0; k < count; k++)
-            {
-                int n = mi * NeedlePerStep + k;
-                if (!needleLocked[n] || !NeedleInPlay(mi, k)) continue;
-                if (NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang) <= needleGrabRadius)
-                {
-                    CountMiss(Miss.LockedNeedle, $"{NeedleName(k)}는 잠겨 있다(구체를 치면 풀린다)");
-                    return;
-                }
-            }
-        }
+        // ① «잠긴 바늘 건드림»은 09-28에 없앴다 — 바늘을 손으로 잡지 않게 되어 셀 것이 없다.
         // ② 판 <b>언저리</b>에서 오므렸나. 09-22의 진범이 이 형태였다(판 앞 10~26cm의 조기 핀치).
         if (menuFixedInSpace && leftMenu != null && leftMenu.Placed
             && leftMenu.Near(p, menuGrabMargin + 0.12f))
@@ -1594,37 +1686,9 @@ public class RomRecordSession : MonoBehaviour
     private int FindDragTarget(Vector3 p, out Vector3 startValue)
     {
         startValue = default;
-        // ★바늘 손잡이가 먼저다(09-21) — 동작 단계에서 바늘 끝을 잡으면 마커를 찍지 않는다.
-        //   바늘이 둘이라 <b>가까운 쪽</b>을 잡는다.
-        if (NeedleVisible(out Vector3 nc, out _, out _, out _, out float nh, out int mi))
-        {
-            int count = NeedleCountOf(step);
-            bool hang = NeedleFinHangs(step);
-            // ★이미 끌어낸 바늘부터 본다 — 손잡이가 흩어져 있어 어느 것을 집는지 분명하다.
-            int best = -1;
-            float bestD = needleGrabRadius;
-            for (int k = 0; k < count; k++)
-            {
-                int n = mi * NeedlePerStep + k;
-                // ★잠근 바늘은 안 잡힌다(놓으면 저절로 잠긴다 — 구체를 쳐서 푼다). 아직 차례가 아닌 방향도 안 잡힌다.
-                if (!needleMoved[n] || needleLocked[n] || !NeedleInPlay(mi, k)) continue;
-                float d = NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang);
-                if (d <= bestD) { bestD = d; best = k; }
-            }
-            // ★아직 안 끌어낸 것들은 한계 자리에 능동·압박이 포개져 있다 — 그중 <b>첫째</b>(능동)를 집는다.
-            //   그래서 능동 → 압박 순서로 하나씩 꺼내진다.
-            if (best < 0)
-            {
-                for (int k = 0; k < count; k++)
-                {
-                    int n = mi * NeedlePerStep + k;
-                    if (needleMoved[n] || needleLocked[n] || !NeedleInPlay(mi, k)) continue;
-                    if (NeedleDistance(p, nc, needleDir[n], nh, NeedleFin(step, needleDir[n]), hang) <= needleGrabRadius)
-                    { best = k; break; }
-                }
-            }
-            if (best >= 0) return 3 + best;   // 3·4·5·6 = 바늘 0·1·2·3
-        }
+        // ★★바늘은 손으로 잡지 않는다(2026-09-28 사용자: "각도기 바늘 옮기는 거 손으로 잡고 옮기는 기능은 빼고
+        //   그냥 버튼으로 각도 조절하게 하자"). 09-21~09-28 오전엔 바늘 선·면 어디든 핀치로 잡아 끌었다.
+        //   번호 3~6(바늘)은 이제 여기서 나오지 않는다. 바늘 고르기는 구체 터치(UpdateNeedleTouch), 움직이기는 바늘 각도 판이다.
         // ★조작 판도 잡아 끈다(09-21 고정 모드) — 자리가 마음에 안 들면 옮긴다.
         if (InMenuGrabZone(p))
         {
@@ -1727,7 +1791,8 @@ public class RomRecordSession : MonoBehaviour
     {
         if (k / 2 == 0) return true;
         int b = mi * NeedlePerStep;
-        return (needleMoved[b] && needleMoved[b + 1]) || needleMoved[b + 2] || needleMoved[b + 3];
+        // ★09-28 오후: «다 맞췄다» = 둘 다 [✓] 확정(버튼으로만 움직이니 «움직였나»로는 순서를 못 가른다).
+        return (needleLocked[b] && needleLocked[b + 1]) || NeedleRecorded(b + 2) || NeedleRecorded(b + 3);
     }
 
     /// <summary>그 단계에서 쓰는 바늘 수 — 굴곡·신전은 둘, 측굴·회전은 넷(좌우가 있어서).</summary>
@@ -1752,55 +1817,11 @@ public class RomRecordSession : MonoBehaviour
     /// <summary>회전만 면이 한쪽으로 쏠린다 — 원통 윗 테두리에 걸고 아래로 늘어뜨린다.</summary>
     private static bool NeedleFinHangs(RomRecordStep s) => s == RomRecordStep.Rotation;
 
-    /// <summary>바늘 선의 <b>어디서부터</b> 잡히나(손잡이 반지름 배수). 0.35 = 안쪽 1/3은 안 잡힌다.</summary>
-    private const float NeedleGrabFrom = 0.35f;
-
-    /// <summary>
-    /// 그 손이 바늘에서 얼마나 떨어져 있나. ★꼭지 끝만이 아니라 <b>선 중간 어디를 잡아도</b> 끌린다
-    /// (2026-09-23 사용자: "니들 원형 꼭지 끝 말고 중간을 잡아도"). 안쪽 <see cref="NeedleGrabFrom"/>까지는
-    /// 빼 둔다 — 중심 근처는 머리 속이라 잡을 일이 없고, 거기까지 열면 마커 찍기를 가로챈다.
-    /// 회전은 바늘이 <b>면</b>이라 그 높이 안이면 세로 어디를 잡아도 같게 친다.
-    /// </summary>
-    private float NeedleDistance(Vector3 p, Vector3 center, Vector3 dir, float handleRadius, Vector3 fin, bool hang)
-    {
-        float finLen = fin.magnitude;
-        if (finLen > 1e-4f)
-        {
-            // 지움: 면 <b>안</b>의 면방향 차이만. 면 밖으로 벗어난 거리는 그대로 남는다.
-            //   회전은 한쪽(아래)으로만 뻗고, 나머지는 바늘을 가운데 두고 양쪽으로 벌어진다.
-            Vector3 u = fin / finLen;
-            float along = Vector3.Dot(p - center, u);
-            float cl = hang ? Mathf.Clamp(along, -finLen, 0f) : Mathf.Clamp(along, -finLen * 0.5f, finLen * 0.5f);
-            p -= u * (along - cl);
-        }
-        Vector3 a = center + dir * (handleRadius * NeedleGrabFrom);
-        Vector3 ab = center + dir * handleRadius - a;
-        float len2 = ab.sqrMagnitude;
-        if (len2 < 1e-8f) return Vector3.Distance(p, a);
-        float t = Mathf.Clamp01(Vector3.Dot(p - a, ab) / len2);
-        return Vector3.Distance(p, a + ab * t);
-    }
+    // ★바늘 잡기 거리(NeedleDistance·NeedleGrabFrom, 09-21~09-23)는 09-28에 없앴다 — 바늘을 손으로 잡지 않는다.
 
     private void ApplyDrag(Vector3 p)
     {
-        // ★바늘은 델타가 아니라 <b>손이 있는 쪽</b>을 향한다. 단면에 투영해 그 면에서만 돌게 한다.
-        if (dragTarget >= 3 && dragTarget <= 6)
-        {
-            if (NeedleVisible(out Vector3 nc, out Vector3 nn, out Vector3 nz, out _, out _, out int mi))
-            {
-                int k = dragTarget - 3;
-                int n = mi * NeedlePerStep + k;
-                Vector3 d = RomRecordGeometry.OnPlane(p - nc, nn, needleDir[n]);
-                // ★바늘은 제 방향 쪽에만 있다(09-28) — 굴곡 바늘을 뒤로 넘기면 눈금 0에서 멈춘다.
-                //   넘어가게 두면 «굴곡 바늘에 신전 값»이 적혀 탭 아래 값이 엉뚱한 줄로 간다.
-                if (NeedleSide(step, d) != NeedleSideOf(k)) d = nz;
-                needleDir[n] = d;
-                needleMoved[n] = true;   // ★끌어낸 순간부터 값이다 — 따로 [기록]을 누르지 않는다
-                DrawNeedle();
-            }
-            return;
-        }
-
+        // ★바늘 끌기(09-21~09-28 오전)는 없앴다 — 바늘은 버튼으로만 움직인다(사용자 09-28).
         Vector3 v = dragStartValue + (p - dragGrabbedAt);
         switch (dragTarget)
         {
@@ -1810,7 +1831,11 @@ public class RomRecordSession : MonoBehaviour
             //   대추(dragTarget==1) 자신은 기준점이라 이 게이트를 안 건다.
             case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; break;
             case 8: ear = v; break;
-            case 9: leftMenu.MoveTo(v); return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
+            case 9:
+                leftMenu.MoveTo(v);
+                // ★위치 조정 판은 조작 판 옆에 붙어 있다 — 같이 옮긴다(09-28).
+                if (nudgeMenu != null && nudgeMenu.Visible) nudgeMenu.MoveTo(v + nudgeOffset);
+                return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
         Vector3 pivot = Pivot;
@@ -1823,40 +1848,14 @@ public class RomRecordSession : MonoBehaviour
         // ★잡자마자 놓았다 = 잡을 뜻이 없었을 가능성이 크다(2026-09-23 계수).
         if (Time.unscaledTime - dragStartTime < 0.25f)
             CountMiss(Miss.ShortGrab, $"{DragName(dragTarget)}를 {(Time.unscaledTime - dragStartTime) * 1000f:F0}ms 만에 놓았다");
-        if (dragTarget >= 3 && dragTarget <= 6) needleEndTime[dragTarget - 3] = Time.unscaledTime;
-
-        int endedNeedle = -1;
-        if (dragTarget >= 3 && dragTarget <= 6 && NeedleVisible(out _, out _, out Vector3 z, out _, out _, out int mi))
-        {
-            int k = dragTarget - 3;
-            int n = mi * NeedlePerStep + k;
-            // ★놓은 자리가 곧 기록이다 — 따로 누를 것이 없다. 다시 끌면 고쳐진다(구체를 쳐서 푼 뒤에).
-            // ★★오토 홀드(09-28) — 놓는 순간 잠근다. 놓을 때 흔들린 것은 미세 조정 판(±0.1°)으로 고친다.
-            bool wasInPlay1 = NeedleInPlay(mi, 2);
-            needleLocked[n] = true;
-            endedNeedle = k;
-            Debug.Log($"[실측기록] 기록 {StepTitle[(int)step]} {DirName(step, k / 2)} {NeedleName(k)}(바늘) " +
-                      $"눈금 {Vector3.Angle(z, needleDir[n]):F1}° · " +
-                      $"{(hasGlab ? "중립 기준 " + NeedleNeutralDeg(n, mi).ToString("F1") + "°" : "미간 없음")} · 잠금");
-            if (!wasInPlay1 && NeedleInPlay(mi, 2))
-                Debug.Log($"[실측기록] {DirName(step, 0)} 끝 — 다음은 {DirName(step, 1)}(한계 {LimitDeg(step, 2):F0}°에 바늘이 선다)");
-        }
-        else
-        {
-            Vector3 at = dragTarget == 0 ? frameOrigin
-                       : dragTarget == 1 ? c7
-                       : dragTarget == 8 ? ear
-                       : dragTarget == 9 ? leftMenu.Position : glab;
-            Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
-        }
+        Vector3 at = dragTarget == 0 ? frameOrigin
+                   : dragTarget == 1 ? c7
+                   : dragTarget == 8 ? ear
+                   : dragTarget == 9 ? leftMenu.Position : glab;
+        Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
         dragTarget = -1;
         Play(sndPinch);
         dirty = true;
-        if (endedNeedle >= 0)
-        {
-            DrawNeedle();                 // ★잠금 모양(작은 구체)을 먼저 그려야 판 자리가 새 구체 위로 간다
-            ShowFineMenu(endedNeedle);
-        }
     }
 
     // ── 바늘(09-21 신설) ─────────────────────────────────────────────
@@ -1895,29 +1894,80 @@ public class RomRecordSession : MonoBehaviour
             Vector3 dir = needleDir[nk];
             float deg = Vector3.Angle(z, dir);
             int tenths = Mathf.RoundToInt(deg * 10f);   // ★0.1° 미세 조정이 있어 소수 한 자리로 본다(09-28)
+            // ★바늘 위에는 각도만 쓴다(09-22 사용자). 아직 한계 자리에 있는 바늘은 글자를 비운다 —
+            //   값이 아니라 출발점이라서다. 단 <b>고른 바늘</b>은 지금 맞추는 중이라 값을 보인다.
+            bool showValue = NeedleRecorded(nk) || k == fineTarget;
+            // ★글자는 바뀔 때만 새로 만든다 — 값뿐 아니라 «보이나»가 바뀌어도 다시 쓴다(고르기만 바뀌어도 글자가 떠야 한다).
+            int key = tenths * 2 + (showValue ? 1 : 0);
             string label = null;
-            if (tenths != lastNeedleDegShown[k])
+            if (key != lastNeedleDegShown[k])
             {
-                lastNeedleDegShown[k] = tenths;
-                // ★바늘 위에는 각도만 쓴다(09-22 사용자). 아직 한계 자리에 있는 바늘은 글자를 비운다 —
-                //   값이 아니라 출발점이라서다. 능동·압박은 바늘 색의 밝기로 가른다.
-                label = needleMoved[nk] ? (tenths * 0.1f).ToString("F1") + "°" : "";
+                lastNeedleDegShown[k] = key;
+                label = showValue ? (tenths * 0.1f).ToString("F1") + "°" : "";
             }
-            view.SetNeedle(k, true, c, dir, r, h, label, dragTarget == 3 + k,
-                           NeedleFin(step, dir), NeedleFinHangs(step), needleLocked[nk]);
+            // ★고른 바늘은 노랗게(«잡는 중» 색 · 구체도 조금 크게) — 버튼이 어느 바늘을 움직이는지 보이게.
+            view.SetNeedle(k, true, c, dir, r, h, label, k == fineTarget,
+                           NeedleFin(step, dir), NeedleFinHangs(step), false);
         }
     }
 
-    // ── 구체 터치 · 미세 조정(2026-09-28 신설) ────────────────────────
-    // ★[홀드] 버튼(09-23)을 대신한다. 사용자 메모: "바늘 한번 옮기면 오토 홀드 — 이후 버튼 조정, 구체 터치로 홀드 해제"
-    //   + "UI에 홀드 버튼을 놓지 말고 바늘 구체를 터치하는 걸로" + "0.1도 간격 버튼을 바늘 위, 손과 환자 머리가 한 시선에".
+    // ── 바늘 고르기 · 각도 판 · 확정(2026-09-28 신설, 같은 날 오후 개편) ──────────
+    // ★오전: 끌어 놓으면 오토 홀드 · 구체 터치로 잠금 해제 · ±0.1° 판.
+    // ★오후(사용자 "손으로 잡고 옮기는 기능은 빼고 그냥 버튼으로 각도 조절하게 하자"):
+    //   바늘은 <b>고른 것 하나</b>를 각도 판(±5·±1·±0.1°)으로 움직이고 [✓]로 확정한다. 확정하면 순서상 다음 바늘이 골라진다.
+    //   구체 터치는 «잠금 풀기»가 아니라 <b>그 바늘 고르기</b>다(확정한 것을 다시 고칠 때). needleLocked = «확정했다».
+    //   고른 바늘은 노랗게(잡는 중 색) 보인다.
+
+    /// <summary>그 바늘이 값을 가졌나 — 버튼으로 움직였거나, 한계 자리 그대로 [✓]했거나.</summary>
+    private bool NeedleRecorded(int n) => needleMoved[n] || needleLocked[n];
+
+    /// <summary>순서상 첫 미확정 바늘(지금 차례인 방향 안에서). 다 확정했으면 -1.</summary>
+    private int FirstPendingNeedle()
+    {
+        if (!IsMotion(step)) return -1;
+        int mi = MotionIndex(step);
+        for (int k = 0; k < NeedleCountOf(step); k++)
+            if (NeedleInPlay(mi, k) && !needleLocked[mi * NeedlePerStep + k]) return k;
+        return -1;
+    }
+
+    /// <summary>바늘 하나를 고른다. 판은 바늘을 그린 뒤(Redraw) 그 구체 위에 선다 — 구체 자리가 먼저 정해져야 해서다.</summary>
+    private void SelectNeedle(int k)
+    {
+        if (k < 0) { HideFineMenu(); dirty = true; return; }
+        fineTarget = k;
+        finePlacePending = true;
+        dirty = true;
+        Debug.Log($"[실측기록] 바늘 고름 — {StepTitle[(int)step]} {DirName(step, k / 2)} {(k % 2 == 0 ? "능동" : "압박")}");
+    }
 
     /// <summary>
-    /// 검지끝이 잠긴 바늘 구체에 <b>들어오는 순간</b> 잠금을 푼다(손별로 매 프레임).
-    /// ★터치와 핀치는 이렇게 가른다: <b>잠긴 바늘은 터치만, 풀린 바늘은 핀치만</b> 받는다.
-    ///   풀린 바늘은 터치로 다시 잠그지 않는다 — 잡으러 가는 손가락이 구체에 먼저 닿아 잠겨 버린다.
-    /// ★들어옴만 센다 — 놓는 순간 그 손가락은 이미 구체 안이라, 놓자마자 도로 풀리지 않는다.
-    ///   그래서 안에 있는지는 <b>끄는 중에도</b> 계속 잰다(동작만 안 한다).
+    /// [✓] — 고른 바늘을 확정하고 순서상 다음 미확정 바늘을 고른다. 한계 자리 그대로 확정해도 값이다.
+    /// 첫 방향 둘을 다 확정하면 둘째 방향 바늘이 나타난다(<see cref="NeedleInPlay"/>).
+    /// </summary>
+    private void ConfirmNeedle()
+    {
+        if (fineTarget < 0 || !IsMotion(step)) { Play(sndDeny); return; }
+        int mi = MotionIndex(step);
+        int k = fineTarget;
+        int n = mi * NeedlePerStep + k;
+        bool dir2Before = NeedleInPlay(mi, 2);
+        needleLocked[n] = true;
+        Vector3 z = RomRecordGeometry.ScaleZero(step, yaw);
+        Debug.Log($"[실측기록] 기록 {StepTitle[(int)step]} {DirName(step, k / 2)} {NeedleName(k)}(바늘) " +
+                  $"눈금 {Vector3.Angle(z, needleDir[n]):F1}° · " +
+                  $"{(hasGlab ? "중립 기준 " + NeedleNeutralDeg(n, mi).ToString("F1") + "°" : "미간 없음")} · 확정");
+        if (!dir2Before && NeedleInPlay(mi, 2))
+            Debug.Log($"[실측기록] {DirName(step, 0)} 끝 — 다음은 {DirName(step, 1)}(한계 {LimitDeg(step, 2):F0}°에 바늘이 선다)");
+        Play(sndPinch);
+        int next = FirstPendingNeedle();
+        if (next < 0) Debug.Log($"[실측기록] {StepTitle[(int)step]} 바늘 모두 확정 — 고치려면 구체를 검지로 친다.");
+        SelectNeedle(next);
+    }
+
+    /// <summary>
+    /// 검지끝이 바늘 구체에 <b>들어오는 순간</b> 그 바늘을 고른다(손별로 매 프레임).
+    /// ★들어옴만 센다 — 경계에서 떨어도 되풀이되지 않게 나갈 때는 1.5배까지 봐준다.
     /// ★구체 자리는 <see cref="RomRecordVisual.TryNeedleGrip"/> — <b>그려진 자리</b>다(규칙 9).
     /// </summary>
     private void UpdateNeedleTouch(bool left)
@@ -1943,15 +1993,10 @@ public class RomRecordSession : MonoBehaviour
         if (inside < 0 || inside == was) return;
         if (dragTarget >= 0 || liveActive) return;   // 무엇이든 끄는 중이면 안 받는다(안에 있다는 것만 기억)
 
-        int n = MotionIndex(step) * NeedlePerStep + inside;
-        if (!needleLocked[n]) return;                 // 풀린 바늘은 핀치 몫이다
-        needleLocked[n] = false;
-        Play(sndUndo);
-        Debug.Log($"[실측기록] 구체 터치 — {StepTitle[(int)step]} {DirName(step, inside / 2)} {NeedleName(inside)} 잠금 풀림" +
-                  $"({(left ? "왼" : "오른")}손 검지 · 다시 끌어 맞추면 또 잠긴다)");
-        DrawNeedle();
-        ShowFineMenu(inside);
-        dirty = true;
+        if (inside == fineTarget) return;             // 이미 고른 바늘이다
+        Play(sndPress);
+        Debug.Log($"[실측기록] 구체 터치 — {(left ? "왼" : "오른")}손 검지");
+        SelectNeedle(inside);
     }
 
     /// <summary>미세 조정 판을 그 바늘 구체 위에 세운다. ★자리는 이때 한 번만 — 누르는 중에 판이 움직이면 헛짚는다.</summary>
@@ -2025,10 +2070,10 @@ public class RomRecordSession : MonoBehaviour
             int n = mi * NeedlePerStep + k;
             needleDir[n] = LimitDir(step, k);
             needleMoved[n] = false;
-            needleLocked[n] = false;   // ★[다시]는 잠금도 푼다 — 안 그러면 되돌려 놓고 못 만진다
+            needleLocked[n] = false;   // ★[다시]는 확정도 푼다 — 순서가 처음부터다
             lastNeedleDegShown[k] = -999;
         }
-        HideFineMenu();
+        SelectNeedle(0);
         Play(sndUndo);
         Debug.Log($"[실측기록] {StepTitle[(int)step]} 바늘을 모두 한계 자리로 되돌렸다.");
         dirty = true;
@@ -2292,6 +2337,16 @@ public class RomRecordSession : MonoBehaviour
         if (hasDial) view.SetDial(true, dc, dn, dz, dr);
         else view.SetDial(false, Vector3.zero, Vector3.up, Vector3.forward, 0.1f);
         DrawNeedle();
+
+        // ★바늘 각도 판(09-28) — 고른 바늘이 바뀌었으면 <b>방금 그린</b> 구체 위에 세운다(그리기 전엔 구체 자리가 옛 자리다).
+        if (!IsMotion(step) || !needleOn) { if (fineTarget >= 0) HideFineMenu(); }
+        else if (finePlacePending && fineTarget >= 0)
+        {
+            finePlacePending = false;
+            ShowFineMenu(fineTarget);
+        }
+        UpdateFineValue();
+        UpdateNudgeMenu();
 
         // ★단면 사각형(09-21) — 지금 재는 면이 어디인지 사람 크기만큼 네모로 보여 준다.
         //   회전은 눈금판이 미간 높이로 올라가 있으므로 사각형도 같은 중심을 쓴다.

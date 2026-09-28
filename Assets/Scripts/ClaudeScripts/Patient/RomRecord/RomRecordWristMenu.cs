@@ -26,6 +26,9 @@ public struct RomMenuItem
     public float rows;          // 세로 줄 수(0이면 1). 탭은 그림이 들어가 두 줄 가까이 쓴다
     public bool locked;         // 보이되 못 누른다(대추를 찍기 전의 동작 탭)
     public Texture2D icon;      // 버튼 위쪽에 그림, 글자는 아래로 내린다
+    // ★그림만 보인다(2026-09-28 사용자: "버튼도 글씨 말고 아이콘으로 — 글씨는 조잡해"). 그림을 가운데 크게 두고 글자는 숨긴다.
+    //   ★label은 그래도 채워 둔다 — 그림을 못 그리는 Quad 판(RomRecordWristMenu)은 label을 대신 보여 준다.
+    public bool iconOnly;
     public string key;          // 글자 칸을 나중에 SetText로 바꿀 때 찾는 이름
     public float textScale;     // 글자 크기 배수(0이면 1)
     public bool alignLeft;      // 글자 칸을 왼쪽 정렬
