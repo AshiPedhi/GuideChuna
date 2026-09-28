@@ -1888,14 +1888,16 @@ MonoBehaviour:
   finePanelRise: 0.08
   defaultC7Distance: 0.6
   defaultC7BelowEye: 0.1
-  nudgePanelOffset: 0.25
+  nudgePanelBehind: 0.25
+  nudgePanelBelow: 0.15
+  nudgePanelSide: 0.15
   landmarkRecaptureSeconds: 1
   exitHoldSeconds: 1
   flipSides: 0
   showSectionPlane: 1
   showOffPlaneTriangle: 1
   useDepthOcclusion: 1
-  occludedAlpha: 0.18
+  occludedAlpha: 0.08
   occludedDashed: 0
   occludedDashPeriodPx: 10
   enablePassthroughOnStart: 1

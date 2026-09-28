@@ -241,7 +241,10 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private bool useDepthOcclusion = true;
     [Tooltip("가려진 부분에 남길 진하기. 0이면 완전히 사라지고, 1이면 폐색이 없는 것과 같다.\n" +
              "★0.15~0.25가 «몸 안을 지나간다»로 읽히는 구간이다(추정 — 눈으로 맞출 값).")]
-    [Range(0f, 1f)] [SerializeField] private float occludedAlpha = 0.18f;
+    // ★09-28 저녁 사용자: "가려진 부분 더 확실하게 눈에 들어오게 연하게" — 0.18 → 0.08.
+    //   보이는 부분(각도기는 같은 날 불투명으로 올렸다)과의 차이를 키워 «몸 뒤로 들어갔다»가 읽히게. 0이면 아예 사라진다(관통이 안 읽힌다).
+    //   ★씬 값도 브리지로 같이 바꿨다(규칙 7).
+    [Range(0f, 1f)] [SerializeField] private float occludedAlpha = 0.08f;
     // ★09-28: 가려진 부분을 <b>점선</b>으로 끊는 선택지(내가 제안 — 사용자가 요청한 것은 아니다).
     //   ★사용자 정정: "굵기가 아니라 색의 진하기, 불투명도를 말한 것" — 대비는 <b>보이는 부분을 불투명하게</b> 해서 낸다.
     //   그래서 기본은 끔이고 가려진 진하기도 0.18 그대로 둔다(한때 0.5로 올렸다가 되돌렸다 — 올리면 대비가 줄어 요청과 반대).
