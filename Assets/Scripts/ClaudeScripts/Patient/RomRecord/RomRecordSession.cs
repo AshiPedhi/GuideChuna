@@ -307,8 +307,10 @@ public class RomRecordSession : MonoBehaviour
     private bool finePlacePending;   // 고른 바늘이 바뀌었다 — 바늘을 그린 뒤(Redraw) 판을 그 구체 위에 세운다
     private IRomRecordMenu fineMenu;
     private float nextFineLog;
-    // ★기준점 위치 조정 판(09-28) — 환자 뒤, 내가 쓰기 편한 자리(UpdateNudgeMenu).
+    // ★기준점 위치 조정 판(09-28) — 환자 뒤, 내가 쓰기 편한 자리(UpdateNudgeMenu). 잡아 끌 수 있다(dragTarget 10).
     private IRomRecordMenu nudgeMenu;
+    private bool nudgeUserPlaced;   // 손으로 옮긴 적이 있나 — 있으면 다시 보일 때 그 자리에 선다
+    private Vector3 nudgeUserPos;
     // ★기준점을 손가락으로 «찍었나»(09-28). 시작하면 세 점 모두 헤드셋 앞 기본 자리에 서 있으므로(hasC7 등은 참)
     //   «있나»와 «실제로 찍었나»를 가른다. 기본 자리 그대로면 판에서 ○로 보인다. 0 대추 · 1 미간 · 2 외이도.
     private readonly bool[] landmarkCaptured = new bool[3];
@@ -316,7 +318,7 @@ public class RomRecordSession : MonoBehaviour
     //   놓는 순간 그 손가락은 이미 구체 안에 있다 — 들어옴만 세면 놓자마자 도로 풀리는 일이 없다.
     private readonly int[] touchInside = { -1, -1 };
     private bool needleOn = true;
-    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 조작 판 · -1 아무것도 안 잡음(«찍기»로 간다)
+    // ★잡아 끌기(09-21) — 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 조작 판 · 10 위치 조정 판(09-28) · -1 아무것도 안 잡음(«찍기»로 간다)
     private int dragTarget = -1;
     private Vector3 dragGrabbedAt, dragStartValue;
     // ★진단 로그 자기 침묵 — <b>손별로</b> 따로 센다(09-21 수정).
@@ -922,7 +924,11 @@ public class RomRecordSession : MonoBehaviour
             if (nudgeMenu.Visible) nudgeMenu.Hide();
             return;
         }
-        if (!nudgeMenu.Visible)
+        if (!nudgeMenu.Visible && nudgeUserPlaced)
+        {
+            nudgeMenu.PlaceAt(nudgeUserPos, eye);   // ★손으로 옮긴 적이 있으면 그 자리(09-28 저녁)
+        }
+        else if (!nudgeMenu.Visible)
         {
             Vector3 f = RomRecordGeometry.Forward(yaw), r = RomRecordGeometry.Right(yaw);
             Vector3 pos = c7 - f * nudgePanelBehind - Vector3.up * nudgePanelBelow + r * nudgePanelSide;
@@ -1635,7 +1641,7 @@ public class RomRecordSession : MonoBehaviour
 
     // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
     private static string DragName(int t) =>
-        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "외이도" : t == 9 ? "조작 판" : "바늘";
+        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "외이도" : t == 9 ? "조작 판" : t == 10 ? "위치 조정 판" : "바늘";
 
     /// <summary>
     /// 이 자리에서 오므리면 조작 판이 잡히나. ★잡기(<see cref="FindDragTarget"/>)와 하이라이트가 <b>같은 함수</b>를 탄다 —
@@ -1693,6 +1699,15 @@ public class RomRecordSession : MonoBehaviour
         int level = dragTarget == 9 ? 2
                   : !liveActive && (HandInMenuGrabZone(true) || HandInMenuGrabZone(false)) ? 1
                   : 0;
+        // ★위치 조정 판의 잡기 테두리(09-28 저녁) — 판마다 따로 켠다. SetHighlight는 같은 값이면 아무것도 안 한다.
+        if (nudgeMenu != null)
+        {
+            int nl = dragTarget == 10 ? 2
+                   : !liveActive && dragTarget < 0 && (HandInNudgeGrabZone(true) || HandInNudgeGrabZone(false)) ? 1
+                   : 0;
+            nudgeMenu.SetHighlight(nl);
+        }
+
         if (level == menuHighlight) return;
         if (level == 1 && menuHighlight == 0) menuHoverCount++;
         menuHighlight = level;
@@ -1706,6 +1721,15 @@ public class RomRecordSession : MonoBehaviour
         && hands.TryJoint(left, HandJointId.HandIndexTip, out Vector3 i)
         && InMenuGrabZone((t + i) * 0.5f);
 
+    /// <summary>이 자리에서 오므리면 위치 조정 판이 잡히나. ★잡기·하이라이트가 같은 함수를 탄다(규칙 9).</summary>
+    private bool InNudgeGrabZone(Vector3 p) =>
+        nudgeMenu != null && nudgeMenu.Visible && nudgeMenu.Near(p, menuGrabMargin);
+
+    private bool HandInNudgeGrabZone(bool left) =>
+        hands.TryJoint(left, HandJointId.HandThumbTip, out Vector3 t)
+        && hands.TryJoint(left, HandJointId.HandIndexTip, out Vector3 i)
+        && InNudgeGrabZone((t + i) * 0.5f);
+
     /// <summary>핀치를 오므린 자리에서 잡을 수 있는 것을 고른다. 없으면 -1(그러면 «찍기»로 간다).</summary>
     private int FindDragTarget(Vector3 p, out Vector3 startValue)
     {
@@ -1718,6 +1742,13 @@ public class RomRecordSession : MonoBehaviour
         {
             startValue = leftMenu.Position;
             return 9;   // ★바늘이 3~6을 쓴다
+        }
+        // ★위치 조정 판도 잡아 끈다(09-28 저녁 사용자: "기준점 조절하는 UI도 잡아서 옮기게 — 처음 위치에 고정된 채로
+        //   있으면 어떻게 움직이라고"). 조작 판과 같은 방식(가장자리 여유 menuGrabMargin, 테두리 하이라이트).
+        if (InNudgeGrabZone(p))
+        {
+            startValue = nudgeMenu.Position;
+            return 10;
         }
         if (step == RomRecordStep.Setup)
         {
@@ -1867,6 +1898,11 @@ public class RomRecordSession : MonoBehaviour
             case 9:
                 leftMenu.MoveTo(v);   // ★위치 조정 판은 09-28 오후부터 환자 뒤에 따로 선다 — 같이 옮기지 않는다
                 return;   // 판은 표시물과 무관하다 — 다시 그릴 것이 없다
+            case 10:
+                nudgeMenu.MoveTo(v);
+                nudgeUserPos = v;          // ★옮긴 자리를 기억한다 — 다른 탭에 갔다 와도 거기 다시 선다
+                nudgeUserPlaced = true;
+                return;
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
         Vector3 pivot = Pivot;
@@ -1882,7 +1918,8 @@ public class RomRecordSession : MonoBehaviour
         Vector3 at = dragTarget == 0 ? frameOrigin
                    : dragTarget == 1 ? c7
                    : dragTarget == 8 ? ear
-                   : dragTarget == 9 ? leftMenu.Position : glab;
+                   : dragTarget == 9 ? leftMenu.Position
+                   : dragTarget == 10 ? nudgeMenu.Position : glab;
         Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
         dragTarget = -1;
         Play(sndPinch);
