@@ -966,6 +966,9 @@ public class RomRecordSession : MonoBehaviour
             {
                 // ★[홀드](09-23)는 없앴다(09-28) — 놓으면 저절로 잠기고, 구체를 치면 풀린다.
                 Ctl(RomMenuItem.Button("nreset", "다시", 0, 0, 0, UndoTint));
+                // ★바닥 단서(드롭라인+바닥 그림자, 09-28) 켜고 끄기 — 같은 판에서 나란히 비교해 보려고 둔다.
+                //   런타임 값이다(씬에 저장되지 않는다). 시작은 켬.
+                Ctl(RomMenuItem.Button("cues", "바닥", 0, 0, 0, NeedleTint, selected: view.DropCuesOn));
             }
             else
             {
@@ -1020,7 +1023,7 @@ public class RomRecordSession : MonoBehaviour
         {
             int h = (int)step;
             h = h * 31 + landmarkTarget;
-            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0);
+            h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (view.DropCuesOn ? 16 : 0);
             return h;
         }
     }
@@ -1224,6 +1227,11 @@ public class RomRecordSession : MonoBehaviour
                 ApplyStepButtons();
                 break;
             case "nreset": ResetNeedles(); break;
+            case "cues":
+                view.SetDropCuesEnabled(!view.DropCuesOn);
+                Debug.Log("[실측기록] 바닥 단서(드롭라인·그림자) " + (view.DropCuesOn ? "켬" : "끔"));
+                ApplyStepButtons();
+                break;
             case "fine+": FineAdjust(+fineStepDeg); break;
             case "fine-": FineAdjust(-fineStepDeg); break;
             // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.

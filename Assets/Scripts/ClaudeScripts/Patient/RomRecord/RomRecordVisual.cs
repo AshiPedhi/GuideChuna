@@ -201,6 +201,7 @@ public class RomRecordVisual
         glabDot = Dot("미간(중립)", Color.white, 0.016f);
         earDot = Dot("외이도", EarColor, 0.016f);   // ★09-22 — 찍은 자리(실제 축은 정중면으로 옮긴 점 — 노란 기준점)
         liveDot = Dot("핀치 중", new Color(1f, 1f, 0.3f), 0.014f);
+        BuildDropCues();   // ★바닥 단서(09-28)
 
         dialRoot = new GameObject("각도기");
         dialRoot.transform.SetParent(root, false);
@@ -274,6 +275,8 @@ public class RomRecordVisual
         Seg(axisRight, pivot - r * len, pivot + r * len);
         Seg(pivotAxis, pivot - u * (len * 1.6f), pivot + u * (len * 1.6f));
         pivotDot.position = pivot;
+        cuePos[CuePivot] = pivot;   // 보이는지는 SetAxesVisible이 정한다
+        ApplyDropCue(CuePivot);
 
         labUp.transform.position = pivot + u * (len + 0.02f);
         labDown.transform.position = pivot - u * (len + 0.02f);
@@ -351,8 +354,131 @@ public class RomRecordVisual
          : needleLockedShown[i] ? needleGripSize * 0.55f    // 잠긴 바늘은 작게 — 더 안 잡힌다는 표시다
          : needleGripSize;
 
+    // ── 바닥 단서: 드롭라인 + 바닥 그림자(2026-09-28 신설) ─────────────
+    // ★★사용자 09-23: "물체 위에서는 그냥 위에 그려 놓은 것처럼 보인다 — 깊이감·거리감이 없다."
+    //   폐색(Depth API)을 켜도 체감이 없었다 — 폐색은 «무엇이 무엇을 가리나»만 말하고 «얼마나 앞인가»는 안 말한다.
+    //   문헌(09-23 조사)에서 효과가 가장 컸던 것이 <b>드롭라인</b>(표시물에서 바닥까지 연직선)과
+    //   <b>접지 그림자</b>였다. 그림자는 사실적일 필요가 없다 — 바닥의 어두운 원 하나면 된다.
+    // ★바닥은 월드 y = <see cref="floorY"/>다. 씬의 추적 기준이 FloorLevel(OVRManager _trackingOriginType 1)이라
+    //   y=0이 실제 바닥이다(09-28 씬 실측 · 기록된 대추 높이 약 0.9m와도 맞는다). ★기기에서 바닥에 붙는지 눈으로 볼 것.
+    // ★깊이 API와 무관하다 — Quest Link(PC Play)에서도 그대로 보인다.
+    // ★표시만 한다. 각·판정에는 아무것도 안 들어간다.
+    // 칸: 0~3 바늘 구체 · 4 대추 · 5 외이도 · 6 미간 · 7 기준점(3축 중심)
+    private const int DropCueCount = 8;
+    private const int CueC7 = 4, CueEar = 5, CueGlab = 6, CuePivot = 7;
+    private readonly LineRenderer[] dropLines = new LineRenderer[DropCueCount];
+    private readonly Transform[] dropBlobs = new Transform[DropCueCount];
+    private readonly bool[] cueWanted = new bool[DropCueCount];     // 그 표시물이 지금 보이나
+    private readonly Vector3[] cuePos = new Vector3[DropCueCount];  // 그 표시물 자리(끄고 켤 때 다시 쓴다)
+    private bool dropCuesOn = true;
+    private bool loggedCueHeight;
+
+    public float floorY = 0f;                 // 바닥 높이(월드 y)
+    public float dropLineWidth = 0.0015f;     // ★가늘게 — 주 표시물보다 튀면 안 된다(기기 미검증 추정)
+    public float dropLineAlpha = 0.35f;
+    public float blobRadius = 0.035f;         // 바닥 원 반지름(m). 지름 7cm — 기기 미검증 추정
+    public float blobAlpha = 0.6f;            // ★셰이더가 알파를 두 번 곱해(SrcAlpha 블렌드) 실제로 바닥을 약 36% 어둡게 한다(계산)
+
+    public bool DropCuesOn => dropCuesOn;
+
+    /// <summary>바닥 단서를 통째로 켜고 끈다(런타임 — 판의 [바닥] 버튼). ★켜고 끈 판을 나란히 비교하려고 둔다.</summary>
+    public void SetDropCuesEnabled(bool on)
+    {
+        dropCuesOn = on;
+        for (int i = 0; i < DropCueCount; i++) ApplyDropCue(i);
+    }
+
+    private void SetDropCue(int i, bool on, Vector3 p)
+    {
+        cueWanted[i] = on;
+        if (on) cuePos[i] = p;
+        ApplyDropCue(i);
+    }
+
+    /// <summary>한 칸을 그린다. ★바늘을 끄는 동안 매 프레임 불린다 — 할당 없음.</summary>
+    private void ApplyDropCue(int i)
+    {
+        if (dropLines[i] == null) return;
+        Vector3 p = cuePos[i];
+        // 바닥 바로 위(5cm 안)의 것은 선이 없는 것과 같다 — 그리지 않는다.
+        bool on = dropCuesOn && cueWanted[i] && p.y > floorY + 0.05f;
+        Show(dropLines[i], on);
+        Show(dropBlobs[i], on);
+        if (!on) return;
+        Vector3 foot = new Vector3(p.x, floorY + 0.002f, p.z);   // 2mm 띄워 바닥 면과 겹쳐 깜박이지 않게
+        Seg(dropLines[i], p, foot);
+        dropBlobs[i].position = foot;
+        if (!loggedCueHeight)
+        {
+            loggedCueHeight = true;
+            // ★바닥이 맞는지 가르는 한 줄 — 앉은 환자의 머리·목이면 0.7~1.4m여야 한다. 벗어나면 바닥 기준이 틀린 것이다.
+            float h = p.y - floorY;
+            Debug.Log($"[실측기록] 바닥 단서 — 바닥 y={floorY:F3} · 첫 표시물 높이 {h:F2}m" +
+                      (h < 0.5f || h > 2.2f ? " ★앉은 환자 머리 높이(0.7~1.4m)를 벗어난다 — 바닥 기준(추적 원점)을 확인한다" : ""));
+        }
+    }
+
+    private void BuildDropCues()
+    {
+        Texture2D tex = BlobTexture();
+        for (int i = 0; i < DropCueCount; i++)
+        {
+            Color c = i < NeedleCount ? (i % 2 == 0 ? ActiveColor : PassiveColor)
+                    : i == CueC7 ? new Color(0.3f, 0.9f, 1f)
+                    : i == CueEar ? EarColor
+                    : i == CueGlab ? Color.white
+                    : PivotColor;
+            c.a = dropLineAlpha;
+            dropLines[i] = Line("바닥 단서 선" + i, c, dropLineWidth);
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            go.name = "바닥 그림자" + i;
+            Object.Destroy(go.GetComponent<Collider>());
+            go.transform.SetParent(root, false);
+            go.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // 바닥에 눕힌다(셰이더가 양면이라 앞뒤는 상관없다)
+            go.transform.localScale = Vector3.one * (blobRadius * 2f);
+            var r = go.GetComponent<Renderer>();
+            if (lineMat != null) r.sharedMaterial = lineMat;
+            r.material.mainTexture = tex;          // ★인스턴스 머티리얼 — 선과 같은 셰이더(폐색 포함)에 둥근 그림만 얹는다
+            r.material.color = new Color(0f, 0f, 0f, blobAlpha);
+            r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            dropBlobs[i] = go.transform;
+            Show(dropLines[i], false);
+            Show(dropBlobs[i], false);
+        }
+    }
+
+    private static Texture2D blobTex;
+
+    /// <summary>가운데가 진하고 가장자리로 사라지는 원(흰색 + 알파). 한 번만 굽는다.</summary>
+    private static Texture2D BlobTexture()
+    {
+        if (blobTex != null) return blobTex;
+        const int size = 64;
+        blobTex = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, name = "바닥 그림자" };
+        var px = new Color32[size * size];
+        float c = (size - 1) * 0.5f;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float d = Mathf.Sqrt((x - c) * (x - c) + (y - c) * (y - c)) / c;   // 0 가운데 · 1 가장자리
+                float a = Mathf.Clamp01(1f - d);
+                a = a * a * (3f - 2f * a);                                         // 부드럽게 사라진다
+                px[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+            }
+        }
+        blobTex.SetPixels32(px);
+        blobTex.Apply(false, true);
+        return blobTex;
+    }
+
     public void SetLandmarks(bool hasC7, Vector3 c7, bool hasEar, Vector3 ear, bool hasGlab, Vector3 glab, Vector3 pivot)
     {
+        SetDropCue(CueC7, hasC7, c7);
+        SetDropCue(CueEar, hasEar, ear);
+        SetDropCue(CueGlab, hasGlab, glab);
         Show(c7Dot, hasC7);
         if (hasC7) c7Dot.position = c7;
         Show(earDot, hasEar);
@@ -664,7 +790,11 @@ public class RomRecordVisual
         needleHeld[i] = held;
         needleLockedShown[i] = locked;
         needleFinShown[i] = on && fin.sqrMagnitude > 1e-8f;
-        if (!on) return;
+        if (!on)
+        {
+            SetDropCue(i, false, Vector3.zero);
+            return;
+        }
 
         Color baseC = i % 2 == 0 ? ActiveColor : PassiveColor;   // 짝수 능동 · 홀수 압박(좌우는 방향이 가른다)
         Color c = held ? NeedleHeldColor : hoverTarget == 3 + i ? GrabHoverColor : baseC;
@@ -728,6 +858,7 @@ public class RomRecordVisual
         needleLabels[i].color = c;
         if (label != null) needleLabels[i].text = label;
         needleLabels[i].transform.position = needleGrips[i].position + Vector3.up * needleLabelRise;
+        SetDropCue(i, true, needleGrips[i].position);   // ★바닥 단서도 구체를 따라간다(끄는 동안 매 프레임 — 할당 없음)
     }
 
     /// <summary>
@@ -752,6 +883,8 @@ public class RomRecordVisual
     public void SetAxesVisible(bool on)
     {
         Show(axisUp, on); Show(axisFwd, on); Show(axisRight, on); Show(pivotAxis, on); Show(pivotDot, on);
+        cueWanted[CuePivot] = on;
+        ApplyDropCue(CuePivot);
         foreach (var t in new[] { labUp, labDown, labFwd, labBack, labRight, labLeft })
             if (t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
     }
