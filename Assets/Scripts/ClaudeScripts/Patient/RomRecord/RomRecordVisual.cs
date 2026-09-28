@@ -47,6 +47,11 @@ public class RomRecordVisual
     //   서로 다른 때에 불려서, 마지막에 부른 쪽이 크기를 덮어쓰면 하이라이트가 조용히 사라진다.
     //   → 상태를 기억해 두고 <see cref="NeedleGripSizeOf"/> 한 곳에서만 크기를 낸다.
     private readonly LineRenderer[] needleFinEdges = new LineRenderer[NeedleCount];   // 면의 테두리(사각형 네 변)
+    // ★바늘 «직선»(2026-09-28 사용자: "면으로 표시하는 건 좋은데 각도기에 직선이 사라지니 숫자 말고는 상태를 볼 수가 없네").
+    //   면으로 그릴 때 needles[i]는 <b>채움</b>으로 쓰여(선 폭을 면 크기로 눕힌다) 각도기 위를 가리키는 선이 없어졌다.
+    //   → 중심에서 구체까지 진한 선을 따로 긋는다. 면 모드에서만 켠다(선 모드에서는 needles[i]가 곧 이 선이다).
+    private readonly LineRenderer[] needleSpines = new LineRenderer[NeedleCount];
+    public float needleSpineWidth = 0.003f;   // 면 테두리(0.002)보다 조금 굵게 — 바늘이 «어디를 가리키나»가 먼저 읽혀야 한다
     private readonly bool[] needleHeld = new bool[NeedleCount];
     private readonly bool[] needleFinShown = new bool[NeedleCount];   // 지금 면으로 그렸나(하이라이트가 알파를 지켜야 한다)
     private readonly bool[] needleLockedShown = new bool[NeedleCount];
@@ -231,6 +236,8 @@ public class RomRecordVisual
             needles[i] = Line(act ? "바늘(능동)" + i : "바늘(압박)" + i, c, needleWidth);
             needleFinEdges[i] = Line(act ? "바늘 면 테두리(능동)" + i : "바늘 면 테두리(압박)" + i, c, needleWidth);
             needleFinEdges[i].positionCount = 5;   // 사각형 네 귀퉁이 + 처음으로 돌아오기
+            needleSpines[i] = Line(act ? "바늘 직선(능동)" + i : "바늘 직선(압박)" + i, c, needleSpineWidth);
+            Show(needleSpines[i], false);
             needleGrips[i] = Dot("바늘 손잡이" + i, c, needleGripSize);
             needleLabels[i] = Label("", textSize * 1.4f, c);
         }
@@ -329,6 +336,7 @@ public class RomRecordVisual
                 fill.a = finFillAlpha;
                 needles[i].startColor = needles[i].endColor = fill;
                 needleFinEdges[i].startColor = needleFinEdges[i].endColor = c;
+                needleSpines[i].startColor = needleSpines[i].endColor = c;
             }
             else
             {
@@ -785,7 +793,7 @@ public class RomRecordVisual
         if (i < 0 || i >= NeedleCount) return;
         Show(needles[i], on);
         Show(needleGrips[i], on);
-        if (!on) Show(needleFinEdges[i], false);
+        if (!on) { Show(needleFinEdges[i], false); Show(needleSpines[i], false); }
         if (needleLabels[i].gameObject.activeSelf != on) needleLabels[i].gameObject.SetActive(on);
         needleHeld[i] = held;
         needleLockedShown[i] = locked;
@@ -815,6 +823,9 @@ public class RomRecordVisual
             Vector3 a = center + off, b = tip + off;
             Seg(needles[i], a, b);
             needles[i].alignment = LineAlignment.TransformZ;
+            // ★★끝을 둥글리지 않는다(09-28 녹화 실측). 둥근 끝은 <b>선 폭의 절반</b>만큼 양 끝으로 튀어나온다 —
+            //   면 크기(0.2m)를 폭으로 쓰니 채움이 테두리 밖으로 10cm씩 육각형으로 삐져나왔다.
+            needles[i].numCapVertices = 0;
             Vector3 fnrm = Vector3.Cross(dir, fin);   // 이 법선이면 면이 fin 쪽으로 눕는다
             if (fnrm.sqrMagnitude > 1e-8f)
                 needles[i].transform.rotation = Quaternion.LookRotation(fnrm.normalized, Vector3.up);
@@ -831,6 +842,13 @@ public class RomRecordVisual
             Color fill = c;
             fill.a = finFillAlpha;   // ★안은 반투명 — 환자 얼굴이 비쳐야 한다
             needles[i].startColor = needles[i].endColor = fill;
+
+            // 바늘 직선 — 각도기 중심에서 구체까지. 구체와 같은 높이다(회전은 원통 윗 테두리).
+            var sp = needleSpines[i];
+            Show(sp, true);
+            Seg(sp, center, tip);
+            sp.startColor = sp.endColor = c;
+            sp.widthMultiplier = needleSpineWidth;
             needleGrips[i].position = tip + off;
             needleGrips[i].GetComponent<Renderer>().material.color = c;
             needleGrips[i].localScale = Vector3.one * NeedleGripSizeOf(i);
@@ -838,8 +856,10 @@ public class RomRecordVisual
             return;
         }
         Show(needleFinEdges[i], false);
+        Show(needleSpines[i], false);   // 선 모드에서는 needles[i]가 곧 직선이다
         Seg(needles[i], center, tip);
         needles[i].alignment = LineAlignment.View;
+        needles[i].numCapVertices = 2;
         needles[i].widthMultiplier = needleWidth;
         needles[i].startColor = needles[i].endColor = c;
         needleGrips[i].position = tip;
