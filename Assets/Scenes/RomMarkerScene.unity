@@ -1851,7 +1851,7 @@ MonoBehaviour:
   dialTickColor: {r: 0.94, g: 0.95, b: 0.97, a: 1}
   dialZeroColor: {r: 1, g: 1, b: 1, a: 1}
   dialLabelColor: {r: 1, g: 1, b: 1, a: 1}
-  needleWidth: 0.003
+  needleWidth: 0.002
   tickLabelOut: 1.2
   cylinderHeight: 0.3
   cylinderRadiusScale: 2.2
@@ -1895,8 +1895,8 @@ MonoBehaviour:
   showSectionPlane: 1
   showOffPlaneTriangle: 1
   useDepthOcclusion: 1
-  occludedAlpha: 0.5
-  occludedDashed: 1
+  occludedAlpha: 0.18
+  occludedDashed: 0
   occludedDashPeriodPx: 10
   enablePassthroughOnStart: 1
   lobbySceneName: lobby

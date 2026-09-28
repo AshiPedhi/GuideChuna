@@ -51,7 +51,7 @@ public class RomRecordVisual
     //   면으로 그릴 때 needles[i]는 <b>채움</b>으로 쓰여(선 폭을 면 크기로 눕힌다) 각도기 위를 가리키는 선이 없어졌다.
     //   → 중심에서 구체까지 진한 선을 따로 긋는다. 면 모드에서만 켠다(선 모드에서는 needles[i]가 곧 이 선이다).
     private readonly LineRenderer[] needleSpines = new LineRenderer[NeedleCount];
-    public float needleSpineWidth = 0.004f;   // 09-28 0.003→0.004(«훨씬 선명하게») · 면 테두리보다 조금 굵게 — 바늘이 «어디를 가리키나»가 먼저 읽혀야 한다
+    public float needleSpineWidth = 0.003f;   // 면 테두리(0.002)보다 조금 굵게 — 바늘이 «어디를 가리키나»가 먼저 읽혀야 한다
     private readonly bool[] needleHeld = new bool[NeedleCount];
     private readonly bool[] needleFinShown = new bool[NeedleCount];   // 지금 면으로 그렸나(하이라이트가 알파를 지켜야 한다)
     private readonly bool[] needleLockedShown = new bool[NeedleCount];
@@ -93,11 +93,9 @@ public class RomRecordVisual
     public Color dialTickColor = new Color(0.64f, 0.66f, 0.69f, 0.60f);   // 10°·30° 눈금
     public Color dialZeroColor = new Color(0.88f, 0.90f, 0.93f, 0.95f);   // ★눈금 0은 기준이라 조금 더 또렷하게
     public Color dialLabelColor = new Color(0.80f, 0.82f, 0.85f, 0.95f);  // 눈금 숫자
-    // ★09-28 사용자(기기에서 폐색 확인 뒤): "다른 선이랑 각도기 눈금 같은 걸 훨씬 선명하게" — 09-21에 줄였던 것을 되돌려 올린다.
-    //   보이는 선이 또렷해야 가려진 부분(점선)과 대비가 나서 «몸을 뚫고 들어갔다»로 읽힌다. 전부 기기 미검증 추정값.
-    public float dialLineWidth = 0.003f;    // 원·테두리 굵기(0.004 → 0.003 → 0.002 → 09-28 0.003)
-    public float dialTickWidth = 0.0022f;   // 눈금 굵기(0.003 → 0.002 → 0.0013 → 09-28 0.0022). ★09-28부터 실제로 먹는다(아래 눈금 메시)
-    public float dialZeroWidth = 0.004f;    // 눈금 0 굵기(0.005 → 0.004 → 0.0025 → 09-28 0.004)
+    public float dialLineWidth = 0.002f;    // 원·테두리 굵기(0.004 → 0.003 → 0.002)
+    public float dialTickWidth = 0.0013f;   // 눈금 굵기(0.003 → 0.002 → 0.0013)
+    public float dialZeroWidth = 0.0025f;   // 눈금 0 굵기(0.005 → 0.004 → 0.0025)
 
     // ── 선 굵기(2026-09-21 신설) ─────────────────────────────────────
     // ★"바늘 전체적으로 모든 선들은 좀더 얇게"(사용자 지시)라 <b>바늘만이 아니라</b> 3축·기준축·중립선·
@@ -105,11 +103,10 @@ public class RomRecordVisual
     //   계산 근거(추정): Quest 3은 눈에서 0.5m 거리에서 1mm가 대략 0.11°다. 각해상도가 20~25ppd쯤이니
     //   1.3mm면 2~3픽셀은 남아 선으로는 보인다 — 이보다 더 줄이면 끊겨 보일 위험이 있다.
     // ★Build에서 한 번만 읽는 값이다(각도기 굵기와 달리 다시 입히지 않는다). Session은 Build 전에 대입해라.
-    // ★09-28: 다시 굵게(사용자 "훨씬 선명하게"). 몸을 관통하는 3축이 가장 중요한 «파고듦» 단서라 가장 굵다.
-    public float axisWidth = 0.004f;         // 3축(연직·전후·좌우). 0.004 → 0.0025 → 09-28 0.004
-    public float pivotAxisWidth = 0.005f;    // 기준축. 0.006 → 0.0035 → 09-28 0.005
-    public float neutralLineWidth = 0.003f;  // 중립선(기준점→미간). 0.003 → 0.002 → 09-28 0.003
-    public float markLineWidth = 0.003f;     // 마커선(기준점→찍은 점). 0.003 → 0.002 → 09-28 0.003
+    public float axisWidth = 0.0025f;        // 3축(연직·전후·좌우). 옛 0.004
+    public float pivotAxisWidth = 0.0035f;   // 기준축(목 중앙). 옛 0.006
+    public float neutralLineWidth = 0.002f;  // 중립선(기준점→미간). 옛 0.003
+    public float markLineWidth = 0.002f;     // 마커선(기준점→찍은 점). 옛 0.003
 
     // 바늘
     // ★손잡이 구체는 <b>보이는 크기만</b>이다. 잡는 판정 반경은 Session이 따로 들고 있다
@@ -570,49 +567,24 @@ public class RomRecordVisual
          : deg % 5 == 0 ? tickLen5
          : tickLen1;
 
-    /// <summary>
-    /// 눈금 메시를 만든다(Build에서 한 번). 정점은 재활용하고 인덱스는 고정이다.
-    /// ★★09-28: 선분(MeshTopology.Lines)에서 <b>폭 있는 막대</b>(눈금마다 사각형 하나)로 바꿨다.
-    ///   선분 메시는 GPU가 늘 <b>1픽셀</b>로 긋는다 — dialTickWidth를 아무리 바꿔도 안 먹었다(09-21~09-28).
-    ///   사용자 "각도기 눈금 훨씬 선명하게"는 그 1픽셀로는 못 푼다.
-    /// </summary>
+    /// <summary>눈금 선분 메시를 만든다(Build에서 한 번). 정점은 재활용하고 인덱스는 고정이다.</summary>
     private void BuildTickMesh()
     {
         var go = new GameObject("눈금");
         go.transform.SetParent(dialRoot.transform, false);
-        tickMesh = new Mesh { name = "눈금막대" };
+        tickMesh = new Mesh { name = "눈금선분" };
         tickMesh.MarkDynamic();
-        tickVerts = new Vector3[TickCount * 4];
-        var idx = new int[TickCount * 6];
-        for (int i = 0; i < TickCount; i++)
-        {
-            int v = i * 4, t = i * 6;
-            idx[t] = v; idx[t + 1] = v + 1; idx[t + 2] = v + 2;
-            idx[t + 3] = v; idx[t + 4] = v + 2; idx[t + 5] = v + 3;
-        }
+        tickVerts = new Vector3[TickCount * 2];
+        var idx = new int[TickCount * 2];
+        for (int i = 0; i < idx.Length; i++) idx[i] = i;
         tickMesh.vertices = tickVerts;
-        tickMesh.SetIndices(idx, MeshTopology.Triangles, 0);   // 셰이더가 양면(Cull Off)이라 감는 방향은 상관없다
+        tickMesh.SetIndices(idx, MeshTopology.Lines, 0);   // ★선분 목록 — 삼각형이 아니다
         go.AddComponent<MeshFilter>().sharedMesh = tickMesh;
         tickRenderer = go.AddComponent<MeshRenderer>();
         if (lineMat != null) tickRenderer.sharedMaterial = lineMat;
         tickRenderer.material.color = dialTickColor;
         tickRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         tickRenderer.receiveShadows = false;
-    }
-
-    /// <summary>
-    /// 눈금 하나를 막대(사각형)로 적는다. a→b가 눈금 선이고, <paramref name="side"/>(단위) 쪽으로 폭을 준다.
-    /// 폭은 30°·10° 눈금을 조금 더 굵게 — 굵기도 단위를 읽는 사다리다.
-    /// </summary>
-    private void SetTick(int i, Vector3 a, Vector3 b, Vector3 side, int absDeg)
-    {
-        float w = dialTickWidth * (absDeg % 30 == 0 ? 1.6f : absDeg % 10 == 0 ? 1.25f : 1f) * 0.5f;
-        Vector3 h = side * w;
-        int v = i * 4;
-        tickVerts[v] = a - h;
-        tickVerts[v + 1] = b - h;
-        tickVerts[v + 2] = b + h;
-        tickVerts[v + 3] = a + h;
     }
 
     /// <summary>바뀐 정점을 메시에 올린다. ★SetDial 때만 부른다 — 매 프레임 하지 않는다.</summary>
@@ -647,9 +619,9 @@ public class RomRecordVisual
             int deg = TickDeg(i);
             float a = deg * Mathf.Deg2Rad;
             Vector3 d = z * Mathf.Cos(a) + o * Mathf.Sin(a);
-            Vector3 tangent = o * Mathf.Cos(a) - z * Mathf.Sin(a);   // 단면 안에서 눈금에 수직
             float inner = 1f - TickLengthOf(Mathf.Abs(deg));
-            SetTick(i, center + d * (radius * inner), center + d * radius, tangent, Mathf.Abs(deg));
+            tickVerts[i * 2] = center + d * (radius * inner);
+            tickVerts[i * 2 + 1] = center + d * radius;
         }
         UploadTickMesh();
         for (int i = 0; i < TickLabelCount; i++)
@@ -692,8 +664,8 @@ public class RomRecordVisual
             Vector3 p = center + (z * Mathf.Cos(a) + o * Mathf.Sin(a)) * wall;
             float h = half * Mathf.Clamp01(TickLengthOf(Mathf.Abs(deg)) / 0.14f) * cylinderMinorHeightRatio;
             if (deg % 30 == 0) h = half;                     // 30°는 위아래 테두리까지 꽉
-            Vector3 tangent = o * Mathf.Cos(a) - z * Mathf.Sin(a);   // 벽을 따라 도는 방향 — 세로 막대의 폭
-            SetTick(i, p - up * h, p + up * h, tangent, Mathf.Abs(deg));
+            tickVerts[i * 2] = p - up * h;
+            tickVerts[i * 2 + 1] = p + up * h;
         }
         UploadTickMesh();
         for (int i = 0; i < TickLabelCount; i++)
