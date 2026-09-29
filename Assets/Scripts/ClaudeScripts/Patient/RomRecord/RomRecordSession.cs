@@ -415,18 +415,20 @@ public class RomRecordSession : MonoBehaviour
         fineMenu = NewMenu();
         fineMenu.FixedInSpace = true;
         fineMenu.Build(transform, "바늘 각도", 8, font, mat);
-        const float fs = 0.8f;   // 버튼 한 칸 폭(판 칸 단위) — 7개 + 값이면 판 폭 약 29cm
+        // ★09-29 사용자: "너무 옆으로 길어 누르기 불편 — 24cm 기준으로 줄여." 0.8 → 0.65칸, 값 칸 1.4 → 1.2(계산상 29 → 약 24cm).
+        const float fs = 0.65f;  // 버튼 한 칸 폭(판 칸 단위)
+        const float fv = 1.2f;   // 가운데 값 칸 폭
         fineMenu.SetLayout("", new[]
         {
             // ★09-29 사용자: "각도 조절은 텍스트 숫자로 — 아이콘으로 하면 오히려 헷갈려." 확정도 글자 [기록]으로.
             RomMenuItem.Button("deg-5", "-5", 0f * fs, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("deg-1", "-1", 1f * fs, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("deg-0.1", "-0.1", 2f * fs, 0f, fs, AdjTint, repeat: true),
-            new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = 1.4f },
-            RomMenuItem.Button("deg+0.1", "+0.1", 3f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg+1", "+1", 4f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg+5", "+5", 5f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("degok", "기록", 6f * fs + 1.5f, 0f, fs, NeedleTint),
+            new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = fv },
+            RomMenuItem.Button("deg+0.1", "+0.1", 3f * fs + fv, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg+1", "+1", 4f * fs + fv, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg+5", "+5", 5f * fs + fv, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("degok", "기록", 6f * fs + fv + 0.1f, 0f, fs, NeedleTint),
         });
         fineMenu.Hide();
 
