@@ -2085,8 +2085,12 @@ public class RomRecordSession : MonoBehaviour
                 label = showValue ? (tenths * 0.1f).ToString("F1") + "°" : "";
             }
             // ★고른 바늘은 노랗게(«잡는 중» 색 · 구체도 조금 크게) — 버튼이 어느 바늘을 움직이는지 보이게.
+            // ★★[기록]한 바늘은 <b>면을 지우고 직선과 구체만</b> 남긴다(09-29 사용자 재지시).
+            //   09-28에 "그래야 면에 기록만 남고 깔끔"을 «기록 자리에 면을 남긴다»로 잘못 읽어 면을 남겨 뒀다(6335004).
+            //   면은 지금 맞추는 바늘(미확정)에만 쓴다. 기록한 것을 다시 고르면(구체 터치) 다시 면이 된다.
+            bool recordedLine = needleLocked[nk] && k != fineTarget;
             view.SetNeedle(k, true, c, dir, r, h, label, k == fineTarget,
-                           NeedleFin(step, dir), NeedleFinHangs(step), false);
+                           recordedLine ? Vector3.zero : NeedleFin(step, dir), NeedleFinHangs(step), false);
         }
     }
 

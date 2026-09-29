@@ -869,7 +869,8 @@ public class RomRecordVisual
         Seg(needles[i], center, tip);
         needles[i].alignment = LineAlignment.View;
         needles[i].numCapVertices = 2;
-        needles[i].widthMultiplier = needleWidth;
+        // ★선 모드 = [기록]한 바늘(09-29). 면 모드의 직선과 같은 굵기로 — 기록 전후로 선이 가늘어지지 않게.
+        needles[i].widthMultiplier = needleSpineWidth;
         needles[i].startColor = needles[i].endColor = c;
         needleGrips[i].position = tip;
         needleGrips[i].GetComponent<Renderer>().material.color = c;
