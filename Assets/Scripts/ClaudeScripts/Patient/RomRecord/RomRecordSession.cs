@@ -33,7 +33,7 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("시작할 때 3축을 눈높이보다 이만큼(m) 낮게 둔다.")]
     [SerializeField] private float startBelowEye = 0.3f;
     [Tooltip("3축 선 길이(m, 중심에서 한쪽).")]
-    [SerializeField] private float axisLength = 0.25f;
+    [SerializeField] private float axisLength = 0.18f;   // 09-29 0.25 → 0.18(사용자: "삼축 UI 사이즈 좀 줄이고")
 
     [Header("=== 크기(글자는 TMP 폰트 크기, 스케일 1) ===")]
     [Tooltip("축 끝 글자·마커 각도 글자·눈금 숫자(0.8배). ★기존 각도기 판독 0.05(기기 확인값).\n" +
@@ -103,9 +103,9 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("판을 손목이 아니라 <b>허공에 고정</b>한다(진행Root 방식). 끄면 종전처럼 양 손목을 따라다닌다.")]
     [SerializeField] private bool menuFixedInSpace = true;
     [Tooltip("고정 판을 처음 놓을 자리 — 눈앞 거리(m).")]
-    [SerializeField] private float menuFixedDistance = 0.55f;
+    [SerializeField] private float menuFixedDistance = 0.45f;   // 09-29 0.55 → 0.45(사용자: "초기 생성 위치 조금 더 가깝게")
     [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m). ★09-21: 0.3은 너무 낮아 조작이 힘들었다.")]
-    [SerializeField] private float menuFixedBelowEye = 0.14f;
+    [SerializeField] private float menuFixedBelowEye = 0.08f;   // 09-29 0.14 → 0.08(사용자: "살짝 위로")
     [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
     // ★판 기본 자리는 <b>우측 대각선</b>이다(2026-09-23 사용자). 양수 = 보는 방향의 오른쪽.
     //   ★씬에 값이 굳어 있어 코드 기본값은 새 씬에만 먹는다 — 지금 씬은 인스펙터 값을 직접 바꿨다(규칙 7).

@@ -1838,7 +1838,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RomRecordSession
   startDistance: 0.7
   startBelowEye: 0.3
-  axisLength: 0.25
+  axisLength: 0.18
   textSize: 0.08
   panelTextSize: 0.045
   buttonLabelSize: 0.09
@@ -1858,8 +1858,8 @@ MonoBehaviour:
   menuPlateAlpha: 1
   menuTintStrength: 0.5
   menuFixedInSpace: 1
-  menuFixedDistance: 0.55
-  menuFixedBelowEye: 0.14
+  menuFixedDistance: 0.45
+  menuFixedBelowEye: 0.08
   menuFixedSide: 0.38
   menuGrabMargin: 0.04
   menuCellWidth: 0.049
@@ -1878,6 +1878,7 @@ MonoBehaviour:
   needleEnabled: 1
   needleHandleOut: 0.16
   needleFallbackRadius: 0.18
+  dialRadiusScale: 1.5
   needleFinSize: 0.2
   flexionLimitDeg: 45
   extensionLimitDeg: 90
@@ -1891,7 +1892,9 @@ MonoBehaviour:
   nudgePanelBehind: 0.25
   nudgePanelBelow: 0.15
   nudgePanelSide: 0.15
+  nudgeFollowDistance: 0.3
   landmarkRecaptureSeconds: 1
+  markHoldSeconds: 0.1
   exitHoldSeconds: 1
   flipSides: 0
   showSectionPlane: 1
