@@ -1878,7 +1878,9 @@ MonoBehaviour:
   needleEnabled: 1
   needleHandleOut: 0.16
   needleFallbackRadius: 0.18
-  dialRadiusScale: 1.25
+  dialScaleFlexion: 1.5
+  dialScaleLateral: 1.25
+  dialScaleRotation: 1.5
   needleFinSize: 0.2
   flexionLimitDeg: 30
   extensionLimitDeg: 60

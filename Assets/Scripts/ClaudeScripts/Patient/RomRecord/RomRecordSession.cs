@@ -165,11 +165,20 @@ public class RomRecordSession : MonoBehaviour
     // ★09-29 사용자: "각도기 반지름은 미간 기준에서 위로 1.5배 좀 더 넓게." 원·눈금만 커진다 —
     //   바늘 구체는 <b>종전 반지름 + needleHandleOut</b> 그대로 둔다(사용자 선택: "구체는 지금 자리" — 밀려나면 조작이 번거롭다).
     //   ★09-29 밤 사용자: "회전 각도기는 1.5배 하지 말고, 다른 각도기도 1.5배 말고 1.25로" → 회전은 1배(키우지 않음), 나머지 1.25.
-    [Tooltip("각도기 원 반지름 = (중심→미간 거리) × 이 값(굴곡·신전·측굴). ★회전 각도기는 키우지 않는다(1배). 바늘 구체 자리는 이 값에 영향받지 않는다.")]
-    [SerializeField] private float dialRadiusScale = 1.25f;
+    //   ★★09-29 밤 테스트 뒤 사용자: "신전이랑 회전은 1.5배 해도 되겠다 — 1.25로 하니 머리에 걸치네."
+    //   원인(계산): 반지름이 «중심→미간 거리»라 1배 원은 미간 피부 위를 지나고, 머리는 정수리·뒤통수 쪽이 미간보다 더 멀어
+    //   그쪽에서 원이 머리를 파고든다. 1.25로는 모자랐다. → 단계마다 따로 둔다(굴곡·신전은 한 각도기라 신전만 따로 못 키운다).
+    //   종전 dialRadiusScale(한 값·회전 1배)은 없앴다 — 씬에 남은 값은 안 읽힌다.
+    [Tooltip("굴곡·신전 각도기 원 반지름 = (중심→미간 거리) × 이 값. 바늘 구체 자리는 영향받지 않는다.")]
+    [SerializeField] private float dialScaleFlexion = 1.5f;
+    [Tooltip("측굴 각도기 원 반지름 배율.")]
+    [SerializeField] private float dialScaleLateral = 1.25f;
+    [Tooltip("회전 각도기 원 반지름 배율.")]
+    [SerializeField] private float dialScaleRotation = 1.5f;
 
-    /// <summary>그 단계 각도기 원의 배율(09-29 밤) — 회전은 1배, 나머지는 dialRadiusScale.</summary>
-    private float DialScaleOf(RomRecordStep s) => s == RomRecordStep.Rotation ? 1f : Mathf.Max(0.1f, dialRadiusScale);
+    /// <summary>그 단계 각도기 원의 배율(09-29 밤).</summary>
+    private float DialScaleOf(RomRecordStep s) => Mathf.Max(0.1f,
+        s == RomRecordStep.Rotation ? dialScaleRotation : s == RomRecordStep.LateralFlexion ? dialScaleLateral : dialScaleFlexion);
     // ★바늘 면의 크기(2026-09-23 사용자: "너무 크지 않게 환자 머리 크기 정도만"). 사람 머리 높이 어림이다.
     //   ★추정값이다 — 기기에서 보고 맞춘다. 회전은 이만큼 <b>아래로</b>, 나머지는 바늘을 가운데 두고 위아래로 벌어진다.
     [SerializeField] private float needleFinSize = 0.2f;
@@ -807,7 +816,7 @@ public class RomRecordSession : MonoBehaviour
         radius = hasGlab
             ? Mathf.Max(0.08f, Vector3.ProjectOnPlane(glab - center, normal).magnitude)
             : needleFallbackRadius;
-        radius *= DialScaleOf(step);   // ★원만 키운다(회전은 1배) — 구체는 NeedleVisible이 되돌려 쓴다(09-29)
+        radius *= DialScaleOf(step);   // ★원만 키운다(단계별 배율) — 구체는 NeedleVisible이 되돌려 쓴다(09-29)
         return true;
     }
 
