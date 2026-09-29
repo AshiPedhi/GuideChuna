@@ -171,10 +171,11 @@ public class RomRecordSession : MonoBehaviour
     //   종전 dialRadiusScale(한 값·회전 1배)은 없앴다 — 씬에 남은 값은 안 읽힌다.
     [Tooltip("굴곡·신전 각도기 원 반지름 = (중심→미간 거리) × 이 값. 바늘 구체 자리는 영향받지 않는다.")]
     [SerializeField] private float dialScaleFlexion = 1.5f;
+    //   ★곧바로 정정(사용자: "말을 잘못했어 — 측굴이랑 신전·굴곡 각도기 1.5배, 회전은 그대로") → 측굴 1.5 · 회전 1배.
     [Tooltip("측굴 각도기 원 반지름 배율.")]
-    [SerializeField] private float dialScaleLateral = 1.25f;
-    [Tooltip("회전 각도기 원 반지름 배율.")]
-    [SerializeField] private float dialScaleRotation = 1.5f;
+    [SerializeField] private float dialScaleLateral = 1.5f;
+    [Tooltip("회전 각도기 원 반지름 배율. ★회전은 키우지 않는다(1배, 사용자).")]
+    [SerializeField] private float dialScaleRotation = 1f;
 
     /// <summary>그 단계 각도기 원의 배율(09-29 밤).</summary>
     private float DialScaleOf(RomRecordStep s) => Mathf.Max(0.1f,
