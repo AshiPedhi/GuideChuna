@@ -1885,7 +1885,7 @@ MonoBehaviour:
   lateralLimitDeg: 45
   rotationLimitDeg: 90
   needleTouchRadius: 0.025
-  fineStepDeg: 0.1
+  fineStepDeg: 0.2
   finePanelRise: 0.08
   defaultC7Distance: 0.6
   defaultC7BelowEye: 0.15

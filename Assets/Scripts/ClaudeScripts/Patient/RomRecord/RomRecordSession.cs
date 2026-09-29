@@ -184,7 +184,7 @@ public class RomRecordSession : MonoBehaviour
     [Tooltip("잠긴 바늘의 구체를 검지끝으로 이 거리(m) 안까지 치면 잠금이 풀린다. 구체 지름은 1.8cm다.")]
     [SerializeField] private float needleTouchRadius = 0.025f;
     [Tooltip("바늘 위 미세 조정 버튼 한 번에 움직이는 각(°).")]
-    [SerializeField] private float fineStepDeg = 0.1f;
+    [SerializeField] private float fineStepDeg = 0.2f;   // 09-29 0.1 → 0.2(사용자). 버튼 글자도 이 값에서 만든다
     [Tooltip("미세 조정 판을 바늘 구체보다 이만큼(m) 위에 띄운다(손과 환자 머리가 한 시선에 들게).")]
     [SerializeField] private float finePanelRise = 0.08f;
 
@@ -427,9 +427,9 @@ public class RomRecordSession : MonoBehaviour
             // ★09-29 사용자: "각도 조절은 텍스트 숫자로 — 아이콘으로 하면 오히려 헷갈려." 확정도 글자 [기록]으로.
             RomMenuItem.Button("deg-5", "-5", 0f * fs, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("deg-1", "-1", 1f * fs, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg-0.1", "-0.1", 2f * fs, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg-0.1", "-" + fineStepDeg.ToString("0.0#"), 2f * fs, 0f, fs, AdjTint, repeat: true),   // id는 그대로(판정 키)
             new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = fv },
-            RomMenuItem.Button("deg+0.1", "+0.1", 3f * fs + fv, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg+0.1", "+" + fineStepDeg.ToString("0.0#"), 3f * fs + fv, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("deg+1", "+1", 4f * fs + fv, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("deg+5", "+5", 5f * fs + fv, 0f, fs, AdjTint, repeat: true),
             RomMenuItem.Button("degok", "기록", 6f * fs + fv + 0.1f, 0f, fs, NeedleTint),
@@ -1438,7 +1438,7 @@ public class RomRecordSession : MonoBehaviour
                 Debug.Log("[실측기록] 바닥 단서(드롭라인·그림자) " + (view.DropCuesOn ? "켬" : "끔"));
                 ApplyStepButtons();
                 break;
-            // ★바늘 각도 판(09-28) — 손으로 끌지 않는다. 5° · 1° · 0.1°(fineStepDeg), [✓]는 확정 후 다음 바늘.
+            // ★바늘 각도 판(09-28) — 손으로 끌지 않는다. 5° · 1° · fineStepDeg(09-29부터 0.2°), [✓]는 확정 후 다음 바늘.
             case "deg+5": FineAdjust(+5f); break;
             case "deg-5": FineAdjust(-5f); break;
             case "deg+1": FineAdjust(+1f); break;
