@@ -1179,19 +1179,21 @@ public class RomRecordSession : MonoBehaviour
             //     [+5] [+1] [+0.2]   값
             //     [-5] [-1] [-0.2]  [기록]
             //   고른 바늘이 있을 때만. ★숫자 글자(아이콘 아님 — 09-29 사용자) · [기록]은 확정 후 다음 바늘.
+            // ★09-29 밤 사용자: "2줄 배치 좋긴 한데 한쪽에 쏠려 있어서 불편" → 판 전체 폭 <b>4칸 격자</b>에 맞춘다(위 버튼들과 같은 크기·열).
+            //     [ +5 ] [ +1 ] [+0.2] [  값  ]
+            //     [ -5 ] [ -1 ] [-0.2] [ 기록 ]
             if (needleOn && fineTarget >= 0)
             {
-                const float fb = 0.7f, fv = 1.2f, fgap = 0.2f;
                 float rf = r + Mathf.Ceil(n / 3f) + 0.2f;
                 string st = fineStepDeg.ToString("0.0#");
-                items.Add(RomMenuItem.Button("deg+5", "+5", 0f * fb, rf, fb, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg+1", "+1", 1f * fb, rf, fb, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg+0.1", "+" + st, 2f * fb, rf, fb, NavTint, repeat: true));   // id는 그대로(판정 키)
-                items.Add(RomMenuItem.Button("deg-5", "-5", 0f * fb, rf + 1f, fb, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg-1", "-1", 1f * fb, rf + 1f, fb, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg-0.1", "-" + st, 2f * fb, rf + 1f, fb, NavTint, repeat: true));
-                items.Add(new RomMenuItem { id = null, key = FineValueKey, label = FineValueText(), col = 3f * fb + fgap, row = rf, span = fv });
-                items.Add(RomMenuItem.Button("degok", "기록", 3f * fb + fgap, rf + 1f, fv, NavTint));
+                AddAt(RomMenuItem.Button("deg+5", "+5", 0, 0, 0, NavTint, repeat: true), 0, rf);
+                AddAt(RomMenuItem.Button("deg+1", "+1", 0, 0, 0, NavTint, repeat: true), 1, rf);
+                AddAt(RomMenuItem.Button("deg+0.1", "+" + st, 0, 0, 0, NavTint, repeat: true), 2, rf);   // id는 그대로(판정 키)
+                AddAt(new RomMenuItem { id = null, key = FineValueKey, label = FineValueText(), textScale = 1.3f }, 3, rf);
+                AddAt(RomMenuItem.Button("deg-5", "-5", 0, 0, 0, NavTint, repeat: true), 0, rf + 1f);
+                AddAt(RomMenuItem.Button("deg-1", "-1", 0, 0, 0, NavTint, repeat: true), 1, rf + 1f);
+                AddAt(RomMenuItem.Button("deg-0.1", "-" + st, 0, 0, 0, NavTint, repeat: true), 2, rf + 1f);
+                AddAt(RomMenuItem.Button("degok", "기록", 0, 0, 0, NavTint), 3, rf + 1f);
             }
         }
 
