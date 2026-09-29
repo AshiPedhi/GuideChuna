@@ -29,7 +29,10 @@ public struct RomMenuItem
     // ★그림만 보인다(2026-09-28 사용자: "버튼도 글씨 말고 아이콘으로 — 글씨는 조잡해"). 그림을 가운데 크게 두고 글자는 숨긴다.
     //   ★label은 그래도 채워 둔다 — 그림을 못 그리는 Quad 판(RomRecordWristMenu)은 label을 대신 보여 준다.
     public bool iconOnly;
-    public string key;          // 글자 칸을 나중에 SetText로 바꿀 때 찾는 이름
+    // ★그림을 글자 <b>옆</b>에 둔다(2026-09-29 사용자: "화살표도 아이콘이랑 영어로 같이 표시"). 0 = 종전(위 그림·아래 글자),
+    //   -1 = 그림 왼쪽·글자 오른쪽(◀ LEFT), +1 = 글자 왼쪽·그림 오른쪽(RIGHT ▶). 한 줄 버튼에 둘을 나란히 넣는다.
+    public int iconBeside;
+    public string key;         // 글자 칸을 나중에 SetText로 바꿀 때 찾는 이름
     public float textScale;     // 글자 크기 배수(0이면 1)
     public bool alignLeft;      // 글자 칸을 왼쪽 정렬
 

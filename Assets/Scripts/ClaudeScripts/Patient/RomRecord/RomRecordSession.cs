@@ -442,24 +442,25 @@ public class RomRecordSession : MonoBehaviour
 
         // ★기준점 위치 조정 판(2026-09-28 사용자: "위치 조정하는 버튼 UI 따로 빼 주고, 버튼도 글씨 말고 아이콘으로").
         //   환자 뒤(내가 쓰기 편한 자리)에 서는 3×3 판이다(09-28 오후 — 오전엔 조작 판 옆). 가운데 칸은 지금 옮기는 기준점 이름.
-        //     ↺  ▲  ↻        ↺↻ = 환자 정면 돌리기(종전 «정면 ◀▶»)
-        //     ◀ 이름 ▶        ▲▼◀▶ = 위·아래·환자 왼쪽·오른쪽
-        //     앞  ▼  뒤        앞·뒤 = 환자 앞·뒤(바닥 사다리꼴 그림으로 위·아래와 가른다)
+        //   ★09-29 사용자: "기준점 설정할 때 회전은 없어도 되고(정면은 미간으로 자동) · 화살표도 아이콘이랑 영어로 같이 ·
+        //     위아래만 UP DOWN 영어만." → ↺↻를 빼고, 그림 옆에 영어를 붙인다(좌우·앞뒤는 환자 기준).
+        //              UP
+        //     ◀ LEFT  이름  RIGHT ▶
+        //     FRONT   DOWN   BACK        FRONT·BACK = 바닥 사다리꼴 그림 + 글자
         //   기준점 설정 단계에서만 보인다.
         nudgeMenu = NewMenu();
         nudgeMenu.FixedInSpace = true;
         nudgeMenu.Build(transform, "기준점 위치", 10, font, mat);
+        const float nw = 1.7f;   // 칸 폭 — 그림 + 영어 단어가 한 줄에 들어가게(종전 1칸)
         nudgeMenu.SetLayout("", new[]
         {
-            IconButton("yaw-", "<-", "yaw_left", 0f, 0f, 1f, true),
-            IconButton("up", "^", "nudge_up", 1f, 0f, 1f, true),
-            IconButton("yaw+", "->", "yaw_right", 2f, 0f, 1f, true),
-            IconButton("left", "<", "nudge_left", 0f, 1f, 1f, true),
-            new RomMenuItem { id = null, key = NudgeTargetKey, label = "", col = 1f, row = 1f, span = 1f },
-            IconButton("right", ">", "nudge_right", 2f, 1f, 1f, true),
-            IconButton("fwd", "F", "nudge_fwd", 0f, 2f, 1f, true),
-            IconButton("down", "v", "nudge_down", 1f, 2f, 1f, true),
-            IconButton("back", "B", "nudge_back", 2f, 2f, 1f, true),
+            RomMenuItem.Button("up", "UP", nw, 0f, nw, AdjTint, repeat: true),
+            BesideButton("left", "LEFT", "nudge_left", -1, 0f, 1f, nw),
+            new RomMenuItem { id = null, key = NudgeTargetKey, label = "", col = nw, row = 1f, span = nw },
+            BesideButton("right", "RIGHT", "nudge_right", +1, 2f * nw, 1f, nw),
+            BesideButton("fwd", "FRONT", "nudge_fwd", -1, 0f, 2f, nw),
+            RomMenuItem.Button("down", "DOWN", nw, 2f, nw, AdjTint, repeat: true),
+            BesideButton("back", "BACK", "nudge_back", -1, 2f * nw, 2f, nw),
         });
         nudgeMenu.Hide();
         ApplyStepButtons();
@@ -470,12 +471,14 @@ public class RomRecordSession : MonoBehaviour
                   $"글자 {textSize}/{panelTextSize}/버튼 {buttonLabelSize} · 칸 {menuCellWidth * 100f:F1}×{menuRowHeight * 100f:F1}cm · 소리 {soundVolume:F1}");
     }
 
-    /// <summary>그림 버튼 하나(09-28). 그림을 못 찾으면 대체 글자로 보인다(LoadIcon이 경고를 남긴다).</summary>
-    private static RomMenuItem IconButton(string id, string fallback, string icon, float col, float row, float span, bool repeat)
+    // ★그림만 보이는 IconButton(09-28)은 09-29에 없앴다 — 바늘 판은 숫자 글자, 위치 판은 그림 옆 영어(BesideButton)로 바뀌었다.
+
+    /// <summary>그림 옆에 글자를 붙인 반복 버튼(09-29). side -1 = 그림 왼쪽, +1 = 그림 오른쪽.</summary>
+    private static RomMenuItem BesideButton(string id, string label, string icon, int side, float col, float row, float span)
     {
-        var it = RomMenuItem.Button(id, fallback, col, row, span, AdjTint, repeat: repeat);
+        var it = RomMenuItem.Button(id, label, col, row, span, AdjTint, repeat: true);
         it.icon = LoadIcon(icon);
-        it.iconOnly = it.icon != null;
+        it.iconBeside = side;
         return it;
     }
 

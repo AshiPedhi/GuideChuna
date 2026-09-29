@@ -447,10 +447,15 @@ public class RomRecordMenuUI : IRomRecordMenu
                 b.label.fontSize = labelPt * (it.textScale > 0f ? it.textScale : 1f);
                 b.label.fontStyle = it.selected ? FontStyles.Bold : FontStyles.Normal;
                 // ★그림이 있으면 글자를 아래로 내린다. 글자 칸은 왼쪽 정렬을 고를 수 있다(값 여러 줄).
-                b.label.alignment = hasIcon ? TextAlignmentOptions.Bottom
+                // ★그림 옆 글자(09-29): 그림 한 칸(버튼 높이 정사각형)만큼 글자를 반대쪽으로 비킨다.
+                float side = Mathf.Max(8f, h - 12f) + 8f;
+                b.label.alignment = hasIcon && it.iconBeside != 0 ? TextAlignmentOptions.Center
+                                  : hasIcon ? TextAlignmentOptions.Bottom
                                   : it.alignLeft ? TextAlignmentOptions.MidlineLeft
                                   : TextAlignmentOptions.Center;
-                b.label.margin = hasIcon ? new Vector4(0f, 0f, 0f, 6f) : Vector4.zero;
+                b.label.margin = hasIcon && it.iconBeside < 0 ? new Vector4(side, 0f, 4f, 0f)
+                               : hasIcon && it.iconBeside > 0 ? new Vector4(4f, 0f, side, 0f)
+                               : hasIcon ? new Vector4(0f, 0f, 0f, 6f) : Vector4.zero;
                 b.label.richText = b.isText;   // 값 표시에서 지금 단계만 밝힌다
                 // ★key가 붙은 글자 칸(안내·탭 아래 값)은 밝은 글자다 — TMP 색 태그의 알파가 바탕 알파를 못 넘어서
                 //   흐린 caption 색이면 값 색이 다 죽는다. key 없는 설명 글자만 흐리게 둔다.
@@ -478,7 +483,16 @@ public class RomRecordMenuUI : IRomRecordMenu
                 {
                     RectTransform irt = b.icon.rectTransform;
                     b.icon.texture = it.icon;
-                    if (iconOnly)
+                    if (!iconOnly && it.iconBeside != 0)
+                    {
+                        // 그림 옆 글자(09-29) — 그림은 버튼 높이 정사각형, 왼쪽(-1) 또는 오른쪽(+1) 끝에 세로 가운데로
+                        float s = Mathf.Max(8f, h - 12f);
+                        float ax = it.iconBeside < 0 ? 0f : 1f;
+                        irt.anchorMin = irt.anchorMax = irt.pivot = new Vector2(ax, 0.5f);
+                        irt.sizeDelta = new Vector2(s, s);
+                        irt.anchoredPosition = new Vector2(it.iconBeside < 0 ? 6f : -6f, 0f);
+                    }
+                    else if (iconOnly)
                     {
                         // 그림만 — 버튼 한가운데, 여백 조금만 남기고 꽉 차게
                         float s = Mathf.Max(8f, Mathf.Min(w, h) - 12f);
