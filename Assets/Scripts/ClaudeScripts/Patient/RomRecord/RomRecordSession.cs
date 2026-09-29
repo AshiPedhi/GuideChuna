@@ -1164,22 +1164,25 @@ public class RomRecordSession : MonoBehaviour
                 Ctl(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, NavTint, repeat: true));
             }
 
-            // ── 측정 판 하단: 바늘 각도 줄(09-29 밤 사용자: "바늘 각도 수정하는 UI도 기록 UI 하단부에 같이 합쳐 줘") ──
-            //   [-5][-1][-0.2] [값] [+0.2][+1][+5] [기록] — 고른 바늘이 있을 때만. 폭은 떠 있던 판과 같다(버튼 0.65칸 · 값 1.2칸).
-            //   ★숫자 글자(아이콘 아님 — 09-29 사용자) · [기록]은 확정 후 다음 바늘.
+            // ── 측정 판 하단: 바늘 각도 버튼(09-29 밤 사용자: "바늘 각도 수정하는 UI도 기록 UI 하단부에 같이 합쳐 줘") ──
+            //   ★두 줄 — 위 = 각이 커진다(+), 아래 = 작아진다(−), 같은 열 = 같은 크기(09-29 밤 사용자 선택:
+            //   "각도 조절하는 버튼 은근 좌우로 길어서 조작할 때 불편" → 한 줄 7개(약 24cm)를 3열 두 줄(약 17cm, 계산)로).
+            //     [+5] [+1] [+0.2]   값
+            //     [-5] [-1] [-0.2]  [기록]
+            //   고른 바늘이 있을 때만. ★숫자 글자(아이콘 아님 — 09-29 사용자) · [기록]은 확정 후 다음 바늘.
             if (needleOn && fineTarget >= 0)
             {
-                const float fs = 0.65f, fv = 1.2f;
+                const float fb = 0.7f, fv = 1.2f, fgap = 0.2f;
                 float rf = r + Mathf.Ceil(n / 3f) + 0.2f;
                 string st = fineStepDeg.ToString("0.0#");
-                items.Add(RomMenuItem.Button("deg-5", "-5", 0f * fs, rf, fs, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg-1", "-1", 1f * fs, rf, fs, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg-0.1", "-" + st, 2f * fs, rf, fs, NavTint, repeat: true));   // id는 그대로(판정 키)
-                items.Add(new RomMenuItem { id = null, key = FineValueKey, label = FineValueText(), col = 3f * fs, row = rf, span = fv });
-                items.Add(RomMenuItem.Button("deg+0.1", "+" + st, 3f * fs + fv, rf, fs, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg+1", "+1", 4f * fs + fv, rf, fs, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("deg+5", "+5", 5f * fs + fv, rf, fs, NavTint, repeat: true));
-                items.Add(RomMenuItem.Button("degok", "기록", 6f * fs + fv + 0.1f, rf, fs, NavTint));
+                items.Add(RomMenuItem.Button("deg+5", "+5", 0f * fb, rf, fb, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg+1", "+1", 1f * fb, rf, fb, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg+0.1", "+" + st, 2f * fb, rf, fb, NavTint, repeat: true));   // id는 그대로(판정 키)
+                items.Add(RomMenuItem.Button("deg-5", "-5", 0f * fb, rf + 1f, fb, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg-1", "-1", 1f * fb, rf + 1f, fb, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg-0.1", "-" + st, 2f * fb, rf + 1f, fb, NavTint, repeat: true));
+                items.Add(new RomMenuItem { id = null, key = FineValueKey, label = FineValueText(), col = 3f * fb + fgap, row = rf, span = fv });
+                items.Add(RomMenuItem.Button("degok", "기록", 3f * fb + fgap, rf + 1f, fv, NavTint));
             }
         }
 
