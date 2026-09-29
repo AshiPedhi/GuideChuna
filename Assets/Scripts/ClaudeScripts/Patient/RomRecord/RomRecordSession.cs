@@ -207,13 +207,12 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float nudgePanelBelow = 0.15f;
     [Tooltip("위치 조정 판 — 환자 오른쪽으로(m). 음수면 왼쪽.")]
     [SerializeField] private float nudgePanelSide = 0.15f;
-    // ★따라오기(09-29 사용자: "따라오기를 하되 따라오는 각도 범위를 여유 있게"). 고개를 조금 돌린 정도로는 서 있고,
-    //   판이 시선에서 좌우로 이 각도를 넘으면 눈을 중심으로 수평으로만 돌아 들어온다(거리·높이는 그대로).
+    // ★따라오기 — <b>걸어서 자리를 옮겼을 때만</b>(09-29 오후 사용자 선택). 고개를 돌려서는 절대 안 움직인다.
+    //   오전판(시선에서 50°를 넘으면 20° 안으로 끌어옴)은 "너무 빡빡하고 측정 중에 고개 돌리는 걸로도 따라와 불편"해서 바꿨다.
+    //   헤드셋이 판을 놓았을 때 자리에서 수평으로 이만큼 넘게 옮겨 가면, 판이 같은 만큼 옮겨 와 상대 자리를 지킨다(높이는 그대로).
     //   ★검지가 판 근처에 있거나 판을 잡는 중에는 안 움직인다 — 09-28에 따라오기를 뺀 이유가 «누르던 손가락이 헛짚는다»였다.
-    [Tooltip("위치 조정 판 따라오기 — 판이 시선에서 좌우로 이 각도(°)를 넘으면 따라온다.")]
-    [SerializeField] private float nudgeFollowAngle = 50f;
-    [Tooltip("위치 조정 판 따라오기 — 따라올 때 시선에서 이 각도(°) 안쪽까지 들어와 멈춘다.")]
-    [SerializeField] private float nudgeFollowSettle = 20f;
+    [Tooltip("위치 조정 판 따라오기 — 헤드셋이 판을 놓았을 때 자리에서 수평으로 이만큼(m) 넘게 옮겨 가면 따라온다. 고개 돌림에는 반응하지 않는다.")]
+    [SerializeField] private float nudgeFollowDistance = 0.3f;
 
     [Header("=== 기준점 다시 찍기(2026-09-28) ===")]
     [Tooltip("이미 찍은 기준점 버튼을 이만큼(초) 누르고 있으면 검지끝 자리로 다시 찍힌다. 짧게 누르면 이동 대상만 바뀐다.\n" +
@@ -332,7 +331,8 @@ public class RomRecordSession : MonoBehaviour
     private IRomRecordMenu nudgeMenu;
     private bool nudgeUserPlaced;   // 손으로 옮긴 적이 있나 — 있으면 다시 보일 때 그 자리에 선다
     private Vector3 nudgeUserPos;
-    private bool nudgeFollowing;    // 범위를 벗어나 들어오는 중인가(09-29)
+    private bool nudgeFollowing;    // 옮겨 오는 중인가(09-29)
+    private Vector3 nudgeAnchorEye; // 판을 놓았을(마지막으로 따라온) 때의 헤드셋 자리 — 이것과 비교해 «걸었나»를 잰다
     private const float NudgeFollowHandMargin = 0.12f;   // 검지가 판에서 이만큼(m) 안이면 따라오지 않는다
     private const float NudgeFollowSharpness = 5f;
     // ★기준점을 손가락으로 «찍었나»(09-28). 시작하면 세 점 모두 헤드셋 앞 기본 자리에 서 있으므로(hasC7 등은 참)
@@ -957,12 +957,14 @@ public class RomRecordSession : MonoBehaviour
         if (!nudgeMenu.Visible && nudgeUserPlaced)
         {
             nudgeMenu.PlaceAt(nudgeUserPos, eye);   // ★손으로 옮긴 적이 있으면 그 자리(09-28 저녁)
+            nudgeAnchorEye = eye.position;
         }
         else if (!nudgeMenu.Visible)
         {
             Vector3 f = RomRecordGeometry.Forward(yaw), r = RomRecordGeometry.Right(yaw);
             Vector3 pos = c7 - f * nudgePanelBehind - Vector3.up * nudgePanelBelow + r * nudgePanelSide;
             nudgeMenu.PlaceAt(pos, eye);
+            nudgeAnchorEye = eye.position;
             Debug.Log($"[실측기록] 위치 조정 판을 세웠다 — {Fmt(pos)}(대추에서 뒤 {nudgePanelBehind * 100f:F0} · " +
                       $"아래 {nudgePanelBelow * 100f:F0} · 오른쪽 {nudgePanelSide * 100f:F0}cm · 눈까지 " +
                       $"{Vector3.Distance(pos, eye.position) * 100f:F0}cm)");
@@ -972,36 +974,38 @@ public class RomRecordSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 위치 조정 판 따라오기(09-29). 판이 시선에서 좌우 <see cref="nudgeFollowAngle"/>°를 넘으면 눈을 중심으로
-    /// 수평으로만 돌려 <see cref="nudgeFollowSettle"/>° 안쪽까지 들인다. 거리·높이는 그대로다.
-    /// ★검지가 판 근처에 있거나 판을 잡고 있으면 서 있는다.
+    /// 위치 조정 판 따라오기(09-29 오후) — <b>걸어서 자리를 옮겼을 때만</b>. 헤드셋이 판을 놓았을 때 자리에서
+    /// 수평으로 <see cref="nudgeFollowDistance"/>를 넘게 옮기면, 판이 헤드셋이 옮긴 만큼 부드럽게 옮겨 온다(높이 그대로).
+    /// ★고개 돌림은 헤드셋 <b>위치</b>를 거의 안 바꾸므로 반응하지 않는다. 검지가 판 근처거나 판을 잡는 중이면 서 있는다.
     /// </summary>
     private void FollowNudgeMenu()
     {
         if (nudgeMenu == null || !nudgeMenu.Visible || eye == null) { nudgeFollowing = false; return; }
-        if (dragTarget == 10
-            || (hands.TryJoint(false, HandJointId.HandIndexTip, out Vector3 ri) && nudgeMenu.Near(ri, NudgeFollowHandMargin))
+        Vector3 e = eye.position;
+        if (dragTarget == 10)
+        {
+            nudgeAnchorEye = e;   // ★손으로 옮기는 중 = 지금 몸 자리를 기준으로 다시 잡는다
+            nudgeFollowing = false;
+            return;
+        }
+        if ((hands.TryJoint(false, HandJointId.HandIndexTip, out Vector3 ri) && nudgeMenu.Near(ri, NudgeFollowHandMargin))
             || (hands.TryJoint(true, HandJointId.HandIndexTip, out Vector3 li) && nudgeMenu.Near(li, NudgeFollowHandMargin)))
         {
             nudgeFollowing = false;
             return;
         }
-        Vector3 e = eye.position, toP = nudgeMenu.Position - e;
-        Vector3 flat = new Vector3(toP.x, 0f, toP.z);
-        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
-        if (flat.sqrMagnitude < 1e-4f || fwd.sqrMagnitude < 1e-4f) return;
-        float ang = Vector3.SignedAngle(fwd, flat, Vector3.up);
+        Vector3 walked = new Vector3(e.x - nudgeAnchorEye.x, 0f, e.z - nudgeAnchorEye.z);
         if (!nudgeFollowing)
         {
-            if (Mathf.Abs(ang) <= nudgeFollowAngle) return;
+            if (walked.magnitude <= nudgeFollowDistance) return;
             nudgeFollowing = true;
-            Debug.Log($"[실측기록] 위치 조정 판이 시선에서 {ang:F0}° 벗어났다(허용 ±{nudgeFollowAngle:F0}°) — {nudgeFollowSettle:F0}° 안쪽으로 따라온다");
+            Debug.Log($"[실측기록] 헤드셋이 {walked.magnitude * 100f:F0}cm 옮겨 갔다(문턱 {nudgeFollowDistance * 100f:F0}cm) — 위치 조정 판이 따라온다");
         }
-        float target = Mathf.Sign(ang) * nudgeFollowSettle;
         float k = 1f - Mathf.Exp(-NudgeFollowSharpness * Time.unscaledDeltaTime);
-        float next = Mathf.Lerp(ang, target, k);
-        if (Mathf.Abs(next - target) < 1f) { next = target; nudgeFollowing = false; }
-        Vector3 pos = e + Quaternion.AngleAxis(next - ang, Vector3.up) * toP;
+        Vector3 move = walked * k;
+        if (walked.magnitude < 0.01f) { move = walked; nudgeFollowing = false; }
+        nudgeAnchorEye += move;
+        Vector3 pos = nudgeMenu.Position + move;
         nudgeMenu.MoveTo(pos);
         if (nudgeUserPlaced) nudgeUserPos = pos;   // ★손으로 옮긴 자리도 따라온 자리로 갱신한다
     }
