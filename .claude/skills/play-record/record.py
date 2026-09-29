@@ -32,7 +32,10 @@ import time
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 BRIDGE_RESP = os.path.join(ROOT, "Temp", "chuna-bridge", "resp.json")
 BRIDGE_PY = os.path.join(ROOT, ".claude", "skills", "unity-live", "bridge.py")
-STATE_DIR = os.path.join(ROOT, "Temp", "play-record")
+# ★상태 폴더는 프로젝트 Temp 밖에 둔다(2026-09-29). Temp에 두면 daemon이 daemon.log를 늘 열고 있어
+#   Unity가 종료 때 Temp를 못 지우고, 남은 Temp/__Backupscenes 때문에 다음 실행마다 «씬 복구» 창이 뜨고
+#   Assets/_Recovery에 사본이 쌓였다(09-21~09-29, 0 (17)~0 (19)).
+STATE_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "GuideChuna", "play-record")
 STATE = os.path.join(STATE_DIR, "state.json")
 STOP_FLAG = os.path.join(STATE_DIR, "stop")
 # ★상주 모드(2026-09-22). 사용자 지시 09-21 "Play하면 자동으로 녹화" — 에이전트가 세션마다 watch를
@@ -221,8 +224,22 @@ def capture_region(title, whole=False):
     return x, y, w, h, note
 
 
+def unity_running():
+    """Unity 에디터 프로세스가 떠 있나. 확인이 안 되면 떠 있다고 본다(녹화를 놓치지 않게)."""
+    try:
+        r = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Unity.exe", "/NH"], creationflags=NOWIN,
+                           capture_output=True, text=True, timeout=10, errors="replace")
+    except Exception:
+        return True
+    return "Unity.exe" in (r.stdout or "")
+
+
 def is_playing(timeout=20):
     """브리지에 물어 Play 중인지 본다. (재생중, 브리지응답여부)"""
+    # ★Unity가 없으면 ping하지 않는다(09-29). ping은 Temp/chuna-bridge를 만들고 파일을 쓰므로
+    #   Unity가 꺼진 뒤에도 Temp를 되살리고, 종료 중인 Temp 삭제와 부딪친다.
+    if not unity_running():
+        return False, False
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     try:
         r = subprocess.run(creationflags=NOWIN, args=[sys.executable, BRIDGE_PY, "ping", "--timeout=%d" % timeout],

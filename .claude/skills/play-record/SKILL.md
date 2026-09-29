@@ -32,7 +32,7 @@ PYTHONIOENCODING=utf-8 "$PY" $R rm                          # 마지막 녹화�
 ★★★**2026-09-22부터 자동이다 — 에이전트가 띄우지 않는다.** `.claude/settings.json`의 **SessionStart 훅**이
 `record.py ensure`를 부르고, ensure가 **상주 녹화(`daemon`)** 를 하나만 띄운다(심장박동 파일로 중복 방지).
 daemon은 Play를 기다려 찍고, 끝나면 다시 기다리기를 **멈춤 신호가 올 때까지** 되풀이한다(대기 시간 제한 없음).
-Claude 세션이 끝나도 살아 있다(떼어 낸 프로세스). 로그는 `Temp/play-record/daemon.log`.
+Claude 세션이 끝나도 살아 있다(떼어 낸 프로세스). 로그는 `%LOCALAPPDATA%/GuideChuna/play-record/daemon.log`(★프로젝트 Temp에 두면 Unity가 종료 때 Temp를 못 지워 다음 실행마다 씬 복구 창이 뜬다 — 09-29).
 - 틀렸던 것: 09-21~22엔 «에이전트가 세션마다 `watch`를 백그라운드로 띄운다»였다. 09-22에 하루 종일 안 띄워
   사용자가 "플레이하면 자동으로 녹화하게끔 하라고 했잖아"라고 했다. **기억에 기대는 자동은 자동이 아니다.**
 - 확인은 `status`(첫 줄이 «상주 녹화 O»). 없으면 `ensure`. 끄려면 `stop`.
