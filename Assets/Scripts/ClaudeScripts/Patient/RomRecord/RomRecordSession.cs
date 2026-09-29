@@ -171,14 +171,18 @@ public class RomRecordSession : MonoBehaviour
     // ★★바늘은 <b>정상가동범위 최대값</b>에서 시작한다(2026-09-28 사용자: "굴곡 45 신전 90 측굴 45 회전 90").
     //   종전(09-21~09-23)엔 전부 0°에 포개 세웠다. 한계에서 출발해 환자가 실제로 간 자리까지 <b>되돌려</b> 맞춘다.
     //   ★아직 안 끌어낸 바늘은 값이 아니다(탭 아래 «—») — 한계 자리는 출발점일 뿐이다.
-    [Tooltip("굴곡 바늘이 처음 서는 각(°). 정상가동범위 최대값.")]
-    [SerializeField] private float flexionLimitDeg = 45f;
-    [Tooltip("신전 바늘이 처음 서는 각(°). 정상가동범위 최대값.")]
-    [SerializeField] private float extensionLimitDeg = 90f;
-    [Tooltip("측굴(좌우 같음) 바늘이 처음 서는 각(°). 정상가동범위 최대값.")]
-    [SerializeField] private float lateralLimitDeg = 45f;
-    [Tooltip("회전(좌우 같음) 바늘이 처음 서는 각(°). 정상가동범위 최대값.")]
-    [SerializeField] private float rotationLimitDeg = 90f;
+    // ★★09-29 사용자: "바늘 기준 생성 위치를 45도 90도 말고 30 60도 정도로 줄이고" → 굴곡 30 · 신전 60 · 측굴 30 · 회전 60.
+    //   씬 값이라 브리지로 바꿔 저장했다(규칙 7). 이름은 «Limit»이지만 이제 정상가동범위 최대값이 아니라 «시작 자리»다.
+    [Tooltip("굴곡 바늘이 처음 서는 각(°).")]
+    [SerializeField] private float flexionLimitDeg = 30f;
+    [Tooltip("신전 바늘이 처음 서는 각(°).")]
+    [SerializeField] private float extensionLimitDeg = 60f;
+    [Tooltip("측굴(좌우 같음) 바늘이 처음 서는 각(°).")]
+    [SerializeField] private float lateralLimitDeg = 30f;
+    [Tooltip("회전(좌우 같음) 바늘이 처음 서는 각(°).")]
+    [SerializeField] private float rotationLimitDeg = 60f;
+    // 압박 바늘이 처음 서는 자리 = 능동 기록 + 이 각(09-29 사용자 "5도 증가한 위치").
+    private const float PressureStartOffsetDeg = 5f;
     // ★오토 홀드(09-28 사용자 메모 «바늘 한번 옮기면 오토 홀드»): 놓는 순간 잠긴다. [홀드] 버튼은 없앴다.
     //   09-23 계수에서 바늘 기록 20회 중 4회(20%)가 «놓자마자 다시 고침»이었다 — 놓을 때의 흔들림이 값이 됐다.
     [Tooltip("잠긴 바늘의 구체를 검지끝으로 이 거리(m) 안까지 치면 잠금이 풀린다. 구체 지름은 1.8cm다.")]
@@ -1909,7 +1913,15 @@ public class RomRecordSession : MonoBehaviour
             //     그 위치에서 다시 버튼을 눌러 조작하게 — 새 바늘을 옮기는 게 아니라, 그래야 면에 기록만 남고 깔끔").
             //     그래서 한 방향에 움직이는 바늘은 늘 하나이고, 능동 자리에는 기록(면)만 남는다.
             //   (09-21~09-23엔 전부 눈금 0에 포개 세웠고, 09-28 오전엔 둘 다 한계에 포개 세웠다.)
-            needleDir[n] = k % 2 == 1 ? needleDir[n - 1] : LimitDir(step, k);
+            // ★★09-29 사용자: "기록한 다음 압박 기록용 바늘을 이전 능동 기록에서 5도 증가한 위치로" — 능동과 겹쳐 보이지 않게
+            //   <b>눈금 0에서 더 멀어지는 쪽</b>으로 5° 벌려 세운다. 방향은 한계 자리 쪽 회전을 그대로 쓴다(규칙 9 — FineAdjust와 같은 약속).
+            if (k % 2 == 1)
+            {
+                float away = Vector3.SignedAngle(zero, LimitDir(step, k), normal) >= 0f ? 1f : -1f;
+                float deg = Mathf.Min(180f, Vector3.Angle(zero, needleDir[n - 1]) + PressureStartOffsetDeg);
+                needleDir[n] = Quaternion.AngleAxis(away * deg, normal) * zero;
+            }
+            else needleDir[n] = LimitDir(step, k);
         }
         return true;
     }

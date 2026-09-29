@@ -1878,10 +1878,10 @@ MonoBehaviour:
   needleFallbackRadius: 0.18
   dialRadiusScale: 1.5
   needleFinSize: 0.2
-  flexionLimitDeg: 45
-  extensionLimitDeg: 90
-  lateralLimitDeg: 45
-  rotationLimitDeg: 90
+  flexionLimitDeg: 30
+  extensionLimitDeg: 60
+  lateralLimitDeg: 30
+  rotationLimitDeg: 60
   needleTouchRadius: 0.025
   fineStepDeg: 0.2
   finePanelRise: 0.08
