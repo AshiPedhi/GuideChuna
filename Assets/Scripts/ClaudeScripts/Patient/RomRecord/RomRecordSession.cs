@@ -159,6 +159,10 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float needleHandleOut = 0.16f;
     [Tooltip("미간을 아직 안 찍었을 때 쓸 각도기 반지름(m). 미간이 있으면 중심에서 미간까지를 쓴다.")]
     [SerializeField] private float needleFallbackRadius = 0.18f;
+    // ★09-29 사용자: "각도기 반지름은 미간 기준에서 위로 1.5배 좀 더 넓게." 원·눈금만 커진다 —
+    //   바늘 구체는 <b>종전 반지름 + needleHandleOut</b> 그대로 둔다(사용자 선택: "구체는 지금 자리" — 밀려나면 조작이 번거롭다).
+    [Tooltip("각도기 원 반지름 = (중심→미간 거리) × 이 값. 바늘 구체 자리는 이 값에 영향받지 않는다.")]
+    [SerializeField] private float dialRadiusScale = 1.5f;
     // ★바늘 면의 크기(2026-09-23 사용자: "너무 크지 않게 환자 머리 크기 정도만"). 사람 머리 높이 어림이다.
     //   ★추정값이다 — 기기에서 보고 맞춘다. 회전은 이만큼 <b>아래로</b>, 나머지는 바늘을 가운데 두고 위아래로 벌어진다.
     [SerializeField] private float needleFinSize = 0.2f;
@@ -823,6 +827,7 @@ public class RomRecordSession : MonoBehaviour
         radius = hasGlab
             ? Mathf.Max(0.08f, Vector3.ProjectOnPlane(glab - center, normal).magnitude)
             : needleFallbackRadius;
+        radius *= Mathf.Max(0.1f, dialRadiusScale);   // ★원만 키운다 — 구체는 NeedleVisible이 되돌려 쓴다(09-29)
         return true;
     }
 
@@ -1881,7 +1886,8 @@ public class RomRecordSession : MonoBehaviour
             center = default; normal = Vector3.up; zero = Vector3.forward; radius = needleFallbackRadius;
             return false;
         }
-        handleRadius = radius + needleHandleOut;
+        // ★구체는 <b>키우기 전</b> 반지름 기준이다(09-29 — 각도기만 1.5배, 구체는 제자리).
+        handleRadius = radius / Mathf.Max(0.1f, dialRadiusScale) + needleHandleOut;
         // ★회전 바늘은 원통 <b>윗 테두리</b> 높이에 건다(2026-09-23 사용자) — 눈금판 높이에 두면 머리에 가린다.
         //   ★각은 안 바뀐다: 회전은 단면 법선이 연직이라 ProjectOnPlane이 높이 성분을 지운다(실측 아님·계산).
         //   ★여기서 한 번만 올린다 — 잡기(FindDragTarget)·끌기(ApplyDrag)·그리기(DrawNeedle)가 다 이 center를 쓴다.
