@@ -43,7 +43,7 @@ public static partial class ChunaAgentBridge
             case "stop": ok = DoPlay(sb, false, out err); return true;
             case "gameview": ok = DoGameView(sb, a, out err); return true;
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
-            case "build-run": ok = DoBuildRun(sb, out err); return true;
+            case "build-run": ok = DoBuildRun(sb, a, out err); return true;
         }
         return false;
     }
@@ -54,7 +54,9 @@ public static partial class ChunaAgentBridge
     //   빌드는 몇 분 걸려 에디터를 붙잡으므로 응답은 즉시 «시작»으로 내고, 결과는 로그와 build-result.txt에 남긴다.
     private static string BuildResultPath => Path.Combine(Dir, "build-result.txt");
 
-    private static bool DoBuildRun(StringBuilder sb, out string err)
+    // ★--scenes="A.unity;B.unity"로 <b>이번 빌드에만</b> 씬 목록을 준다(Build Settings 파일은 안 건드린다, 09-29).
+    //   --path=로 출력 apk 경로를 준다(주면 마지막 빌드 경로를 안 바꾼다 — BuildPipeline은 그 설정을 고치지 않는다).
+    private static bool DoBuildRun(StringBuilder sb, Dictionary<string, string> a, out string err)
     {
         err = null;
         if (EditorApplication.isPlaying) { err = "Play 중이다 — 멈춘 뒤 빌드한다."; return false; }
@@ -63,9 +65,15 @@ public static partial class ChunaAgentBridge
         for (int i = 0; i < SceneManager.sceneCount; i++)
             if (SceneManager.GetSceneAt(i).isDirty)
             { err = $"저장 안 된 씬이 있다({SceneManager.GetSceneAt(i).name}) — 빌드는 디스크의 씬을 쓴다. 먼저 저장한다."; return false; }
-        string[] scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
-        if (scenes.Length == 0) { err = "Build Settings에 켜진 씬이 없다."; return false; }
-        string path = EditorUserBuildSettings.GetBuildLocation(BuildTarget.Android);
+        string sceneArg = Get(a, "scenes", "");
+        string[] scenes = string.IsNullOrWhiteSpace(sceneArg)
+            ? EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray()
+            : sceneArg.Split(';').Select(s => Norm(s.Trim())).Where(s => s.Length > 0).ToArray();
+        if (scenes.Length == 0) { err = "빌드할 씬이 없다(Build Settings에 켜진 씬도, --scenes도 없다)."; return false; }
+        foreach (var sp in scenes)
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(sp) == null) { err = $"씬이 없다: {sp}"; return false; }
+        string path = Get(a, "path", "");
+        if (string.IsNullOrEmpty(path)) path = EditorUserBuildSettings.GetBuildLocation(BuildTarget.Android);
         if (string.IsNullOrEmpty(path)) { err = "마지막 빌드 경로가 없다 — 에디터에서 한 번 Build 해 경로를 정한다."; return false; }
 
         var opt = BuildOptions.AutoRunPlayer;
