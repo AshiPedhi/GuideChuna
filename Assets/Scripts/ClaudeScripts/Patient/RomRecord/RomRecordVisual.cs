@@ -194,12 +194,16 @@ public class RomRecordVisual
         pivotAxis = Line("기준축(목 중앙)", PivotColor, pivotAxisWidth);
         neutralLine = Line("중립선", Color.white, neutralLineWidth);
 
-        labUp = Label("위", textSize, UpColor);
-        labDown = Label("아래", textSize * 0.8f, UpColor);
-        labFwd = Label("환자 앞", textSize, FwdColor);
-        labBack = Label("환자 뒤", textSize * 0.8f, FwdColor);
-        labRight = Label("환자 오른쪽", textSize, RightColor);
-        labLeft = Label("환자 왼쪽", textSize * 0.8f, RightColor);
+        // ★09-29 사용자: "3축 글씨 환자 오른쪽 이런 거 R L F B로 바꾸고 위·아래는 글씨 빼 줘."
+        //   위·아래 글자는 만들어 두되 늘 끈다(SetAxesVisible이 켜지 않는다) — 자리 계산 코드를 그대로 두려고.
+        labUp = Label("", textSize, UpColor);
+        labDown = Label("", textSize * 0.8f, UpColor);
+        labUp.gameObject.SetActive(false);
+        labDown.gameObject.SetActive(false);
+        labFwd = Label("F", textSize, FwdColor);
+        labBack = Label("B", textSize, FwdColor);
+        labRight = Label("R", textSize, RightColor);
+        labLeft = Label("L", textSize, RightColor);
 
         pivotDot = Dot("기준점", PivotColor, 0.012f);
         c7Dot = Dot("대추", new Color(0.3f, 0.9f, 1f), 0.016f);
@@ -915,7 +919,7 @@ public class RomRecordVisual
         Show(axisUp, on); Show(axisFwd, on); Show(axisRight, on); Show(pivotAxis, on); Show(pivotDot, on);
         cueWanted[CuePivot] = on;
         ApplyDropCue(CuePivot);
-        foreach (var t in new[] { labUp, labDown, labFwd, labBack, labRight, labLeft })
+        foreach (var t in new[] { labFwd, labBack, labRight, labLeft })   // ★위·아래 글자는 뺐다(09-29)
             if (t.gameObject.activeSelf != on) t.gameObject.SetActive(on);
     }
 
