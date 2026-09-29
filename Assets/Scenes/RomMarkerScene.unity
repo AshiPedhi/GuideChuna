@@ -1858,9 +1858,7 @@ MonoBehaviour:
   menuPlateAlpha: 1
   menuTintStrength: 0.5
   menuFixedInSpace: 1
-  menuFixedDistance: 0.45
-  menuFixedBelowEye: 0.08
-  menuFixedSide: 0.38
+  menuAboveAxes: 0.42
   menuGrabMargin: 0.04
   menuCellWidth: 0.049
   menuRowHeight: 0.041

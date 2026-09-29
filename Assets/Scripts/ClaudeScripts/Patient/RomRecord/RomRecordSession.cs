@@ -102,14 +102,14 @@ public class RomRecordSession : MonoBehaviour
     //   09-21 로그 실측에서 핀치를 막은 주범이 판 자신이었다(판 근처 3,084 · 다가옴 3,708 프레임).
     [Tooltip("판을 손목이 아니라 <b>허공에 고정</b>한다(진행Root 방식). 끄면 종전처럼 양 손목을 따라다닌다.")]
     [SerializeField] private bool menuFixedInSpace = true;
-    [Tooltip("고정 판을 처음 놓을 자리 — 눈앞 거리(m).")]
-    [SerializeField] private float menuFixedDistance = 0.45f;   // 09-29 0.55 → 0.45(사용자: "초기 생성 위치 조금 더 가깝게")
-    [Tooltip("고정 판을 처음 놓을 자리 — 눈높이보다 아래로(m). ★09-21: 0.3은 너무 낮아 조작이 힘들었다.")]
-    [SerializeField] private float menuFixedBelowEye = 0.08f;   // 09-29 0.14 → 0.08(사용자: "살짝 위로")
-    [Tooltip("고정 판을 처음 놓을 자리 — 정면에서 옆으로(m). 양수면 오른쪽. ★3축과 겹치지 않게 비켜 둔다.")]
-    // ★판 기본 자리는 <b>우측 대각선</b>이다(2026-09-23 사용자). 양수 = 보는 방향의 오른쪽.
-    //   ★씬에 값이 굳어 있어 코드 기본값은 새 씬에만 먹는다 — 지금 씬은 인스펙터 값을 직접 바꿨다(규칙 7).
-    [SerializeField] private float menuFixedSide = 0.38f;
+    // ★★고정 판의 처음 자리 = <b>3축 중심 바로 위</b>(2026-09-29 오후 사용자: "기본 조작 UI 생성 위치를 3축선 중심 기준에서 Y 위로").
+    //   종전(09-23~09-29 오전)엔 눈 기준 우측 대각선(menuFixedDistance·menuFixedSide·menuFixedBelowEye)이었다 — 그 셋은 없앴다.
+    //   씬에 남은 옛 값은 안 읽힌다. 판 방향은 종전처럼 눈을 본다.
+    //   ★기본 0.42(계산): 3축 위 끝(0.18)은 «전체 옮기기» 손잡이라 잡기 반경 0.08까지(0.26) 비워야 하고,
+    //   판 잡기 여유(menuGrabMargin 0.04)와 판 절반 높이(약 0.12)를 더하면 판 가운데가 0.42 이상이어야 안 겹친다.
+    //   0.32로 두면 위쪽 끝을 잡으려다 판이 먼저 잡힌다(FindDragTarget이 판을 먼저 본다). 기기에서 맞출 것.
+    [Tooltip("고정 판을 처음 놓을 자리 — 3축 중심에서 위로(m). 판의 가운데 높이다. ★0.42보다 낮추면 3축 위쪽 끝(전체 옮기기 손잡이)과 잡기가 겹친다.")]
+    [SerializeField] private float menuAboveAxes = 0.42f;
     // ★09-22 로그 실측: 판을 옮기려고 가장자리를 집었더니 <b>기준점이 찍혔다</b>(대추·미간이 판 중심에서 18~23cm).
     //   판 폭이 약 33cm라 중심 반경(0.16)으로는 가장자리가 안 잡히고, 못 잡은 핀치가 «찍기»로 빠졌다.
     //   «잡았다 — 조작 판» 로그는 한 번도 없었다. → 판 사각형 전체를 이 여유만큼 넓혀 잡는다.
@@ -857,14 +857,13 @@ public class RomRecordSession : MonoBehaviour
         {
             if (!leftMenu.Placed && eye != null)
             {
-                Vector3 f = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
-                if (f.sqrMagnitude < 1e-4f) f = Vector3.forward;
-                f.Normalize();
-                Vector3 side = Vector3.Cross(Vector3.up, f);   // f를 볼 때 오른쪽
-                Vector3 pos = eye.position + f * menuFixedDistance
-                            + side * menuFixedSide - Vector3.up * menuFixedBelowEye;
+                // ★3축 중심(지금 단계의 회전 중심 = 기준점 단계에선 대추) 바로 위(09-29). 기본 자리가 먼저 서 있어야 한다 —
+                //   Update에서 PlaceDefaultLandmarks가 이보다 먼저 돈다(같은 프레임).
+                Vector3 pivot = Pivot;
+                Vector3 pos = pivot + Vector3.up * menuAboveAxes;
                 leftMenu.PlaceAt(pos, eye);
-                Debug.Log($"[실측기록] 조작 판을 세웠다 — {Fmt(pos)} (잡아 끌어 옮길 수 있다)");
+                Debug.Log($"[실측기록] 조작 판을 세웠다 — {Fmt(pos)}(3축 중심 {Fmt(pivot)}에서 위로 {menuAboveAxes * 100f:F0}cm · " +
+                          $"눈까지 {Vector3.Distance(pos, eye.position) * 100f:F0}cm · 잡아 끌어 옮길 수 있다)");
             }
             leftMenu.Follow(false, Vector3.zero, eye, false);   // 고정 모드에서는 회전만 눈을 따라간다
             menuHoldL = menuHoldR = false;
