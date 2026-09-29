@@ -297,7 +297,7 @@ public class RomRecordVisual
     // ★★"모든 오브젝트는 그랩되기 전에 «지금 잡으면 잡힌다»는 하이라이트가 필수다."
     //   ★판정은 여기서 새로 하지 않는다 — Session이 <b>실제로 잡을 때 쓰는 FindDragTarget</b>을 그대로
     //   태워 번호만 넘겨 준다(규칙 9 — 따로 계산하면 하이라이트가 거짓말을 한다).
-    //   번호 약속은 Session.FindDragTarget과 같다: 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 판 · -1 없음.
+    //   번호 약속은 Session.FindDragTarget과 같다: 0 3축 · 1 대추 · 2 미간 · 3~6 바늘 · 8 외이도 · 9 판 · 10 위치 판 · 11 전체 · -1 없음.
     public static readonly Color GrabHoverColor = new Color(1f, 1f, 0.55f);
     public float grabHoverScale = 1.7f;
 
@@ -342,6 +342,15 @@ public class RomRecordVisual
             {
                 needles[i].startColor = needles[i].endColor = c;
             }
+            return;
+        }
+        if (t == 11)
+        {
+            // ★전체 옮기기(09-29) — 손잡이가 3축 끝이라 <b>3축 전체</b>가 밝아진다(잡으면 전부 같이 간다는 뜻).
+            if (axisUp == null) return;
+            axisUp.startColor = axisUp.endColor = on ? GrabHoverColor : UpColor;
+            axisFwd.startColor = axisFwd.endColor = on ? GrabHoverColor : FwdColor;
+            axisRight.startColor = axisRight.endColor = on ? GrabHoverColor : RightColor;
             return;
         }
         Transform dot = t == 0 ? pivotDot : t == 1 ? c7Dot : t == 2 ? glabDot : t == 8 ? earDot : null;

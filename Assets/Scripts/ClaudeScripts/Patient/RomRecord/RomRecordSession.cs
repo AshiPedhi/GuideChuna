@@ -1689,7 +1689,8 @@ public class RomRecordSession : MonoBehaviour
 
     // ── 잡아 끌기(09-21 신설) ─────────────────────────────────────────
     private static string DragName(int t) =>
-        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "외이도" : t == 9 ? "조작 판" : t == 10 ? "위치 조정 판" : "바늘";
+        t == 0 ? "기준선(3축)" : t == 1 ? "대추" : t == 2 ? "미간" : t == 8 ? "외이도" : t == 9 ? "조작 판" : t == 10 ? "위치 조정 판"
+        : t == 11 ? "전체(기준점 셋)" : "바늘";
 
     /// <summary>
     /// 이 자리에서 오므리면 조작 판이 잡히나. ★잡기(<see cref="FindDragTarget"/>)와 하이라이트가 <b>같은 함수</b>를 탄다 —
@@ -1812,7 +1813,14 @@ public class RomRecordSession : MonoBehaviour
         float dGl = hasGlab ? Vector3.Distance(p, glab) : float.MaxValue;
         float dFf = hasEar ? Vector3.Distance(p, ear) : float.MaxValue;
         float nearest = Mathf.Min(dC7, Mathf.Min(dGl, dFf));
-        if (nearest > dotGrabRadius) return -1;
+        if (nearest > dotGrabRadius)
+        {
+            // ★전체 옮기기(2026-09-29 사용자: "기준점 포함한 전체도 잡아서 옮길 수 있게").
+            //   손잡이 = 3축의 <b>끝 여섯 곳</b>(축 글자 자리). 점 셋과 겹치지 않는 자리라 «한 점 잡기»와 갈린다.
+            //   잡으면 대추·외이도·미간(+기록한 점)이 한 덩어리로 움직이고, 3축·각도기·바늘은 그 점들에서 다시 그려진다.
+            if (hasC7 && NearAxisTip(p)) { startValue = c7; return 11; }
+            return -1;
+        }
         if (nearest == dC7) { startValue = c7; return 1; }
         if (nearest == dFf) { startValue = ear; return 8; }
         startValue = glab;
@@ -1951,11 +1959,32 @@ public class RomRecordSession : MonoBehaviour
                 nudgeUserPos = v;          // ★옮긴 자리를 기억한다 — 다른 탭에 갔다 와도 거기 다시 선다
                 nudgeUserPlaced = true;
                 return;
+            case 11:
+                MoveAll(v - c7);           // ★전체(09-29) — 대추가 v로 가도록 전부 같은 만큼
+                break;
         }
         // ★끄는 동안은 가벼운 갱신만 한다 — 안내판·머리줄 문자열을 매 프레임 새로 만들지 않는다(VR 프레임 예산).
         Vector3 pivot = Pivot;
         view.SetFrame(pivot, yaw, axisLength);
         view.SetLandmarks(hasC7, c7, hasEar, ear, hasGlab, glab, pivot);
+    }
+
+    /// <summary>3축 끝(여섯 곳) 가운데 하나가 잡는 자리 안인가 — 전체 옮기기 손잡이(09-29).</summary>
+    private bool NearAxisTip(Vector3 p)
+    {
+        Vector3 pv = Pivot, u = RomRecordGeometry.Up, f = RomRecordGeometry.Forward(yaw), r = RomRecordGeometry.Right(yaw);
+        float rr = dotGrabRadius * dotGrabRadius;
+        return (p - (pv + u * axisLength)).sqrMagnitude < rr || (p - (pv - u * axisLength)).sqrMagnitude < rr
+            || (p - (pv + f * axisLength)).sqrMagnitude < rr || (p - (pv - f * axisLength)).sqrMagnitude < rr
+            || (p - (pv + r * axisLength)).sqrMagnitude < rr || (p - (pv - r * axisLength)).sqrMagnitude < rr;
+    }
+
+    /// <summary>기준점 셋과 기록한 점을 같은 만큼 옮긴다(09-29). ★점과 기준점이 함께 가야 각이 안 바뀐다.</summary>
+    private void MoveAll(Vector3 d)
+    {
+        c7 += d; glab += d; ear += d; frameOrigin += d;
+        for (int s = 0; s < marks.Length; s++)
+            for (int i = 0; i < marks[s].Count; i++) marks[s][i].raw += d;
     }
 
     private void EndDrag()
@@ -1964,7 +1993,7 @@ public class RomRecordSession : MonoBehaviour
         if (Time.unscaledTime - dragStartTime < 0.25f)
             CountMiss(Miss.ShortGrab, $"{DragName(dragTarget)}를 {(Time.unscaledTime - dragStartTime) * 1000f:F0}ms 만에 놓았다");
         Vector3 at = dragTarget == 0 ? frameOrigin
-                   : dragTarget == 1 ? c7
+                   : dragTarget == 1 || dragTarget == 11 ? c7
                    : dragTarget == 8 ? ear
                    : dragTarget == 9 ? leftMenu.Position
                    : dragTarget == 10 ? nudgeMenu.Position : glab;
