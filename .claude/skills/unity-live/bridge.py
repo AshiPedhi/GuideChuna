@@ -60,6 +60,8 @@ USAGE = """쓰는 법 — 조회
   bridge.py capture [--view=scene|game] [--label=이름] [--frame=Root/Obj] [--w=1600 --h=900]
                                                                # → <프로젝트>/Captures/날짜/시각_이름.png
   bridge.py play  /  bridge.py stop
+  bridge.py build-run      # Build And Run(켜진 씬·마지막 경로·Development 그대로). 즉시 «시작» 응답,
+                           # 결과는 Temp/chuna-bridge/build-result.txt · Editor.log «[에이전트브리지] 빌드 끝» (2026-09-29)
 
 옵션
   --timeout=15    응답을 기다릴 초 (기본 15)

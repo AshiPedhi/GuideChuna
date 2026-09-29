@@ -43,8 +43,62 @@ public static partial class ChunaAgentBridge
             case "stop": ok = DoPlay(sb, false, out err); return true;
             case "gameview": ok = DoGameView(sb, a, out err); return true;
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
+            case "build-run": ok = DoBuildRun(sb, out err); return true;
         }
         return false;
+    }
+
+    // ── 빌드 후 기기 실행(2026-09-29 사용자: "빌드해서 디바이스에 RUN까지 해 줘") ──────────
+    // ★에디터가 열려 있으면 batchmode 빌드는 프로젝트 락으로 실패한다(CLAUDE.md) — 그래서 열린 에디터 안에서 돌린다.
+    // ★Build Settings의 <b>켜진 씬</b>·마지막 빌드 경로·Development 여부를 <b>그대로</b> 쓴다(File > Build And Run과 같다).
+    //   빌드는 몇 분 걸려 에디터를 붙잡으므로 응답은 즉시 «시작»으로 내고, 결과는 로그와 build-result.txt에 남긴다.
+    private static string BuildResultPath => Path.Combine(Dir, "build-result.txt");
+
+    private static bool DoBuildRun(StringBuilder sb, out string err)
+    {
+        err = null;
+        if (EditorApplication.isPlaying) { err = "Play 중이다 — 멈춘 뒤 빌드한다."; return false; }
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+        { err = $"빌드 대상이 Android가 아니다({EditorUserBuildSettings.activeBuildTarget})."; return false; }
+        for (int i = 0; i < SceneManager.sceneCount; i++)
+            if (SceneManager.GetSceneAt(i).isDirty)
+            { err = $"저장 안 된 씬이 있다({SceneManager.GetSceneAt(i).name}) — 빌드는 디스크의 씬을 쓴다. 먼저 저장한다."; return false; }
+        string[] scenes = EditorBuildSettings.scenes.Where(s => s.enabled).Select(s => s.path).ToArray();
+        if (scenes.Length == 0) { err = "Build Settings에 켜진 씬이 없다."; return false; }
+        string path = EditorUserBuildSettings.GetBuildLocation(BuildTarget.Android);
+        if (string.IsNullOrEmpty(path)) { err = "마지막 빌드 경로가 없다 — 에디터에서 한 번 Build 해 경로를 정한다."; return false; }
+
+        var opt = BuildOptions.AutoRunPlayer;
+        if (EditorUserBuildSettings.development) opt |= BuildOptions.Development;
+        try { File.Delete(BuildResultPath); } catch (Exception) { }
+
+        sb.Append("빌드를 시작한다(끝나면 기기에서 실행) — ").Append(path).Append('\n');
+        sb.Append("  씬 ").Append(scenes.Length).Append("개: ").Append(string.Join(", ", scenes)).Append('\n');
+        sb.Append("  Development ").Append(EditorUserBuildSettings.development ? "켬" : "끔").Append('\n');
+        sb.Append("  결과는 Temp/chuna-bridge/build-result.txt 와 Editor.log «[에이전트브리지] 빌드 끝»\n");
+
+        // ★응답을 먼저 쓰게 한 틱 미룬다.
+        EditorApplication.delayCall += () =>
+        {
+            string line;
+            try
+            {
+                Debug.Log($"[에이전트브리지] 빌드 시작 — {path} · 씬 {string.Join(", ", scenes)}");
+                var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
+                {
+                    scenes = scenes, locationPathName = path, target = BuildTarget.Android, options = opt,
+                });
+                var s = report.summary;
+                line = $"{s.result} · {s.totalTime.TotalSeconds:F0}초 · 오류 {s.totalErrors} · 경고 {s.totalWarnings} · {s.totalSize / 1048576.0:F0}MB · {path}";
+            }
+            catch (Exception e)
+            {
+                line = "예외 — " + e.GetType().Name + ": " + e.Message;
+            }
+            Debug.Log("[에이전트브리지] 빌드 끝 — " + line);
+            try { File.WriteAllText(BuildResultPath, line, new UTF8Encoding(false)); } catch (Exception) { }
+        };
+        return true;
     }
 
     // ── 소유 씬 ─────────────────────────────────────────────────────────
