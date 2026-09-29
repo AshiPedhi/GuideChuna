@@ -1084,7 +1084,7 @@ public class RomRecordSession : MonoBehaviour
         // ★★09-29 저녁: 오후의 «탭 4개 한 줄» 배치는 <b>되돌렸다</b>(사용자: "기존 UI로 디자인은 롤백" — 배치만, 색은 한 계열 유지).
         //   대신 판을 <b>둘</b>로 나눈다(사용자: "설정 UI를 최초에 보여 주고, 설정 완료하면 측정용 UI를 보여 주고,
         //   설정 버튼 아이콘을 따로 빼서 그걸 누르면 다시 기준점 설정이 되게").
-        //   · 설정 판(기준점 단계): 안내+[나가기] / 왼쪽 [기준점 설정] 타일·●○·[설정 완료] · 오른쪽 [대추][외이도][미간] + 방향키
+        //   · 설정 판(기준점 단계): 안내+[나가기] / [대추][외이도][미간] ●○ / 방향키 + [설정 완료]
         //   · 측정 판(동작 단계): 탭 셋+값 / 안내+작은 톱니바퀴+[나가기] / 조작 버튼
         bool setup = step == RomRecordStep.Landmarks;
         float r = 0f;
@@ -1130,51 +1130,38 @@ public class RomRecordSession : MonoBehaviour
         items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
         r += 1f;
 
-        // 오른쪽 버튼 칸의 열 자리(한 줄에 셋). 설정 판은 왼쪽에 타일이 있어 한 칸 비켜 선다.
-        float x0 = setup ? CtlSpan + CtlGap : 0f;
-        float ColX(int c) => x0 + c * (CtlSpan + CtlGap);
+        // 버튼 칸의 열 자리(판 폭 6.5 = 1.55 × 4 + 0.1 × 3 — 네 칸).
+        float ColX(int c) => c * (CtlSpan + CtlGap);
 
         if (setup)
         {
-            // ── 설정 판: 왼쪽 [기준점 설정] 타일 + ●○ + [설정 완료] ──
-            items.Add(new RomMenuItem
-            {
-                id = RefId, label = StepTitle[(int)RomRecordStep.Landmarks],
-                col = 0f, row = r, span = CtlSpan, rows = RefRows,
-                tint = NavTint, selected = true, icon = refIcon,
-            });
-            items.Add(new RomMenuItem
-            {
-                id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
-                col = 0f, row = r + RefRows, span = CtlSpan, rows = RefStatusRows, textScale = ValueScale,
-            });
-            // ★[설정 완료]를 눌러야 측정 판으로 넘어간다(09-29 사용자 선택 — 세 점을 다 찍어도 저절로 넘기지 않는다).
-            items.Add(RomMenuItem.Button("setdone", "설정 완료", 0f, r + RefRows + RefStatusRows + 0.2f, CtlSpan, NavTint,
-                                         selected: NextUnsetLandmark() < 0));
-
-            // ── 설정 판 오른쪽: 대상 셋 + 방향키(09-29 저녁 사용자: "방향키 UI 따로 빼지 말고 설정 UI랑 같이 합쳐 줘") ──
-            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(방향키가 이 점을 옮긴다). 찍혔는지는 타일 아래 ●○가 말한다.
-            // ★★이미 찍은 점은 <b>누르면 대상만 고르고, 길게 누르면 다시 찍는다</b>(2026-09-28 사용자 확정 ⓑ).
+            // ★★09-29 저녁 사용자: "애초에 기준점 설정하기 위한 UI니까 기준점 버튼도 필요 없고 · UI 합쳤으면 대추는 가운데에
+            //   따로 쓸 필요가 없잖아" → [기준점 설정] 타일과 방향키 가운데 이름 칸을 뺐다. 옮길 대상은 밝은 대상 버튼이 말한다.
+            //   [대추] [외이도] [미간]   ●●○
+            //          [↑ FRONT]
+            //   [◀ LEFT]         [RIGHT ▶]
+            //   [ UP ]  [↓ BACK]  [ DOWN ]  [설정 완료]
+            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(방향키가 이 점을 옮긴다).
+            // ★★이미 찍은 점은 <b>누르면 대상만 고르고, 길게 누르면 다시 찍는다</b>(2026-09-28 사용자 확정 ⓑ) — 길게 누르면 테두리가 찬다.
             AddAt(LandmarkButton("t0", "대추", 0, hasC7), 0, r);
             AddAt(LandmarkButton("t2", "외이도", 2, hasEar), 1, r);
             AddAt(LandmarkButton("t1", "미간", 1, hasGlab), 2, r);
+            items.Add(new RomMenuItem   // 찍었나(●)·기본 자리(○) — 종전 타일 아래에 있던 것
+            {
+                id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
+                col = ColX(3), row = r, span = CtlSpan, textScale = ValueScale,
+            });
             // 방향키 — 키보드 방향키 꼴(사용자: "위아래랑 앞뒤 버튼 위치 바꾸고, 앞뒤 아이콘을 원래 위아래였던 화살표만 있는 아이콘으로").
-            //          [↑ FRONT]
-            //   [◀ LEFT] [ 이름 ] [RIGHT ▶]
-            //   [  UP  ] [↓ BACK] [ DOWN ]
             //   좌우·앞뒤는 환자 기준. ↑·↓ 그림은 종전 위·아래 버튼의 화살표다(nudge_up·nudge_down).
             float ra = r + 1.2f;
             AddAt(BesideButton("fwd", "FRONT", "nudge_up", -1, 0f, 0f, 0f), 1, ra);
             AddAt(BesideButton("left", "LEFT", "nudge_left", -1, 0f, 0f, 0f), 0, ra + 1f);
-            items.Add(new RomMenuItem
-            {
-                id = null, key = NudgeTargetKey, col = ColX(1), row = ra + 1f, span = CtlSpan,
-                label = $"<color={LandmarkHex(landmarkTarget)}>{LandmarkName(landmarkTarget)}</color>",
-            });
             AddAt(BesideButton("right", "RIGHT", "nudge_right", +1, 0f, 0f, 0f), 2, ra + 1f);
             AddAt(RomMenuItem.Button("up", "UP", 0, 0, 0, NavTint, repeat: true), 0, ra + 2f);
             AddAt(BesideButton("back", "BACK", "nudge_down", -1, 0f, 0f, 0f), 1, ra + 2f);
             AddAt(RomMenuItem.Button("down", "DOWN", 0, 0, 0, NavTint, repeat: true), 2, ra + 2f);
+            // ★[설정 완료]를 눌러야 측정 판으로 넘어간다(09-29 사용자 선택 — 세 점을 다 찍어도 저절로 넘기지 않는다).
+            AddAt(RomMenuItem.Button("setdone", "설정 완료", 0, 0, 0, NavTint, selected: NextUnsetLandmark() < 0), 3, ra + 2f);
         }
         else if (IsMotion(step))
         {
