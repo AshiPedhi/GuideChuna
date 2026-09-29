@@ -1858,7 +1858,9 @@ MonoBehaviour:
   menuPlateAlpha: 1
   menuTintStrength: 0.5
   menuFixedInSpace: 1
-  menuAboveAxes: 0.42
+  menuSpawnForward: 0.35
+  menuSpawnBelowEye: 0.05
+  menuSpawnRight: 0.2
   menuGrabMargin: 0.04
   menuCellWidth: 0.049
   menuRowHeight: 0.041
@@ -1884,7 +1886,6 @@ MonoBehaviour:
   rotationLimitDeg: 60
   needleTouchRadius: 0.025
   fineStepDeg: 0.2
-  finePanelRise: 0.08
   defaultC7Distance: 0.6
   defaultC7BelowEye: 0.15
   nudgePanelBehind: 0.25
