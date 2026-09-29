@@ -203,6 +203,13 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float nudgePanelBelow = 0.15f;
     [Tooltip("위치 조정 판 — 환자 오른쪽으로(m). 음수면 왼쪽.")]
     [SerializeField] private float nudgePanelSide = 0.15f;
+    // ★따라오기(09-29 사용자: "따라오기를 하되 따라오는 각도 범위를 여유 있게"). 고개를 조금 돌린 정도로는 서 있고,
+    //   판이 시선에서 좌우로 이 각도를 넘으면 눈을 중심으로 수평으로만 돌아 들어온다(거리·높이는 그대로).
+    //   ★검지가 판 근처에 있거나 판을 잡는 중에는 안 움직인다 — 09-28에 따라오기를 뺀 이유가 «누르던 손가락이 헛짚는다»였다.
+    [Tooltip("위치 조정 판 따라오기 — 판이 시선에서 좌우로 이 각도(°)를 넘으면 따라온다.")]
+    [SerializeField] private float nudgeFollowAngle = 50f;
+    [Tooltip("위치 조정 판 따라오기 — 따라올 때 시선에서 이 각도(°) 안쪽까지 들어와 멈춘다.")]
+    [SerializeField] private float nudgeFollowSettle = 20f;
 
     [Header("=== 기준점 다시 찍기(2026-09-28) ===")]
     [Tooltip("이미 찍은 기준점 버튼을 이만큼(초) 누르고 있으면 검지끝 자리로 다시 찍힌다. 짧게 누르면 이동 대상만 바뀐다.\n" +
@@ -311,6 +318,9 @@ public class RomRecordSession : MonoBehaviour
     private IRomRecordMenu nudgeMenu;
     private bool nudgeUserPlaced;   // 손으로 옮긴 적이 있나 — 있으면 다시 보일 때 그 자리에 선다
     private Vector3 nudgeUserPos;
+    private bool nudgeFollowing;    // 범위를 벗어나 들어오는 중인가(09-29)
+    private const float NudgeFollowHandMargin = 0.12f;   // 검지가 판에서 이만큼(m) 안이면 따라오지 않는다
+    private const float NudgeFollowSharpness = 5f;
     // ★기준점을 손가락으로 «찍었나»(09-28). 시작하면 세 점 모두 헤드셋 앞 기본 자리에 서 있으므로(hasC7 등은 참)
     //   «있나»와 «실제로 찍었나»를 가른다. 기본 자리 그대로면 판에서 ○로 보인다. 0 대추 · 1 미간 · 2 외이도.
     private readonly bool[] landmarkCaptured = new bool[3];
@@ -398,14 +408,15 @@ public class RomRecordSession : MonoBehaviour
         const float fs = 0.8f;   // 버튼 한 칸 폭(판 칸 단위) — 7개 + 값이면 판 폭 약 29cm
         fineMenu.SetLayout("", new[]
         {
-            IconButton("deg-5", "-5", "deg_dec3", 0f * fs, 0f, fs, true),
-            IconButton("deg-1", "-1", "deg_dec2", 1f * fs, 0f, fs, true),
-            IconButton("deg-0.1", "-.1", "deg_dec1", 2f * fs, 0f, fs, true),
+            // ★09-29 사용자: "각도 조절은 텍스트 숫자로 — 아이콘으로 하면 오히려 헷갈려." 확정도 글자 [기록]으로.
+            RomMenuItem.Button("deg-5", "-5", 0f * fs, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg-1", "-1", 1f * fs, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg-0.1", "-0.1", 2f * fs, 0f, fs, AdjTint, repeat: true),
             new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = 1.4f },
-            IconButton("deg+0.1", "+.1", "deg_inc1", 3f * fs + 1.4f, 0f, fs, true),
-            IconButton("deg+1", "+1", "deg_inc2", 4f * fs + 1.4f, 0f, fs, true),
-            IconButton("deg+5", "+5", "deg_inc3", 5f * fs + 1.4f, 0f, fs, true),
-            IconButton("degok", "OK", "confirm", 6f * fs + 1.5f, 0f, fs, false),
+            RomMenuItem.Button("deg+0.1", "+0.1", 3f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg+1", "+1", 4f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("deg+5", "+5", 5f * fs + 1.4f, 0f, fs, AdjTint, repeat: true),
+            RomMenuItem.Button("degok", "기록", 6f * fs + 1.5f, 0f, fs, NeedleTint),
         });
         fineMenu.Hide();
 
@@ -686,6 +697,7 @@ public class RomRecordSession : MonoBehaviour
         UpdateNeedleTouch(true);
         UpdateNeedleTouch(false);
         UpdateMenuHighlight();
+        FollowNudgeMenu();
         UpdateVoice();
 
         if (dirty)
@@ -922,6 +934,7 @@ public class RomRecordSession : MonoBehaviour
         if (!want)
         {
             if (nudgeMenu.Visible) nudgeMenu.Hide();
+            nudgeFollowing = false;
             return;
         }
         if (!nudgeMenu.Visible && nudgeUserPlaced)
@@ -939,6 +952,41 @@ public class RomRecordSession : MonoBehaviour
         }
         nudgeMenu.SetText(NudgeTargetKey,
             $"<color={LandmarkHex(landmarkTarget)}>{LandmarkName(landmarkTarget)}</color>");
+    }
+
+    /// <summary>
+    /// 위치 조정 판 따라오기(09-29). 판이 시선에서 좌우 <see cref="nudgeFollowAngle"/>°를 넘으면 눈을 중심으로
+    /// 수평으로만 돌려 <see cref="nudgeFollowSettle"/>° 안쪽까지 들인다. 거리·높이는 그대로다.
+    /// ★검지가 판 근처에 있거나 판을 잡고 있으면 서 있는다.
+    /// </summary>
+    private void FollowNudgeMenu()
+    {
+        if (nudgeMenu == null || !nudgeMenu.Visible || eye == null) { nudgeFollowing = false; return; }
+        if (dragTarget == 10
+            || (hands.TryJoint(false, HandJointId.HandIndexTip, out Vector3 ri) && nudgeMenu.Near(ri, NudgeFollowHandMargin))
+            || (hands.TryJoint(true, HandJointId.HandIndexTip, out Vector3 li) && nudgeMenu.Near(li, NudgeFollowHandMargin)))
+        {
+            nudgeFollowing = false;
+            return;
+        }
+        Vector3 e = eye.position, toP = nudgeMenu.Position - e;
+        Vector3 flat = new Vector3(toP.x, 0f, toP.z);
+        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
+        if (flat.sqrMagnitude < 1e-4f || fwd.sqrMagnitude < 1e-4f) return;
+        float ang = Vector3.SignedAngle(fwd, flat, Vector3.up);
+        if (!nudgeFollowing)
+        {
+            if (Mathf.Abs(ang) <= nudgeFollowAngle) return;
+            nudgeFollowing = true;
+            Debug.Log($"[실측기록] 위치 조정 판이 시선에서 {ang:F0}° 벗어났다(허용 ±{nudgeFollowAngle:F0}°) — {nudgeFollowSettle:F0}° 안쪽으로 따라온다");
+        }
+        float target = Mathf.Sign(ang) * nudgeFollowSettle;
+        float k = 1f - Mathf.Exp(-NudgeFollowSharpness * Time.unscaledDeltaTime);
+        float next = Mathf.Lerp(ang, target, k);
+        if (Mathf.Abs(next - target) < 1f) { next = target; nudgeFollowing = false; }
+        Vector3 pos = e + Quaternion.AngleAxis(next - ang, Vector3.up) * toP;
+        nudgeMenu.MoveTo(pos);
+        if (nudgeUserPlaced) nudgeUserPos = pos;   // ★손으로 옮긴 자리도 따라온 자리로 갱신한다
     }
 
     private static string LandmarkHex(int t) => t == 0 ? HexC7 : t == 2 ? HexEar : HexGlab;
