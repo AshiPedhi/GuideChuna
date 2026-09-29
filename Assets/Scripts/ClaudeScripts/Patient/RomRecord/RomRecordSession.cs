@@ -1047,6 +1047,7 @@ public class RomRecordSession : MonoBehaviour
     private static readonly string[] TabIconNames = { "flexext", "lateral", "rotation" };
     private readonly Texture2D[] tabIcons = new Texture2D[3];
     private Texture2D refIcon;              // 기준점 설정 타일 그림
+    private Texture2D settingsIcon;         // 측정 판 모서리 톱니바퀴(09-29)
     private const string RefId = "tab1", RefStatusKey = "v1";
     private const string FineValueKey = "finev";   // 미세 조정 판 가운데 값 칸
     private const string NudgeTargetKey = "nudget"; // 위치 조정 판 가운데 칸 — 지금 옮기는 기준점
@@ -1058,7 +1059,7 @@ public class RomRecordSession : MonoBehaviour
 
     // 칸 치수(판 칸 단위). ★Meta 판은 칸 4.9cm·줄 4.1cm(씬 값)라 판 폭 6.5칸 ≈ 33cm다 — 설정 팝업(33cm)과 같다.
     private const float BoardSpan = 6.5f, TabRows = 1.8f, ValueBand = 0.7f, ValueScale = 0.95f;
-    private const float CtlSpan = 1.55f, CtlGap = 0.1f;   // 09-29 배치 개편으로 RefRows·RefStatusRows·TabSpan(기준점 타일용)은 없앴다
+    private const float CtlSpan = 1.55f, CtlGap = 0.1f, RefRows = 1.8f, RefStatusRows = 0.5f;   // 09-29 저녁 배치 롤백으로 되살림
     // ★판이 미리 만들어 두는 칸 수. 글자 칸(탭 아래 값·상태)도 한 칸씩 먹는다.
     //   09-22에 14로 두었다가 기준점 단계(최대 18칸)에서 [정면 ▶]·[정면 다시]가 <b>조용히 잘렸다</b>(사용자 발견).
     //   넘치면 판이 경고를 남긴다.
@@ -1070,6 +1071,7 @@ public class RomRecordSession : MonoBehaviour
         for (int i = 0; i < tabIcons.Length; i++)
             tabIcons[i] = LoadIcon(TabIconNames[i]);
         refIcon = LoadIcon("landmarks");
+        settingsIcon = LoadIcon("settings");
     }
 
     private static Texture2D LoadIcon(string name)
@@ -1096,98 +1098,96 @@ public class RomRecordSession : MonoBehaviour
     {
         var items = new List<RomMenuItem>(24);
 
-        // ★★09-29 배치 개편(사용자: "텍스트라 읽으면 알긴 하겠는데 배치랑 디자인이 좀 난잡해" → «탭 4개 한 줄» 안 선택).
-        //   ① 단계 탭 4개 한 줄(기준점·굴곡신전·측굴·회전) + 그 아래 값  ② 안내 한 줄  ③ 이 단계 버튼 <b>늘 한 줄</b>  ④ 오른쪽 아래 [나가기]
-        //   종전: 기준점 설정만 탭 줄에서 빠져 아래 왼쪽 큰 타일 · 조작 버튼이 한 줄에 셋씩이라 넷째가 둘째 줄에 홀로 · [나가기]가 가운데 줄.
+        // ★★09-29 저녁: 오후의 «탭 4개 한 줄» 배치는 <b>되돌렸다</b>(사용자: "기존 UI로 디자인은 롤백" — 배치만, 색은 한 계열 유지).
+        //   대신 판을 <b>둘</b>로 나눈다(사용자: "설정 UI를 최초에 보여 주고, 설정 완료하면 측정용 UI를 보여 주고,
+        //   설정 버튼 아이콘을 따로 빼서 그걸 누르면 다시 기준점 설정이 되게").
+        //   · 설정 판(기준점 단계): 안내+[나가기] / 왼쪽 [기준점 설정] 타일 · 오른쪽 [대추][외이도][미간] / [설정 완료]
+        //   · 측정 판(동작 단계): 탭 셋+값 / 안내+[나가기] / 왼쪽 모서리 톱니바퀴(기준점 설정으로) · 오른쪽 조작 버튼
+        bool setup = step == RomRecordStep.Landmarks;
+        float r = 0f;
 
-        // ── ① 단계 탭 4개와 그 아래 값 ──
-        float tabSpan = BoardSpan / 4f;
+        // ── ① 측정 탭과 그 아래 값(측정 판만) ──
+        if (!setup)
+        {
+            float tabSpan = BoardSpan / TabSteps.Length;
+            for (int i = 0; i < TabSteps.Length; i++)
+            {
+                RomRecordStep s = TabSteps[i];
+                items.Add(new RomMenuItem
+                {
+                    id = TabIds[i], label = StepTitle[(int)s],
+                    col = i * tabSpan, row = 0f, span = tabSpan, rows = TabRows,
+                    tint = NavTint, selected = step == s,
+                    locked = !hasC7,
+                    icon = tabIcons[i],
+                });
+                items.Add(new RomMenuItem
+                {
+                    id = null, key = TabValueKeys[i], label = TabValues(s),
+                    col = i * tabSpan, row = TabRows, span = tabSpan, rows = ValueBand, textScale = ValueScale,
+                });
+            }
+            r = TabRows + ValueBand;
+        }
+
+        // ── ② 안내 한 줄 + [나가기] ──
+        items.Add(new RomMenuItem { id = null, key = "guide", label = GuideText(), col = 0f, row = r,
+                                    span = BoardSpan - CtlSpan, alignLeft = true });
+        items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
+        r += 1f;
+
+        // ── ③ 왼쪽 타일: 설정 판 = [기준점 설정](지금 여기) · 측정 판 = 톱니바퀴(누르면 기준점 설정으로) ──
         items.Add(new RomMenuItem
         {
-            id = RefId, label = StepTitle[(int)RomRecordStep.Landmarks],
-            col = 0f, row = 0f, span = tabSpan, rows = TabRows,
-            tint = NavTint, selected = step == RomRecordStep.Landmarks,
-            icon = refIcon,
+            id = RefId, label = setup ? StepTitle[(int)RomRecordStep.Landmarks] : "설정",
+            col = 0f, row = r, span = CtlSpan, rows = RefRows,
+            tint = NavTint, selected = setup,
+            icon = setup ? refIcon : settingsIcon,
         });
         items.Add(new RomMenuItem
         {
             id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
-            col = 0f, row = TabRows, span = tabSpan, rows = ValueBand, textScale = ValueScale,
+            col = 0f, row = r + RefRows, span = CtlSpan, rows = RefStatusRows, textScale = ValueScale,
         });
-        for (int i = 0; i < TabSteps.Length; i++)
+
+        // ── ③ 오른쪽 조작 버튼(한 줄에 셋) ──
+        int n = 0;
+        void Ctl(RomMenuItem it)
         {
-            RomRecordStep s = TabSteps[i];
-            items.Add(new RomMenuItem
-            {
-                id = TabIds[i], label = StepTitle[(int)s],
-                col = (i + 1) * tabSpan, row = 0f, span = tabSpan, rows = TabRows,
-                tint = NavTint, selected = step == s,
-                locked = !hasC7,
-                icon = tabIcons[i],
-            });
-            items.Add(new RomMenuItem
-            {
-                id = null, key = TabValueKeys[i], label = TabValues(s),
-                col = (i + 1) * tabSpan, row = TabRows, span = tabSpan, rows = ValueBand, textScale = ValueScale,
-            });
+            it.col = CtlSpan + CtlGap + (n % 3) * (CtlSpan + CtlGap);
+            it.row = r + n / 3;
+            it.span = CtlSpan;
+            items.Add(it);
+            n++;
         }
-
-        // ── ② 안내 한 줄(판 폭 전부) ──
-        float r = TabRows + ValueBand;
-        items.Add(new RomMenuItem { id = null, key = "guide", label = GuideText(), col = 0f, row = r,
-                                    span = BoardSpan, alignLeft = true });
-        r += 1f;
-
-        // ── ③ 이 단계 버튼 — 늘 한 줄. 넷이면 판 폭을 꽉 채운다(4 × 1.55 + 3 × 0.1 = 6.5) ──
-        var row = new List<RomMenuItem>(4);
-        int split = -1;   // 이 번호 앞에 조금 더 벌린다(기준점: 대상 셋 | 정면 다시)
-        if (step == RomRecordStep.Landmarks)
+        if (setup)
         {
-            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(위치 조정 판이 이 점을 옮긴다). 찍혔는지는 탭 아래 ●○가 말한다.
+            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(위치 조정 판이 이 점을 옮긴다). 찍혔는지는 타일 아래 ●○가 말한다.
             // ★★이미 찍은 점은 <b>누르면 대상만 고르고, 길게 누르면 다시 찍는다</b>(2026-09-28 사용자 확정 ⓑ).
-            row.Add(LandmarkButton("t0", "대추", 0, hasC7));
-            row.Add(LandmarkButton("t2", "외이도", 2, hasEar));
-            row.Add(LandmarkButton("t1", "미간", 1, hasGlab));
-            // ★[정면 다시]는 기준점 단계에서 <b>늘</b> 보인다(09-29 사용자: "정면 세팅 버튼은 왜 없앤 거야 — 정면 다시를 살려").
-            //   대추→미간 수평 방향이 정면이 된다. 기본 자리끼리면 처음 방향이 그대로 나올 뿐이라 해가 없다.
-            split = row.Count;
-            row.Add(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
-            // ★정면 ◀▶와 위·아래·앞·뒤·좌·우 이동 버튼은 09-28부터 <b>위치 조정 판</b>(환자 뒤에 따로 서는 판)에 있다.
+            Ctl(LandmarkButton("t0", "대추", 0, hasC7));
+            Ctl(LandmarkButton("t2", "외이도", 2, hasEar));
+            Ctl(LandmarkButton("t1", "미간", 1, hasGlab));
+            // ★[설정 완료]를 눌러야 측정 판으로 넘어간다(09-29 사용자 선택 — 세 점을 다 찍어도 저절로 넘기지 않는다).
+            //   ★[정면 다시]는 없앴다 — 대추·미간이 바뀔 때마다 정면이 저절로 맞는다(09-29).
+            Ctl(RomMenuItem.Button("setdone", "설정 완료", 0, 0, 0, NavTint, selected: NextUnsetLandmark() < 0));
         }
         else if (IsMotion(step))
         {
-            row.Add(RomMenuItem.Button("needle", "바늘", 0, 0, 0, NavTint, selected: needleOn));
+            Ctl(RomMenuItem.Button("needle", "바늘", 0, 0, 0, NavTint, selected: needleOn));
             if (needleOn)
             {
                 // ★[홀드](09-23)는 없앴다(09-28). [바닥] = 드롭라인+바닥 그림자 켜고 끄기(런타임 값, 시작은 켬).
-                row.Add(RomMenuItem.Button("nreset", "다시", 0, 0, 0, NavTint));
-                row.Add(RomMenuItem.Button("cues", "바닥", 0, 0, 0, NavTint, selected: view.DropCuesOn));
+                Ctl(RomMenuItem.Button("nreset", "다시", 0, 0, 0, NavTint));
+                Ctl(RomMenuItem.Button("cues", "바닥", 0, 0, 0, NavTint, selected: view.DropCuesOn));
             }
             else
             {
                 // 점찍기로 쓸 때만 다듬기 버튼을 낸다.
-                row.Add(RomMenuItem.Button("undo", "취소", 0, 0, 0, NavTint));
-                row.Add(RomMenuItem.Button("adj-", "-1°", 0, 0, 0, NavTint, repeat: true));
-                row.Add(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, NavTint, repeat: true));
+                Ctl(RomMenuItem.Button("undo", "취소", 0, 0, 0, NavTint));
+                Ctl(RomMenuItem.Button("adj-", "-1°", 0, 0, 0, NavTint, repeat: true));
+                Ctl(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, NavTint, repeat: true));
             }
         }
-        const float splitGap = 0.3f;
-        float bw = split >= 0 ? (BoardSpan - splitGap - CtlGap * (row.Count - 2)) / row.Count : CtlSpan;
-        float x = 0f;
-        for (int i = 0; i < row.Count; i++)
-        {
-            if (i > 0) x += i == split ? splitGap : CtlGap;
-            RomMenuItem it = row[i];   // ★구조체다 — 복사본을 고쳐 넣는다
-            it.col = x;
-            it.row = r;
-            it.span = bw;
-            items.Add(it);
-            x += bw;
-        }
-        r += 1f;
-
-        // ── ④ [나가기] — 오른쪽 아래 구석(길게 눌러야 나간다) ──
-        items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r + 0.1f, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
 
         var arr = items.ToArray();
         leftMenu.SetLayout("", arr);
@@ -1333,7 +1333,7 @@ public class RomRecordSession : MonoBehaviour
             //   손가락을 대고 길게 누르면 그 자리에 찍힌다. 자동으로 넘어가지 않는다(09-22 사용자).
             int next = NextUnsetLandmark();
             return next >= 0 ? $"{LandmarkName(next)}: 화살표로 옮기거나, 손가락을 대고 [{LandmarkName(next)}] 길게"
-                             : "기준점 완료 — 다시 찍으려면 손가락을 대고 길게 누르세요";
+                             : "기준점 완료 — [설정 완료]를 누르면 측정으로";   // 09-29 설정 판/측정 판 분리
         }
         if (!IsMotion(step)) return "";
         int mi = MotionIndex(step);
@@ -1449,7 +1449,8 @@ public class RomRecordSession : MonoBehaviour
             case "deg-0.1": FineAdjust(-fineStepDeg); break;
             case "degok": ConfirmNeedle(); break;
             // ★탭(09-22) — [이전]/[다음] 대신 바로 간다. 잠긴 탭은 판이 id를 비워 여기까지 안 온다.
-            case "tab1": GoTo(RomRecordStep.Landmarks); break;         // 기준점 설정 타일(설정 칸)
+            case "tab1": GoTo(RomRecordStep.Landmarks); break;         // 측정 판 모서리 톱니바퀴 = 기준점 설정으로(09-29)
+            case "setdone": GoTo(RomRecordStep.Flexion); break;        // 설정 판 [설정 완료] → 측정 판(09-29)
             case "tab2": GoTo(RomRecordStep.Flexion); break;          // 굴곡·신전
             case "tab3": GoTo(RomRecordStep.LateralFlexion); break;
             case "tab4": GoTo(RomRecordStep.Rotation); break;

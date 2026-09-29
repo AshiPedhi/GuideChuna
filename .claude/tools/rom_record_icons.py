@@ -79,6 +79,19 @@ def check(d):
     d.line([P(62, 132), P(108, 180), P(196, 80)], fill=CYAN, width=18 * SS, joint="curve")
 
 
+def gear(d):
+    """톱니바퀴 — 측정 판 모서리의 «기준점 설정으로 돌아가기»(2026-09-29 사용자: "설정 버튼 아이콘을 따로 빼서")."""
+    cx, cy = 128, 128
+    teeth, r_out, r_in = 8, 100, 76
+    pts = []
+    for i in range(teeth * 4):
+        a = math.radians(i * 360 / (teeth * 4) - 90 + 360 / (teeth * 8))
+        r = r_out if (i % 4) in (1, 2) else r_in
+        pts.append(P(cx + r * math.cos(a), cy + r * math.sin(a)))
+    d.polygon(pts, fill=GRAY)
+    d.ellipse([P(cx - 34, cy - 34), P(cx + 34, cy + 34)], fill=(0, 0, 0, 0))   # 가운데 구멍(투명)
+
+
 ICONS = {
     # 기준점 위치 조정 판
     "nudge_up": lambda d: arrow(d, (128, 208), (128, 44), CYAN),
@@ -97,6 +110,8 @@ ICONS = {
     "deg_inc2": lambda d: chevrons(d, 2, True),
     "deg_inc3": lambda d: chevrons(d, 3, True),
     "confirm": check,
+    # 측정 판 모서리 — 기준점 설정으로 돌아가기
+    "settings": gear,
 }
 MIRROR = {"yaw_left"}
 
