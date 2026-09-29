@@ -193,8 +193,7 @@ public class RomRecordSession : MonoBehaviour
     [SerializeField] private float needleTouchRadius = 0.025f;
     [Tooltip("바늘 위 미세 조정 버튼 한 번에 움직이는 각(°).")]
     [SerializeField] private float fineStepDeg = 0.2f;   // 09-29 0.1 → 0.2(사용자). 버튼 글자도 이 값에서 만든다
-    [Tooltip("미세 조정 판을 바늘 구체보다 이만큼(m) 위에 띄운다(손과 환자 머리가 한 시선에 들게).")]
-    [SerializeField] private float finePanelRise = 0.08f;
+    // ★finePanelRise(바늘 판을 구체 위로 띄우는 높이)는 09-29 밤에 없앴다 — 바늘 각도 줄이 측정 판 하단에 합쳐졌다. 씬에 남은 값은 안 읽힌다.
 
     [Header("=== 기준점 기본 자리·위치 조정 판(2026-09-28) ===")]
     // ★사용자 09-28: "기준점 최초에 대추·미간·외이도 안 찍어도 헤드셋 눈높이에서 디폴트값으로 일정 위치에 생성되게".
@@ -333,7 +332,7 @@ public class RomRecordSession : MonoBehaviour
     // ★미세 조정 판이 다루는 바늘(k) — 마지막으로 놓았거나 구체를 쳐서 푼 바늘. -1이면 판을 숨긴다.
     private int fineTarget = -1;
     private bool finePlacePending;   // 고른 바늘이 바뀌었다 — 바늘을 그린 뒤(Redraw) 판을 그 구체 위에 세운다
-    private IRomRecordMenu fineMenu;
+    private IRomRecordMenu fineMenu = null;   // ★[미사용 09-29] 측정 판 하단에 합쳤다 — 늘 null
     private float nextFineLog;
     // ★기준점 위치 조정 판(09-28) — 환자 뒤, 내가 쓰기 편한 자리(UpdateNudgeMenu). 잡아 끌 수 있다(dragTarget 10).
     // ★[미사용 09-29] 설정 판에 합쳐 더는 만들지 않는다 — 늘 null(명시해 둔다: 안 쓰는 게 의도다).
@@ -419,31 +418,9 @@ public class RomRecordSession : MonoBehaviour
 
         LoadTabIcons();
 
-        // ★바늘 각도 판(2026-09-28 — 오전에 ±0.1° 둘로 만들고, 오후에 사용자 선택으로 5단 + 확정):
-        //   "각도기 바늘 옮기는 거 손으로 잡고 옮기는 기능은 빼고 그냥 버튼으로 각도 조절하게 하자."
-        //   한계 각도(예: 신전 90°)에서 실제 값까지 버튼만으로 가야 하므로 5° · 1° · 0.1° 셋을 둔다(누르고 있으면 반복).
-        //   [✓]는 이 바늘을 확정하고 순서상 다음 바늘로 넘어간다. 판은 고른 바늘 구체 위에 선다 —
-        //   "손과 환자 머리가 한 시선 안에"(09-23 사용자 메모). 글자 대신 그림이다(화살표 개수 = 크기).
-        //   ★label은 그림을 못 그리는 Quad 판용 대체 글자다(Meta 판은 iconOnly라 그림만 보인다).
-        fineMenu = NewMenu();
-        fineMenu.FixedInSpace = true;
-        fineMenu.Build(transform, "바늘 각도", 8, font, mat);
-        // ★09-29 사용자: "너무 옆으로 길어 누르기 불편 — 24cm 기준으로 줄여." 0.8 → 0.65칸, 값 칸 1.4 → 1.2(계산상 29 → 약 24cm).
-        const float fs = 0.65f;  // 버튼 한 칸 폭(판 칸 단위)
-        const float fv = 1.2f;   // 가운데 값 칸 폭
-        fineMenu.SetLayout("", new[]
-        {
-            // ★09-29 사용자: "각도 조절은 텍스트 숫자로 — 아이콘으로 하면 오히려 헷갈려." 확정도 글자 [기록]으로.
-            RomMenuItem.Button("deg-5", "-5", 0f * fs, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg-1", "-1", 1f * fs, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg-0.1", "-" + fineStepDeg.ToString("0.0#"), 2f * fs, 0f, fs, AdjTint, repeat: true),   // id는 그대로(판정 키)
-            new RomMenuItem { id = null, key = FineValueKey, label = "", col = 3f * fs, row = 0f, span = fv },
-            RomMenuItem.Button("deg+0.1", "+" + fineStepDeg.ToString("0.0#"), 3f * fs + fv, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg+1", "+1", 4f * fs + fv, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("deg+5", "+5", 5f * fs + fv, 0f, fs, AdjTint, repeat: true),
-            RomMenuItem.Button("degok", "기록", 6f * fs + fv + 0.1f, 0f, fs, NeedleTint),
-        });
-        fineMenu.Hide();
+        // ★★따로 떠 있던 «바늘 각도 판»(09-28~09-29)은 <b>만들지 않는다</b>(09-29 밤 사용자: "바늘 각도 수정하는 UI도
+        //   기록 UI 하단부에 같이 합쳐 줘"). 버튼 줄은 측정 판 맨 아래에 있다(ApplyStepButtons — 고른 바늘이 있을 때만).
+        //   fineMenu는 null로 남는다 — ★[미사용 09-29].
 
         // ★★따로 떠 있던 «기준점 위치 조정 판»(09-28~09-29 오후)은 <b>만들지 않는다</b>(09-29 저녁 사용자: "방향키 UI 따로 빼지 말고
         //   설정 UI랑 같이 합쳐 줘"). 방향 버튼은 설정 판 안에 있다(ApplyStepButtons). nudgeMenu는 null로 남고,
@@ -1186,6 +1163,24 @@ public class RomRecordSession : MonoBehaviour
                 Ctl(RomMenuItem.Button("adj-", "-1°", 0, 0, 0, NavTint, repeat: true));
                 Ctl(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, NavTint, repeat: true));
             }
+
+            // ── 측정 판 하단: 바늘 각도 줄(09-29 밤 사용자: "바늘 각도 수정하는 UI도 기록 UI 하단부에 같이 합쳐 줘") ──
+            //   [-5][-1][-0.2] [값] [+0.2][+1][+5] [기록] — 고른 바늘이 있을 때만. 폭은 떠 있던 판과 같다(버튼 0.65칸 · 값 1.2칸).
+            //   ★숫자 글자(아이콘 아님 — 09-29 사용자) · [기록]은 확정 후 다음 바늘.
+            if (needleOn && fineTarget >= 0)
+            {
+                const float fs = 0.65f, fv = 1.2f;
+                float rf = r + Mathf.Ceil(n / 3f) + 0.2f;
+                string st = fineStepDeg.ToString("0.0#");
+                items.Add(RomMenuItem.Button("deg-5", "-5", 0f * fs, rf, fs, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg-1", "-1", 1f * fs, rf, fs, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg-0.1", "-" + st, 2f * fs, rf, fs, NavTint, repeat: true));   // id는 그대로(판정 키)
+                items.Add(new RomMenuItem { id = null, key = FineValueKey, label = FineValueText(), col = 3f * fs, row = rf, span = fv });
+                items.Add(RomMenuItem.Button("deg+0.1", "+" + st, 3f * fs + fv, rf, fs, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg+1", "+1", 4f * fs + fv, rf, fs, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("deg+5", "+5", 5f * fs + fv, rf, fs, NavTint, repeat: true));
+                items.Add(RomMenuItem.Button("degok", "기록", 6f * fs + fv + 0.1f, rf, fs, NavTint));
+            }
         }
 
         void AddAt(RomMenuItem it, int c, float row)
@@ -1241,7 +1236,8 @@ public class RomRecordSession : MonoBehaviour
             int h = (int)step;
             h = h * 31 + landmarkTarget;
             h = h * 31 + (needleOn ? 1 : 0) + (hasC7 ? 2 : 0) + (hasGlab ? 4 : 0) + (hasEar ? 8 : 0) + (view.DropCuesOn ? 16 : 0)
-                  + (landmarkCaptured[0] ? 32 : 0) + (landmarkCaptured[1] ? 64 : 0) + (landmarkCaptured[2] ? 128 : 0);
+                  + (landmarkCaptured[0] ? 32 : 0) + (landmarkCaptured[1] ? 64 : 0) + (landmarkCaptured[2] ? 128 : 0)
+                  + (fineTarget >= 0 ? 256 : 0);   // ★바늘 각도 줄이 생기고 없어짐(09-29 밤 — 측정 판 하단에 합침)
             return h;
         }
     }
@@ -2221,28 +2217,32 @@ public class RomRecordSession : MonoBehaviour
     }
 
     /// <summary>미세 조정 판을 그 바늘 구체 위에 세운다. ★자리는 이때 한 번만 — 누르는 중에 판이 움직이면 헛짚는다.</summary>
+    // ★09-29 밤: 바늘 각도 버튼은 측정 판 하단 줄이다 — «판을 세운다»가 아니라 «고른 바늘을 정한다»가 전부다.
+    //   줄이 생기고 없어지는 것은 LayoutSignature(fineTarget ≥ 0)가 배치를 다시 짜게 한다.
     private void ShowFineMenu(int k)
     {
-        if (fineMenu == null || eye == null || !view.TryNeedleGrip(k, out Vector3 g)) return;
         fineTarget = k;
-        fineMenu.PlaceAt(g + Vector3.up * finePanelRise, eye);
         UpdateFineValue();
     }
 
     private void HideFineMenu()
     {
         fineTarget = -1;
-        if (fineMenu != null) fineMenu.Hide();
     }
 
     private void UpdateFineValue()
     {
-        if (fineMenu == null || fineTarget < 0 || !IsMotion(step)) return;
+        if (fineTarget < 0 || !IsMotion(step)) return;
+        SetMenuText(FineValueKey, FineValueText());
+    }
+
+    /// <summary>하단 줄 가운데 값 — 고른 바늘의 지금 각. 바늘 색과 같은 색(능동 밝게 · 압박 진하게).</summary>
+    private string FineValueText()
+    {
+        if (fineTarget < 0 || !IsMotion(step)) return "";
         int n = MotionIndex(step) * NeedlePerStep + fineTarget;
         float deg = Vector3.Angle(RomRecordGeometry.ScaleZero(step, yaw), needleDir[n]);
-        // ★가운데 칸 = 어느 바늘인지 + 지금 값. 바늘 색과 같은 색으로 쓴다(능동 밝게 · 압박 진하게).
-        fineMenu.SetText(FineValueKey,
-            $"<color={(fineTarget % 2 == 1 ? HexPassive : HexActive)}>{deg:F1}°</color>");
+        return $"<color={(fineTarget % 2 == 1 ? HexPassive : HexActive)}>{deg:F1}°</color>";
     }
 
     /// <summary>
