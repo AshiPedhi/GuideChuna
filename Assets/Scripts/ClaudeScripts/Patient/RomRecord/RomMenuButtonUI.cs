@@ -28,19 +28,22 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
     public float repeatInterval = 0.12f;
 
     private Image background;     // 눌림을 색으로 알린다
-    private Image fill;           // 길게 누르기 진행 막대
+    // ★길게 누르기 진행 = 테두리 네 변이 시계 방향으로 차오른다(2026-09-29 — 종전엔 아래 막대 하나).
+    private GameObject fillRoot;
+    private Image[] fillEdges;
     private Color baseColor;
     private bool down;
     private float downAt;
     private float nextRepeat;
     private bool holdFired;
 
-    public void Setup(Image bg, Image progress)
+    public void Setup(Image bg, GameObject progressRoot, Image[] progressEdges)
     {
         background = bg;
-        fill = progress;
+        fillRoot = progressRoot;
+        fillEdges = progressEdges;
         if (background != null) baseColor = background.color;
-        if (fill != null) fill.gameObject.SetActive(false);
+        if (fillRoot != null) fillRoot.SetActive(false);
     }
 
     public void OnPointerDown(PointerEventData e)
@@ -63,7 +66,7 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         if (!down) return;
         down = false;
         Tint(0f);
-        if (fill != null && fill.gameObject.activeSelf) fill.gameObject.SetActive(false);
+        if (fillRoot != null && fillRoot.activeSelf) fillRoot.SetActive(false);
     }
 
     private void Update()
@@ -74,10 +77,12 @@ public class RomMenuButtonUI : MonoBehaviour, IPointerDownHandler, IPointerUpHan
         if (holdSeconds > 0f)
         {
             float p = Mathf.Clamp01(held / holdSeconds);
-            if (fill != null)
+            if (fillRoot != null && fillEdges != null)
             {
-                if (!fill.gameObject.activeSelf) fill.gameObject.SetActive(true);
-                fill.fillAmount = p;
+                if (!fillRoot.activeSelf) fillRoot.SetActive(true);
+                // 네 변을 차례로 — 변 i는 p가 i/4 ~ (i+1)/4일 때 찬다(위 → 오른쪽 → 아래 → 왼쪽)
+                for (int i = 0; i < fillEdges.Length; i++)
+                    fillEdges[i].fillAmount = Mathf.Clamp01(p * fillEdges.Length - i);
             }
             if (!holdFired && p >= 1f)
             {

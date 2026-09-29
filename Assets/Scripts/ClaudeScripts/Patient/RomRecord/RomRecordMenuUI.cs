@@ -46,7 +46,8 @@ public class RomRecordMenuUI : IRomRecordMenu
         public RectTransform rt;
         public RomMenuButtonUI press;
         public Image background;
-        public Image fill;
+        public GameObject fillRoot;   // 길게 누르기 진행 — 테두리 네 변(09-29)
+        public Image[] fillEdges;
         public TextMeshProUGUI label;
         public bool isText;        // 누를 수 없는 글자 칸
         // ★탭 판(2026-09-22)
@@ -71,7 +72,8 @@ public class RomRecordMenuUI : IRomRecordMenu
     public Color labelColor = new Color(1f, 1f, 1f, 0.902f);          // Meta 표준 글자색
     public Color selectedLabelColor = new Color(0.153f, 0.153f, 0.153f, 1f);
     public Color captionColor = new Color(1f, 1f, 1f, 0.698f);        // 누를 수 없는 글자 칸
-    public Color fillColor = new Color(1f, 1f, 1f, 0.92f);            // 길게 누르기 막대
+    public Color fillColor = new Color(1f, 1f, 1f, 0.92f);            // 길게 누르기 테두리(09-29 — 종전엔 아래 막대)
+    public float fillEdgePx = 5f;                                      // 테두리 두께(px, 1px = 0.5mm)
     public float selectedMix = 0.35f;                                  // 고른 버튼을 흰색 쪽으로 섞는 정도
     // ★판 잡기 하이라이트(09-22) — 판 둘레의 둥근 테두리. 표시물(대추 점) 하늘색 계열로 맞췄다(실측 아님 — 눈으로 맞출 값).
     public Color grabReadyColor = new Color(0.30f, 0.90f, 1f, 0.55f);   // 지금 오므리면 잡힌다
@@ -333,20 +335,24 @@ public class RomRecordMenuUI : IRomRecordMenu
             b.label.color = labelColor;
         }
 
-        // 길게 누르기 막대 — 레이아웃에 끼지 않게 무시 표시를 준다(레이아웃을 껐어도 남겨 둔다).
-        var fillGo = new GameObject("차오름", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(LayoutElement));
+        // ★길게 누르기 진행 = <b>테두리가 시계 방향으로 차오른다</b>(2026-09-29 사용자: "대추·외이도·미간 길게 누를 때 테두리
+        //   필 어마운트로 효과"). 종전엔 버튼 아래 얇은 막대였다. 위(왼→오) → 오른쪽(위→아래) → 아래(오→왼) → 왼쪽(아래→위).
+        //   레이아웃에 끼지 않게 무시 표시를 준다(레이아웃을 껐어도 남겨 둔다).
+        var fillGo = new GameObject("차오름 테두리", typeof(RectTransform), typeof(LayoutElement));
         var fillRt = (RectTransform)fillGo.transform;
         fillRt.SetParent(b.rt, false);
-        fillRt.anchorMin = new Vector2(0f, 0f);
-        fillRt.anchorMax = new Vector2(1f, 0.12f);
-        fillRt.offsetMin = new Vector2(4f, 3f);
-        fillRt.offsetMax = new Vector2(-4f, 0f);
+        fillRt.anchorMin = Vector2.zero;
+        fillRt.anchorMax = Vector2.one;
+        fillRt.offsetMin = fillRt.offsetMax = Vector2.zero;
         fillGo.GetComponent<LayoutElement>().ignoreLayout = true;
-        b.fill = fillGo.GetComponent<Image>();
-        b.fill.color = fillColor;
-        b.fill.type = Image.Type.Filled;
-        b.fill.fillMethod = Image.FillMethod.Horizontal;
-        b.fill.raycastTarget = false;
+        b.fillRoot = fillGo;
+        b.fillEdges = new[]
+        {
+            Edge(fillRt, "위", new Vector2(0f, 1f), new Vector2(1f, 1f), Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Left),
+            Edge(fillRt, "오른쪽", new Vector2(1f, 0f), new Vector2(1f, 1f), Image.FillMethod.Vertical, (int)Image.OriginVertical.Top),
+            Edge(fillRt, "아래", new Vector2(0f, 0f), new Vector2(1f, 0f), Image.FillMethod.Horizontal, (int)Image.OriginHorizontal.Right),
+            Edge(fillRt, "왼쪽", new Vector2(0f, 0f), new Vector2(0f, 1f), Image.FillMethod.Vertical, (int)Image.OriginVertical.Bottom),
+        };
         fillGo.SetActive(false);
 
         // ★탭 그림(2026-09-22). 루트의 마지막 자식이라 배경 위에 그려진다. 누름은 배경이 받는다.
@@ -362,7 +368,7 @@ public class RomRecordMenuUI : IRomRecordMenu
 
         b.press = go.AddComponent<RomMenuButtonUI>();
         b.press.owner = this;
-        b.press.Setup(b.background, b.fill);
+        b.press.Setup(b.background, b.fillRoot, b.fillEdges);
 
         go.SetActive(false);
         return b;
@@ -516,9 +522,31 @@ public class RomRecordMenuUI : IRomRecordMenu
                                  : new Color(1f, 1f, 1f, 0.9f);
                 }
             }
-            b.press.Setup(b.background, b.fill);   // ★색을 정한 뒤에 부른다 — 여기서 되돌릴 색을 기억한다
-            if (b.fill != null) b.fill.gameObject.SetActive(false);
+            b.press.Setup(b.background, b.fillRoot, b.fillEdges);   // ★색을 정한 뒤에 부른다 — 여기서 되돌릴 색을 기억한다
+            if (b.fillRoot != null) b.fillRoot.SetActive(false);
         }
+    }
+
+    /// <summary>길게 누르기 테두리의 한 변(09-29). 두께 fillEdgePx, 흰 사각형을 fillAmount로 채운다.</summary>
+    private Image Edge(RectTransform parent, string name, Vector2 aMin, Vector2 aMax, Image.FillMethod method, int origin)
+    {
+        var go = new GameObject("테두리 " + name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = aMin;
+        rt.anchorMax = aMax;
+        rt.pivot = new Vector2(aMin.x == aMax.x ? aMin.x : 0.5f, aMin.y == aMax.y ? aMin.y : 0.5f);
+        // 가로 변은 높이만, 세로 변은 너비만 두께로 준다(길이는 앵커가 버튼 전체로 늘인다).
+        rt.sizeDelta = new Vector2(aMin.x == aMax.x ? fillEdgePx : 0f, aMin.y == aMax.y ? fillEdgePx : 0f);
+        rt.anchoredPosition = Vector2.zero;
+        var img = go.GetComponent<Image>();
+        img.color = fillColor;
+        img.type = Image.Type.Filled;
+        img.fillMethod = method;
+        img.fillOrigin = origin;
+        img.fillAmount = 0f;
+        img.raycastTarget = false;
+        return img;
     }
 
     private static float RowsOf(RomMenuItem it) => it.rows > 0f ? it.rows : 1f;
