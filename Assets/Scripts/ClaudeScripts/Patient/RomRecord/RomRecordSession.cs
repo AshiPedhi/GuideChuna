@@ -1141,7 +1141,10 @@ public class RomRecordSession : MonoBehaviour
             Ctl(LandmarkButton("t2", "외이도", 2, hasEar));
             Ctl(LandmarkButton("t1", "미간", 1, hasGlab));
             // ★정면을 다시 잡는 버튼(09-21) — 대추·미간을 둘 다 <b>찍은</b> 뒤에만 뜻이 있다(기본 자리끼리는 내 시선 방향 그대로다).
-            if (landmarkCaptured[0] && landmarkCaptured[1]) Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
+            // ★[정면 다시]는 기준점 단계에서 <b>늘</b> 보인다(09-29 사용자: "정면 세팅 버튼은 왜 없앤 거야 — 정면 다시를 살려").
+            //   09-28엔 대추·미간을 둘 다 «찍은» 뒤에만 보이게 해 기본 자리에서 시작하면 사실상 사라졌다.
+            //   기본 자리끼리면 처음 방향이 그대로 나올 뿐이라 해가 없다. 대추→미간 수평 방향이 정면이 된다.
+            Ctl(RomMenuItem.Button("aim", "정면 다시", 0, 0, 0, NavTint));
             // ★정면 ◀▶와 위·아래·앞·뒤·좌·우 이동 버튼은 09-28에 <b>위치 조정 판</b>(환자 뒤에 따로 서는 그림 버튼 판)으로 옮겼다
             //   (사용자: "위치 조정하는 버튼 UI 따로 빼 주고 버튼도 글씨 말고 아이콘으로").
         }
