@@ -332,7 +332,8 @@ public class RomRecordSession : MonoBehaviour
     private IRomRecordMenu fineMenu;
     private float nextFineLog;
     // ★기준점 위치 조정 판(09-28) — 환자 뒤, 내가 쓰기 편한 자리(UpdateNudgeMenu). 잡아 끌 수 있다(dragTarget 10).
-    private IRomRecordMenu nudgeMenu;
+    // ★[미사용 09-29] 설정 판에 합쳐 더는 만들지 않는다 — 늘 null(명시해 둔다: 안 쓰는 게 의도다).
+    private IRomRecordMenu nudgeMenu = null;
     private bool nudgeUserPlaced;   // 손으로 옮긴 적이 있나 — 있으면 다시 보일 때 그 자리에 선다
     private Vector3 nudgeUserPos;
     private bool nudgeFollowing;    // 옮겨 오는 중인가(09-29)
@@ -440,29 +441,9 @@ public class RomRecordSession : MonoBehaviour
         });
         fineMenu.Hide();
 
-        // ★기준점 위치 조정 판(2026-09-28 사용자: "위치 조정하는 버튼 UI 따로 빼 주고, 버튼도 글씨 말고 아이콘으로").
-        //   환자 뒤(내가 쓰기 편한 자리)에 서는 3×3 판이다(09-28 오후 — 오전엔 조작 판 옆). 가운데 칸은 지금 옮기는 기준점 이름.
-        //   ★09-29 사용자: "기준점 설정할 때 회전은 없어도 되고(정면은 미간으로 자동) · 화살표도 아이콘이랑 영어로 같이 ·
-        //     위아래만 UP DOWN 영어만." → ↺↻를 빼고, 그림 옆에 영어를 붙인다(좌우·앞뒤는 환자 기준).
-        //              UP
-        //     ◀ LEFT  이름  RIGHT ▶
-        //     FRONT   DOWN   BACK        FRONT·BACK = 바닥 사다리꼴 그림 + 글자
-        //   기준점 설정 단계에서만 보인다.
-        nudgeMenu = NewMenu();
-        nudgeMenu.FixedInSpace = true;
-        nudgeMenu.Build(transform, "기준점 위치", 10, font, mat);
-        const float nw = 1.7f;   // 칸 폭 — 그림 + 영어 단어가 한 줄에 들어가게(종전 1칸)
-        nudgeMenu.SetLayout("", new[]
-        {
-            RomMenuItem.Button("up", "UP", nw, 0f, nw, AdjTint, repeat: true),
-            BesideButton("left", "LEFT", "nudge_left", -1, 0f, 1f, nw),
-            new RomMenuItem { id = null, key = NudgeTargetKey, label = "", col = nw, row = 1f, span = nw },
-            BesideButton("right", "RIGHT", "nudge_right", +1, 2f * nw, 1f, nw),
-            BesideButton("fwd", "FRONT", "nudge_fwd", -1, 0f, 2f, nw),
-            RomMenuItem.Button("down", "DOWN", nw, 2f, nw, AdjTint, repeat: true),
-            BesideButton("back", "BACK", "nudge_back", -1, 2f * nw, 2f, nw),
-        });
-        nudgeMenu.Hide();
+        // ★★따로 떠 있던 «기준점 위치 조정 판»(09-28~09-29 오후)은 <b>만들지 않는다</b>(09-29 저녁 사용자: "방향키 UI 따로 빼지 말고
+        //   설정 UI랑 같이 합쳐 줘"). 방향 버튼은 설정 판 안에 있다(ApplyStepButtons). nudgeMenu는 null로 남고,
+        //   그 판을 다루던 코드(UpdateNudgeMenu·FollowNudgeMenu·잡기 10번)는 전부 null이면 건너뛴다 — ★[미사용 09-29].
         ApplyStepButtons();
         BuildSounds();
         Say(ArmVoice(landmarkTarget));   // ★처음엔 대추가 찍기 대기다
@@ -945,6 +926,8 @@ public class RomRecordSession : MonoBehaviour
         m.Tick();
     }
 
+    // ★[미사용 09-29] UpdateNudgeMenu·FollowNudgeMenu — 따로 뜨던 위치 조정 판을 설정 판에 합쳐 nudgeMenu가 늘 null이다.
+    //   지우지 않고 둔다(프로젝트 방침). 되살리려면 Start의 nudgeMenu 생성을 되돌린다(커밋 870a891 참조).
     /// <summary>
     /// 위치 조정 판을 기준점 설정 단계에서만 보인다(09-28). 자리는 <b>환자 뒤, 내가 쓰기 편한 곳</b> — 대추에서
     /// 환자 뒤(내 쪽)·아래·오른쪽으로 비킨 곳이다(09-28 오후 사용자). ★보일 때 한 번만 정한다.
@@ -1101,8 +1084,8 @@ public class RomRecordSession : MonoBehaviour
         // ★★09-29 저녁: 오후의 «탭 4개 한 줄» 배치는 <b>되돌렸다</b>(사용자: "기존 UI로 디자인은 롤백" — 배치만, 색은 한 계열 유지).
         //   대신 판을 <b>둘</b>로 나눈다(사용자: "설정 UI를 최초에 보여 주고, 설정 완료하면 측정용 UI를 보여 주고,
         //   설정 버튼 아이콘을 따로 빼서 그걸 누르면 다시 기준점 설정이 되게").
-        //   · 설정 판(기준점 단계): 안내+[나가기] / 왼쪽 [기준점 설정] 타일 · 오른쪽 [대추][외이도][미간] / [설정 완료]
-        //   · 측정 판(동작 단계): 탭 셋+값 / 안내+[나가기] / 왼쪽 모서리 톱니바퀴(기준점 설정으로) · 오른쪽 조작 버튼
+        //   · 설정 판(기준점 단계): 안내+[나가기] / 왼쪽 [기준점 설정] 타일·●○·[설정 완료] · 오른쪽 [대추][외이도][미간] + 방향키
+        //   · 측정 판(동작 단계): 탭 셋+값 / 안내+작은 톱니바퀴+[나가기] / 조작 버튼
         bool setup = step == RomRecordStep.Landmarks;
         float r = 0f;
 
@@ -1130,49 +1113,74 @@ public class RomRecordSession : MonoBehaviour
             r = TabRows + ValueBand;
         }
 
-        // ── ② 안내 한 줄 + [나가기] ──
+        // ── ② 안내 한 줄 + (측정 판만) 작은 톱니바퀴 + [나가기] ──
+        //   ★09-29 저녁 정정(사용자: "기록 UI에서 설정 버튼 저렇게 크게 하지 말고 한쪽에 작게 빼라는 말"):
+        //   측정 판의 설정 버튼은 큰 타일이 아니라 [나가기] 옆 작은 그림 버튼 하나다.
+        const float gearSpan = 0.8f;
+        float guideSpan = BoardSpan - CtlSpan - (setup ? 0f : gearSpan + CtlGap);
         items.Add(new RomMenuItem { id = null, key = "guide", label = GuideText(), col = 0f, row = r,
-                                    span = BoardSpan - CtlSpan, alignLeft = true });
+                                    span = guideSpan, alignLeft = true });
+        if (!setup)
+        {
+            var gear = RomMenuItem.Button(RefId, "설정", guideSpan, r, gearSpan, NavTint);
+            gear.icon = settingsIcon;
+            gear.iconOnly = settingsIcon != null;
+            items.Add(gear);
+        }
         items.Add(RomMenuItem.Button("exit", "나가기", BoardSpan - CtlSpan, r, CtlSpan, ExitTint, holdSeconds: exitHoldSeconds));
         r += 1f;
 
-        // ── ③ 왼쪽 타일: 설정 판 = [기준점 설정](지금 여기) · 측정 판 = 톱니바퀴(누르면 기준점 설정으로) ──
-        items.Add(new RomMenuItem
-        {
-            id = RefId, label = setup ? StepTitle[(int)RomRecordStep.Landmarks] : "설정",
-            col = 0f, row = r, span = CtlSpan, rows = RefRows,
-            tint = NavTint, selected = setup,
-            icon = setup ? refIcon : settingsIcon,
-        });
-        items.Add(new RomMenuItem
-        {
-            id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
-            col = 0f, row = r + RefRows, span = CtlSpan, rows = RefStatusRows, textScale = ValueScale,
-        });
+        // 오른쪽 버튼 칸의 열 자리(한 줄에 셋). 설정 판은 왼쪽에 타일이 있어 한 칸 비켜 선다.
+        float x0 = setup ? CtlSpan + CtlGap : 0f;
+        float ColX(int c) => x0 + c * (CtlSpan + CtlGap);
 
-        // ── ③ 오른쪽 조작 버튼(한 줄에 셋) ──
-        int n = 0;
-        void Ctl(RomMenuItem it)
-        {
-            it.col = CtlSpan + CtlGap + (n % 3) * (CtlSpan + CtlGap);
-            it.row = r + n / 3;
-            it.span = CtlSpan;
-            items.Add(it);
-            n++;
-        }
         if (setup)
         {
-            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(위치 조정 판이 이 점을 옮긴다). 찍혔는지는 타일 아래 ●○가 말한다.
-            // ★★이미 찍은 점은 <b>누르면 대상만 고르고, 길게 누르면 다시 찍는다</b>(2026-09-28 사용자 확정 ⓑ).
-            Ctl(LandmarkButton("t0", "대추", 0, hasC7));
-            Ctl(LandmarkButton("t2", "외이도", 2, hasEar));
-            Ctl(LandmarkButton("t1", "미간", 1, hasGlab));
+            // ── 설정 판: 왼쪽 [기준점 설정] 타일 + ●○ + [설정 완료] ──
+            items.Add(new RomMenuItem
+            {
+                id = RefId, label = StepTitle[(int)RomRecordStep.Landmarks],
+                col = 0f, row = r, span = CtlSpan, rows = RefRows,
+                tint = NavTint, selected = true, icon = refIcon,
+            });
+            items.Add(new RomMenuItem
+            {
+                id = null, key = RefStatusKey, label = TabValues(RomRecordStep.Landmarks),
+                col = 0f, row = r + RefRows, span = CtlSpan, rows = RefStatusRows, textScale = ValueScale,
+            });
             // ★[설정 완료]를 눌러야 측정 판으로 넘어간다(09-29 사용자 선택 — 세 점을 다 찍어도 저절로 넘기지 않는다).
-            //   ★[정면 다시]는 없앴다 — 대추·미간이 바뀔 때마다 정면이 저절로 맞는다(09-29).
-            Ctl(RomMenuItem.Button("setdone", "설정 완료", 0, 0, 0, NavTint, selected: NextUnsetLandmark() < 0));
+            items.Add(RomMenuItem.Button("setdone", "설정 완료", 0f, r + RefRows + RefStatusRows + 0.2f, CtlSpan, NavTint,
+                                         selected: NextUnsetLandmark() < 0));
+
+            // ── 설정 판 오른쪽: 대상 셋 + 방향키(09-29 저녁 사용자: "방향키 UI 따로 빼지 말고 설정 UI랑 같이 합쳐 줘") ──
+            // ★밝은 버튼 = 지금 <b>다듬을 대상</b>인 점(방향키가 이 점을 옮긴다). 찍혔는지는 타일 아래 ●○가 말한다.
+            // ★★이미 찍은 점은 <b>누르면 대상만 고르고, 길게 누르면 다시 찍는다</b>(2026-09-28 사용자 확정 ⓑ).
+            AddAt(LandmarkButton("t0", "대추", 0, hasC7), 0, r);
+            AddAt(LandmarkButton("t2", "외이도", 2, hasEar), 1, r);
+            AddAt(LandmarkButton("t1", "미간", 1, hasGlab), 2, r);
+            // 방향키 — 키보드 방향키 꼴(사용자: "위아래랑 앞뒤 버튼 위치 바꾸고, 앞뒤 아이콘을 원래 위아래였던 화살표만 있는 아이콘으로").
+            //          [↑ FRONT]
+            //   [◀ LEFT] [ 이름 ] [RIGHT ▶]
+            //   [  UP  ] [↓ BACK] [ DOWN ]
+            //   좌우·앞뒤는 환자 기준. ↑·↓ 그림은 종전 위·아래 버튼의 화살표다(nudge_up·nudge_down).
+            float ra = r + 1.2f;
+            AddAt(BesideButton("fwd", "FRONT", "nudge_up", -1, 0f, 0f, 0f), 1, ra);
+            AddAt(BesideButton("left", "LEFT", "nudge_left", -1, 0f, 0f, 0f), 0, ra + 1f);
+            items.Add(new RomMenuItem
+            {
+                id = null, key = NudgeTargetKey, col = ColX(1), row = ra + 1f, span = CtlSpan,
+                label = $"<color={LandmarkHex(landmarkTarget)}>{LandmarkName(landmarkTarget)}</color>",
+            });
+            AddAt(BesideButton("right", "RIGHT", "nudge_right", +1, 0f, 0f, 0f), 2, ra + 1f);
+            AddAt(RomMenuItem.Button("up", "UP", 0, 0, 0, NavTint, repeat: true), 0, ra + 2f);
+            AddAt(BesideButton("back", "BACK", "nudge_down", -1, 0f, 0f, 0f), 1, ra + 2f);
+            AddAt(RomMenuItem.Button("down", "DOWN", 0, 0, 0, NavTint, repeat: true), 2, ra + 2f);
         }
         else if (IsMotion(step))
         {
+            // ── 측정 판: 조작 버튼(한 줄에 셋) ──
+            int n = 0;
+            void Ctl(RomMenuItem it) { AddAt(it, n % 3, r + n / 3); n++; }
             Ctl(RomMenuItem.Button("needle", "바늘", 0, 0, 0, NavTint, selected: needleOn));
             if (needleOn)
             {
@@ -1187,6 +1195,14 @@ public class RomRecordSession : MonoBehaviour
                 Ctl(RomMenuItem.Button("adj-", "-1°", 0, 0, 0, NavTint, repeat: true));
                 Ctl(RomMenuItem.Button("adj+", "+1°", 0, 0, 0, NavTint, repeat: true));
             }
+        }
+
+        void AddAt(RomMenuItem it, int c, float row)
+        {
+            it.col = ColX(c);
+            it.row = row;
+            it.span = CtlSpan;
+            items.Add(it);
         }
 
         var arr = items.ToArray();
