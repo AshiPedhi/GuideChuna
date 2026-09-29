@@ -740,7 +740,6 @@ public class RomRecordSession : MonoBehaviour
         glab = c7 + f * 0.12f + up * 0.11f;
         ear = c7 + f * 0.08f + up * 0.11f + r * 0.04f;   // 오른쪽 귀 쪽(축은 정중면으로 옮긴 점이라 좌우는 각에 영향 없다)
         hasC7 = hasGlab = hasEar = true;
-        frontAimed = false;   // ★실제 대추·미간을 찍으면 그때 한 번 정면을 다시 잡게 둔다
         Debug.Log($"[실측기록] 기준점 기본 자리 — 대추 {Fmt(c7)} · 외이도 {Fmt(ear)} · 미간 {Fmt(glab)} " +
                   $"(눈 {Fmt(eye.position)} 앞 {defaultC7Distance * 100f:F0}cm · 아래 {defaultC7BelowEye * 100f:F0}cm · 정면 {yaw:F0}°)");
     }
@@ -1414,10 +1413,7 @@ public class RomRecordSession : MonoBehaviour
             case "t0" + RomMenuItem.HoldSuffix: SetTarget(0); break;
             case "t1" + RomMenuItem.HoldSuffix: SetTarget(1); break;
             case "t2" + RomMenuItem.HoldSuffix: SetTarget(2); break;
-            case "aim":
-                frontAimed = false;      // 다시 잡게 풀어 준다
-                AimFrontFromLandmarks();
-                break;
+            // ★[정면 다시](aim)는 09-29에 없앴다 — 대추·미간이 바뀔 때마다 정면이 저절로 맞는다.
             case "up": Nudge(u * mm); break;
             case "down": Nudge(-u * mm); break;
             case "fwd": Nudge(f * mm); break;
@@ -1471,32 +1467,30 @@ public class RomRecordSession : MonoBehaviour
     /// ★부호를 추론으로 정하지 않았다(규칙 9). 두 점의 차라 뒤집힐 여지가 없다.
     ///   그래도 <b>Play에서 '환자 앞' 글자가 실제 환자 앞을 가리키는지 눈으로 봐야 한다.</b>
     /// </summary>
-    private bool frontAimed;   // 정면을 이미 한 번 잡았나
+    /// ★★09-29 사용자: "미간 설정하면 자동으로 정면 조정하고, 드래그든 버튼으로 옮기든 자동 정렬되게."
+    ///   → 대추·미간이 <b>바뀔 때마다</b> 다시 잡는다. [정면 다시]·↺↻는 없앴다.
+    ///   ★09-21엔 «처음 한 번만»이었다 — 핀치로 찍을 때마다 다시 잡았더니 정면이 347→1→97→172…°로 튀었다(찍힌 점 자체가 흔들렸다).
+    ///   지금은 버튼·손끝으로 찍으니 점이 덜 흔들리지만, 두 점이 수평으로 너무 가까우면(3cm 미만) 방향이 튀므로 그때는 안 바꾼다.
+    /// </summary>
+    private const float AimMinFlat = 0.03f;
 
-    private void AimFrontFromLandmarks()
+    /// <param name="log">끄는 중(매 프레임)에는 false — 로그는 놓을 때 한 번.</param>
+    private void AimFrontFromLandmarks(bool log = true)
     {
         if (!hasC7 || !hasGlab) return;
-        // ★★09-21 실측: 미간을 찍을 때마다 다시 잡았더니 정면이 347→1→97→172→121→258→156→316→133°로
-        //   판마다 튀었다. 사용자가 ↺↻로 맞춰 놔도 다시 찍으면 날아가니 악순환이었다.
-        //   → <b>처음 한 번만</b> 잡는다. 다시 잡고 싶으면 [정면] 버튼을 누른다.
-        if (frontAimed)
-        {
-            Debug.Log("[실측기록] 정면은 이미 잡혀 있다 — 다시 잡으려면 [정면]을 누른다.");
-            return;
-        }
         Vector3 flat = Vector3.ProjectOnPlane(glab - c7, Vector3.up);
-        if (flat.sqrMagnitude < 1e-4f)
+        if (flat.magnitude < AimMinFlat)
         {
-            Debug.Log("[실측기록] ★대추와 미간이 거의 수직으로 겹쳐 정면을 못 잡았다 — ↺↻로 맞춘다.");
+            if (log) Debug.Log($"[실측기록] ★대추와 미간이 수평으로 {flat.magnitude * 100f:F1}cm뿐이라 정면을 안 바꿨다(최소 {AimMinFlat * 100f:F0}cm).");
             return;
         }
         float before = yaw;
         yaw = Quaternion.LookRotation(flat.normalized, Vector3.up).eulerAngles.y;
-        frontAimed = true;
+        if (!log) return;
         // ★미간이 대추보다 낮으면 잘못 찍었을 가능성이 크다 — 중립에서는 이마가 목 뒤보다 위다.
         string warn = glab.y < c7.y ? " ★미간이 대추보다 낮다 — 잘못 찍었는지 본다" : "";
-        Debug.Log($"[실측기록] 환자 정면을 대추→미간으로 잡았다 — {before:F0}° → {yaw:F0}° " +
-                  $"(수평 거리 {flat.magnitude * 100f:F0}cm · ↺↻로 다듬는다){warn}");
+        Debug.Log($"[실측기록] 환자 정면을 대추→미간으로 맞췄다 — {before:F0}° → {yaw:F0}°(변화 {Mathf.DeltaAngle(before, yaw):+0;-0;0}°) " +
+                  $"· 수평 거리 {flat.magnitude * 100f:F0}cm{warn}");
     }
 
     /// <summary>
@@ -1558,9 +1552,9 @@ public class RomRecordSession : MonoBehaviour
             Debug.Log($"[실측기록] 미간(중립) {Fmt(glab)}");
         }
         landmarkCaptured[t] = true;
-        // ★정면은 대추·미간을 <b>둘 다 찍은</b> 뒤에 한 번 잡는다(09-28) — 하나가 기본 자리면
-        //   «기본 대추 → 실제 미간»처럼 엉뚱한 방향이 나온다. 기본 자리끼리는 내 시선 방향 그대로다.
-        if ((t == 0 || t == 1) && landmarkCaptured[0] && landmarkCaptured[1]) AimFrontFromLandmarks();
+        // ★대추·미간을 찍으면 곧바로 정면을 맞춘다(09-29 사용자: "미간 설정하면 자동으로 정면 조정").
+        //   09-28엔 둘 다 «찍은» 뒤에만 잡았다(기본 대추 + 실제 미간이면 방향이 엉뚱할 수 있어서) — 사용자 지시로 늘 맞춘다.
+        if (t == 0 || t == 1) AimFrontFromLandmarks();
         landmarkPlacedTime[t == 0 ? 0 : t == 1 ? 1 : 2] = Time.unscaledTime;   // 즉시 고침을 재는 기준
         // ★다음은 자동으로 넘기지 않고 말로 알린다(09-22 사용자) — 사용자가 버튼을 누른다.
         int nextT = NextUnsetLandmark();
@@ -1582,6 +1576,8 @@ public class RomRecordSession : MonoBehaviour
         if (landmarkTarget == 0 && hasC7) c7 += d;
         else if (landmarkTarget == 1 && hasGlab) glab += d;
         else if (landmarkTarget == 2 && hasEar) ear += d;
+        // ★버튼으로 옮겨도 정면이 따라 맞는다(09-29). 반복 버튼이라 로그는 끈다.
+        if (landmarkTarget == 0 || landmarkTarget == 1) AimFrontFromLandmarks(false);
     }
 
     private void GoTo(RomRecordStep s)
@@ -2009,10 +2005,11 @@ public class RomRecordSession : MonoBehaviour
         switch (dragTarget)
         {
             case 0: frameOrigin = v; break;
-            case 1: c7 = v; break;
+            // ★끌어도 정면이 따라 맞는다(09-29) — 매 프레임이라 로그는 놓을 때(EndDrag) 한 번.
+            case 1: c7 = v; AimFrontFromLandmarks(false); break;
             // ★미간을 대추보다 낮게 끌 수 없다(2026-09-22 사용자 지시, 마진 없음) — 마커 생성과 같은 규칙이다.
             //   대추(dragTarget==1) 자신은 기준점이라 이 게이트를 안 건다.
-            case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; break;
+            case 2: glab = hasC7 ? new Vector3(v.x, Mathf.Max(v.y, c7.y), v.z) : v; AimFrontFromLandmarks(false); break;
             case 8: ear = v; break;
             case 9:
                 leftMenu.MoveTo(v);   // ★위치 조정 판은 09-28 오후부터 환자 뒤에 따로 선다 — 같이 옮기지 않는다
@@ -2061,6 +2058,7 @@ public class RomRecordSession : MonoBehaviour
                    : dragTarget == 9 ? leftMenu.Position
                    : dragTarget == 10 ? nudgeMenu.Position : glab;
         Debug.Log($"[실측기록] 놓았다 — {DragName(dragTarget)} {Fmt(at)}");
+        if (dragTarget == 1 || dragTarget == 2) AimFrontFromLandmarks();   // ★끄는 동안 맞춘 정면을 한 번 로그로 남긴다(09-29)
         dragTarget = -1;
         Play(sndPinch);
         dirty = true;
