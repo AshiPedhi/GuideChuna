@@ -790,6 +790,15 @@ public class RomRecordSession : MonoBehaviour
         Vector3 pivot = Pivot;
         normal = RomRecordGeometry.PlaneNormal(step, yaw);
         zero = RomRecordGeometry.ScaleZero(step, yaw);
+        // ★★점찍기(바늘 끔)에서는 눈금 0°를 <b>축 → 미간 선</b>(중립선)에 맞춘다(2026-09-29 밤 사용자 선택 A).
+        //   점의 각은 원래부터 이 선에서 잰다(AngleOf = PlaneAngle(축, 미간, 점)) — 눈금만 연직 0°라 점 자리의 눈금과
+        //   기록 숫자가 달랐다. 바늘 모드는 09-16 정의대로 연직 0°를 둔다(★두 모드의 기준이 갈린다 — 교수님 회의 안건).
+        //   ★부호를 추론하지 않는다(규칙 9) — 두 점의 차를 단면에 투영한 방향 그대로다.
+        if (!needleOn && hasGlab)
+        {
+            Vector3 neutral = Vector3.ProjectOnPlane(glab - pivot, normal);
+            if (neutral.sqrMagnitude > 1e-6f) zero = neutral.normalized;
+        }
         // 회전 눈금판은 미간 높이의 수평면에 둔다 — 회전 중심 높이에 두면 머리에 가려 안 보인다.
         center = step == RomRecordStep.Rotation && hasGlab ? new Vector3(pivot.x, glab.y, pivot.z) : pivot;
         radius = hasGlab
