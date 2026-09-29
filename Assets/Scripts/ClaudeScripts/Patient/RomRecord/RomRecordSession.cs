@@ -216,6 +216,11 @@ public class RomRecordSession : MonoBehaviour
              "★판의 쿨다운(0.5초)보다 길어야 한다 — 짧으면 길게 누르기가 쿨다운에 먹힌다.")]
     [SerializeField] private float landmarkRecaptureSeconds = 1f;
 
+    [Header("=== 점찍기(2026-09-29) ===")]
+    [Tooltip("동작 단계 점찍기 — 오므린 채로 이만큼(초) 유지하면 그 자리에 찍힌다. 펴는 순간은 안 쓴다.\n" +
+             "★짧게 스친 핀치는 이보다 먼저 펴져 안 찍힌다.")]
+    [SerializeField] private float markHoldSeconds = 0.1f;
+
     [Header("=== 나가기 ===")]
     [Tooltip("[나가기]를 이만큼(초) 누르고 있어야 나간다. ★09-21: 지탱하던 손이 스쳐 나가기가 눌렸다.")]
     [SerializeField] private float exitHoldSeconds = 1f;
@@ -294,6 +299,11 @@ public class RomRecordSession : MonoBehaviour
     private bool dirty = true;
     private bool livePinchLeft;            // 지금 오므리고 있는 손(한 번에 하나만 받는다)
     private bool liveActive;
+    // ★점찍기는 «오므린 채 유지»로 찍는다(09-29 사용자: "드래그 없애고 — 오므린 상태로 유지하면 찍기, 그게 더 정확").
+    //   종전엔 오므린 동안 노란 구가 손을 따라다니다 <b>펴는 순간</b> 찍혔다(펴는 동작에 손이 튄다).
+    private bool markPending;       // 오므렸고 아직 안 찍었다(markHoldSeconds를 기다린다)
+    private bool markDone;          // 이번 핀치로 이미 찍었다 — 펴도 아무것도 안 한다
+    private float markPendStart;
     // ★바늘(09-21) — 단계마다 <b>넷</b>이다: 한 탭에 방향 둘 × (능동·압박).
     // ★★09-28부터 바늘은 <b>방향에 묶인다</b>(사용자: "굴곡 신전 우측굴 좌측굴 우회전 좌회전 순서, 탭은 3개 유지").
     //   k = 0 첫 방향 능동 · 1 첫 방향 압박 · 2 둘째 방향 능동 · 3 둘째 방향 압박.
@@ -1615,6 +1625,7 @@ public class RomRecordSession : MonoBehaviour
         {
             liveActive = true;
             livePinchLeft = isLeft;
+            markPending = markDone = false;
             // ★잡을 것이 있으면 «찍기»가 아니라 «잡아 끌기»다. 없으면 종전대로 찍는다.
             dragTarget = FindDragTarget(st.current, out dragStartValue);
             if (dragTarget >= 0)
@@ -1632,6 +1643,10 @@ public class RomRecordSession : MonoBehaviour
             {
                 // ★잡을 것이 없었다 — <b>왜</b> 없었는지를 센다(핀치는 여기서 «찍기»로 넘어간다).
                 CountNearMiss(st.current);
+                // ★동작 단계 점찍기는 «유지하면 찍기»로 간다(09-29). 다른 단계·바늘 모드는 종전대로 펼 때 처리한다.
+                markPending = IsMotion(step) && !needleOn;
+                markDone = false;
+                markPendStart = Time.unscaledTime;
             }
         }
         if (liveActive && livePinchLeft == isLeft)
@@ -1639,21 +1654,40 @@ public class RomRecordSession : MonoBehaviour
             if (st.closed)
             {
                 if (dragTarget >= 0) ApplyDrag(st.current);
+                else if (markPending)
+                {
+                    // 기다리는 동안만 노란 구로 «찍히려는 자리»를 보인다. 유지되면 그 자리에 찍는다.
+                    view.SetLive(true, st.current);
+                    if (Time.unscaledTime - markPendStart >= markHoldSeconds)
+                    {
+                        markPending = false;
+                        markDone = true;
+                        view.SetLive(false, Vector3.zero);
+                        OnPinchFixed(st.current);
+                    }
+                }
                 // ★바늘 모드에서는 «찍는 중» 표시를 아예 안 낸다(2026-09-23 사용자: "바늘 모드일 때
                 //   핀치로 마커 포인트 생기는 거 끄고"). 점은 종전에도 안 찍혔지만 노란 구가 떠서
                 //   <b>찍히는 것처럼 보였다</b> — 핀치는 잡아 끌기 전용이다.
-                else if (!needleOn) view.SetLive(true, st.current);
+                else if (!needleOn && !markDone) view.SetLive(true, st.current);
             }
             if (ev == 2)
             {
                 liveActive = false;
                 view.SetLive(false, Vector3.zero);
                 if (dragTarget >= 0) EndDrag();
-                else OnPinchFixed(fixedPos);
+                else if (markPending)
+                {
+                    // ★유지 시간을 못 채우고 폈다 — 스친 핀치로 보고 안 찍는다.
+                    CountMiss(Miss.PinchIgnored, $"점찍기 핀치를 {markHoldSeconds:F2}초 못 채우고 폈다");
+                }
+                else if (!markDone) OnPinchFixed(fixedPos);
+                markPending = markDone = false;
             }
             else if (ev == 3 || ev == 4)
             {
                 liveActive = false;
+                markPending = markDone = false;
                 view.SetLive(false, Vector3.zero);
                 // ★놓친 드래그는 되돌리지 않는다 — 옮긴 자리를 그대로 둔다(되돌리면 더 놀란다).
                 if (dragTarget >= 0) EndDrag();
