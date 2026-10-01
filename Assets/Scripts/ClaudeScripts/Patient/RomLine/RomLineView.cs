@@ -32,8 +32,8 @@ public class RomLineView
     private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
 
     public static readonly string[] ButtonIds = { "tab0", "tab1", "tab2", "tab3", "redo", "reset", "exit" };
-    private static readonly string[] TabNames = { "중립", "굴곡·신전", "측굴", "회전" };
-    private static readonly string[] ButtonNames = { "이 동작 다시", "중립 다시", "나가기" };
+    private static readonly string[] TabNames = { "기준", "굴곡·신전", "측굴", "회전" };
+    private static readonly string[] ButtonNames = { "이 동작 다시", "전부 다시", "나가기" };
 
     private Transform root;
     private Material mat;
@@ -52,7 +52,7 @@ public class RomLineView
 
     // 환자 위 표시
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
-    private readonly TextMeshPro[] neutralLabels = new TextMeshPro[4];
+    private readonly TextMeshPro[] neutralLabels = new TextMeshPro[2];   // 기준(양쪽 Tr) 이름표
     private LineRenderer neutralLine, activeLine, pressureLine, arc;
     private TextMeshPro activeText, pressureText;
     private readonly Vector3[] arcPoints = new Vector3[ArcSegments + 1];
@@ -74,11 +74,13 @@ public class RomLineView
         // ── 점 ──
         for (int i = 0; i < spheres.Length; i++)
         {
-            Color c = i < 4 ? NeutralColor : (((i - 4) / 2) % 2 == 0 ? ActiveColor : PressureColor);
+            // 0·1 = 기준(양쪽 Tr) · 그 뒤로 동작마다 중립 2 · 능동 2 · 압박 2
+            int phase = i < 2 ? 0 : ((i - 2) / 2) % 3;
+            Color c = phase == 0 ? NeutralColor : phase == 1 ? ActiveColor : PressureColor;
             spheres[i] = MakeSphere("점", PointRadius, c);
             spheres[i].gameObject.SetActive(false);
         }
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < neutralLabels.Length; i++)
         {
             neutralLabels[i] = MakeText(root, RomLineSession.PointName[i], 0.07f, TextAlignmentOptions.Center, 5);
             neutralLabels[i].gameObject.SetActive(false);
@@ -264,7 +266,7 @@ public class RomLineView
     {
         if (spheres[index].gameObject.activeSelf != show) spheres[index].gameObject.SetActive(show);
         if (show) spheres[index].position = pos;
-        if (index < 4)
+        if (index < neutralLabels.Length)
         {
             if (neutralLabels[index].gameObject.activeSelf != show) neutralLabels[index].gameObject.SetActive(show);
             if (show) neutralLabels[index].transform.position = pos + Vector3.up * 0.018f;
@@ -326,6 +328,34 @@ public class RomLineView
         }
     }
 
+    /// <summary>
+    /// 면으로 옮기지 않은 3차원 선을 그대로 그린다(기준 Tr을 안 찍었을 때). 두 선은 공간에서 엇갈릴 수 있어
+    /// 각도기 호는 그리지 않고, 가장 가까운 자리에 값만 띄운다.
+    /// </summary>
+    public void ShowDirect(Vector3 nA, Vector3 nB, Vector3 aA, Vector3 aB, Vector3 pivot, string activeLabel,
+                           bool hasPressure, Vector3 pA, Vector3 pB, string pressureLabel)
+    {
+        HideMeasure();
+        DrawRaw(neutralLine, nA, nB);
+        DrawRaw(activeLine, aA, aB);
+        activeText.text = activeLabel;
+        activeText.transform.position = pivot + Vector3.up * 0.03f;
+        activeText.gameObject.SetActive(true);
+        if (hasPressure)
+        {
+            DrawRaw(pressureLine, pA, pB);
+            pressureText.text = pressureLabel;
+            pressureText.transform.position = pB + (pB - pA).normalized * (LineMargin + 0.025f);
+            pressureText.gameObject.SetActive(true);
+        }
+    }
+
+    private static void DrawRaw(LineRenderer lr, Vector3 a, Vector3 b)
+    {
+        Vector3 d = (b - a).normalized;
+        DrawLine(lr, a - d * LineMargin, b + d * LineMargin);
+    }
+
     // 선을 두 점과 교점을 모두 덮게 편다(교점이 실제 교점일 때만 교점까지 뻗는다).
     private static void Span(Vector3 a, Vector3 b, Vector3 dir, Vector3 pivot, bool usePivot, out float min, out float max)
     {
@@ -366,7 +396,7 @@ public class RomLineView
                 Face(tipLabel.transform, eye);
             }
         }
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < neutralLabels.Length; i++)
             if (neutralLabels[i].gameObject.activeSelf) Face(neutralLabels[i].transform, eye);
         if (activeText.gameObject.activeSelf) Face(activeText.transform, eye);
         if (pressureText.gameObject.activeSelf) Face(pressureText.transform, eye);

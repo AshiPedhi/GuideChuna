@@ -14,13 +14,17 @@ public enum RomLinePoint
 /// ★경추 ROM «선 실측» — 본체(2026-10-01 신설, 전용 씬 <c>RomLineScene</c>에서 돈다).
 ///
 /// 9/30 교수님 피드백으로 바뀐 방식이다. 기존 실측(<c>RomRecordSession</c> · <c>RomMarkerScene</c>)은 <b>그대로 두고</b> 따로 만든다.
-///   · 중립에서 네 점(오른쪽 Tr · 왼쪽 Tr · Gl · Gn)을 찍는다 → 환자 기준 방향 + 세 동작의 중립 기준선
-///   · 동작마다 능동 2점 · 압박 2점을 찍는다 → 중립 기준선에서 돌아간 각(환자 기준 면 위에서 잰다)
-///   · 순서 고정: 중립 → 굴곡 → 신전 → 우측굴 → 좌측굴 → 우회전 → 좌회전(각각 능동 → 압박)
+///   · 기준: 양쪽 Tr 두 점(건너뛸 수 있다) → 환자 기준 방향
+///   · 동작마다 <b>직선 셋</b>: 중립 2점 → 능동 2점 → 압박 2점. 여섯 동작이라 직선은 18개다
+///   · 값 둘을 나란히 낸다: «직접» = 3차원에서 두 선의 각을 그대로(기준 없이도 나온다) /
+///     «면» = 환자 기준 면 위로 옮겨 잰 각(기준 Tr을 찍었을 때만)
+///   · 순서 고정: 기준 → 굴곡 → 신전 → 우측굴 → 좌측굴 → 우회전 → 좌회전(각각 중립 → 능동 → 압박)
+///   ★10-01 첫 판은 «중립 네 점을 한 번 찍어 모든 동작의 중립선으로 돌려쓰는» 구조였다(28점). 사용자 지시로
+///     «기준은 양쪽 Tr만 · 중립선은 동작마다 찍는다(18직선)»로 바꿨다(38점, 기준을 건너뛰면 36점).
 ///
 /// 조작은 <b>컨트롤러 하나</b>다(주로 오른손, 바꿔 쥐면 그쪽이 그대로 동작). 반대 손은 환자를 잡는 데 쓴다.
 ///   트리거 = 점 찍기 · 아래 버튼(A/X) = 한 점 취소 · 위 버튼(B/Y) = 건너뛰기 · 그립 = 판 옮기기 · 스틱 좌우 = 앞뒤 단계
-///   판의 버튼은 컨트롤러 끝을 버튼에 대고 트리거를 당긴다(«중립 다시»·«나가기»는 1초 길게).
+///   판의 버튼은 컨트롤러 끝을 버튼에 대고 트리거를 당긴다(«전부 다시»·«나가기»는 1초 길게).
 ///   ★레이로 멀리서 누르게 하지 않았다 — 환자 머리에 점을 찍는 순간 뒤에 있는 판이 눌리는 일을 막으려고.
 ///
 /// ★임시로 정해 둔 것(사용자 답 대기, 10-01): 각이 작아 교점이 멀면 각도기를 중립선 첫 점에 세운다 ·
@@ -28,12 +32,12 @@ public enum RomLinePoint
 /// </summary>
 public class RomLineSession : MonoBehaviour
 {
-    public const int GroupCount = 13;          // 중립 1 + 6동작 × (능동·압박)
-    public const int PointCount = 28;          // 중립 4 + 12 × 2
+    public const int GroupCount = 19;          // 기준 1 + 6동작 × (중립·능동·압박)
+    public const int PointCount = 38;          // 묶음마다 2점
 
     public static readonly string[] MotionName = { "굴곡", "신전", "우측굴", "좌측굴", "우회전", "좌회전" };
     public static readonly string[] PointName = { "오른쪽 Tr", "왼쪽 Tr", "Gl", "Gn" };
-    private static readonly string[] PhaseName = { "능동", "압박" };
+    private static readonly string[] PhaseName = { "중립", "능동", "압박" };
 
     [Header("=== 컨트롤러 ===")]
     [Tooltip("컨트롤러 기준 «찍는 점»의 자리(m, 오른손 기준 — 왼손은 x를 뒤집어 쓴다). 노란 점이 여기에 뜬다.\n" +
@@ -50,7 +54,7 @@ public class RomLineSession : MonoBehaviour
     private readonly RomLineResult[] results = new RomLineResult[12];
     private readonly RomLineDirect[] direct = new RomLineDirect[12];   // 비교용 — 면으로 옮기지 않고 3차원에서 잰 값
     private RomLineFrame frame;
-    private int group;      // 0 = 중립, 1~12 = 동작·단계, 13 = 끝
+    private int group;      // 0 = 기준(양쪽 Tr), 1~18 = 동작 × (중립·능동·압박), 19 = 끝
     private int index;      // 그 묶음 안에서 다음에 찍을 점
 
     // 입력
@@ -88,8 +92,11 @@ public class RomLineSession : MonoBehaviour
     private bool Done => group >= GroupCount;
 
     // ── 단계 ↔ 점 ───────────────────────────────────────────────────
-    private static int GroupStart(int g) => g == 0 ? 0 : 4 + (g - 1) * 2;
-    private static int GroupSize(int g) => g == 0 ? 4 : 2;
+    private const int GroupSize = 2;
+    private static int GroupStart(int g) => g * 2;
+    private static int MotionOf(int g) => (g - 1) / 3;
+    private static int PhaseOf(int g) => (g - 1) % 3;          // 0 중립 · 1 능동 · 2 압박
+    private static int GroupOf(int motion, int phase) => 1 + motion * 3 + phase;
 
     /// <summary>그 동작이 쓰는 두 점. ★검증기(RomLineVerify)도 이 함수를 그대로 쓴다.</summary>
     public static void LineOf(RomLineMotion m, out RomLinePoint a, out RomLinePoint b)
@@ -107,8 +114,8 @@ public class RomLineSession : MonoBehaviour
 
     private RomLinePoint ExpectedPoint(int g, int i)
     {
-        if (g == 0) return (RomLinePoint)i;
-        LineOf((RomLineMotion)((g - 1) / 2), out RomLinePoint a, out RomLinePoint b);
+        if (g == 0) return (RomLinePoint)i;   // 기준: 오른쪽 Tr → 왼쪽 Tr
+        LineOf((RomLineMotion)MotionOf(g), out RomLinePoint a, out RomLinePoint b);
         return i == 0 ? a : b;
     }
 
@@ -245,7 +252,7 @@ public class RomLineSession : MonoBehaviour
         if (onPanel)
         {
             if (button != holdButton) { holdButton = -1; }
-            bool needHold = button >= 5;   // «중립 다시» · «나가기»
+            bool needHold = button >= 5;   // «전부 다시» · «나가기»
             if (button >= 0 && triggerDown)
             {
                 if (needHold) { holdButton = button; holdStart = Time.unscaledTime; Play(sndPress); }
@@ -295,60 +302,62 @@ public class RomLineSession : MonoBehaviour
     {
         if (Done) { Deny("측정이 끝났다 — 다시 재려면 탭이나 스틱으로 그 단계로 간다"); return; }
 
-        int start = GroupStart(group), size = GroupSize(group);
+        int start = GroupStart(group);
         if (index == 0)
         {
             // 이미 찍은 묶음에 다시 들어와 첫 점을 찍으면 그 묶음을 새로 잰다.
-            for (int i = 0; i < size; i++) has[start + i] = false;
-            if (group == 0) InvalidateAll();
-            else ClearResult(group - 1);
+            has[start] = has[start + 1] = false;
+            Invalidate(group);
         }
 
         RomLinePoint which = ExpectedPoint(group, index);
         points[start + index] = pos;
         has[start + index] = true;
-        Debug.Log($"[선실측] 찍음 — {GroupTitle(group)} · {PointName[(int)which]} ({index + 1}/{size}) · 자리 {pos:F3} · " +
+        Debug.Log($"[선실측] 찍음 — {GroupTitle(group)} · {PointName[(int)which]} ({index + 1}/{GroupSize}) · 자리 {pos:F3} · " +
                   $"당기는 동안 끝점 이동 {shake * 1000f:F1}mm");
         index++;
         noteText = "";
         Play(sndMark);
 
-        if (index >= size) CompleteGroup();
+        if (index >= GroupSize) CompleteGroup();
         dirty = true;
     }
 
     private void CompleteGroup()
     {
+        int start = GroupStart(group);
+        if (Vector3.Distance(points[start], points[start + 1]) < 0.005f)
+        {
+            has[start] = has[start + 1] = false;
+            index = 0;
+            Deny("두 점이 같은 자리에 찍혔다 — 다시 찍는다");
+            return;
+        }
+
         if (group == 0)
         {
-            frame = RomLineMath.BuildFrame(points[0], points[1], points[2]);
+            frame = RomLineMath.BuildFrame(points[0], points[1]);
             if (!frame.valid)
             {
-                for (int i = 0; i < 4; i++) has[i] = false;
+                has[0] = has[1] = false;
                 index = 0;
-                Deny("양쪽 Tr이 같은 자리에 찍혔다 — 중립을 다시 찍는다");
+                Deny("양쪽 Tr이 위아래로 겹쳐 찍혔다 — 기준을 다시 찍는다");
                 return;
             }
-            if (frame.sidesSwapped)
-            {
-                (points[0], points[1]) = (points[1], points[0]);
-                noteText = "양쪽 Tr이 바뀌어 찍혀 바로잡았다";
-                Debug.Log("[선실측] ★양쪽 Tr을 바꿔 찍은 것으로 보인다(Gl이 뒤쪽에 있었다) — 좌우를 바로잡았다.");
-            }
-            Debug.Log($"[선실측] 기준 방향 — 오른쪽 {frame.right:F2} · 앞 {frame.forward:F2} · 위 {frame.up:F2} · " +
-                      $"Tr 간격 {Vector3.Distance(points[0], points[1]) * 100f:F1}cm · Tr~Gl {Vector3.Distance(points[0], points[2]) * 100f:F1}cm · " +
-                      $"Gl~Gn {Vector3.Distance(points[2], points[3]) * 100f:F1}cm");
-            for (int g = 1; g < GroupCount; g++) Compute(g);   // 중립만 다시 찍었을 때 남아 있는 측정을 새 기준으로 다시 잰다
+            Debug.Log($"[선실측] 기준 방향 — 오른쪽 {frame.right:F2} · 앞뒤 {frame.forward:F2} · 위 {frame.up:F2} · " +
+                      $"Tr 간격 {Vector3.Distance(points[0], points[1]) * 100f:F1}cm");
+            for (int m = 0; m < 6; m++) { FaceCheck(m); RecomputeMotion(m); }   // 기준만 다시 찍었을 때 남아 있는 측정을 다시 잰다
         }
         else
         {
-            Compute(group);
-            if (!results[group - 1].valid)
+            int m = MotionOf(group), ph = PhaseOf(group);
+            if (ph == 0)
             {
-                has[GroupStart(group)] = has[GroupStart(group) + 1] = false;
-                index = 0;
-                return;
+                Debug.Log($"[선실측] 중립선 — {MotionName[m]} · 길이 {Vector3.Distance(points[start], points[start + 1]) * 100f:F1}cm");
+                FaceCheck(m);
+                RecomputeMotion(m);
             }
+            else Compute(m, ph);
         }
 
         group++;
@@ -360,38 +369,87 @@ public class RomLineSession : MonoBehaviour
         }
     }
 
-    /// <summary>그 묶음의 두 점이 다 있으면 각을 낸다.</summary>
-    private void Compute(int g)
+    /// <summary>
+    /// 그 동작의 중립선에 든 Gl로 앞뒤를 확인한다. Gl이 뒤쪽에 있으면 양쪽 Tr을 바꿔 찍은 것이라 좌우를 바로잡는다.
+    /// ★각의 크기는 안 바뀐다 — 부호(방향이 맞는가 판정)만 바뀐다.
+    /// </summary>
+    private void FaceCheck(int m)
     {
-        ClearResult(g - 1);
-        int start = GroupStart(g);
-        if (!frame.valid || !has[start] || !has[start + 1]) return;
+        if (!frame.valid) return;
+        int n0 = GroupStart(GroupOf(m, 0));
+        if (!has[n0] || !has[n0 + 1]) return;
+        LineOf((RomLineMotion)m, out RomLinePoint a, out RomLinePoint b);
+        int gi = a == RomLinePoint.Gl ? 0 : b == RomLinePoint.Gl ? 1 : -1;
+        if (gi < 0) return;
+        if (!RomLineMath.FaceForward(ref frame, (points[0] + points[1]) * 0.5f, points[n0 + gi])) return;
 
-        var motion = (RomLineMotion)((g - 1) / 2);
-        LineOf(motion, out RomLinePoint a, out RomLinePoint b);
-        Vector3 normal = RomLineMath.PlaneNormal(motion, frame);
-        RomLineResult r = RomLineMath.Measure(points[(int)a], points[(int)b], points[start], points[start + 1], normal);
-        results[g - 1] = r;
-        RomLineDirect dr = RomLineMath.MeasureDirect(points[(int)a], points[(int)b], points[start], points[start + 1]);
-        direct[g - 1] = dr;
+        (points[0], points[1]) = (points[1], points[0]);
+        noteText = "양쪽 Tr이 바뀌어 찍혀 바로잡았다";
+        Debug.Log("[선실측] ★양쪽 Tr을 바꿔 찍은 것으로 보인다(Gl이 뒤쪽에 있었다) — 좌우를 바로잡았다.");
+        for (int k = 0; k < 6; k++) RecomputeMotion(k);
+    }
 
+    private void RecomputeMotion(int m)
+    {
+        Compute(m, 1);
+        Compute(m, 2);
+    }
+
+    /// <summary>그 동작의 중립선과 측정선(ph 1 능동 · 2 압박)이 다 있으면 각을 낸다.</summary>
+    private void Compute(int m, int ph)
+    {
+        int slot = m * 2 + ph - 1;
+        ClearResult(slot);
+        int n0 = GroupStart(GroupOf(m, 0)), s0 = GroupStart(GroupOf(m, ph));
+        if (!has[n0] || !has[n0 + 1] || !has[s0] || !has[s0 + 1]) return;
+
+        var motion = (RomLineMotion)m;
+        string title = MotionName[m] + " · " + PhaseName[ph];
+
+        // 직접 — 기준 없이 3차원에서 그대로.
+        RomLineDirect dr = RomLineMath.MeasureDirect(points[n0], points[n0 + 1], points[s0], points[s0 + 1]);
+        direct[slot] = dr;
+        if (!dr.valid) { Debug.LogWarning($"[선실측] ★{title} — 각을 못 냈다(같은 자리를 두 번 찍었다)."); return; }
+
+        // 면 — 기준(양쪽 Tr)이 있을 때만.
+        if (!frame.valid)
+        {
+            Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · 면 위 —(기준 Tr을 안 찍었다)");
+            return;
+        }
+        RomLineResult r = RomLineMath.Measure(points[n0], points[n0 + 1], points[s0], points[s0 + 1], RomLineMath.PlaneNormal(motion, frame));
+        results[slot] = r;
         if (!r.valid)
         {
-            Debug.LogWarning($"[선실측] ★{GroupTitle(g)} — 각을 못 냈다(두 점이 같은 자리이거나 선이 면에 수직이다).");
-            if (g == group) Deny("각을 못 냈다 — 두 점을 다시 찍는다");
+            Debug.LogWarning($"[선실측] ★{title} — 면 위 각을 못 냈다(선이 면에 수직이다). 직접 {dr.angle:F1}°");
             return;
         }
 
         bool match = RomLineMath.DirectionMatches(motion, r.signedAngle);
-        Debug.Log($"[선실측] 값 — {GroupTitle(g)} {r.angle:F1}° (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
-                  $"면 밖 각 중립선 {r.neutralOffPlane:F1}° → 측정선 {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}° — 다른 동작이 섞인 정도) · " +
-                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")} · " +
-                  $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm");
-        if (!match && g == group)
+        Debug.Log($"[선실측] 값 — {title} 면 위 {r.angle:F1}° (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
+                  $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · " +
+                  $"면 밖 각 중립선 {r.neutralOffPlane:F1}° → 측정선 {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}°) · " +
+                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")}");
+        if (!match && GroupOf(m, ph) == group)
         {
-            noteText = $"{MotionName[(int)motion]} 단계인데 반대쪽으로 움직인 값이다";
+            noteText = $"{MotionName[m]} 단계인데 반대쪽으로 움직인 값이다";
             Play(sndDeny);
         }
+    }
+
+    /// <summary>그 묶음의 점이 바뀌면 거기에 기대던 값을 지운다.</summary>
+    private void Invalidate(int g)
+    {
+        if (g == 0)
+        {
+            frame = default;
+            for (int i = 0; i < results.Length; i++) results[i] = default;   // 면 값만 — 직접 값은 기준과 무관하다
+            return;
+        }
+        if (g >= GroupCount) return;
+        int m = MotionOf(g), ph = PhaseOf(g);
+        if (ph == 0) { ClearResult(m * 2); ClearResult(m * 2 + 1); }
+        else ClearResult(m * 2 + ph - 1);
     }
 
     private void Undo()
@@ -404,13 +462,10 @@ public class RomLineSession : MonoBehaviour
         else if (group > 0)
         {
             group = Mathf.Min(group, GroupCount) - 1;
-            index = GroupSize(group) - 1;
-            has[GroupStart(group) + index] = false;
-            // 건너뛴 묶음이면 앞 점이 없다 — 마지막 점만 찍으면 선이 안 되므로 처음부터 찍게 한다.
-            for (int i = 0; i < index; i++)
-                if (!has[GroupStart(group) + i]) { index = 0; break; }
-            if (group == 0) InvalidateAll();
-            else ClearResult(group - 1);
+            int start = GroupStart(group);
+            has[start + 1] = false;
+            Invalidate(group);
+            index = has[start] ? 1 : 0;   // 건너뛴 묶음이면 첫 점부터 찍게 한다
         }
         else { Deny("지울 점이 없다"); return; }
 
@@ -422,8 +477,8 @@ public class RomLineSession : MonoBehaviour
 
     private void Skip()
     {
-        if (!frame.valid) { Deny("중립은 건너뛸 수 없다"); return; }
         if (Done) return;
+        if (group == 0) Debug.Log("[선실측] 기준(양쪽 Tr)을 건너뛴다 — «면» 값은 안 나오고 «직접» 값만 나온다.");
         Go(group + 1, "건너뜀");
     }
 
@@ -431,8 +486,8 @@ public class RomLineSession : MonoBehaviour
     private void Go(int target, string why)
     {
         target = Mathf.Clamp(target, 0, GroupCount);
-        if (target > 0 && !frame.valid) { Deny("중립 네 점을 먼저 찍는다"); return; }
         if (target == group && index == 0) return;
+        if (index > 0) has[GroupStart(group)] = false;   // 한 점만 찍다 만 묶음은 비운다
         group = target;
         index = 0;
         noteText = "";
@@ -446,9 +501,9 @@ public class RomLineSession : MonoBehaviour
         switch (button)
         {
             case 0: Go(0, "탭"); break;
-            case 1: Go(1, "탭"); break;
-            case 2: Go(5, "탭"); break;
-            case 3: Go(9, "탭"); break;
+            case 1: Go(GroupOf(0, 0), "탭"); break;   // 굴곡·신전
+            case 2: Go(GroupOf(2, 0), "탭"); break;   // 측굴
+            case 3: Go(GroupOf(4, 0), "탭"); break;   // 회전
             case 4: RedoMotion(); break;
             case 5: ResetAll(); break;
             case 6: Exit(); break;
@@ -457,17 +512,28 @@ public class RomLineSession : MonoBehaviour
 
     private void RedoMotion()
     {
-        if (group == 0 || !frame.valid) { ResetAll(); return; }
-        int m = (Mathf.Min(group, GroupCount - 1) - 1) / 2;
-        for (int g = 1 + m * 2; g <= 2 + m * 2; g++)
+        if (group == 0)
         {
-            has[GroupStart(g)] = has[GroupStart(g) + 1] = false;
-            ClearResult(g - 1);
+            has[0] = has[1] = false;
+            Invalidate(0);
+            index = 0;
+            Debug.Log("[선실측] 이 동작 다시 — 기준");
         }
-        group = 1 + m * 2;
-        index = 0;
+        else
+        {
+            int m = MotionOf(Mathf.Min(group, GroupCount - 1));
+            for (int ph = 0; ph < 3; ph++)
+            {
+                int st = GroupStart(GroupOf(m, ph));
+                has[st] = has[st + 1] = false;
+            }
+            ClearResult(m * 2);
+            ClearResult(m * 2 + 1);
+            group = GroupOf(m, 0);
+            index = 0;
+            Debug.Log($"[선실측] 이 동작 다시 — {MotionName[m]}");
+        }
         noteText = "";
-        Debug.Log($"[선실측] 이 동작 다시 — {MotionName[m]}");
         Play(sndUndo);
         dirty = true;
     }
@@ -475,11 +541,12 @@ public class RomLineSession : MonoBehaviour
     private void ResetAll()
     {
         for (int i = 0; i < PointCount; i++) has[i] = false;
-        InvalidateAll();
+        frame = default;
+        for (int i = 0; i < 12; i++) ClearResult(i);
         group = 0;
         index = 0;
         noteText = "";
-        Debug.Log("[선실측] 중립 다시 — 전부 지웠다");
+        Debug.Log("[선실측] 전부 다시 — 전부 지웠다");
         Play(sndUndo);
         dirty = true;
     }
@@ -488,12 +555,6 @@ public class RomLineSession : MonoBehaviour
     {
         results[i] = default;
         direct[i] = default;
-    }
-
-    private void InvalidateAll()
-    {
-        frame = default;
-        for (int i = 0; i < results.Length; i++) ClearResult(i);
     }
 
     private void Exit()
@@ -514,16 +575,16 @@ public class RomLineSession : MonoBehaviour
     // ── 표시 갱신(상태가 바뀔 때만) ──────────────────────────────────
     private string GroupTitle(int g)
     {
-        if (g <= 0) return "중립";
+        if (g <= 0) return "기준";
         if (g >= GroupCount) return "측정 끝";
-        return MotionName[(g - 1) / 2] + " · " + PhaseName[(g - 1) % 2];
+        return MotionName[MotionOf(g)] + " · " + PhaseName[PhaseOf(g)];
     }
 
     private void Refresh()
     {
         dirty = false;
 
-        int tab = group == 0 ? 0 : group <= 4 ? 1 : group <= 8 ? 2 : 3;
+        int tab = group == 0 ? 0 : group <= 6 ? 1 : group <= 12 ? 2 : 3;
         string instruction, tipText;
         if (Done)
         {
@@ -533,51 +594,58 @@ public class RomLineSession : MonoBehaviour
         else
         {
             RomLinePoint p = ExpectedPoint(group, index);
-            instruction = $"{PointName[(int)p]} 을 찍으세요  ({index + 1}/{GroupSize(group)})";
+            instruction = $"{PointName[(int)p]} 을 찍으세요  ({index + 1}/{GroupSize})";
             tipText = PointName[(int)p];
         }
-        view.SetTexts(GroupTitle(group), instruction, noteText, tab, tipText);
+        string note = noteText;
+        if (note.Length == 0 && group == 0) note = "건너뛰면(B/Y) «직접» 값만 나옵니다";
+        view.SetTexts(GroupTitle(group), instruction, note, tab, tipText);
 
+        int current = group >= 1 && !Done && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;
         for (int i = 0; i < 12; i++)
             view.SetValue(i, results[i].valid ? results[i].angle.ToString("F1") + "°" : "—",
-                          direct[i].valid ? direct[i].angle.ToString("F1") + "°" : "—", i == group - 1);
+                          direct[i].valid ? direct[i].angle.ToString("F1") + "°" : "—", i == current);
 
-        // 점 — 중립 넷은 늘, 측정 점은 지금 동작 것만.
-        int motion = group == 0 ? -1 : (Mathf.Min(group, GroupCount - 1) - 1) / 2;
+        // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.
+        int motion = group == 0 ? -1 : MotionOf(Mathf.Min(group, GroupCount - 1));
         for (int i = 0; i < PointCount; i++)
         {
-            bool show = has[i] && (i < 4 || (i - 4) / 4 == motion);
+            bool show = has[i] && (i < 2 || (i - 2) / 6 == motion);
             view.SetPoint(i, show, points[i]);
         }
 
         // 선·각도기 — 지금 동작 것만.
-        if (motion < 0 || !frame.valid) { view.HideMeasure(); return; }
-        RomLineResult a = results[motion * 2], pr = results[motion * 2 + 1];
-        LineOf((RomLineMotion)motion, out RomLinePoint la, out RomLinePoint lb);
-        Vector3 normal = RomLineMath.PlaneNormal((RomLineMotion)motion, frame);
-        if (a.valid)
-            view.ShowMeasure(a, pr.valid, pr, normal, a.angle.ToString("F1") + "°", pr.valid ? "압박 " + pr.angle.ToString("F1") + "°" : "");
-        else
+        if (motion < 0) { view.HideMeasure(); return; }
+        int n0 = GroupStart(GroupOf(motion, 0)), a0 = GroupStart(GroupOf(motion, 1)), p0 = GroupStart(GroupOf(motion, 2));
+        if (!has[n0] || !has[n0 + 1]) { view.HideMeasure(); return; }
+
+        RomLineResult ra = results[motion * 2], rp = results[motion * 2 + 1];
+        RomLineDirect da = direct[motion * 2], dp = direct[motion * 2 + 1];
+        if (ra.valid)
         {
-            // 중립 기준선만 — 면 위로 옮긴 선을 그린다(능동을 찍으면 이 선과 만난다).
-            Vector3 pa = points[(int)la], pb = points[(int)lb];
-            pb -= normal * Vector3.Dot(pb - pa, normal);
-            view.ShowNeutralOnly(pa, pb);
+            Vector3 normal = RomLineMath.PlaneNormal((RomLineMotion)motion, frame);
+            view.ShowMeasure(ra, rp.valid, rp, normal, ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
         }
+        else if (da.valid)
+        {
+            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], da.pivot, da.angle.ToString("F1") + "°",
+                            dp.valid, points[p0], points[p0 + 1], dp.valid ? "압박 " + dp.angle.ToString("F1") + "°" : "");
+        }
+        else view.ShowNeutralOnly(points[n0], points[n0 + 1]);   // 중립 기준선만 — 직선만 보인다
     }
 
     private void LogSummary(string why)
     {
-        var sb = new StringBuilder(256);
+        var sb = new StringBuilder(320);
         sb.Append("[선실측] 요약(").Append(why).Append(") — ");
         for (int m = 0; m < 6; m++)
         {
-            RomLineResult a = results[m * 2], p = results[m * 2 + 1];
-            sb.Append(MotionName[m]).Append(' ')
-              .Append(a.valid ? a.angle.ToString("F1") : "—").Append('/')
-              .Append(p.valid ? p.angle.ToString("F1") : "—")
-              .Append(" [직접 ").Append(direct[m * 2].valid ? direct[m * 2].angle.ToString("F1") : "—").Append('/')
-              .Append(direct[m * 2 + 1].valid ? direct[m * 2 + 1].angle.ToString("F1") : "—").Append(']');
+            sb.Append(MotionName[m]).Append(" 면 ")
+              .Append(results[m * 2].valid ? results[m * 2].angle.ToString("F1") : "—").Append('/')
+              .Append(results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") : "—")
+              .Append(" 직접 ")
+              .Append(direct[m * 2].valid ? direct[m * 2].angle.ToString("F1") : "—").Append('/')
+              .Append(direct[m * 2 + 1].valid ? direct[m * 2 + 1].angle.ToString("F1") : "—");
             if (m < 5) sb.Append(" · ");
         }
         sb.Append("  (능동/압박, 도)");

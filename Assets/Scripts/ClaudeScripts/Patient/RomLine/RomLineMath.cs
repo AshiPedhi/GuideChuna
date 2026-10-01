@@ -70,9 +70,11 @@ public static class RomLineMath
     public const float MaxPivotDistance = 0.5f;
 
     /// <summary>
-    /// 환자 기준 방향을 만든다. 위아래 = 중력, 좌우 = 왼쪽 Tr → 오른쪽 Tr, 앞 = Gl 쪽.
+    /// 환자 기준 방향을 <b>양쪽 Tr만으로</b> 만든다. 위아래 = 중력, 좌우 = 왼쪽 Tr → 오른쪽 Tr, 앞뒤 = 그 둘에 직각.
+    /// ★각의 <b>크기</b>는 이것만으로 나온다(면은 법선의 부호와 무관하다). 앞뒤·좌우가 뒤집혔는지는 Gl을 알게 됐을 때
+    ///   <see cref="FaceForward"/>로 따로 확인한다 — 부호는 «방향이 맞는가» 판정에만 쓰인다.
     /// </summary>
-    public static RomLineFrame BuildFrame(Vector3 trRight, Vector3 trLeft, Vector3 gl)
+    public static RomLineFrame BuildFrame(Vector3 trRight, Vector3 trLeft)
     {
         var f = new RomLineFrame { up = Vector3.up };
 
@@ -83,16 +85,28 @@ public static class RomLineMath
 
         // 앞뒤는 위·좌우 둘에 직각이다(독립으로 정할 근거가 없다 — 점이 머리에만 있다).
         f.forward = Vector3.Cross(f.right, f.up).normalized;
-
-        // ★앞인지 뒤인지는 추론하지 않고 Gl로 잰다. Gl이 뒤쪽에 있으면 양쪽 Tr을 바꿔 찍은 것이다.
-        Vector3 mid = (trRight + trLeft) * 0.5f;
-        if (Vector3.Dot(gl - mid, f.forward) < 0f)
-        {
-            f.right = -f.right;
-            f.forward = -f.forward;
-            f.sidesSwapped = true;
-        }
         f.valid = true;
+        return f;
+    }
+
+    /// <summary>
+    /// Gl이 앞쪽에 있는지 재서, 뒤에 있으면 좌우·앞뒤를 뒤집는다(양쪽 Tr을 바꿔 찍은 것이다). 뒤집었으면 true.
+    /// ★앞인지 뒤인지는 추론하지 않고 Gl로 잰다.
+    /// </summary>
+    public static bool FaceForward(ref RomLineFrame f, Vector3 trMid, Vector3 gl)
+    {
+        if (!f.valid || Vector3.Dot(gl - trMid, f.forward) >= 0f) return false;
+        f.right = -f.right;
+        f.forward = -f.forward;
+        f.sidesSwapped = !f.sidesSwapped;
+        return true;
+    }
+
+    /// <summary>양쪽 Tr + Gl로 한 번에(검증기가 쓴다).</summary>
+    public static RomLineFrame BuildFrame(Vector3 trRight, Vector3 trLeft, Vector3 gl)
+    {
+        RomLineFrame f = BuildFrame(trRight, trLeft);
+        FaceForward(ref f, (trRight + trLeft) * 0.5f, gl);
         return f;
     }
 
