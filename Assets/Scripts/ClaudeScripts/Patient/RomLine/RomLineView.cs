@@ -1,0 +1,439 @@
+using TMPro;
+using UnityEngine;
+
+/// <summary>
+/// ★경추 ROM «선 실측» — 표시(2026-10-01 신설). 점·선·각도기, 컨트롤러 끝 이름표, 조작 판 하나.
+/// 계산은 하지 않는다 — <see cref="RomLineSession"/>이 준 값만 그린다.
+/// ★글자는 상태가 바뀔 때만 바꾼다(매 프레임 문자열을 만들지 않는다). 매 프레임 하는 일은 자리 옮기기뿐이다.
+/// </summary>
+public class RomLineView
+{
+    // ── 크기(m) ─────────────────────────────────────────────────────
+    public const float PanelW = 0.36f, PanelH = 0.38f;
+    private const float PointRadius = 0.005f;
+    private const float LineWidth = 0.003f;
+    private const float ArcRadius = 0.06f;
+    private const float LineMargin = 0.04f;
+    private const int ArcSegments = 32;
+    private const float TouchDepth = 0.035f;     // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
+
+    // ── 색 ──────────────────────────────────────────────────────────
+    private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+    private static readonly Color ActiveColor = new Color(1f, 0.42f, 0.02f, 1f);      // 능동 #FF6B05
+    private static readonly Color PressureColor = new Color(0.62f, 0.26f, 0.01f, 1f); // 압박 #9E4203(명도만 낮춤)
+    private static readonly Color ArcColor = new Color(0.25f, 0.65f, 1f, 1f);
+    private static readonly Color TipColor = new Color(1f, 0.95f, 0.2f, 1f);
+    private static readonly Color PlateColor = new Color(0.07f, 0.09f, 0.12f, 0.92f);
+    private static readonly Color ButtonColor = new Color(0.20f, 0.26f, 0.34f, 1f);
+    private static readonly Color ButtonHot = new Color(0.30f, 0.52f, 0.85f, 1f);
+    private static readonly Color ExitColor = new Color(0.55f, 0.18f, 0.18f, 1f);
+    private static readonly Color TabOn = new Color(0.30f, 0.52f, 0.85f, 1f);
+    private static readonly Color TabOff = new Color(0.16f, 0.20f, 0.26f, 1f);
+    private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
+
+    public static readonly string[] ButtonIds = { "tab0", "tab1", "tab2", "tab3", "redo", "reset", "exit" };
+    private static readonly string[] TabNames = { "중립", "굴곡·신전", "측굴", "회전" };
+    private static readonly string[] ButtonNames = { "이 동작 다시", "중립 다시", "나가기" };
+
+    private Transform root;
+    private Material mat;
+    private TMP_FontAsset font;
+
+    // 판
+    private Transform panel;
+    private readonly Renderer[] buttonPlates = new Renderer[7];
+    private readonly Rect[] buttonRects = new Rect[7];
+    private readonly Color[] buttonBase = new Color[7];
+    private Transform fill;
+    private TextMeshPro title, instruction, note;
+    private readonly TextMeshPro[] values = new TextMeshPro[12];
+    private int hot = -1;
+
+    // 환자 위 표시
+    private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
+    private readonly TextMeshPro[] neutralLabels = new TextMeshPro[4];
+    private LineRenderer neutralLine, activeLine, pressureLine, arc;
+    private TextMeshPro activeText, pressureText;
+    private readonly Vector3[] arcPoints = new Vector3[ArcSegments + 1];
+
+    // 컨트롤러 끝
+    private Transform tip;
+    private TextMeshPro tipLabel;
+
+    public bool PanelPlaced { get; private set; }
+    public Transform Panel => panel;
+
+    public void Build(Transform parent, TMP_FontAsset f, Material m)
+    {
+        font = f;
+        mat = m;
+        root = new GameObject("선 실측 표시").transform;
+        root.SetParent(parent, false);
+
+        // ── 점 ──
+        for (int i = 0; i < spheres.Length; i++)
+        {
+            Color c = i < 4 ? NeutralColor : (((i - 4) / 2) % 2 == 0 ? ActiveColor : PressureColor);
+            spheres[i] = MakeSphere("점", PointRadius, c);
+            spheres[i].gameObject.SetActive(false);
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            neutralLabels[i] = MakeText(root, RomLineSession.PointName[i], 0.07f, TextAlignmentOptions.Center, 5);
+            neutralLabels[i].gameObject.SetActive(false);
+        }
+
+        neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
+        activeLine = MakeLine("능동 측정선", ActiveColor, 2);
+        pressureLine = MakeLine("압박 측정선", PressureColor, 2);
+        arc = MakeLine("각도기", ArcColor, ArcSegments + 1);
+        activeText = MakeText(root, "", 0.11f, TextAlignmentOptions.Center, 5);
+        pressureText = MakeText(root, "", 0.09f, TextAlignmentOptions.Center, 5);
+        activeText.color = ActiveColor;
+        pressureText.color = PressureColor;
+        HideMeasure();
+
+        // ── 컨트롤러 끝 ──
+        tip = MakeSphere("컨트롤러 끝", PointRadius * 0.8f, TipColor);
+        tipLabel = MakeText(root, "", 0.08f, TextAlignmentOptions.Left, 6);
+        tipLabel.color = TipColor;
+        tipLabel.rectTransform.sizeDelta = new Vector2(0.10f, 0.16f);   // 왼쪽 정렬 — 글자가 끝점 오른쪽에서 시작하게 폭을 좁힌다
+        tip.gameObject.SetActive(false);
+        tipLabel.gameObject.SetActive(false);
+
+        BuildPanel();
+        panel.gameObject.SetActive(false);
+    }
+
+    // ── 판 ──────────────────────────────────────────────────────────
+    private void BuildPanel()
+    {
+        panel = new GameObject("조작 판").transform;
+        panel.SetParent(root, false);
+        MakeQuad(panel, "판", Vector2.zero, new Vector2(PanelW, PanelH), PlateColor, 0);
+
+        float top = PanelH * 0.5f;
+
+        // 진행 위치(탭) — 누르면 그 자리로 간다
+        float tabW = 0.082f, tabH = 0.034f;
+        for (int i = 0; i < 4; i++)
+        {
+            var c = new Vector2((i - 1.5f) * (tabW + 0.004f), top - 0.030f);
+            AddButton(i, c, new Vector2(tabW, tabH), TabOff, TabNames[i], 0.075f);
+        }
+
+        title = MakeText(panel, "", 0.13f, TextAlignmentOptions.Center, 3);
+        Place(title, new Vector2(0f, top - 0.078f), PanelW - 0.02f);
+        instruction = MakeText(panel, "", 0.115f, TextAlignmentOptions.Center, 3);
+        Place(instruction, new Vector2(0f, top - 0.110f), PanelW - 0.02f);
+        instruction.color = TipColor;
+        note = MakeText(panel, "", 0.07f, TextAlignmentOptions.Center, 3);
+        Place(note, new Vector2(0f, top - 0.137f), PanelW - 0.02f);
+        note.color = new Color(1f, 0.75f, 0.45f, 1f);
+
+        // 결과표
+        float tableTop = top - 0.165f, rowH = 0.022f;
+        const float xName = -0.115f, xActive = 0.02f, xPressure = 0.115f;
+        Place(MakeText(panel, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xActive, tableTop), 0.09f).color = ActiveColor;
+        Place(MakeText(panel, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, tableTop), 0.09f).color = new Color(0.95f, 0.6f, 0.3f, 1f);
+        for (int m = 0; m < 6; m++)
+        {
+            float y = tableTop - rowH * (m + 1);
+            Place(MakeText(panel, RomLineSession.MotionName[m], 0.085f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.09f);
+            values[m * 2] = Place(MakeText(panel, "—", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(xActive, y), 0.09f);
+            values[m * 2 + 1] = Place(MakeText(panel, "—", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, y), 0.09f);
+        }
+
+        // 버튼 셋
+        float by = -top + 0.030f, bw = 0.108f, bh = 0.036f;
+        for (int i = 0; i < 3; i++)
+        {
+            var c = new Vector2((i - 1f) * (bw + 0.006f), by);
+            AddButton(4 + i, c, new Vector2(bw, bh), i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
+        }
+
+        // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
+        fill = MakeQuad(panel, "차오름", Vector2.zero, new Vector2(0.01f, 0.004f), FillColor, 2);
+        fill.gameObject.SetActive(false);
+    }
+
+    private void AddButton(int index, Vector2 center, Vector2 size, Color color, string label, float textSize)
+    {
+        Transform q = MakeQuad(panel, "버튼 " + label, center, size, color, 1);
+        buttonPlates[index] = q.GetComponent<Renderer>();
+        buttonRects[index] = new Rect(center - size * 0.5f, size);
+        buttonBase[index] = color;
+        Place(MakeText(panel, label, textSize, TextAlignmentOptions.Center, 3), center, size.x);
+    }
+
+    /// <summary>판을 눈앞 오른쪽에 세운다(처음 한 번).</summary>
+    public void PlacePanel(Transform eye)
+    {
+        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;   // 지움: 고개 숙임 → 판은 늘 수평 앞에 선다
+        if (fwd.sqrMagnitude < 0.5f) fwd = Vector3.forward;
+        Vector3 right = Vector3.Cross(Vector3.up, fwd);
+        MovePanel(eye.position + fwd * 0.50f + right * 0.28f - Vector3.up * 0.08f, eye);
+        panel.gameObject.SetActive(true);
+        PanelPlaced = true;
+    }
+
+    public void MovePanel(Vector3 pos, Transform eye)
+    {
+        panel.position = pos;
+        Vector3 away = pos - eye.position;
+        if (away.sqrMagnitude > 1e-4f) panel.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
+    }
+
+    /// <summary>컨트롤러 끝이 닿은 버튼 번호(없으면 -1). <paramref name="onPanel"/> = 버튼은 아니어도 판 위에 있다.</summary>
+    public int Touch(Vector3 tipPos, out bool onPanel)
+    {
+        onPanel = false;
+        if (!PanelPlaced) return -1;
+        Vector3 l = panel.InverseTransformPoint(tipPos);
+        if (Mathf.Abs(l.z) > TouchDepth) return -1;
+        if (Mathf.Abs(l.x) > PanelW * 0.5f + 0.01f || Mathf.Abs(l.y) > PanelH * 0.5f + 0.01f) return -1;
+        onPanel = true;
+        var p = new Vector2(l.x, l.y);
+        for (int i = 0; i < buttonRects.Length; i++)
+            if (buttonRects[i].Contains(p)) return i;
+        return -1;
+    }
+
+    /// <summary>판을 잡을 수 있는 거리인가.</summary>
+    public bool NearPanel(Vector3 tipPos, float margin)
+    {
+        if (!PanelPlaced) return false;
+        Vector3 l = panel.InverseTransformPoint(tipPos);
+        return Mathf.Abs(l.x) < PanelW * 0.5f + margin && Mathf.Abs(l.y) < PanelH * 0.5f + margin && Mathf.Abs(l.z) < margin;
+    }
+
+    /// <summary>닿은 버튼을 밝히고(-1이면 끔), 길게 누르기 진행(0~1)을 그린다.</summary>
+    public void SetHot(int index, float hold01)
+    {
+        if (index != hot)
+        {
+            if (hot >= 0) buttonPlates[hot].material.color = hot < 4 ? tabColor[hot] : buttonBase[hot];
+            if (index >= 0) buttonPlates[index].material.color = ButtonHot;
+            hot = index;
+        }
+        bool show = index >= 0 && hold01 > 0f;
+        if (fill.gameObject.activeSelf != show) fill.gameObject.SetActive(show);
+        if (show)
+        {
+            Rect r = buttonRects[index];
+            float w = r.width * Mathf.Clamp01(hold01);
+            fill.localPosition = new Vector3(r.xMin + w * 0.5f, r.yMin + 0.003f, -0.003f);
+            fill.localScale = new Vector3(w, 0.005f, 1f);
+        }
+    }
+
+    private readonly Color[] tabColor = { TabOff, TabOff, TabOff, TabOff };
+
+    // ── 글자(상태가 바뀔 때만 부른다) ────────────────────────────────
+    public void SetTexts(string titleText, string instructionText, string noteText, int tab, string tipText)
+    {
+        title.text = titleText;
+        instruction.text = instructionText;
+        note.text = noteText;
+        tipLabel.text = tipText;
+        for (int i = 0; i < 4; i++)
+        {
+            tabColor[i] = i == tab ? TabOn : TabOff;
+            if (i != hot) buttonPlates[i].material.color = tabColor[i];
+        }
+    }
+
+    public void SetValue(int slot, string text, bool current)
+    {
+        values[slot].text = text;
+        values[slot].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+    }
+
+    // ── 점 ──────────────────────────────────────────────────────────
+    public void SetPoint(int index, bool show, Vector3 pos)
+    {
+        if (spheres[index].gameObject.activeSelf != show) spheres[index].gameObject.SetActive(show);
+        if (show) spheres[index].position = pos;
+        if (index < 4)
+        {
+            if (neutralLabels[index].gameObject.activeSelf != show) neutralLabels[index].gameObject.SetActive(show);
+            if (show) neutralLabels[index].transform.position = pos + Vector3.up * 0.018f;
+        }
+    }
+
+    // ── 선·각도기 ───────────────────────────────────────────────────
+    public void HideMeasure()
+    {
+        neutralLine.enabled = activeLine.enabled = pressureLine.enabled = arc.enabled = false;
+        activeText.gameObject.SetActive(false);
+        pressureText.gameObject.SetActive(false);
+    }
+
+    /// <summary>중립 기준선만 그린다(아직 측정선이 없을 때) — 직선만 보인다.</summary>
+    public void ShowNeutralOnly(Vector3 a, Vector3 b)
+    {
+        HideMeasure();
+        Vector3 d = (b - a).normalized;
+        DrawLine(neutralLine, a - d * LineMargin, b + d * LineMargin);
+    }
+
+    /// <summary>능동(필수)·압박(있으면)을 그린다. 각도기는 능동 때의 교점에 세운다.</summary>
+    public void ShowMeasure(RomLineResult active, bool hasPressure, RomLineResult pressure, Vector3 normal, string activeLabel, string pressureLabel)
+    {
+        HideMeasure();
+        Vector3 pivot = active.pivot;
+
+        float nMin, nMax;
+        Span(active.neutralA, active.neutralB, active.neutralDir, pivot, active.pivotOnLines, out nMin, out nMax);
+        DrawLine(neutralLine, active.neutralA + active.neutralDir * nMin, active.neutralA + active.neutralDir * nMax);
+
+        float aMin, aMax;
+        Span(active.markA, active.markB, active.markDir, pivot, active.pivotOnLines, out aMin, out aMax);
+        DrawLine(activeLine, active.markA + active.markDir * aMin, active.markA + active.markDir * aMax);
+
+        // 각도기 — 점들이 있는 쪽으로 편다(교점 건너편에 펴면 선은 있는데 점이 없는 쪽에 선다).
+        float side = Vector3.Dot((active.neutralA + active.neutralB) * 0.5f - pivot, active.neutralDir) >= 0f ? 1f : -1f;
+        Vector3 from = active.neutralDir * side;
+        for (int i = 0; i <= ArcSegments; i++)
+            arcPoints[i] = pivot + Quaternion.AngleAxis(active.signedAngle * i / ArcSegments, normal) * from * ArcRadius;
+        arc.positionCount = ArcSegments + 1;
+        arc.SetPositions(arcPoints);
+        arc.enabled = true;
+
+        Vector3 mid = Quaternion.AngleAxis(active.signedAngle * 0.5f, normal) * from;
+        activeText.text = activeLabel;
+        activeText.transform.position = pivot + mid * (ArcRadius + 0.03f);
+        activeText.gameObject.SetActive(true);
+
+        if (hasPressure)
+        {
+            float pMin, pMax;
+            Span(pressure.markA, pressure.markB, pressure.markDir, pressure.pivot, pressure.pivotOnLines, out pMin, out pMax);
+            DrawLine(pressureLine, pressure.markA + pressure.markDir * pMin, pressure.markA + pressure.markDir * pMax);
+            pressureText.text = pressureLabel;
+            pressureText.transform.position = pressure.markB + pressure.markDir * (LineMargin + 0.025f);
+            pressureText.gameObject.SetActive(true);
+        }
+    }
+
+    // 선을 두 점과 교점을 모두 덮게 편다(교점이 실제 교점일 때만 교점까지 뻗는다).
+    private static void Span(Vector3 a, Vector3 b, Vector3 dir, Vector3 pivot, bool usePivot, out float min, out float max)
+    {
+        float tb = Vector3.Dot(b - a, dir);
+        min = Mathf.Min(0f, tb);
+        max = Mathf.Max(0f, tb);
+        if (usePivot)
+        {
+            float tp = Vector3.Dot(pivot - a, dir);
+            min = Mathf.Min(min, tp);
+            max = Mathf.Max(max, tp);
+        }
+        min -= LineMargin;
+        max += LineMargin;
+    }
+
+    private static void DrawLine(LineRenderer lr, Vector3 a, Vector3 b)
+    {
+        lr.positionCount = 2;
+        lr.SetPosition(0, a);
+        lr.SetPosition(1, b);
+        lr.enabled = true;
+    }
+
+    // ── 매 프레임 ───────────────────────────────────────────────────
+    /// <summary>컨트롤러 끝 표시와 이름표, 글자들의 눈 쪽 돌리기. 할당 없음.</summary>
+    public void Tick(Transform eye, bool tipValid, Vector3 tipPos, bool showTipLabel)
+    {
+        if (tip.gameObject.activeSelf != tipValid) tip.gameObject.SetActive(tipValid);
+        bool label = tipValid && showTipLabel;
+        if (tipLabel.gameObject.activeSelf != label) tipLabel.gameObject.SetActive(label);
+        if (tipValid)
+        {
+            tip.position = tipPos;
+            if (label)
+            {
+                tipLabel.transform.position = tipPos + eye.right * 0.065f + eye.up * 0.012f;
+                Face(tipLabel.transform, eye);
+            }
+        }
+        for (int i = 0; i < 4; i++)
+            if (neutralLabels[i].gameObject.activeSelf) Face(neutralLabels[i].transform, eye);
+        if (activeText.gameObject.activeSelf) Face(activeText.transform, eye);
+        if (pressureText.gameObject.activeSelf) Face(pressureText.transform, eye);
+    }
+
+    private static void Face(Transform t, Transform eye)
+    {
+        Vector3 away = t.position - eye.position;
+        if (away.sqrMagnitude > 1e-6f) t.rotation = Quaternion.LookRotation(away, eye.up);
+    }
+
+    // ── 만들기 ──────────────────────────────────────────────────────
+    private Transform MakeSphere(string name, float radius, Color c)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        go.name = name;
+        Object.Destroy(go.GetComponent<Collider>());
+        go.transform.SetParent(root, false);
+        go.transform.localScale = Vector3.one * radius * 2f;
+        var r = go.GetComponent<Renderer>();
+        r.sharedMaterial = mat;
+        r.material.color = c;
+        r.sortingOrder = 4;
+        return go.transform;
+    }
+
+    private LineRenderer MakeLine(string name, Color c, int count)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(root, false);
+        var lr = go.AddComponent<LineRenderer>();
+        lr.sharedMaterial = mat;
+        lr.useWorldSpace = true;
+        lr.positionCount = count;
+        lr.startWidth = lr.endWidth = LineWidth;
+        lr.startColor = lr.endColor = c;
+        lr.numCapVertices = 2;
+        lr.sortingOrder = 3;
+        lr.enabled = false;
+        return lr;
+    }
+
+    private Transform MakeQuad(Transform parent, string name, Vector2 center, Vector2 size, Color c, int order)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = name;
+        Object.Destroy(go.GetComponent<Collider>());
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = new Vector3(center.x, center.y, -0.001f * order);
+        go.transform.localScale = new Vector3(size.x, size.y, 1f);
+        var r = go.GetComponent<Renderer>();
+        r.sharedMaterial = mat;
+        r.material.color = c;
+        r.sortingOrder = order;   // 같은 투명 큐라 그리는 순서를 정해 준다: 판 0 · 버튼 1 · 차오름 2 · 글자 3
+        return go.transform;
+    }
+
+    private TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order)
+    {
+        var go = new GameObject("글자");
+        go.transform.SetParent(parent, false);
+        var t = go.AddComponent<TextMeshPro>();
+        if (font != null) t.font = font;
+        t.fontSize = size;
+        t.alignment = align;
+        t.color = Color.white;
+        t.textWrappingMode = TextWrappingModes.NoWrap;
+        t.rectTransform.sizeDelta = new Vector2(0.2f, size * 2f);
+        t.sortingOrder = order;
+        t.text = text;
+        return t;
+    }
+
+    private static TextMeshPro Place(TextMeshPro t, Vector2 center, float width)
+    {
+        t.rectTransform.sizeDelta = new Vector2(width, t.fontSize * 2f);
+        t.transform.localPosition = new Vector3(center.x, center.y, -0.004f);
+        return t;
+    }
+}
