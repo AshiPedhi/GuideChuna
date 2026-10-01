@@ -90,6 +90,27 @@ public static class RomLineVerify
             RomLineResult r = RomLineMath.Measure(n.trR, n.gl, h.trR, h.gl, RomLineMath.PlaneNormal(RomLineMotion.Flexion, f));
             sb.AppendLine($"참고  굴곡 30° + 우회전 10°가 섞임 → 굴곡으로 잰 값 {r.angle:F1}° · 면 밖 각 {r.neutralOffPlane:F1}° → {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}°)");
 
+            // «직접»(면으로 옮기지 않고 3차원에서 잰 값)이 실제 회전과 얼마나 다른가 — 동작마다 30°를 넣어 본다.
+            for (int m = 0; m < 6; m++)
+            {
+                var motion = (RomLineMotion)m;
+                Head hm = Rotate(n, neck, Rotation(motion, 30f, R, U, F));
+                PickLine(motion, n, out Vector3 a0, out Vector3 b0);
+                PickLine(motion, hm, out Vector3 a1, out Vector3 b1);
+                RomLineResult onPlane = RomLineMath.Measure(a0, b0, a1, b1, RomLineMath.PlaneNormal(motion, f));
+                RomLineDirect dr = RomLineMath.MeasureDirect(a0, b0, a1, b1);
+                sb.AppendLine($"참고  {Name(motion)} 30° → 면 위 {onPlane.angle:F1}° · 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm");
+            }
+
+            // 10-01 사람에게 찍은 굴곡(로그 좌표 그대로) — 같은 점에서 두 방식이 얼마나 다른가.
+            {
+                var nTr = new Vector3(-0.158f, 1.096f, -0.103f); var nGl = new Vector3(-0.046f, 1.155f, -0.094f);
+                var aTr = new Vector3(-0.122f, 1.062f, -0.118f); var aGl = new Vector3(-0.010f, 1.066f, -0.109f);
+                var pTr = new Vector3(-0.103f, 1.049f, -0.133f); var pGl = new Vector3(0.017f, 1.031f, -0.112f);
+                sb.AppendLine($"참고  10-01 사람 굴곡(면 위 31.1° / 46.3°로 나온 점들) → 직접 능동 {RomLineMath.MeasureDirect(nTr, nGl, aTr, aGl).angle:F1}° · " +
+                              $"압박 {RomLineMath.MeasureDirect(nTr, nGl, pTr, pGl).angle:F1}°");
+            }
+
             // 한 점을 5mm 잘못 찍었을 때(굴곡 30°, Gl을 선에 직각으로 5mm).
             h = Rotate(n, neck, Quaternion.AngleAxis(30f, R));
             Vector3 dir = (h.gl - h.trR).normalized;
@@ -104,6 +125,57 @@ public static class RomLineVerify
         }
 
         sb.Insert(0, (fail == 0 ? "선 실측 계산 검증 — 전부 통과" : $"선 실측 계산 검증 — ★실패 {fail}건") + "\n");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// 컨트롤러 모형에서 «맨 앞»이 어디인지 잰다(2026-10-01) — 찍는 점을 컨트롤러 앞면에 붙이려고.
+    /// 열린 씬의 OVRControllerHelper 아래 모형마다, 모형 뿌리 좌표로 z가 가장 큰 꼭짓점을 낸다.
+    /// ★모형 뿌리가 OVRInput의 컨트롤러 자리와 같다는 전제다(화면에서 노란 점으로 확인할 것).
+    /// </summary>
+    public static string ControllerFront()
+    {
+        var sb = new StringBuilder();
+        var helpers = Object.FindObjectsByType<OVRControllerHelper>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        sb.AppendLine($"OVRControllerHelper {helpers.Length}개");
+        var baked = new Mesh();
+        foreach (OVRControllerHelper h in helpers)
+        {
+            Transform rootT = h.transform;
+            sb.AppendLine($"■ {rootT.parent.parent.name} / {rootT.name}");
+            foreach (SkinnedMeshRenderer smr in rootT.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr.sharedMesh == null) continue;
+                smr.BakeMesh(baked);
+                Vector3[] v = baked.vertices;
+                if (v.Length == 0) continue;
+                Vector3 best = Vector3.zero, min = Vector3.one * 99f, max = Vector3.one * -99f;
+                float bestZ = -99f;
+                for (int i = 0; i < v.Length; i++)
+                {
+                    Vector3 p = rootT.InverseTransformPoint(smr.transform.TransformPoint(v[i]));
+                    min = Vector3.Min(min, p);
+                    max = Vector3.Max(max, p);
+                    if (p.z > bestZ) { bestZ = p.z; best = p; }
+                }
+                // 대조용 — 렌더러가 갖고 있는 경계 상자(뼈대 기준)를 같은 좌표로 옮긴 것. 구운 꼭짓점과 크기가 다르면 굽기가 틀린 것이다.
+                Transform bone = smr.rootBone != null ? smr.rootBone : smr.transform;
+                Bounds lb = smr.localBounds;
+                Vector3 bmin = Vector3.one * 99f, bmax = Vector3.one * -99f;
+                for (int c = 0; c < 8; c++)
+                {
+                    var corner = lb.center + Vector3.Scale(lb.extents, new Vector3((c & 1) == 0 ? -1 : 1, (c & 2) == 0 ? -1 : 1, (c & 4) == 0 ? -1 : 1));
+                    Vector3 q = rootT.InverseTransformPoint(bone.TransformPoint(corner));
+                    bmin = Vector3.Min(bmin, q);
+                    bmax = Vector3.Max(bmax, q);
+                }
+                sb.AppendLine($"  {"",-44} 경계상자 x {bmin.x * 100f:F1}~{bmax.x * 100f:F1} y {bmin.y * 100f:F1}~{bmax.y * 100f:F1} z {bmin.z * 100f:F1}~{bmax.z * 100f:F1} · " +
+                              $"배율 {smr.transform.lossyScale.x:F2} · 뼈대 {bone.name} · 켜짐 {smr.gameObject.activeInHierarchy}");
+                sb.AppendLine($"  {smr.name,-44} 맨 앞 ({best.x * 100f:F1}, {best.y * 100f:F1}, {best.z * 100f:F1})cm · " +
+                              $"범위 x {min.x * 100f:F1}~{max.x * 100f:F1} y {min.y * 100f:F1}~{max.y * 100f:F1} z {min.z * 100f:F1}~{max.z * 100f:F1}");
+            }
+        }
+        Object.DestroyImmediate(baked);
         return sb.ToString();
     }
 

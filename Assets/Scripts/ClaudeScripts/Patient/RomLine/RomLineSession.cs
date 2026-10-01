@@ -36,9 +36,9 @@ public class RomLineSession : MonoBehaviour
     private static readonly string[] PhaseName = { "능동", "압박" };
 
     [Header("=== 컨트롤러 ===")]
-    [Tooltip("컨트롤러 기준 «찍는 점»의 자리(m). 노란 점이 여기에 뜬다 — 패스스루로 보이는 실제 컨트롤러 끝에 맞춘다.\n" +
-             "★처음 값은 어림이다. 기기에서 보고 인스펙터로 맞춘다.")]
-    [SerializeField] private Vector3 tipOffset = new Vector3(0f, 0f, 0.05f);
+    [Tooltip("컨트롤러 기준 «찍는 점»의 자리(m, 오른손 기준 — 왼손은 x를 뒤집어 쓴다). 노란 점이 여기에 뜬다.\n" +
+             "★0.033 = 컨트롤러 모형 경계 상자의 맨 앞(브리지 romline-ctrl로 잰 값, 10-01). 실제 컨트롤러 앞면과 어긋나면 인스펙터로 맞춘다.")]
+    [SerializeField] private Vector3 tipOffset = new Vector3(0f, 0f, 0.033f);
 
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
@@ -48,6 +48,7 @@ public class RomLineSession : MonoBehaviour
     private readonly Vector3[] points = new Vector3[PointCount];
     private readonly bool[] has = new bool[PointCount];
     private readonly RomLineResult[] results = new RomLineResult[12];
+    private readonly RomLineDirect[] direct = new RomLineDirect[12];   // 비교용 — 면으로 옮기지 않고 3차원에서 잰 값
     private RomLineFrame frame;
     private int group;      // 0 = 중립, 1~12 = 동작·단계, 13 = 끝
     private int index;      // 그 묶음 안에서 다음에 찍을 점
@@ -185,7 +186,9 @@ public class RomLineSession : MonoBehaviour
 
         Vector3 p = trackingSpace.TransformPoint(OVRInput.GetLocalControllerPosition(active));
         Quaternion r = trackingSpace.rotation * OVRInput.GetLocalControllerRotation(active);
-        tipPos = p + r * tipOffset;
+        Vector3 off = tipOffset;
+        if (active == OVRInput.Controller.LTouch) off.x = -off.x;   // 왼손 컨트롤러는 좌우가 거울상이다
+        tipPos = p + r * off;
         tipValid = true;
         lastSilent = null;
     }
@@ -298,7 +301,7 @@ public class RomLineSession : MonoBehaviour
             // 이미 찍은 묶음에 다시 들어와 첫 점을 찍으면 그 묶음을 새로 잰다.
             for (int i = 0; i < size; i++) has[start + i] = false;
             if (group == 0) InvalidateAll();
-            else results[group - 1] = default;
+            else ClearResult(group - 1);
         }
 
         RomLinePoint which = ExpectedPoint(group, index);
@@ -360,7 +363,7 @@ public class RomLineSession : MonoBehaviour
     /// <summary>그 묶음의 두 점이 다 있으면 각을 낸다.</summary>
     private void Compute(int g)
     {
-        results[g - 1] = default;
+        ClearResult(g - 1);
         int start = GroupStart(g);
         if (!frame.valid || !has[start] || !has[start + 1]) return;
 
@@ -369,6 +372,8 @@ public class RomLineSession : MonoBehaviour
         Vector3 normal = RomLineMath.PlaneNormal(motion, frame);
         RomLineResult r = RomLineMath.Measure(points[(int)a], points[(int)b], points[start], points[start + 1], normal);
         results[g - 1] = r;
+        RomLineDirect dr = RomLineMath.MeasureDirect(points[(int)a], points[(int)b], points[start], points[start + 1]);
+        direct[g - 1] = dr;
 
         if (!r.valid)
         {
@@ -380,7 +385,8 @@ public class RomLineSession : MonoBehaviour
         bool match = RomLineMath.DirectionMatches(motion, r.signedAngle);
         Debug.Log($"[선실측] 값 — {GroupTitle(g)} {r.angle:F1}° (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
                   $"면 밖 각 중립선 {r.neutralOffPlane:F1}° → 측정선 {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}° — 다른 동작이 섞인 정도) · " +
-                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")}");
+                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")} · " +
+                  $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm");
         if (!match && g == group)
         {
             noteText = $"{MotionName[(int)motion]} 단계인데 반대쪽으로 움직인 값이다";
@@ -404,7 +410,7 @@ public class RomLineSession : MonoBehaviour
             for (int i = 0; i < index; i++)
                 if (!has[GroupStart(group) + i]) { index = 0; break; }
             if (group == 0) InvalidateAll();
-            else results[group - 1] = default;
+            else ClearResult(group - 1);
         }
         else { Deny("지울 점이 없다"); return; }
 
@@ -456,7 +462,7 @@ public class RomLineSession : MonoBehaviour
         for (int g = 1 + m * 2; g <= 2 + m * 2; g++)
         {
             has[GroupStart(g)] = has[GroupStart(g) + 1] = false;
-            results[g - 1] = default;
+            ClearResult(g - 1);
         }
         group = 1 + m * 2;
         index = 0;
@@ -478,10 +484,16 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
+    private void ClearResult(int i)
+    {
+        results[i] = default;
+        direct[i] = default;
+    }
+
     private void InvalidateAll()
     {
         frame = default;
-        for (int i = 0; i < results.Length; i++) results[i] = default;
+        for (int i = 0; i < results.Length; i++) ClearResult(i);
     }
 
     private void Exit()
@@ -527,7 +539,8 @@ public class RomLineSession : MonoBehaviour
         view.SetTexts(GroupTitle(group), instruction, noteText, tab, tipText);
 
         for (int i = 0; i < 12; i++)
-            view.SetValue(i, results[i].valid ? results[i].angle.ToString("F1") + "°" : "—", i == group - 1);
+            view.SetValue(i, results[i].valid ? results[i].angle.ToString("F1") + "°" : "—",
+                          direct[i].valid ? direct[i].angle.ToString("F1") + "°" : "—", i == group - 1);
 
         // 점 — 중립 넷은 늘, 측정 점은 지금 동작 것만.
         int motion = group == 0 ? -1 : (Mathf.Min(group, GroupCount - 1) - 1) / 2;
@@ -562,7 +575,9 @@ public class RomLineSession : MonoBehaviour
             RomLineResult a = results[m * 2], p = results[m * 2 + 1];
             sb.Append(MotionName[m]).Append(' ')
               .Append(a.valid ? a.angle.ToString("F1") : "—").Append('/')
-              .Append(p.valid ? p.angle.ToString("F1") : "—");
+              .Append(p.valid ? p.angle.ToString("F1") : "—")
+              .Append(" [직접 ").Append(direct[m * 2].valid ? direct[m * 2].angle.ToString("F1") : "—").Append('/')
+              .Append(direct[m * 2 + 1].valid ? direct[m * 2 + 1].angle.ToString("F1") : "—").Append(']');
             if (m < 5) sb.Append(" · ");
         }
         sb.Append("  (능동/압박, 도)");

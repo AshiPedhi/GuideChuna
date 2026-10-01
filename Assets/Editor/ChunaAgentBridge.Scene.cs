@@ -45,6 +45,7 @@ public static partial class ChunaAgentBridge
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
             case "build-run": ok = DoBuildRun(sb, a, out err); return true;
             case "gfx-api": ok = DoGfxApi(sb, a, out err); return true;
+            case "romline-ctrl": sb.Append(RomLineVerify.ControllerFront()); return true;   // 컨트롤러 모형의 맨 앞 자리를 잰다(10-01)
             case "romline-verify": sb.Append(RomLineVerify.Run()); return true;   // 선 실측 계산 검증(10-01) — 런타임과 같은 함수를 탄다
         }
         return false;

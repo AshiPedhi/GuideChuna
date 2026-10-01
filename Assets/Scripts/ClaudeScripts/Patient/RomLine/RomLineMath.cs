@@ -52,6 +52,18 @@ public struct RomLineResult
     public float neutralOffPlane, markOffPlane;
 }
 
+/// <summary>면으로 옮기지 않고 3차원에서 그대로 잰 값(10-01, 비교용 «B 방식»). 환자 기준 방향이 필요 없다.</summary>
+public struct RomLineDirect
+{
+    public bool valid;
+    /// <summary>두 선의 방향이 벌어진 각(도).</summary>
+    public float angle;
+    /// <summary>두 선이 공간에서 가장 가까운 거리(m) — 0이면 실제로 만난다.</summary>
+    public float gap;
+    /// <summary>가장 가까운 두 점의 중간.</summary>
+    public Vector3 pivot;
+}
+
 public static class RomLineMath
 {
     /// <summary>교점이 중립선 첫 점에서 이보다 멀면(m) 각도기를 첫 점에 대신 세운다 — 각이 작으면 교점이 달아난다.</summary>
@@ -168,6 +180,38 @@ public static class RomLineMath
                 r.pivot = r.neutralA + u * px;
                 r.pivotOnLines = true;
             }
+        }
+        r.valid = true;
+        return r;
+    }
+
+    /// <summary>
+    /// 두 직선을 면으로 옮기지 않고 3차원에서 그대로 잰다. ★선이 회전축에 직각이 아니면 실제 회전보다 작게 나온다
+    ///   (선의 축 방향 성분은 돌아도 그대로라서) — 검증기 참고 줄에서 크기를 볼 수 있다.
+    /// </summary>
+    public static RomLineDirect MeasureDirect(Vector3 nA, Vector3 nB, Vector3 mA, Vector3 mB)
+    {
+        var r = new RomLineDirect();
+        Vector3 d1 = nB - nA, d2 = mB - mA;
+        if (d1.sqrMagnitude < 1e-8f || d2.sqrMagnitude < 1e-8f) return r;
+        r.angle = Vector3.Angle(d1, d2);
+
+        Vector3 w = nA - mA;
+        float a = Vector3.Dot(d1, d1), b = Vector3.Dot(d1, d2), c = Vector3.Dot(d2, d2);
+        float d = Vector3.Dot(d1, w), e = Vector3.Dot(d2, w);
+        float denom = a * c - b * b;
+        if (denom < 1e-10f)
+        {
+            // 평행 — 가장 가까운 점이 정해지지 않는다. 중립선 첫 점에서 측정선까지의 거리를 쓴다.
+            r.gap = Vector3.Cross(w, d2.normalized).magnitude;
+            r.pivot = nA;
+        }
+        else
+        {
+            Vector3 p1 = nA + d1 * ((b * e - c * d) / denom);
+            Vector3 p2 = mA + d2 * ((a * e - b * d) / denom);
+            r.gap = Vector3.Distance(p1, p2);
+            r.pivot = (p1 + p2) * 0.5f;
         }
         r.valid = true;
         return r;

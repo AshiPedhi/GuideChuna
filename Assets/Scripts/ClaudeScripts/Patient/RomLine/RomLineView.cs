@@ -46,7 +46,8 @@ public class RomLineView
     private readonly Color[] buttonBase = new Color[7];
     private Transform fill;
     private TextMeshPro title, instruction, note;
-    private readonly TextMeshPro[] values = new TextMeshPro[12];
+    private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값
+    private readonly TextMeshPro[] valuesDirect = new TextMeshPro[12];  // 3차원에서 그대로 잰 값(비교용)
     private int hot = -1;
 
     // 환자 위 표시
@@ -131,17 +132,25 @@ public class RomLineView
         Place(note, new Vector2(0f, top - 0.137f), PanelW - 0.02f);
         note.color = new Color(1f, 0.75f, 0.45f, 1f);
 
-        // 결과표
-        float tableTop = top - 0.165f, rowH = 0.022f;
-        const float xName = -0.115f, xActive = 0.02f, xPressure = 0.115f;
-        Place(MakeText(panel, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xActive, tableTop), 0.09f).color = ActiveColor;
-        Place(MakeText(panel, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, tableTop), 0.09f).color = new Color(0.95f, 0.6f, 0.3f, 1f);
+        // 결과표 — 능동·압박마다 «면»(환자 기준 면 위에서 잰 값)과 «직접»(3차원에서 그대로 잰 값, 비교용)
+        float tableTop = top - 0.158f, rowH = 0.019f;
+        const float xName = -0.125f;
+        float[] xCol = { -0.050f, 0.015f, 0.085f, 0.150f };
+        var dim = new Color(0.72f, 0.76f, 0.82f, 1f);
+        Place(MakeText(panel, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[0] + xCol[1]) * 0.5f, tableTop), 0.12f).color = ActiveColor;
+        Place(MakeText(panel, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[2] + xCol[3]) * 0.5f, tableTop), 0.12f).color = new Color(0.95f, 0.6f, 0.3f, 1f);
+        for (int c = 0; c < 4; c++)
+            Place(MakeText(panel, c % 2 == 0 ? "면" : "직접", 0.06f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], tableTop - 0.017f), 0.06f).color = dim;
         for (int m = 0; m < 6; m++)
         {
-            float y = tableTop - rowH * (m + 1);
-            Place(MakeText(panel, RomLineSession.MotionName[m], 0.085f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.09f);
-            values[m * 2] = Place(MakeText(panel, "—", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(xActive, y), 0.09f);
-            values[m * 2 + 1] = Place(MakeText(panel, "—", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, y), 0.09f);
+            float y = tableTop - 0.017f - rowH * (m + 1);
+            Place(MakeText(panel, RomLineSession.MotionName[m], 0.08f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.09f);
+            for (int ph = 0; ph < 2; ph++)
+            {
+                values[m * 2 + ph] = Place(MakeText(panel, "—", 0.08f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2], y), 0.06f);
+                valuesDirect[m * 2 + ph] = Place(MakeText(panel, "—", 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2 + 1], y), 0.06f);
+                valuesDirect[m * 2 + ph].color = dim;
+            }
         }
 
         // 버튼 셋
@@ -243,10 +252,11 @@ public class RomLineView
         }
     }
 
-    public void SetValue(int slot, string text, bool current)
+    public void SetValue(int slot, string text, string directText, bool current)
     {
         values[slot].text = text;
         values[slot].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+        valuesDirect[slot].text = directText;
     }
 
     // ── 점 ──────────────────────────────────────────────────────────
