@@ -44,8 +44,56 @@ public static partial class ChunaAgentBridge
             case "gameview": ok = DoGameView(sb, a, out err); return true;
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
             case "build-run": ok = DoBuildRun(sb, a, out err); return true;
+            case "gfx-api": ok = DoGfxApi(sb, a, out err); return true;
         }
         return false;
+    }
+
+    // ── Android 그래픽 API·폐색 기능 전환(2026-10-01 — 미러링 검은 화면이 Vulkan 탓인지 대조 빌드로 가르려고) ──
+    // ★인자 없이 부르면 <b>지금 값만</b> 읽는다. --api=gles3|vulkan, --occlusion=on|off 를 준 것만 바꾼다.
+    // ★폐색(Meta Depth API)은 Vulkan 전용이다 — GLES3로 내릴 땐 --occlusion=off 를 같이 줘야 OpenXR 빌드 검증에 안 걸린다.
+    private static bool DoGfxApi(StringBuilder sb, Dictionary<string, string> a, out string err)
+    {
+        err = null;
+
+        if (a.TryGetValue("api", out var api))
+        {
+            UnityEngine.Rendering.GraphicsDeviceType t;
+            switch (api.ToLowerInvariant())
+            {
+                case "gles3": t = UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3; break;
+                case "vulkan": t = UnityEngine.Rendering.GraphicsDeviceType.Vulkan; break;
+                default: err = $"--api 는 gles3 또는 vulkan 이다(받은 값: {api})"; return false;
+            }
+            PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+            PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { t });
+        }
+
+        var xr = UnityEngine.XR.OpenXR.OpenXRSettings.GetSettingsForBuildTargetGroup(BuildTargetGroup.Android);
+        bool wantOcc = a.TryGetValue("occlusion", out var occ);
+        bool occOn = wantOcc && (occ == "on" || occ == "1" || occ == "true");
+
+        sb.Append("Android 그래픽 API: ")
+          .AppendLine(string.Join(", ", PlayerSettings.GetGraphicsAPIs(BuildTarget.Android).Select(x => x.ToString())));
+
+        if (xr == null) { sb.AppendLine("★Android OpenXR 설정을 못 찾았다 — 폐색 기능은 안 건드렸다."); }
+        else
+        {
+            foreach (var f in xr.GetFeatures())
+            {
+                if (f == null || f.GetType().Name != "AROcclusionFeature") continue;
+                if (wantOcc && f.enabled != occOn)
+                {
+                    f.enabled = occOn;
+                    EditorUtility.SetDirty(f);
+                    EditorUtility.SetDirty(xr);
+                }
+                sb.Append("OpenXR 폐색 기능(AROcclusionFeature Android): ").AppendLine(f.enabled ? "켜짐" : "꺼짐");
+            }
+        }
+
+        if (a.ContainsKey("api") || wantOcc) AssetDatabase.SaveAssets();
+        return true;
     }
 
     // ── 빌드 후 기기 실행(2026-09-29 사용자: "빌드해서 디바이스에 RUN까지 해 줘") ──────────
