@@ -63,6 +63,52 @@ public static class RomLineModelSim
         return sb.ToString();
     }
 
+    /// <summary>
+    /// 에디터 창 없이 한 번에 돌린다(문서에 쓰는 실행 묶음 전부): Unity.exe -batchmode -projectPath … -executeMethod RomLineModelSim.Batch
+    /// 결과는 Captures/romsim/ 아래 같은 이름으로 덮어쓰고, 요약은 batch.log에 남긴다.
+    /// </summary>
+    public static void Batch()
+    {
+        var log = new StringBuilder();
+        int code = 0;
+        try
+        {
+            string[] tr = { "tr_y", "-0.016", "tr_z", "-0.077" };
+            string[][] runs =
+            {
+                new[] { "mode", "sim", "n", "3000", "out", "v2" },
+                new[] { "mode", "mc", "out", "v2" },
+                new[] { "mode", "mc", "seed", "23", "out", "s23" },
+                new[] { "mode", "mc", "seed", "37", "out", "s37" },
+                new[] { "mode", "mc", "seed", "11", "n", "20000", "out", "n20k" },
+                new[] { "mode", "sim", "n", "200", "yaw", "37", "out", "yaw37" },
+                new[] { "mode", "sim", "n", "200", "yaw", "200", "out", "yaw200" },
+                new[] { "mode", "sim", "n", "200", "pivot_y", "0", "pivot_z", "0", "out", "pivot0" },
+                new[] { "mode", "sim", "n", "200", "pivot_y", "-0.2", "pivot_z", "0.05", "out", "pivot2" },
+                new[] { "mode", "sim", "n", "200", "tr_y", "-0.021", "tr_z", "-0.077", "out", "trYm" },
+                new[] { "mode", "sim", "n", "200", "tr_y", "-0.011", "tr_z", "-0.077", "out", "trYp" },
+                new[] { "mode", "sim", "n", "200", "tr_y", "-0.016", "tr_z", "-0.082", "out", "trZm" },
+                new[] { "mode", "sim", "n", "200", "tr_y", "-0.016", "tr_z", "-0.072", "out", "trZp" },
+            };
+            foreach (string[] r in runs)
+            {
+                var a = new Dictionary<string, string>();
+                for (int i = 0; i + 1 < tr.Length; i += 2) a[tr[i]] = tr[i + 1];
+                for (int i = 0; i + 1 < r.Length; i += 2) a[r[i]] = r[i + 1];   // 실행마다 준 값이 기본(Tr 자리)을 덮는다
+                log.AppendLine("── " + string.Join(" ", r));
+                log.AppendLine(Run(a));
+            }
+        }
+        catch (Exception e)
+        {
+            log.AppendLine("★실패: " + e);
+            code = 1;
+        }
+        Directory.CreateDirectory(OutDir);
+        File.WriteAllText(Path.Combine(OutDir, "batch.log"), log.ToString(), new UTF8Encoding(false));
+        if (Application.isBatchMode) UnityEditor.EditorApplication.Exit(code);
+    }
+
     // ── 모델 읽기 ───────────────────────────────────────────────────
     private static Ctx Build(Scene sc, StringBuilder sb)
     {
@@ -308,10 +354,10 @@ public static class RomLineModelSim
         return new[] { L("반대쪽Tr~Gl", a, b), L("Tr~Tr", RomLinePoint.TrLeft, RomLinePoint.TrRight) };
     }
 
-    // 넣는 각(도). 10-06에 끝 범위를 넓혔다(굴곡·신전 70·80 · 측굴 60 · 회전 90).
+    // 넣는 각(도). ★굴곡은 45°가 최대, 신전은 90°가 최대다(10-06 사용자 정정 — 처음엔 굴곡·신전을 똑같이 80°까지 넣었다).
     private static readonly float[][] Thetas =
     {
-        new[] { 10f, 20f, 30f, 40f, 50f, 60f, 70f, 80f }, new[] { 10f, 20f, 30f, 40f, 50f, 60f, 70f, 80f },
+        new[] { 10f, 20f, 30f, 40f, 45f }, new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f },
         new[] { 10f, 20f, 30f, 40f, 45f, 60f }, new[] { 10f, 20f, 30f, 40f, 45f, 60f },
         new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f }, new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f },
     };
