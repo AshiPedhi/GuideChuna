@@ -9,7 +9,7 @@ using UnityEngine;
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.38f;
+    public const float PanelW = 0.36f, PanelH = 0.42f;   // 0.38 → 0.42(10-02): 결과표 아래 비교 시험 두 줄 자리
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
@@ -29,6 +29,9 @@ public class RomLineView
     private static readonly Color ExitColor = new Color(0.55f, 0.18f, 0.18f, 1f);
     private static readonly Color TabOn = new Color(0.30f, 0.52f, 0.85f, 1f);
     private static readonly Color TabOff = new Color(0.16f, 0.20f, 0.26f, 1f);
+    private static readonly Color CompareColor = new Color(0.35f, 0.80f, 1f, 1f);
+    private static readonly Color CompareNeutral = new Color(0.75f, 0.92f, 1f, 1f);
+    private static readonly Color ComparePressure = new Color(0.10f, 0.45f, 0.75f, 1f);
     private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
 
     public static readonly string[] ButtonIds = { "tab0", "tab1", "tab2", "tab3", "redo", "reset", "exit" };
@@ -46,15 +49,19 @@ public class RomLineView
     private readonly Color[] buttonBase = new Color[7];
     private Transform fill;
     private TextMeshPro title, instruction, note;
+    private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
+    private readonly TextMeshPro[] compareValues = new TextMeshPro[8];   // 줄마다 능동 면·직접, 압박 면·직접
     private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값
     private readonly TextMeshPro[] valuesDirect = new TextMeshPro[12];  // 3차원에서 그대로 잰 값(비교용)
     private int hot = -1;
 
     // 환자 위 표시
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
+    private readonly Transform[] extraSpheres = new Transform[3];        // 비교 시험의 Gn(중립·능동·압박)
     private readonly TextMeshPro[] neutralLabels = new TextMeshPro[2];   // 기준(양쪽 Tr) 이름표
     private LineRenderer neutralLine, activeLine, pressureLine, arc;
-    private TextMeshPro activeText, pressureText;
+    private LineRenderer cmpNeutralLine, cmpActiveLine, cmpPressureLine;   // 비교 시험의 Gl ~ Gn 선
+    private TextMeshPro activeText, pressureText, cmpText;
     private readonly Vector3[] arcPoints = new Vector3[ArcSegments + 1];
 
     // 컨트롤러 끝
@@ -80,6 +87,11 @@ public class RomLineView
             spheres[i] = MakeSphere("점", PointRadius, c);
             spheres[i].gameObject.SetActive(false);
         }
+        for (int i = 0; i < extraSpheres.Length; i++)
+        {
+            extraSpheres[i] = MakeSphere("점(비교 Gn)", PointRadius, i == 0 ? NeutralColor : i == 1 ? ActiveColor : PressureColor);
+            extraSpheres[i].gameObject.SetActive(false);
+        }
         for (int i = 0; i < neutralLabels.Length; i++)
         {
             neutralLabels[i] = MakeText(root, RomLineSession.PointName[i], 0.07f, TextAlignmentOptions.Center, 5);
@@ -95,6 +107,14 @@ public class RomLineView
         activeText.color = ActiveColor;
         pressureText.color = PressureColor;
         HideMeasure();
+
+        // 비교 시험의 Gl ~ Gn 선 — Tr ~ Gl 선과 헷갈리지 않게 하늘색 계열로 그린다
+        cmpNeutralLine = MakeLine("비교 중립선", CompareNeutral, 2);
+        cmpActiveLine = MakeLine("비교 능동선", CompareColor, 2);
+        cmpPressureLine = MakeLine("비교 압박선", ComparePressure, 2);
+        cmpText = MakeText(root, "", 0.10f, TextAlignmentOptions.Center, 5);
+        cmpText.color = CompareColor;
+        HideCompare();
 
         // ── 컨트롤러 끝 ──
         tip = MakeSphere("컨트롤러 끝", PointRadius * 0.8f, TipColor);
@@ -153,6 +173,21 @@ public class RomLineView
                 valuesDirect[m * 2 + ph] = Place(MakeText(panel, "—", 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2 + 1], y), 0.06f);
                 valuesDirect[m * 2 + ph].color = dim;
             }
+        }
+
+        // 비교 시험 두 줄(굴곡 · 신전의 Gl ~ Gn 선) — 결과표 아래에 같은 칸 맞춤으로 붙인다. 찍어 둔 값은 단계가 넘어가도 남는다.
+        //   ★10-02 첫 판은 «지금 동작» 한 줄만 보여 줘서, 굴곡을 다 찍고 신전으로 넘어가는 순간 굴곡 값이 사라졌다.
+        for (int r = 0; r < 2; r++)
+        {
+            float cy = tableTop - 0.017f - rowH * (7 + r);
+            compareNames[r] = Place(MakeText(panel, RomLineSession.MotionName[r] + " Gl~Gn", 0.07f, TextAlignmentOptions.Left, 3), new Vector2(xName, cy), 0.09f);
+            compareNames[r].color = CompareColor;
+            for (int c = 0; c < 4; c++)
+            {
+                compareValues[r * 4 + c] = Place(MakeText(panel, "—", c % 2 == 0 ? 0.08f : 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], cy), 0.06f);
+                compareValues[r * 4 + c].color = CompareColor;
+            }
+            SetCompare(r, false, "", "", "", "");
         }
 
         // 버튼 셋
@@ -261,7 +296,49 @@ public class RomLineView
         valuesDirect[slot].text = directText;
     }
 
+    /// <summary>비교 시험 줄. row 0 = 굴곡 · 1 = 신전.</summary>
+    public void SetCompare(int row, bool show, string activePlane, string activeDirect, string pressurePlane, string pressureDirect)
+    {
+        if (compareNames[row].gameObject.activeSelf != show) compareNames[row].gameObject.SetActive(show);
+        int o = row * 4;
+        for (int c = 0; c < 4; c++)
+            if (compareValues[o + c].gameObject.activeSelf != show) compareValues[o + c].gameObject.SetActive(show);
+        if (!show) return;
+        compareValues[o].text = activePlane;
+        compareValues[o + 1].text = activeDirect;
+        compareValues[o + 2].text = pressurePlane;
+        compareValues[o + 3].text = pressureDirect;
+    }
+
+    public void HideCompare()
+    {
+        cmpNeutralLine.enabled = cmpActiveLine.enabled = cmpPressureLine.enabled = false;
+        cmpText.gameObject.SetActive(false);
+    }
+
+    /// <summary>비교 시험의 Gl ~ Gn 선을 찍힌 그대로(3차원) 그리고 값을 띄운다. 글자가 비면 선만 그린다.</summary>
+    public void ShowCompare(bool hasN, Vector3 nA, Vector3 nB, bool hasA, Vector3 aA, Vector3 aB, bool hasP, Vector3 pA, Vector3 pB,
+                            string label, Vector3 labelPos)
+    {
+        HideCompare();
+        if (hasN) DrawRaw(cmpNeutralLine, nA, nB);
+        if (hasA) DrawRaw(cmpActiveLine, aA, aB);
+        if (hasP) DrawRaw(cmpPressureLine, pA, pB);
+        if (label.Length == 0) return;
+        cmpText.text = label;
+        cmpText.transform.position = labelPos;
+        cmpText.gameObject.SetActive(true);
+    }
+
     // ── 점 ──────────────────────────────────────────────────────────
+    /// <summary>비교 시험의 세 번째 점(Gn). phase 0 중립 · 1 능동 · 2 압박.</summary>
+    public void SetExtraPoint(int phase, bool show, Vector3 pos)
+    {
+        Transform t = extraSpheres[phase];
+        if (t.gameObject.activeSelf != show) t.gameObject.SetActive(show);
+        if (show) t.position = pos;
+    }
+
     public void SetPoint(int index, bool show, Vector3 pos)
     {
         if (spheres[index].gameObject.activeSelf != show) spheres[index].gameObject.SetActive(show);
@@ -400,6 +477,7 @@ public class RomLineView
             if (neutralLabels[i].gameObject.activeSelf) Face(neutralLabels[i].transform, eye);
         if (activeText.gameObject.activeSelf) Face(activeText.transform, eye);
         if (pressureText.gameObject.activeSelf) Face(pressureText.transform, eye);
+        if (cmpText.gameObject.activeSelf) Face(cmpText.transform, eye);
     }
 
     private static void Face(Transform t, Transform eye)
