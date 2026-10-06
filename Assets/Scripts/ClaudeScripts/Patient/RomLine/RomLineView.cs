@@ -9,13 +9,15 @@ using UnityEngine;
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.42f;   // 0.38 → 0.42(10-02): 결과표 아래 비교 시험 두 줄 자리
+    public const float PanelW = 0.36f, PanelH = 0.46f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
     private const float LineMargin = 0.04f;
     private const int ArcSegments = 32;
-    private const float TouchDepth = 0.035f;     // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
+    public const float TouchDepth = 0.035f;      // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
+    public const float FingerDepth = 0.02f;      // 손끝은 더 바짝 대야 한다 — 지나가는 손에 눌리지 않게(10-06)
+    public const int ButtonCount = 10;
 
     // ── 색 ──────────────────────────────────────────────────────────
     private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
@@ -33,10 +35,13 @@ public class RomLineView
     private static readonly Color CompareNeutral = new Color(0.75f, 0.92f, 1f, 1f);
     private static readonly Color ComparePressure = new Color(0.10f, 0.45f, 0.75f, 1f);
     private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
+    private static readonly Color FingerColor = new Color(0.55f, 0.85f, 1f, 1f);
 
-    public static readonly string[] ButtonIds = { "tab0", "tab1", "tab2", "tab3", "redo", "reset", "exit" };
     private static readonly string[] TabNames = { "기준", "굴곡·신전", "측굴", "회전" };
     private static readonly string[] ButtonNames = { "이 동작 다시", "전부 다시", "나가기" };
+    // 컨트롤러의 스틱 · A/X · B/Y가 하던 일 — 손으로도 할 수 있게 판에 올린다(10-06)
+    private static readonly string[] StepNames = { "이전 단계", "한 점 취소", "다음 단계" };
+    public static readonly string[] ButtonLabel = { "기준", "굴곡·신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계" };
 
     private Transform root;
     private Material mat;
@@ -44,9 +49,9 @@ public class RomLineView
 
     // 판
     private Transform panel;
-    private readonly Renderer[] buttonPlates = new Renderer[7];
-    private readonly Rect[] buttonRects = new Rect[7];
-    private readonly Color[] buttonBase = new Color[7];
+    private readonly Renderer[] buttonPlates = new Renderer[ButtonCount];
+    private readonly Rect[] buttonRects = new Rect[ButtonCount];
+    private readonly Color[] buttonBase = new Color[ButtonCount];
     private Transform fill;
     private TextMeshPro title, instruction, note;
     private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
@@ -67,6 +72,7 @@ public class RomLineView
     // 컨트롤러 끝
     private Transform tip;
     private TextMeshPro tipLabel;
+    private readonly Transform[] fingers = new Transform[2];   // 판 가까이 온 검지 끝(왼·오른) — 손이 입력으로 잡혔다는 표시
 
     public bool PanelPlaced { get; private set; }
     public Transform Panel => panel;
@@ -123,6 +129,11 @@ public class RomLineView
         tipLabel.rectTransform.sizeDelta = new Vector2(0.10f, 0.16f);   // 왼쪽 정렬 — 글자가 끝점 오른쪽에서 시작하게 폭을 좁힌다
         tip.gameObject.SetActive(false);
         tipLabel.gameObject.SetActive(false);
+        for (int i = 0; i < fingers.Length; i++)
+        {
+            fingers[i] = MakeSphere("손끝", PointRadius * 0.9f, FingerColor);
+            fingers[i].gameObject.SetActive(false);
+        }
 
         BuildPanel();
         panel.gameObject.SetActive(false);
@@ -190,12 +201,13 @@ public class RomLineView
             SetCompare(r, false, "", "", "", "");
         }
 
-        // 버튼 셋
+        // 버튼 두 줄 — 위: 단계(이전 · 한 점 취소 · 다음) / 아래: 다시 · 전부 다시 · 나가기
         float by = -top + 0.030f, bw = 0.108f, bh = 0.036f;
         for (int i = 0; i < 3; i++)
         {
             var c = new Vector2((i - 1f) * (bw + 0.006f), by);
             AddButton(4 + i, c, new Vector2(bw, bh), i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
+            AddButton(7 + i, c + new Vector2(0f, bh + 0.008f), new Vector2(bw, bh), ButtonColor, StepNames[i], 0.075f);
         }
 
         // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
@@ -231,12 +243,12 @@ public class RomLineView
     }
 
     /// <summary>컨트롤러 끝이 닿은 버튼 번호(없으면 -1). <paramref name="onPanel"/> = 버튼은 아니어도 판 위에 있다.</summary>
-    public int Touch(Vector3 tipPos, out bool onPanel)
+    public int Touch(Vector3 tipPos, float depth, out bool onPanel)
     {
         onPanel = false;
         if (!PanelPlaced) return -1;
         Vector3 l = panel.InverseTransformPoint(tipPos);
-        if (Mathf.Abs(l.z) > TouchDepth) return -1;
+        if (Mathf.Abs(l.z) > depth) return -1;
         if (Mathf.Abs(l.x) > PanelW * 0.5f + 0.01f || Mathf.Abs(l.y) > PanelH * 0.5f + 0.01f) return -1;
         onPanel = true;
         var p = new Vector2(l.x, l.y);
@@ -459,8 +471,16 @@ public class RomLineView
 
     // ── 매 프레임 ───────────────────────────────────────────────────
     /// <summary>컨트롤러 끝 표시와 이름표, 글자들의 눈 쪽 돌리기. 할당 없음.</summary>
-    public void Tick(Transform eye, bool tipValid, Vector3 tipPos, bool showTipLabel)
+    public void Tick(Transform eye, bool tipValid, Vector3 tipPos, bool showTipLabel, bool[] fingerValid, Vector3[] fingerPos)
     {
+        // 손끝 구슬은 판 가까이(15cm) 왔을 때만 — 환자를 잡은 손 위에 떠다니지 않게
+        for (int i = 0; i < fingers.Length; i++)
+        {
+            bool show = fingerValid[i] && NearPanel(fingerPos[i], 0.15f);
+            if (fingers[i].gameObject.activeSelf != show) fingers[i].gameObject.SetActive(show);
+            if (show) fingers[i].position = fingerPos[i];
+        }
+
         if (tip.gameObject.activeSelf != tipValid) tip.gameObject.SetActive(tipValid);
         bool label = tipValid && showTipLabel;
         if (tipLabel.gameObject.activeSelf != label) tipLabel.gameObject.SetActive(label);

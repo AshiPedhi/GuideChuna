@@ -1,3 +1,4 @@
+using Oculus.Interaction.Input;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -83,9 +84,26 @@ public class RomLineSession : MonoBehaviour
     private bool stickReady = true;
     private bool grabbing;
     private Vector3 grabOffset;
-    private int holdButton = -1;
     private int switchedFrame = -1;
-    private float holdStart;
+    private Vector3 ctrlPos;
+    private Quaternion ctrlRot = Quaternion.identity;
+    private float hapticOff = -1f;
+
+    // 손(10-06) — 판 조작만 한다. 점은 컨트롤러로만 찍는다(끝점이 정해져 있는 쪽).
+    private readonly RomRecordHands hands = new RomRecordHands();
+    private readonly bool[] fingerValid = new bool[2];      // 0 왼손 · 1 오른손 검지 끝
+    private readonly Vector3[] fingerPos = new Vector3[2];
+    private readonly bool[] pinching = new bool[2];
+    private readonly bool[] pinchDown = new bool[2];
+    private int grabHand = -1;           // 판을 잡은 손(0 · 1). 컨트롤러로 잡았으면 -1
+    private bool simultaneousOn;         // 우리가 켠 «컨트롤러 + 맨손 동시 추적» — 켠 것만 끈다
+    private int trackMask = -1;
+    private float nextTrackLog;
+
+    // 판 버튼 — 닿고 머물면 눌린다(컨트롤러·손 공통). source: 0 왼손 · 1 오른손 · 2 컨트롤러
+    private int dwellButton = -1, dwellSource = -1;
+    private float dwellStart;
+    private bool dwellFired;
 
     // 표시
     private readonly RomLineView view = new RomLineView();
@@ -98,7 +116,10 @@ public class RomLineSession : MonoBehaviour
     private AudioSource audioSrc;
     private AudioClip sndMark, sndUndo, sndDeny, sndPress, sndDone;
 
-    private const float HoldSeconds = 1f;
+    private const float DwellSeconds = 0.45f;      // 닿고 이만큼 머물면 눌린다
+    private const float DangerDwellSeconds = 1.5f; // «전부 다시» · «나가기»는 길게
+    private const float PinchClose = 0.02f, PinchOpen = 0.04f;   // 엄지–검지 끝 거리(m). 사이는 그대로 — 떨림으로 깜박이지 않게
+    private static readonly string[] SourceName = { "왼손", "오른손", "컨트롤러" };
     private const float ArmThreshold = 0.15f;      // 트리거를 이만큼 당기기 시작한 순간의 자리를 찍는 자리로 쓴다
     private const float TrackingWaitSeconds = 8f;
 
@@ -153,6 +174,10 @@ public class RomLineSession : MonoBehaviour
         view.Build(transform, font, new Material(sh));
         BuildSounds();
 
+        // 한 손에 컨트롤러, 다른 손은 맨손 — 둘을 함께 추적하게 한다. 지원하지 않으면 false가 돌아오고 손은 컨트롤러를 내려놨을 때만 잡힌다.
+        simultaneousOn = OVRInput.EnableSimultaneousHandsAndControllers();
+        Debug.Log($"[선실측] 컨트롤러 + 맨손 동시 추적 요청 — {(simultaneousOn ? "받아들여짐" : "★거절됨(이 기기·연결에서는 컨트롤러를 쥔 동안 손이 안 잡힐 수 있다)")}");
+
         Debug.Log($"[선실측] 붙었다 — 리그 {(rig != null ? "있음" : "★없음")} · 추적공간 {(trackingSpace != null ? "있음" : "★없음(컨트롤러 자리를 못 잡는다)")} · " +
                   $"셰이더 {(sh != null ? "있음" : "★없음")} · 폰트 {(font != null ? font.name : "★없음")} · 끝점 오프셋 {tipOffset:F3} · " +
                   $"비교 시험(Gl~Gn) {(compareGlGn ? "켬 — 굴곡·신전은 세 점씩" : "끔")}");
@@ -176,10 +201,81 @@ public class RomLineSession : MonoBehaviour
         }
 
         ReadController();
+        ReadHands();
         HandleInput();
 
         if (dirty) Refresh();
-        view.Tick(eye, tipValid, tipPos, !Done);
+        view.Tick(eye, tipValid, tipPos, !Done, fingerValid, fingerPos);
+    }
+
+    private void OnDestroy()
+    {
+        if (hapticOff > 0f) OVRInput.SetControllerVibration(0f, 0f, active);
+        if (simultaneousOn) OVRInput.DisableSimultaneousHandsAndControllers();   // 우리가 켠 것만 되돌린다
+    }
+
+    // ── 손 ──────────────────────────────────────────────────────────
+    private void ReadHands()
+    {
+        hands.Resolve();
+        for (int h = 0; h < 2; h++)
+        {
+            bool left = h == 0;
+            pinchDown[h] = false;
+            fingerValid[h] = hands.TryJoint(left, HandJointId.HandIndexTip, out fingerPos[h]) && !hands.SystemGesture(left);
+            if (!fingerValid[h]) { pinching[h] = false; continue; }
+            if (!hands.TryJoint(left, HandJointId.HandThumbTip, out Vector3 thumb)) continue;
+            float gap = Vector3.Distance(thumb, fingerPos[h]);
+            if (!pinching[h] && gap < PinchClose) pinching[h] = pinchDown[h] = true;
+            else if (pinching[h] && gap > PinchOpen) pinching[h] = false;
+        }
+
+        // 무엇이 잡히고 있는지 — 바뀔 때만(1초에 한 번까지) 남긴다. «컨트롤러와 맨손이 함께 잡히는가»를 로그로 가른다.
+        int mask = (tipValid ? 4 : 0) | (fingerValid[0] ? 1 : 0) | (fingerValid[1] ? 2 : 0);
+        if (mask != trackMask && Time.unscaledTime >= nextTrackLog)
+        {
+            trackMask = mask;
+            nextTrackLog = Time.unscaledTime + 1f;
+            Debug.Log($"[선실측] 추적 — 컨트롤러 {(tipValid ? "O" : "X")} · 왼손 {(fingerValid[0] ? "O" : "X")} · 오른손 {(fingerValid[1] ? "O" : "X")}");
+        }
+    }
+
+    /// <summary>판 옮기기 — 컨트롤러는 그립, 손은 판 가까이에서 엄지·검지를 오므린다. 옮기는 중이면 true.</summary>
+    private bool UpdateGrab()
+    {
+        if (grabbing)
+        {
+            bool held = grabHand < 0 ? tipValid && OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, active)
+                                     : fingerValid[grabHand] && pinching[grabHand];
+            if (held) view.MovePanel((grabHand < 0 ? tipPos : fingerPos[grabHand]) + grabOffset, eye);
+            else
+            {
+                grabbing = false;
+                Debug.Log($"[선실측] 판을 옮겼다({(grabHand < 0 ? "컨트롤러" : SourceName[grabHand])}) — {view.Panel.position:F2} (눈에서 {Vector3.Distance(view.Panel.position, eye.position) * 100f:F0}cm)");
+            }
+            return true;
+        }
+        if (tipValid && OVRInput.GetDown(OVRInput.Button.PrimaryHandTrigger, active) && view.NearPanel(tipPos, 0.12f))
+        {
+            grabbing = true; grabHand = -1;
+            grabOffset = view.Panel.position - tipPos;
+            return true;
+        }
+        for (int h = 0; h < 2; h++)
+            if (pinchDown[h] && view.NearPanel(fingerPos[h], 0.06f))
+            {
+                grabbing = true; grabHand = h;
+                grabOffset = view.Panel.position - fingerPos[h];
+                return true;
+            }
+        return false;
+    }
+
+    private void Buzz(float seconds, float amplitude)
+    {
+        if (!tipValid) return;
+        OVRInput.SetControllerVibration(1f, amplitude, active);
+        hapticOff = Time.unscaledTime + seconds;
     }
 
     // ── 컨트롤러 ────────────────────────────────────────────────────
@@ -210,6 +306,8 @@ public class RomLineSession : MonoBehaviour
 
         Vector3 p = trackingSpace.TransformPoint(OVRInput.GetLocalControllerPosition(active));
         Quaternion r = trackingSpace.rotation * OVRInput.GetLocalControllerRotation(active);
+        ctrlPos = p;
+        ctrlRot = r;
         Vector3 off = tipOffset;
         if (active == OVRInput.Controller.LTouch) off.x = -off.x;   // 왼손 컨트롤러는 좌우가 거울상이다
         tipPos = p + r * off;
@@ -225,71 +323,73 @@ public class RomLineSession : MonoBehaviour
 
     private void HandleInput()
     {
-        if (!tipValid)
+        if (hapticOff > 0f && Time.unscaledTime >= hapticOff)
         {
-            view.SetHot(-1, 0f);
-            holdButton = -1;
-            return;
+            OVRInput.SetControllerVibration(0f, 0f, active);
+            hapticOff = -1f;
         }
-
         if (Time.frameCount == switchedFrame) return;   // 컨트롤러를 바꾼 그 누름은 전환으로만 쓴다
 
         // 트리거를 당기기 시작한 순간의 자리를 잡아 둔다 — 끝까지 당기는 동안 컨트롤러가 흔들린다.
-        float trigger = OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, active);
+        float trigger = tipValid ? OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, active) : prevTrigger;
         if (prevTrigger < ArmThreshold && trigger >= ArmThreshold)
         {
             armedPos = tipPos;
             armedTime = Time.unscaledTime;
         }
-        bool triggerDown = prevTrigger < 0.55f && trigger >= 0.55f;
-        bool triggerHeld = trigger >= 0.55f;
+        bool triggerDown = tipValid && prevTrigger < 0.55f && trigger >= 0.55f;
         prevTrigger = trigger;
 
-        // ── 판 옮기기(그립) ──
-        bool grip = OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, active);
-        if (!grabbing && OVRInput.GetDown(OVRInput.Button.PrimaryHandTrigger, active) && view.NearPanel(tipPos, 0.12f))
+        // ── 판 옮기기(컨트롤러 그립 · 손 핀치) ──
+        if (UpdateGrab())
         {
-            grabbing = true;
-            grabOffset = view.Panel.position - tipPos;
-        }
-        if (grabbing)
-        {
-            if (grip) view.MovePanel(tipPos + grabOffset, eye);
-            else
-            {
-                grabbing = false;
-                Debug.Log($"[선실측] 판을 옮겼다 — {view.Panel.position:F2} (눈에서 {Vector3.Distance(view.Panel.position, eye.position) * 100f:F0}cm)");
-            }
+            dwellButton = -1;
             view.SetHot(-1, 0f);
             return;
         }
 
-        // ── 판 버튼 ──
-        int button = view.Touch(tipPos, out bool onPanel);
-        if (onPanel)
+        // ── 판 버튼 — 컨트롤러 끝이 먼저, 없으면 손끝. 닿고 머물면 눌린다(컨트롤러는 트리거로 바로 눌러도 된다) ──
+        int button = -1, source = -1;
+        bool controllerOnPanel = false;
+        if (tipValid)
         {
-            if (button != holdButton) { holdButton = -1; }
-            bool needHold = button >= 5;   // «전부 다시» · «나가기»
-            if (button >= 0 && triggerDown)
+            int b = view.Touch(tipPos, RomLineView.TouchDepth, out controllerOnPanel);
+            if (b >= 0) { button = b; source = 2; }
+        }
+        for (int h = 0; h < 2 && button < 0; h++)
+        {
+            if (!fingerValid[h] || pinching[h]) continue;
+            int b = view.Touch(fingerPos[h], RomLineView.FingerDepth, out _);
+            if (b >= 0) { button = b; source = h; }
+        }
+
+        float progress = 0f;
+        if (button < 0) dwellButton = -1;
+        else
+        {
+            if (button != dwellButton || source != dwellSource)
             {
-                if (needHold) { holdButton = button; holdStart = Time.unscaledTime; Play(sndPress); }
-                else Press(button);
+                dwellButton = button; dwellSource = source;
+                dwellStart = Time.unscaledTime;
+                dwellFired = false;
             }
-            float hold01 = 0f;
-            if (holdButton >= 0 && holdButton == button)
+            bool danger = button == 5 || button == 6;   // «전부 다시» · «나가기»
+            if (!dwellFired)
             {
-                if (!triggerHeld) holdButton = -1;
-                else
+                progress = (Time.unscaledTime - dwellStart) / (danger ? DangerDwellSeconds : DwellSeconds);
+                if (progress >= 1f || (source == 2 && triggerDown && !danger))
                 {
-                    hold01 = (Time.unscaledTime - holdStart) / HoldSeconds;
-                    if (hold01 >= 1f) { int b = holdButton; holdButton = -1; hold01 = 0f; Press(b); }
+                    dwellFired = true;   // 한 번 닿아 한 번만 — 떼었다 다시 대야 또 눌린다
+                    progress = 0f;
+                    Debug.Log($"[선실측] 버튼 — «{RomLineView.ButtonLabel[button]}» ({SourceName[source]})");
+                    if (source == 2) Buzz(0.04f, 0.4f);
+                    Press(button);
                 }
             }
-            view.SetHot(button, hold01);
-            return;   // ★판 위에서는 점을 찍지 않는다
         }
-        holdButton = -1;
-        view.SetHot(-1, 0f);
+        view.SetHot(button, progress);
+        if (controllerOnPanel) return;   // ★판 위에서는 점을 찍지 않는다
+        if (!tipValid) return;           // 아래는 컨트롤러로만 한다
 
         // ── 버튼·스틱 ──
         if (OVRInput.GetDown(OVRInput.Button.One, active)) { Undo(); return; }
@@ -336,6 +436,7 @@ public class RomLineSession : MonoBehaviour
         index++;
         noteText = "";
         Play(sndMark);
+        Buzz(0.06f, 0.6f);
 
         if (index >= SizeOf(group)) CompleteGroup();
         dirty = true;
@@ -598,6 +699,9 @@ public class RomLineSession : MonoBehaviour
             case 4: RedoMotion(); break;
             case 5: ResetAll(); break;
             case 6: Exit(); break;
+            case 7: Go(group - 1, "버튼"); break;
+            case 8: Undo(); break;
+            case 9: Skip(); break;
         }
     }
 
@@ -858,5 +962,23 @@ public class RomLineSession : MonoBehaviour
     private void Play(AudioClip c)
     {
         if (audioSrc != null && c != null && soundVolume > 0f) audioSrc.PlayOneShot(c, soundVolume);
+    }
+
+    // ── 에디터 ──────────────────────────────────────────────────────
+    /// <summary>끝점 맞추기용(에디터 인스펙터가 읽는다). 컨트롤러가 잡혀 있을 때만 뜻이 있다.</summary>
+    public bool TipValid => tipValid;
+    public Vector3 TipWorld => tipPos;
+    public bool UsingLeft => active == OVRInput.Controller.LTouch;
+
+    // 씬 창에서 컨트롤러 원점(세 축 3cm)과 찍는 점까지의 선을 본다 — 끝점 오프셋이 어느 쪽으로 얼마인지 눈으로 확인하는 용도.
+    private void OnDrawGizmos()
+    {
+        if (!Application.isPlaying || !tipValid) return;
+        Gizmos.color = Color.red; Gizmos.DrawLine(ctrlPos, ctrlPos + ctrlRot * Vector3.right * 0.03f);
+        Gizmos.color = Color.green; Gizmos.DrawLine(ctrlPos, ctrlPos + ctrlRot * Vector3.up * 0.03f);
+        Gizmos.color = Color.blue; Gizmos.DrawLine(ctrlPos, ctrlPos + ctrlRot * Vector3.forward * 0.03f);
+        Gizmos.color = Color.yellow;
+        Gizmos.DrawLine(ctrlPos, tipPos);
+        Gizmos.DrawWireSphere(tipPos, 0.004f);
     }
 }
