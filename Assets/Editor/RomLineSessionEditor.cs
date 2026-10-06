@@ -4,6 +4,7 @@
 //   · tipOffset은 매 프레임 읽으므로 Play 중에 고치면 바로 점이 움직인다.
 //   · Play 중에 고친 값은 Play를 멈추면 사라진다 → 멈출 때 기억해 뒀다가 씬의 값에 옮겨 적는다(저장은 사람이 Ctrl+S).
 //   · 씬 창에는 컨트롤러 원점의 세 축과 끝점까지의 노란 선이 보인다(RomLineSession.OnDrawGizmos).
+//   · «컨트롤러 모형 보기»는 씬에서 꺼 둔 모형을 Play 중에만 켠다 — 모형의 앞면에 노란 점을 맞추는 용도. 저장되지 않는다.
 
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -44,6 +45,20 @@ public class RomLineSessionEditor : Editor
         }
 
         var s = (RomLineSession)target;
+
+        // 컨트롤러 모형 — 맞출 때만 켠다. Play 중에만 켜지고 저장되지 않는다(다음 Play·빌드에서는 꺼져 있다).
+        EditorGUI.BeginDisabledGroup(!Application.isPlaying);
+        EditorGUILayout.BeginHorizontal();
+        bool shown = Application.isPlaying && s.ControllerModelShown;
+        bool want = GUILayout.Toggle(shown, shown ? "컨트롤러 모형 보는 중 (끄기)" : "컨트롤러 모형 보기", "Button", GUILayout.Height(24f));
+        if (want != shown) s.ShowControllerModel(want);
+        if (GUILayout.Button("씬 창에서 끝점 보기", GUILayout.Height(24f), GUILayout.Width(130f)) && s.TipValid && SceneView.lastActiveSceneView != null)
+        {
+            // 컨트롤러 옆에서 끝점을 들여다보는 자리로 씬 창을 옮긴다
+            SceneView.lastActiveSceneView.LookAt((s.TipWorld + s.ControllerWorld) * 0.5f, SceneView.lastActiveSceneView.rotation, 0.12f);
+        }
+        EditorGUILayout.EndHorizontal();
+        EditorGUI.EndDisabledGroup();
         string live = !Application.isPlaying ? "Play 중에 고치면 노란 점이 바로 움직인다."
                     : s.TipValid ? $"지금 쓰는 컨트롤러: {(s.UsingLeft ? "왼쪽(좌우 값은 뒤집어 적용)" : "오른쪽")} · 끝점 {s.TipWorld:F3}"
                     : "컨트롤러가 추적되지 않는다.";

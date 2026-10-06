@@ -969,6 +969,38 @@ public class RomLineSession : MonoBehaviour
     public bool TipValid => tipValid;
     public Vector3 TipWorld => tipPos;
     public bool UsingLeft => active == OVRInput.Controller.LTouch;
+    public Vector3 ControllerWorld => ctrlPos;
+    public bool ControllerModelShown => modelsOn.Count > 0;
+
+    // 끝점을 맞출 때만 켜는 컨트롤러 모형. 씬에서는 꺼 둔 채로 두고(패스스루로 실제 컨트롤러가 보인다 — 10-01),
+    // 인스펙터 스위치가 Play 중에만 켠다. ★우리가 켠 것만 끈다. Play가 끝나면 씬 값(꺼짐)으로 돌아가므로 빌드에는 나오지 않는다.
+    private readonly System.Collections.Generic.List<GameObject> modelsOn = new System.Collections.Generic.List<GameObject>();
+
+    public void ShowControllerModel(bool on)
+    {
+        if (!on)
+        {
+            foreach (GameObject g in modelsOn) if (g != null) g.SetActive(false);
+            modelsOn.Clear();
+            Debug.Log("[선실측] 컨트롤러 모형 끔");
+            return;
+        }
+        if (modelsOn.Count > 0) return;
+        int found = 0;
+        foreach (OVRControllerHelper helper in FindObjectsByType<OVRControllerHelper>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+        {
+            found++;
+            // 모형은 꺼진 부모(OVRControllerVisual) 아래에 있다 — 꺼져 있는 조상을 찾아 켠다.
+            for (Transform a = helper.transform; a != null; a = a.parent)
+                if (!a.gameObject.activeSelf)
+                {
+                    a.gameObject.SetActive(true);
+                    modelsOn.Add(a.gameObject);
+                }
+        }
+        Debug.Log($"[선실측] 컨트롤러 모형 켬 — 모형 {found}개 중 꺼져 있던 {modelsOn.Count}곳을 켰다" +
+                  (found == 0 ? " ★씬에 컨트롤러 모형(OVRControllerHelper)이 없다" : modelsOn.Count == 0 ? " (이미 켜져 있었다)" : ""));
+    }
 
     // 씬 창에서 컨트롤러 원점(세 축 3cm)과 찍는 점까지의 선을 본다 — 끝점 오프셋이 어느 쪽으로 얼마인지 눈으로 확인하는 용도.
     private void OnDrawGizmos()
