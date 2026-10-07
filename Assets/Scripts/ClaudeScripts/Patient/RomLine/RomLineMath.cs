@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -138,6 +139,94 @@ public static class RomLineMath
         first = Mathf.Max(side, Mathf.Max(front, floor));
         second = plane == 0 ? Mathf.Max(front, floor) : plane == 1 ? Mathf.Max(side, floor) : Mathf.Max(side, front);
         return plane;
+    }
+
+    /// <summary>
+    /// 끝점 보정(10-07) — 컨트롤러의 한 곳(끝)을 고정된 점에 댄 채 여러 방향으로 돌린 자세들에서,
+    /// 그 «끝»이 컨트롤러 좌표로 어디인지(offset)와 고정된 점의 자리(pivot)를 함께 구한다.
+    /// 모든 표본에서 «pos + rot · offset = pivot»이어야 한다 → 최소제곱(미지수 6개).
+    /// rms·max = 맞춘 뒤에도 남은 어긋남(m) — 크면 끝이 미끄러졌거나 추적이 흔들린 것이다.
+    /// ★돌린 범위가 좁으면 offset이 정해지지 않는다(특히 돌린 축 방향 성분) — 부르는 쪽이 범위를 본다.
+    /// </summary>
+    public static bool PivotFit(List<Vector3> pos, List<Quaternion> rot, out Vector3 offset, out Vector3 pivot, out float rms, out float max)
+    {
+        offset = pivot = Vector3.zero;
+        rms = max = 0f;
+        int n = pos.Count;
+        if (n < 6 || rot.Count != n) return false;
+
+        // 자리의 평균을 빼고 푼다(1m쯤 되는 좌표에서 mm를 가려야 한다).
+        Vector3 mean = Vector3.zero;
+        for (int i = 0; i < n; i++) mean += pos[i];
+        mean /= n;
+
+        // 정규방정식 M x = b, x = [offset(3) ; pivot'(3)]. 행마다 R·offset − pivot' = −(pos − mean).
+        var m = new double[6, 7];
+        for (int i = 0; i < n; i++)
+        {
+            Vector3 c0 = rot[i] * Vector3.right, c1 = rot[i] * Vector3.up, c2 = rot[i] * Vector3.forward;   // R의 세 열
+            Vector3 p = pos[i] - mean;
+            for (int r = 0; r < 3; r++)
+            {
+                double r0 = c0[r], r1 = c1[r], r2 = c2[r], rhs = -p[r];
+                // 이 행의 계수: [r0 r1 r2 | −e_r]
+                var row = new double[6];
+                row[0] = r0; row[1] = r1; row[2] = r2; row[3 + r] = -1.0;
+                for (int a = 0; a < 6; a++)
+                {
+                    if (row[a] == 0.0) continue;
+                    for (int b = 0; b < 6; b++) m[a, b] += row[a] * row[b];
+                    m[a, 6] += row[a] * rhs;
+                }
+            }
+        }
+
+        // 가우스 소거(부분 피벗)
+        for (int c = 0; c < 6; c++)
+        {
+            int best = c;
+            for (int r = c + 1; r < 6; r++) if (System.Math.Abs(m[r, c]) > System.Math.Abs(m[best, c])) best = r;
+            if (System.Math.Abs(m[best, c]) < 1e-9) return false;   // 돌린 범위가 없어 풀 수 없다
+            if (best != c) for (int k = c; k < 7; k++) { double t = m[c, k]; m[c, k] = m[best, k]; m[best, k] = t; }
+            for (int r = 0; r < 6; r++)
+            {
+                if (r == c) continue;
+                double f = m[r, c] / m[c, c];
+                if (f == 0.0) continue;
+                for (int k = c; k < 7; k++) m[r, k] -= f * m[c, k];
+            }
+        }
+        offset = new Vector3((float)(m[0, 6] / m[0, 0]), (float)(m[1, 6] / m[1, 1]), (float)(m[2, 6] / m[2, 2]));
+        pivot = mean + new Vector3((float)(m[3, 6] / m[3, 3]), (float)(m[4, 6] / m[4, 4]), (float)(m[5, 6] / m[5, 5]));
+
+        double sq = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            float e = Vector3.Distance(pos[i] + rot[i] * offset, pivot);
+            sq += (double)e * e;
+            if (e > max) max = e;
+        }
+        rms = (float)System.Math.Sqrt(sq / n);
+        return true;
+    }
+
+    /// <summary>주어진 offset으로 «끝»의 자리를 냈을 때, 그 자리들이 평균에서 흩어진 크기(m) — 그 offset이 만드는 찍는 오차다.</summary>
+    public static void TipSpread(List<Vector3> pos, List<Quaternion> rot, Vector3 offset, out float rms, out float max)
+    {
+        rms = max = 0f;
+        int n = pos.Count;
+        if (n == 0) return;
+        Vector3 mean = Vector3.zero;
+        for (int i = 0; i < n; i++) mean += pos[i] + rot[i] * offset;
+        mean /= n;
+        double sq = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            float e = Vector3.Distance(pos[i] + rot[i] * offset, mean);
+            sq += (double)e * e;
+            if (e > max) max = e;
+        }
+        rms = (float)System.Math.Sqrt(sq / n);
     }
 
     /// <summary>양쪽 Tr + Gl로 한 번에(검증기가 쓴다).</summary>

@@ -43,6 +43,11 @@ public enum RomLinePoint
 ///   면은 공간에 고정된 세 축(정면·좌우·수직)으로 세운다 — 양쪽 Tr을 찍지 않는다. 회전의 바닥면은 중력만 쓴다.
 ///   세 축은 판을 세울 때 헤드셋이 보던 방향으로 잡는다(환자가 사용자를 마주 본다고 놓는다) — «축 다시 잡기»로 다시 잡는다.
 ///   ★환자는 그 축에 정면만 맞춰 앉으면 된다(자리는 뜻이 없다). 어긋난 만큼 값이 달라진다.
+///
+/// ★끝점 보정(10-07, 스틱을 눌러 시작 · 다시 눌러 끝): 컨트롤러 끝을 움직이지 않는 한 점에 댄 채 여러 방향으로 돌리면,
+///   그 자세들에서 «찍는 점»이 컨트롤러 좌표로 어디인지(<c>tipOffset</c>)를 계산으로 구한다. 눈으로 맞춘 값이 실제 닿는 자리와
+///   어긋나 있으면, 찍을 때 컨트롤러를 쥔 각도에 따라 찍히는 자리가 달라진다(어긋남 × 2·sin(각/2)) — 민두 시험에서 드러났다.
+///
 ///   ★첫 판(10-07 낮)은 한 선에서 세 면의 값을 함께 보여 줬다. 민두 시험에서 다른 두 면의 값이 실제 움직임이 아닌
 ///     «겉보기 값»(순수 회전인데 옆면 120~150°)으로 나와 갈래를 나눴다 — 다른 면의 값은 로그에만 남긴다.
 /// </summary>
@@ -109,6 +114,18 @@ public class RomLineSession : MonoBehaviour
     private float prevTrigger;
     private Vector3 armedPos;
     private float armedTime = -10f;
+    private Vector3 armedCtrlPos, markCtrlPos;                              // 찍는 순간의 컨트롤러 자세 — 로그에 남겨, 나중에 끝점을 바꿔 다시 계산해 볼 수 있게
+    private Quaternion armedCtrlRot = Quaternion.identity, markCtrlRot = Quaternion.identity;
+
+    // 끝점 보정(10-07) — 끝을 한 점에 대고 돌린 자세들
+    private bool calibrating;
+    private float calibStart, calibNextText, calibRange;
+    private readonly List<Vector3> calibPos = new List<Vector3>(600);
+    private readonly List<Quaternion> calibRot = new List<Quaternion>(600);
+    private const int CalibMinSamples = 40;
+    private const float CalibMinRange = 40f;       // 처음 자세에서 이만큼(도)은 돌려야 끝점이 정해진다
+    private const float CalibMaxRms = 0.003f;      // 맞춘 뒤 남은 흔들림이 이보다 크면(m) 적용하지 않는다
+    private const float CalibTimeout = 40f;
     private bool stickReady = true;
     private bool grabbing;
     private Vector3 grabOffset;
@@ -271,7 +288,7 @@ public class RomLineSession : MonoBehaviour
         {
             trackMask = mask;
             nextTrackLog = Time.unscaledTime + 1f;
-            Debug.Log($"[선실측] 추적 — 컨트롤러 {(tipValid ? "O" : "X")} · 왼손 {(fingerValid[0] ? "O" : "X")} · 오른손 {(fingerValid[1] ? "O" : "X")}");
+            Debug.Log($"[선실측] 추적 — 컨트롤러 {(tipValid ? "O" : "X")} · 왼손 {(fingerValid[0] ? "O" : "X")} · 오른손 {(fingerValid[1] ? "O" : "X")} · t {Time.unscaledTime:F1}s");
         }
     }
 
@@ -364,12 +381,15 @@ public class RomLineSession : MonoBehaviour
             hapticOff = -1f;
         }
         if (Time.frameCount == switchedFrame) return;   // 컨트롤러를 바꾼 그 누름은 전환으로만 쓴다
+        if (calibrating && Time.unscaledTime - calibStart > CalibTimeout) EndCalibration("시간이 다 됐다");
 
         // 트리거를 당기기 시작한 순간의 자리를 잡아 둔다 — 끝까지 당기는 동안 컨트롤러가 흔들린다.
         float trigger = tipValid ? OVRInput.Get(OVRInput.Axis1D.PrimaryIndexTrigger, active) : prevTrigger;
         if (prevTrigger < ArmThreshold && trigger >= ArmThreshold)
         {
             armedPos = tipPos;
+            armedCtrlPos = ctrlPos;
+            armedCtrlRot = ctrlRot;
             armedTime = Time.unscaledTime;
         }
         bool triggerDown = tipValid && prevTrigger < 0.55f && trigger >= 0.55f;
@@ -426,6 +446,15 @@ public class RomLineSession : MonoBehaviour
         if (controllerOnPanel) return;   // ★판 위에서는 점을 찍지 않는다
         if (!tipValid) return;           // 아래는 컨트롤러로만 한다
 
+        // ── 끝점 보정 — 스틱을 눌러 시작, 다시 눌러 끝. 하는 동안에는 점을 찍지 않는다 ──
+        if (OVRInput.GetDown(OVRInput.Button.PrimaryThumbstick, active))
+        {
+            if (calibrating) EndCalibration("스틱");
+            else BeginCalibration();
+            return;
+        }
+        if (calibrating) { SampleCalibration(); return; }
+
         // ── 버튼·스틱 ──
         if (OVRInput.GetDown(OVRInput.Button.One, active)) { Undo(); return; }
         if (!freeMode && OVRInput.GetDown(OVRInput.Button.Two, active)) { Skip(); return; }   // 자유 측정에는 단계가 없다
@@ -445,8 +474,88 @@ public class RomLineSession : MonoBehaviour
             bool armed = Time.unscaledTime - armedTime < 0.6f;
             Vector3 at = armed ? armedPos : tipPos;
             float shake = armed ? Vector3.Distance(armedPos, tipPos) : 0f;
+            markCtrlPos = armed ? armedCtrlPos : ctrlPos;
+            markCtrlRot = armed ? armedCtrlRot : ctrlRot;
             Mark(at, shake);
         }
+    }
+
+    // ── 끝점 보정 ───────────────────────────────────────────────────
+    private void BeginCalibration()
+    {
+        calibrating = true;
+        calibStart = Time.unscaledTime;
+        calibNextText = 0f;
+        calibRange = 0f;
+        calibPos.Clear();
+        calibRot.Clear();
+        noteText = "끝점 보정 — 끝을 한 점에 대고 여러 방향으로 돌리세요";
+        Debug.Log($"[선실측] 끝점 보정 시작 — 지금 값 {tipOffset * 1000f:F1}mm · 끝을 움직이지 않는 한 점에 댄 채 컨트롤러를 여러 방향으로 돌린다(스틱을 다시 누르면 끝)");
+        Play(sndPress);
+        dirty = true;
+    }
+
+    private void SampleCalibration()
+    {
+        int n = calibPos.Count;
+        if (n < 600 && (n == 0 || Quaternion.Angle(calibRot[n - 1], ctrlRot) > 1.5f))   // 방향이 바뀐 자세만 모은다(가만히 있는 동안 같은 표본이 쌓이지 않게)
+        {
+            calibPos.Add(ctrlPos);
+            calibRot.Add(ctrlRot);
+            calibRange = Mathf.Max(calibRange, Quaternion.Angle(calibRot[0], ctrlRot));
+        }
+        if (Time.unscaledTime < calibNextText) return;
+        calibNextText = Time.unscaledTime + 0.5f;   // 글자는 0.5초에 한 번만 바꾼다
+        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 스틱을 다시 누르면 끝";
+        dirty = true;
+    }
+
+    private void EndCalibration(string why)
+    {
+        calibrating = false;
+        int n = calibPos.Count;
+        if (n < CalibMinSamples || calibRange < CalibMinRange)
+        {
+            Deny($"끝점 보정 — 모자라다(표본 {n} · 돌린 범위 {calibRange:F0}°). 더 크게, 여러 방향으로 돌려야 한다");
+            return;
+        }
+        if (!RomLineMath.PivotFit(calibPos, calibRot, out Vector3 fit, out Vector3 pivot, out float rms, out float max))
+        {
+            Deny("끝점 보정 — 계산을 못 했다(한 방향으로만 돌렸다)");
+            return;
+        }
+
+        bool left = active == OVRInput.Controller.LTouch;
+        Vector3 used = tipOffset;
+        if (left) used.x = -used.x;                     // 왼손 컨트롤러는 좌우를 뒤집어 쓴다 — 견줄 때도 같은 좌표로
+        RomLineMath.TipSpread(calibPos, calibRot, used, out float oldRms, out float oldMax);
+        Vector3 asRight = fit;
+        if (left) asRight.x = -asRight.x;               // tipOffset은 오른손 기준으로 적는다
+        float moved = Vector3.Distance(asRight, tipOffset);
+        bool apply = rms <= CalibMaxRms;
+
+        Debug.Log($"[선실측] 끝점 보정 끝({why}) — 표본 {n} · 돌린 범위 {calibRange:F0}° · {(left ? "왼쪽" : "오른쪽")} 컨트롤러 · " +
+                  $"맞춘 끝점 {asRight * 1000f:F1}mm ↔ 쓰던 값 {tipOffset * 1000f:F1}mm (차이 {moved * 1000f:F1}mm) · " +
+                  $"맞춘 값으로 남은 흔들림 rms {rms * 1000f:F1}mm(최대 {max * 1000f:F1}mm) · 쓰던 값으로는 rms {oldRms * 1000f:F1}mm(최대 {oldMax * 1000f:F1}mm) · " +
+                  $"고정점 {pivot:F3} · {(apply ? "★이번 Play에 적용했다(Play를 멈추면 씬 값에 옮겨 적는다)" : "적용 안 함 — 흔들림이 크다(끝이 미끄러졌거나 추적이 흔들렸다)")}");
+        if (apply)
+        {
+            tipOffset = asRight;
+            noteText = $"끝점 ({asRight.x * 1000f:F0}, {asRight.y * 1000f:F0}, {asRight.z * 1000f:F0})mm 로 바꿈 · 전과 {moved * 1000f:F0}mm 차이 · 흔들림 {oldRms * 1000f:F1} → {rms * 1000f:F1}mm";
+            Play(sndDone);
+        }
+        else
+        {
+            noteText = $"끝점 보정 — 흔들림 {rms * 1000f:F1}mm로 커서 적용 안 함";
+            Play(sndDeny);
+        }
+        dirty = true;
+    }
+
+    /// <summary>찍는 순간의 컨트롤러 자세와 시각 — 찍음 로그 끝에 붙인다(끝점을 바꿔 다시 계산하거나, 추적이 끊긴 때와 견줄 수 있게).</summary>
+    private string PoseSuffix()
+    {
+        return $" · 컨트롤러 자리 {markCtrlPos:F4} 회전 {markCtrlRot:F4} · t {Time.unscaledTime:F1}s";
     }
 
     // ── 동작 ────────────────────────────────────────────────────────
@@ -468,7 +577,7 @@ public class RomLineSession : MonoBehaviour
         if (index < 2) { points[start + index] = pos; has[start + index] = true; }
         else { extra[group] = pos; hasExtra[group] = true; }
         Debug.Log($"[선실측] 찍음 — {GroupTitle(group)} · {PointName[(int)which]} ({index + 1}/{SizeOf(group)}) · 자리 {pos:F3} · " +
-                  $"당기는 동안 끝점 이동 {shake * 1000f:F1}mm");
+                  $"당기는 동안 끝점 이동 {shake * 1000f:F1}mm" + PoseSuffix());
         index++;
         noteText = "";
         Play(sndMark);
@@ -830,7 +939,7 @@ public class RomLineSession : MonoBehaviour
         List<Vector3> pts = FreePts;
         pts.Add(pos);
         int n = pts.Count, line = (n + 1) / 2;
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 찍음 · 선 {line}의 {(n % 2 == 1 ? "첫" : "둘째")} 점 · 자리 {pos:F4} · 당기는 동안 끝점 이동 {shake * 1000f:F1}mm");
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 찍음 · 선 {line}의 {(n % 2 == 1 ? "첫" : "둘째")} 점 · 자리 {pos:F4} · 당기는 동안 끝점 이동 {shake * 1000f:F1}mm" + PoseSuffix());
         if (n % 2 == 0)
         {
             if (Vector3.Distance(pts[n - 2], pts[n - 1]) < 0.005f)

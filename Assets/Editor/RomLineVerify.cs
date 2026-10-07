@@ -110,6 +110,30 @@ public static class RomLineVerify
             }
         }
 
+        // ── 끝점 보정(10-07) — 정답을 아는 끝점·고정점으로 자세를 만들어 넣고 되찾는가 ──
+        {
+            var pos = new System.Collections.Generic.List<Vector3>();
+            var rot = new System.Collections.Generic.List<Quaternion>();
+            Vector3 trueOff = new Vector3(-0.012f, 0.009f, 0.027f), truePivot = new Vector3(0.31f, 0.84f, -0.22f);
+            var rng = new System.Random(5);
+            for (int i = 0; i < 200; i++)
+            {
+                Quaternion q = Quaternion.Euler((float)(rng.NextDouble() * 80 - 40), (float)(rng.NextDouble() * 80 - 40), (float)(rng.NextDouble() * 80 - 40));
+                rot.Add(q);
+                pos.Add(truePivot - q * trueOff);
+            }
+            bool fit = RomLineMath.PivotFit(pos, rot, out Vector3 off, out Vector3 piv, out float rms, out float mx);
+            fail += Line(sb, fit && Vector3.Distance(off, trueOff) < 0.0002f && Vector3.Distance(piv, truePivot) < 0.0002f && rms < 0.0002f,
+                         $"끝점 보정 — 넣은 끝점 {trueOff * 1000f:F1}mm → 되찾은 값 {off * 1000f:F1}mm (남은 흔들림 {rms * 1000f:F2}mm)");
+            RomLineMath.TipSpread(pos, rot, trueOff + new Vector3(0f, 0f, 0.010f), out float wrongRms, out float wrongMax);
+            sb.AppendLine($"참고  끝점을 앞뒤로 10mm 틀리게 두면(±40° 돌릴 때) 찍는 자리가 rms {wrongRms * 1000f:F1}mm · 최대 {wrongMax * 1000f:F1}mm 흩어진다");
+            // 표본마다 1mm 오차를 넣어도 끝점이 1mm 안으로 나오는가
+            for (int i = 0; i < pos.Count; i++)
+                pos[i] += new Vector3((float)(rng.NextDouble() - 0.5), (float)(rng.NextDouble() - 0.5), (float)(rng.NextDouble() - 0.5)) * 0.002f;
+            fit = RomLineMath.PivotFit(pos, rot, out off, out piv, out rms, out mx);
+            fail += Line(sb, fit && Vector3.Distance(off, trueOff) < 0.001f, $"끝점 보정 — 표본마다 ±1mm 오차 → 되찾은 값 {off * 1000f:F1}mm (남은 흔들림 {rms * 1000f:F2}mm)");
+        }
+
         // ── 참고(판정 없음): 다른 동작이 섞이면 값과 «면 밖 벗어남»이 어떻게 나오나 ──
         {
             Vector3 U = Vector3.up, F = Vector3.forward, R = Vector3.right;
