@@ -523,6 +523,7 @@ public static class RomLineModelSim
                 Acc(sum, sq, j * 2, direct);
                 Acc(sum, sq, j * 2 + 1, RomLineMath.Measure(nA, nB, mA, mB, normal).angle);
                 if (m < 2 && j == 0) Acc(sum, sq, corr, Corrected(direct, phiModel));
+                if ((m == 2 || m == 3) && j == 0) Acc(sum, sq, corr, NeutralPlaneAngle(nA, nB, mA, mB, direct));
             }
         }
         string head = $"{MotionName[m]}\t{{0}}\t{th.ToString("F0", CultureInfo.InvariantCulture)}\t{group}\t{param}\t{{1}}\t{{2}}\t{{3}}\t{n}";
@@ -542,6 +543,7 @@ public static class RomLineModelSim
                                                  MotionName[m], th, e, Corrected(d, phiModel + e)));
                 }
         }
+        else if (m < 4) Row(tsv, head, "Gl~Gn", "중립선면", sum, sq, corr, n);
     }
 
     // ── 종합 시뮬레이션(여러 요인을 한꺼번에 흔든다) ────────────────
@@ -588,7 +590,7 @@ public static class RomLineModelSim
                 var motion = (RomLineMotion)m;
                 LineDef[] lines = LinesFor(motion);
                 int corr = lines.Length * 2;
-                int cols = corr + (m < 2 ? 1 : 0);
+                int cols = corr + (m < 4 ? 1 : 0);   // 굴곡·신전 = 평균값 보정 / 측굴 = 중립선으로 세운 면(10-07)
                 int o1 = ((m / 2 + 1) % 3) * 2, o2 = ((m / 2 + 2) % 3) * 2;   // 섞이는 다른 두 동작(축 부호는 뽑는 값의 부호가 맡는다)
                 foreach (float th in Thetas[m])
                 {
@@ -624,6 +626,7 @@ public static class RomLineModelSim
                             err[j * 2][it] = direct - th;
                             err[j * 2 + 1][it] = RomLineMath.Measure(nA, nB, mA, mB, normal).angle - th;
                             if (m < 2 && j == 0) err[corr][it] = Corrected(direct, phiModel) - th;   // 평균값 = 기준 모델의 들린 각(그 사람의 값이 아니다)
+                            if ((m == 2 || m == 3) && j == 0) err[corr][it] = NeutralPlaneAngle(nA, nB, mA, mB, direct) - th;
                         }
                     }
                     for (int i = 0; i < cols; i++)
@@ -640,8 +643,8 @@ public static class RomLineModelSim
                         Array.Sort(abs);
                         Array.Sort(err[i]);
                         double mean = sum / n, sd = Math.Sqrt(Math.Max(0.0, sq / n - mean * mean));
-                        string line = i == corr ? "Tr~Gl" : lines[i / 2].name;
-                        string method = i == corr ? "평균값보정" : i % 2 == 0 ? "직접" : "면";
+                        string line = i == corr ? (m < 2 ? "Tr~Gl" : "Gl~Gn") : lines[i / 2].name;
+                        string method = i == corr ? (m < 2 ? "평균값보정" : "중립선면") : i % 2 == 0 ? "직접" : "면";
                         tsv.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}\t{1}\t{2}\t{3:F0}\t{4}\t{5:F3}\t{6:F3}\t{7:F3}\t{8:F3}\t{9:F3}\t{10:F4}\t{11:F4}\t{12}",
                                                      e.name, MotionName[m], line, th, method, mean, sd,
                                                      err[i][(int)(n * 0.025f)], err[i][Mathf.Min(n - 1, (int)(n * 0.975f))],
@@ -666,6 +669,20 @@ public static class RomLineModelSim
     {
         float s = Mathf.Sin(phiDeg * Mathf.Deg2Rad), c = Mathf.Cos(phiDeg * Mathf.Deg2Rad);
         return Mathf.Acos(Mathf.Clamp((Mathf.Cos(directDeg * Mathf.Deg2Rad) - s * s) / (c * c), -1f, 1f)) * Mathf.Rad2Deg;
+    }
+
+    /// <summary>
+    /// 기준(양쪽 Tr) 없이 측굴면을 세워 보는 시험(10-07, 사용자 질문 «측굴도 바닥에 수직인 면에 그리면 되지 않나»).
+    /// 바닥에 수직인 면은 무수히 많아 환자의 앞뒤를 알아야 하나를 고를 수 있다 → 중립의 Gl ~ Gn 선이 기운 방향
+    /// (수평 성분 — 턱 끝이 미간보다 뒤에 있다)을 앞뒤로 삼는다. 찍힌 점(오차 포함)으로 계산한다.
+    /// ★앱에는 없는 방법이다 — 이득이 있는지 보려는 것. 수평 성분이 없으면(선이 수직) fallback(직접 값)을 돌려준다.
+    /// </summary>
+    private static float NeutralPlaneAngle(Vector3 nA, Vector3 nB, Vector3 mA, Vector3 mB, float fallback)
+    {
+        Vector3 h = Vector3.ProjectOnPlane(nB - nA, Vector3.up);
+        if (h.sqrMagnitude < 1e-8f) return fallback;
+        RomLineResult r = RomLineMath.Measure(nA, nB, mA, mB, h.normalized);
+        return r.valid ? r.angle : fallback;
     }
 
     private static void Acc(double[] sum, double[] sq, int i, float v) { sum[i] += v; sq[i] += (double)v * v; }
