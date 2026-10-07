@@ -9,7 +9,7 @@ using UnityEngine;
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.46f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄
+    public const float PanelW = 0.36f, PanelH = 0.50f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
@@ -17,7 +17,7 @@ public class RomLineView
     private const int ArcSegments = 32;
     public const float TouchDepth = 0.035f;      // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
     public const float FingerDepth = 0.02f;      // 손끝은 더 바짝 대야 한다 — 지나가는 손에 눌리지 않게(10-06)
-    public const int ButtonCount = 10;
+    public const int ButtonCount = 15;
 
     // ── 색 ──────────────────────────────────────────────────────────
     private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
@@ -41,7 +41,8 @@ public class RomLineView
     private static readonly string[] ButtonNames = { "이 동작 다시", "전부 다시", "나가기" };
     // 컨트롤러의 스틱 · A/X · B/Y가 하던 일 — 손으로도 할 수 있게 판에 올린다(10-06)
     private static readonly string[] StepNames = { "이전 단계", "한 점 취소", "다음 단계" };
-    public static readonly string[] ButtonLabel = { "기준", "굴곡·신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계" };
+    public static readonly string[] ButtonLabel = { "기준", "굴곡·신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계",
+                                                   "6동작", "자유 측정", "전부 지우기", "3축 표시", "축 다시 잡기" };   // 10~14 = 자유 측정(10-07)
 
     private Transform root;
     private Material mat;
@@ -49,6 +50,7 @@ public class RomLineView
 
     // 판
     private Transform panel;
+    private Transform guidedArea, freeArea;   // 모드마다 보이는 것 — 6동작(탭·결과표·단계 버튼) / 자유 측정(결과 줄·축 버튼)
     private readonly Renderer[] buttonPlates = new Renderer[ButtonCount];
     private readonly Rect[] buttonRects = new Rect[ButtonCount];
     private readonly Color[] buttonBase = new Color[ButtonCount];
@@ -76,6 +78,9 @@ public class RomLineView
 
     public bool PanelPlaced { get; private set; }
     public Transform Panel => panel;
+    /// <summary>자유 측정의 판 글자를 붙일 자리와, 그 결과 줄이 시작하는 높이(판 좌표).</summary>
+    public Transform FreeArea => freeArea;
+    public float FreeTableTop { get; private set; }
 
     public void Build(Transform parent, TMP_FontAsset f, Material m)
     {
@@ -146,14 +151,23 @@ public class RomLineView
         panel.SetParent(root, false);
         MakeQuad(panel, "판", Vector2.zero, new Vector2(PanelW, PanelH), PlateColor, 0);
 
-        float top = PanelH * 0.5f;
+        guidedArea = new GameObject("6동작").transform;
+        guidedArea.SetParent(panel, false);
+        freeArea = new GameObject("자유 측정").transform;
+        freeArea.SetParent(panel, false);
+
+        // 맨 위 한 줄 — 모드(6동작 ↔ 자유 측정). 그 아래는 종전 배치 그대로 4cm 내려왔다.
+        float modeY = PanelH * 0.5f - 0.026f;
+        AddButton(panel, 10, new Vector2(-0.058f, modeY), new Vector2(0.108f, 0.032f), TabOn, ButtonLabel[10], 0.075f);
+        AddButton(panel, 11, new Vector2(0.058f, modeY), new Vector2(0.108f, 0.032f), TabOff, ButtonLabel[11], 0.075f);
+        float top = PanelH * 0.5f - 0.040f;
 
         // 진행 위치(탭) — 누르면 그 자리로 간다
         float tabW = 0.082f, tabH = 0.034f;
         for (int i = 0; i < 4; i++)
         {
             var c = new Vector2((i - 1.5f) * (tabW + 0.004f), top - 0.030f);
-            AddButton(i, c, new Vector2(tabW, tabH), TabOff, TabNames[i], 0.075f);
+            AddButton(guidedArea, i, c, new Vector2(tabW, tabH), TabOff, TabNames[i], 0.075f);
         }
 
         title = MakeText(panel, "", 0.13f, TextAlignmentOptions.Center, 3);
@@ -167,21 +181,22 @@ public class RomLineView
 
         // 결과표 — 능동·압박마다 «면»(환자 기준 면 위에서 잰 값)과 «직접»(3차원에서 그대로 잰 값, 비교용)
         float tableTop = top - 0.158f, rowH = 0.019f;
+        FreeTableTop = tableTop;
         const float xName = -0.125f;
         float[] xCol = { -0.050f, 0.015f, 0.085f, 0.150f };
         var dim = new Color(0.72f, 0.76f, 0.82f, 1f);
-        Place(MakeText(panel, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[0] + xCol[1]) * 0.5f, tableTop), 0.12f).color = ActiveColor;
-        Place(MakeText(panel, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[2] + xCol[3]) * 0.5f, tableTop), 0.12f).color = new Color(0.95f, 0.6f, 0.3f, 1f);
+        Place(MakeText(guidedArea, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[0] + xCol[1]) * 0.5f, tableTop), 0.12f).color = ActiveColor;
+        Place(MakeText(guidedArea, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2((xCol[2] + xCol[3]) * 0.5f, tableTop), 0.12f).color = new Color(0.95f, 0.6f, 0.3f, 1f);
         for (int c = 0; c < 4; c++)
-            Place(MakeText(panel, c % 2 == 0 ? "면" : "직접", 0.06f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], tableTop - 0.017f), 0.06f).color = dim;
+            Place(MakeText(guidedArea, c % 2 == 0 ? "면" : "직접", 0.06f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], tableTop - 0.017f), 0.06f).color = dim;
         for (int m = 0; m < 6; m++)
         {
             float y = tableTop - 0.017f - rowH * (m + 1);
-            Place(MakeText(panel, RomLineSession.MotionName[m], 0.08f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.09f);
+            Place(MakeText(guidedArea, RomLineSession.MotionName[m], 0.08f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.09f);
             for (int ph = 0; ph < 2; ph++)
             {
-                values[m * 2 + ph] = Place(MakeText(panel, "—", 0.08f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2], y), 0.06f);
-                valuesDirect[m * 2 + ph] = Place(MakeText(panel, "—", 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2 + 1], y), 0.06f);
+                values[m * 2 + ph] = Place(MakeText(guidedArea, "—", 0.08f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2], y), 0.06f);
+                valuesDirect[m * 2 + ph] = Place(MakeText(guidedArea, "—", 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[ph * 2 + 1], y), 0.06f);
                 valuesDirect[m * 2 + ph].color = dim;
             }
         }
@@ -191,37 +206,62 @@ public class RomLineView
         for (int r = 0; r < 2; r++)
         {
             float cy = tableTop - 0.017f - rowH * (7 + r);
-            compareNames[r] = Place(MakeText(panel, RomLineSession.MotionName[r] + " Gl~Gn", 0.07f, TextAlignmentOptions.Left, 3), new Vector2(xName, cy), 0.09f);
+            compareNames[r] = Place(MakeText(guidedArea, RomLineSession.MotionName[r] + " Gl~Gn", 0.07f, TextAlignmentOptions.Left, 3), new Vector2(xName, cy), 0.09f);
             compareNames[r].color = CompareColor;
             for (int c = 0; c < 4; c++)
             {
-                compareValues[r * 4 + c] = Place(MakeText(panel, "—", c % 2 == 0 ? 0.08f : 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], cy), 0.06f);
+                compareValues[r * 4 + c] = Place(MakeText(guidedArea, "—", c % 2 == 0 ? 0.08f : 0.072f, TextAlignmentOptions.Center, 3), new Vector2(xCol[c], cy), 0.06f);
                 compareValues[r * 4 + c].color = CompareColor;
             }
             SetCompare(r, false, "", "", "", "");
         }
 
         // 버튼 두 줄 — 위: 단계(이전 · 한 점 취소 · 다음) / 아래: 다시 · 전부 다시 · 나가기
-        float by = -top + 0.030f, bw = 0.108f, bh = 0.036f;
+        //   «나가기»(6) · «한 점 취소»(8)는 두 모드가 같이 쓴다. 나머지 자리는 모드마다 다른 버튼이 선다.
+        float by = -PanelH * 0.5f + 0.030f, bw = 0.108f, bh = 0.036f;
+        var size = new Vector2(bw, bh);
+        var up = new Vector2(0f, bh + 0.008f);
         for (int i = 0; i < 3; i++)
         {
             var c = new Vector2((i - 1f) * (bw + 0.006f), by);
-            AddButton(4 + i, c, new Vector2(bw, bh), i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
-            AddButton(7 + i, c + new Vector2(0f, bh + 0.008f), new Vector2(bw, bh), ButtonColor, StepNames[i], 0.075f);
+            AddButton(i == 2 ? panel : guidedArea, 4 + i, c, size, i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
+            AddButton(i == 1 ? panel : guidedArea, 7 + i, c + up, size, ButtonColor, StepNames[i], 0.075f);
         }
+        // 자유 측정: 아래 줄 «3축 표시» · «전부 지우기» / 윗줄 «축 다시 잡기»
+        AddButton(freeArea, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
+        AddButton(freeArea, 12, new Vector2(0f, by), size, ButtonColor, ButtonLabel[12], 0.075f);
+        AddButton(freeArea, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);
+        freeArea.gameObject.SetActive(false);
 
         // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
         fill = MakeQuad(panel, "차오름", Vector2.zero, new Vector2(0.01f, 0.004f), FillColor, 2);
         fill.gameObject.SetActive(false);
     }
 
-    private void AddButton(int index, Vector2 center, Vector2 size, Color color, string label, float textSize)
+    private void AddButton(Transform parent, int index, Vector2 center, Vector2 size, Color color, string label, float textSize)
     {
-        Transform q = MakeQuad(panel, "버튼 " + label, center, size, color, 1);
+        Transform q = MakeQuad(parent, "버튼 " + label, center, size, color, 1);
         buttonPlates[index] = q.GetComponent<Renderer>();
         buttonRects[index] = new Rect(center - size * 0.5f, size);
         buttonBase[index] = color;
-        Place(MakeText(panel, label, textSize, TextAlignmentOptions.Center, 3), center, size.x);
+        Place(MakeText(parent, label, textSize, TextAlignmentOptions.Center, 3), center, size.x);
+    }
+
+    /// <summary>판을 6동작 ↔ 자유 측정으로 바꾼다. 그 모드의 버튼·글자만 보이고, 안 보이는 버튼은 눌리지 않는다.</summary>
+    public void SetMode(bool free)
+    {
+        SetHot(-1, 0f);
+        guidedArea.gameObject.SetActive(!free);
+        freeArea.gameObject.SetActive(free);
+        SetButtonOn(10, !free);
+        SetButtonOn(11, free);
+    }
+
+    /// <summary>켜고 끄는 버튼(모드 · 3축 표시)의 바탕색.</summary>
+    public void SetButtonOn(int index, bool on)
+    {
+        buttonBase[index] = on ? TabOn : TabOff;
+        if (index != hot) buttonPlates[index].material.color = buttonBase[index];
     }
 
     /// <summary>판을 눈앞 오른쪽에 세운다(처음 한 번).</summary>
@@ -253,7 +293,7 @@ public class RomLineView
         onPanel = true;
         var p = new Vector2(l.x, l.y);
         for (int i = 0; i < buttonRects.Length; i++)
-            if (buttonRects[i].Contains(p)) return i;
+            if (buttonRects[i].Contains(p) && buttonPlates[i].gameObject.activeInHierarchy) return i;   // 다른 모드의 버튼은 같은 자리에 꺼져 있다
         return -1;
     }
 
@@ -461,7 +501,7 @@ public class RomLineView
         max += LineMargin;
     }
 
-    private static void DrawLine(LineRenderer lr, Vector3 a, Vector3 b)
+    internal static void DrawLine(LineRenderer lr, Vector3 a, Vector3 b)
     {
         lr.positionCount = 2;
         lr.SetPosition(0, a);
@@ -500,14 +540,14 @@ public class RomLineView
         if (cmpText.gameObject.activeSelf) Face(cmpText.transform, eye);
     }
 
-    private static void Face(Transform t, Transform eye)
+    internal static void Face(Transform t, Transform eye)
     {
         Vector3 away = t.position - eye.position;
         if (away.sqrMagnitude > 1e-6f) t.rotation = Quaternion.LookRotation(away, eye.up);
     }
 
     // ── 만들기 ──────────────────────────────────────────────────────
-    private Transform MakeSphere(string name, float radius, Color c)
+    internal Transform MakeSphere(string name, float radius, Color c)
     {
         var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         go.name = name;
@@ -521,7 +561,7 @@ public class RomLineView
         return go.transform;
     }
 
-    private LineRenderer MakeLine(string name, Color c, int count)
+    internal LineRenderer MakeLine(string name, Color c, int count)
     {
         var go = new GameObject(name);
         go.transform.SetParent(root, false);
@@ -552,7 +592,7 @@ public class RomLineView
         return go.transform;
     }
 
-    private TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order)
+    internal TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order)
     {
         var go = new GameObject("글자");
         go.transform.SetParent(parent, false);
@@ -568,7 +608,7 @@ public class RomLineView
         return t;
     }
 
-    private static TextMeshPro Place(TextMeshPro t, Vector2 center, float width)
+    internal static TextMeshPro Place(TextMeshPro t, Vector2 center, float width)
     {
         t.rectTransform.sizeDelta = new Vector2(width, t.fontSize * 2f);
         t.transform.localPosition = new Vector3(center.x, center.y, -0.004f);

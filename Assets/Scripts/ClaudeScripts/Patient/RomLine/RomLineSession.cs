@@ -1,4 +1,5 @@
 using Oculus.Interaction.Input;
+using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -35,6 +36,12 @@ public enum RomLinePoint
 /// ★비교 시험(10-02, <c>compareGlGn</c>): 굴곡·신전에서 한 자세마다 Gn을 하나 더 찍어(오른쪽 Tr → Gl → Gn)
 ///   Tr ~ Gl 선과 Gl ~ Gn 선의 값을 나란히 본다. Tr ~ Gl 선은 옆면에서 비스듬해 «직접»이 작게 나오고
 ///   Gl ~ Gn 선은 정중선 위라 그대로 나온다는 계산을 실제로 확인하려는 것이다. 끄면 종전 흐름(2점) 그대로다.
+///
+/// ★자유 측정(10-07, 판 맨 위의 «자유 측정»): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
+///   선마다 길이를 내고, <b>첫 선</b>·<b>바로 앞 선</b>과 벌어진 각을 낸다(«직접»).
+///   «3축 표시»가 켜져 있으면 공간에 고정된 세 축(정면·좌우·수직)의 세 면에도 내려, 한 선에서 굴곡/신전·측굴·회전을 함께 낸다.
+///   세 축은 판을 세울 때 헤드셋이 보던 방향으로 잡는다(환자가 사용자를 마주 본다고 놓는다) — «축 다시 잡기»로 다시 잡는다.
+///   ★환자는 그 축에 정면만 맞춰 앉으면 된다(자리는 뜻이 없다). 어긋난 만큼 값이 달라진다.
 /// </summary>
 public class RomLineSession : MonoBehaviour
 {
@@ -70,6 +77,15 @@ public class RomLineSession : MonoBehaviour
     private readonly RomLineResult[] cmpResults = new RomLineResult[4];
     private readonly RomLineDirect[] cmpDirect = new RomLineDirect[4];
     private RomLineFrame frame;
+
+    // 자유 측정(10-07) — 두 점마다 선 하나, 개수 제한 없음
+    private bool freeMode;
+    private readonly List<Vector3> freePts = new List<Vector3>(64);
+    private readonly RomLineFreeView freeView = new RomLineFreeView();
+    private bool axesOn = true;
+    private RomLineFrame axes;          // 공간에 고정된 세 축 — 양쪽 Tr이 하던 일을 대신한다
+    private Vector3 axesOrigin;         // 바닥의 십자를 그리는 자리(방향만 쓰고 자리는 계산에 안 들어간다)
+    private const float FreeMaxOffPlane = 75f;   // 선이 그 면에서 이보다 많이 들려 있으면 그 면의 값은 비운다(그림자가 짧아 값이 튄다)
     private int group;      // 0 = 기준(양쪽 Tr), 1~18 = 동작 × (중립·능동·압박), 19 = 끝
     private int index;      // 그 묶음 안에서 다음에 찍을 점
 
@@ -173,6 +189,7 @@ public class RomLineSession : MonoBehaviour
             return;
         }
         view.Build(transform, font, new Material(sh));
+        freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
         BuildSounds();
 
         // 한 손에 컨트롤러, 다른 손은 맨손 — 둘을 함께 추적하게 한다. 지원하지 않으면 false가 돌아오고 손은 컨트롤러를 내려놨을 때만 잡힌다.
@@ -199,6 +216,7 @@ public class RomLineSession : MonoBehaviour
             }
             view.PlacePanel(eye);
             Debug.Log($"[선실측] 판을 세웠다 — 눈 {eye.position:F2} · 판 {view.Panel.position:F2}");
+            CaptureAxes("처음");
         }
 
         ReadController();
@@ -206,7 +224,8 @@ public class RomLineSession : MonoBehaviour
         HandleInput();
 
         if (dirty) Refresh();
-        view.Tick(eye, tipValid, tipPos, !Done, fingerValid, fingerPos);
+        view.Tick(eye, tipValid, tipPos, freeMode || !Done, fingerValid, fingerPos);
+        freeView.Tick(eye);
     }
 
     private void OnDestroy()
@@ -374,7 +393,7 @@ public class RomLineSession : MonoBehaviour
                 dwellStart = Time.unscaledTime;
                 dwellFired = false;
             }
-            bool danger = button == 5 || button == 6;   // «전부 다시» · «나가기»
+            bool danger = button == 5 || button == 6 || button == 12;   // «전부 다시» · «나가기» · «전부 지우기»
             if (!dwellFired)
             {
                 progress = (Time.unscaledTime - dwellStart) / (danger ? DangerDwellSeconds : DwellSeconds);
@@ -394,11 +413,11 @@ public class RomLineSession : MonoBehaviour
 
         // ── 버튼·스틱 ──
         if (OVRInput.GetDown(OVRInput.Button.One, active)) { Undo(); return; }
-        if (OVRInput.GetDown(OVRInput.Button.Two, active)) { Skip(); return; }
+        if (!freeMode && OVRInput.GetDown(OVRInput.Button.Two, active)) { Skip(); return; }   // 자유 측정에는 단계가 없다
 
         float sx = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, active).x;
         if (Mathf.Abs(sx) < 0.3f) stickReady = true;
-        else if (stickReady && Mathf.Abs(sx) > 0.7f)
+        else if (!freeMode && stickReady && Mathf.Abs(sx) > 0.7f)
         {
             stickReady = false;
             Go(group + (sx > 0f ? 1 : -1), "스틱");
@@ -418,6 +437,7 @@ public class RomLineSession : MonoBehaviour
     // ── 동작 ────────────────────────────────────────────────────────
     private void Mark(Vector3 pos, float shake)
     {
+        if (freeMode) { FreeMark(pos, shake); return; }
         if (Done) { Deny("측정이 끝났다 — 다시 재려면 탭이나 스틱으로 그 단계로 간다"); return; }
 
         int start = GroupStart(group);
@@ -636,6 +656,7 @@ public class RomLineSession : MonoBehaviour
 
     private void Undo()
     {
+        if (freeMode) { FreeUndo(); return; }
         if (index > 0)
         {
             index--;
@@ -705,7 +726,196 @@ public class RomLineSession : MonoBehaviour
             case 7: Go(group - 1, "버튼"); break;
             case 8: Undo(); break;
             case 9: Skip(); break;
+            case 10: SetFreeMode(false); break;
+            case 11: SetFreeMode(true); break;
+            case 12: FreeClear(); break;
+            case 13:
+                axesOn = !axesOn;
+                Debug.Log($"[선실측] 자유 — 3축 표시 {(axesOn ? "켬" : "끔(세 면의 값은 안 나온다)")}");
+                Play(sndPress);
+                dirty = true;
+                break;
+            case 14: CaptureAxes("버튼"); Play(sndPress); dirty = true; break;
         }
+    }
+
+    // ── 자유 측정(10-07) ────────────────────────────────────────────
+    private void SetFreeMode(bool on)
+    {
+        if (freeMode == on) return;
+        freeMode = on;
+        noteText = "";
+        view.SetMode(on);
+        freeView.SetVisible(on);
+        if (on)
+        {
+            // 6동작의 공간 표시는 끈다(찍어 둔 값은 그대로 — 돌아오면 다시 그린다).
+            for (int i = 0; i < PointCount; i++) view.SetPoint(i, false, points[i]);
+            for (int ph = 0; ph < 3; ph++) view.SetExtraPoint(ph, false, Vector3.zero);
+            view.HideMeasure();
+            view.HideCompare();
+        }
+        Debug.Log($"[선실측] 모드 → {(on ? $"자유 측정(찍어 둔 점 {freePts.Count}개 · 3축 표시 {(axesOn ? "켬" : "끔")})" : "6동작")}");
+        Play(sndPress);
+        dirty = true;
+    }
+
+    /// <summary>
+    /// 고정 3축을 지금 헤드셋이 보는 방향으로 잡는다. 환자는 사용자(헤드셋)를 마주 본다고 놓는다 — 정면 = 헤드셋 쪽.
+    /// ★헤드셋을 쓰지 않고 정해 둔 자리에 놓아 기준으로 삼을 때도 같은 함수다(그 자리에서 «축 다시 잡기»).
+    /// </summary>
+    private void CaptureAxes(string why)
+    {
+        // 지움: 헤드셋의 숙임·기울임 → 세 축은 늘 수평·수직이다(위아래는 중력이 맡는다).
+        Vector3 look = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
+        if (look.sqrMagnitude < 0.01f) look = Vector3.forward;   // 바로 위·아래를 보고 있었다
+        look.Normalize();
+        axes = RomLineMath.FrameFacing(-look);   // 검증기가 «양쪽 Tr로 만든 기준»과 같은 방향·부호인지 본다
+        axesOrigin = eye.position + look * 1.0f;
+        axesOrigin.y = trackingSpace != null ? trackingSpace.position.y : 0f;   // 바닥(추적 원점이 바닥 높이일 때)
+        Debug.Log($"[선실측] 자유 — 3축을 잡았다({why}) · 환자 정면 {axes.forward:F2} · 환자 오른쪽 {axes.right:F2} · 십자 자리 {axesOrigin:F2} · 눈 {eye.position:F2}");
+    }
+
+    private void FreeMark(Vector3 pos, float shake)
+    {
+        freePts.Add(pos);
+        int n = freePts.Count, line = (n + 1) / 2;
+        Debug.Log($"[선실측] 자유 — 찍음 · 선 {line}의 {(n % 2 == 1 ? "첫" : "둘째")} 점 · 자리 {pos:F4} · 당기는 동안 끝점 이동 {shake * 1000f:F1}mm");
+        if (n % 2 == 0)
+        {
+            if (Vector3.Distance(freePts[n - 2], freePts[n - 1]) < 0.005f)
+            {
+                freePts.RemoveAt(n - 1);
+                Deny("두 점이 같은 자리에 찍혔다 — 둘째 점을 다시 찍는다");
+                return;
+            }
+            LogFreeLine(line - 1);
+        }
+        noteText = "";
+        Play(sndMark);
+        Buzz(0.06f, 0.6f);
+        dirty = true;
+    }
+
+    private void FreeUndo()
+    {
+        if (freePts.Count == 0) { Deny("지울 점이 없다"); return; }
+        freePts.RemoveAt(freePts.Count - 1);
+        noteText = "";
+        Debug.Log($"[선실측] 자유 — 한 점 취소 → 남은 점 {freePts.Count}개");
+        Play(sndUndo);
+        dirty = true;
+    }
+
+    private void FreeClear()
+    {
+        Debug.Log($"[선실측] 자유 — 전부 지웠다(점 {freePts.Count}개)");
+        freePts.Clear();
+        noteText = "";
+        Play(sndUndo);
+        dirty = true;
+    }
+
+    private float FreeLength(int line) => Vector3.Distance(freePts[line * 2], freePts[line * 2 + 1]);
+
+    /// <summary>선 line이 선 from에서 벌어진 각 — 3차원 그대로(«직접»).</summary>
+    private RomLineDirect FreeDirect(int from, int line)
+    {
+        return RomLineMath.MeasureDirect(freePts[from * 2], freePts[from * 2 + 1], freePts[line * 2], freePts[line * 2 + 1]);
+    }
+
+    /// <summary>
+    /// 선 line이 선 from에서 돌아간 각을 고정 3축의 한 면에 내려 읽는다. plane 0 굴곡·신전 · 1 측굴 · 2 회전.
+    /// 선이 그 면에서 너무 들려 있으면(<see cref="FreeMaxOffPlane"/>) false — 그림자가 짧아 값이 튄다.
+    /// ★6동작과 같은 함수(<see cref="RomLineMath.Measure"/> · <see cref="RomLineMath.PlaneNormal"/>)를 탄다.
+    /// </summary>
+    private bool FreePlane(int from, int line, int plane, out RomLineResult r)
+    {
+        r = RomLineMath.Measure(freePts[from * 2], freePts[from * 2 + 1], freePts[line * 2], freePts[line * 2 + 1],
+                                RomLineMath.PlaneNormal((RomLineMotion)(plane * 2), axes));
+        return r.valid && r.neutralOffPlane <= FreeMaxOffPlane && r.markOffPlane <= FreeMaxOffPlane;
+    }
+
+    // 면마다 부호가 +일 때 / −일 때의 이름(RomLineMath.PositiveMeans: 굴곡 · 좌측굴 · 우회전이 +)
+    private static readonly string[] FreePlus = { "굴곡", "좌측굴", "우회전" };
+    private static readonly string[] FreeMinus = { "신전", "우측굴", "좌회전" };
+
+    private string FreeCell(int from, int line, int plane)
+    {
+        if (!axesOn) return "";
+        if (!FreePlane(from, line, plane, out RomLineResult r)) return "—";
+        return (r.signedAngle >= 0f ? FreePlus[plane] : FreeMinus[plane]) + " " + r.angle.ToString("F1") + "°";
+    }
+
+    private void LogFreeLine(int line)
+    {
+        var sb = new StringBuilder(260);
+        sb.Append("[선실측] 자유 — 선 ").Append(line + 1).Append(" · 길이 ").Append((FreeLength(line) * 100f).ToString("F1")).Append("cm");
+        for (int k = 0; k < 2; k++)
+        {
+            int from = k == 0 ? 0 : line - 1;
+            if (line == 0 || (k == 1 && line < 2)) continue;   // 첫 선은 견줄 선이 없고, 둘째 선은 «첫 선»과 «앞 선»이 같다
+            RomLineDirect d = FreeDirect(from, line);
+            sb.Append(k == 0 ? " ‖ 첫 선과 " : " ‖ 앞 선과 ").Append("직접 ").Append(d.angle.ToString("F1")).Append("°(엇갈림 ")
+              .Append((d.gap * 100f).ToString("F1")).Append("cm)");
+            if (!axesOn) continue;
+            for (int p = 0; p < 3; p++)
+            {
+                bool ok = FreePlane(from, line, p, out RomLineResult r);
+                sb.Append(" · ").Append(ok ? (r.signedAngle >= 0f ? FreePlus[p] : FreeMinus[p]) + " " + r.angle.ToString("F1") + "°" : "—")
+                  .Append("(면 밖 ").Append(r.neutralOffPlane.ToString("F0")).Append("→").Append(r.markOffPlane.ToString("F0")).Append("°)");
+            }
+        }
+        if (!axesOn) sb.Append(" ‖ 3축 끔");
+        Debug.Log(sb.ToString());
+    }
+
+    private void RefreshFree()
+    {
+        dirty = false;
+        int lines = freePts.Count / 2;
+        bool half = freePts.Count % 2 == 1;
+
+        string note = noteText;
+        if (note.Length == 0)
+            note = axesOn ? "환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로" : "두 점은 늘 같은 순서로 찍으세요";
+        view.SetTexts("자유 측정", $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요", note, -1, "선 " + (lines + 1));
+        view.SetButtonOn(13, axesOn);
+
+        freeView.SetPoints(freePts);
+        freeView.SetPlaneHeads(axesOn);
+        freeView.ShowAxes(axesOn, axesOrigin, axes);
+
+        // 판 — 가장 최근 선들. 선마다 «첫 선과» · «앞 선과» 두 줄.
+        int first = Mathf.Max(0, lines - RomLineFreeView.Rows);
+        for (int row = 0; row < RomLineFreeView.Rows; row++)
+        {
+            int line = first + row;
+            if (line >= lines)
+            {
+                freeView.SetRowName(row, "");
+                freeView.SetRow(row, 0, "", "", "", "", "");
+                freeView.SetRow(row, 1, "", "", "", "", "");
+                continue;
+            }
+            freeView.SetRowName(row, $"선 {line + 1}  {FreeLength(line) * 100f:F1}cm");
+            if (line == 0) freeView.SetRow(row, 0, "기준선", "", "", "", "");
+            else freeView.SetRow(row, 0, "첫 선", FreeDirect(0, line).angle.ToString("F1") + "°", FreeCell(0, line, 0), FreeCell(0, line, 1), FreeCell(0, line, 2));
+            if (line >= 2) freeView.SetRow(row, 1, "앞 선", FreeDirect(line - 1, line).angle.ToString("F1") + "°", FreeCell(line - 1, line, 0), FreeCell(line - 1, line, 1), FreeCell(line - 1, line, 2));
+            else freeView.SetRow(row, 1, "", "", "", "", "");
+        }
+
+        // 환자 위 — 가장 최근 선 곁에 각을 띄운다.
+        string label = "";
+        Vector3 at = Vector3.zero;
+        if (lines >= 2)
+        {
+            int last = lines - 1;
+            label = "첫 선 " + FreeDirect(0, last).angle.ToString("F1") + "°";
+            if (last >= 2) label += " · 앞 선 " + FreeDirect(last - 1, last).angle.ToString("F1") + "°";
+            at = (freePts[last * 2] + freePts[last * 2 + 1]) * 0.5f + Vector3.up * 0.04f;
+        }
+        freeView.SetAngleLabel(label, at);
     }
 
     private void RedoMotion()
@@ -783,6 +993,7 @@ public class RomLineSession : MonoBehaviour
 
     private void Refresh()
     {
+        if (freeMode) { RefreshFree(); return; }
         dirty = false;
 
         int tab = group == 0 ? 0 : group <= 6 ? 1 : group <= 12 ? 2 : 3;

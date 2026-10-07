@@ -49,12 +49,27 @@ public static class RomLineVerify
             bool swOk = sw.valid && sw.sidesSwapped && Vector3.Angle(sw.right, R) < 0.01f && Vector3.Angle(sw.forward, F) < 0.01f;
             fail += Line(sb, swOk, $"환자 방향 {yaw:F0}° — 양쪽 Tr을 바꿔 찍으면 알아채고 바로잡는다");
 
+            // 자유 측정의 고정 3축(10-07) — 환자가 보는 방향 하나로 만든 기준이 양쪽 Tr로 만든 기준과 같은가(방향·손잡이).
+            //   같으면 아래 6동작의 부호 확인이 고정 3축에도 그대로 선다. 비스듬히 준 방향(위로 20° 들림)도 수평 성분만 써야 한다.
+            RomLineFrame ff = RomLineMath.FrameFacing(F + U * 0.36f);
+            bool ffOk = ff.valid && Vector3.Angle(ff.right, f.right) < 0.01f && Vector3.Angle(ff.forward, f.forward) < 0.01f && Vector3.Angle(ff.up, f.up) < 0.01f;
+            fail += Line(sb, ffOk, $"환자 방향 {yaw:F0}° — 고정 3축(보는 방향으로 만든 기준)이 양쪽 Tr로 만든 기준과 같다");
+
             for (int m = 0; m < 6; m++)
             {
                 var motion = (RomLineMotion)m;
                 foreach (float deg in angles)
                 {
                     Quaternion q = Rotation(motion, deg, R, U, F);
+
+                    // 고정 3축으로 아무 선(Gl ~ Gn)이나 재도 그 동작의 면에서 같은 각·같은 방향 판정이 나오는가.
+                    {
+                        Head hf = Rotate(n, neck, q);
+                        RomLineResult fr = RomLineMath.Measure(n.gl, n.gn, hf.gl, hf.gn, RomLineMath.PlaneNormal(motion, ff));
+                        bool frOk = fr.valid && Mathf.Abs(fr.angle - deg) < 0.02f && RomLineMath.DirectionMatches(motion, fr.signedAngle);
+                        fail += Line(sb, frOk, $"환자 {yaw:F0}° · {Name(motion)} {deg:F0}° · 고정 3축 · Gl~Gn 선 → 잰 값 {fr.angle:F2}° (부호 {fr.signedAngle:+0.0;-0.0})");
+                    }
+
                     Head h = Rotate(n, neck, q);
 
                     // ① 넣은 회전이 정말 그 동작인가 — 몸의 결과로 확인한다.

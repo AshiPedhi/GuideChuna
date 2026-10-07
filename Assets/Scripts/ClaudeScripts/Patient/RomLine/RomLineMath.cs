@@ -102,6 +102,23 @@ public static class RomLineMath
         return true;
     }
 
+    /// <summary>
+    /// 환자가 보는 방향 하나로 기준 방향을 만든다(자유 측정의 고정 3축, 10-07) — 양쪽 Tr을 찍지 않는다.
+    /// 위아래 = 중력, 앞뒤 = 준 방향의 수평 성분, 좌우 = 그 둘에 직각.
+    /// ★<see cref="BuildFrame(Vector3, Vector3, Vector3)"/>와 같은 손잡이여야 부호(굴곡·좌측굴·우회전이 +)가 같다 — 검증기가 둘을 견준다.
+    /// </summary>
+    public static RomLineFrame FrameFacing(Vector3 patientForward)
+    {
+        var f = new RomLineFrame { up = Vector3.up };
+        // 지움: 준 방향의 위아래 성분 → 세 축은 늘 수평·수직이다.
+        Vector3 fw = Vector3.ProjectOnPlane(patientForward, f.up);
+        if (fw.sqrMagnitude < 1e-6f) return f;
+        f.forward = fw.normalized;
+        f.right = Vector3.Cross(f.up, f.forward).normalized;
+        f.valid = true;
+        return f;
+    }
+
     /// <summary>양쪽 Tr + Gl로 한 번에(검증기가 쓴다).</summary>
     public static RomLineFrame BuildFrame(Vector3 trRight, Vector3 trLeft, Vector3 gl)
     {
