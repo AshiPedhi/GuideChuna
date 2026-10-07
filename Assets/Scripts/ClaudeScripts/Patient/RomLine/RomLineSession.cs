@@ -122,7 +122,10 @@ public class RomLineSession : MonoBehaviour
     private Transform trackingSpace;
     private Transform eye;
     private OVRInput.Controller active = OVRInput.Controller.RTouch;
-    private bool tipValid;
+    private bool tipValid;              // 헤드셋 카메라가 컨트롤러를 보고 있다(자리가 «추적» 상태) — 이때만 점을 찍는다
+    private bool tipShown;              // 자리가 있긴 하다(못 보는 동안은 기기가 센서로 추정한 값) — 끝 구슬을 빨갛게라도 보여 준다
+    private int trackState = -1;        // 연결·자리 추적·자리 유효·방향 추적을 묶은 값 — 바뀔 때 로그를 남긴다
+    private float trackSince, trackLogNext;
     private Vector3 tipPos;
     private float prevTrigger;
     private Vector3 armedPos;
@@ -304,7 +307,7 @@ public class RomLineSession : MonoBehaviour
 
         if (dirty) Refresh();
         PumpMonitor();
-        view.Tick(eye, tipValid, tipPos, freeMode || !Done, fingerValid, fingerPos);
+        view.Tick(eye, tipShown, tipValid, tipPos, freeMode || !Done, fingerValid, fingerPos);
         freeView.Tick(eye);
     }
 
@@ -334,7 +337,7 @@ public class RomLineSession : MonoBehaviour
 
         // 무엇이 잡히고 있는지 — 바뀔 때만(1초에 한 번까지) 남긴다. «컨트롤러와 맨손이 함께 잡히는가»를 로그로 가른다.
         int mask = (tipValid ? 4 : 0) | (fingerValid[0] ? 1 : 0) | (fingerValid[1] ? 2 : 0);
-        if (mask != trackMask && Time.unscaledTime >= nextTrackLog)
+        if (handInput && mask != trackMask && Time.unscaledTime >= nextTrackLog)   // 컨트롤러의 추적 상태는 ReadController가 따로 남긴다
         {
             trackMask = mask;
             nextTrackLog = Time.unscaledTime + 1f;
@@ -383,7 +386,7 @@ public class RomLineSession : MonoBehaviour
     // ── 컨트롤러 ────────────────────────────────────────────────────
     private void ReadController()
     {
-        tipValid = false;
+        tipValid = tipShown = false;
         if (trackingSpace == null) { Silent("추적공간이 없다 — OVRCameraRig를 못 찾았다"); return; }
 
         // 쥐고 있지 않은 쪽에서 무언가 눌리면 그쪽으로 바꾼다. ★바꾼 그 누름은 «전환»으로만 쓴다 —
@@ -400,21 +403,74 @@ public class RomLineSession : MonoBehaviour
             Play(sndPress);
         }
 
-        if (!OVRInput.IsControllerConnected(active) || !OVRInput.GetControllerPositionTracked(active))
+        // ★기기는 컨트롤러의 자리를 두 단계로 알려 준다.
+        //   «추적(Tracked)» = 헤드셋 카메라가 컨트롤러의 LED를 실제로 보고 있다 → mm 단위로 믿을 수 있다.
+        //   «유효(Valid)»   = 자리가 있긴 하다. 카메라가 못 보는 동안에는 컨트롤러 안의 센서로 이어 붙인 추정값이고, 곧 틀어진다.
+        //   우리는 «추적»일 때만 점을 찍게 한다(프로그램이 건 제한). «유효»이기만 할 때는 끝 구슬을 빨갛게 보여 주고 찍기를 막는다.
+        bool connected = OVRInput.IsControllerConnected(active);
+        bool posTracked = connected && OVRInput.GetControllerPositionTracked(active);
+        bool posValid = connected && OVRInput.GetControllerPositionValid(active);
+        bool oriTracked = connected && OVRInput.GetControllerOrientationTracked(active);
+
+        if (posValid)
+        {
+            Vector3 p = trackingSpace.TransformPoint(OVRInput.GetLocalControllerPosition(active));
+            Quaternion r = trackingSpace.rotation * OVRInput.GetLocalControllerRotation(active);
+            ctrlPos = p;
+            ctrlRot = r;
+            Vector3 off = tipOffset;
+            if (active == OVRInput.Controller.LTouch) off.x = -off.x;   // 왼손 컨트롤러는 좌우가 거울상이다
+            tipPos = p + r * off;
+            tipShown = true;
+        }
+        tipValid = posTracked && posValid;
+        LogTracking(connected, posTracked, posValid, oriTracked);
+
+        if (!tipValid)
         {
             Silent($"{(active == OVRInput.Controller.RTouch ? "오른쪽" : "왼쪽")} 컨트롤러가 연결·추적되지 않는다 — 점을 찍을 수 없다");
             return;
         }
-
-        Vector3 p = trackingSpace.TransformPoint(OVRInput.GetLocalControllerPosition(active));
-        Quaternion r = trackingSpace.rotation * OVRInput.GetLocalControllerRotation(active);
-        ctrlPos = p;
-        ctrlRot = r;
-        Vector3 off = tipOffset;
-        if (active == OVRInput.Controller.LTouch) off.x = -off.x;   // 왼손 컨트롤러는 좌우가 거울상이다
-        tipPos = p + r * off;
-        tipValid = true;
         lastSilent = null;
+    }
+
+    /// <summary>헤드셋에서 본 컨트롤러의 자리 — 거리(cm) · 좌우 각(오른쪽 +) · 위아래 각(위 +). 헤드셋 카메라의 시야를 벗어났는지 가리는 데 쓴다.</summary>
+    private void FromHeadset(out float distanceCm, out float sideDeg, out float upDeg)
+    {
+        Vector3 rel = Quaternion.Inverse(eye.rotation) * (ctrlPos - eye.position);
+        distanceCm = rel.magnitude * 100f;
+        sideDeg = Mathf.Atan2(rel.x, rel.z) * Mathf.Rad2Deg;
+        upDeg = Mathf.Atan2(rel.y, new Vector2(rel.x, rel.z).magnitude) * Mathf.Rad2Deg;
+    }
+
+    /// <summary>
+    /// 컨트롤러의 추적 상태가 바뀔 때마다 «어디서 어떤 자세로» 바뀌었는지 남긴다(0.2초에 한 번까지).
+    /// 놓친 이유를 가르려는 것이다: 시야 밖(좌우·위아래 각이 크다) / 멀다(거리) / 가렸다(가까운데 놓쳤다) / LED 면이 반대쪽(컨트롤러 방향).
+    /// </summary>
+    private void LogTracking(bool connected, bool posTracked, bool posValid, bool oriTracked)
+    {
+        int state = (connected ? 1 : 0) | (posTracked ? 2 : 0) | (posValid ? 4 : 0) | (oriTracked ? 8 : 0);
+        if (state == trackState || Time.unscaledTime < trackLogNext) return;
+        float held = trackState < 0 ? 0f : Time.unscaledTime - trackSince;
+        trackState = state;
+        trackSince = Time.unscaledTime;
+        trackLogNext = Time.unscaledTime + 0.2f;
+
+        string what = !connected ? "★연결 끊김" : posTracked ? "잡힘" : posValid ? "★놓침(자리는 추정값)" : "★놓침(자리 없음)";
+        var sb = new StringBuilder(260);
+        sb.Append("[선실측] 추적 — 컨트롤러 ").Append(what).Append(" · t ").Append(Time.unscaledTime.ToString("F1")).Append("s · 앞 상태 ").Append(held.ToString("F1")).Append("초");
+        if (posValid && eye != null)
+        {
+            FromHeadset(out float dist, out float side, out float up);
+            Vector3 toHead = (eye.position - ctrlPos).normalized;
+            sb.Append(" · 헤드셋에서 ").Append(dist.ToString("F0")).Append("cm · 좌우 ").Append(side.ToString("+0;-0")).Append("° · 위아래 ").Append(up.ToString("+0;-0"))
+              .Append("° · 컨트롤러 윗면→헤드셋 ").Append(Vector3.Dot(ctrlRot * Vector3.up, toHead).ToString("+0.00;-0.00"))
+              .Append(" · 앞면→헤드셋 ").Append(Vector3.Dot(ctrlRot * Vector3.forward, toHead).ToString("+0.00;-0.00"))
+              .Append(" · 속도 ").Append(OVRInput.GetLocalControllerVelocity(active).magnitude.ToString("F2")).Append("m/s");
+        }
+        sb.Append(" · 플래그 연결 ").Append(connected ? 'O' : 'X').Append(" 자리추적 ").Append(posTracked ? 'O' : 'X').Append(" 자리유효 ").Append(posValid ? 'O' : 'X')
+          .Append(" 방향추적 ").Append(oriTracked ? 'O' : 'X');
+        Debug.Log(sb.ToString());
     }
 
     private static bool AnyDown(OVRInput.Controller c)
@@ -649,7 +705,8 @@ public class RomLineSession : MonoBehaviour
     /// <summary>찍는 순간의 컨트롤러 자세와 시각 — 찍음 로그 끝에 붙인다(끝점을 바꿔 다시 계산하거나, 추적이 끊긴 때와 견줄 수 있게).</summary>
     private string PoseSuffix()
     {
-        return $" · 컨트롤러 자리 {markCtrlPos:F4} 회전 {markCtrlRot:F4} · t {Time.unscaledTime:F1}s";
+        FromHeadset(out float dist, out float side, out float up);
+        return $" · 컨트롤러 자리 {markCtrlPos:F4} 회전 {markCtrlRot:F4} · 헤드셋에서 {dist:F0}cm 좌우 {side:+0;-0}° 위아래 {up:+0;-0}° · 추적된 지 {Time.unscaledTime - trackSince:F1}초 · t {Time.unscaledTime:F1}s";
     }
 
     // ── 동작 ────────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ public class RomLineView
     private static readonly Color PressureColor = new Color(0.62f, 0.26f, 0.01f, 1f); // 압박 #9E4203(명도만 낮춤)
     private static readonly Color ArcColor = new Color(0.25f, 0.65f, 1f, 1f);
     private static readonly Color TipColor = new Color(1f, 0.95f, 0.2f, 1f);
+    private static readonly Color TipLostColor = new Color(1f, 0.30f, 0.30f, 0.85f);   // 헤드셋이 컨트롤러를 못 보고 있다 — 자리는 추정값
     private static readonly Color PlateColor = new Color(0.07f, 0.09f, 0.12f, 0.92f);
     private static readonly Color ButtonColor = new Color(0.20f, 0.26f, 0.34f, 1f);
     private static readonly Color ButtonHot = new Color(0.30f, 0.52f, 0.85f, 1f);
@@ -74,6 +75,8 @@ public class RomLineView
 
     // 컨트롤러 끝
     private Transform tip;
+    private Renderer tipRenderer;
+    private bool tipDrawnTracked = true;
     private TextMeshPro tipLabel;
     private readonly Transform[] fingers = new Transform[2];   // 판 가까이 온 검지 끝(왼·오른) — 손이 입력으로 잡혔다는 표시
 
@@ -130,6 +133,7 @@ public class RomLineView
 
         // ── 컨트롤러 끝 ──
         tip = MakeSphere("컨트롤러 끝", PointRadius * 0.8f, TipColor);
+        tipRenderer = tip.GetComponent<Renderer>();
         tipLabel = MakeText(root, "", 0.08f, TextAlignmentOptions.Left, 6);
         tipLabel.color = TipColor;
         tipLabel.rectTransform.sizeDelta = new Vector2(0.10f, 0.16f);   // 왼쪽 정렬 — 글자가 끝점 오른쪽에서 시작하게 폭을 좁힌다
@@ -532,9 +536,20 @@ public class RomLineView
     }
 
     // ── 매 프레임 ───────────────────────────────────────────────────
-    /// <summary>컨트롤러 끝 표시와 이름표, 글자들의 눈 쪽 돌리기. 할당 없음.</summary>
-    public void Tick(Transform eye, bool tipValid, Vector3 tipPos, bool showTipLabel, bool[] fingerValid, Vector3[] fingerPos)
+    /// <summary>
+    /// 컨트롤러 끝 표시와 이름표, 글자들의 눈 쪽 돌리기. 할당 없음.
+    /// tipValid = 끝의 자리가 있다(추정값이라도) · tipTracked = 헤드셋 카메라가 실제로 보고 있다.
+    /// 못 보고 있으면 끝 구슬을 빨갛게 그리고 이름표를 숨긴다 — 그 상태에서는 점이 찍히지 않는다는 표시다.
+    /// </summary>
+    public void Tick(Transform eye, bool tipValid, bool tipTracked, Vector3 tipPos, bool showTipLabel, bool[] fingerValid, Vector3[] fingerPos)
     {
+        if (tipTracked != tipDrawnTracked)
+        {
+            tipDrawnTracked = tipTracked;
+            tipRenderer.material.color = tipTracked ? TipColor : TipLostColor;
+            tip.localScale = Vector3.one * PointRadius * (tipTracked ? 1.6f : 2.6f);
+        }
+        showTipLabel &= tipTracked;
         // 손끝 구슬은 판 가까이(15cm) 왔을 때만 — 환자를 잡은 손 위에 떠다니지 않게
         for (int i = 0; i < fingers.Length; i++)
         {
