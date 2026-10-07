@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선 실측 모니터</title>
+<!--
+  경추 ROM «선 실측» — 모니터 화면(2026-10-07 신설).
+  헤드셋을 쓰지 않고 정해 둔 자리에 놓은 채 컨트롤러만으로 잴 때, 같은 Wi-Fi의 PC·태블릿 브라우저로 여는 화면이다.
+  헤드셋 앱(RomLineMonitor)이 이 파일을 그대로 내보내고, 이 화면은 /state 를 0.15초마다 물어 그린다. 버튼은 /cmd?c=… 로 보낸다.
+  주소 끝에 #demo 를 붙이면 헤드셋 없이 견본 값으로 그린다(배치 확인용).
+-->
+<style>
+  :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFB060; --bad:#FF6B6B; --ok:#4ADE80; --orange:#FF6B05; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic','Noto Sans KR',sans-serif; }
+  body { display:grid; grid-template-rows:auto 1fr auto; gap:10px; padding:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; }
+  header { display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center; padding:10px 14px; }
+  .tabs { display:flex; gap:8px; }
+  .tab { padding:10px 22px; border-radius:8px; background:#222C38; color:var(--dim); font-size:22px; font-weight:700; cursor:pointer; border:2px solid transparent; }
+  .tab.on { color:#0E1319; }
+  .tab small { font-size:13px; font-weight:400; margin-left:6px; opacity:.8; }
+  #instruction { font-size:28px; font-weight:700; color:#FFF2A6; }
+  #note { font-size:16px; color:var(--warn); min-height:22px; }
+  #track { font-size:22px; font-weight:800; padding:10px 18px; border-radius:8px; white-space:nowrap; }
+  #track.ok { background:#123B22; color:var(--ok); } #track.bad { background:#4A1616; color:var(--bad); } #track.off { background:#333; color:#bbb; }
+  main { display:grid; grid-template-columns:minmax(420px, 44%) 1fr; gap:10px; min-height:0; }
+  #left { display:grid; grid-template-rows:auto 1fr; gap:10px; min-height:0; }
+  #big { padding:14px 18px; display:grid; grid-template-columns:1fr auto; align-items:end; gap:10px; }
+  #bigLabel { font-size:17px; color:var(--dim); }
+  #bigValue { font-size:84px; font-weight:800; line-height:1; letter-spacing:-1px; }
+  #bigSub { font-size:20px; color:var(--dim); text-align:right; }
+  #bigWarn { font-size:22px; color:var(--warn); font-weight:700; text-align:right; }
+  #tableWrap { overflow:auto; padding:6px 10px; }
+  table { width:100%; border-collapse:collapse; font-size:20px; }
+  th { text-align:right; color:var(--dim); font-weight:600; font-size:15px; padding:6px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--card); }
+  th:first-child, td:first-child { text-align:left; }
+  td { text-align:right; padding:7px 8px; border-bottom:1px solid #222B36; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  tr.ref td { color:var(--dim); } tr.last td { background:#1F2936; font-weight:700; }
+  td.plane { font-weight:700; } td.warn { color:var(--warn); text-align:left; font-size:16px; }
+  #views { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; min-height:0; }
+  .view { position:relative; min-height:0; border:2px solid var(--line); border-radius:10px; overflow:hidden; background:#10161D; }
+  .view.on { border-width:3px; }
+  .view h3 { position:absolute; left:10px; top:6px; margin:0; font-size:16px; font-weight:700; }
+  .view h3 small { color:var(--dim); font-weight:400; margin-left:6px; font-size:13px; }
+  canvas { width:100%; height:100%; display:block; }
+  footer { display:grid; grid-template-columns:1fr auto; gap:12px; align-items:center; padding:8px 12px; }
+  #keys { font-size:14px; color:var(--dim); line-height:1.6; }
+  #keys b { color:var(--ink); }
+  .btns { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  button, a.btn { font:inherit; font-size:15px; padding:8px 12px; border-radius:7px; border:1px solid var(--line); background:#222C38; color:var(--ink); cursor:pointer; text-decoration:none; }
+  button:hover, a.btn:hover { background:#2C3A4B; } button.on { background:#2A5FA8; }
+  #conn { font-size:13px; color:var(--dim); }
+</style>
+</head>
+<body>
+<header class="card">
+  <div class="tabs" id="tabs"></div>
+  <div><div id="instruction">연결하는 중…</div><div id="note"></div></div>
+  <div id="track" class="off">컨트롤러 —</div>
+</header>
+<main>
+  <div id="left">
+    <div id="big" class="card">
+      <div><div id="bigLabel">가장 최근 측정선</div><div id="bigValue">—</div></div>
+      <div><div id="bigWarn"></div><div id="bigSub"></div></div>
+    </div>
+    <div id="tableWrap" class="card">
+      <table><thead><tr><th>선</th><th>길이</th><th id="thPlane">면 각</th><th>직접 각</th><th style="text-align:left">알림</th></tr></thead><tbody id="rows"></tbody></table>
+    </div>
+  </div>
+  <div id="views">
+    <div class="view" id="v0"><h3 style="color:var(--sag)">옆에서 본 그림<small>굴곡 · 신전</small></h3><canvas></canvas></div>
+    <div class="view" id="v1"><h3 style="color:var(--front)">앞에서 본 그림<small>측굴</small></h3><canvas></canvas></div>
+    <div class="view" id="v2"><h3 style="color:var(--floor)">위에서 본 그림<small>회전</small></h3><canvas></canvas></div>
+  </div>
+</main>
+<footer class="card">
+  <div>
+    <div id="keys"><b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기</div>
+    <div id="conn"></div>
+  </div>
+  <div class="btns">
+    <button onclick="cmd('undo')">한 점 취소</button>
+    <button onclick="cmd('rebase')">기준선 바꾸기</button>
+    <button onclick="if(confirm('이 동작의 선을 모두 지울까요?'))cmd('clear')">이 동작 지우기</button>
+    <button id="bAxes" onclick="cmd('axesToggle')">3축</button>
+    <button onclick="cmd('axes')">축 다시 잡기</button>
+    <button id="bCalib" onclick="cmd('calib')">끝점 보정</button>
+    <button id="bMode" onclick="cmd('mode')">모드</button>
+    <a class="btn" href="/csv" download>CSV 받기</a>
+  </div>
+</footer>
+<script>
+const COLORS = ['#66B3FF', '#73E68C', '#FFD94D'];
+const DEMO = location.hash === '#demo';
+let S = null, lastOk = 0;
+
+function cmd(c) { if (!DEMO) fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); }
+
+function demoState() {
+  const t = Date.now() / 1000, w = Math.sin(t) * 0.01;
+  return { mode:'free', tab:0, tabs:['굴곡·신전','측굴','회전'], counts:[6,0,4], instruction:'선 4의 첫 점을 찍으세요', note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
+    axesOn:true, planeOn:true, plane:'옆면', tracked:true, calib:false, tipOffset:[-10,6,32], url:'http://192.168.0.12:8090', csv:3, t:t,
+    tip:[0.03 + w, 0.86, 0.12], eye:[0, 1.0, 1.0],
+    lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
+            {n:2, ref:false, refOf:1, len:9.0, plane:'굴곡 26.8°', direct:26.9, warn:'', a:[-0.001,0.82,0.075], b:[0.002,0.74,0.035]},
+            {n:3, ref:false, refOf:1, len:8.8, plane:'굴곡 39.3°', direct:39.5, warn:'측굴으로 보임', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ],
+    pending:null };
+}
+
+async function poll() {
+  try {
+    if (DEMO) S = demoState();
+    else { const r = await fetch('/state', { cache:'no-store' }); S = await r.json(); }
+    lastOk = Date.now();
+  } catch (e) {}
+  render();
+}
+
+function el(id) { return document.getElementById(id); }
+
+function render() {
+  const stale = Date.now() - lastOk > 1500;
+  el('conn').textContent = stale ? '★헤드셋과 연결이 끊겼습니다 — 다시 연결하는 중' : (S ? `연결됨 · ${S.url || ''} · 끝점 (${(S.tipOffset || []).join(', ')})mm · 기록 ${S.csv || 0}줄` : '');
+  if (!S) return;
+
+  const tabs = el('tabs');
+  if (tabs.childElementCount !== S.tabs.length) {
+    tabs.innerHTML = '';
+    S.tabs.forEach((name, i) => { const d = document.createElement('div'); d.className = 'tab'; d.onclick = () => cmd('tab' + i); tabs.appendChild(d); });
+  }
+  [...tabs.children].forEach((d, i) => {
+    const on = S.mode === 'free' && i === S.tab;
+    d.className = 'tab' + (on ? ' on' : '');
+    d.style.background = on ? COLORS[i] : '';
+    d.innerHTML = S.tabs[i] + `<small>선 ${Math.floor((S.counts[i] || 0) / 2)}</small>`;
+  });
+  el('instruction').textContent = (S.mode === 'free' ? '' : '[6동작 모드] ') + (S.instruction || '');
+  el('note').textContent = S.calib ? '끝점 보정 중 — 끝을 한 점에 대고 여러 방향으로 돌리세요' : (S.note || '');
+
+  const tr = el('track');
+  tr.className = stale ? 'off' : S.tracked ? 'ok' : 'bad';
+  tr.textContent = stale ? '연결 끊김' : S.tracked ? '컨트롤러 추적 중' : '★컨트롤러가 안 보입니다';
+
+  el('bAxes').className = S.axesOn ? 'on' : ''; el('bAxes').textContent = '3축 ' + (S.axesOn ? '켬' : '끔');
+  el('bCalib').className = S.calib ? 'on' : ''; el('bCalib').textContent = S.calib ? '끝점 보정 끝내기' : '끝점 보정';
+  el('bMode').textContent = S.mode === 'free' ? '6동작 모드로' : '자유 측정으로';
+
+  const col = COLORS[S.tab] || '#fff';
+  el('thPlane').textContent = (S.plane || '면') + ' 각'; el('thPlane').style.color = S.planeOn ? col : '#667';
+  const lines = S.lines || [];
+  const rows = el('rows'); rows.innerHTML = '';
+  let last = null;
+  lines.forEach(l => { if (!l.ref) last = l; });
+  lines.slice().reverse().forEach(l => {
+    const r = document.createElement('tr');
+    r.className = l.ref ? 'ref' : (l === last ? 'last' : '');
+    r.innerHTML = l.ref
+      ? `<td>선 ${l.n}</td><td>${l.len.toFixed(1)}cm</td><td>기준선</td><td></td><td></td>`
+      : `<td>선 ${l.n}<span style="color:#667;font-size:13px"> ← ${l.refOf}</span></td><td>${l.len.toFixed(1)}cm</td><td class="plane" style="color:${S.planeOn ? col : '#667'}">${l.plane || '—'}</td><td>${l.direct.toFixed(1)}°</td><td class="warn">${l.warn || ''}</td>`;
+    rows.appendChild(r);
+  });
+  el('bigValue').textContent = last ? (last.plane || ('직접 ' + last.direct.toFixed(1) + '°')) : '—';
+  el('bigValue').style.color = last && last.plane ? col : 'var(--ink)';
+  el('bigLabel').textContent = last ? `선 ${last.n} — 기준선(선 ${last.refOf})에서` : '가장 최근 측정선';
+  el('bigSub').textContent = last ? `직접 ${last.direct.toFixed(1)}° · 길이 ${last.len.toFixed(1)}cm` : '';
+  el('bigWarn').textContent = last ? (last.warn || '') : '';
+
+  for (let v = 0; v < 3; v++) drawView(v, lines, col);
+}
+
+// 좌표는 [환자 오른쪽, 위, 환자 앞](m). 보는 방향마다 두 성분을 고른다.
+//   옆: 가로 = 앞(오른쪽이 환자 앞), 세로 = 위 / 앞: 가로 = −오른쪽(마주 보므로 환자 오른쪽이 화면 왼쪽), 세로 = 위 / 위: 가로 = −오른쪽, 세로 = 앞(아래가 환자 앞 = 헤드셋 쪽)
+const PICK = [ p => [p[2], p[1]], p => [-p[0], p[1]], p => [-p[0], -p[2]] ];
+
+function drawView(v, lines, col) {
+  const box = el('v' + v), cv = box.querySelector('canvas');
+  box.className = 'view' + (S.mode === 'free' && S.tab === v ? ' on' : '');
+  box.style.borderColor = S.mode === 'free' && S.tab === v ? COLORS[v] : '';
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+
+  const pts = [];
+  lines.forEach(l => { pts.push(l.a, l.b); });
+  if (S.pending) pts.push(S.pending);
+  const center = pts.length ? pts.reduce((s, p) => [s[0] + p[0], s[1] + p[1], s[2] + p[2]], [0, 0, 0]).map(x => x / pts.length) : (S.tip || [0, 1, 0]);
+  let half = 0.10;
+  pts.forEach(p => { for (let k = 0; k < 3; k++) half = Math.max(half, Math.abs(p[k] - center[k]) + 0.03); });
+  const sc = Math.min(W, H - 26) / (2 * half), pick = PICK[v], c2 = pick(center);
+  const X = p => W / 2 + (pick(p)[0] - c2[0]) * sc, Y = p => (H + 26) / 2 - (pick(p)[1] - c2[1]) * sc;
+
+  // 눈금 — 5cm
+  g.strokeStyle = '#1D2631'; g.lineWidth = 1;
+  for (let m = -Math.ceil(half / 0.05); m <= Math.ceil(half / 0.05); m++) {
+    const d = m * 0.05 * sc;
+    g.beginPath(); g.moveTo(W / 2 + d, 26); g.lineTo(W / 2 + d, H); g.stroke();
+    g.beginPath(); g.moveTo(0, (H + 26) / 2 + d); g.lineTo(W, (H + 26) / 2 + d); g.stroke();
+  }
+  g.fillStyle = '#56657A'; g.font = '12px sans-serif';
+  g.fillText('눈금 5cm', 8, H - 8);
+  g.fillText(['← 뒤   앞 →', '← 환자 오른쪽   왼쪽 →', '← 환자 오른쪽   (아래 = 앞)'][v], W - [84, 150, 170][v], H - 8);
+
+  lines.forEach((l, i) => {
+    const isLast = !l.ref && i === lines.length - 1;
+    g.strokeStyle = l.ref ? '#EDEDED' : (isLast ? '#FF8A2B' : '#B8530C'); g.lineWidth = l.ref ? 3 : (isLast ? 4 : 2.5);
+    g.beginPath(); g.moveTo(X(l.a), Y(l.a)); g.lineTo(X(l.b), Y(l.b)); g.stroke();
+    g.fillStyle = g.strokeStyle;
+    g.beginPath(); g.arc(X(l.a), Y(l.a), 4.5, 0, 6.3); g.fill();           // 첫 점은 꽉 찬 점
+    g.beginPath(); g.arc(X(l.b), Y(l.b), 4.5, 0, 6.3); g.stroke();         // 둘째 점은 빈 점 — 찍은 순서가 보인다
+    g.font = 'bold 15px sans-serif'; g.fillText(l.n, (X(l.a) + X(l.b)) / 2 + 7, (Y(l.a) + Y(l.b)) / 2 - 5);
+  });
+  if (S.pending) { g.fillStyle = '#FF8A2B'; g.beginPath(); g.arc(X(S.pending), Y(S.pending), 5, 0, 6.3); g.fill(); }
+  if (S.tip) {
+    g.strokeStyle = S.tracked ? '#FFF233' : '#FF6B6B'; g.lineWidth = 2;
+    const x = X(S.tip), y = Y(S.tip);
+    g.beginPath(); g.moveTo(x - 9, y); g.lineTo(x + 9, y); g.moveTo(x, y - 9); g.lineTo(x, y + 9); g.stroke();
+    g.beginPath(); g.arc(x, y, 5, 0, 6.3); g.stroke();
+  }
+}
+
+window.addEventListener('resize', render);
+setInterval(poll, 150); poll();
+</script>
+</body>
+</html>

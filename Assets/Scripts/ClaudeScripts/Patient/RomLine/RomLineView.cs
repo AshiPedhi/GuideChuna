@@ -56,7 +56,7 @@ public class RomLineView
     private readonly Rect[] buttonRects = new Rect[ButtonCount];
     private readonly Color[] buttonBase = new Color[ButtonCount];
     private Transform fill;
-    private TextMeshPro title, instruction, note;
+    private TextMeshPro title, instruction, note, footer;
     private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
     private readonly TextMeshPro[] compareValues = new TextMeshPro[8];   // 줄마다 능동 면·직접, 압박 면·직접
     private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값
@@ -238,6 +238,11 @@ public class RomLineView
         AddButton(freeArea, 18, new Vector2(bw + 0.006f, by) + up, size, ButtonColor, ButtonLabel[18], 0.075f);
         freeArea.gameObject.SetActive(false);
 
+        // 맨 아래 한 줄 — 모니터 화면의 주소
+        footer = MakeText(panel, "", 0.052f, TextAlignmentOptions.Center, 3);
+        Place(footer, new Vector2(0f, -PanelH * 0.5f + 0.0055f), PanelW - 0.02f);
+        footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
+
         // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
         fill = MakeQuad(panel, "차오름", Vector2.zero, new Vector2(0.01f, 0.004f), FillColor, 2);
         fill.gameObject.SetActive(false);
@@ -350,6 +355,12 @@ public class RomLineView
             tabColor[i] = i == tab ? TabOn : TabOff;
             if (i != hot) buttonPlates[i].material.color = tabColor[i];
         }
+    }
+
+    /// <summary>판 맨 아래 한 줄(모니터 화면의 주소).</summary>
+    public void SetFooter(string text)
+    {
+        footer.text = text;
     }
 
     public void SetValue(int slot, string text, string directText, bool current)

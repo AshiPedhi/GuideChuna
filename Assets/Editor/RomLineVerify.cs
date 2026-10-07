@@ -180,6 +180,8 @@ public static class RomLineVerify
             sb.AppendLine($"참고  굴곡 1° → {r.angle:F2}° · 교점 {(r.pivotOnLines ? $"선 위(첫 점에서 {Vector3.Distance(r.pivot, n.trR) * 100f:F0}cm)" : "멀어서 첫 점에 대신 세움")}");
         }
 
+        fail += MonitorSelfTest(sb);
+
         sb.Insert(0, (fail == 0 ? "선 실측 계산 검증 — 전부 통과" : $"선 실측 계산 검증 — ★실패 {fail}건") + "\n");
         return sb.ToString();
     }
@@ -233,6 +235,43 @@ public static class RomLineVerify
         }
         Object.DestroyImmediate(baked);
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 모니터 서버(10-07)를 잠깐 열어 화면·상태·명령·기록이 실제로 오가는지 본다(이 PC 안에서, 포트 18090).
+    /// ★에디터(Mono)에서의 확인이다 — 헤드셋(IL2CPP·Android)에서 포트가 열리는지는 기기에서 봐야 한다.
+    /// </summary>
+    private static int MonitorSelfTest(StringBuilder sb)
+    {
+        int fail = 0;
+        var m = new RomLineMonitor();
+        var page = Resources.Load<TextAsset>("RomLine/monitor");
+        fail += Line(sb, page != null && page.text.Contains("/state"), $"모니터 — 화면 파일(Resources/RomLine/monitor)을 읽었다({(page != null ? page.text.Length + "자" : "없음")})");
+        if (!m.Start(18090, page != null ? page.text : "x")) { Line(sb, false, "모니터 — 포트 18090을 열었다"); return fail + 1; }
+        try
+        {
+            m.SetState("{\"mode\":\"free\",\"note\":\"한글\"}");
+            m.SetCsv("시각,사건\n2026-10-07,선\n");
+            using (var wc = new System.Net.WebClient { Encoding = Encoding.UTF8 })
+            {
+                string html = wc.DownloadString("http://127.0.0.1:18090/");
+                fail += Line(sb, page != null && html == page.text, $"모니터 — GET / 가 화면을 그대로 돌려준다({html.Length}자)");
+                bool before = m.Watched;
+                string st = wc.DownloadString("http://127.0.0.1:18090/state");
+                fail += Line(sb, st.Contains("\"한글\"") && !before && m.Watched, $"모니터 — GET /state 가 건넨 상태를 돌려주고 «보는 화면 있음»으로 바뀐다 → {st}");
+                wc.DownloadString("http://127.0.0.1:18090/cmd?c=tab2");
+                bool got = m.TryDequeue(out string c);
+                fail += Line(sb, got && c == "tab2" && !m.TryDequeue(out _), $"모니터 — GET /cmd?c=tab2 가 명령 줄에 선다 → {c}");
+                byte[] csv = wc.DownloadData("http://127.0.0.1:18090/csv");
+                fail += Line(sb, csv.Length > 3 && csv[0] == 0xEF && Encoding.UTF8.GetString(csv, 3, csv.Length - 3).StartsWith("시각,사건"), $"모니터 — GET /csv 가 기록을 돌려준다({csv.Length}바이트, BOM 있음)");
+            }
+        }
+        catch (System.Exception e)
+        {
+            fail += Line(sb, false, "모니터 — 요청 중 예외: " + e.Message);
+        }
+        finally { m.Stop(); }
+        return fail;
     }
 
     private static int Line(StringBuilder sb, bool ok, string text)

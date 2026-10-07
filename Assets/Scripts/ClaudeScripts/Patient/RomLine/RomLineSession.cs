@@ -1,5 +1,6 @@
 using Oculus.Interaction.Input;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text;
 using TMPro;
 using UnityEngine;
@@ -48,6 +49,13 @@ public enum RomLinePoint
 ///   그 자세들에서 «찍는 점»이 컨트롤러 좌표로 어디인지(<c>tipOffset</c>)를 계산으로 구한다. 눈으로 맞춘 값이 실제 닿는 자리와
 ///   어긋나 있으면, 찍을 때 컨트롤러를 쥔 각도에 따라 찍히는 자리가 달라진다(어긋남 × 2·sin(각/2)) — 민두 시험에서 드러났다.
 ///
+/// ★모니터(10-07): 헤드셋을 쓰지 않고 정해 둔 자리에 놓은 채 컨트롤러만으로 잴 수 있게, 헤드셋 앱이 작은 웹 서버를 연다
+///   (<see cref="RomLineMonitor"/>). 같은 Wi-Fi의 PC 브라우저가 그 주소를 열면 값·선·추적 상태가 보인다.
+///   판을 누를 수 없으니 자유 측정의 조작을 전부 컨트롤러 버튼에 올렸다:
+///   트리거 = 점 · A/X = 한 점 취소 · B/Y = 기준선 바꾸기 · 스틱 좌우 = 동작(갈래) 바꾸기 · 스틱 클릭 = 끝점 보정
+///   · 그립 1.5초 = 이 동작 지우기 · 스틱 위로 1초 = 축 다시 잡기 · 스틱 아래로 1초 = 6동작 ↔ 자유 측정.
+///   찍은 선은 CSV로 기기에 남고(persistentDataPath) 모니터에서도 받는다.
+///
 ///   ★첫 판(10-07 낮)은 한 선에서 세 면의 값을 함께 보여 줬다. 민두 시험에서 다른 두 면의 값이 실제 움직임이 아닌
 ///     «겉보기 값»(순수 회전인데 옆면 120~150°)으로 나와 갈래를 나눴다 — 다른 면의 값은 로그에만 남긴다.
 /// </summary>
@@ -74,6 +82,11 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("켜면 판의 버튼을 맨손 검지로도 누르고(닿고 머물기) 핀치로 판을 옮긴다. 컨트롤러 + 맨손 동시 추적을 요청한다.\n" +
              "끄면 컨트롤러만 쓴다(10-07 사용자 지시로 기본 끔). 점은 어느 쪽이든 컨트롤러로만 찍는다.")]
     [SerializeField] private bool handInput = false;
+
+    [Header("=== 모니터 ===")]
+    [Tooltip("모니터 화면을 내보내는 포트. 같은 Wi-Fi의 브라우저에서 http://(헤드셋 IP):포트 로 연다 — 주소는 판 맨 아래와 로그에 나온다.\n" +
+             "0이면 열지 않는다. ★인증이 없다(같은 망의 누구나 볼 수 있고 버튼도 누를 수 있다) — 시험용이다.")]
+    [SerializeField] private int monitorPort = 8090;
 
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
@@ -116,6 +129,20 @@ public class RomLineSession : MonoBehaviour
     private float armedTime = -10f;
     private Vector3 armedCtrlPos, markCtrlPos;                              // 찍는 순간의 컨트롤러 자세 — 로그에 남겨, 나중에 끝점을 바꿔 다시 계산해 볼 수 있게
     private Quaternion armedCtrlRot = Quaternion.identity, markCtrlRot = Quaternion.identity;
+
+    // 모니터·기록(10-07)
+    private readonly RomLineMonitor monitor = new RomLineMonitor();
+    private readonly StringBuilder monitorSb = new StringBuilder(4096), monitorLive = new StringBuilder(4096);
+    private string monitorBody = "";      // 상태 가운데 «바뀔 때만 만드는 부분» — Refresh가 만든다
+    private float monitorNext;
+    private readonly List<string> csvRows = new List<string>(128);
+    private string csvPath;
+
+    // 컨트롤러만으로 하는 조작(10-07) — 길게 누르기
+    private float gripHoldStart = -1f, stickHoldStart = -1f;
+    private int stickHoldDir;             // +1 위 · −1 아래 · 0 없음
+    private bool gripHoldFired, stickHoldFired;
+    private const float GripClearSeconds = 1.5f, StickHoldSeconds = 1.0f;
 
     // 끝점 보정(10-07) — 끝을 한 점에 대고 돌린 자세들
     private bool calibrating;
@@ -220,6 +247,27 @@ public class RomLineSession : MonoBehaviour
         freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
         BuildSounds();
 
+        if (monitorPort > 0)
+        {
+            var pageAsset = Resources.Load<TextAsset>("RomLine/monitor");
+            if (monitor.Start(monitorPort, pageAsset != null ? pageAsset.text : ""))
+            {
+                view.SetFooter("모니터  " + monitor.Url);
+                monitor.SetCsv(CsvHeader + "\n");
+            }
+        }
+        try
+        {
+            csvPath = System.IO.Path.Combine(Application.persistentDataPath, "romline_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv");
+            System.IO.File.WriteAllText(csvPath, CsvHeader + "\n", new UTF8Encoding(true));
+            Debug.Log("[선실측] 기록 파일 — " + csvPath);
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[선실측] ★기록 파일을 만들지 못했다({e.Message}) — 모니터의 «CSV 받기»로만 받을 수 있다.");
+            csvPath = null;
+        }
+
         // 한 손에 컨트롤러, 다른 손은 맨손 — 둘을 함께 추적하게 한다. 지원하지 않으면 false가 돌아오고 손은 컨트롤러를 내려놨을 때만 잡힌다.
         //   ★handInput이 꺼져 있으면(기본) 요청하지 않는다 — 컨트롤러만 쓴다.
         simultaneousOn = handInput && OVRInput.EnableSimultaneousHandsAndControllers();
@@ -255,6 +303,7 @@ public class RomLineSession : MonoBehaviour
         HandleInput();
 
         if (dirty) Refresh();
+        PumpMonitor();
         view.Tick(eye, tipValid, tipPos, freeMode || !Done, fingerValid, fingerPos);
         freeView.Tick(eye);
     }
@@ -263,6 +312,7 @@ public class RomLineSession : MonoBehaviour
     {
         if (hapticOff > 0f) OVRInput.SetControllerVibration(0f, 0f, active);
         if (simultaneousOn) OVRInput.DisableSimultaneousHandsAndControllers();   // 우리가 켠 것만 되돌린다
+        monitor.Stop();
     }
 
     // ── 손 ──────────────────────────────────────────────────────────
@@ -457,16 +507,60 @@ public class RomLineSession : MonoBehaviour
 
         // ── 버튼·스틱 ──
         if (OVRInput.GetDown(OVRInput.Button.One, active)) { Undo(); return; }
-        if (!freeMode && OVRInput.GetDown(OVRInput.Button.Two, active)) { Skip(); return; }   // 자유 측정에는 단계가 없다
-
-        float sx = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, active).x;
-        if (Mathf.Abs(sx) < 0.3f) stickReady = true;
-        else if (!freeMode && stickReady && Mathf.Abs(sx) > 0.7f)
+        if (OVRInput.GetDown(OVRInput.Button.Two, active))
         {
-            stickReady = false;
-            Go(group + (sx > 0f ? 1 : -1), "스틱");
+            if (freeMode) FreeRebase();   // 자유 측정에는 단계가 없다 — B/Y는 «기준선 바꾸기»
+            else Skip();
             return;
         }
+
+        Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, active);
+        float sx = stick.x;
+        if (Mathf.Abs(sx) < 0.3f) stickReady = true;
+        else if (stickReady && Mathf.Abs(sx) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
+        {
+            stickReady = false;
+            if (freeMode) SetFreeTab(Mathf.Clamp(freeTab + (sx > 0f ? 1 : -1), 0, 2));   // 동작(갈래) 바꾸기
+            else Go(group + (sx > 0f ? 1 : -1), "스틱");
+            return;
+        }
+
+        // 스틱을 위·아래로 1초 — 위: 축 다시 잡기 / 아래: 6동작 ↔ 자유 측정. 판을 못 볼 때(헤드셋을 내려놓고 잴 때) 쓴다.
+        int dir = Mathf.Abs(stick.y) > 0.8f && Mathf.Abs(sx) < 0.4f ? (stick.y > 0f ? 1 : -1) : 0;
+        if (dir != stickHoldDir)
+        {
+            stickHoldDir = dir;
+            stickHoldStart = Time.unscaledTime;
+            stickHoldFired = false;
+        }
+        else if (dir != 0 && !stickHoldFired && Time.unscaledTime - stickHoldStart >= StickHoldSeconds)
+        {
+            stickHoldFired = true;
+            Buzz(0.08f, 0.6f);
+            if (dir > 0)
+            {
+                CaptureAxes("스틱");
+                noteText = "축을 다시 잡았다";
+                Play(sndPress);
+                dirty = true;
+            }
+            else SetFreeMode(!freeMode);
+            return;
+        }
+
+        // 그립을 1.5초 — 이 동작 지우기(자유 측정). 판 가까이에서 쥔 그립은 «판 옮기기»라 여기까지 오지 않는다.
+        if (freeMode && OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, active))
+        {
+            if (gripHoldStart < 0f) { gripHoldStart = Time.unscaledTime; gripHoldFired = false; }
+            else if (!gripHoldFired && Time.unscaledTime - gripHoldStart >= GripClearSeconds)
+            {
+                gripHoldFired = true;
+                Buzz(0.12f, 0.8f);
+                FreeClear();
+                return;
+            }
+        }
+        else gripHoldStart = -1f;
 
         // ── 점 찍기 ──
         if (triggerDown)
@@ -951,6 +1045,7 @@ public class RomLineSession : MonoBehaviour
             int idx = line - 1, rf = FreeCurrentRef();
             FreeRefs.Add(rf < 0 ? idx : rf);   // 첫 선은 스스로 기준선이다
             LogFreeLine(idx);
+            CsvAdd("선", idx);
         }
         noteText = "";
         Play(sndMark);
@@ -962,7 +1057,11 @@ public class RomLineSession : MonoBehaviour
     {
         List<Vector3> pts = FreePts;
         if (pts.Count == 0) { Deny("지울 점이 없다"); return; }
-        if (pts.Count % 2 == 0) FreeRefs.RemoveAt(FreeRefs.Count - 1);   // 마지막 선이 깨진다
+        if (pts.Count % 2 == 0)   // 마지막 선이 깨진다
+        {
+            CsvAdd("취소", FreeRefs.Count - 1);
+            FreeRefs.RemoveAt(FreeRefs.Count - 1);
+        }
         pts.RemoveAt(pts.Count - 1);
         noteText = "";
         Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 한 점 취소 → 남은 점 {pts.Count}개");
@@ -973,6 +1072,7 @@ public class RomLineSession : MonoBehaviour
     private void FreeClear()
     {
         Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 이 동작을 지웠다(점 {FreePts.Count}개)");
+        if (FreePts.Count > 0) CsvAdd("지움", -1);
         FreePts.Clear();
         FreeRefs.Clear();
         noteText = "";
@@ -987,6 +1087,7 @@ public class RomLineSession : MonoBehaviour
         if (last < 0) { Deny("기준선으로 삼을 선이 없다 — 선을 먼저 찍는다"); return; }
         if (FreeRefs[last] == last) { Deny($"선 {last + 1}은 이미 기준선이다"); return; }
         FreeRefs[last] = last;
+        CsvAdd("기준선으로", last);
         noteText = $"선 {last + 1}을 기준선으로 삼았다";
         Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 기준선 → 선 {last + 1}(길이 {FreeLength(last) * 100f:F1}cm)");
         Play(sndPress);
@@ -1070,7 +1171,8 @@ public class RomLineSession : MonoBehaviour
             note = freeTab == 2 ? "바닥면으로 읽습니다 · 두 점은 늘 같은 순서로"
                  : axesOn ? "환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로"
                  : "3축이 꺼져 있어 직접 각만 나옵니다 · 두 점은 늘 같은 순서로";
-        view.SetTexts("자유 측정 · " + FreeTabName[freeTab], $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요", note, -1, "선 " + (lines + 1));
+        string instruction = $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요";
+        view.SetTexts("자유 측정 · " + FreeTabName[freeTab], instruction, note, -1, "선 " + (lines + 1));
         view.SetButtonOn(13, axesOn);
         view.SetFreeTab(freeTab);
 
@@ -1078,32 +1180,185 @@ public class RomLineSession : MonoBehaviour
         freeView.SetTab(freeTab, FreePlaneOn, FreePlaneName[freeTab] + " 각");
         freeView.ShowAxes(axesOn, axesOrigin, axes);
 
-        // 판 — 가장 최근 선들. 한 줄에 선 하나: 길이 · 그 동작의 면 각 · 직접 각 · 알림.
+        // 모니터로 내보낼 상태 — 판과 같은 값을 같은 자리에서 만든다(따로 계산하면 두 화면이 어긋난다).
+        StringBuilder js = monitorSb;
+        js.Length = 0;
+        js.Append("\"mode\":\"free\",\"tab\":").Append(freeTab).Append(",\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
+          .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append("],\"instruction\":");
+        JsonStr(js, instruction).Append(",\"note\":");
+        JsonStr(js, note).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":").Append(FreePlaneOn ? "true" : "false").Append(",\"plane\":");
+        JsonStr(js, FreePlaneName[freeTab]).Append(",\"lines\":[");
+
+        // 판 — 가장 최근 선들. 한 줄에 선 하나: 길이 · 그 동작의 면 각 · 직접 각 · 알림. 모니터에는 선을 전부 보낸다.
         int firstRow = Mathf.Max(0, lines - RomLineFreeView.Rows);
         string label = "";
         Vector3 at = Vector3.zero;
-        for (int row = 0; row < RomLineFreeView.Rows; row++)
+        for (int line = 0; line < lines; line++)
         {
-            int line = firstRow + row;
-            if (line >= lines) { freeView.SetRow(row, "", "", "", "", false); continue; }
-            string name = $"선 {line + 1}  {FreeLength(line) * 100f:F1}cm";
-            int rf = refs[line];
-            if (rf == line) { freeView.SetRow(row, name, "기준선", "", "", true); continue; }
-
-            RomLineDirect d = FreeDirect(rf, line);
-            string plane = !FreePlaneOn ? "" : FreePlane(rf, line, freeTab, out RomLineResult r) ? FreeNamed(freeTab, r) : "—";
-            string warn = FreeWarning(rf, line, d.angle, out _, out _, out _);
-            freeView.SetRow(row, name, plane, d.angle.ToString("F1") + "°", warn, false);
-            if (line == lines - 1)
+            int row = line - firstRow, rf = refs[line];
+            float len = FreeLength(line) * 100f;
+            string plane = "", warn = "";
+            float directAngle = 0f;
+            if (rf != line)
             {
-                // 환자 위 — 가장 최근 측정선 곁에 값을 띄운다(면 각이 있으면 그것, 없으면 직접 각).
-                label = plane.Length > 1 ? plane : "직접 " + d.angle.ToString("F1") + "°";
-                at = (pts[line * 2] + pts[line * 2 + 1]) * 0.5f + Vector3.up * 0.04f;
+                RomLineDirect d = FreeDirect(rf, line);
+                directAngle = d.angle;
+                plane = !FreePlaneOn ? "" : FreePlane(rf, line, freeTab, out RomLineResult r) ? FreeNamed(freeTab, r) : "—";
+                warn = FreeWarning(rf, line, d.angle, out _, out _, out _);
+                if (line == lines - 1)
+                {
+                    // 환자 위 — 가장 최근 측정선 곁에 값을 띄운다(면 각이 있으면 그것, 없으면 직접 각).
+                    label = plane.Length > 1 ? plane : "직접 " + d.angle.ToString("F1") + "°";
+                    at = (pts[line * 2] + pts[line * 2 + 1]) * 0.5f + Vector3.up * 0.04f;
+                }
             }
+            if (row >= 0)
+            {
+                string name = $"선 {line + 1}  {len:F1}cm";
+                if (rf == line) freeView.SetRow(row, name, "기준선", "", "", true);
+                else freeView.SetRow(row, name, plane, directAngle.ToString("F1") + "°", warn, false);
+            }
+
+            if (line > 0) js.Append(',');
+            js.Append("{\"n\":").Append(line + 1).Append(",\"ref\":").Append(rf == line ? "true" : "false").Append(",\"refOf\":").Append(rf + 1)
+              .Append(",\"len\":").Append(len.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"plane\":");
+            JsonStr(js, plane.Length > 1 ? plane : "").Append(",\"direct\":").Append(directAngle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
+            JsonStr(js, warn).Append(",\"a\":");
+            JsonVec(js, InAxes(pts[line * 2])).Append(",\"b\":");
+            JsonVec(js, InAxes(pts[line * 2 + 1])).Append('}');
         }
+        for (int row = Mathf.Max(0, lines - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
         freeView.SetAngleLabel(label, at);
+
+        js.Append("],\"pending\":");
+        if (half) JsonVec(js, InAxes(pts[pts.Count - 1])); else js.Append("null");
+        monitorBody = js.ToString();
     }
 
+    // ── 모니터(10-07) ───────────────────────────────────────────────
+    /// <summary>월드 좌표를 고정 3축의 좌표로 — [환자 오른쪽, 위(바닥에서), 환자 앞](m). 모니터의 세 방향 그림이 이 좌표로 그린다.</summary>
+    private Vector3 InAxes(Vector3 world)
+    {
+        Vector3 d = world - axesOrigin;
+        return new Vector3(Vector3.Dot(d, axes.right), d.y, Vector3.Dot(d, axes.forward));
+    }
+
+    private static StringBuilder JsonVec(StringBuilder sb, Vector3 v)
+    {
+        return sb.Append('[').Append(v.x.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.y.ToString("F4", CultureInfo.InvariantCulture))
+                 .Append(',').Append(v.z.ToString("F4", CultureInfo.InvariantCulture)).Append(']');
+    }
+
+    private static StringBuilder JsonStr(StringBuilder sb, string s)
+    {
+        sb.Append('"');
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '"' || c == '\\') sb.Append('\\').Append(c);
+            else if (c < ' ') sb.Append(' ');
+            else sb.Append(c);
+        }
+        return sb.Append('"');
+    }
+
+    /// <summary>
+    /// 모니터 화면이 보낸 명령을 처리하고, 보는 화면이 있을 때만 0.1초에 한 번 상태를 건넨다.
+    /// 상태 = «바뀔 때만 만드는 부분»(monitorBody — Refresh가 만든다) + «늘 바뀌는 부분»(컨트롤러 끝·추적 여부).
+    /// </summary>
+    private void PumpMonitor()
+    {
+        if (monitor.Port == 0) return;
+        while (monitor.TryDequeue(out string command)) RunMonitorCommand(command);
+        if (!monitor.Watched || Time.unscaledTime < monitorNext) return;   // 보는 화면이 없으면 글자를 만들지 않는다
+        monitorNext = Time.unscaledTime + 0.1f;
+
+        StringBuilder js = monitorLive;
+        js.Length = 0;
+        js.Append("{\"t\":").Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
+          .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false").Append(",\"tip\":");
+        if (axes.valid) JsonVec(js, InAxes(tipPos)); else js.Append("null");
+        js.Append(",\"eye\":");
+        if (axes.valid && eye != null) JsonVec(js, InAxes(eye.position)); else js.Append("null");
+        js.Append(",\"tipOffset\":[").Append((tipOffset.x * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',')
+          .Append((tipOffset.y * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append((tipOffset.z * 1000f).ToString("F1", CultureInfo.InvariantCulture))
+          .Append("],\"csv\":").Append(csvRows.Count).Append(",\"url\":");
+        JsonStr(js, monitor.Url);
+        if (monitorBody.Length > 0) js.Append(',').Append(monitorBody);
+        js.Append('}');
+        monitor.SetState(js.ToString());
+    }
+
+    private void RunMonitorCommand(string command)
+    {
+        Debug.Log($"[선실측] 모니터 명령 — {command}");
+        switch (command)
+        {
+            case "tab0": case "tab1": case "tab2":
+                if (!freeMode) SetFreeMode(true);
+                SetFreeTab(command[3] - '0');
+                break;
+            case "undo": Undo(); break;
+            case "clear": if (freeMode) FreeClear(); break;
+            case "rebase": if (freeMode) FreeRebase(); break;
+            case "axes": CaptureAxes("모니터"); Play(sndPress); dirty = true; break;
+            case "axesToggle": axesOn = !axesOn; Play(sndPress); dirty = true; break;
+            case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
+            case "mode": SetFreeMode(!freeMode); break;
+            default: Debug.LogWarning($"[선실측] ★모니터 명령 «{command}»을 모른다"); break;
+        }
+    }
+
+    // ── 기록(CSV) ───────────────────────────────────────────────────
+    private const string CsvHeader = "시각,경과(초),사건,동작,선,기준선,길이(cm),면,방향,면 각(도),직접 각(도),알림,움직인 모양,첫 점 x,첫 점 y,첫 점 z,둘째 점 x,둘째 점 y,둘째 점 z,환자 정면 x,환자 정면 z,끝점 x(mm),끝점 y(mm),끝점 z(mm)";
+
+    /// <summary>
+    /// 한 줄을 기록한다 — 기기의 파일과 모니터의 «CSV 받기» 양쪽에. line이 0 이상이면 그 선의 값을 함께 적는다.
+    /// ★지운 선도 줄은 남는다(«취소»·«지움» 줄이 뒤따른다) — 무슨 일이 있었는지를 남기는 기록이다.
+    /// </summary>
+    private void CsvAdd(string what, int line)
+    {
+        StringBuilder sb = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드, PumpMonitor가 쓸 때는 처음에 비운다)
+        sb.Length = 0;
+        sb.Append(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append(',').Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
+          .Append(',').Append(what).Append(',').Append(FreeTabName[freeTab]).Append(',');
+        if (line >= 0 && line < FreeRefs.Count)
+        {
+            int rf = FreeRefs[line];
+            List<Vector3> p = FreePts;
+            sb.Append(line + 1).Append(',').Append(rf + 1).Append(',').Append((FreeLength(line) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[freeTab]).Append(',');
+            if (rf == line) sb.Append(",,,,,");
+            else
+            {
+                RomLineDirect d = FreeDirect(rf, line);
+                bool ok = FreePlaneOn && FreePlane(rf, line, freeTab, out RomLineResult r0);
+                FreePlane(rf, line, freeTab, out RomLineResult r);
+                string warn = FreeWarning(rf, line, d.angle, out int judged, out _, out _);
+                sb.Append(ok ? (r.signedAngle >= 0f ? FreePlus[freeTab] : FreeMinus[freeTab]) : "").Append(',')
+                  .Append(ok ? r.angle.ToString("F1", CultureInfo.InvariantCulture) : "").Append(',')
+                  .Append(d.angle.ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(warn).Append(',').Append(judged < 0 ? "" : FreeTabName[judged]).Append(',');
+            }
+            for (int k = 0; k < 2; k++)
+            {
+                Vector3 v = p[line * 2 + k];
+                sb.Append(v.x.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.y.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.z.ToString("F4", CultureInfo.InvariantCulture)).Append(',');
+            }
+        }
+        else sb.Append(",,,,,,,,,,,,,,,");
+        sb.Append(axes.forward.x.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(axes.forward.z.ToString("F3", CultureInfo.InvariantCulture)).Append(',')
+          .Append((tipOffset.x * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append((tipOffset.y * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',')
+          .Append((tipOffset.z * 1000f).ToString("F1", CultureInfo.InvariantCulture));
+        string rowText = sb.ToString();
+        csvRows.Add(rowText);
+        monitor.SetCsv(CsvHeader + "\n" + string.Join("\n", csvRows) + "\n");
+        if (csvPath == null) return;
+        try { System.IO.File.AppendAllText(csvPath, rowText + "\n", new UTF8Encoding(false)); }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[선실측] ★기록 파일에 못 적었다({e.Message}) — 모니터의 «CSV 받기»로는 받을 수 있다. 파일 기록을 멈춘다.");
+            csvPath = null;
+        }
+    }
 
     private void RedoMotion()
     {
@@ -1199,6 +1454,16 @@ public class RomLineSession : MonoBehaviour
         string note = noteText;
         if (note.Length == 0 && group == 0) note = "건너뛰면(B/Y) 회전만 «면» 값, 나머지는 «직접» 값만 나옵니다";
         view.SetTexts(GroupTitle(group), instruction, note, tab, tipText);
+        {
+            // 모니터 — 6동작 모드는 안내 글자만 보낸다(선·표는 자유 측정에서만).
+            StringBuilder js = monitorSb;
+            js.Length = 0;
+            js.Append("\"mode\":\"guided\",\"tab\":-1,\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
+              .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append("],\"instruction\":");
+            JsonStr(js, GroupTitle(group) + " — " + instruction).Append(",\"note\":");
+            JsonStr(js, note).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":false,\"plane\":\"면\",\"lines\":[],\"pending\":null");
+            monitorBody = js.ToString();
+        }
 
         int current = group >= 1 && !Done && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;
         for (int i = 0; i < 12; i++)
