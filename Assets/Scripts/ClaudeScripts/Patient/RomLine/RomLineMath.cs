@@ -110,7 +110,20 @@ public static class RomLineMath
         return f;
     }
 
-    /// <summary>그 동작을 읽는 면의 법선. 굴곡·신전 = 좌우 / 측굴 = 앞뒤 / 회전 = 위아래 성분을 버린다.</summary>
+    /// <summary>
+    /// 그 동작의 면을 세우는 데 기준(양쪽 Tr)이 필요한가.
+    /// ★회전은 필요 없다(10-07) — 회전을 읽는 면은 바닥(수평면)이고, 바닥은 중력만으로 정해진다.
+    ///   굴곡·신전·측굴의 면은 수직면이라 환자가 어느 쪽을 보는지 알아야 하고, 그건 양쪽 Tr이 준다.
+    /// </summary>
+    public static bool NeedsReference(RomLineMotion motion)
+    {
+        return motion != RomLineMotion.RotationRight && motion != RomLineMotion.RotationLeft;
+    }
+
+    /// <summary>
+    /// 그 동작을 읽는 면의 법선. 굴곡·신전 = 좌우 / 측굴 = 앞뒤 / 회전 = 위아래 성분을 버린다.
+    /// ★회전은 기준과 무관하게 늘 중력 방향이다 — 기준을 안 찍은(valid가 아닌) f를 넘겨도 된다(<see cref="NeedsReference"/>).
+    /// </summary>
     public static Vector3 PlaneNormal(RomLineMotion motion, RomLineFrame f)
     {
         switch (motion)
@@ -119,7 +132,7 @@ public static class RomLineMath
             case RomLineMotion.Extension: return f.right;
             case RomLineMotion.LateralRight:
             case RomLineMotion.LateralLeft: return f.forward;
-            default: return f.up;
+            default: return Vector3.up;
         }
     }
 

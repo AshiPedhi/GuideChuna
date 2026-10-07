@@ -18,7 +18,8 @@ public enum RomLinePoint
 ///   · 기준: 양쪽 Tr 두 점(건너뛸 수 있다) → 환자 기준 방향
 ///   · 동작마다 <b>직선 셋</b>: 중립 2점 → 능동 2점 → 압박 2점. 여섯 동작이라 직선은 18개다
 ///   · 값 둘을 나란히 낸다: «직접» = 3차원에서 두 선의 각을 그대로(기준 없이도 나온다) /
-///     «면» = 환자 기준 면 위로 옮겨 잰 각(기준 Tr을 찍었을 때만)
+///     «면» = 환자 기준 면 위로 옮겨 잰 각(기준 Tr을 찍었을 때만 — ★회전은 예외다. 회전의 면은 바닥이라
+///     중력만으로 정해지므로 기준을 건너뛰어도 «면» 값이 나온다, 10-07)
 ///   · 순서 고정: 기준 → 굴곡 → 신전 → 우측굴 → 좌측굴 → 우회전 → 좌회전(각각 중립 → 능동 → 압박)
 ///   ★10-01 첫 판은 «중립 네 점을 한 번 찍어 모든 동작의 중립선으로 돌려쓰는» 구조였다(28점). 사용자 지시로
 ///     «기준은 양쪽 Tr만 · 중립선은 동작마다 찍는다(18직선)»로 바꿨다(38점, 기준을 건너뛰면 36점).
@@ -539,8 +540,9 @@ public class RomLineSession : MonoBehaviour
         direct[slot] = dr;
         if (!dr.valid) { Debug.LogWarning($"[선실측] ★{title} — 각을 못 냈다(같은 자리를 두 번 찍었다)."); return; }
 
-        // 면 — 기준(양쪽 Tr)이 있을 때만.
-        if (!frame.valid)
+        // 면 — 기준(양쪽 Tr)이 있을 때만. 회전은 바닥면이라 기준 없이도 낸다.
+        bool byGravity = !frame.valid && !RomLineMath.NeedsReference(motion);
+        if (!frame.valid && !byGravity)
         {
             Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · 면 위 —(기준 Tr을 안 찍었다)");
             return;
@@ -554,7 +556,7 @@ public class RomLineSession : MonoBehaviour
         }
 
         bool match = RomLineMath.DirectionMatches(motion, r.signedAngle);
-        Debug.Log($"[선실측] 값 — {title} 면 위 {r.angle:F1}° (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
+        Debug.Log($"[선실측] 값 — {title} 면 위 {r.angle:F1}°{(byGravity ? "(기준 없이 · 바닥면)" : "")} (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
                   $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · " +
                   $"면 밖 각 중립선 {r.neutralOffPlane:F1}° → 측정선 {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}°) · " +
                   $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")}");
@@ -621,7 +623,8 @@ public class RomLineSession : MonoBehaviour
         if (g == 0)
         {
             frame = default;
-            for (int i = 0; i < results.Length; i++) results[i] = default;   // 면 값만 — 직접 값은 기준과 무관하다
+            for (int i = 0; i < results.Length; i++)   // 면 값만 — 직접 값은 기준과 무관하다. 회전의 면 값도 기준과 무관해 남긴다
+                if (RomLineMath.NeedsReference((RomLineMotion)(i / 2))) results[i] = default;
             for (int i = 0; i < cmpResults.Length; i++) cmpResults[i] = default;
             return;
         }
@@ -666,7 +669,7 @@ public class RomLineSession : MonoBehaviour
     private void Skip()
     {
         if (Done) return;
-        if (group == 0) Debug.Log("[선실측] 기준(양쪽 Tr)을 건너뛴다 — «면» 값은 안 나오고 «직접» 값만 나온다.");
+        if (group == 0) Debug.Log("[선실측] 기준(양쪽 Tr)을 건너뛴다 — 굴곡·신전·측굴은 «직접» 값만 나온다. 회전은 바닥면으로 «면» 값이 나온다.");
         Go(group + 1, "건너뜀");
     }
 
@@ -796,7 +799,7 @@ public class RomLineSession : MonoBehaviour
             tipText = PointName[(int)p];
         }
         string note = noteText;
-        if (note.Length == 0 && group == 0) note = "건너뛰면(B/Y) «직접» 값만 나옵니다";
+        if (note.Length == 0 && group == 0) note = "건너뛰면(B/Y) 회전만 «면» 값, 나머지는 «직접» 값만 나옵니다";
         view.SetTexts(GroupTitle(group), instruction, note, tab, tipText);
 
         int current = group >= 1 && !Done && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;

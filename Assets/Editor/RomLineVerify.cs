@@ -74,6 +74,16 @@ public static class RomLineVerify
                     fail += Line(sb, ok, $"환자 {yaw:F0}° · {Name(motion)} {deg:F0}° → 잰 값 {r.angle:F2}° " +
                                          $"(부호 {r.signedAngle:+0.0;-0.0}) · 몸 확인 {(anatomy ? "O" : "★X")} · " +
                                          $"교점 {(r.pivotOnLines ? "선 위" : "대신 세움")}");
+
+                    // 회전은 기준(양쪽 Tr) 없이도 같은 값·같은 방향 판정이 나와야 한다(10-07 — 면이 바닥이라 중력만으로 정해진다).
+                    //   런타임이 기준을 건너뛰었을 때 넘기는 것과 같은 «빈 기준»을 넣는다.
+                    if (!RomLineMath.NeedsReference(motion))
+                    {
+                        RomLineResult g = RomLineMath.Measure(nA, nB, mA, mB, RomLineMath.PlaneNormal(motion, default));
+                        bool gOk = g.valid && Mathf.Abs(g.angle - deg) < 0.02f && Mathf.Abs(g.signedAngle - r.signedAngle) < 0.001f
+                                   && RomLineMath.DirectionMatches(motion, g.signedAngle);
+                        fail += Line(sb, gOk, $"환자 {yaw:F0}° · {Name(motion)} {deg:F0}° · 기준 없이(바닥면) → 잰 값 {g.angle:F2}° (부호 {g.signedAngle:+0.0;-0.0})");
+                    }
                 }
             }
         }
