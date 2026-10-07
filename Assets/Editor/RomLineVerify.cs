@@ -90,6 +90,13 @@ public static class RomLineVerify
                                          $"(부호 {r.signedAngle:+0.0;-0.0}) · 몸 확인 {(anatomy ? "O" : "★X")} · " +
                                          $"교점 {(r.pivotOnLines ? "선 위" : "대신 세움")}");
 
+                    // 선이 움직인 모양으로 가른 동작이 넣은 동작과 같은가(자유 측정의 검산, 10-07) — 그 동작에 쓰는 선으로.
+                    if (deg >= 10f)
+                    {
+                        int dp = RomLineMath.DominantPlane(nB - nA, mB - mA, ff, out float w1, out float w2);
+                        fail += Line(sb, dp == m / 2, $"환자 {yaw:F0}° · {Name(motion)} {deg:F0}° · 움직인 모양으로 가름 → 면 {dp} (성분 {w1:F2} / {w2:F2})");
+                    }
+
                     // 회전은 기준(양쪽 Tr) 없이도 같은 값·같은 방향 판정이 나와야 한다(10-07 — 면이 바닥이라 중력만으로 정해진다).
                     //   런타임이 기준을 건너뛰었을 때 넘기는 것과 같은 «빈 기준»을 넣는다.
                     if (!RomLineMath.NeedsReference(motion))

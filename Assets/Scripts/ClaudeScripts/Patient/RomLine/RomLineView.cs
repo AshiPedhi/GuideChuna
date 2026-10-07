@@ -17,7 +17,7 @@ public class RomLineView
     private const int ArcSegments = 32;
     public const float TouchDepth = 0.035f;      // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
     public const float FingerDepth = 0.02f;      // 손끝은 더 바짝 대야 한다 — 지나가는 손에 눌리지 않게(10-06)
-    public const int ButtonCount = 15;
+    public const int ButtonCount = 19;
 
     // ── 색 ──────────────────────────────────────────────────────────
     private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
@@ -42,7 +42,8 @@ public class RomLineView
     // 컨트롤러의 스틱 · A/X · B/Y가 하던 일 — 손으로도 할 수 있게 판에 올린다(10-06)
     private static readonly string[] StepNames = { "이전 단계", "한 점 취소", "다음 단계" };
     public static readonly string[] ButtonLabel = { "기준", "굴곡·신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계",
-                                                   "6동작", "자유 측정", "전부 지우기", "3축 표시", "축 다시 잡기" };   // 10~14 = 자유 측정(10-07)
+                                                   "6동작", "자유 측정", "이 동작 지우기", "3축 표시", "축 다시 잡기",   // 10~14 = 자유 측정(10-07)
+                                                   "굴곡·신전", "측굴", "회전", "기준선 바꾸기" };                         // 15~17 = 자유 측정의 동작 탭 · 18
 
     private Transform root;
     private Material mat;
@@ -169,6 +170,9 @@ public class RomLineView
             var c = new Vector2((i - 1.5f) * (tabW + 0.004f), top - 0.030f);
             AddButton(guidedArea, i, c, new Vector2(tabW, tabH), TabOff, TabNames[i], 0.075f);
         }
+        // 자유 측정의 동작 탭(같은 줄) — 동작마다 점을 따로 모으고, 그 동작의 면 값만 보여 준다
+        for (int i = 0; i < 3; i++)
+            AddButton(freeArea, 15 + i, new Vector2((i - 1f) * 0.114f, top - 0.030f), new Vector2(0.110f, tabH), i == 0 ? TabOn : TabOff, ButtonLabel[15 + i], 0.075f);
 
         title = MakeText(panel, "", 0.13f, TextAlignmentOptions.Center, 3);
         Place(title, new Vector2(0f, top - 0.078f), PanelW - 0.02f);
@@ -227,10 +231,11 @@ public class RomLineView
             AddButton(i == 2 ? panel : guidedArea, 4 + i, c, size, i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
             AddButton(i == 1 ? panel : guidedArea, 7 + i, c + up, size, ButtonColor, StepNames[i], 0.075f);
         }
-        // 자유 측정: 아래 줄 «3축 표시» · «전부 지우기» / 윗줄 «축 다시 잡기»
+        // 자유 측정: 아래 줄 «3축 표시» · «이 동작 지우기» / 윗줄 «축 다시 잡기» · (한 점 취소) · «기준선 바꾸기»
         AddButton(freeArea, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
         AddButton(freeArea, 12, new Vector2(0f, by), size, ButtonColor, ButtonLabel[12], 0.075f);
         AddButton(freeArea, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);
+        AddButton(freeArea, 18, new Vector2(bw + 0.006f, by) + up, size, ButtonColor, ButtonLabel[18], 0.075f);
         freeArea.gameObject.SetActive(false);
 
         // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
@@ -257,7 +262,13 @@ public class RomLineView
         SetButtonOn(11, free);
     }
 
-    /// <summary>켜고 끄는 버튼(모드 · 3축 표시)의 바탕색.</summary>
+    /// <summary>자유 측정의 동작 탭(0 굴곡·신전 · 1 측굴 · 2 회전) 가운데 지금 것을 밝힌다.</summary>
+    public void SetFreeTab(int tab)
+    {
+        for (int i = 0; i < 3; i++) SetButtonOn(15 + i, i == tab);
+    }
+
+    /// <summary>켜고 끄는 버튼(모드 · 3축 표시 · 동작 탭)의 바탕색.</summary>
     public void SetButtonOn(int index, bool on)
     {
         buttonBase[index] = on ? TabOn : TabOff;

@@ -119,6 +119,27 @@ public static class RomLineMath
         return f;
     }
 
+    /// <summary>
+    /// 선이 기준선(d0)에서 측정선(d1)으로 돌아간 축이 세 축 중 어디에 가장 가까운가 — 그 동작을 읽는 면의 번호를 낸다
+    /// (0 옆면 = 굴곡·신전 · 1 앞면 = 측굴 · 2 바닥면 = 회전, 못 가르면 -1). first·second = 가장 가까운 축과 둘째 축의 성분(0~1).
+    /// ★검산용이다(10-07) — 고른 동작과 다르게 움직였는지 알려 주는 데만 쓴다. 값 계산에는 들어가지 않는다.
+    ///   민두 시험 34쌍에서 손으로 가른 것과 모두 같았다. 선을 축으로 도는 움직임은 원래 안 보인다(세로선으로 회전 등).
+    /// </summary>
+    public static int DominantPlane(Vector3 d0, Vector3 d1, RomLineFrame f, out float first, out float second)
+    {
+        first = second = 0f;
+        if (!f.valid) return -1;
+        if (Vector3.Dot(d0, d1) < 0f) d1 = -d1;   // 반대 순서로 찍힌 선은 바로잡고 본다(순서 문제는 따로 알린다)
+        Vector3 axis = Vector3.Cross(d0, d1);
+        if (axis.sqrMagnitude < 1e-12f) return -1;   // 두 선이 나란하다 — 움직이지 않았다
+        axis.Normalize();
+        float side = Mathf.Abs(Vector3.Dot(axis, f.right)), front = Mathf.Abs(Vector3.Dot(axis, f.forward)), floor = Mathf.Abs(Vector3.Dot(axis, f.up));
+        int plane = side >= front && side >= floor ? 0 : front >= floor ? 1 : 2;
+        first = Mathf.Max(side, Mathf.Max(front, floor));
+        second = plane == 0 ? Mathf.Max(front, floor) : plane == 1 ? Mathf.Max(side, floor) : Mathf.Max(side, front);
+        return plane;
+    }
+
     /// <summary>양쪽 Tr + Gl로 한 번에(검증기가 쓴다).</summary>
     public static RomLineFrame BuildFrame(Vector3 trRight, Vector3 trLeft, Vector3 gl)
     {
