@@ -358,7 +358,7 @@ public static class RomLineModelSim
     private static readonly float[][] Thetas =
     {
         new[] { 10f, 20f, 30f, 40f, 45f }, new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f },
-        new[] { 10f, 20f, 30f, 40f, 45f, 60f }, new[] { 10f, 20f, 30f, 40f, 45f, 60f },
+        new[] { 10f, 20f, 30f, 40f, 45f }, new[] { 10f, 20f, 30f, 40f, 45f },   // 측굴 최대 45°(사용자 정정 10-08 — 60°까지 넣었었다)
         new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f }, new[] { 10f, 20f, 30f, 45f, 60f, 80f, 90f },
     };
 
