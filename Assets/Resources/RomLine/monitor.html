@@ -9,6 +9,7 @@
   헤드셋을 쓰지 않고 정해 둔 자리에 놓은 채 컨트롤러만으로 잴 때, 같은 Wi-Fi의 PC·태블릿 브라우저로 여는 화면이다.
   헤드셋 앱(RomLineMonitor)이 이 파일을 그대로 내보내고, 이 화면은 /state 를 0.15초마다 물어 그린다. 버튼은 /cmd?c=… 로 보낸다.
   주소 끝에 #demo 를 붙이면 헤드셋 없이 견본 값으로 그린다(배치 확인용).
+  #demo = 굴곡·신전 · #demo-lat = 측굴 · #demo-rot = 회전. 견본에서는 위쪽 탭을 눌러도 바뀐다(10-08).
 -->
 <style>
   :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFB060; --bad:#FF6B6B; --ok:#4ADE80; --orange:#FF6B05; }
@@ -94,20 +95,36 @@
 </footer>
 <script>
 const COLORS = ['#66B3FF', '#73E68C', '#FFD94D'];
-const DEMO = location.hash === '#demo';
+const DEMO = location.hash.startsWith('#demo');
+let demoTab = location.hash === '#demo-lat' ? 1 : location.hash === '#demo-rot' ? 2 : 0;
 let S = null, lastOk = 0;
 
-function cmd(c) { if (!DEMO) fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); }
+function cmd(c) {
+  if (!DEMO) { fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); return; }
+  if (/^tab[0-2]$/.test(c)) { demoTab = +c[3]; poll(); }   // 견본에서는 탭만 바뀐다
+}
 
-function demoState() {
-  const t = Date.now() / 1000, w = Math.sin(t) * 0.01;
-  return { mode:'free', tab:0, tabs:['굴곡·신전','측굴','회전'], counts:[6,0,4], instruction:'선 4의 첫 점을 찍으세요', note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
-    axesOn:true, planeOn:true, plane:'옆면', tracked:true, calib:false, tipOffset:[-10,6,32], url:'http://192.168.0.12:8090', csv:3, t:t,
-    tip:[0.03 + w, 0.86, 0.12], eye:[0, 1.0, 1.0],
+// 견본 값 — 좌표는 [환자 오른쪽, 위, 환자 앞](m). 선마다 a = 첫 점, b = 둘째 점.
+//   굴곡·신전 · 측굴 = 정중선(미간 → 턱), 회전 = 왼쪽 귀 → 미간. 각은 이 좌표에 맞춰 손으로 적은 값이다(실측 아님).
+const DEMO_SETS = [
+  { plane:'옆면', instruction:'선 4의 첫 점을 찍으세요', tip:[0.03, 0.86, 0.12],
     lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
             {n:2, ref:false, refOf:1, len:9.0, plane:'굴곡 26.8°', direct:26.9, warn:'', a:[-0.001,0.82,0.075], b:[0.002,0.74,0.035]},
-            {n:3, ref:false, refOf:1, len:8.8, plane:'굴곡 39.3°', direct:39.5, warn:'측굴으로 보임', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ],
-    pending:null };
+            {n:3, ref:false, refOf:1, len:8.8, plane:'굴곡 39.3°', direct:39.5, warn:'측굴으로 보임', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ] },
+  { plane:'앞면', instruction:'선 4의 첫 점을 찍으세요', tip:[-0.09, 0.84, 0.05],
+    lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
+            {n:2, ref:false, refOf:1, len:9.0, plane:'좌측굴 20.0°', direct:20.3, warn:'', a:[-0.045,0.845,0.02], b:[-0.014,0.760,0.016]},
+            {n:3, ref:false, refOf:1, len:9.0, plane:'좌측굴 33.0°', direct:33.2, warn:'', a:[-0.074,0.8305,0.02], b:[-0.025,0.755,0.016]} ] },
+  { plane:'바닥면', instruction:'선 4의 첫 점을 찍으세요', tip:[0.09, 0.87, 0.07],
+    lines:[ {n:1, ref:true, refOf:1, len:14.6, plane:'', direct:0, warn:'', a:[-0.075,0.80,-0.02], b:[0,0.86,0.09]},
+            {n:2, ref:false, refOf:1, len:14.6, plane:'우회전 30.0°', direct:27.3, warn:'', a:[-0.075,0.80,0.0202], b:[0.045,0.86,0.0779]},
+            {n:3, ref:false, refOf:1, len:14.6, plane:'우회전 55.0°', direct:49.8, warn:'', a:[-0.0594,0.80,0.0499], b:[0.0737,0.86,0.0516]} ] } ];
+
+function demoState() {
+  const t = Date.now() / 1000, w = Math.sin(t) * 0.01, d = DEMO_SETS[demoTab];
+  return { mode:'free', tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[6,6,6], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
+    axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
+    tip:[d.tip[0] + w, d.tip[1], d.tip[2]], eye:[0, 1.0, 1.0], lines:d.lines, pending:null };
 }
 
 async function poll() {
