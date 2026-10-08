@@ -17502,7 +17502,20 @@ MonoBehaviour:
     cardContainer: {fileID: 6030829799560956498}
   searchInput: {fileID: 688733258267013090}
   hideEmptySections: 1
-  alwaysHiddenCards: []
+  alwaysHiddenCards:
+  - {fileID: 1692973045}
+  - {fileID: 440948656674527962}
+  - {fileID: 1655694958}
+  - {fileID: 1754443783}
+  - {fileID: 2137968246}
+  - {fileID: 103988217}
+  - {fileID: 492550518}
+  - {fileID: 1375266186}
+  - {fileID: 54930539}
+  - {fileID: 1439973224}
+  - {fileID: 1226877429}
+  - {fileID: 1260031467}
+  - {fileID: 980856643}
 --- !u!1001 &1655694955
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -24588,6 +24601,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: SecondaryButton_IconAndLabel (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 8427117777238694044, guid: 292035910f8781541aeb438db140bd72, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 9210260128077714954, guid: 292035910f8781541aeb438db140bd72, type: 3}
       propertyPath: m_text
       value: "\uB2E8\uC21C\uCD94\uB098"
@@ -25494,6 +25511,10 @@ PrefabInstance:
     - target: {fileID: 8427117777238694044, guid: 292035910f8781541aeb438db140bd72, type: 3}
       propertyPath: m_Name
       value: SecondaryButton_IconAndLabel (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8427117777238694044, guid: 292035910f8781541aeb438db140bd72, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9210260128077714954, guid: 292035910f8781541aeb438db140bd72, type: 3}
       propertyPath: m_text
