@@ -9,7 +9,7 @@ using UnityEngine;
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.46f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
+    public const float PanelW = 0.36f, PanelH = 0.50f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
@@ -38,12 +38,12 @@ public class RomLineView
     private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
     private static readonly Color FingerColor = new Color(0.55f, 0.85f, 1f, 1f);
 
-    private static readonly string[] TabNames = { "기준", "굴곡·신전", "측굴", "회전" };
+    private static readonly string[] TabNames = { "굴곡", "신전", "측굴", "회전" };   // 맨 위 탭(10-08) — 다섯째 «기타»는 ButtonLabel[11]
     private static readonly string[] ButtonNames = { "이 동작 다시", "전부 다시", "나가기" };
     // 컨트롤러의 스틱 · A/X · B/Y가 하던 일 — 손으로도 할 수 있게 판에 올린다(10-06)
     private static readonly string[] StepNames = { "이전 단계", "한 점 취소", "다음 단계" };
-    public static readonly string[] ButtonLabel = { "기준", "굴곡·신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계",
-                                                   "6동작", "자유 측정", "이 동작 지우기", "3축 표시", "축 다시 잡기",   // 10~14 = 자유 측정(10-07)
+    public static readonly string[] ButtonLabel = { "굴곡", "신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계",
+                                                   "6동작", "기타", "이 동작 지우기", "3축 표시", "축 다시 잡기",   // 10~14 = 자유 측정(10-07)
                                                    "굴곡·신전", "측굴", "회전", "기준선 바꾸기" };                         // 15~17 = 자유 측정의 동작 탭 · 18
 
     private Transform root;
@@ -57,7 +57,7 @@ public class RomLineView
     private readonly Rect[] buttonRects = new Rect[ButtonCount];
     private readonly Color[] buttonBase = new Color[ButtonCount];
     private Transform fill;
-    private TextMeshPro title, instruction, note, footer;
+    private TextMeshPro title, instruction, note, footer, stepLine;
     private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
     private readonly TextMeshPro[] compareValues = new TextMeshPro[8];   // 줄마다 능동 면·직접, 압박 면·직접
     private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값
@@ -168,16 +168,17 @@ public class RomLineView
         retired.gameObject.SetActive(false);
         float modeY = PanelH * 0.5f - 0.026f;
         AddButton(retired, 10, new Vector2(-0.058f, modeY), new Vector2(0.108f, 0.032f), TabOn, ButtonLabel[10], 0.075f);
-        AddButton(retired, 11, new Vector2(0.058f, modeY), new Vector2(0.108f, 0.032f), TabOff, ButtonLabel[11], 0.075f);
-        float top = PanelH * 0.5f;
-
-        // 진행 위치(탭) — 누르면 그 자리로 간다
-        float tabW = 0.082f, tabH = 0.034f;
+        // ★10-08: 맨 위 한 줄 = 탭 다섯(굴곡 · 신전 · 측굴 · 회전 · 기타). 앞의 넷은 순서대로 재는 흐름, «기타»는 자유 측정이다.
+        const float topW = 0.066f;
         for (int i = 0; i < 4; i++)
-        {
-            var c = new Vector2((i - 1.5f) * (tabW + 0.004f), top - 0.030f);
-            AddButton(guidedArea, i, c, new Vector2(tabW, tabH), TabOff, TabNames[i], 0.075f);
-        }
+            AddButton(panel, i, new Vector2((i - 2f) * (topW + 0.004f), modeY), new Vector2(topW, 0.032f), TabOff, TabNames[i], 0.07f);
+        AddButton(panel, 11, new Vector2(2f * (topW + 0.004f), modeY), new Vector2(topW, 0.032f), TabOff, ButtonLabel[11], 0.07f);
+        float top = PanelH * 0.5f - 0.040f;
+
+        // 둘째 줄 — 순서 탭에서는 진행 줄(중립 → 능동 → 압박), «기타»에서는 동작 갈래 탭 셋이 선다
+        float tabH = 0.034f;
+        stepLine = MakeText(guidedArea, "", 0.085f, TextAlignmentOptions.Center, 3);
+        Place(stepLine, new Vector2(0f, top - 0.030f), PanelW - 0.02f);
         // 자유 측정의 동작 탭(같은 줄) — 동작마다 점을 따로 모으고, 그 동작의 면 값만 보여 준다
         for (int i = 0; i < 3; i++)
             AddButton(freeArea, 15 + i, new Vector2((i - 1f) * 0.114f, top - 0.030f), new Vector2(0.110f, tabH), i == 0 ? TabOn : TabOff, ButtonLabel[15 + i], 0.075f);
@@ -363,6 +364,12 @@ public class RomLineView
             tabColor[i] = i == tab ? TabOn : TabOff;
             if (i != hot) buttonPlates[i].material.color = tabColor[i];
         }
+    }
+
+    /// <summary>순서 탭의 진행 줄(색은 리치 텍스트로 넣어 온다).</summary>
+    public void SetStepLine(string text)
+    {
+        stepLine.text = text;
     }
 
     /// <summary>판 맨 아래 한 줄(모니터 화면의 주소).</summary>

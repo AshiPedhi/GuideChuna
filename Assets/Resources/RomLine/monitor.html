@@ -22,6 +22,8 @@
   .tab { padding:10px 22px; border-radius:8px; background:#222C38; color:var(--dim); font-size:22px; font-weight:700; cursor:pointer; border:2px solid transparent; }
   .tab.on { color:#0E1319; }
   .tab small { font-size:13px; font-weight:400; margin-left:6px; opacity:.8; }
+  .tab.sub { padding:8px 14px; font-size:17px; }
+  .tabs .gap { width:10px; }
   #instruction { font-size:28px; font-weight:700; color:#FFF2A6; }
   #note { font-size:16px; color:var(--warn); min-height:22px; }
   #track { font-size:22px; font-weight:800; padding:10px 18px; border-radius:8px; white-space:nowrap; }
@@ -99,28 +101,30 @@ let S = null, lastOk = 0;
 
 function cmd(c) {
   if (!DEMO) { fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); return; }
-  if (/^tab[0-2]$/.test(c)) { demoTab = +c[3]; poll(); }   // 견본에서는 탭만 바뀐다
+  if (/^top[0-3]$/.test(c)) { demoTab = [0, 0, 1, 2][+c[3]]; poll(); }   // 견본에서는 탭만 바뀐다(신전은 굴곡 견본을 같이 쓴다)
 }
 
 // 견본 값 — 좌표는 [환자 오른쪽, 위, 환자 앞](m). 선마다 a = 첫 점, b = 둘째 점.
 //   굴곡·신전 · 측굴 = 정중선(미간 → 턱), 회전 = 왼쪽 귀 → 미간. 각은 이 좌표에 맞춰 손으로 적은 값이다(실측 아님).
 const DEMO_SETS = [
-  { plane:'옆면', instruction:'선 4의 첫 점을 찍으세요', tip:[0.03, 0.86, 0.12],
+  { plane:'옆면', instruction:'굴곡 · 압박 — 측정이 끝났습니다', tip:[0.03, 0.86, 0.12],
     lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
             {n:2, ref:false, refOf:1, len:9.0, plane:'굴곡 26.8°', direct:26.9, warn:'', a:[-0.001,0.82,0.075], b:[0.002,0.74,0.035]},
             {n:3, ref:false, refOf:1, len:8.8, plane:'굴곡 39.3°', direct:39.5, warn:'측굴으로 보임', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ] },
-  { plane:'앞면', instruction:'선 4의 첫 점을 찍으세요', tip:[-0.09, 0.84, 0.05],
+  { plane:'앞면', instruction:'좌측굴 · 압박 — 측정이 끝났습니다', tip:[-0.09, 0.84, 0.05],
     lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
             {n:2, ref:false, refOf:1, len:9.0, plane:'좌측굴 20.0°', direct:20.3, warn:'', a:[-0.045,0.845,0.02], b:[-0.014,0.760,0.016]},
             {n:3, ref:false, refOf:1, len:9.0, plane:'좌측굴 33.0°', direct:33.2, warn:'', a:[-0.074,0.8305,0.02], b:[-0.025,0.755,0.016]} ] },
-  { plane:'바닥면', instruction:'선 4의 첫 점을 찍으세요', tip:[0.09, 0.87, 0.07],
+  { plane:'바닥면', instruction:'우회전 · 압박 — 측정이 끝났습니다', tip:[0.09, 0.87, 0.07],
     lines:[ {n:1, ref:true, refOf:1, len:14.6, plane:'', direct:0, warn:'', a:[-0.075,0.80,-0.02], b:[0,0.86,0.09]},
             {n:2, ref:false, refOf:1, len:14.6, plane:'우회전 30.0°', direct:27.3, warn:'', a:[-0.075,0.80,0.0202], b:[0.045,0.86,0.0779]},
             {n:3, ref:false, refOf:1, len:14.6, plane:'우회전 55.0°', direct:49.8, warn:'', a:[-0.0594,0.80,0.0499], b:[0.0737,0.86,0.0516]} ] } ];
 
 function demoState() {
   const t = Date.now() / 1000, w = Math.sin(t) * 0.01, d = DEMO_SETS[demoTab];
-  return { mode:'free', tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[6,6,6], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
+  const names = ['중립', '능동', '압박'];
+  d.lines.forEach((l, i) => { l.name = names[i]; });
+  return { mode:'guided', top:[0, 2, 3][demoTab], topTabs:['굴곡','신전','측굴','회전','기타'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
     axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
     tip:[d.tip[0] + w, d.tip[1], d.tip[2]], eye:[0, 1.0, 1.0], lines:d.lines, pending:null };
 }
@@ -141,18 +145,35 @@ function render() {
   el('conn').textContent = stale ? '★헤드셋과 연결이 끊겼습니다 — 다시 연결하는 중' : (S ? `연결됨 · ${S.url || ''} · 끝점 (${(S.tipOffset || []).join(', ')})mm · 기록 ${S.csv || 0}줄` : '');
   if (!S) return;
 
-  const tabs = el('tabs');
-  if (tabs.childElementCount !== S.tabs.length) {
+  // 맨 위 탭 다섯(굴곡 · 신전 · 측굴 · 회전 · 기타). «기타»(자유 측정)일 때만 그 옆에 동작 갈래 셋이 붙는다.
+  const tabs = el('tabs'), free = S.mode === 'free', top = S.topTabs || [];
+  const key = S.mode + '|' + top.length;
+  if (tabs.dataset.key !== key) {
+    tabs.dataset.key = key;
     tabs.innerHTML = '';
-    S.tabs.forEach((name, i) => { const d = document.createElement('div'); d.className = 'tab'; d.onclick = () => cmd('tab' + i); tabs.appendChild(d); });
+    top.forEach((name, i) => { const d = document.createElement('div'); d.dataset.top = i; d.onclick = () => cmd('top' + i); tabs.appendChild(d); });
+    if (free) {
+      const g = document.createElement('div'); g.className = 'gap'; tabs.appendChild(g);
+      S.tabs.forEach((name, i) => { const d = document.createElement('div'); d.dataset.sub = i; d.onclick = () => cmd('tab' + i); tabs.appendChild(d); });
+    }
   }
-  [...tabs.children].forEach((d, i) => {
-    const on = S.mode === 'free' && i === S.tab;
-    d.className = 'tab' + (on ? ' on' : '');
-    d.style.background = on ? COLORS[i] : '';
-    d.innerHTML = S.tabs[i] + `<small>선 ${Math.floor((S.counts[i] || 0) / 2)}</small>`;
+  [...tabs.children].forEach(d => {
+    if (d.dataset.top !== undefined) {
+      const i = +d.dataset.top, on = i === S.top;
+      d.className = 'tab' + (on ? ' on' : '');
+      d.style.background = on ? (free ? '#C9D3DE' : COLORS[S.tab]) : '';
+      d.textContent = top[i];
+    } else if (d.dataset.sub !== undefined) {
+      const i = +d.dataset.sub, on = i === S.tab;
+      d.className = 'tab sub' + (on ? ' on' : '');
+      d.style.background = on ? COLORS[i] : '';
+      d.innerHTML = S.tabs[i] + `<small>선 ${Math.floor((S.counts[i] || 0) / 2)}</small>`;
+    }
   });
-  el('instruction').textContent = (S.mode === 'free' ? '' : '[6동작 모드] ') + (S.instruction || '');
+  el('instruction').textContent = S.instruction || '';
+  el('keys').innerHTML = free
+    ? '<b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)'
+    : '<b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 이 단계 건너뛰기 · <b>스틱 좌우</b> 앞 · 뒤 단계 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
   el('note').textContent = S.calib ? '끝점 보정 중 — 끝을 한 점에 대고 여러 방향으로 돌리세요' : (S.note || '');
 
   const tr = el('track');
@@ -171,13 +192,13 @@ function render() {
     const r = document.createElement('tr');
     r.className = l.ref ? 'ref' : (l === last ? 'last' : '');
     r.innerHTML = l.ref
-      ? `<td>선 ${l.n}</td><td>${l.len.toFixed(1)}cm</td><td>기준선</td><td></td><td></td>`
-      : `<td>선 ${l.n}<span style="color:#667;font-size:13px"> ← ${l.refOf}</span></td><td>${l.len.toFixed(1)}cm</td><td class="plane" style="color:${S.planeOn ? col : '#667'}">${l.plane || '—'}</td><td>${l.direct.toFixed(1)}°</td><td class="warn">${l.warn || ''}</td>`;
+      ? `<td>${l.name || '선 ' + l.n}</td><td>${l.len.toFixed(1)}cm</td><td>${free ? '기준선' : '중립선'}</td><td></td><td></td>`
+      : `<td>${l.name || '선 ' + l.n}<span style="color:#667;font-size:13px">${free ? ' ← ' + l.refOf : ''}</span></td><td>${l.len.toFixed(1)}cm</td><td class="plane" style="color:${S.planeOn ? col : '#667'}">${l.plane || '—'}</td><td>${l.direct.toFixed(1)}°</td><td class="warn">${l.warn || ''}</td>`;
     rows.appendChild(r);
   });
   el('bigValue').textContent = last ? (last.plane || ('직접 ' + last.direct.toFixed(1) + '°')) : '—';
   el('bigValue').style.color = last && last.plane ? col : 'var(--ink)';
-  el('bigLabel').textContent = last ? `선 ${last.n} — 기준선(선 ${last.refOf})에서` : '가장 최근 측정선';
+  el('bigLabel').textContent = last ? (free ? `선 ${last.n} — 기준선(선 ${last.refOf})에서` : `${last.name} — 중립선에서`) : '가장 최근 측정선';
   el('bigSub').textContent = last ? `직접 ${last.direct.toFixed(1)}° · 길이 ${last.len.toFixed(1)}cm` : '';
   el('bigWarn').textContent = last ? (last.warn || '') : '';
 
@@ -190,8 +211,8 @@ const PICK = [ p => [p[2], p[1]], p => [-p[0], p[1]], p => [-p[0], -p[2]] ];
 
 function drawView(v, lines, col) {
   const box = el('v' + v), cv = box.querySelector('canvas');
-  box.className = 'view' + (S.mode === 'free' && S.tab === v ? ' on' : '');
-  box.style.borderColor = S.mode === 'free' && S.tab === v ? COLORS[v] : '';
+  box.className = 'view' + (S.tab === v ? ' on' : '');
+  box.style.borderColor = S.tab === v ? COLORS[v] : '';
   const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);

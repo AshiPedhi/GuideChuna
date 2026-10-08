@@ -38,8 +38,12 @@ public enum RomLinePoint
 ///   Tr ~ Gl 선과 Gl ~ Gn 선의 값을 나란히 본다. Tr ~ Gl 선은 옆면에서 비스듬해 «직접»이 작게 나오고
 ///   Gl ~ Gn 선은 정중선 위라 그대로 나온다는 계산을 실제로 확인하려는 것이다. 끄면 종전 흐름(2점) 그대로다.
 ///
-/// ★★10-08 사용자 지시: <b>고정 3축으로 재는 자유 측정만 남긴다.</b> 위의 6동작 흐름(기준 양쪽 Tr · 18직선)은 코드만 남고
-///   들어가는 길이 없다 — 시작하면 바로 자유 측정이고, 모드 버튼 · 3축 끄기 버튼은 판과 모니터에서 뺐다.
+/// ★★10-08 사용자 지시(같은 날 두 번 바뀜 — 아래가 지금 구조다):
+///   판 맨 위에 <b>탭 다섯</b> — 굴곡(3직선) · 신전(3) · 측굴(우 3 + 좌 3) · 회전(우 3 + 좌 3) · 기타.
+///   앞의 넷은 위의 «18직선» 흐름을 <b>순서대로</b> 잰다(중립 → 능동 → 압박, 다 찍으면 다음 동작으로 저절로 넘어간다).
+///   단계가 바뀔 때마다 <b>안내 음성</b>이 한 문장 나온다(Resources/RomLine/Narration).
+///   <b>기준(양쪽 Tr)은 찍지 않는다</b> — 면은 고정 3축으로 세운다(frame = axes). 굴곡 · 신전의 선도 정중선(Gl ~ Gn)이다.
+///   «기타» = 아래의 자유 측정. 3축 끄기 · 모드 버튼은 뺐다.
 ///
 /// ★자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
@@ -70,6 +74,10 @@ public class RomLineSession : MonoBehaviour
 
     public static readonly string[] MotionName = { "굴곡", "신전", "우측굴", "좌측굴", "우회전", "좌회전" };
     public static readonly string[] PointName = { "오른쪽 Tr", "왼쪽 Tr", "Gl", "Gn" };
+    // 판의 안내 글자에 쓰는 이름(안내 음성과 같은 말). 공간의 이름표·로그는 짧은 PointName을 그대로 쓴다.
+    private static readonly string[] PointSay = { "오른쪽 귀 앞(Tr)", "왼쪽 귀 앞(Tr)", "미간(Gl)", "턱 끝(Gn)" };
+    private static readonly string[] TopTabName = { "굴곡", "신전", "측굴", "회전", "기타" };
+    private static readonly string[] PhaseHint = { "환자 정면을 바닥 화살표에 맞추세요 · 정면을 본 편안한 자세", "환자가 스스로 끝까지 움직인 자세", "측정자가 같은 방향으로 조금 더 눌러 준 자세" };
     private static readonly string[] PhaseName = { "중립", "능동", "압박" };
 
     [Header("=== 컨트롤러 ===")]
@@ -207,7 +215,7 @@ public class RomLineSession : MonoBehaviour
 
     // ── 단계 ↔ 점 ───────────────────────────────────────────────────
     /// <summary>그 묶음에서 찍는 점 수. 비교 시험이 켜져 있으면 굴곡·신전(묶음 1~6)만 Gn을 더해 셋이다.</summary>
-    private int SizeOf(int g) => compareGlGn && g >= 1 && g <= 6 ? 3 : 2;
+    private int SizeOf(int g) => compareGlGn && g >= 1 && g <= 6 ? 3 : 2;   // ★compareGlGn은 Start에서 끈다(10-08) — 늘 2다
     private static int GroupStart(int g) => g * 2;
     private static int MotionOf(int g) => (g - 1) / 3;
     private static int PhaseOf(int g) => (g - 1) % 3;          // 0 중립 · 1 능동 · 2 압박
@@ -218,10 +226,12 @@ public class RomLineSession : MonoBehaviour
     {
         switch (m)
         {
+            // ★10-08 사용자 결정: 굴곡 · 신전도 정중선(Gl ~ Gn)으로 잰다(종전은 오른쪽 Tr ~ Gl — 9/30 기준).
+            //   시뮬레이션에서 Tr ~ Gl 선은 옆면에서 33.7° 들려 있어 다른 동작이 섞일 때 ±6.8° 틀어졌고, 정중선은 +1.3°였다.
             case RomLineMotion.Flexion:
-            case RomLineMotion.Extension: a = RomLinePoint.TrRight; b = RomLinePoint.Gl; break;    // 우측면: 오른쪽 Tr ~ Gl
+            case RomLineMotion.Extension:
             case RomLineMotion.LateralRight:
-            case RomLineMotion.LateralLeft: a = RomLinePoint.Gl; b = RomLinePoint.Gn; break;       // 정면: Gl ~ Gn
+            case RomLineMotion.LateralLeft: a = RomLinePoint.Gl; b = RomLinePoint.Gn; break;       // 정중선: Gl ~ Gn
             case RomLineMotion.RotationRight: a = RomLinePoint.TrLeft; b = RomLinePoint.Gl; break; // 반대쪽(왼쪽) Tr ~ Gl
             default: a = RomLinePoint.TrRight; b = RomLinePoint.Gl; break;                         // 좌회전: 오른쪽 Tr ~ Gl
         }
@@ -254,11 +264,14 @@ public class RomLineSession : MonoBehaviour
         freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
         BuildSounds();
 
-        // ★10-08 사용자 지시: «고정 3축으로 측정하는 것만 남긴다» — 처음부터 자유 측정으로 들어가고 6동작(기준 양쪽 Tr)으로는 못 간다.
-        //   6동작 코드는 지우지 않았다(들어가는 길만 막았다 — 판의 모드 버튼 · 스틱 아래로 길게 · 모니터의 «모드»).
-        freeMode = true;
-        view.SetMode(true);
-        freeView.SetVisible(true);
+        // ★10-08 사용자 지시: 탭 다섯 — 굴곡(3직선) · 신전(3) · 측굴(좌우 6) · 회전(좌우 6)을 <b>순서대로</b> 재고, 자유 측정은 «기타»다.
+        //   기준(양쪽 Tr) 묶음(0)은 건너뛴다 — 면은 고정 3축으로 세운다(SetAxes가 frame에 넣는다). 처음은 굴곡 · 중립.
+        //   ★비교 시험(compareGlGn)은 씬에 true로 굳어 있다. 굴곡 · 신전의 선이 Gl ~ Gn이 됐으니 뜻이 없어 여기서 끈다(세 점씩 찍게 되는 것을 막는다).
+        compareGlGn = false;
+        group = GroupOf(0, 0);
+        freeMode = false;
+        view.SetMode(false);
+        freeView.SetVisible(true);   // 바닥의 3축 십자는 두 모드가 같이 쓴다
 
         if (monitorPort > 0)
         {
@@ -783,6 +796,7 @@ public class RomLineSession : MonoBehaviour
                 RecomputeMotion(m);
             }
             else Compute(m, ph);
+            CsvGuided(m, ph);
         }
 
         group++;
@@ -801,6 +815,7 @@ public class RomLineSession : MonoBehaviour
     private void FaceCheck(int m)
     {
         if (!frame.valid) return;
+        if (!has[0] || !has[1]) return;   // 양쪽 Tr을 찍지 않는다(10-08) — 앞뒤는 고정 3축이 정한다
         int n0 = GroupStart(GroupOf(m, 0));
         if (!has[n0] || !has[n0 + 1]) return;
         LineOf((RomLineMotion)m, out RomLinePoint a, out RomLinePoint b);
@@ -941,7 +956,7 @@ public class RomLineSession : MonoBehaviour
             if (index >= 2) hasExtra[group] = false;
             else has[GroupStart(group) + index] = false;
         }
-        else if (group > 0)
+        else if (group > 1)   // 묶음 0(기준)은 쓰지 않는다
         {
             group = Mathf.Min(group, GroupCount) - 1;
             int start = GroupStart(group);
@@ -975,7 +990,7 @@ public class RomLineSession : MonoBehaviour
     /// <summary>단계를 옮긴다(찍어 둔 점은 그대로 둔다 — 그 단계에서 첫 점을 찍는 순간 새로 잰다).</summary>
     private void Go(int target, string why)
     {
-        target = Mathf.Clamp(target, 0, GroupCount);
+        target = Mathf.Clamp(target, 1, GroupCount);   // 묶음 0(기준)은 쓰지 않는다
         if (target == group && index == 0) return;
         if (index > 0)   // 찍다 만 묶음은 비운다
         {
@@ -994,17 +1009,15 @@ public class RomLineSession : MonoBehaviour
     {
         switch (button)
         {
-            case 0: Go(0, "탭"); break;
-            case 1: Go(GroupOf(0, 0), "탭"); break;   // 굴곡·신전
-            case 2: Go(GroupOf(2, 0), "탭"); break;   // 측굴
-            case 3: Go(GroupOf(4, 0), "탭"); break;   // 회전
+            case 0: case 1: case 2: case 3: GoTopTab(button, "탭"); break;   // 굴곡 · 신전 · 측굴 · 회전
             case 4: RedoMotion(); break;
             case 5: ResetAll(); break;
             case 6: Exit(); break;
             case 7: Go(group - 1, "버튼"); break;
             case 8: Undo(); break;
             case 9: Skip(); break;
-            case 10: case 11: case 13: break;   // 모드(6동작 ↔ 자유) · 3축 끄기는 뺐다(10-08) — 버튼도 판에 없다
+            case 10: case 13: break;   // 3축 끄기는 뺐다(10-08) — 버튼도 판에 없다
+            case 11: GoTopTab(4, "탭"); break;   // 기타(자유 측정)
             case 12: FreeClear(); break;
             case 14: break;   // «축 다시 잡기» 버튼은 판에서 뺐다(10-08) — 판을 누르는 자세로는 방향을 겨눌 수 없다. 스틱 위로 길게 · 모니터로 한다
             case 15: case 16: case 17: SetFreeTab(button - 15); break;
@@ -1026,13 +1039,24 @@ public class RomLineSession : MonoBehaviour
     /// <summary>회전의 면(바닥)은 중력만 쓰므로 3축을 꺼도 나온다. 굴곡·신전과 측굴의 면은 3축이 있어야 한다.</summary>
     private bool FreePlaneOn => freeTab == 2 || axesOn;
 
+    /// <summary>맨 위 탭 — 0 굴곡 · 1 신전 · 2 측굴(우 → 좌) · 3 회전(우 → 좌) · 4 기타(자유 측정).</summary>
+    private void GoTopTab(int tab, string why)
+    {
+        if (tab >= 4) { SetFreeMode(true); return; }
+        SetFreeMode(false);
+        int m = tab < 2 ? tab : tab == 2 ? 2 : 4;
+        if (!Done && MotionOf(group) == m && index == 0) { announced = -1; dirty = true; return; }   // 같은 자리 — 안내만 다시 들려준다
+        Go(GroupOf(m, 0), why);
+    }
+
     private void SetFreeMode(bool on)
     {
         if (freeMode == on) return;
         freeMode = on;
         noteText = "";
         view.SetMode(on);
-        freeView.SetVisible(on);
+        announced = -1;                              // 순서 탭으로 돌아오면 그 단계의 안내를 다시 들려준다
+        if (on && narrSrc != null) narrSrc.Stop();
         if (on)
         {
             // 6동작의 공간 표시는 끈다(찍어 둔 값은 그대로 — 돌아오면 다시 그린다).
@@ -1094,6 +1118,9 @@ public class RomLineSession : MonoBehaviour
     private void SetAxes(Vector3 toward, Vector3 crossAt, string why, string how)
     {
         axes = RomLineMath.FrameFacing(-toward);   // 검증기가 «양쪽 Tr로 만든 기준»과 같은 방향·부호인지 본다
+        frame = axes;                              // 순서대로 재는 흐름의 «면»도 이 축으로 세운다(양쪽 Tr을 찍지 않는다, 10-08)
+        for (int m = 0; m < 6; m++) RecomputeMotion(m);   // 축을 다시 잡으면 찍어 둔 선의 면 값이 바뀐다
+        dirty = true;
         axesOrigin = crossAt;
         axesOrigin.y = trackingSpace != null ? trackingSpace.position.y : 0f;   // 바닥(추적 원점이 바닥 높이일 때)
         Debug.Log($"[선실측] 자유 — 3축을 잡았다({why} · {how}) · 환자 정면 {axes.forward:F3} · 환자 오른쪽 {axes.right:F3} · 십자 자리 {axesOrigin:F2} · 눈 {eye.position:F2}");
@@ -1263,8 +1290,8 @@ public class RomLineSession : MonoBehaviour
         // 모니터로 내보낼 상태 — 판과 같은 값을 같은 자리에서 만든다(따로 계산하면 두 화면이 어긋난다).
         StringBuilder js = monitorSb;
         js.Length = 0;
-        js.Append("\"mode\":\"free\",\"tab\":").Append(freeTab).Append(",\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
-          .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append("],\"instruction\":");
+        js.Append("\"mode\":\"free\",\"top\":4,\"tab\":").Append(freeTab);
+        AppendTabsJson(js).Append(",\"instruction\":");
         JsonStr(js, instruction).Append(",\"note\":");
         JsonStr(js, note).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":").Append(FreePlaneOn ? "true" : "false").Append(",\"plane\":");
         JsonStr(js, FreePlaneName[freeTab]).Append(",\"lines\":[");
@@ -1378,8 +1405,9 @@ public class RomLineSession : MonoBehaviour
                 if (!freeMode) SetFreeMode(true);
                 SetFreeTab(command[3] - '0');
                 break;
+            case "top0": case "top1": case "top2": case "top3": case "top4": GoTopTab(command[3] - '0', "모니터"); break;
             case "undo": Undo(); break;
-            case "clear": if (freeMode) FreeClear(); break;
+            case "clear": if (freeMode) FreeClear(); else RedoMotion(); break;
             case "rebase": if (freeMode) FreeRebase(); break;
             case "axes": CaptureAxesFromController("모니터"); break;
             case "axesToggle": case "mode": Debug.Log($"[선실측] 모니터 명령 «{command}»은 뺐다(10-08 — 고정 3축 측정만 남김)"); break;
@@ -1472,9 +1500,9 @@ public class RomLineSession : MonoBehaviour
     {
         for (int i = 0; i < PointCount; i++) has[i] = false;
         for (int i = 0; i < GroupCount; i++) hasExtra[i] = false;
-        frame = default;
+        frame = axes;   // 고정 3축은 그대로다
         for (int i = 0; i < 12; i++) ClearResult(i);
-        group = 0;
+        group = 1;      // 굴곡 · 중립부터(묶음 0 = 기준은 쓰지 않는다)
         index = 0;
         noteText = "";
         Debug.Log("[선실측] 전부 다시 — 전부 지웠다");
@@ -1507,7 +1535,7 @@ public class RomLineSession : MonoBehaviour
     // ── 표시 갱신(상태가 바뀔 때만) ──────────────────────────────────
     private string GroupTitle(int g)
     {
-        if (g <= 0) return "기준";
+        if (g <= 0) return "기준(쓰지 않음)";
         if (g >= GroupCount) return "측정 끝";
         return MotionName[MotionOf(g)] + " · " + PhaseName[PhaseOf(g)];
     }
@@ -1517,7 +1545,7 @@ public class RomLineSession : MonoBehaviour
         if (freeMode) { RefreshFree(); return; }
         dirty = false;
 
-        int tab = group == 0 ? 0 : group <= 6 ? 1 : group <= 12 ? 2 : 3;
+        int tab = group <= 3 ? 0 : group <= 6 ? 1 : group <= 12 ? 2 : 3;   // 굴곡 · 신전 · 측굴(우·좌) · 회전(우·좌)
         string instruction, tipText;
         if (Done)
         {
@@ -1527,22 +1555,13 @@ public class RomLineSession : MonoBehaviour
         else
         {
             RomLinePoint p = ExpectedPoint(group, index);
-            instruction = $"{PointName[(int)p]} 을 찍으세요  ({index + 1}/{SizeOf(group)})";
+            instruction = $"{PointSay[(int)p]} 을 찍으세요  ({index + 1}/{SizeOf(group)})";
             tipText = PointName[(int)p];
         }
         string note = noteText;
-        if (note.Length == 0 && group == 0) note = "건너뛰면(B/Y) 회전만 «면» 값, 나머지는 «직접» 값만 나옵니다";
+        if (note.Length == 0 && !Done) note = PhaseHint[PhaseOf(group)];
         view.SetTexts(GroupTitle(group), instruction, note, tab, tipText);
-        {
-            // 모니터 — 6동작 모드는 안내 글자만 보낸다(선·표는 자유 측정에서만).
-            StringBuilder js = monitorSb;
-            js.Length = 0;
-            js.Append("\"mode\":\"guided\",\"tab\":-1,\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
-              .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append("],\"instruction\":");
-            JsonStr(js, GroupTitle(group) + " — " + instruction).Append(",\"note\":");
-            JsonStr(js, note).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":false,\"plane\":\"면\",\"lines\":[],\"pending\":null");
-            monitorBody = js.ToString();
-        }
+        RefreshGuidedExtras(tab, instruction, note);
 
         int current = group >= 1 && !Done && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;
         for (int i = 0; i < 12; i++)
@@ -1610,6 +1629,166 @@ public class RomLineSession : MonoBehaviour
                             dp.valid, points[p0], points[p0 + 1], dp.valid ? "압박 " + dp.angle.ToString("F1") + "°" : "");
         }
         else view.ShowNeutralOnly(points[n0], points[n0 + 1]);   // 중립 기준선만 — 직선만 보인다
+    }
+
+    /// <summary>순서대로 재는 흐름의 나머지 표시 — 진행 줄 · 바닥의 3축 · 안내 음성 · 모니터로 보낼 상태.</summary>
+    private void RefreshGuidedExtras(int tab, string instruction, string note)
+    {
+        int m = MotionOf(Mathf.Min(group, GroupCount - 1));
+        int plane = m / 2;
+
+        // 진행 줄 — 중립 → 능동 → 압박. 찍은 단계는 초록, 지금 단계는 노랑.
+        StringBuilder st = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드)
+        st.Length = 0;
+        st.Append(MotionName[m]).Append("   ");
+        for (int ph = 0; ph < 3; ph++)
+        {
+            int g = GroupOf(m, ph), n = GroupStart(g);
+            bool done = has[n] && has[n + 1], now = !Done && g == group;
+            if (ph > 0) st.Append("  →  ");
+            st.Append(now ? "<color=#FFD94D><b>" : done ? "<color=#73E68C>" : "<color=#8A96A6>").Append(PhaseName[ph]).Append(now ? "</b></color>" : "</color>");
+        }
+        view.SetStepLine(st.ToString());
+
+        // 바닥의 3축 — 자유 측정의 점·선은 지우고 십자만 남긴다(찍어 둔 자유 측정 점은 그대로 있다. «기타»로 가면 다시 그린다).
+        freeView.SetPoints(NoPoints, NoRefs);
+        freeView.SetAngleLabel("", Vector3.zero);
+        freeView.SetTab(plane, true, FreePlaneName[plane] + " 각");
+        freeView.ShowAxes(true, axesOrigin, axes);
+
+        Announce();
+
+        // 모니터 — 지금 동작의 세 선(중립 · 능동 · 압박)을 자유 측정과 같은 모양으로 보낸다.
+        StringBuilder js = monitorSb;
+        js.Length = 0;
+        js.Append("\"mode\":\"guided\",\"top\":").Append(tab).Append(",\"tab\":").Append(plane);
+        AppendTabsJson(js).Append(",\"instruction\":");
+        JsonStr(js, GroupTitle(group) + " — " + instruction).Append(",\"note\":");
+        JsonStr(js, note).Append(",\"axesOn\":true,\"planeOn\":true,\"plane\":");
+        JsonStr(js, FreePlaneName[plane]).Append(",\"lines\":[");
+        bool first = true;
+        for (int ph = 0; ph < 3; ph++)
+        {
+            int n = GroupStart(GroupOf(m, ph));
+            if (!has[n] || !has[n + 1]) continue;
+            int slot = m * 2 + ph - 1;
+            string planeText = "", warn = "";
+            float directAngle = 0f;
+            if (ph > 0)
+            {
+                if (direct[slot].valid) directAngle = direct[slot].angle;
+                if (results[slot].valid)
+                {
+                    planeText = MotionName[m] + " " + results[slot].angle.ToString("F1") + "°";
+                    if (!RomLineMath.DirectionMatches((RomLineMotion)m, results[slot].signedAngle)) warn = "반대쪽으로 움직인 값";
+                }
+            }
+            if (!first) js.Append(',');
+            first = false;
+            js.Append("{\"n\":").Append(ph + 1).Append(",\"name\":");
+            JsonStr(js, PhaseName[ph]).Append(",\"ref\":").Append(ph == 0 ? "true" : "false").Append(",\"refOf\":1,\"len\":")
+              .Append((Vector3.Distance(points[n], points[n + 1]) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(",\"plane\":");
+            JsonStr(js, planeText).Append(",\"direct\":").Append(directAngle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
+            JsonStr(js, warn).Append(",\"a\":");
+            JsonVec(js, InAxes(points[n])).Append(",\"b\":");
+            JsonVec(js, InAxes(points[n + 1])).Append('}');
+        }
+        js.Append("],\"pending\":");
+        if (!Done && index == 1) JsonVec(js, InAxes(points[GroupStart(group)])); else js.Append("null");
+        monitorBody = js.ToString();
+    }
+
+    private static readonly List<Vector3> NoPoints = new List<Vector3>(0);
+    private static readonly List<int> NoRefs = new List<int>(0);
+
+    /// <summary>모니터로 보내는 탭 목록 — 맨 위 다섯(topTabs)과 자유 측정의 갈래 셋(tabs · counts).</summary>
+    private StringBuilder AppendTabsJson(StringBuilder js)
+    {
+        js.Append(",\"topTabs\":[");
+        for (int i = 0; i < TopTabName.Length; i++) { if (i > 0) js.Append(','); JsonStr(js, TopTabName[i]); }
+        return js.Append("],\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
+                 .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append(']');
+    }
+
+    // ── 안내 음성(10-08) ────────────────────────────────────────────
+    //   단계가 바뀔 때마다 한 문장. 파일은 .claude/tools/romline_narration.py가 만든다(m{동작}_p{단계} · done).
+    //   ★파일이 없으면 에러 없이 무음이다 — 그래서 읽은 개수와, 틀 때마다 어느 파일인지를 로그에 남긴다.
+    private AudioSource narrSrc;
+    private readonly AudioClip[] narr = new AudioClip[19];
+    private int announced = -1;
+
+    private void LoadNarration()
+    {
+        narrSrc = gameObject.AddComponent<AudioSource>();
+        narrSrc.playOnAwake = false;
+        narrSrc.spatialBlend = 0f;
+        int found = 0;
+        for (int i = 0; i < 18; i++)
+        {
+            narr[i] = Resources.Load<AudioClip>($"RomLine/Narration/m{i / 3}_p{i % 3}");
+            if (narr[i] != null) found++;
+        }
+        narr[18] = Resources.Load<AudioClip>("RomLine/Narration/done");
+        if (narr[18] != null) found++;
+        if (found == narr.Length) Debug.Log($"[선실측] 안내 음성 {found}개를 읽었다");
+        else Debug.LogWarning($"[선실측] ★안내 음성 {narr.Length}개 중 {found}개만 읽었다 — 없는 단계는 무음이다(Resources/RomLine/Narration).");
+    }
+
+    private void Announce()
+    {
+        int key = Done ? 18 : group - 1;
+        if (key == announced) return;
+        announced = key;
+        if (narrSrc == null) return;
+        narrSrc.Stop();
+        AudioClip c = key >= 0 && key < narr.Length ? narr[key] : null;
+        Debug.Log($"[선실측] 안내 음성 — {GroupTitle(group)} · {(c != null ? c.name : "★파일 없음(무음)")}");
+        if (c == null || soundVolume <= 0f) return;
+        narrSrc.clip = c;
+        narrSrc.volume = soundVolume;
+        narrSrc.Play();
+    }
+
+    /// <summary>순서대로 재는 흐름의 기록 한 줄 — 자유 측정과 같은 열에 맞춘다(사건 = «순서»).</summary>
+    private void CsvGuided(int m, int ph)
+    {
+        int n = GroupStart(GroupOf(m, ph));
+        if (!has[n] || !has[n + 1]) return;
+        int plane = m / 2;
+        StringBuilder sb = monitorLive;
+        sb.Length = 0;
+        sb.Append(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append(',').Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
+          .Append(",순서,").Append(MotionName[m]).Append(',').Append(PhaseName[ph]).Append(',').Append(ph == 0 ? "" : "중립").Append(',')
+          .Append((Vector3.Distance(points[n], points[n + 1]) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[plane]).Append(',');
+        if (ph == 0) sb.Append(",,,,,");
+        else
+        {
+            int slot = m * 2 + ph - 1;
+            bool ok = results[slot].valid;
+            bool match = ok && RomLineMath.DirectionMatches((RomLineMotion)m, results[slot].signedAngle);
+            sb.Append(ok ? MotionName[m] : "").Append(',')
+              .Append(ok ? results[slot].angle.ToString("F1", CultureInfo.InvariantCulture) : "").Append(',')
+              .Append(direct[slot].valid ? direct[slot].angle.ToString("F1", CultureInfo.InvariantCulture) : "").Append(',')
+              .Append(ok && !match ? "반대쪽으로 움직인 값" : "").Append(",,");
+        }
+        for (int k = 0; k < 2; k++)
+        {
+            Vector3 v = points[n + k];
+            sb.Append(v.x.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.y.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.z.ToString("F4", CultureInfo.InvariantCulture)).Append(',');
+        }
+        sb.Append(axes.forward.x.ToString("F3", CultureInfo.InvariantCulture)).Append(',').Append(axes.forward.z.ToString("F3", CultureInfo.InvariantCulture)).Append(',')
+          .Append((tipOffset.x * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append((tipOffset.y * 1000f).ToString("F1", CultureInfo.InvariantCulture)).Append(',')
+          .Append((tipOffset.z * 1000f).ToString("F1", CultureInfo.InvariantCulture));
+        string rowText = sb.ToString();
+        csvRows.Add(rowText);
+        monitor.SetCsv(CsvHeader + "\n" + string.Join("\n", csvRows) + "\n");
+        if (csvPath == null) return;
+        try { System.IO.File.AppendAllText(csvPath, rowText + "\n", new UTF8Encoding(false)); }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning($"[선실측] ★기록 파일에 못 적었다({e.Message}) — 파일 기록을 멈춘다.");
+            csvPath = null;
+        }
     }
 
     private void LogSummary(string why)
@@ -1684,6 +1863,7 @@ public class RomLineSession : MonoBehaviour
         sndDeny = Tone("거부", 300f, 300f, 0.12f);
         sndPress = Tone("누름", 1250f, 1250f, 0.045f);
         sndDone = Tone("끝", 660f, 1760f, 0.25f);
+        LoadNarration();
     }
 
     private static AudioClip Tone(string name, float f0, float f1, float seconds)
