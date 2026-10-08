@@ -778,7 +778,7 @@ public static partial class ChunaAgentBridge
         return false;
     }
 
-    /// <summary>"Root/Child/Obj" 로 찾는다. 비활성 오브젝트도 찾는다(GameObject.Find는 못 찾는다).</summary>
+    /// <summary>"Root/Child/Obj" 로 찾는다. 비활성 오브젝트도 찾는다(GameObject.Find는 못 찾는다). 같은 이름 형제는 "Obj#1".</summary>
     private static GameObject FindByPath(string path)
     {
         var parts = path.Split('/');
@@ -793,9 +793,16 @@ public static partial class ChunaAgentBridge
                 bool ok = true;
                 for (int k = 1; k < parts.Length && ok; k++)
                 {
+                    // ★«이름#2» = 그 이름을 가진 형제 가운데 2번째(0부터). 로비 카드처럼 형제 이름이 전부 같을 때 쓴다(10-08).
+                    string want = parts[k];
+                    int nth = 0;
+                    int hash = want.LastIndexOf('#');
+                    if (hash > 0 && int.TryParse(want.Substring(hash + 1), out int parsed))
+                    { nth = parsed; want = want.Substring(0, hash); }
+
                     Transform next = null;
                     for (int j = 0; j < cur.childCount; j++)
-                        if (cur.GetChild(j).name == parts[k]) { next = cur.GetChild(j); break; }
+                        if (cur.GetChild(j).name == want && nth-- == 0) { next = cur.GetChild(j); break; }
                     if (next == null) ok = false; else cur = next;
                 }
                 if (ok) return cur.gameObject;

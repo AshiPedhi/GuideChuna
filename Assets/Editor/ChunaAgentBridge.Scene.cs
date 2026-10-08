@@ -38,6 +38,7 @@ public static partial class ChunaAgentBridge
             case "add-go": ok = DoAddGo(sb, a, out err); return true;
             case "add-comp": ok = DoAddComp(sb, a, out err); return true;
             case "build-add": ok = DoBuildAdd(sb, a, out err); return true;
+            case "build-scenes": ok = DoBuildScenes(sb, a, out err); return true;   // Build Settings에서 켤 씬을 정한다(10-08)
             case "capture": ok = DoCapture(sb, a, out err); return true;
             case "play": ok = DoPlay(sb, true, out err); return true;
             case "stop": ok = DoPlay(sb, false, out err); return true;
@@ -45,6 +46,7 @@ public static partial class ChunaAgentBridge
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
             case "build-run": ok = DoBuildRun(sb, a, out err); return true;
             case "gfx-api": ok = DoGfxApi(sb, a, out err); return true;
+            case "app-version": ok = DoAppVersion(sb, a, out err); return true;   // 앱 버전 조회·변경(10-08)
             case "romline-ctrl": sb.Append(RomLineVerify.ControllerFront()); return true;   // 컨트롤러 모형의 맨 앞 자리를 잰다(10-01)
             case "romline-verify": sb.Append(RomLineVerify.Run()); return true;   // 선 실측 계산 검증(10-01) — 런타임과 같은 함수를 탄다
             case "romline-tip": sb.Append(RomLineTipPreview.Bridge(a)); return true;   // 끝점 맞추기 — 씬 창에 컨트롤러 모형 미리보기(10-06)
@@ -97,6 +99,27 @@ public static partial class ChunaAgentBridge
         }
 
         if (a.ContainsKey("api") || wantOcc) AssetDatabase.SaveAssets();
+        return true;
+    }
+
+    // ── 앱 버전(2026-10-08) ─────────────────────────────────────────────
+    // ★에디터가 열려 있는 동안 ProjectSettings.asset을 글자로 고치면 에디터가 메모리 값으로 덮어쓴다 — 그래서 여기로 바꾼다.
+    //   인자가 없으면 조회만 한다. --name=v1.42 --code=42
+    private static bool DoAppVersion(StringBuilder sb, Dictionary<string, string> a, out string err)
+    {
+        err = null;
+        bool changed = false;
+        if (a.TryGetValue("name", out var name) && name.Length > 0 && name != PlayerSettings.bundleVersion)
+        { PlayerSettings.bundleVersion = name; changed = true; }
+        if (a.TryGetValue("code", out var codeText))
+        {
+            if (!int.TryParse(codeText, out int code) || code <= 0) { err = $"--code 는 양의 정수다(받은 값: {codeText})"; return false; }
+            if (code != PlayerSettings.Android.bundleVersionCode) { PlayerSettings.Android.bundleVersionCode = code; changed = true; }
+        }
+        if (changed) AssetDatabase.SaveAssets();
+        sb.Append("버전 ").Append(PlayerSettings.bundleVersion)
+          .Append(" · Android 버전 코드 ").Append(PlayerSettings.Android.bundleVersionCode)
+          .Append(changed ? " (바꿨다)" : " (그대로)").Append('\n');
         return true;
     }
 
@@ -391,6 +414,29 @@ public static partial class ChunaAgentBridge
         EditorBuildSettings.scenes = list.ToArray();
         sb.Append($"Build Settings에 넣었다: {path} (#{list.Count - 1})\n");
         SaveBuildSettings(sb, path);
+        return true;
+    }
+
+    // ★--on="A.unity;B.unity" — 목록에 <b>이미 있는</b> 씬 가운데 이것들만 켜고 나머지는 끈다(순서·항목은 안 바꾼다, 10-08).
+    //   build-run --scenes는 그 빌드에만 먹고 Build Settings 창은 그대로라, 사람이 창을 보면 다른 씬이 켜져 있다 — 그 어긋남을 없앤다.
+    private static bool DoBuildScenes(StringBuilder sb, Dictionary<string, string> a, out string err)
+    {
+        err = null;
+        var want = Get(a, "on", "").Split(';').Select(s => Norm(s.Trim())).Where(s => s.Length > 0).ToList();
+        if (want.Count == 0) { err = "--on=\"A.unity;B.unity\" 로 켤 씬을 준다."; return false; }
+        var list = EditorBuildSettings.scenes;
+        foreach (var w in want)
+            if (!list.Any(s => Norm(s.path) == w)) { err = $"Build Settings 목록에 없는 씬이다: {w}"; return false; }
+        foreach (var s in list) s.enabled = want.Contains(Norm(s.path));
+        EditorBuildSettings.scenes = list;
+        for (int i = 0; i < list.Length; i++)
+            sb.Append("  ").Append(i).Append(". ").Append(list[i].enabled ? "" : "(꺼짐) ").Append(list[i].path).Append('\n');
+        // ★SaveBuildSettings는 «경로가 파일에 있나»만 봐서 켜짐·꺼짐이 안 적혀도 «저장됐다»고 한다(10-08에 속았다) — 전체 저장 뒤 파일을 직접 읽는다.
+        AssetDatabase.SaveAssets();
+        string full = Path.Combine(Directory.GetParent(Application.dataPath).FullName, "ProjectSettings/EditorBuildSettings.asset");
+        string text = File.Exists(full) ? File.ReadAllText(full).Replace("\r", "") : "";
+        bool onDisk = want.All(w => text.Contains("enabled: 1\n    path: " + w + "\n"));
+        sb.Append(onDisk ? "파일에도 적혔다.\n" : "★파일에는 아직 안 적혔다 — 사람이 File > Save Project 해야 한다.\n");
         return true;
     }
 
