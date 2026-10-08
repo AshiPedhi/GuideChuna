@@ -9,7 +9,7 @@ using UnityEngine;
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.50f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
+    public const float PanelW = 0.36f, PanelH = 0.46f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
@@ -161,11 +161,15 @@ public class RomLineView
         freeArea = new GameObject("자유 측정").transform;
         freeArea.SetParent(panel, false);
 
-        // 맨 위 한 줄 — 모드(6동작 ↔ 자유 측정). 그 아래는 종전 배치 그대로 4cm 내려왔다.
+        // ★10-08: 모드(6동작 ↔ 자유 측정) 줄과 «3축 표시» 버튼을 뺐다 — 고정 3축 측정만 남긴다(사용자 지시).
+        //   버튼 번호가 배열 자리라 만들기는 하되 꺼 둔 부모 아래에 둔다(꺼진 버튼은 Touch가 건너뛴다). 판 높이도 그 줄만큼(4cm) 줄였다.
+        Transform retired = new GameObject("뺀 버튼").transform;
+        retired.SetParent(panel, false);
+        retired.gameObject.SetActive(false);
         float modeY = PanelH * 0.5f - 0.026f;
-        AddButton(panel, 10, new Vector2(-0.058f, modeY), new Vector2(0.108f, 0.032f), TabOn, ButtonLabel[10], 0.075f);
-        AddButton(panel, 11, new Vector2(0.058f, modeY), new Vector2(0.108f, 0.032f), TabOff, ButtonLabel[11], 0.075f);
-        float top = PanelH * 0.5f - 0.040f;
+        AddButton(retired, 10, new Vector2(-0.058f, modeY), new Vector2(0.108f, 0.032f), TabOn, ButtonLabel[10], 0.075f);
+        AddButton(retired, 11, new Vector2(0.058f, modeY), new Vector2(0.108f, 0.032f), TabOff, ButtonLabel[11], 0.075f);
+        float top = PanelH * 0.5f;
 
         // 진행 위치(탭) — 누르면 그 자리로 간다
         float tabW = 0.082f, tabH = 0.034f;
@@ -236,7 +240,7 @@ public class RomLineView
             AddButton(i == 1 ? panel : guidedArea, 7 + i, c + up, size, ButtonColor, StepNames[i], 0.075f);
         }
         // 자유 측정: 아래 줄 «3축 표시» · «이 동작 지우기» / 윗줄 «축 다시 잡기» · (한 점 취소) · «기준선 바꾸기»
-        AddButton(freeArea, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
+        AddButton(retired, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
         AddButton(freeArea, 12, new Vector2(0f, by), size, ButtonColor, ButtonLabel[12], 0.075f);
         AddButton(freeArea, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);
         AddButton(freeArea, 18, new Vector2(bw + 0.006f, by) + up, size, ButtonColor, ButtonLabel[18], 0.075f);

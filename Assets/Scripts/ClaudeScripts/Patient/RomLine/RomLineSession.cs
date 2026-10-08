@@ -38,7 +38,10 @@ public enum RomLinePoint
 ///   Tr ~ Gl 선과 Gl ~ Gn 선의 값을 나란히 본다. Tr ~ Gl 선은 옆면에서 비스듬해 «직접»이 작게 나오고
 ///   Gl ~ Gn 선은 정중선 위라 그대로 나온다는 계산을 실제로 확인하려는 것이다. 끄면 종전 흐름(2점) 그대로다.
 ///
-/// ★자유 측정(10-07, 판 맨 위의 «자유 측정»): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
+/// ★★10-08 사용자 지시: <b>고정 3축으로 재는 자유 측정만 남긴다.</b> 위의 6동작 흐름(기준 양쪽 Tr · 18직선)은 코드만 남고
+///   들어가는 길이 없다 — 시작하면 바로 자유 측정이고, 모드 버튼 · 3축 끄기 버튼은 판과 모니터에서 뺐다.
+///
+/// ★자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
 ///   측정선마다 길이, 기준선과 벌어진 각(«직접»), 그리고 <b>그 동작의 면 하나</b>에 내린 각(«면» — 옆면·앞면·바닥면)을 낸다.
 ///   면은 공간에 고정된 세 축(정면·좌우·수직)으로 세운다 — 양쪽 Tr을 찍지 않는다. 회전의 바닥면은 중력만 쓴다.
@@ -53,7 +56,7 @@ public enum RomLinePoint
 ///   (<see cref="RomLineMonitor"/>). 같은 Wi-Fi의 PC 브라우저가 그 주소를 열면 값·선·추적 상태가 보인다.
 ///   판을 누를 수 없으니 자유 측정의 조작을 전부 컨트롤러 버튼에 올렸다:
 ///   트리거 = 점 · A/X = 한 점 취소 · B/Y = 기준선 바꾸기 · 스틱 좌우 = 동작(갈래) 바꾸기 · 스틱 클릭 = 끝점 보정
-///   · 그립 1.5초 = 이 동작 지우기 · 스틱 위로 1초 = 축 다시 잡기 · 스틱 아래로 1초 = 6동작 ↔ 자유 측정.
+///   · 그립 1.5초 = 이 동작 지우기 · 스틱 위로 1초 = 축 다시 잡기.
 ///   찍은 선은 CSV로 기기에 남고(persistentDataPath) 모니터에서도 받는다.
 ///
 ///   ★첫 판(10-07 낮)은 한 선에서 세 면의 값을 함께 보여 줬다. 민두 시험에서 다른 두 면의 값이 실제 움직임이 아닌
@@ -249,6 +252,12 @@ public class RomLineSession : MonoBehaviour
         view.Build(transform, font, new Material(sh));
         freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
         BuildSounds();
+
+        // ★10-08 사용자 지시: «고정 3축으로 측정하는 것만 남긴다» — 처음부터 자유 측정으로 들어가고 6동작(기준 양쪽 Tr)으로는 못 간다.
+        //   6동작 코드는 지우지 않았다(들어가는 길만 막았다 — 판의 모드 버튼 · 스틱 아래로 길게 · 모니터의 «모드»).
+        freeMode = true;
+        view.SetMode(true);
+        freeView.SetVisible(true);
 
         if (monitorPort > 0)
         {
@@ -589,18 +598,14 @@ public class RomLineSession : MonoBehaviour
             stickHoldStart = Time.unscaledTime;
             stickHoldFired = false;
         }
-        else if (dir != 0 && !stickHoldFired && Time.unscaledTime - stickHoldStart >= StickHoldSeconds)
+        else if (dir > 0 && !stickHoldFired && Time.unscaledTime - stickHoldStart >= StickHoldSeconds)   // 아래로 길게(모드 바꾸기)는 뺐다(10-08)
         {
             stickHoldFired = true;
             Buzz(0.08f, 0.6f);
-            if (dir > 0)
-            {
-                CaptureAxes("스틱");
-                noteText = "축을 다시 잡았다";
-                Play(sndPress);
-                dirty = true;
-            }
-            else SetFreeMode(!freeMode);
+            CaptureAxes("스틱");
+            noteText = "축을 다시 잡았다";
+            Play(sndPress);
+            dirty = true;
             return;
         }
 
@@ -1001,15 +1006,8 @@ public class RomLineSession : MonoBehaviour
             case 7: Go(group - 1, "버튼"); break;
             case 8: Undo(); break;
             case 9: Skip(); break;
-            case 10: SetFreeMode(false); break;
-            case 11: SetFreeMode(true); break;
+            case 10: case 11: case 13: break;   // 모드(6동작 ↔ 자유) · 3축 끄기는 뺐다(10-08) — 버튼도 판에 없다
             case 12: FreeClear(); break;
-            case 13:
-                axesOn = !axesOn;
-                Debug.Log($"[선실측] 자유 — 3축 표시 {(axesOn ? "켬" : "끔(세 면의 값은 안 나온다)")}");
-                Play(sndPress);
-                dirty = true;
-                break;
             case 14: CaptureAxes("버튼"); Play(sndPress); dirty = true; break;
             case 15: case 16: case 17: SetFreeTab(button - 15); break;
             case 18: FreeRebase(); break;
@@ -1359,9 +1357,8 @@ public class RomLineSession : MonoBehaviour
             case "clear": if (freeMode) FreeClear(); break;
             case "rebase": if (freeMode) FreeRebase(); break;
             case "axes": CaptureAxes("모니터"); Play(sndPress); dirty = true; break;
-            case "axesToggle": axesOn = !axesOn; Play(sndPress); dirty = true; break;
+            case "axesToggle": case "mode": Debug.Log($"[선실측] 모니터 명령 «{command}»은 뺐다(10-08 — 고정 3축 측정만 남김)"); break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
-            case "mode": SetFreeMode(!freeMode); break;
             default: Debug.LogWarning($"[선실측] ★모니터 명령 «{command}»을 모른다"); break;
         }
     }
