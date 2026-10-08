@@ -79,14 +79,14 @@
 </main>
 <footer class="card">
   <div>
-    <div id="keys"><b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기</div>
+    <div id="keys"><b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)</div>
     <div id="conn"></div>
   </div>
   <div class="btns">
     <button onclick="cmd('undo')">한 점 취소</button>
     <button onclick="cmd('rebase')">기준선 바꾸기</button>
     <button onclick="if(confirm('이 동작의 선을 모두 지울까요?'))cmd('clear')">이 동작 지우기</button>
-    <button onclick="cmd('axes')">축 다시 잡기</button>
+    <button onclick="cmd('axes')" title="컨트롤러가 지금 가리키는 방향으로 잡는다">축 다시 잡기</button>
     <button id="bCalib" onclick="cmd('calib')">끝점 보정</button>
     <a class="btn" href="/csv" download>CSV 받기</a>
   </div>

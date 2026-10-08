@@ -45,7 +45,8 @@ public enum RomLinePoint
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
 ///   측정선마다 길이, 기준선과 벌어진 각(«직접»), 그리고 <b>그 동작의 면 하나</b>에 내린 각(«면» — 옆면·앞면·바닥면)을 낸다.
 ///   면은 공간에 고정된 세 축(정면·좌우·수직)으로 세운다 — 양쪽 Tr을 찍지 않는다. 회전의 바닥면은 중력만 쓴다.
-///   세 축은 판을 세울 때 헤드셋이 보던 방향으로 잡는다(환자가 사용자를 마주 본다고 놓는다) — «축 다시 잡기»로 다시 잡는다.
+///   세 축은 판을 세울 때 헤드셋이 보던 방향으로 잡는다(환자가 사용자를 마주 본다고 놓는다).
+///   다시 잡을 때는 <b>컨트롤러가 가리키는 방향</b>이다(10-08) — 환자 정면에서 환자 쪽으로 겨누고 스틱을 위로 1초.
 ///   ★환자는 그 축에 정면만 맞춰 앉으면 된다(자리는 뜻이 없다). 어긋난 만큼 값이 달라진다.
 ///
 /// ★끝점 보정(10-07, 스틱을 눌러 시작 · 다시 눌러 끝): 컨트롤러 끝을 움직이지 않는 한 점에 댄 채 여러 방향으로 돌리면,
@@ -602,10 +603,7 @@ public class RomLineSession : MonoBehaviour
         {
             stickHoldFired = true;
             Buzz(0.08f, 0.6f);
-            CaptureAxes("스틱");
-            noteText = "축을 다시 잡았다";
-            Play(sndPress);
-            dirty = true;
+            CaptureAxesFromController("스틱");
             return;
         }
 
@@ -1008,7 +1006,7 @@ public class RomLineSession : MonoBehaviour
             case 9: Skip(); break;
             case 10: case 11: case 13: break;   // 모드(6동작 ↔ 자유) · 3축 끄기는 뺐다(10-08) — 버튼도 판에 없다
             case 12: FreeClear(); break;
-            case 14: CaptureAxes("버튼"); Play(sndPress); dirty = true; break;
+            case 14: break;   // «축 다시 잡기» 버튼은 판에서 뺐다(10-08) — 판을 누르는 자세로는 방향을 겨눌 수 없다. 스틱 위로 길게 · 모니터로 한다
             case 15: case 16: case 17: SetFreeTab(button - 15); break;
             case 18: FreeRebase(); break;
         }
@@ -1068,10 +1066,37 @@ public class RomLineSession : MonoBehaviour
         Vector3 look = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
         if (look.sqrMagnitude < 0.01f) look = Vector3.forward;   // 바로 위·아래를 보고 있었다
         look.Normalize();
-        axes = RomLineMath.FrameFacing(-look);   // 검증기가 «양쪽 Tr로 만든 기준»과 같은 방향·부호인지 본다
-        axesOrigin = eye.position + look * 1.0f;
+        SetAxes(look, eye.position + look * 1.0f, why, "헤드셋이 보던 방향");
+    }
+
+    /// <summary>
+    /// ★10-08 사용자 지시: 축을 <b>컨트롤러가 가리키는 방향</b>으로 다시 잡는다(환자 정면에서 환자 쪽으로 겨눈다).
+    ///   헤드셋이 보는 방향으로 잡으면 판의 버튼을 누르는 순간 판 쪽으로 잡혀, 원하는 방향으로 맞출 수 없었다.
+    ///   헤드셋을 놓아 둔 채로도 축을 바꿀 수 있다. 처음 한 번(판을 세울 때)만 헤드셋 방향이다.
+    ///   지움: 컨트롤러의 위아래 기울임(세 축은 늘 수평·수직). 너무 세워 겨누면 수평 방향이 흔들리므로 받지 않는다.
+    /// </summary>
+    private bool CaptureAxesFromController(string why)
+    {
+        if (!tipValid) { Deny("축 다시 잡기 — 컨트롤러가 추적되지 않는다"); return false; }
+        Vector3 point = ctrlRot * Vector3.forward;
+        Vector3 flat = Vector3.ProjectOnPlane(point, Vector3.up);
+        if (flat.magnitude < 0.5f) { Deny("축 다시 잡기 — 컨트롤러를 눕혀서 환자 쪽으로 겨눈다(너무 세워 들었다)"); return false; }   // 수평에서 60° 넘게 들림
+        float pitch = Mathf.Asin(Mathf.Clamp(point.y, -1f, 1f)) * Mathf.Rad2Deg;
+        flat.Normalize();
+        SetAxes(flat, tipPos + flat * 0.3f, why, $"컨트롤러가 가리킨 방향 · 들린 각 {pitch:F0}°");
+        noteText = "축을 다시 잡았다 — 컨트롤러가 가리킨 쪽이 환자";
+        Play(sndPress);
+        dirty = true;
+        return true;
+    }
+
+    /// <summary>toward = 측정자 쪽에서 환자를 향하는 수평 방향. 환자는 그 반대를 본다고 놓는다.</summary>
+    private void SetAxes(Vector3 toward, Vector3 crossAt, string why, string how)
+    {
+        axes = RomLineMath.FrameFacing(-toward);   // 검증기가 «양쪽 Tr로 만든 기준»과 같은 방향·부호인지 본다
+        axesOrigin = crossAt;
         axesOrigin.y = trackingSpace != null ? trackingSpace.position.y : 0f;   // 바닥(추적 원점이 바닥 높이일 때)
-        Debug.Log($"[선실측] 자유 — 3축을 잡았다({why}) · 환자 정면 {axes.forward:F3} · 환자 오른쪽 {axes.right:F3} · 십자 자리 {axesOrigin:F2} · 눈 {eye.position:F2}");
+        Debug.Log($"[선실측] 자유 — 3축을 잡았다({why} · {how}) · 환자 정면 {axes.forward:F3} · 환자 오른쪽 {axes.right:F3} · 십자 자리 {axesOrigin:F2} · 눈 {eye.position:F2}");
     }
 
     /// <summary>지금 갈래에서 새 선이 견줄 기준선의 번호(가장 최근에 기준선으로 삼은 선). 아직 없으면 -1.</summary>
@@ -1356,7 +1381,7 @@ public class RomLineSession : MonoBehaviour
             case "undo": Undo(); break;
             case "clear": if (freeMode) FreeClear(); break;
             case "rebase": if (freeMode) FreeRebase(); break;
-            case "axes": CaptureAxes("모니터"); Play(sndPress); dirty = true; break;
+            case "axes": CaptureAxesFromController("모니터"); break;
             case "axesToggle": case "mode": Debug.Log($"[선실측] 모니터 명령 «{command}»은 뺐다(10-08 — 고정 3축 측정만 남김)"); break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
             default: Debug.LogWarning($"[선실측] ★모니터 명령 «{command}»을 모른다"); break;

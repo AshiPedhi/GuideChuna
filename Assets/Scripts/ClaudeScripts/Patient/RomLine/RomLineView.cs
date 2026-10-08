@@ -242,7 +242,7 @@ public class RomLineView
         // 자유 측정: 아래 줄 «3축 표시» · «이 동작 지우기» / 윗줄 «축 다시 잡기» · (한 점 취소) · «기준선 바꾸기»
         AddButton(retired, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
         AddButton(freeArea, 12, new Vector2(0f, by), size, ButtonColor, ButtonLabel[12], 0.075f);
-        AddButton(freeArea, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);
+        AddButton(retired, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);   // 10-08: 축은 컨트롤러로 겨눠 잡는다(스틱 위로 길게)
         AddButton(freeArea, 18, new Vector2(bw + 0.006f, by) + up, size, ButtonColor, ButtonLabel[18], 0.075f);
         freeArea.gameObject.SetActive(false);
 
