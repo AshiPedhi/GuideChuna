@@ -1840,7 +1840,7 @@ public class RomLineSession : MonoBehaviour
                 for (int g = GroupOf(t * 2, 0); g <= GroupOf(t * 2 + 1, 2); g++) if (HasLine(g)) n++;
                 sub = n == 0 ? "—" : $"직선 {n} / 6";
             }
-            view.SetPopupTab(t, TopTabName[t] + "\n<size=58%>" + sub + "</size>", t == popupCursor, t == cur, locked && t != cur);
+            view.SetPopupTab(t, TopTabName[t] + "\n<size=68%>" + sub + "</size>", t == popupCursor, t == cur, locked && t != cur);
         }
 
         StringBuilder st = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드 — PumpMonitor는 쓸 때 처음에 비운다)

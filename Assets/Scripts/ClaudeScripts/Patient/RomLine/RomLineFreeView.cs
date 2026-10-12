@@ -61,17 +61,17 @@ public class RomLineFreeView
         const float xName = -0.27f;
         float[] x = { -0.06f, 0.10f, 0.27f };
         float[] w = { 0.18f, 0.12f, 0.20f };
-        RomLineView.Place(v.MakeText(panelArea, "선 · 길이", 0.085f, TextAlignmentOptions.Left, 3), new Vector2(xName, tableTop), 0.20f).color = DimColor;
-        planeHead = RomLineView.Place(v.MakeText(panelArea, "", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(x[0], tableTop), w[0]);
-        RomLineView.Place(v.MakeText(panelArea, "직접 각", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(x[1], tableTop), w[1]).color = DimColor;
+        RomLineView.Place(v.MakeText(panelArea, "선 · 길이", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(xName, tableTop), 0.20f).color = DimColor;
+        planeHead = RomLineView.Place(v.MakeText(panelArea, "", 0.105f, TextAlignmentOptions.Center, 3), new Vector2(x[0], tableTop), w[0]);
+        RomLineView.Place(v.MakeText(panelArea, "직접 각", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(x[1], tableTop), w[1]).color = DimColor;
         for (int r = 0; r < Rows; r++)
         {
             float y = tableTop - 0.030f - r * 0.0265f;
-            names[r] = RomLineView.Place(v.MakeText(panelArea, "", 0.105f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.20f);
-            cells[r * Cols] = RomLineView.Place(v.MakeText(panelArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(x[0], y), w[0]);
-            cells[r * Cols + 1] = RomLineView.Place(v.MakeText(panelArea, "", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(x[1], y), w[1]);
+            names[r] = RomLineView.Place(v.MakeText(panelArea, "", 0.125f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.20f);
+            cells[r * Cols] = RomLineView.Place(v.MakeText(panelArea, "", 0.14f, TextAlignmentOptions.Center, 3), new Vector2(x[0], y), w[0]);
+            cells[r * Cols + 1] = RomLineView.Place(v.MakeText(panelArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(x[1], y), w[1]);
             cells[r * Cols + 1].color = DimColor;
-            cells[r * Cols + 2] = RomLineView.Place(v.MakeText(panelArea, "", 0.085f, TextAlignmentOptions.Left, 3), new Vector2(x[2], y), w[2]);
+            cells[r * Cols + 2] = RomLineView.Place(v.MakeText(panelArea, "", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(x[2], y), w[2]);
             cells[r * Cols + 2].color = WarnColor;
         }
 

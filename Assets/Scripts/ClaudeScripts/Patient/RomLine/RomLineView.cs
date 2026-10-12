@@ -149,8 +149,8 @@ public class RomLineView
         float top = PanelH * 0.5f;
 
         // 순서 측정 — 맨 위 두 줄: 지금 단계와 찍을 점(또는 «A = 확인») · 알림
-        guideLine = Place(MakeText(guidedArea, "", 0.17f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.032f), PanelW - 0.02f);
-        guideNote = Place(MakeText(guidedArea, "", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.070f), PanelW - 0.02f);
+        guideLine = Place(MakeText(guidedArea, "", 0.20f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.032f), PanelW - 0.02f);
+        guideNote = Place(MakeText(guidedArea, "", 0.13f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.070f), PanelW - 0.02f);
         guideNote.color = NoteColor;
 
         // 자유 측정 — 맨 위에 동작 갈래 셋(보여 주기만 한다 — 스틱 좌우로 바꾼다), 그 아래 안내 · 알림 · 선 목록
@@ -158,11 +158,11 @@ public class RomLineView
         {
             var c = new Vector2((i - 1f) * 0.16f, top - 0.030f);
             freeTabPlates[i] = MakeQuad(freeArea, "갈래 " + FreeTabNames[i], c, new Vector2(0.15f, 0.038f), TabOff, 1).GetComponent<Renderer>();
-            Place(MakeText(freeArea, FreeTabNames[i], 0.11f, TextAlignmentOptions.Center, 3), c, 0.15f);
+            Place(MakeText(freeArea, FreeTabNames[i], 0.13f, TextAlignmentOptions.Center, 3), c, 0.15f);
         }
-        instruction = Place(MakeText(freeArea, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.076f), PanelW - 0.02f);
+        instruction = Place(MakeText(freeArea, "", 0.19f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.076f), PanelW - 0.02f);
         instruction.color = TipColor;
-        note = Place(MakeText(freeArea, "", 0.095f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.106f), PanelW - 0.02f);
+        note = Place(MakeText(freeArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.106f), PanelW - 0.02f);
         note.color = NoteColor;
         FreeTableTop = top - 0.132f;
 
@@ -179,7 +179,7 @@ public class RomLineView
         popup.gameObject.SetActive(false);
 
         // 맨 아래 한 줄 — 모니터 화면의 주소
-        footer = Place(MakeText(panel, "", 0.06f, TextAlignmentOptions.Center, 3), new Vector2(0f, -PanelH * 0.5f + 0.010f), PanelW - 0.02f);
+        footer = Place(MakeText(panel, "", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(0f, -PanelH * 0.5f + 0.010f), PanelW - 0.02f);
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
     }
 
@@ -190,7 +190,7 @@ public class RomLineView
     //     회전 = 위에서 본 그림(아래가 환자 앞 · 환자 오른쪽이 그림 왼쪽) — 모니터 화면의 세 그림과 같은 방향이다.
     private const float RowH = 0.080f, CellW = 0.39f, GaugeR = 0.050f;
     private const float XName = -0.140f, XActive = -0.055f, XPressure = 0.020f, GaugeX = 0.125f;   // 칸 가운데에서 잰 자리
-    private const float PopupH = 0.150f, PopupGap = 0.015f;
+    private const float PopupH = 0.176f, PopupGap = 0.015f;   // 10-12: 글자를 키우며 0.150 → 0.176
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(아랫줄을 침범한다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
@@ -223,10 +223,10 @@ public class RomLineView
         for (int col = 0; col < 2; col++)
         {
             float cx = col == 0 ? -0.20f : 0.20f;
-            Place(MakeText(resultArea, "측정", 0.075f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, headY), 0.10f).color = DimColor;
-            Place(MakeText(resultArea, "능동", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, headY), 0.07f).color = ActiveColor;
-            Place(MakeText(resultArea, "압박", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PressureColor;
-            Place(MakeText(resultArea, "각도기", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(cx + GaugeX, headY), 0.10f).color = DimColor;
+            Place(MakeText(resultArea, "측정", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, headY), 0.10f).color = DimColor;
+            Place(MakeText(resultArea, "능동", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, headY), 0.07f).color = ActiveColor;
+            Place(MakeText(resultArea, "압박", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PressureColor;
+            Place(MakeText(resultArea, "각도기", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(cx + GaugeX, headY), 0.10f).color = DimColor;
         }
 
         rowNow = MakeQuad(resultArea, "지금 칸", Vector2.zero, new Vector2(CellW - 0.006f, RowH - 0.006f), RowNowColor, 1);
@@ -242,12 +242,12 @@ public class RomLineView
             cellPos[m] = new Vector2(cx, y);
             gaugePivot[m] = new Vector2(cx + GaugeX, y - GaugeZeroY[m] * GaugeR * 0.5f);
 
-            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.14f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y + 0.010f), 0.10f);
-            Place(MakeText(resultArea, GaugeView[m], 0.062f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y - 0.020f), 0.10f).color = GaugeDim;
-            values[m * 2] = Place(MakeText(resultArea, "—", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, y), 0.07f);
-            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, y), 0.07f);
-            Place(MakeText(resultArea, GaugeLeft[m], 0.065f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
-            Place(MakeText(resultArea, GaugeRight[m], 0.065f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.17f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y + 0.012f), 0.10f);
+            Place(MakeText(resultArea, GaugeView[m], 0.085f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y - 0.022f), 0.10f).color = GaugeDim;
+            values[m * 2] = Place(MakeText(resultArea, "—", 0.20f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, y), 0.07f);
+            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.20f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, y), 0.07f);
+            Place(MakeText(resultArea, GaugeLeft[m], 0.085f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, GaugeRight[m], 0.085f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
 
             if (m % 2 == 0)
                 Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0012f, GaugeDim);
@@ -313,26 +313,26 @@ public class RomLineView
     private void BuildPopup()
     {
         MakeQuad(popup, "바탕", Vector2.zero, new Vector2(PanelW, PopupH), PopupColor, 0);
-        const float w = 0.150f, gap = 0.006f, h = 0.056f;
+        const float w = 0.150f, gap = 0.006f, h = 0.064f;
         for (int i = 0; i < PopupTabs; i++)
         {
-            var c = new Vector2((i - 2f) * (w + gap), PopupH * 0.5f - 0.036f);
+            var c = new Vector2((i - 2f) * (w + gap), PopupH * 0.5f - 0.040f);
             popupTabPlates[i] = MakeQuad(popup, "탭 " + i, c, new Vector2(w, h), TabOff, 1).GetComponent<Renderer>();
-            popupTabTexts[i] = Place(MakeText(popup, "", 0.13f, TextAlignmentOptions.Center, 3), c, w);
+            popupTabTexts[i] = Place(MakeText(popup, "", 0.16f, TextAlignmentOptions.Center, 3), c, w);
             popupTabTexts[i].rectTransform.sizeDelta = new Vector2(w, h);   // 두 줄(이름 · 진행)
         }
-        popupProgress = Place(MakeText(popup, "", 0.105f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.086f), PanelW - 0.02f);
-        popupHint = Place(MakeText(popup, "", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.112f), PanelW - 0.02f);
+        popupProgress = Place(MakeText(popup, "", 0.13f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.097f), PanelW - 0.02f);
+        popupHint = Place(MakeText(popup, "", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.129f), PanelW - 0.02f);
         popupHint.color = NoteColor;
-        popupKeys = Place(MakeText(popup, "", 0.07f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.135f), PanelW - 0.02f);
+        popupKeys = Place(MakeText(popup, "", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.157f), PanelW - 0.02f);
         popupKeys.color = DimColor;
 
         // 리셋 확인 — 탭 창 위에 덮어 뜬다
         resetCard = new GameObject("리셋 확인").transform;
         resetCard.SetParent(popup, false);
         MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.52f, PopupH - 0.016f), ResetColor, 4);
-        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.15f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.024f, -0.008f);
-        MakeText(resetCard, "A = 지우기          B = 취소", 0.12f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
+        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.19f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.024f, -0.008f);
+        MakeText(resetCard, "A = 지우기          B = 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.034f, -0.008f);
         resetCard.gameObject.SetActive(false);
     }
 
