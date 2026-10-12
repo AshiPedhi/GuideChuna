@@ -10,6 +10,8 @@
   헤드셋 앱(RomLineMonitor)이 이 파일을 그대로 내보내고, 이 화면은 /state 를 0.15초마다 물어 그린다. 버튼은 /cmd?c=… 로 보낸다.
   주소 끝에 #demo 를 붙이면 헤드셋 없이 견본 값으로 그린다(배치 확인용).
   #demo = 굴곡·신전 · #demo-lat = 측굴 · #demo-rot = 회전. 견본에서는 위쪽 탭을 눌러도 바뀐다(10-08).
+  10-12: 순서 탭(굴곡 · 신전 · 측굴 · 회전)의 왼쪽은 결과표다 — 측정 명칭 · 능동 · 압박 · 그 동작의 단면에서 본 각도기.
+         단계 · 진행은 «진행 정보»(컨트롤러 A 버튼, 또는 아래의 버튼)로 띄운다. 헤드셋 안의 판과 같은 구성 · 같은 값이다.
 -->
 <style>
   :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFB060; --bad:#FF6B6B; --ok:#4ADE80; --orange:#FF6B05; }
@@ -55,6 +57,25 @@
   button, a.btn { font:inherit; font-size:15px; padding:8px 12px; border-radius:7px; border:1px solid var(--line); background:#222C38; color:var(--ink); cursor:pointer; text-decoration:none; }
   button:hover, a.btn:hover { background:#2C3A4B; } button.on { background:#2A5FA8; }
   #conn { font-size:13px; color:var(--dim); }
+  /* 순서 탭의 결과표(10-12) — «기타»(자유 측정)에서는 종전의 큰 값 + 선 목록이 선다 */
+  #gLeft { display:none; grid-row:1 / span 2; overflow:auto; padding:6px 12px; }
+  body.guided #gLeft { display:block; } body.guided #big, body.guided #tableWrap { display:none; }
+  #res td { padding:2px 8px; font-size:34px; font-weight:800; vertical-align:middle; }
+  #res td:first-child { font-size:26px; } #res td:first-child small { display:block; font-size:13px; font-weight:400; color:#667; }
+  #res td.a { color:var(--orange); } #res td.p { color:#F2994D; } #res td.opp { color:var(--bad); } #res td.none { color:#445; font-weight:400; }
+  #res tr.now td { background:#1F2936; } #res tr.now td.cur { text-decoration:underline; text-underline-offset:6px; }
+  #res td.g { text-align:center; padding:1px 8px; } #res canvas { width:176px; height:92px; display:block; margin:0 auto; }
+  #pop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:5; }
+  #pop.on { display:flex; }
+  #popCard { min-width:560px; padding:22px 30px; border-color:#3C4B5E; }
+  #popCard h2 { margin:0 0 12px; font-size:26px; text-align:center; }
+  .prow { display:grid; grid-template-columns:120px 1fr; align-items:center; padding:7px 12px; border-radius:8px; font-size:24px; }
+  .prow.now { background:#1F2936; } .prow b.name { font-weight:700; }
+  .prow span.todo { color:#8A96A6; } .prow span.done { color:var(--front); } .prow span.cur { color:var(--floor); font-weight:800; } .prow i { color:#556; font-style:normal; margin:0 12px; }
+  #popHint { margin-top:10px; text-align:center; color:var(--warn); font-size:17px; min-height:24px; }
+  #popProg { text-align:center; font-size:22px; font-weight:700; margin:6px 0 12px; }
+  #popKeys { text-align:center; color:var(--dim); font-size:15px; line-height:1.7; }
+  #popBtns { display:flex; gap:8px; justify-content:center; margin-top:14px; }
 </style>
 </head>
 <body>
@@ -72,6 +93,9 @@
     <div id="tableWrap" class="card">
       <table><thead><tr><th>선</th><th>길이</th><th id="thPlane">면 각</th><th>직접 각</th><th style="text-align:left">알림</th></tr></thead><tbody id="rows"></tbody></table>
     </div>
+    <div id="gLeft" class="card">
+      <table id="res"><thead><tr><th>측정</th><th>능동</th><th>압박</th><th style="text-align:center">각도기(단면에서 본 그림)</th></tr></thead><tbody id="resRows"></tbody></table>
+    </div>
   </div>
   <div id="views">
     <div class="view" id="v0"><h3 style="color:var(--sag)">옆에서 본 그림<small>굴곡 · 신전</small></h3><canvas></canvas></div>
@@ -81,27 +105,49 @@
 </main>
 <footer class="card">
   <div>
-    <div id="keys"><b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)</div>
+    <div id="keys"></div>
     <div id="conn"></div>
   </div>
   <div class="btns">
+    <button id="bPopup" onclick="cmd('popup')">진행 정보</button>
     <button onclick="cmd('undo')">한 점 취소</button>
-    <button onclick="cmd('rebase')">기준선 바꾸기</button>
-    <button onclick="if(confirm('이 동작의 선을 모두 지울까요?'))cmd('clear')">이 동작 지우기</button>
+    <button id="bRebase" onclick="cmd('rebase')">기준선 바꾸기</button>
+    <button id="bClear" onclick="if(confirm(this.textContent + ' — 이 동작에서 찍은 것을 모두 지울까요?'))cmd('clear')">이 동작 지우기</button>
     <button onclick="cmd('axes')" title="컨트롤러가 지금 가리키는 방향으로 잡는다">축 다시 잡기</button>
     <button id="bCalib" onclick="cmd('calib')">끝점 보정</button>
     <a class="btn" href="/csv" download>CSV 받기</a>
   </div>
 </footer>
+<div id="pop" onclick="if(event.target===this)cmd('popup')">
+  <div class="card" id="popCard">
+    <h2>진행 정보</h2>
+    <div id="popRows"></div>
+    <div id="popHint"></div>
+    <div id="popProg"></div>
+    <div id="popKeys"></div>
+    <div id="popBtns"><button id="bPrev" onclick="cmd('prev')">◀ 앞 단계</button><button id="bNext" onclick="cmd('next')">뒤 단계 ▶</button><button onclick="cmd('popup')">닫기</button></div>
+  </div>
+</div>
 <script>
 const COLORS = ['#66B3FF', '#73E68C', '#FFD94D'];
 const DEMO = location.hash.startsWith('#demo');
 let demoTab = location.hash === '#demo-lat' ? 1 : location.hash === '#demo-rot' ? 2 : 0;
-let S = null, lastOk = 0;
+let S = null, lastOk = 0, demoPopup = location.hash.endsWith('-popup');
+
+// 결과표 · 각도기(10-12) — 헤드셋 안의 판(RomLineView)과 같은 순서 · 같은 방향이다.
+//   굴곡 · 신전 = 옆에서 본 그림(오른쪽이 환자 앞) · 측굴 = 앞에서 본 그림(환자 오른쪽이 그림 왼쪽) · 회전 = 위에서 본 그림(아래가 환자 앞)
+const MOTIONS = ['굴곡', '신전', '우측굴', '좌측굴', '우회전', '좌회전'], PHASES = ['중립', '능동', '압박'];
+const GVIEW = ['옆에서 본 그림', '옆에서 본 그림', '앞에서 본 그림', '앞에서 본 그림', '위에서 본 그림', '위에서 본 그림'];
+const GZERO = [1, 1, 1, 1, -1, -1], GSIDE = [1, -1, -1, 1, -1, 1];   // 0° 선이 향하는 쪽(위 +1) · 제 방향으로 움직였을 때 기우는 쪽(오른쪽 +1)
+const GLEFT = ['뒤', '뒤', '우', '우', '우', '우'], GRIGHT = ['앞', '앞', '좌', '좌', '좌', '좌'];
+const GMAX = 100;   // 이보다 큰 각은 그림에서 여기까지만 그린다 — 숫자는 그대로 나온다
+const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 진행 정보 열기 · 닫기 · <b>B</b> 한 점 취소(길게 누르면 이 동작 다시) · <b>스틱 좌우</b> 진행 정보를 띄운 동안 앞 · 뒤 단계 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
+const KEYS_FREE = '<b>트리거</b> 점 찍기 · <b>A</b> 진행 정보 열기 · 닫기 · <b>B</b> 한 점 취소(길게 누르면 이 동작 지우기) · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
 
 function cmd(c) {
   if (!DEMO) { fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); return; }
   if (/^top[0-3]$/.test(c)) { demoTab = [0, 0, 1, 2][+c[3]]; poll(); }   // 견본에서는 탭만 바뀐다(신전은 굴곡 견본을 같이 쓴다)
+  if (c === 'popup') { demoPopup = !demoPopup; poll(); }
 }
 
 // 견본 값 — 좌표는 [환자 오른쪽, 위, 환자 앞](m). 선마다 a = 첫 점, b = 둘째 점.
@@ -124,9 +170,73 @@ function demoState() {
   const t = Date.now() / 1000, w = Math.sin(t) * 0.01, d = DEMO_SETS[demoTab];
   const names = ['중립', '능동', '압박'];
   d.lines.forEach((l, i) => { l.name = names[i]; });
-  return { mode:'guided', top:[0, 2, 3][demoTab], topTabs:['굴곡','신전','측굴','회전','기타'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
+  // 결과표의 견본 — 손으로 적은 값이다(실측 아님). 지금 탭의 동작은 위 선들의 값과 맞춘다.
+  const R = (a, p) => ({ a:{v:a, o:false}, p:{v:p, o:false} });
+  const cur = [0, 3, 4][demoTab];
+  return { popup:demoPopup, cur:cur, phase:2, index:0, hint:'측정자가 같은 방향으로 조금 더 눌러 준 자세', steps:'111111111111111110',
+    results:[R(26.8, 39.3), R(41.5, 52.0), R(22.4, 30.1), R(20.0, 33.0), R(30.0, 55.0), {a:{v:48.2, o:false}, p:null}],
+    mode:'guided', top:[0, 2, 3][demoTab], topTabs:['굴곡','신전','측굴','회전','기타'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
     axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
     tip:[d.tip[0] + w, d.tip[1], d.tip[2]], eye:[0, 1.0, 1.0], lines:d.lines, pending:null };
+}
+
+// 각도기 하나 — 반원 · 15° 눈금 · 0° 선(중립) · 능동 선과 호 · 압박 선. r = {a:{v,o}|null, p:{v,o}|null}
+function drawGauge(cv, m, r) {
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const z = GZERO[m], Rr = Math.min(W / 2 - 22, H - 16), px = W / 2, py = z > 0 ? H - 8 : 8;
+  const P = (deg, rad) => { const a = deg * Math.PI / 180; return [px + Math.sin(a) * rad, py - Math.cos(a) * rad * z]; };
+  const line = (a, b) => { g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); };
+  g.strokeStyle = '#6B7A8F'; g.lineWidth = 1.5; g.lineCap = 'round';
+  line([px - Rr, py], [px + Rr, py]);
+  g.beginPath(); for (let d = -90; d <= 90; d += 5) { const q = P(d, Rr); d === -90 ? g.moveTo(q[0], q[1]) : g.lineTo(q[0], q[1]); } g.stroke();
+  for (let d = -90; d <= 90; d += 15) line(P(d, Rr - (d % 45 === 0 ? 11 : 6)), P(d, Rr));
+  g.fillStyle = '#6B7A8F'; g.font = '13px sans-serif'; g.textBaseline = 'middle';
+  g.textAlign = 'right'; g.fillText(GLEFT[m], px - Rr - 5, py - z * 2); g.textAlign = 'left'; g.fillText(GRIGHT[m], px + Rr + 5, py - z * 2);
+  g.strokeStyle = '#EDEDED'; g.lineWidth = 2.5; line([px, py], P(0, Rr));
+  const deg = x => Math.min(x.v, GMAX) * GSIDE[m] * (x.o ? -1 : 1);
+  if (r && r.p) { g.strokeStyle = '#F2994D'; g.lineWidth = 3; line([px, py], P(deg(r.p), Rr)); }
+  if (r && r.a) {
+    const d = deg(r.a);
+    g.strokeStyle = '#FF6B05'; g.lineWidth = 2;
+    g.beginPath(); for (let i = 0; i <= 12; i++) { const q = P(d * i / 12, Rr * 0.45); i === 0 ? g.moveTo(q[0], q[1]) : g.lineTo(q[0], q[1]); } g.stroke();
+    g.lineWidth = 4; line([px, py], P(d, Rr));
+  }
+}
+
+// 순서 탭의 결과표와 진행 정보
+function renderGuided(free) {
+  const rows = el('resRows');
+  if (!rows.children.length)
+    MOTIONS.forEach((name, m) => { const r = document.createElement('tr'); r.innerHTML = `<td>${name}<small>${GVIEW[m]}</small></td><td class="a"></td><td class="p"></td><td class="g"><canvas></canvas></td>`; rows.appendChild(r); });
+  const res = S.results || [];
+  if (!free) [...rows.children].forEach((r, m) => {
+    const x = res[m] || {};
+    r.className = m === S.cur ? 'now' : '';
+    [x.a, x.p].forEach((v, k) => {
+      const td = r.children[1 + k];
+      td.textContent = v ? v.v.toFixed(1) + '°' : '—';
+      td.className = (k === 0 ? 'a' : 'p') + (v ? (v.o ? ' opp' : '') : ' none') + (m === S.cur && S.phase === k + 1 ? ' cur' : '');
+    });
+    drawGauge(r.querySelector('canvas'), m, x);
+  });
+
+  el('pop').className = S.popup ? 'on' : '';
+  el('bPopup').className = S.popup ? 'on' : '';
+  if (!S.popup) return;
+  const steps = S.steps || '';
+  let done = 0;
+  for (let i = 0; i < steps.length; i++) if (steps[i] === '1') done++;
+  el('popRows').innerHTML = free
+    ? S.tabs.map((name, i) => `<div class="prow${i === S.tab ? ' now' : ''}"><b class="name">${name}</b><span class="${i === S.tab ? 'cur' : 'todo'}">선 ${Math.floor((S.counts[i] || 0) / 2)}개</span></div>`).join('')
+    : MOTIONS.map((name, m) => `<div class="prow${m === S.cur ? ' now' : ''}"><b class="name">${name}</b><div>` +
+        PHASES.map((ph, k) => `<span class="${m === S.cur && k === S.phase ? 'cur' : steps[m * 3 + k] === '1' ? 'done' : 'todo'}">${ph}</span>`).join('<i>→</i>') + '</div></div>').join('');
+  el('popHint').textContent = free ? '기타(자유 측정) — 처음 찍은 선이 기준선입니다' : (S.hint || '');
+  el('popProg').textContent = free ? '지금  ' + S.tabs[S.tab]
+    : `찍은 직선 ${done} / 18 · ` + (S.cur < 0 ? '측정 끝' : `지금  ${MOTIONS[S.cur]} · ${PHASES[S.phase]}  ${(S.index || 0) + 1}번째 점`);
+  el('popKeys').innerHTML = free ? '<b>스틱 좌우</b> 동작 바꾸기 · <b>A</b> 닫기 · <b>B</b> 한 점 취소(길게: 이 동작 지우기)' : '<b>스틱 좌우</b> 앞 · 뒤 단계 · <b>A</b> 닫기 · <b>B</b> 한 점 취소(길게: 이 동작 다시)';
+  el('bPrev').style.display = el('bNext').style.display = free ? 'none' : '';
 }
 
 async function poll() {
@@ -171,9 +281,11 @@ function render() {
     }
   });
   el('instruction').textContent = S.instruction || '';
-  el('keys').innerHTML = free
-    ? '<b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 기준선 바꾸기 · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>그립 길게</b> 이 동작 지우기 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)'
-    : '<b>트리거</b> 점 찍기 · <b>A</b> 한 점 취소 · <b>B</b> 이 단계 건너뛰기 · <b>스틱 좌우</b> 앞 · 뒤 단계 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
+  el('keys').innerHTML = free ? KEYS_FREE : KEYS_GUIDED;
+  document.body.className = free ? '' : 'guided';
+  el('bRebase').style.display = free ? '' : 'none';   // 기준선 바꾸기는 «기타»에만 있다
+  el('bClear').textContent = free ? '이 동작 지우기' : '이 동작 다시';
+  renderGuided(free);
   el('note').textContent = S.calib ? '끝점 보정 중 — 끝을 한 점에 대고 여러 방향으로 돌리세요' : (S.note || '');
 
   const tr = el('track');
