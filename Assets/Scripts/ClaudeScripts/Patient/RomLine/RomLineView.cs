@@ -104,7 +104,7 @@ public class RomLineView
         }
         for (int i = 0; i < extraSpheres.Length; i++)
         {
-            extraSpheres[i] = MakeSphere("점(비교 Gn)", PointRadius, i == 0 ? NeutralColor : i == 1 ? ActiveColor : PressureColor);
+            extraSpheres[i] = MakeSphere("점(비교 턱끝점)", PointRadius, i == 0 ? NeutralColor : i == 1 ? ActiveColor : PressureColor);
             extraSpheres[i].gameObject.SetActive(false);
         }
         for (int i = 0; i < neutralLabels.Length; i++)
@@ -219,7 +219,7 @@ public class RomLineView
         for (int r = 0; r < 2; r++)
         {
             float cy = tableTop - 0.017f - rowH * (7 + r);
-            compareNames[r] = Place(MakeText(guidedArea, RomLineSession.MotionName[r] + " Gl~Gn", 0.07f, TextAlignmentOptions.Left, 3), new Vector2(xName, cy), 0.09f);
+            compareNames[r] = Place(MakeText(guidedArea, RomLineSession.MotionName[r] + " 미간점~턱끝점", 0.07f, TextAlignmentOptions.Left, 3), new Vector2(xName, cy), 0.09f);
             compareNames[r].color = CompareColor;
             for (int c = 0; c < 4; c++)
             {
