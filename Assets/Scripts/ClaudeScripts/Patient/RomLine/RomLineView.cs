@@ -39,7 +39,7 @@ public class RomLineView
     // 판
     private Transform panel;
     private Transform guidedArea, freeArea;   // 순서 측정(안내 두 줄 · 결과표) / 자유 측정(갈래 · 안내 · 선 목록)
-    private TextMeshPro instruction, note, footer;   // 안내 · 알림은 자유 측정의 것이다 — 순서 측정은 guideLine · guideNote
+    private TextMeshPro footer;
     private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
     private readonly TextMeshPro[] compareValues = new TextMeshPro[8];   // 줄마다 능동 면·직접, 압박 면·직접
     private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값(동작 × 능동 · 압박). «직접» 값은 10-12부터 판에 내지 않는다(로그 · CSV에만)
@@ -148,23 +148,17 @@ public class RomLineView
 
         float top = PanelH * 0.5f;
 
-        // 순서 측정 — 맨 위 두 줄: 지금 단계와 찍을 점(또는 «A = 확인») · 알림
-        guideLine = Place(MakeText(guidedArea, "", 0.20f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.032f), PanelW - 0.02f);
-        guideNote = Place(MakeText(guidedArea, "", 0.13f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.070f), PanelW - 0.02f);
-        guideNote.color = NoteColor;
+        // ★10-12 사용자 지시: 화면 맨 위(top ~ top − 0.085)는 <b>비워 둔다</b> — 프로그램 이름과 회사 아이콘으로 꾸밀 타이틀 자리다.
+        //   거기 있던 «지금 찍을 점 · 알림» 두 줄은 안내창(아래 guide)으로 옮겼다.
 
         // 자유 측정 — 맨 위에 동작 갈래 셋(보여 주기만 한다 — 스틱 좌우로 바꾼다), 그 아래 안내 · 알림 · 선 목록
         for (int i = 0; i < 3; i++)
         {
-            var c = new Vector2((i - 1f) * 0.16f, top - 0.030f);
+            var c = new Vector2((i - 1f) * 0.16f, top - 0.104f);
             freeTabPlates[i] = MakeQuad(freeArea, "갈래 " + FreeTabNames[i], c, new Vector2(0.15f, 0.038f), TabOff, 1).GetComponent<Renderer>();
             Place(MakeText(freeArea, FreeTabNames[i], 0.13f, TextAlignmentOptions.Center, 3), c, 0.15f);
         }
-        instruction = Place(MakeText(freeArea, "", 0.19f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.076f), PanelW - 0.02f);
-        instruction.color = TipColor;
-        note = Place(MakeText(freeArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.106f), PanelW - 0.02f);
-        note.color = NoteColor;
-        FreeTableTop = top - 0.132f;
+        FreeTableTop = top - 0.142f;   // 갈래 줄 아래
 
         BuildResults(top);
         BuildPopup();
@@ -178,6 +172,19 @@ public class RomLineView
         freeArea.gameObject.SetActive(false);
         popup.gameObject.SetActive(false);
 
+        // ── 안내창(10-12 사용자 지시) ── 지금 무엇을 할지를 멀리 있는 화면이 아니라 사용자 가까이에 띄운다. 글 두 줄뿐이다:
+        //   윗줄 = 지금 단계와 찍을 점(또는 «A = 확인») · 아랫줄 = 그 단계의 안내 음성과 같은 문장(알림이 있으면 알림)
+        guide = new GameObject("안내창").transform;
+        guide.SetParent(root, false);
+        MakeQuad(guide, "바탕", Vector2.zero, new Vector2(GuideW, GuideH), PopupColor, 0);
+        guideLine = Place(MakeText(guide, "", 0.14f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.024f), GuideW - 0.02f);
+        guideNote = MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3);
+        guideNote.textWrappingMode = TextWrappingModes.Normal;   // 안내 문장은 길면 두 줄로 접는다
+        guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.03f, 0.05f);
+        guideNote.transform.localPosition = new Vector3(0f, -0.022f, -0.004f);
+        guideNote.color = NoteColor;
+        guide.gameObject.SetActive(false);
+
         // 맨 아래 한 줄 — 모니터 화면의 주소
         footer = Place(MakeText(panel, "", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(0f, -PanelH * 0.5f + 0.010f), PanelW - 0.02f);
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
@@ -190,7 +197,8 @@ public class RomLineView
     //     회전 = 위에서 본 그림(아래가 환자 앞 · 환자 오른쪽이 그림 왼쪽) — 모니터 화면의 세 그림과 같은 방향이다.
     private const float RowH = 0.080f, CellW = 0.39f, GaugeR = 0.050f;
     private const float XName = -0.140f, XActive = -0.055f, XPressure = 0.020f, GaugeX = 0.125f;   // 칸 가운데에서 잰 자리
-    private const float PopupH = 0.176f, PopupGap = 0.015f;   // 10-12: 글자를 키우며 0.150 → 0.176
+    private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
+    private const float GuideW = 0.46f, GuideH = 0.11f;      // 안내창의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(아랫줄을 침범한다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
@@ -209,7 +217,8 @@ public class RomLineView
     private static readonly Color ResetColor = new Color(0.42f, 0.13f, 0.13f, 1f);
 
     private Transform resultArea, popup, rowNow, resetCard;
-    private TextMeshPro guideLine, guideNote, popupProgress, popupHint, popupKeys;
+    private Transform guide;                 // 안내창 — 사용자 가까이에 따로 선다
+    private TextMeshPro guideLine, guideNote;
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
     private readonly LineRenderer[] gaugeArcs = new LineRenderer[6];     // 0° 선에서 능동 선까지의 호
@@ -316,23 +325,18 @@ public class RomLineView
         const float w = 0.150f, gap = 0.006f, h = 0.064f;
         for (int i = 0; i < PopupTabs; i++)
         {
-            var c = new Vector2((i - 2f) * (w + gap), PopupH * 0.5f - 0.040f);
+            var c = new Vector2((i - 2f) * (w + gap), 0f);
             popupTabPlates[i] = MakeQuad(popup, "탭 " + i, c, new Vector2(w, h), TabOff, 1).GetComponent<Renderer>();
-            popupTabTexts[i] = Place(MakeText(popup, "", 0.16f, TextAlignmentOptions.Center, 3), c, w);
+            popupTabTexts[i] = Place(MakeText(popup, "", 0.19f, TextAlignmentOptions.Center, 3), c, w);
             popupTabTexts[i].rectTransform.sizeDelta = new Vector2(w, h);   // 두 줄(이름 · 진행)
         }
-        popupProgress = Place(MakeText(popup, "", 0.13f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.097f), PanelW - 0.02f);
-        popupHint = Place(MakeText(popup, "", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.129f), PanelW - 0.02f);
-        popupHint.color = NoteColor;
-        popupKeys = Place(MakeText(popup, "", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.157f), PanelW - 0.02f);
-        popupKeys.color = DimColor;
-
         // 리셋 확인 — 탭 창 위에 덮어 뜬다
         resetCard = new GameObject("리셋 확인").transform;
         resetCard.SetParent(popup, false);
-        MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.52f, PopupH - 0.016f), ResetColor, 4);
-        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.19f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.024f, -0.008f);
-        MakeText(resetCard, "A = 지우기          B = 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.034f, -0.008f);
+        resetCard.localPosition = new Vector3(0f, -0.018f, 0f);   // 탭 줄보다 키가 커서 아래로 조금 내려 덮는다
+        MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.56f, 0.116f), ResetColor, 4);
+        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.19f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.026f, -0.008f);
+        MakeText(resetCard, "A = 지우기          B = 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
         resetCard.gameObject.SetActive(false);
     }
 
@@ -359,13 +363,10 @@ public class RomLineView
         popupTabPlates[i].material.color = cursor ? TabOn : current ? TabCurrent : TabOff;
     }
 
-    /// <summary>탭 창의 아래 세 줄 — 지금 탭의 진행 · 알림 · 버튼 안내. resetAsk = 리셋 확인 창을 덮어 띄운다.</summary>
-    public void SetPopupLines(string progress, string hint, string keys, bool resetAsk)
+    /// <summary>리셋 확인 창(«전체 측정 결과를 지울까요?»)을 탭 창 위에 덮어 띄운다 / 내린다.</summary>
+    public void ShowResetAsk(bool on)
     {
-        popupProgress.text = progress;
-        popupHint.text = hint;
-        popupKeys.text = keys;
-        if (resetCard.gameObject.activeSelf != resetAsk) resetCard.gameObject.SetActive(resetAsk);
+        if (resetCard.gameObject.activeSelf != on) resetCard.gameObject.SetActive(on);
     }
 
     /// <summary>자유 측정의 동작 갈래(0 굴곡·신전 · 1 측굴 · 2 회전) 가운데 지금 것을 밝힌다.</summary>
@@ -377,8 +378,9 @@ public class RomLineView
     /// <summary>
     /// 메인 화면을 헤드셋이 보는 쪽 멀리에 세운다. distance = 눈에서 화면까지(m) · width = 화면 폭(m) · rise = 화면 아랫변이 눈높이보다 높은 만큼(m).
     /// 지움: 고개 숙임 → 화면은 늘 수평 앞에 선다. 탭 창은 화면 아래에 붙어 따라온다.
+    /// 안내창도 같이 세운다 — guideDistance = 눈에서 안내창까지(m) · guideDrop = 눈높이보다 낮은 만큼(m).
     /// </summary>
-    public void PlacePanel(Transform eye, float distance, float width, float rise)
+    public void PlacePanel(Transform eye, float distance, float width, float rise, float guideDistance, float guideDrop)
     {
         Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;
         if (fwd.sqrMagnitude < 0.5f) fwd = Vector3.forward;
@@ -388,19 +390,23 @@ public class RomLineView
         panel.position = pos;
         panel.rotation = Quaternion.LookRotation((pos - eye.position).normalized, Vector3.up);   // 눈을 마주 보게 살짝 숙인다
         panel.gameObject.SetActive(true);
+
+        // 안내창 — 같은 방향 가까이, 눈높이보다 아래. 눈을 마주 보게 젖힌다.
+        Vector3 gp = eye.position + fwd * guideDistance - Vector3.up * guideDrop;
+        guide.position = gp;
+        guide.rotation = Quaternion.LookRotation((gp - eye.position).normalized, Vector3.up);
+        guide.gameObject.SetActive(true);
         PanelPlaced = true;
     }
 
     // ── 글자(상태가 바뀔 때만 부른다) ────────────────────────────────
-    /// <summary>자유 측정의 안내 · 알림과, 컨트롤러 끝의 이름표(두 모드 공통).</summary>
-    public void SetTexts(string instructionText, string noteText, string tipText)
+    /// <summary>컨트롤러 끝의 이름표(다음에 찍을 점).</summary>
+    public void SetTip(string tipText)
     {
-        instruction.text = instructionText;
-        note.text = noteText;
         tipLabel.text = tipText;
     }
 
-    /// <summary>순서 측정 맨 위 두 줄 — 지금 단계와 찍을 점(색은 리치 텍스트로 넣어 온다) · 알림.</summary>
+    /// <summary>안내창의 두 줄 — 지금 단계와 찍을 점(색은 리치 텍스트로 넣어 온다) · 안내 문장이나 알림. 두 모드가 같이 쓴다.</summary>
     public void SetGuide(string line, string noteText)
     {
         guideLine.text = line;

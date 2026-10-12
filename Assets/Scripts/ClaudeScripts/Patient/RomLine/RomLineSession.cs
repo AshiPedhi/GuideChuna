@@ -124,6 +124,12 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("메인 화면의 아랫변이 헤드셋 눈높이보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
     [SerializeField] private float screenRise = 0.30f;
 
+    [Header("=== 안내창(10-12) ===")]
+    [Tooltip("헤드셋에서 안내창까지의 거리(m). 지금 무엇을 할지 두 줄로 보여 주는 작은 창이다 — 메인 화면과 같은 때에 같은 방향으로 선다.")]
+    [SerializeField] private float guideDistance = 0.60f;
+    [Tooltip("안내창이 헤드셋 눈높이보다 낮은 만큼(m). 환자 머리를 가리면 더 내린다.")]
+    [SerializeField] private float guideDrop = 0.22f;
+
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
     [SerializeField] private string lobbySceneName = "lobby";
@@ -189,7 +195,6 @@ public class RomLineSession : MonoBehaviour
     private float undoHoldStart = -1f;    // B/Y — 짧게 = 직선 취소(뗄 때), 길게 = 이 탭 지우기
     private bool undoHoldFired;
     private const float ResetHoldSeconds = 1.0f;
-    private const string PopupKeys = "스틱 좌우 = 탭 고르기 · A = 닫기 · B = 직선 취소 · B 길게 = 이 탭 지우기 · 스틱 누르고 밀기 = 축 다시 잡기";
 
     // 끝점 보정(10-07) — 끝을 한 점에 대고 돌린 자세들
     private bool calibrating;
@@ -357,7 +362,7 @@ public class RomLineSession : MonoBehaviour
                 if (trackingWaitStart < 0f) trackingWaitStart = Time.unscaledTime;
                 if (Time.unscaledTime - trackingWaitStart < TrackingWaitSeconds) { Silent("헤드셋 추적을 기다린다"); return; }
             }
-            view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+            view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
             Debug.Log($"[선실측] 메인 화면을 세웠다 — 눈 {eye.position:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 눈높이 위 {screenRise:F2}m");
             CaptureAxes("처음", false);
         }
@@ -570,7 +575,7 @@ public class RomLineSession : MonoBehaviour
                 stickReady = false;
                 axesAsk = false;
                 Buzz(0.08f, 0.6f);
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
                 CaptureAxes("스틱", true);
             }
             else if (aDown || undoTap || undoLong || triggerDown) SetAxesAsk(false, "다른 버튼");
@@ -1336,7 +1341,8 @@ public class RomLineSession : MonoBehaviour
                  : axesOn ? "환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로"
                  : "3축이 꺼져 있어 직접 각만 나옵니다 · 두 점은 늘 같은 순서로";
         string instruction = $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요";
-        view.SetTexts(instruction, note, "선 " + (lines + 1));
+        view.SetTip("선 " + (lines + 1));
+        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + "   <color=#FFF233>" + instruction + "</color>", note);
         view.SetFreeTab(freeTab);
         RefreshPopup();
 
@@ -1471,7 +1477,7 @@ public class RomLineSession : MonoBehaviour
             case "resetAll": ResetAll("모니터"); break;
             case "rebase": if (freeMode) FreeRebase(); break;
             case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
                 CaptureAxes("모니터", true);
                 break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
@@ -1647,9 +1653,9 @@ public class RomLineSession : MonoBehaviour
             tipText = PointName[(int)p];
             guide = $"{GroupTitle(group)}   <color=#FFF233>{instruction}</color>";
             forMonitor = GroupTitle(group) + " — " + instruction;
-            if (note.Length == 0) note = PhaseHint[PhaseOf(group)];
+            if (note.Length == 0) note = NarrationText(cm, PhaseOf(group));   // 안내창의 아랫줄 = 그 단계의 안내 음성과 같은 문장
         }
-        view.SetTexts(instruction, note, tipText);
+        view.SetTip(tipText);
         view.SetGuide(guide, note);
         RefreshGuidedExtras(tab, forMonitor, note);
         RefreshPopup();
@@ -1819,7 +1825,7 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 탭 창의 글자(10-12 저녁). 탭 다섯(이름 + 진행) · 지금 탭의 두 동작 × (중립 → 능동 → 압박) · 알림 · 버튼 안내.
+    /// 탭 창의 글자 — 탭 다섯의 이름뿐이다(스틱이 올라간 탭 · 지금 탭 · 다 잰 탭은 색으로 가른다).
     /// 닫혀 있으면 글자를 만들지 않는다.
     /// </summary>
     private void RefreshPopup()
@@ -1830,41 +1836,11 @@ public class RomLineSession : MonoBehaviour
         bool locked = TabLocked;
         for (int t = 0; t < RomLineView.PopupTabs; t++)
         {
-            string sub;
-            if (t == 3) sub = "전체 지우기";
-            else if (t == 4) sub = $"선 {freeRefOf[0].Count + freeRefOf[1].Count + freeRefOf[2].Count}개";
-            else if (TabComplete(t)) sub = "<color=#73E68C>완료</color>";
-            else
-            {
-                int n = 0;
-                for (int g = GroupOf(t * 2, 0); g <= GroupOf(t * 2 + 1, 2); g++) if (HasLine(g)) n++;
-                sub = n == 0 ? "—" : $"직선 {n} / 6";
-            }
-            view.SetPopupTab(t, TopTabName[t] + "\n<size=68%>" + sub + "</size>", t == popupCursor, t == cur, locked && t != cur);
+            // 탭 이름만 쓴다(10-12: 아래의 «완료» · 진행 글자와 설명 세 줄을 뺐다). 다 잰 탭은 이름을 초록으로 칠한다.
+            string label = t < 3 && TabComplete(t) ? "<color=#73E68C>" + TopTabName[t] + "</color>" : TopTabName[t];
+            view.SetPopupTab(t, label, t == popupCursor, t == cur, locked && t != cur);
         }
-
-        StringBuilder st = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드 — PumpMonitor는 쓸 때 처음에 비운다)
-        st.Length = 0;
-        if (freeMode) st.Append("자유 측정 · ").Append(FreeTabName[freeTab]).Append("   선 ").Append(FreeRefs.Count).Append("개 — 동작은 탭 창을 닫고 스틱 좌우로 바꿉니다");
-        else
-            for (int m = cur * 2; m < cur * 2 + 2; m++)
-            {
-                if (m > cur * 2) st.Append("          ");
-                st.Append("<b>").Append(MotionName[m]).Append("</b>   ");
-                for (int ph = 0; ph < 3; ph++)
-                {
-                    int g = GroupOf(m, ph);
-                    bool done = HasLine(g), now = !confirmWait && !TabComplete(cur) && g == group;
-                    if (ph > 0) st.Append(" → ");
-                    st.Append(now ? "<color=#FFD94D><b>" : done ? "<color=#73E68C>" : "<color=#8A96A6>").Append(PhaseName[ph]).Append(now ? "</b></color>" : "</color>");
-                }
-                if (confirmed[m]) st.Append("  <color=#73E68C>(확인)</color>");
-                else if (confirmWait && MotionOf(group) == m) st.Append("  <color=#FFD94D>(A = 확인)</color>");
-            }
-        string hint = locked ? "이 탭을 재는 중입니다 — 다 잰 뒤에 다른 탭으로 옮길 수 있습니다 (그만두려면 B 길게)"
-                    : popupCursor == 3 ? "A를 누르면 전체 측정 결과를 지울지 묻습니다"
-                    : "스틱을 옮기는 대로 그 탭이 됩니다 · «리셋»만 A로 고릅니다";
-        view.SetPopupLines(st.ToString(), hint, PopupKeys, resetAsk);
+        view.ShowResetAsk(resetAsk);
     }
 
     private static readonly List<Vector3> NoPoints = new List<Vector3>(0);
@@ -1883,6 +1859,19 @@ public class RomLineSession : MonoBehaviour
     //   단계가 바뀔 때마다 한 문장. 파일은 .claude/tools/romline_narration.py가 만든다(m{동작}_p{단계} · done).
     //   ★파일이 없으면 에러 없이 무음이다 — 그래서 읽은 개수와, 틀 때마다 어느 파일인지를 로그에 남긴다.
     private AudioSource narrSrc;
+    // 안내창에 띄우는 글 — ★안내 음성(.claude/tools/romline_narration.py의 texts())과 <b>같은 문장</b>이어야 한다. 한쪽을 고치면 다른 쪽도 고친다.
+    private static readonly string[] NarrName = { "굴곡", "신전", "오른쪽 측굴", "왼쪽 측굴", "오른쪽 회전", "왼쪽 회전" };
+    private static readonly string[] NarrPoints = { "미간점과 턱끝점", "미간점과 턱끝점", "미간점과 턱끝점", "미간점과 턱끝점", "왼쪽 미주점과 미간점", "오른쪽 미주점과 미간점" };
+    private static readonly string[] NarrMove = { "고개를 앞으로 끝까지 숙이게", "고개를 뒤로 끝까지 젖히게", "고개를 오른쪽 어깨 쪽으로 끝까지 기울이게",
+                                                  "고개를 왼쪽 어깨 쪽으로 끝까지 기울이게", "고개를 오른쪽으로 끝까지 돌리게", "고개를 왼쪽으로 끝까지 돌리게" };
+
+    private static string NarrationText(int m, int ph)
+    {
+        if (ph == 0) return $"{NarrName[m]}을 측정합니다. 환자가 정면을 본 편안한 자세에서, {NarrPoints[m]}을 차례로 찍으세요.";
+        if (ph == 1) return $"환자가 스스로 {NarrMove[m]} 한 뒤, {NarrPoints[m]}을 차례로 찍으세요.";
+        return $"측정자가 같은 방향으로 조금 더 눌러 준 상태에서, {NarrPoints[m]}을 차례로 찍으세요.";
+    }
+
     private readonly AudioClip[] narr = new AudioClip[19];
     private int announced = -1;
 

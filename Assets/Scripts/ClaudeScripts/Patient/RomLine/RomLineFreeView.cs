@@ -66,7 +66,7 @@ public class RomLineFreeView
         RomLineView.Place(v.MakeText(panelArea, "직접 각", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(x[1], tableTop), w[1]).color = DimColor;
         for (int r = 0; r < Rows; r++)
         {
-            float y = tableTop - 0.030f - r * 0.0265f;
+            float y = tableTop - 0.030f - r * 0.0250f;
             names[r] = RomLineView.Place(v.MakeText(panelArea, "", 0.125f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.20f);
             cells[r * Cols] = RomLineView.Place(v.MakeText(panelArea, "", 0.14f, TextAlignmentOptions.Center, 3), new Vector2(x[0], y), w[0]);
             cells[r * Cols + 1] = RomLineView.Place(v.MakeText(panelArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(x[1], y), w[1]);
