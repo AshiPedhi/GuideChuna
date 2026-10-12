@@ -11,7 +11,10 @@
   주소 끝에 #demo 를 붙이면 헤드셋 없이 견본 값으로 그린다(배치 확인용).
   #demo = 굴곡·신전 · #demo-lat = 측굴 · #demo-rot = 회전. 견본에서는 위쪽 탭을 눌러도 바뀐다(10-08).
   10-12: 순서 탭(굴곡 · 신전 · 측굴 · 회전)의 왼쪽은 결과표다 — 측정 명칭 · 능동 · 압박 · 그 동작의 단면에서 본 각도기.
-         단계 · 진행은 «진행 정보»(컨트롤러 A 버튼, 또는 아래의 버튼)로 띄운다. 헤드셋 안의 판과 같은 구성 · 같은 값이다.
+         헤드셋 안의 메인 화면과 같은 값이다.
+  10-12 저녁: 탭은 다섯 — 굴곡 · 신전 / 측굴 / 회전 / 리셋 / 자유 측정. 헤드셋에서는 «탭 창»(A 버튼)으로 따로 뜬다.
+         탭을 재는 중이면 다른 탭으로 못 간다. 동작 하나(중립 · 능동 · 압박)를 다 찍으면 멈추고 «확인»(A 버튼 · 아래 버튼)을 기다린다.
+         #demo-confirm = 확인을 기다리는 견본 · #demo-popup = 탭 창을 띄운 견본.
 -->
 <style>
   :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFB060; --bad:#FF6B6B; --ok:#4ADE80; --orange:#FF6B05; }
@@ -25,6 +28,8 @@
   .tab.on { color:#0E1319; }
   .tab small { font-size:13px; font-weight:400; margin-left:6px; opacity:.8; }
   .tab.sub { padding:8px 14px; font-size:17px; }
+  .tab.locked { opacity:.35; cursor:not-allowed; } .tab.reset { color:#FFB4B4; background:#3A1D1D; }
+  .tab.cursor { border-color:#FFD94D; }
   .tabs .gap { width:10px; }
   #instruction { font-size:28px; font-weight:700; color:#FFF2A6; }
   #note { font-size:16px; color:var(--warn); min-height:22px; }
@@ -62,6 +67,10 @@
   body.guided #gLeft { display:block; } body.guided #big, body.guided #tableWrap { display:none; }
   #res td { padding:2px 8px; font-size:34px; font-weight:800; vertical-align:middle; }
   #res td:first-child { font-size:26px; } #res td:first-child small { display:block; font-size:13px; font-weight:400; color:#667; }
+  #res td:first-child em { font-style:normal; font-size:14px; font-weight:700; color:var(--front); margin-left:8px; }
+  #bConfirm { display:none; background:#1F7A3F; border-color:#2FA85A; font-weight:800; } #bConfirm.on { display:inline-block; }
+  #popTabs { display:flex; gap:8px; justify-content:center; margin-bottom:14px; }
+  #popAsk { display:none; margin:10px 0; padding:12px; border-radius:8px; background:#4A1616; color:#FFD0D0; text-align:center; font-size:20px; font-weight:700; } #popAsk.on { display:block; }
   #res td.a { color:var(--orange); } #res td.p { color:#F2994D; } #res td.opp { color:var(--bad); } #res td.none { color:#445; font-weight:400; }
   #res tr.now td { background:#1F2936; } #res tr.now td.cur { text-decoration:underline; text-underline-offset:6px; }
   #res td.g { text-align:center; padding:1px 8px; } #res canvas { width:176px; height:92px; display:block; margin:0 auto; }
@@ -109,30 +118,35 @@
     <div id="conn"></div>
   </div>
   <div class="btns">
-    <button id="bPopup" onclick="cmd('popup')">진행 정보</button>
-    <button onclick="cmd('undo')">한 점 취소</button>
+    <button id="bConfirm" onclick="cmd('confirm')">확인 → 다음</button>
+    <button id="bPopup" onclick="cmd('popup')">탭 창</button>
+    <button onclick="cmd('undo')">직선 취소</button>
     <button id="bRebase" onclick="cmd('rebase')">기준선 바꾸기</button>
-    <button id="bClear" onclick="if(confirm(this.textContent + ' — 이 동작에서 찍은 것을 모두 지울까요?'))cmd('clear')">이 동작 지우기</button>
-    <button onclick="cmd('axes')" title="컨트롤러가 지금 가리키는 방향으로 잡는다">축 다시 잡기</button>
+    <button id="bClear" onclick="if(confirm(this.textContent + ' — 찍은 것을 지울까요?'))cmd('clear')">이 탭 지우기</button>
+    <button onclick="if(confirm('전체 측정 결과를 지울까요? (순서 측정과 자유 측정 전부)'))cmd('resetAll')">전체 리셋</button>
+    <button onclick="if(confirm('지금 헤드셋이 보는 방향으로 축과 메인 화면을 다시 잡을까요?'))cmd('axes')" title="헤드셋이 지금 보는 방향으로 잡는다">축 다시 잡기</button>
     <button id="bCalib" onclick="cmd('calib')">끝점 보정</button>
     <a class="btn" href="/csv" download>CSV 받기</a>
+    <button onclick="if(confirm('측정을 끝내고 로비로 나갈까요?'))cmd('exit')">나가기</button>
   </div>
 </footer>
 <div id="pop" onclick="if(event.target===this)cmd('popup')">
   <div class="card" id="popCard">
-    <h2>진행 정보</h2>
+    <h2>탭 창</h2>
+    <div id="popTabs"></div>
+    <div id="popAsk">전체 측정 결과를 지울까요?  A = 지우기 · B = 취소</div>
     <div id="popRows"></div>
     <div id="popHint"></div>
     <div id="popProg"></div>
     <div id="popKeys"></div>
-    <div id="popBtns"><button id="bPrev" onclick="cmd('prev')">◀ 앞 단계</button><button id="bNext" onclick="cmd('next')">뒤 단계 ▶</button><button onclick="cmd('popup')">닫기</button></div>
+    <div id="popBtns"><button onclick="cmd('popup')">닫기</button></div>
   </div>
 </div>
 <script>
 const COLORS = ['#66B3FF', '#73E68C', '#FFD94D'];
 const DEMO = location.hash.startsWith('#demo');
 let demoTab = location.hash === '#demo-lat' ? 1 : location.hash === '#demo-rot' ? 2 : 0;
-let S = null, lastOk = 0, demoPopup = location.hash.endsWith('-popup');
+let S = null, lastOk = 0, demoPopup = location.hash.endsWith('-popup'), demoConfirm = location.hash.endsWith('-confirm');
 
 // 결과표 · 각도기(10-12) — 헤드셋 안의 판(RomLineView)과 같은 순서 · 같은 방향이다.
 //   굴곡 · 신전 = 옆에서 본 그림(오른쪽이 환자 앞) · 측굴 = 앞에서 본 그림(환자 오른쪽이 그림 왼쪽) · 회전 = 위에서 본 그림(아래가 환자 앞)
@@ -141,13 +155,14 @@ const GVIEW = ['옆에서 본 그림', '옆에서 본 그림', '앞에서 본 �
 const GZERO = [1, 1, 1, 1, -1, -1], GSIDE = [1, -1, -1, 1, -1, 1];   // 0° 선이 향하는 쪽(위 +1) · 제 방향으로 움직였을 때 기우는 쪽(오른쪽 +1)
 const GLEFT = ['뒤', '뒤', '우', '우', '우', '우'], GRIGHT = ['앞', '앞', '좌', '좌', '좌', '좌'];
 const GMAX = 100;   // 이보다 큰 각은 그림에서 여기까지만 그린다 — 숫자는 그대로 나온다
-const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 진행 정보 열기 · 닫기 · <b>B</b> 한 점 취소(길게 누르면 이 동작 다시) · <b>스틱 좌우</b> 진행 정보를 띄운 동안 앞 · 뒤 단계 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
-const KEYS_FREE = '<b>트리거</b> 점 찍기 · <b>A</b> 진행 정보 열기 · 닫기 · <b>B</b> 한 점 취소(길게 누르면 이 동작 지우기) · <b>스틱 좌우</b> 동작 바꾸기 · <b>스틱 클릭</b> 끝점 보정 · <b>스틱 위로 길게</b> 축 다시 잡기(컨트롤러로 환자 쪽을 겨누고)';
+const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기(세 직선을 다 찍은 뒤에는 확인) · <b>B</b> 직선 취소(길게 누르면 이 탭 지우기) · <b>스틱 좌우</b> 탭 창을 띄운 동안 탭 고르기 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
+const KEYS_FREE = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기 · <b>B</b> 직선 취소(길게 누르면 이 동작 지우기) · <b>스틱 좌우</b> 동작 바꾸기(탭 창을 띄운 동안에는 탭 고르기) · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
 
 function cmd(c) {
   if (!DEMO) { fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); return; }
-  if (/^top[0-3]$/.test(c)) { demoTab = [0, 0, 1, 2][+c[3]]; poll(); }   // 견본에서는 탭만 바뀐다(신전은 굴곡 견본을 같이 쓴다)
+  if (/^top[0-2]$/.test(c)) { demoTab = +c[3]; poll(); }   // 견본에서는 탭만 바뀐다
   if (c === 'popup') { demoPopup = !demoPopup; poll(); }
+  if (c === 'confirm') { demoConfirm = false; poll(); }
 }
 
 // 견본 값 — 좌표는 [환자 오른쪽, 위, 환자 앞](m). 선마다 a = 첫 점, b = 둘째 점.
@@ -173,9 +188,14 @@ function demoState() {
   // 결과표의 견본 — 손으로 적은 값이다(실측 아님). 지금 탭의 동작은 위 선들의 값과 맞춘다.
   const R = (a, p) => ({ a:{v:a, o:false}, p:{v:p, o:false} });
   const cur = [0, 3, 4][demoTab];
-  return { popup:demoPopup, cur:cur, phase:2, index:0, hint:'측정자가 같은 방향으로 조금 더 눌러 준 자세', steps:'111111111111111110',
-    results:[R(26.8, 39.3), R(41.5, 52.0), R(22.4, 30.1), R(20.0, 33.0), R(30.0, 55.0), {a:{v:48.2, o:false}, p:null}],
-    mode:'guided', top:[0, 2, 3][demoTab], topTabs:['굴곡','신전','측굴','회전','기타'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0], instruction:d.instruction, note:'환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
+  const conf = demoConfirm;
+  return { popup:demoPopup, cursor:demoTab, locked:conf, confirm:conf, resetAsk:false, confirmed:conf ? ['000000', '111000', '111100'][demoTab] : '111110',
+    cur:cur, phase:2, index:0, hint:'측정자가 같은 방향으로 조금 더 눌러 준 자세', steps:conf ? ['111000000000000000', '111111111111000000', '111111111111111000'][demoTab] : '111111111111111111',
+    results:conf ? [R(26.8, 39.3), demoTab > 0 ? R(41.5, 52.0) : {a:null, p:null}, demoTab > 0 ? R(22.4, 30.1) : {a:null, p:null}, demoTab > 0 ? R(20.0, 33.0) : {a:null, p:null}, demoTab > 1 ? R(30.0, 55.0) : {a:null, p:null}, {a:null, p:null}]
+                 : [R(26.8, 39.3), R(41.5, 52.0), R(22.4, 30.1), R(20.0, 33.0), R(30.0, 55.0), R(48.2, 61.7)],
+    mode:'guided', top:demoTab, topTabs:['굴곡 · 신전','측굴','회전','리셋','자유 측정'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0],
+    instruction:conf ? ['굴곡을 다 쟀습니다 — A = 확인 → 신전', '좌측굴을 다 쟀습니다 — A = 확인 → 회전', '우회전을 다 쟀습니다 — A = 확인 → 좌회전'][demoTab] : d.instruction,
+    note:conf ? '고치려면  B = 직선 취소 · B 길게 = 이 탭 지우기' : '환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
     axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
     tip:[d.tip[0] + w, d.tip[1], d.tip[2]], eye:[0, 1.0, 1.0], lines:d.lines, pending:null };
 }
@@ -214,6 +234,7 @@ function renderGuided(free) {
   if (!free) [...rows.children].forEach((r, m) => {
     const x = res[m] || {};
     r.className = m === S.cur ? 'now' : '';
+    r.children[0].innerHTML = `${MOTIONS[m]}${(S.confirmed || '')[m] === '1' ? '<em>확인</em>' : ''}<small>${GVIEW[m]}</small>`;
     [x.a, x.p].forEach((v, k) => {
       const td = r.children[1 + k];
       td.textContent = v ? v.v.toFixed(1) + '°' : '—';
@@ -228,15 +249,19 @@ function renderGuided(free) {
   const steps = S.steps || '';
   let done = 0;
   for (let i = 0; i < steps.length; i++) if (steps[i] === '1') done++;
+  const top = S.topTabs || [], curTab = free ? 4 : S.top;
+  el('popTabs').innerHTML = top.map((name, i) => `<div class="tab sub${i === curTab ? ' on' : ''}${i === S.cursor ? ' cursor' : ''}${i === 3 ? ' reset' : ''}${S.locked && i !== curTab ? ' locked' : ''}"${i === curTab ? ' style="background:#C9D3DE"' : ''}>${name}</div>`).join('');
+  el('popAsk').className = S.resetAsk ? 'on' : '';
+  const conf = S.confirmed || '';
   el('popRows').innerHTML = free
     ? S.tabs.map((name, i) => `<div class="prow${i === S.tab ? ' now' : ''}"><b class="name">${name}</b><span class="${i === S.tab ? 'cur' : 'todo'}">선 ${Math.floor((S.counts[i] || 0) / 2)}개</span></div>`).join('')
     : MOTIONS.map((name, m) => `<div class="prow${m === S.cur ? ' now' : ''}"><b class="name">${name}</b><div>` +
-        PHASES.map((ph, k) => `<span class="${m === S.cur && k === S.phase ? 'cur' : steps[m * 3 + k] === '1' ? 'done' : 'todo'}">${ph}</span>`).join('<i>→</i>') + '</div></div>').join('');
-  el('popHint').textContent = free ? '기타(자유 측정) — 처음 찍은 선이 기준선입니다' : (S.hint || '');
+        PHASES.map((ph, k) => `<span class="${m === S.cur && k === S.phase && !S.confirm ? 'cur' : steps[m * 3 + k] === '1' ? 'done' : 'todo'}">${ph}</span>`).join('<i>→</i>') +
+        (conf[m] === '1' ? '<i></i><span class="done">(확인)</span>' : m === S.cur && S.confirm ? '<i></i><span class="cur">(A = 확인)</span>' : '') + '</div></div>').join('');
+  el('popHint').textContent = S.locked ? '이 탭을 재는 중입니다 — 다 잰 뒤에 다른 탭으로 옮길 수 있습니다 (그만두려면 B 길게)' : free ? '자유 측정 — 처음 찍은 선이 기준선입니다' : (S.hint || '');
   el('popProg').textContent = free ? '지금  ' + S.tabs[S.tab]
-    : `찍은 직선 ${done} / 18 · ` + (S.cur < 0 ? '측정 끝' : `지금  ${MOTIONS[S.cur]} · ${PHASES[S.phase]}  ${(S.index || 0) + 1}번째 점`);
-  el('popKeys').innerHTML = free ? '<b>스틱 좌우</b> 동작 바꾸기 · <b>A</b> 닫기 · <b>B</b> 한 점 취소(길게: 이 동작 지우기)' : '<b>스틱 좌우</b> 앞 · 뒤 단계 · <b>A</b> 닫기 · <b>B</b> 한 점 취소(길게: 이 동작 다시)';
-  el('bPrev').style.display = el('bNext').style.display = free ? 'none' : '';
+    : `찍은 직선 ${done} / 18 · ` + (S.cur < 0 ? '측정 끝' : S.confirm ? `${MOTIONS[S.cur]} — 확인을 기다립니다` : `지금  ${MOTIONS[S.cur]} · ${PHASES[S.phase]}  ${(S.index || 0) + 1}번째 점`);
+  el('popKeys').innerHTML = '<b>스틱 좌우</b> 탭 고르기(옮기는 대로 바뀝니다 · «리셋»만 A로 고릅니다) · <b>A</b> 닫기 · <b>B</b> 직선 취소(길게: ' + (free ? '이 동작 지우기' : '이 탭 지우기') + ')';
 }
 
 async function poll() {
@@ -261,7 +286,7 @@ function render() {
   if (tabs.dataset.key !== key) {
     tabs.dataset.key = key;
     tabs.innerHTML = '';
-    top.forEach((name, i) => { const d = document.createElement('div'); d.dataset.top = i; d.onclick = () => cmd('top' + i); tabs.appendChild(d); });
+    top.forEach((name, i) => { const d = document.createElement('div'); d.dataset.top = i; d.onclick = () => { if (i !== 3) cmd('top' + i); else if (confirm('전체 측정 결과를 지울까요? (순서 측정과 자유 측정 전부)')) cmd('resetAll'); }; tabs.appendChild(d); });
     if (free) {
       const g = document.createElement('div'); g.className = 'gap'; tabs.appendChild(g);
       S.tabs.forEach((name, i) => { const d = document.createElement('div'); d.dataset.sub = i; d.onclick = () => cmd('tab' + i); tabs.appendChild(d); });
@@ -270,7 +295,7 @@ function render() {
   [...tabs.children].forEach(d => {
     if (d.dataset.top !== undefined) {
       const i = +d.dataset.top, on = i === S.top;
-      d.className = 'tab' + (on ? ' on' : '');
+      d.className = 'tab' + (on ? ' on' : '') + (i === 3 ? ' reset' : '') + (S.locked && !on ? ' locked' : '') + (S.popup && i === S.cursor ? ' cursor' : '');
       d.style.background = on ? (free ? '#C9D3DE' : COLORS[S.tab]) : '';
       d.textContent = top[i];
     } else if (d.dataset.sub !== undefined) {
@@ -284,7 +309,8 @@ function render() {
   el('keys').innerHTML = free ? KEYS_FREE : KEYS_GUIDED;
   document.body.className = free ? '' : 'guided';
   el('bRebase').style.display = free ? '' : 'none';   // 기준선 바꾸기는 «기타»에만 있다
-  el('bClear').textContent = free ? '이 동작 지우기' : '이 동작 다시';
+  el('bClear').textContent = free ? '이 동작 지우기' : '이 탭 지우기';
+  el('bConfirm').className = S.confirm ? 'on' : '';
   renderGuided(free);
   el('note').textContent = S.calib ? '끝점 보정 중 — 끝을 한 점에 대고 여러 방향으로 돌리세요' : (S.note || '');
 

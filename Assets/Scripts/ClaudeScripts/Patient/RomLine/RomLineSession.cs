@@ -27,10 +27,7 @@ public enum RomLinePoint
 ///     «기준은 양쪽 Tr만 · 중립선은 동작마다 찍는다(18직선)»로 바꿨다(38점, 기준을 건너뛰면 36점).
 ///
 /// 조작은 <b>컨트롤러 하나</b>다(주로 오른손, 바꿔 쥐면 그쪽이 그대로 동작). 반대 손은 환자를 잡는 데 쓴다.
-///   트리거 = 점 찍기 · 아래 버튼(A/X) = 진행 정보 여닫기 · 위 버튼(B/Y) = 한 점 취소(1초 길게 = 이 동작 다시) · 그립 = 판 옮기기
-///   · 스틱 좌우 = 진행 정보를 띄운 동안 앞뒤 단계(★10-12에 바뀜 — 아래 «10-12» 문단. 그 앞 문단들의 버튼 설명은 그때의 것이다)
-///   판의 버튼은 컨트롤러 끝을 버튼에 대고 트리거를 당긴다(«전부 다시»·«나가기»는 1초 길게).
-///   ★레이로 멀리서 누르게 하지 않았다 — 환자 머리에 점을 찍는 순간 뒤에 있는 판이 눌리는 일을 막으려고.
+///   ★지금의 버튼은 아래 «10-12 저녁» 문단이 정본이다. 그 앞 문단들의 버튼 · 판 설명은 그때의 것이다.
 ///
 /// ★임시로 정해 둔 것(사용자 답 대기, 10-01): 각이 작아 교점이 멀면 각도기를 중립선 첫 점에 세운다 ·
 ///   압박은 값만 더하고 각도기는 능동 때 자리에 둔다 · 면 밖으로 벗어난 양은 로그에만 남긴다.
@@ -51,6 +48,17 @@ public enum RomLinePoint
 ///   A/X = 진행 정보 여닫기(여섯 동작 × 중립 · 능동 · 압박의 진행). 띄운 동안에만 스틱 좌우로 단계를 옮긴다. 점을 찍으면 저절로 닫힌다.
 ///   B/Y = 한 점 취소(뗄 때 듣는다) · 1초 길게 = 이 동작 다시(«기타»에서는 이 동작 지우기). <b>건너뛰기는 없앴다</b>.
 ///   «기타»의 «기준선 바꾸기»는 판 · 모니터의 버튼으로만 한다(종전 B/Y).
+///
+/// ★★10-12 저녁 사용자 지시 — 화면과 조작을 다시 짰다(위 «10-12» 문단의 «진행 정보 · 스틱으로 단계 옮기기 · 이 동작 다시»를 대신한다):
+///   <b>메인 화면</b>은 크고 넓게, 뒤쪽 멀리 세운다(결과표 — 굴곡 | 신전 / 우측굴 | 좌측굴 / 우회전 | 좌회전). 누르는 버튼은 화면에 없다.
+///   <b>탭 창</b>은 메인 화면 아래에 따로 뜬다 — 탭 다섯: 굴곡 · 신전 / 측굴 / 회전 / 리셋 / 자유 측정.
+///   A/X = 탭 창 여닫기. 띄운 채 스틱 좌우로 탭을 옮기면 <b>옮기는 대로</b> 그 탭이 된다. «리셋»만 A로 골라야 하고 확인 창이 한 번 더 뜬다(A = 지우기 · B = 취소).
+///   ★탭을 <b>재는 중</b>(점이 하나라도 찍혔고 아직 다 재지 않았다)이면 스틱을 밀어도 탭이 바뀌지 않는다. 그만두려면 B/Y 길게로 그 탭을 지운다.
+///   ★동작 하나(중립 · 능동 · 압박 세 직선)를 다 찍으면 <b>멈춘다</b>. A/X(확인)를 눌러야 다음 동작으로 넘어간다 — 신전을 확인하면 측굴이 저절로 시작된다.
+///   지우기 셋: B/Y 짧게 = <b>직선 하나</b>(찍다 만 점이 있으면 그 점) · B/Y 1초 길게 = <b>지금 탭 전체</b> · 탭 창의 «리셋» = <b>전체 측정 결과</b>.
+///   축 다시 잡기 = 스틱을 <b>눌러</b> 부르고, 스틱을 <b>밀어</b> 잡는다(두 단계 — 실수로 잡히지 않게). 방향은 <b>헤드셋이 보는 방향</b>이다
+///     (10-08의 «컨트롤러가 가리키는 방향»을 되돌렸다 — 그때는 판의 버튼을 누르느라 헤드셋이 판을 봤다. 이제 판 버튼이 없다). 메인 화면도 그쪽에 다시 선다.
+///   컨트롤러에 없는 일(끝점 보정 · 기준선 바꾸기 · 나가기)은 모니터(브라우저)의 버튼으로만 한다. 자유 측정의 동작 갈래는 탭 창을 닫은 채 스틱 좌우다.
 ///
 /// ★자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
@@ -83,7 +91,7 @@ public class RomLineSession : MonoBehaviour
     // ★10-12 사용자 지시: 영어 약어(Tr · Gl · Gn)를 화면 · 음성 · 문서에 쓰지 않는다 — 받은 한글 명칭 그대로(미주점 · 미간점 · 턱끝점).
     //   판의 안내 글자 · 공간의 이름표 · 로그 · 안내 음성(romline_narration.py)이 전부 이 이름이다.
     public static readonly string[] PointName = { "오른쪽 미주점", "왼쪽 미주점", "미간점", "턱끝점" };
-    private static readonly string[] TopTabName = { "굴곡", "신전", "측굴", "회전", "기타" };
+    private static readonly string[] TopTabName = { "굴곡 · 신전", "측굴", "회전", "리셋", "자유 측정" };   // 탭 창의 다섯(10-12 저녁). 3 = 리셋은 탭이 아니라 명령이다
     private static readonly string[] PhaseHint = { "환자 정면을 바닥 화살표에 맞추세요 · 정면을 본 편안한 자세", "환자가 스스로 끝까지 움직인 자세", "측정자가 같은 방향으로 조금 더 눌러 준 자세" };
     private static readonly string[] PhaseName = { "중립", "능동", "압박" };
 
@@ -99,13 +107,22 @@ public class RomLineSession : MonoBehaviour
 
     [Header("=== 손 ===")]
     [Tooltip("켜면 판의 버튼을 맨손 검지로도 누르고(닿고 머물기) 핀치로 판을 옮긴다. 컨트롤러 + 맨손 동시 추적을 요청한다.\n" +
-             "끄면 컨트롤러만 쓴다(10-07 사용자 지시로 기본 끔). 점은 어느 쪽이든 컨트롤러로만 찍는다.")]
+             "끄면 컨트롤러만 쓴다(10-07 사용자 지시로 기본 끔). 점은 어느 쪽이든 컨트롤러로만 찍는다.\n" +
+             "★10-12 저녁: 화면에서 누르는 버튼을 없애, 지금은 켜도 손으로 하는 일이 없다(추적 로그만 남는다).")]
     [SerializeField] private bool handInput = false;
 
     [Header("=== 모니터 ===")]
     [Tooltip("모니터 화면을 내보내는 포트. 같은 Wi-Fi의 브라우저에서 http://(헤드셋 IP):포트 로 연다 — 주소는 판 맨 아래와 로그에 나온다.\n" +
              "0이면 열지 않는다. ★인증이 없다(같은 망의 누구나 볼 수 있고 버튼도 누를 수 있다) — 시험용이다.")]
     [SerializeField] private int monitorPort = 8090;
+
+    [Header("=== 메인 화면(10-12) ===")]
+    [Tooltip("헤드셋에서 메인 화면까지의 거리(m). 화면은 헤드셋이 보는 쪽에 선다 — 처음 한 번, 그리고 «축 다시 잡기»(스틱 누르고 밀기) 때마다 다시 선다.")]
+    [SerializeField] private float screenDistance = 2.5f;
+    [Tooltip("메인 화면의 폭(m). 높이는 폭의 0.475배다. 탭 창은 같은 폭으로 그 아래에 붙는다.")]
+    [SerializeField] private float screenWidth = 2.0f;
+    [Tooltip("메인 화면의 아랫변이 헤드셋 눈높이보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
+    [SerializeField] private float screenRise = 0.30f;
 
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
@@ -160,21 +177,19 @@ public class RomLineSession : MonoBehaviour
     private readonly List<string> csvRows = new List<string>(128);
     private string csvPath;
 
-    // 컨트롤러만으로 하는 조작(10-07) — 길게 누르기
-    private float gripHoldStart = -1f, stickHoldStart = -1f;
-    private int stickHoldDir;             // +1 위 · −1 아래 · 0 없음
-    private bool gripHoldFired, stickHoldFired;
-    private const float GripClearSeconds = 1.5f, StickHoldSeconds = 1.0f;
-
-    // 진행 정보(10-12) — A/X로 여닫는다. B/Y는 짧게 = 한 점 취소(뗄 때), 길게 = 이 동작 다시
+    // 탭 창 · 단계 멈춤(10-12 저녁)
     private bool popupOn;
-    private float undoHoldStart = -1f;
+    private int popupCursor;              // 탭 창에서 스틱이 올라가 있는 탭(0 굴곡·신전 · 1 측굴 · 2 회전 · 3 리셋 · 4 자유 측정)
+    private bool resetAsk;                // «전체 측정 결과를 지울까요?» 확인 창
+    private bool confirmWait;             // 동작 하나(세 직선)를 다 찍었다 — A/X(확인)를 기다린다
+    private readonly bool[] confirmed = new bool[6];   // 동작마다 확인까지 마쳤는가
+    private bool axesAsk;                 // «축 다시 잡기»를 불렀다(스틱 누름) — 스틱을 밀면 잡는다
+    private float axesAskStart;
+    private const float AxesAskSeconds = 8f;
+    private float undoHoldStart = -1f;    // B/Y — 짧게 = 직선 취소(뗄 때), 길게 = 이 탭 지우기
     private bool undoHoldFired;
     private const float ResetHoldSeconds = 1.0f;
-    private const string PopupKeysGuided1 = "스틱 좌우 = 앞 · 뒤 단계      A = 닫기";
-    private const string PopupKeysFree1 = "스틱 좌우 = 동작 바꾸기      A = 닫기";
-    private const string PopupKeysGuided2 = "B = 한 점 취소 · B 길게 = 이 동작 다시 · 스틱 위로 길게 = 축 다시 잡기";
-    private const string PopupKeysFree2 = "B = 한 점 취소 · B 길게 = 이 동작 지우기 · 스틱 위로 길게 = 축 다시 잡기";
+    private const string PopupKeys = "스틱 좌우 = 탭 고르기 · A = 닫기 · B = 직선 취소 · B 길게 = 이 탭 지우기 · 스틱 누르고 밀기 = 축 다시 잡기";
 
     // 끝점 보정(10-07) — 끝을 한 점에 대고 돌린 자세들
     private bool calibrating;
@@ -186,8 +201,6 @@ public class RomLineSession : MonoBehaviour
     private const float CalibMaxRms = 0.003f;      // 맞춘 뒤 남은 흔들림이 이보다 크면(m) 적용하지 않는다
     private const float CalibTimeout = 40f;
     private bool stickReady = true;
-    private bool grabbing;
-    private Vector3 grabOffset;
     private int switchedFrame = -1;
     private Vector3 ctrlPos;
     private Quaternion ctrlRot = Quaternion.identity;
@@ -199,15 +212,9 @@ public class RomLineSession : MonoBehaviour
     private readonly Vector3[] fingerPos = new Vector3[2];
     private readonly bool[] pinching = new bool[2];
     private readonly bool[] pinchDown = new bool[2];
-    private int grabHand = -1;           // 판을 잡은 손(0 · 1). 컨트롤러로 잡았으면 -1
     private bool simultaneousOn;         // 우리가 켠 «컨트롤러 + 맨손 동시 추적» — 켠 것만 끈다
     private int trackMask = -1;
     private float nextTrackLog;
-
-    // 판 버튼 — 닿고 머물면 눌린다(컨트롤러·손 공통). source: 0 왼손 · 1 오른손 · 2 컨트롤러
-    private int dwellButton = -1, dwellSource = -1;
-    private float dwellStart;
-    private bool dwellFired;
 
     // 표시
     private readonly RomLineView view = new RomLineView();
@@ -220,15 +227,29 @@ public class RomLineSession : MonoBehaviour
     private AudioSource audioSrc;
     private AudioClip sndMark, sndUndo, sndDeny, sndPress, sndDone;
 
-    private const float DwellSeconds = 0.45f;      // 닿고 이만큼 머물면 눌린다
-    private const float DangerDwellSeconds = 1.5f; // «전부 다시» · «나가기»는 길게
     private const float PinchClose = 0.02f, PinchOpen = 0.04f;   // 엄지–검지 끝 거리(m). 사이는 그대로 — 떨림으로 깜박이지 않게
-    private static readonly string[] SourceName = { "왼손", "오른손", "컨트롤러" };
     private const float ArmThreshold = 0.15f;      // 트리거를 이만큼 당기기 시작한 순간의 자리를 찍는 자리로 쓴다
     private const float TrackingWaitSeconds = 8f;
 
     private bool EyeReady => eye != null && eye.position.y > 0.3f;
-    private bool Done => group >= GroupCount;
+    /// <summary>여섯 동작을 모두 확인까지 마쳤다. ★group은 이제 19(끝)로 가지 않는다 — 마지막에 확인한 동작의 압박에 머문다(10-12 저녁).</summary>
+    private bool Done => confirmed[0] && confirmed[1] && confirmed[2] && confirmed[3] && confirmed[4] && confirmed[5];
+    private int CurTab => MotionOf(Mathf.Clamp(group, 1, GroupCount - 1)) / 2;   // 0 굴곡·신전 · 1 측굴 · 2 회전
+    private bool HasLine(int g) => has[GroupStart(g)] && has[GroupStart(g) + 1];
+    private bool TabComplete(int tab) => confirmed[tab * 2] && confirmed[tab * 2 + 1];
+    /// <summary>그 탭을 재는 중이다 — 점이 하나라도 찍혔고 아직 다 재지 않았다. 이 동안에는 다른 탭으로 못 간다.</summary>
+    private bool TabLocked
+    {
+        get
+        {
+            if (freeMode) return false;
+            int tab = CurTab;
+            if (TabComplete(tab)) return false;
+            for (int i = GroupStart(GroupOf(tab * 2, 0)), end = GroupStart(GroupOf(tab * 2 + 1, 2)) + 2; i < end; i++)
+                if (has[i]) return true;
+            return false;
+        }
+    }
 
     // ── 단계 ↔ 점 ───────────────────────────────────────────────────
     /// <summary>그 묶음에서 찍는 점 수. 비교 시험이 켜져 있으면 굴곡·신전(묶음 1~6)만 Gn을 더해 셋이다.</summary>
@@ -336,9 +357,9 @@ public class RomLineSession : MonoBehaviour
                 if (trackingWaitStart < 0f) trackingWaitStart = Time.unscaledTime;
                 if (Time.unscaledTime - trackingWaitStart < TrackingWaitSeconds) { Silent("헤드셋 추적을 기다린다"); return; }
             }
-            view.PlacePanel(eye);
-            Debug.Log($"[선실측] 판을 세웠다 — 눈 {eye.position:F2} · 판 {view.Panel.position:F2}");
-            CaptureAxes("처음");
+            view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+            Debug.Log($"[선실측] 메인 화면을 세웠다 — 눈 {eye.position:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 눈높이 위 {screenRise:F2}m");
+            CaptureAxes("처음", false);
         }
 
         ReadController();
@@ -347,7 +368,7 @@ public class RomLineSession : MonoBehaviour
 
         if (dirty) Refresh();
         PumpMonitor();
-        view.Tick(eye, tipShown, tipValid, tipPos, freeMode || !Done, fingerValid, fingerPos);
+        view.Tick(eye, tipShown, tipValid, tipPos, freeMode || (!confirmWait && !TabComplete(CurTab)));
         freeView.Tick(eye);
     }
 
@@ -385,37 +406,6 @@ public class RomLineSession : MonoBehaviour
         }
     }
 
-    /// <summary>판 옮기기 — 컨트롤러는 그립, 손은 판 가까이에서 엄지·검지를 오므린다. 옮기는 중이면 true.</summary>
-    private bool UpdateGrab()
-    {
-        if (grabbing)
-        {
-            bool held = grabHand < 0 ? tipValid && OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, active)
-                                     : fingerValid[grabHand] && pinching[grabHand];
-            if (held) view.MovePanel((grabHand < 0 ? tipPos : fingerPos[grabHand]) + grabOffset, eye);
-            else
-            {
-                grabbing = false;
-                Debug.Log($"[선실측] 판을 옮겼다({(grabHand < 0 ? "컨트롤러" : SourceName[grabHand])}) — {view.Panel.position:F2} (눈에서 {Vector3.Distance(view.Panel.position, eye.position) * 100f:F0}cm)");
-            }
-            return true;
-        }
-        if (tipValid && OVRInput.GetDown(OVRInput.Button.PrimaryHandTrigger, active) && view.NearPanel(tipPos, 0.12f))
-        {
-            grabbing = true; grabHand = -1;
-            grabOffset = view.Panel.position - tipPos;
-            return true;
-        }
-        for (int h = 0; h < 2; h++)
-            if (pinchDown[h] && view.NearPanel(fingerPos[h], 0.06f))
-            {
-                grabbing = true; grabHand = h;
-                grabOffset = view.Panel.position - fingerPos[h];
-                return true;
-            }
-        return false;
-    }
-
     private void Buzz(float seconds, float amplitude)
     {
         if (!tipValid) return;
@@ -437,7 +427,6 @@ public class RomLineSession : MonoBehaviour
             active = other;
             prevTrigger = 1f;       // 이번 당김은 끝날 때까지 무시
             armedTime = -10f;
-            grabbing = false;
             switchedFrame = Time.frameCount;
             Debug.Log($"[선실측] 쓰는 컨트롤러 → {(active == OVRInput.Controller.RTouch ? "오른쪽" : "왼쪽")}");
             Play(sndPress);
@@ -541,8 +530,8 @@ public class RomLineSession : MonoBehaviour
         bool triggerDown = tipValid && prevTrigger < 0.55f && trigger >= 0.55f;
         prevTrigger = trigger;
 
-        // B/Y — 짧게 눌렀다 떼면 «한 점 취소», 1초 누르고 있으면 «이 동작 다시». 길게 누르기와 겹치므로 취소는 뗄 때 듣는다.
-        //   ★버튼 상태는 여기서 매 프레임 본다(아래의 판 · 추적 조건으로 일찍 돌아가도 누름이 다음으로 밀려 엉뚱한 때 듣지 않게).
+        // B/Y — 짧게 눌렀다 떼면 «직선 취소», 1초 누르고 있으면 «이 탭 지우기». 길게 누르기와 겹치므로 취소는 뗄 때 듣는다.
+        //   ★버튼 상태는 여기서 매 프레임 본다(아래의 추적 조건으로 일찍 돌아가도 누름이 다음으로 밀려 엉뚱한 때 듣지 않게).
         //     그 프레임에 아래까지 못 가면 그 누름은 버린다.
         bool undoTap = false, undoLong = false;
         if (OVRInput.GetDown(OVRInput.Button.Two, active)) { undoHoldStart = Time.unscaledTime; undoHoldFired = false; }
@@ -556,118 +545,90 @@ public class RomLineSession : MonoBehaviour
             else if (!undoHoldFired && Time.unscaledTime - undoHoldStart >= ResetHoldSeconds) undoHoldFired = undoLong = true;
         }
 
-        // ── 판 옮기기(컨트롤러 그립 · 손 핀치) ──
-        if (UpdateGrab())
-        {
-            dwellButton = -1;
-            view.SetHot(-1, 0f);
-            return;
-        }
+        if (!tipValid) return;           // 아래는 컨트롤러가 추적될 때만 듣는다
 
-        // ── 판 버튼 — 컨트롤러 끝이 먼저, 없으면 손끝. 닿고 머물면 눌린다(컨트롤러는 트리거로 바로 눌러도 된다) ──
-        int button = -1, source = -1;
-        bool controllerOnPanel = false;
-        if (tipValid)
-        {
-            int b = view.Touch(tipPos, RomLineView.TouchDepth, out controllerOnPanel);
-            if (b >= 0) { button = b; source = 2; }
-        }
-        for (int h = 0; h < 2 && button < 0; h++)
-        {
-            if (!fingerValid[h] || pinching[h]) continue;
-            int b = view.Touch(fingerPos[h], RomLineView.FingerDepth, out _);
-            if (b >= 0) { button = b; source = h; }
-        }
+        Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, active);
+        if (stick.magnitude < 0.3f) stickReady = true;
+        bool stickPush = stickReady && stick.magnitude > 0.7f;
+        bool aDown = OVRInput.GetDown(OVRInput.Button.One, active);
 
-        float progress = 0f;
-        if (button < 0) dwellButton = -1;
-        else
-        {
-            if (button != dwellButton || source != dwellSource)
-            {
-                dwellButton = button; dwellSource = source;
-                dwellStart = Time.unscaledTime;
-                dwellFired = false;
-            }
-            bool danger = button == 5 || button == 6 || button == 12;   // «전부 다시» · «나가기» · «전부 지우기»
-            if (!dwellFired)
-            {
-                progress = (Time.unscaledTime - dwellStart) / (danger ? DangerDwellSeconds : DwellSeconds);
-                if (progress >= 1f || (source == 2 && triggerDown && !danger))
-                {
-                    dwellFired = true;   // 한 번 닿아 한 번만 — 떼었다 다시 대야 또 눌린다
-                    progress = 0f;
-                    Debug.Log($"[선실측] 버튼 — «{RomLineView.ButtonLabel[button]}» ({SourceName[source]})");
-                    if (source == 2) Buzz(0.04f, 0.4f);
-                    Press(button);
-                }
-            }
-        }
-        view.SetHot(button, progress);
-        if (controllerOnPanel) return;   // ★판 위에서는 점을 찍지 않는다
-        if (!tipValid) return;           // 아래는 컨트롤러로만 한다
-
-        // ── 끝점 보정 — 스틱을 눌러 시작, 다시 눌러 끝. 하는 동안에는 점을 찍지 않는다 ──
+        // ── 스틱 누르기 — 끝점 보정 중이면 끝내기, 아니면 «축 다시 잡기»를 부른다(부른 뒤 스틱을 밀어야 잡힌다) ──
         if (OVRInput.GetDown(OVRInput.Button.PrimaryThumbstick, active))
         {
             if (calibrating) EndCalibration("스틱");
-            else BeginCalibration();
+            else SetAxesAsk(!axesAsk, "스틱 누름");
+            stickReady = false;          // 누르면서 밀린 스틱이 그대로 «밀기»로 읽히지 않게 — 가운데로 돌아온 뒤에 듣는다
             return;
         }
         if (calibrating) { SampleCalibration(); return; }
 
-        // ── 버튼·스틱 ──
-        if (OVRInput.GetDown(OVRInput.Button.One, active)) { SetPopup(!popupOn, "A/X 버튼"); return; }
-        if (undoLong)
+        // ── 축 다시 잡기를 불러 둔 동안 — 스틱을 밀면(어느 쪽이든) 잡는다. 다른 버튼 · 트리거는 그만두기(점은 찍지 않는다) ──
+        if (axesAsk)
         {
-            Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 동작 지우기" : "이 동작 다시")}");
-            Buzz(0.12f, 0.8f);
-            if (freeMode) FreeClear(); else RedoMotion();
+            if (stickPush)
+            {
+                stickReady = false;
+                axesAsk = false;
+                Buzz(0.08f, 0.6f);
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+                CaptureAxes("스틱", true);
+            }
+            else if (aDown || undoTap || undoLong || triggerDown) SetAxesAsk(false, "다른 버튼");
+            else if (Time.unscaledTime - axesAskStart > AxesAskSeconds) SetAxesAsk(false, "시간이 다 됐다");
             return;
         }
-        if (undoTap) { Undo(); return; }
 
-        Vector2 stick = OVRInput.Get(OVRInput.Axis2D.PrimaryThumbstick, active);
-        float sx = stick.x;
-        if (Mathf.Abs(sx) < 0.3f) stickReady = true;
-        else if (stickReady && Mathf.Abs(sx) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
+        // ── A/X — 리셋 확인 > 탭 창 닫기(«리셋» 위에서는 확인 창 띄우기) > 동작 확인 > 탭 창 열기 ──
+        if (aDown)
+        {
+            if (resetAsk)
+            {
+                Buzz(0.12f, 0.8f);
+                ResetAll("탭 창의 리셋");
+                SetPopup(false, "리셋", true);
+            }
+            else if (popupOn && popupCursor == 3)
+            {
+                resetAsk = true;
+                Debug.Log("[선실측] 리셋 확인 창 — A = 지우기 · B = 취소");
+                Play(sndPress);
+                dirty = true;
+            }
+            else if (popupOn) SetPopup(false, "A/X 버튼");
+            else if (!freeMode && confirmWait) Confirm("A/X 버튼");
+            else SetPopup(true, "A/X 버튼");
+            return;
+        }
+
+        // ── B/Y ──
+        if (undoTap || undoLong)
+        {
+            if (resetAsk)
+            {
+                resetAsk = false;
+                Debug.Log("[선실측] 리셋 확인 — 취소(B/Y)");
+                Play(sndUndo);
+                dirty = true;
+            }
+            else if (undoLong)
+            {
+                Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 동작 지우기(자유 측정)" : "이 탭 지우기")}");
+                Buzz(0.12f, 0.8f);
+                if (freeMode) FreeClear(); else ResetTab(CurTab, "B/Y 길게");
+            }
+            else Undo();
+            return;
+        }
+
+        // ── 스틱 좌우 — 탭 창을 띄운 동안에는 탭 고르기, 닫은 채로는 자유 측정의 동작 갈래만 ──
+        if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            if (freeMode) SetFreeTab(Mathf.Clamp(freeTab + (sx > 0f ? 1 : -1), 0, 2));   // 동작(갈래) 바꾸기
-            else if (popupOn) Go(group + (sx > 0f ? 1 : -1), "스틱");
-            else Deny("단계는 진행 정보를 띄운 뒤 옮긴다 — A 버튼, 그다음 스틱 좌우");   // 10-12: 재는 중에 스틱이 밀려 단계가 넘어가지 않게
+            int d = stick.x > 0f ? 1 : -1;
+            if (popupOn) MoveCursor(d);
+            else if (freeMode) SetFreeTab(Mathf.Clamp(freeTab + d, 0, 2));
             return;
         }
-
-        // 스틱을 위·아래로 1초 — 위: 축 다시 잡기 / 아래: 6동작 ↔ 자유 측정. 판을 못 볼 때(헤드셋을 내려놓고 잴 때) 쓴다.
-        int dir = Mathf.Abs(stick.y) > 0.8f && Mathf.Abs(sx) < 0.4f ? (stick.y > 0f ? 1 : -1) : 0;
-        if (dir != stickHoldDir)
-        {
-            stickHoldDir = dir;
-            stickHoldStart = Time.unscaledTime;
-            stickHoldFired = false;
-        }
-        else if (dir > 0 && !stickHoldFired && Time.unscaledTime - stickHoldStart >= StickHoldSeconds)   // 아래로 길게(모드 바꾸기)는 뺐다(10-08)
-        {
-            stickHoldFired = true;
-            Buzz(0.08f, 0.6f);
-            CaptureAxesFromController("스틱");
-            return;
-        }
-
-        // 그립을 1.5초 — 이 동작 지우기(자유 측정). 판 가까이에서 쥔 그립은 «판 옮기기»라 여기까지 오지 않는다.
-        if (freeMode && OVRInput.Get(OVRInput.Button.PrimaryHandTrigger, active))
-        {
-            if (gripHoldStart < 0f) { gripHoldStart = Time.unscaledTime; gripHoldFired = false; }
-            else if (!gripHoldFired && Time.unscaledTime - gripHoldStart >= GripClearSeconds)
-            {
-                gripHoldFired = true;
-                Buzz(0.12f, 0.8f);
-                FreeClear();
-                return;
-            }
-        }
-        else gripHoldStart = -1f;
 
         // ── 점 찍기 ──
         if (triggerDown)
@@ -765,7 +726,13 @@ public class RomLineSession : MonoBehaviour
     {
         SetPopup(false, "점 찍기", true);   // 재기 시작하면 결과표로 돌아간다
         if (freeMode) { FreeMark(pos, shake); return; }
-        if (Done) { Deny("측정이 끝났다 — 다시 재려면 탭이나 스틱으로 그 단계로 간다"); return; }
+        if (confirmWait) { Deny($"{MotionName[MotionOf(group)]}을 다 쟀다 — A 버튼으로 확인한다(고치려면 B = 직선 취소)"); return; }
+        if (TabComplete(CurTab))
+        {
+            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 탭 창의 리셋"
+                      : $"{TopTabName[CurTab]} 탭은 다 쟀다 — A로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
+            return;
+        }
 
         int start = GroupStart(group);
         if (index == 0)
@@ -835,13 +802,15 @@ public class RomLineSession : MonoBehaviour
             CsvGuided(m, ph);
         }
 
-        group++;
         index = 0;
-        if (Done)
+        if (group > 0 && PhaseOf(group) == 2)
         {
+            // ★10-12 저녁: 동작 하나(세 직선)를 다 찍으면 멈춘다 — A/X(확인)를 눌러야 다음 동작으로 넘어간다. group은 압박에 머문다.
+            confirmWait = true;
             Play(sndDone);
-            LogSummary("끝");
+            Debug.Log($"[선실측] 확인 대기 — {MotionName[MotionOf(group)]}의 세 직선을 다 찍었다 · A/X = 확인 → {NextName(MotionOf(group))}");
         }
+        else group++;
     }
 
     /// <summary>
@@ -983,84 +952,158 @@ public class RomLineSession : MonoBehaviour
         else ClearResult(m * 2 + ph - 1);
     }
 
+    /// <summary>
+    /// 직선 단위 취소(10-12 저녁). 찍다 만 직선이 있으면 그 첫 점만, 없으면 마지막 직선(두 점)을 통째로 지운다.
+    /// 지금 탭 안에서만 거슬러 올라간다 — 앞 탭의 직선은 건드리지 않는다. 확인을 마친 동작의 직선을 지우면 그 확인도 풀린다.
+    /// </summary>
     private void Undo()
     {
         if (freeMode) { FreeUndo(); return; }
         if (index > 0)
         {
-            index--;
-            if (index >= 2) hasExtra[group] = false;
-            else has[GroupStart(group) + index] = false;
+            has[GroupStart(group)] = false;
+            index = 0;
+            Debug.Log($"[선실측] 취소 — {GroupTitle(group)}의 찍던 점");
         }
-        else if (group > 1)   // 묶음 0(기준)은 쓰지 않는다
+        else
         {
-            group = Mathf.Min(group, GroupCount) - 1;
-            int start = GroupStart(group);
-            Invalidate(group);
-            if (hasExtra[group])
-            {
-                hasExtra[group] = false;      // 세 점 묶음 — 마지막(Gn)만 지운다
-                index = 2;
-            }
-            else
-            {
-                has[start + 1] = false;
-                index = has[start] ? 1 : 0;   // 건너뛴 묶음이면 첫 점부터 찍게 한다
-            }
+            int tab = CurTab;
+            int g = confirmWait || TabComplete(tab) ? group : group - 1;   // 마지막으로 다 찍은 직선
+            if (g < GroupOf(tab * 2, 0) || !HasLine(g)) { Deny("지울 직선이 없다"); return; }
+            int st = GroupStart(g);
+            has[st] = has[st + 1] = false;
+            hasExtra[g] = false;
+            Invalidate(g);
+            confirmed[MotionOf(g)] = false;
+            confirmWait = false;
+            group = g;
+            Debug.Log($"[선실측] 취소 — 직선 {GroupTitle(g)} → 그 직선부터 다시 찍는다");
         }
-        else { Deny("지울 점이 없다"); return; }
-
         noteText = "";
-        Debug.Log($"[선실측] 취소 → {GroupTitle(group)} {index + 1}번째 점부터");
         Play(sndUndo);
         dirty = true;
     }
 
-    /// <summary>진행 정보(팝업)를 여닫는다. quiet = 소리 없이(점을 찍어 닫힐 때 — 찍는 소리와 겹친다).</summary>
+    /// <summary>탭 창을 여닫는다. 열 때 스틱 자리는 지금 탭이다. quiet = 소리 없이(점을 찍어 닫힐 때 — 찍는 소리와 겹친다).</summary>
     private void SetPopup(bool on, string why, bool quiet = false)
     {
+        if (resetAsk) { resetAsk = false; dirty = true; }   // 탭 창이 여닫히면 리셋 확인도 접는다
         if (popupOn == on) return;
         popupOn = on;
-        Debug.Log($"[선실측] 진행 정보 {(on ? "열림" : "닫힘")} ({why}) — {(freeMode ? "기타 · " + FreeTabName[freeTab] : GroupTitle(group))}");
+        if (on) popupCursor = freeMode ? 4 : CurTab;
+        Debug.Log($"[선실측] 탭 창 {(on ? "열림" : "닫힘")} ({why}) — {(freeMode ? "자유 측정 · " + FreeTabName[freeTab] : GroupTitle(group))}{(on && TabLocked ? " · 재는 중이라 탭을 옮길 수 없다" : "")}");
         if (!quiet) Play(sndPress);
         dirty = true;
     }
 
-    /// <summary>단계를 옮긴다(찍어 둔 점은 그대로 둔다 — 그 단계에서 첫 점을 찍는 순간 새로 잰다).</summary>
-    private void Go(int target, string why)
+    /// <summary>탭 창에서 스틱을 민다. «리셋»(3) 위에서는 멈춰 있기만 한다 — A를 눌러야 확인 창이 뜬다. 나머지는 옮기는 대로 그 탭이 된다.</summary>
+    private void MoveCursor(int d)
     {
-        target = Mathf.Clamp(target, 1, GroupCount);   // 묶음 0(기준)은 쓰지 않는다
-        if (target == group && index == 0) return;
-        if (index > 0)   // 찍다 만 묶음은 비운다
+        if (resetAsk) return;   // 확인 창이 떠 있는 동안은 A · B만 듣는다
+        int next = Mathf.Clamp(popupCursor + d, 0, 4);
+        if (next == popupCursor) return;
+        if (TabLocked) { Deny(LockText()); return; }
+        popupCursor = next;
+        if (next == 3)
         {
-            has[GroupStart(group)] = has[GroupStart(group) + 1] = false;
-            hasExtra[group] = false;
+            Debug.Log("[선실측] 탭 창 — 스틱이 «리셋» 위에 있다(A를 눌러야 묻는다)");
+            Play(sndPress);
         }
-        group = target;
+        else GoTab(next, "스틱");
+        dirty = true;
+    }
+
+    private string LockText() => $"{TopTabName[CurTab]} 탭을 재는 중이다 — 다 잰 뒤에 옮긴다(그만두려면 B 길게 = 이 탭 지우기)";
+
+    /// <summary>탭을 옮긴다 — 0 굴곡·신전 · 1 측굴 · 2 회전 · 4 자유 측정. 재는 중인 탭이 있으면 받지 않는다(false).</summary>
+    private bool GoTab(int tab, string why)
+    {
+        int cur = freeMode ? 4 : CurTab;
+        if (tab == cur) return true;
+        if (tab == 3 || tab < 0 || tab > 4) return false;
+        if (TabLocked) { Deny(LockText()); return false; }
+        if (tab == 4) { SetFreeMode(true); return true; }
+        SetFreeMode(false);
+        Resume(tab, why);
+        return true;
+    }
+
+    /// <summary>그 탭에서 이어서 잴 자리로 간다 — 아직 확인하지 않은 첫 동작의, 아직 없는 첫 직선. 세 직선이 다 있으면 확인을 기다린다.</summary>
+    private void Resume(int tab, string why)
+    {
+        if (index > 0) has[GroupStart(group)] = false;   // 찍다 만 점(재는 중에는 탭을 못 옮기므로 실제로는 오지 않는다)
         index = 0;
+        confirmWait = false;
+        group = GroupOf(tab * 2 + 1, 2);                 // 다 잰 탭이면 마지막 직선에 머문다(찍기는 Mark가 막는다)
+        for (int m = tab * 2; m < tab * 2 + 2; m++)
+        {
+            if (confirmed[m]) continue;
+            int ph = 0;
+            while (ph < 3 && HasLine(GroupOf(m, ph))) ph++;
+            confirmWait = ph == 3;
+            group = GroupOf(m, Mathf.Min(ph, 2));
+            break;
+        }
         noteText = "";
-        Debug.Log($"[선실측] 단계 → {GroupTitle(group)} ({why})");
+        Debug.Log($"[선실측] 탭 → {TopTabName[tab]} · {(TabComplete(tab) ? "다 잰 탭" : GroupTitle(group) + (confirmWait ? "(확인 대기)" : ""))} ({why})");
         Play(sndPress);
         dirty = true;
     }
 
-    private void Press(int button)
+    /// <summary>확인 뒤에 갈 탭 — 그 탭에 남은 동작이 있으면 그 탭, 없으면 그다음 덜 잰 탭. 다 쟀으면 -1.</summary>
+    private int NextTab(int tab)
     {
-        switch (button)
+        for (int k = 0; k < 3; k++)
         {
-            case 0: case 1: case 2: case 3: GoTopTab(button, "탭"); break;   // 굴곡 · 신전 · 측굴 · 회전
-            case 4: RedoMotion(); break;
-            case 5: ResetAll(); break;
-            case 6: Exit(); break;
-            case 7: case 9: break;   // «이전 단계» · «다음 단계(건너뛰기)»는 판에서 뺐다(10-12) — 진행 정보를 띄우고 스틱으로 옮긴다
-            case 8: Undo(); break;
-            case 10: case 13: break;   // 3축 끄기는 뺐다(10-08) — 버튼도 판에 없다
-            case 11: GoTopTab(4, "탭"); break;   // 기타(자유 측정)
-            case 12: FreeClear(); break;
-            case 14: break;   // «축 다시 잡기» 버튼은 판에서 뺐다(10-08) — 판을 누르는 자세로는 방향을 겨눌 수 없다. 스틱 위로 길게 · 모니터로 한다
-            case 15: case 16: case 17: SetFreeTab(button - 15); break;
-            case 18: FreeRebase(); break;
+            int t = (tab + k) % 3;
+            if (!TabComplete(t)) return t;
         }
+        return -1;
+    }
+
+    /// <summary>동작 m을 확인하면 이어질 것의 이름(화면 · 로그용).</summary>
+    private string NextName(int m)
+    {
+        int pair = m ^ 1;
+        if (!confirmed[pair]) return MotionName[pair];
+        for (int k = 1; k < 3; k++)
+        {
+            int t = (m / 2 + k) % 3;
+            if (!TabComplete(t)) return TopTabName[t];
+        }
+        return "측정 끝";
+    }
+
+    /// <summary>동작 하나(세 직선)를 확인한다 — 같은 탭의 다음 동작으로, 탭을 다 쟀으면 다음 탭으로 저절로 넘어간다.</summary>
+    private void Confirm(string why)
+    {
+        if (!confirmWait) return;
+        int m = MotionOf(group), tab = m / 2;
+        confirmed[m] = true;
+        confirmWait = false;
+        Debug.Log($"[선실측] 확인 — {MotionName[m]} · 능동 {(results[m * 2].valid ? results[m * 2].angle.ToString("F1") : "—")}° · " +
+                  $"압박 {(results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") : "—")}° ({why})");
+        Buzz(0.06f, 0.6f);
+        int next = NextTab(tab);
+        if (next >= 0) { Resume(next, "확인"); return; }
+
+        group = GroupOf(tab * 2 + 1, 2);
+        noteText = "";
+        Play(sndDone);
+        LogSummary("끝");
+        dirty = true;
+    }
+
+    /// <summary>축 다시 잡기를 부른다 / 그만둔다. 부른 동안 스틱을 밀면 잡힌다(HandleInput).</summary>
+    private void SetAxesAsk(bool on, string why)
+    {
+        if (axesAsk == on) return;
+        axesAsk = on;
+        axesAskStart = Time.unscaledTime;
+        noteText = on ? "축 다시 잡기 — 헤드셋이 환자 쪽을 보게 두고 스틱을 미세요 (스틱을 다시 누르면 그만둠)" : "축 다시 잡기를 그만뒀다";
+        Debug.Log($"[선실측] 축 다시 잡기 {(on ? "부름" : "그만둠")} ({why})");
+        Play(on ? sndPress : sndUndo);
+        dirty = true;
     }
 
     // ── 자유 측정(10-07) ────────────────────────────────────────────
@@ -1076,16 +1119,6 @@ public class RomLineSession : MonoBehaviour
     private List<int> FreeRefs => freeRefOf[freeTab];
     /// <summary>회전의 면(바닥)은 중력만 쓰므로 3축을 꺼도 나온다. 굴곡·신전과 측굴의 면은 3축이 있어야 한다.</summary>
     private bool FreePlaneOn => freeTab == 2 || axesOn;
-
-    /// <summary>맨 위 탭 — 0 굴곡 · 1 신전 · 2 측굴(우 → 좌) · 3 회전(우 → 좌) · 4 기타(자유 측정).</summary>
-    private void GoTopTab(int tab, string why)
-    {
-        if (tab >= 4) { SetFreeMode(true); return; }
-        SetFreeMode(false);
-        int m = tab < 2 ? tab : tab == 2 ? 2 : 4;
-        if (!Done && MotionOf(group) == m && index == 0) { announced = -1; dirty = true; return; }   // 같은 자리 — 안내만 다시 들려준다
-        Go(GroupOf(m, 0), why);
-    }
 
     private void SetFreeMode(bool on)
     {
@@ -1120,36 +1153,20 @@ public class RomLineSession : MonoBehaviour
 
     /// <summary>
     /// 고정 3축을 지금 헤드셋이 보는 방향으로 잡는다. 환자는 사용자(헤드셋)를 마주 본다고 놓는다 — 정면 = 헤드셋 쪽.
-    /// ★헤드셋을 쓰지 않고 정해 둔 자리에 놓아 기준으로 삼을 때도 같은 함수다(그 자리에서 «축 다시 잡기»).
+    /// ★헤드셋을 쓰지 않고 정해 둔 자리에 놓아 기준으로 삼을 때도 같은 함수다.
+    /// ★10-12 저녁 사용자 지시: 다시 잡을 때도 헤드셋 방향이다(10-08의 «컨트롤러가 가리키는 방향»은 뺐다 — 그 함수는 git 231cb83에 있다).
+    ///   부르는 길은 «스틱을 누른 뒤 밀기»와 모니터의 버튼 둘이다.
     /// </summary>
-    private void CaptureAxes(string why)
+    private void CaptureAxes(string why, bool tell)
     {
         // 지움: 헤드셋의 숙임·기울임 → 세 축은 늘 수평·수직이다(위아래는 중력이 맡는다).
         Vector3 look = Vector3.ProjectOnPlane(eye.forward, Vector3.up);
         if (look.sqrMagnitude < 0.01f) look = Vector3.forward;   // 바로 위·아래를 보고 있었다
         look.Normalize();
         SetAxes(look, eye.position + look * 1.0f, why, "헤드셋이 보던 방향");
-    }
-
-    /// <summary>
-    /// ★10-08 사용자 지시: 축을 <b>컨트롤러가 가리키는 방향</b>으로 다시 잡는다(환자 정면에서 환자 쪽으로 겨눈다).
-    ///   헤드셋이 보는 방향으로 잡으면 판의 버튼을 누르는 순간 판 쪽으로 잡혀, 원하는 방향으로 맞출 수 없었다.
-    ///   헤드셋을 놓아 둔 채로도 축을 바꿀 수 있다. 처음 한 번(판을 세울 때)만 헤드셋 방향이다.
-    ///   지움: 컨트롤러의 위아래 기울임(세 축은 늘 수평·수직). 너무 세워 겨누면 수평 방향이 흔들리므로 받지 않는다.
-    /// </summary>
-    private bool CaptureAxesFromController(string why)
-    {
-        if (!tipValid) { Deny("축 다시 잡기 — 컨트롤러가 추적되지 않는다"); return false; }
-        Vector3 point = ctrlRot * Vector3.forward;
-        Vector3 flat = Vector3.ProjectOnPlane(point, Vector3.up);
-        if (flat.magnitude < 0.5f) { Deny("축 다시 잡기 — 컨트롤러를 눕혀서 환자 쪽으로 겨눈다(너무 세워 들었다)"); return false; }   // 수평에서 60° 넘게 들림
-        float pitch = Mathf.Asin(Mathf.Clamp(point.y, -1f, 1f)) * Mathf.Rad2Deg;
-        flat.Normalize();
-        SetAxes(flat, tipPos + flat * 0.3f, why, $"컨트롤러가 가리킨 방향 · 들린 각 {pitch:F0}°");
-        noteText = "축을 다시 잡았다 — 컨트롤러가 가리킨 쪽이 환자";
+        if (!tell) return;
+        noteText = "축을 다시 잡았다 — 헤드셋이 보는 쪽이 환자 · 메인 화면도 그쪽에 다시 세웠다";
         Play(sndPress);
-        dirty = true;
-        return true;
     }
 
     /// <summary>toward = 측정자 쪽에서 환자를 향하는 수평 방향. 환자는 그 반대를 본다고 놓는다.</summary>
@@ -1198,18 +1215,20 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
+    /// <summary>직선 단위 취소(10-12 저녁) — 찍다 만 선이 있으면 그 첫 점만, 없으면 마지막 선(두 점)을 통째로.</summary>
     private void FreeUndo()
     {
         List<Vector3> pts = FreePts;
-        if (pts.Count == 0) { Deny("지울 점이 없다"); return; }
-        if (pts.Count % 2 == 0)   // 마지막 선이 깨진다
+        if (pts.Count == 0) { Deny("지울 직선이 없다"); return; }
+        if (pts.Count % 2 == 1) pts.RemoveAt(pts.Count - 1);
+        else
         {
             CsvAdd("취소", FreeRefs.Count - 1);
             FreeRefs.RemoveAt(FreeRefs.Count - 1);
+            pts.RemoveRange(pts.Count - 2, 2);
         }
-        pts.RemoveAt(pts.Count - 1);
         noteText = "";
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 한 점 취소 → 남은 점 {pts.Count}개");
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 직선 취소 → 남은 점 {pts.Count}개");
         Play(sndUndo);
         dirty = true;
     }
@@ -1317,8 +1336,7 @@ public class RomLineSession : MonoBehaviour
                  : axesOn ? "환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로"
                  : "3축이 꺼져 있어 직접 각만 나옵니다 · 두 점은 늘 같은 순서로";
         string instruction = $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요";
-        view.SetTexts("자유 측정 · " + FreeTabName[freeTab], instruction, note, -1, "선 " + (lines + 1));
-        view.SetButtonOn(13, axesOn);
+        view.SetTexts(instruction, note, "선 " + (lines + 1));
         view.SetFreeTab(freeTab);
         RefreshPopup();
 
@@ -1332,8 +1350,8 @@ public class RomLineSession : MonoBehaviour
         js.Append("\"mode\":\"free\",\"top\":4,\"tab\":").Append(freeTab);
         AppendTabsJson(js).Append(",\"instruction\":");
         JsonStr(js, instruction).Append(",\"note\":");
-        JsonStr(js, note).Append(",\"popup\":").Append(popupOn ? "true" : "false")
-          .Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":").Append(FreePlaneOn ? "true" : "false").Append(",\"plane\":");
+        JsonStr(js, note);
+        AppendPopupJson(js).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":").Append(FreePlaneOn ? "true" : "false").Append(",\"plane\":");
         JsonStr(js, FreePlaneName[freeTab]).Append(",\"lines\":[");
 
         // 판 — 가장 최근 선들. 한 줄에 선 하나: 길이 · 그 동작의 면 각 · 직접 각 · 알림. 모니터에는 선을 전부 보낸다.
@@ -1442,18 +1460,22 @@ public class RomLineSession : MonoBehaviour
         switch (command)
         {
             case "tab0": case "tab1": case "tab2":
-                if (!freeMode) SetFreeMode(true);
+                if (!freeMode && !GoTab(4, "모니터")) break;   // 재는 중인 탭이 있으면 못 간다
                 SetFreeTab(command[3] - '0');
                 break;
-            case "top0": case "top1": case "top2": case "top3": case "top4": GoTopTab(command[3] - '0', "모니터"); break;
+            case "top0": case "top1": case "top2": case "top4": GoTab(command[3] - '0', "모니터"); break;
             case "undo": Undo(); break;
             case "popup": SetPopup(!popupOn, "모니터"); break;
-            case "prev": case "next": if (!freeMode) Go(group + (command == "next" ? 1 : -1), "모니터"); break;
-            case "clear": if (freeMode) FreeClear(); else RedoMotion(); break;
+            case "confirm": if (!freeMode && confirmWait) Confirm("모니터"); else Deny("확인할 것이 없다 — 동작 하나의 세 직선을 다 찍은 뒤에 누른다"); break;
+            case "clear": if (freeMode) FreeClear(); else ResetTab(CurTab, "모니터"); break;
+            case "resetAll": ResetAll("모니터"); break;
             case "rebase": if (freeMode) FreeRebase(); break;
-            case "axes": CaptureAxesFromController("모니터"); break;
-            case "axesToggle": case "mode": Debug.Log($"[선실측] 모니터 명령 «{command}»은 뺐다(10-08 — 고정 3축 측정만 남김)"); break;
+            case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+                CaptureAxes("모니터", true);
+                break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
+            case "exit": Exit(); break;
             default: Debug.LogWarning($"[선실측] ★모니터 명령 «{command}»을 모른다"); break;
         }
     }
@@ -1509,45 +1531,56 @@ public class RomLineSession : MonoBehaviour
         }
     }
 
-    private void RedoMotion()
+    /// <summary>탭 하나(두 동작 · 여섯 직선)를 지우고 그 탭의 처음부터 다시 잰다 — B/Y 길게(10-12 저녁).</summary>
+    private void ResetTab(int tab, string why)
     {
-        if (group == 0)
+        for (int m = tab * 2; m < tab * 2 + 2; m++)
         {
-            has[0] = has[1] = false;
-            Invalidate(0);
-            index = 0;
-            Debug.Log("[선실측] 이 동작 다시 — 기준");
-        }
-        else
-        {
-            int m = MotionOf(Mathf.Min(group, GroupCount - 1));
             for (int ph = 0; ph < 3; ph++)
             {
-                int st = GroupStart(GroupOf(m, ph));
+                int g = GroupOf(m, ph), st = GroupStart(g);
                 has[st] = has[st + 1] = false;
-                hasExtra[GroupOf(m, ph)] = false;
+                hasExtra[g] = false;
             }
             ClearResult(m * 2);
             ClearResult(m * 2 + 1);
-            group = GroupOf(m, 0);
-            index = 0;
-            Debug.Log($"[선실측] 이 동작 다시 — {MotionName[m]}");
+            confirmed[m] = false;
         }
+        group = GroupOf(tab * 2, 0);
+        index = 0;
+        confirmWait = false;
         noteText = "";
+        Debug.Log($"[선실측] 이 탭 지우기 — {TopTabName[tab]} ({why})");
         Play(sndUndo);
         dirty = true;
     }
 
-    private void ResetAll()
+    /// <summary>전체 측정 결과를 지운다 — 순서 측정의 18직선과 자유 측정의 선 전부. 기록 파일(CSV)의 줄은 남는다. 굴곡 · 중립으로 돌아간다.</summary>
+    private void ResetAll(string why)
     {
         for (int i = 0; i < PointCount; i++) has[i] = false;
         for (int i = 0; i < GroupCount; i++) hasExtra[i] = false;
+        for (int i = 0; i < 6; i++) confirmed[i] = false;
         frame = axes;   // 고정 3축은 그대로다
         for (int i = 0; i < 12; i++) ClearResult(i);
+        int keep = freeTab, freeLines = 0;
+        for (int t = 0; t < 3; t++)
+        {
+            freeTab = t;                       // CsvAdd가 지금 갈래의 이름으로 적는다
+            freeLines += freeRefOf[t].Count;
+            if (freePts[t].Count > 0) CsvAdd("지움", -1);
+            freePts[t].Clear();
+            freeRefOf[t].Clear();
+        }
+        freeTab = keep;
+        resetAsk = false;
+        confirmWait = false;
+        SetFreeMode(false);
         group = 1;      // 굴곡 · 중립부터(묶음 0 = 기준은 쓰지 않는다)
         index = 0;
+        popupCursor = 0;
         noteText = "";
-        Debug.Log("[선실측] 전부 다시 — 전부 지웠다");
+        Debug.Log($"[선실측] 리셋 — 전체 측정 결과를 지웠다(자유 측정의 선 {freeLines}개 포함) ({why})");
         Play(sndUndo);
         dirty = true;
     }
@@ -1587,13 +1620,25 @@ public class RomLineSession : MonoBehaviour
         if (freeMode) { RefreshFree(); return; }
         dirty = false;
 
-        int tab = group <= 3 ? 0 : group <= 6 ? 1 : group <= 12 ? 2 : 3;   // 굴곡 · 신전 · 측굴(우·좌) · 회전(우·좌)
-        string instruction, tipText, guide;
+        int tab = CurTab, cm = MotionOf(group);
+        string instruction, tipText = "", guide, note = noteText, forMonitor;
         if (Done)
         {
-            instruction = "모든 방향을 쟀습니다";
-            tipText = "";
+            forMonitor = instruction = "모든 방향을 쟀습니다";
             guide = "<color=#73E68C>모든 방향을 쟀습니다</color>";
+            if (note.Length == 0) note = "A = 탭 창 · 다시 재려면 B 길게(이 탭 지우기)나 탭 창의 리셋";
+        }
+        else if (confirmWait)
+        {
+            // 동작 하나를 다 찍었다 — 확인을 기다린다
+            forMonitor = instruction = $"{MotionName[cm]}을 다 쟀습니다 — A = 확인 → {NextName(cm)}";
+            guide = $"{MotionName[cm]}을 다 쟀습니다   <color=#73E68C>A = 확인</color>  →  {NextName(cm)}";
+            if (note.Length == 0) note = "고치려면  B = 직선 취소 · B 길게 = 이 탭 지우기";
+        }
+        else if (TabComplete(tab))
+        {
+            forMonitor = instruction = guide = $"{TopTabName[tab]} 탭은 다 쟀습니다";
+            if (note.Length == 0) note = "A = 탭 창에서 다른 탭을 고릅니다 · 다시 재려면 B 길게(이 탭 지우기)";
         }
         else
         {
@@ -1601,12 +1646,12 @@ public class RomLineSession : MonoBehaviour
             instruction = $"{PointName[(int)p]}을 찍으세요  ({index + 1}/{SizeOf(group)})";
             tipText = PointName[(int)p];
             guide = $"{GroupTitle(group)}   <color=#FFF233>{instruction}</color>";
+            forMonitor = GroupTitle(group) + " — " + instruction;
+            if (note.Length == 0) note = PhaseHint[PhaseOf(group)];
         }
-        string note = noteText;
-        if (note.Length == 0 && !Done) note = PhaseHint[PhaseOf(group)];
-        view.SetTexts(GroupTitle(group), instruction, note, tab, tipText);
+        view.SetTexts(instruction, note, tipText);
         view.SetGuide(guide, note);
-        RefreshGuidedExtras(tab, instruction, note);
+        RefreshGuidedExtras(tab, forMonitor, note);
         RefreshPopup();
 
         // 결과표(10-12) — 한 줄에 동작 하나: 능동 · 압박의 «면 위 각»과 그 동작의 단면에서 본 각도기.
@@ -1705,12 +1750,12 @@ public class RomLineSession : MonoBehaviour
         js.Length = 0;
         js.Append("\"mode\":\"guided\",\"top\":").Append(tab).Append(",\"tab\":").Append(plane);
         AppendTabsJson(js).Append(",\"instruction\":");
-        JsonStr(js, GroupTitle(group) + " — " + instruction).Append(",\"note\":");
+        JsonStr(js, instruction).Append(",\"note\":");
         JsonStr(js, note).Append(",\"axesOn\":true,\"planeOn\":true,\"plane\":");
         JsonStr(js, FreePlaneName[plane]);
 
         // 결과표 · 진행 정보(10-12) — 판과 같은 값을 보낸다. steps = 묶음 1~18을 다 찍었는가(1 · 0), results = 동작 × (능동 a · 압박 p)
-        js.Append(",\"popup\":").Append(popupOn ? "true" : "false").Append(",\"cur\":").Append(Done ? -1 : m).Append(",\"phase\":").Append(Done ? -1 : PhaseOf(group))
+        AppendPopupJson(js).Append(",\"cur\":").Append(Done ? -1 : m).Append(",\"phase\":").Append(Done ? -1 : PhaseOf(group))
           .Append(",\"index\":").Append(index).Append(",\"hint\":");
         JsonStr(js, Done ? "" : PhaseHint[PhaseOf(group)]).Append(",\"steps\":\"");
         for (int g = 1; g < GroupCount; g++) js.Append(has[GroupStart(g)] && has[GroupStart(g) + 1] ? '1' : '0');
@@ -1763,42 +1808,63 @@ public class RomLineSession : MonoBehaviour
                  .Append(RomLineMath.DirectionMatches((RomLineMotion)motion, r.signedAngle) ? "false" : "true").Append('}');
     }
 
+    /// <summary>모니터로 보내는 탭 창 · 단계 멈춤의 상태 — 두 모드가 같은 이름으로 보낸다.</summary>
+    private StringBuilder AppendPopupJson(StringBuilder js)
+    {
+        js.Append(",\"popup\":").Append(popupOn ? "true" : "false").Append(",\"cursor\":").Append(popupCursor)
+          .Append(",\"locked\":").Append(TabLocked ? "true" : "false").Append(",\"confirm\":").Append(!freeMode && confirmWait ? "true" : "false")
+          .Append(",\"resetAsk\":").Append(resetAsk ? "true" : "false").Append(",\"confirmed\":\"");
+        for (int m = 0; m < 6; m++) js.Append(confirmed[m] ? '1' : '0');
+        return js.Append('"');
+    }
+
     /// <summary>
-    /// 진행 정보(팝업)의 글자. 순서 탭 = 여섯 동작 × (중립 → 능동 → 압박) — 다 찍은 단계는 초록, 지금 단계는 노랑 굵게.
-    /// «기타» = 동작 갈래 셋과 찍어 둔 선의 수. 닫혀 있으면 글자를 만들지 않는다.
+    /// 탭 창의 글자(10-12 저녁). 탭 다섯(이름 + 진행) · 지금 탭의 두 동작 × (중립 → 능동 → 압박) · 알림 · 버튼 안내.
+    /// 닫혀 있으면 글자를 만들지 않는다.
     /// </summary>
     private void RefreshPopup()
     {
         view.ShowPopup(popupOn);
         if (!popupOn) return;
-        StringBuilder st = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드 — PumpMonitor는 쓸 때 처음에 비운다)
-        if (freeMode)
+        int cur = freeMode ? 4 : CurTab;
+        bool locked = TabLocked;
+        for (int t = 0; t < RomLineView.PopupTabs; t++)
         {
-            for (int i = 0; i < 6; i++)
+            string sub;
+            if (t == 3) sub = "전체 지우기";
+            else if (t == 4) sub = $"선 {freeRefOf[0].Count + freeRefOf[1].Count + freeRefOf[2].Count}개";
+            else if (TabComplete(t)) sub = "<color=#73E68C>완료</color>";
+            else
             {
-                if (i < 3) view.SetPopupRow(i, FreeTabName[i], $"선 {freePts[i].Count / 2}개" + (freePts[i].Count % 2 == 1 ? " · 찍는 중" : ""), i == freeTab);
-                else view.SetPopupRow(i, "", "", false);
+                int n = 0;
+                for (int g = GroupOf(t * 2, 0); g <= GroupOf(t * 2 + 1, 2); g++) if (HasLine(g)) n++;
+                sub = n == 0 ? "—" : $"직선 {n} / 6";
             }
-            view.SetPopupFoot("기타(자유 측정) — 처음 찍은 선이 기준선입니다", "지금  " + FreeTabName[freeTab], PopupKeysFree1, PopupKeysFree2, false);
-            return;
+            view.SetPopupTab(t, TopTabName[t] + "\n<size=58%>" + sub + "</size>", t == popupCursor, t == cur, locked && t != cur);
         }
 
-        int lines = 0;
-        for (int m = 0; m < 6; m++)
-        {
-            st.Length = 0;
-            for (int ph = 0; ph < 3; ph++)
+        StringBuilder st = monitorLive;   // 잠깐 빌려 쓴다(같은 주 스레드 — PumpMonitor는 쓸 때 처음에 비운다)
+        st.Length = 0;
+        if (freeMode) st.Append("자유 측정 · ").Append(FreeTabName[freeTab]).Append("   선 ").Append(FreeRefs.Count).Append("개 — 동작은 탭 창을 닫고 스틱 좌우로 바꿉니다");
+        else
+            for (int m = cur * 2; m < cur * 2 + 2; m++)
             {
-                int g = GroupOf(m, ph), n = GroupStart(g);
-                bool done = has[n] && has[n + 1], now = !Done && g == group;
-                if (done) lines++;
-                if (ph > 0) st.Append("  →  ");
-                st.Append(now ? "<color=#FFD94D><b>" : done ? "<color=#73E68C>" : "<color=#8A96A6>").Append(PhaseName[ph]).Append(now ? "</b></color>" : "</color>");
+                if (m > cur * 2) st.Append("          ");
+                st.Append("<b>").Append(MotionName[m]).Append("</b>   ");
+                for (int ph = 0; ph < 3; ph++)
+                {
+                    int g = GroupOf(m, ph);
+                    bool done = HasLine(g), now = !confirmWait && !TabComplete(cur) && g == group;
+                    if (ph > 0) st.Append(" → ");
+                    st.Append(now ? "<color=#FFD94D><b>" : done ? "<color=#73E68C>" : "<color=#8A96A6>").Append(PhaseName[ph]).Append(now ? "</b></color>" : "</color>");
+                }
+                if (confirmed[m]) st.Append("  <color=#73E68C>(확인)</color>");
+                else if (confirmWait && MotionOf(group) == m) st.Append("  <color=#FFD94D>(A = 확인)</color>");
             }
-            view.SetPopupRow(m, MotionName[m], st.ToString(), !Done && MotionOf(group) == m);
-        }
-        string progress = Done ? $"찍은 직선 {lines} / 18 · 측정 끝" : $"찍은 직선 {lines} / 18 · 지금  {GroupTitle(group)}  {index + 1}번째 점";
-        view.SetPopupFoot(Done ? "" : PhaseHint[PhaseOf(group)], progress, PopupKeysGuided1, PopupKeysGuided2, Done);
+        string hint = locked ? "이 탭을 재는 중입니다 — 다 잰 뒤에 다른 탭으로 옮길 수 있습니다 (그만두려면 B 길게)"
+                    : popupCursor == 3 ? "A를 누르면 전체 측정 결과를 지울지 묻습니다"
+                    : "스틱을 옮기는 대로 그 탭이 됩니다 · «리셋»만 A로 고릅니다";
+        view.SetPopupLines(st.ToString(), hint, PopupKeys, resetAsk);
     }
 
     private static readonly List<Vector3> NoPoints = new List<Vector3>(0);
@@ -1839,10 +1905,11 @@ public class RomLineSession : MonoBehaviour
 
     private void Announce()
     {
-        int key = Done ? 18 : group - 1;
+        // 확인을 기다리는 동안과 다 잰 탭을 보고 있는 동안은 말하지 않는다(-2) — 그 단계의 안내를 다시 틀지 않게.
+        int key = Done ? 18 : confirmWait || TabComplete(CurTab) ? -2 : group - 1;
         if (key == announced) return;
         announced = key;
-        if (narrSrc == null) return;
+        if (narrSrc == null || key < 0) return;
         narrSrc.Stop();
         AudioClip c = key >= 0 && key < narr.Length ? narr[key] : null;
         Debug.Log($"[선실측] 안내 음성 — {GroupTitle(group)} · {(c != null ? c.name : "★파일 없음(무음)")}");

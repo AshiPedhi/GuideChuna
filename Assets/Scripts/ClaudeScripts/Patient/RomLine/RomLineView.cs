@@ -2,22 +2,19 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// ★경추 ROM «선 실측» — 표시(2026-10-01 신설). 점·선·각도기, 컨트롤러 끝 이름표, 조작 판 하나.
+/// ★경추 ROM «선 실측» — 표시(2026-10-01 신설). 점·선·각도기, 컨트롤러 끝 이름표, 멀리 세우는 메인 화면과 그 아래의 탭 창(10-12).
 /// 계산은 하지 않는다 — <see cref="RomLineSession"/>이 준 값만 그린다.
 /// ★글자는 상태가 바뀔 때만 바꾼다(매 프레임 문자열을 만들지 않는다). 매 프레임 하는 일은 자리 옮기기뿐이다.
 /// </summary>
 public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
-    public const float PanelW = 0.36f, PanelH = 0.50f;   // 0.38 → 0.42(10-02): 비교 시험 두 줄 · → 0.46(10-06): 단계 버튼 줄 · → 0.50(10-07): 모드 줄
+    public const float PanelW = 0.80f, PanelH = 0.38f;   // 메인 화면의 «배율 전» 크기. 실제 폭은 PlacePanel이 받는다(기본 2m → 배율 2.5)
     private const float PointRadius = 0.005f;
     private const float LineWidth = 0.003f;
     private const float ArcRadius = 0.06f;
     private const float LineMargin = 0.04f;
     private const int ArcSegments = 32;
-    public const float TouchDepth = 0.035f;      // 판 앞뒤 이 안에 컨트롤러 끝이 들어오면 «판을 누르는 중»으로 본다
-    public const float FingerDepth = 0.02f;      // 손끝은 더 바짝 대야 한다 — 지나가는 손에 눌리지 않게(10-06)
-    public const int ButtonCount = 19;
 
     // ── 색 ──────────────────────────────────────────────────────────
     private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
@@ -27,24 +24,11 @@ public class RomLineView
     private static readonly Color TipColor = new Color(1f, 0.95f, 0.2f, 1f);
     private static readonly Color TipLostColor = new Color(1f, 0.30f, 0.30f, 0.85f);   // 헤드셋이 컨트롤러를 못 보고 있다 — 자리는 추정값
     private static readonly Color PlateColor = new Color(0.07f, 0.09f, 0.12f, 0.92f);
-    private static readonly Color ButtonColor = new Color(0.20f, 0.26f, 0.34f, 1f);
-    private static readonly Color ButtonHot = new Color(0.30f, 0.52f, 0.85f, 1f);
-    private static readonly Color ExitColor = new Color(0.55f, 0.18f, 0.18f, 1f);
     private static readonly Color TabOn = new Color(0.30f, 0.52f, 0.85f, 1f);
     private static readonly Color TabOff = new Color(0.16f, 0.20f, 0.26f, 1f);
     private static readonly Color CompareColor = new Color(0.35f, 0.80f, 1f, 1f);
     private static readonly Color CompareNeutral = new Color(0.75f, 0.92f, 1f, 1f);
     private static readonly Color ComparePressure = new Color(0.10f, 0.45f, 0.75f, 1f);
-    private static readonly Color FillColor = new Color(1f, 1f, 1f, 0.55f);
-    private static readonly Color FingerColor = new Color(0.55f, 0.85f, 1f, 1f);
-
-    private static readonly string[] TabNames = { "굴곡", "신전", "측굴", "회전" };   // 맨 위 탭(10-08) — 다섯째 «기타»는 ButtonLabel[11]
-    private static readonly string[] ButtonNames = { "이 동작 다시", "전부 다시", "나가기" };
-    // 컨트롤러의 스틱 · A/X · B/Y가 하던 일 — 손으로도 할 수 있게 판에 올린다(10-06)
-    private static readonly string[] StepNames = { "이전 단계", "한 점 취소", "다음 단계" };
-    public static readonly string[] ButtonLabel = { "굴곡", "신전", "측굴", "회전", "이 동작 다시", "전부 다시", "나가기", "이전 단계", "한 점 취소", "다음 단계",
-                                                   "6동작", "기타", "이 동작 지우기", "3축 표시", "축 다시 잡기",   // 10~14 = 자유 측정(10-07)
-                                                   "굴곡·신전", "측굴", "회전", "기준선 바꾸기" };                         // 15~17 = 자유 측정의 동작 탭 · 18
 
     private Transform root;
     private Material mat;
@@ -52,16 +36,11 @@ public class RomLineView
 
     // 판
     private Transform panel;
-    private Transform guidedArea, freeArea;   // 모드마다 보이는 것 — 6동작(탭·결과표·단계 버튼) / 자유 측정(결과 줄·축 버튼)
-    private readonly Renderer[] buttonPlates = new Renderer[ButtonCount];
-    private readonly Rect[] buttonRects = new Rect[ButtonCount];
-    private readonly Color[] buttonBase = new Color[ButtonCount];
-    private Transform fill;
-    private TextMeshPro title, instruction, note, footer;   // 제목 · 안내 · 알림은 자유 측정(«기타»)의 것이다 — 순서 탭은 guideLine · guideNote
+    private Transform guidedArea, freeArea;   // 순서 측정(안내 두 줄 · 결과표) / 자유 측정(갈래 · 안내 · 선 목록)
+    private TextMeshPro instruction, note, footer;   // 안내 · 알림은 자유 측정의 것이다 — 순서 측정은 guideLine · guideNote
     private readonly TextMeshPro[] compareNames = new TextMeshPro[2];    // 비교 시험 줄 이름: 굴곡 · 신전
     private readonly TextMeshPro[] compareValues = new TextMeshPro[8];   // 줄마다 능동 면·직접, 압박 면·직접
     private readonly TextMeshPro[] values = new TextMeshPro[12];        // 면 위에서 잰 값(동작 × 능동 · 압박). «직접» 값은 10-12부터 판에 내지 않는다(로그 · CSV에만)
-    private int hot = -1;
 
     // 환자 위 표시
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
@@ -77,11 +56,10 @@ public class RomLineView
     private Renderer tipRenderer;
     private bool tipDrawnTracked = true;
     private TextMeshPro tipLabel;
-    private readonly Transform[] fingers = new Transform[2];   // 판 가까이 온 검지 끝(왼·오른) — 손이 입력으로 잡혔다는 표시
 
     public bool PanelPlaced { get; private set; }
     public Transform Panel => panel;
-    /// <summary>자유 측정의 판 글자를 붙일 자리와, 그 결과 줄이 시작하는 높이(판 좌표).</summary>
+    /// <summary>자유 측정의 화면 글자를 붙일 자리와, 그 선 목록이 시작하는 높이(화면 좌표).</summary>
     public Transform FreeArea => freeArea;
     public float FreeTableTop { get; private set; }
 
@@ -138,111 +116,79 @@ public class RomLineView
         tipLabel.rectTransform.sizeDelta = new Vector2(0.10f, 0.16f);   // 왼쪽 정렬 — 글자가 끝점 오른쪽에서 시작하게 폭을 좁힌다
         tip.gameObject.SetActive(false);
         tipLabel.gameObject.SetActive(false);
-        for (int i = 0; i < fingers.Length; i++)
-        {
-            fingers[i] = MakeSphere("손끝", PointRadius * 0.9f, FingerColor);
-            fingers[i].gameObject.SetActive(false);
-        }
 
         BuildPanel();
         panel.gameObject.SetActive(false);
     }
 
-    // ── 판 ──────────────────────────────────────────────────────────
+    // ── 화면 ────────────────────────────────────────────────────────
+    //   ★10-12 저녁 사용자 지시: 메인 화면은 <b>크고 넓게, 뒤쪽 멀리</b> 세운다. 탭(굴곡 · 신전 / 측굴 / 회전 / 리셋 / 자유 측정)은
+    //     화면에서 떼어 그 <b>아래에 뜨는 창</b>으로 만든다(A/X로 부른다). 누르는 버튼은 화면에 하나도 없다 — 조작은 전부 컨트롤러다.
+    //   좌표는 «배율 전» 값이다(PanelW × PanelH). 실제 크기는 PlacePanel이 판 전체에 배율을 걸어 맞춘다.
     private void BuildPanel()
     {
-        panel = new GameObject("조작 판").transform;
+        panel = new GameObject("메인 화면").transform;
         panel.SetParent(root, false);
         MakeQuad(panel, "판", Vector2.zero, new Vector2(PanelW, PanelH), PlateColor, 0);
 
-        guidedArea = new GameObject("6동작").transform;
+        guidedArea = new GameObject("순서 측정").transform;
         guidedArea.SetParent(panel, false);
         resultArea = new GameObject("결과표").transform;
         resultArea.SetParent(guidedArea, false);
         freeArea = new GameObject("자유 측정").transform;
         freeArea.SetParent(panel, false);
-        popup = new GameObject("진행 정보").transform;
+        popup = new GameObject("탭 창").transform;
         popup.SetParent(panel, false);
-
-        // ★10-08: 모드(6동작 ↔ 자유 측정) 줄과 «3축 표시» 버튼을 뺐다 — 고정 3축 측정만 남긴다(사용자 지시).
-        //   버튼 번호가 배열 자리라 만들기는 하되 꺼 둔 부모 아래에 둔다(꺼진 버튼은 Touch가 건너뛴다). 판 높이도 그 줄만큼(4cm) 줄였다.
-        Transform retired = new GameObject("뺀 버튼").transform;
+        popup.localPosition = new Vector3(0f, -(PanelH * 0.5f + PopupGap + PopupH * 0.5f), 0f);
+        Transform retired = new GameObject("안 쓰는 글자").transform;   // 비교 시험 줄 — 10-08부터 늘 꺼져 있다
         retired.SetParent(panel, false);
         retired.gameObject.SetActive(false);
-        float modeY = PanelH * 0.5f - 0.026f;
-        AddButton(retired, 10, new Vector2(-0.058f, modeY), new Vector2(0.108f, 0.032f), TabOn, ButtonLabel[10], 0.075f);
-        // ★10-08: 맨 위 한 줄 = 탭 다섯(굴곡 · 신전 · 측굴 · 회전 · 기타). 앞의 넷은 순서대로 재는 흐름, «기타»는 자유 측정이다.
-        const float topW = 0.066f;
-        for (int i = 0; i < 4; i++)
-            AddButton(panel, i, new Vector2((i - 2f) * (topW + 0.004f), modeY), new Vector2(topW, 0.032f), TabOff, TabNames[i], 0.07f);
-        AddButton(panel, 11, new Vector2(2f * (topW + 0.004f), modeY), new Vector2(topW, 0.032f), TabOff, ButtonLabel[11], 0.07f);
-        float top = PanelH * 0.5f - 0.040f;
 
-        // ★10-12 사용자 지시: 순서 탭의 판은 <b>결과</b>를 보여 준다(측정 명칭 · 능동 · 압박 · 단면에서 본 각도기).
-        //   단계 · 진행은 «진행 정보»(A/X 버튼으로 여닫는다)로 옮겼다. 지금 찍을 점 한 줄만 맨 위에 남긴다 — 음성을 놓쳐도 다음에 무엇을 찍는지 알 수 있게.
-        guideLine = Place(MakeText(guidedArea, "", 0.095f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.026f), PanelW - 0.02f);
-        guideNote = Place(MakeText(guidedArea, "", 0.065f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.050f), PanelW - 0.02f);
+        float top = PanelH * 0.5f;
+
+        // 순서 측정 — 맨 위 두 줄: 지금 단계와 찍을 점(또는 «A = 확인») · 알림
+        guideLine = Place(MakeText(guidedArea, "", 0.17f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.032f), PanelW - 0.02f);
+        guideNote = Place(MakeText(guidedArea, "", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.070f), PanelW - 0.02f);
         guideNote.color = NoteColor;
 
-        // 자유 측정(«기타») — 둘째 줄에 동작 갈래 탭 셋, 그 아래 제목 · 안내 · 알림. 동작마다 점을 따로 모으고 그 동작의 면 값만 보여 준다
-        float tabH = 0.034f;
+        // 자유 측정 — 맨 위에 동작 갈래 셋(보여 주기만 한다 — 스틱 좌우로 바꾼다), 그 아래 안내 · 알림 · 선 목록
         for (int i = 0; i < 3; i++)
-            AddButton(freeArea, 15 + i, new Vector2((i - 1f) * 0.114f, top - 0.030f), new Vector2(0.110f, tabH), i == 0 ? TabOn : TabOff, ButtonLabel[15 + i], 0.075f);
-        title = MakeText(freeArea, "", 0.13f, TextAlignmentOptions.Center, 3);
-        Place(title, new Vector2(0f, top - 0.078f), PanelW - 0.02f);
-        instruction = MakeText(freeArea, "", 0.115f, TextAlignmentOptions.Center, 3);
-        Place(instruction, new Vector2(0f, top - 0.110f), PanelW - 0.02f);
+        {
+            var c = new Vector2((i - 1f) * 0.16f, top - 0.030f);
+            freeTabPlates[i] = MakeQuad(freeArea, "갈래 " + FreeTabNames[i], c, new Vector2(0.15f, 0.038f), TabOff, 1).GetComponent<Renderer>();
+            Place(MakeText(freeArea, FreeTabNames[i], 0.11f, TextAlignmentOptions.Center, 3), c, 0.15f);
+        }
+        instruction = Place(MakeText(freeArea, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.076f), PanelW - 0.02f);
         instruction.color = TipColor;
-        note = MakeText(freeArea, "", 0.07f, TextAlignmentOptions.Center, 3);
-        Place(note, new Vector2(0f, top - 0.137f), PanelW - 0.02f);
+        note = Place(MakeText(freeArea, "", 0.095f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.106f), PanelW - 0.02f);
         note.color = NoteColor;
-        FreeTableTop = top - 0.158f;
+        FreeTableTop = top - 0.132f;
 
         BuildResults(top);
-        BuildPopup(top);
+        BuildPopup();
 
-        // 비교 시험 두 줄(굴곡 · 신전의 미간점 ~ 턱끝점 선) — 비교 시험은 10-08부터 늘 꺼져 있다(Start가 끈다). 글자는 만들어만 두고 꺼 둔 부모 아래에 둔다.
         for (int r = 0; r < 2; r++)
         {
             compareNames[r] = MakeText(retired, RomLineSession.MotionName[r] + " 미간점~턱끝점", 0.07f, TextAlignmentOptions.Left, 3);
             for (int c = 0; c < 4; c++) compareValues[r * 4 + c] = MakeText(retired, "—", 0.08f, TextAlignmentOptions.Center, 3);
             SetCompare(r, false, "", "", "", "");
         }
-
-        // 버튼 — 맨 아래 줄: 이 동작 다시 · 전부 다시 · 나가기(순서 탭) / 자유 측정은 그 윗줄까지 쓴다.
-        //   ★10-12: «이전 단계» · «다음 단계(건너뛰기)»는 판에서 뺐다 — 단계는 진행 정보를 띄운 채 스틱으로 옮긴다. «한 점 취소»는 B/Y 버튼이고 판에는 자유 측정에만 남긴다.
-        float by = -PanelH * 0.5f + 0.030f, bw = 0.108f, bh = 0.036f;
-        var size = new Vector2(bw, bh);
-        var up = new Vector2(0f, bh + 0.008f);
-        for (int i = 0; i < 3; i++)
-        {
-            var c = new Vector2((i - 1f) * (bw + 0.006f), by);
-            AddButton(i == 2 ? panel : guidedArea, 4 + i, c, size, i == 2 ? ExitColor : ButtonColor, ButtonNames[i], 0.075f);
-            AddButton(i == 1 ? freeArea : retired, 7 + i, c + up, size, ButtonColor, StepNames[i], 0.075f);
-        }
-        // 자유 측정: 아래 줄 «이 동작 지우기» / 윗줄 (한 점 취소) · «기준선 바꾸기»
-        AddButton(retired, 13, new Vector2(-(bw + 0.006f), by), size, TabOn, ButtonLabel[13], 0.075f);
-        AddButton(freeArea, 12, new Vector2(0f, by), size, ButtonColor, ButtonLabel[12], 0.075f);
-        AddButton(retired, 14, new Vector2(-(bw + 0.006f), by) + up, size, ButtonColor, ButtonLabel[14], 0.075f);   // 10-08: 축은 컨트롤러로 겨눠 잡는다(스틱 위로 길게)
-        AddButton(freeArea, 18, new Vector2(bw + 0.006f, by) + up, size, ButtonColor, ButtonLabel[18], 0.075f);
         freeArea.gameObject.SetActive(false);
         popup.gameObject.SetActive(false);
 
         // 맨 아래 한 줄 — 모니터 화면의 주소
-        footer = MakeText(panel, "", 0.052f, TextAlignmentOptions.Center, 3);
-        Place(footer, new Vector2(0f, -PanelH * 0.5f + 0.0055f), PanelW - 0.02f);
+        footer = Place(MakeText(panel, "", 0.06f, TextAlignmentOptions.Center, 3), new Vector2(0f, -PanelH * 0.5f + 0.010f), PanelW - 0.02f);
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
-
-        // 길게 누르기 진행(버튼 아래 가장자리에서 차오른다)
-        fill = MakeQuad(panel, "차오름", Vector2.zero, new Vector2(0.01f, 0.004f), FillColor, 2);
-        fill.gameObject.SetActive(false);
     }
 
-    // ── 결과표(10-12) ── 한 줄에 동작 하나: 측정 명칭 | 능동 | 압박 | 그 동작의 단면에서 본 각도기
+    // ── 결과표 ── 칸 하나에 동작 하나: 측정 명칭 | 능동 | 압박 | 그 동작의 단면에서 본 각도기
+    //   두 칸씩 세 줄 — 한 줄이 탭 하나다(굴곡 | 신전 / 우측굴 | 좌측굴 / 우회전 | 좌회전).
     //   각도기 그림은 «보는 방향»을 정해 그린 약도다(찍은 점의 좌표를 그대로 옮긴 그림이 아니다). 값은 세션이 준 «면 위 각» 그대로다.
     //     굴곡 · 신전 = 옆에서 본 그림(오른쪽이 환자 앞) · 측굴 = 앞에서 본 그림(마주 보므로 환자 오른쪽이 그림 왼쪽)
     //     회전 = 위에서 본 그림(아래가 환자 앞 · 환자 오른쪽이 그림 왼쪽) — 모니터 화면의 세 그림과 같은 방향이다.
-    private const float RowH = 0.053f, GaugeR = 0.040f, GaugeX = 0.115f;
+    private const float RowH = 0.080f, CellW = 0.39f, GaugeR = 0.050f;
+    private const float XName = -0.140f, XActive = -0.055f, XPressure = 0.020f, GaugeX = 0.125f;   // 칸 가운데에서 잰 자리
+    private const float PopupH = 0.150f, PopupGap = 0.015f;
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(아랫줄을 침범한다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
@@ -250,33 +196,39 @@ public class RomLineView
     private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
     private static readonly string[] GaugeLeft = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] GaugeRight = { "앞", "앞", "좌", "좌", "좌", "좌" };
+    private static readonly string[] FreeTabNames = { "굴곡·신전", "측굴", "회전" };
     private static readonly Color NoteColor = new Color(1f, 0.75f, 0.45f, 1f);
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color GaugeDim = new Color(0.42f, 0.48f, 0.56f, 1f);
     private static readonly Color PanelPressure = new Color(0.95f, 0.6f, 0.3f, 1f);   // 판 위의 압박 — 공간의 압박색(#9E4203)은 어두운 판에서 안 보인다
     private static readonly Color OppositeColor = new Color(1f, 0.45f, 0.45f, 1f);    // 반대쪽으로 움직인 값
     private static readonly Color RowNowColor = new Color(0.15f, 0.21f, 0.29f, 1f);
-    private static readonly Color PopupColor = new Color(0.11f, 0.14f, 0.19f, 1f);
+    private static readonly Color PopupColor = new Color(0.09f, 0.12f, 0.17f, 0.96f);
+    private static readonly Color TabCurrent = new Color(0.20f, 0.29f, 0.40f, 1f);     // 지금 재는 탭(스틱이 다른 탭 위에 있을 때)
+    private static readonly Color ResetColor = new Color(0.42f, 0.13f, 0.13f, 1f);
 
-    private Transform resultArea, popup, rowNow, popupNow;
-    private TextMeshPro guideLine, guideNote, popupHint, popupProgress, popupKeys1, popupKeys2;
-    private readonly float[] rowY = new float[6], popupY = new float[6];
-    private readonly Vector2[] gaugePivot = new Vector2[6];
+    private Transform resultArea, popup, rowNow, resetCard;
+    private TextMeshPro guideLine, guideNote, popupProgress, popupHint, popupKeys;
+    private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
     private readonly LineRenderer[] gaugeArcs = new LineRenderer[6];     // 0° 선에서 능동 선까지의 호
-    private readonly TextMeshPro[] popupNames = new TextMeshPro[6], popupSteps = new TextMeshPro[6];
-    private bool freeShown, popupShown;
+    private readonly Renderer[] freeTabPlates = new Renderer[3], popupTabPlates = new Renderer[PopupTabs];
+    private readonly TextMeshPro[] popupTabTexts = new TextMeshPro[PopupTabs];
+    private bool popupShown;
 
     private void BuildResults(float top)
     {
-        const float xName = -0.125f, xActive = -0.045f, xPressure = 0.025f;
-        float headY = top - 0.074f;
-        Place(MakeText(resultArea, "측정", 0.065f, TextAlignmentOptions.Left, 3), new Vector2(xName, headY), 0.09f).color = DimColor;
-        Place(MakeText(resultArea, "능동", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xActive, headY), 0.07f).color = ActiveColor;
-        Place(MakeText(resultArea, "압박", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, headY), 0.07f).color = PanelPressure;
-        Place(MakeText(resultArea, "각도기", 0.065f, TextAlignmentOptions.Center, 3), new Vector2(GaugeX, headY), 0.09f).color = DimColor;
+        float headY = top - 0.098f, rowTop = top - 0.112f;
+        for (int col = 0; col < 2; col++)
+        {
+            float cx = col == 0 ? -0.20f : 0.20f;
+            Place(MakeText(resultArea, "측정", 0.075f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, headY), 0.10f).color = DimColor;
+            Place(MakeText(resultArea, "능동", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, headY), 0.07f).color = ActiveColor;
+            Place(MakeText(resultArea, "압박", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PanelPressure;
+            Place(MakeText(resultArea, "각도기", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(cx + GaugeX, headY), 0.10f).color = DimColor;
+        }
 
-        rowNow = MakeQuad(resultArea, "지금 줄", Vector2.zero, new Vector2(PanelW - 0.016f, RowH - 0.003f), RowNowColor, 1);
+        rowNow = MakeQuad(resultArea, "지금 칸", Vector2.zero, new Vector2(CellW - 0.006f, RowH - 0.006f), RowNowColor, 1);
         rowNow.gameObject.SetActive(false);
 
         // 움직이지 않는 그림(반원 · 눈금 · 0° 선 · 줄 사이 선)은 메시 하나로 만든다 — 그리는 호출이 하나다.
@@ -285,28 +237,29 @@ public class RomLineView
         var tris = new System.Collections.Generic.List<int>(2100);
         for (int m = 0; m < 6; m++)
         {
-            float y = headY - 0.012f - RowH * (m + 0.5f);
-            rowY[m] = y;
-            gaugePivot[m] = new Vector2(GaugeX, y - GaugeZeroY[m] * GaugeR * 0.5f);
+            float cx = m % 2 == 0 ? -0.20f : 0.20f, y = rowTop - RowH * (m / 2 + 0.5f);
+            cellPos[m] = new Vector2(cx, y);
+            gaugePivot[m] = new Vector2(cx + GaugeX, y - GaugeZeroY[m] * GaugeR * 0.5f);
 
-            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.10f, TextAlignmentOptions.Left, 3), new Vector2(xName, y + 0.006f), 0.09f);
-            Place(MakeText(resultArea, GaugeView[m], 0.048f, TextAlignmentOptions.Left, 3), new Vector2(xName, y - 0.011f), 0.09f).color = GaugeDim;
-            values[m * 2] = Place(MakeText(resultArea, "—", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(xActive, y), 0.07f);
-            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.11f, TextAlignmentOptions.Center, 3), new Vector2(xPressure, y), 0.07f);
-            Place(MakeText(resultArea, GaugeLeft[m], 0.05f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.008f), 0.02f).color = GaugeDim;
-            Place(MakeText(resultArea, GaugeRight[m], 0.05f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.008f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.14f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y + 0.010f), 0.10f);
+            Place(MakeText(resultArea, GaugeView[m], 0.062f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y - 0.020f), 0.10f).color = GaugeDim;
+            values[m * 2] = Place(MakeText(resultArea, "—", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, y), 0.07f);
+            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, y), 0.07f);
+            Place(MakeText(resultArea, GaugeLeft[m], 0.065f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, GaugeRight[m], 0.065f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
 
-            Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0006f, GaugeDim);
-            Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0010f, GaugeDim);
+            if (m % 2 == 0)
+                Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0012f, GaugeDim);
+            Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0016f, GaugeDim);
             for (int i = 0; i < 18; i++)
-                Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0010f, GaugeDim);
+                Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0016f, GaugeDim);
             for (int deg = -90; deg <= 90; deg += 15)   // 눈금 15° — 45° · 90°는 길게
-                Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.007f : 0.004f)), GaugePoint(m, deg, GaugeR), 0.0010f, GaugeDim);
-            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0016f, NeutralColor);   // 0° = 중립
+                Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.009f : 0.005f)), GaugePoint(m, deg, GaugeR), 0.0016f, GaugeDim);
+            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0024f, NeutralColor);   // 0° = 중립
 
-            gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0014f);
-            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PanelPressure, 2, 0.0020f);
-            gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0024f);
+            gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0020f);
+            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PanelPressure, 2, 0.0030f);
+            gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0036f);
         }
 
         var go = new GameObject("각도기 바탕");
@@ -346,173 +299,119 @@ public class RomLineView
     {
         LineRenderer lr = MakeLine(name, c, count);
         lr.transform.SetParent(resultArea, false);
-        lr.useWorldSpace = false;                    // 판과 함께 움직인다
+        lr.useWorldSpace = false;                    // 판과 함께 움직인다(굵기도 판의 배율을 따른다)
         lr.alignment = LineAlignment.TransformZ;     // 판에 납작하게
         lr.startWidth = lr.endWidth = width;
         return lr;
     }
 
-    // ── 진행 정보(10-12) ── A/X 버튼으로 여닫는다. 열려 있는 동안 결과표 자리를 대신 차지한다(겹쳐 그리지 않는다).
-    private void BuildPopup(float top)
+    // ── 탭 창 ── A/X로 부른다. 메인 화면 아래에 따로 뜬다. 탭 다섯 + 지금 탭의 진행 + 알림 + 버튼 안내.
+    //   «리셋»만 고른 뒤 A를 눌러야 하고(확인 창이 한 번 더 뜬다), 나머지 탭은 스틱이 옮겨 가는 대로 바뀐다.
+    public const int PopupTabs = 5;
+
+    private void BuildPopup()
     {
-        float cardTop = top - 0.066f, cardBottom = -PanelH * 0.5f + 0.053f;
-        MakeQuad(popup, "바탕", new Vector2(0f, (cardTop + cardBottom) * 0.5f), new Vector2(PanelW - 0.016f, cardTop - cardBottom), PopupColor, 1);
-        Place(MakeText(popup, "진행 정보", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0f, top - 0.086f), PanelW - 0.04f);
-        popupNow = MakeQuad(popup, "지금 줄", Vector2.zero, new Vector2(PanelW - 0.03f, 0.030f), RowNowColor, 2);
-        popupNow.gameObject.SetActive(false);
-        for (int i = 0; i < 6; i++)
+        MakeQuad(popup, "바탕", Vector2.zero, new Vector2(PanelW, PopupH), PopupColor, 0);
+        const float w = 0.150f, gap = 0.006f, h = 0.056f;
+        for (int i = 0; i < PopupTabs; i++)
         {
-            popupY[i] = top - 0.122f - 0.034f * i;
-            popupNames[i] = Place(MakeText(popup, "", 0.095f, TextAlignmentOptions.Left, 3), new Vector2(-0.115f, popupY[i]), 0.09f);
-            popupSteps[i] = Place(MakeText(popup, "", 0.09f, TextAlignmentOptions.Center, 3), new Vector2(0.045f, popupY[i]), 0.22f);
+            var c = new Vector2((i - 2f) * (w + gap), PopupH * 0.5f - 0.036f);
+            popupTabPlates[i] = MakeQuad(popup, "탭 " + i, c, new Vector2(w, h), TabOff, 1).GetComponent<Renderer>();
+            popupTabTexts[i] = Place(MakeText(popup, "", 0.13f, TextAlignmentOptions.Center, 3), c, w);
+            popupTabTexts[i].rectTransform.sizeDelta = new Vector2(w, h);   // 두 줄(이름 · 진행)
         }
-        float y = popupY[5];
-        popupHint = Place(MakeText(popup, "", 0.065f, TextAlignmentOptions.Center, 3), new Vector2(0f, y - 0.030f), PanelW - 0.04f);
+        popupProgress = Place(MakeText(popup, "", 0.105f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.086f), PanelW - 0.02f);
+        popupHint = Place(MakeText(popup, "", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.112f), PanelW - 0.02f);
         popupHint.color = NoteColor;
-        popupProgress = Place(MakeText(popup, "", 0.08f, TextAlignmentOptions.Center, 3), new Vector2(0f, y - 0.054f), PanelW - 0.04f);
-        popupKeys1 = Place(MakeText(popup, "", 0.058f, TextAlignmentOptions.Center, 3), new Vector2(0f, y - 0.078f), PanelW - 0.04f);
-        popupKeys2 = Place(MakeText(popup, "", 0.058f, TextAlignmentOptions.Center, 3), new Vector2(0f, y - 0.098f), PanelW - 0.04f);
-        popupKeys1.color = popupKeys2.color = DimColor;
+        popupKeys = Place(MakeText(popup, "", 0.07f, TextAlignmentOptions.Center, 3), new Vector2(0f, PopupH * 0.5f - 0.135f), PanelW - 0.02f);
+        popupKeys.color = DimColor;
+
+        // 리셋 확인 — 탭 창 위에 덮어 뜬다
+        resetCard = new GameObject("리셋 확인").transform;
+        resetCard.SetParent(popup, false);
+        MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.52f, PopupH - 0.016f), ResetColor, 4);
+        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.15f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.024f, -0.008f);
+        MakeText(resetCard, "A = 지우기          B = 취소", 0.12f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
+        resetCard.gameObject.SetActive(false);
     }
 
-    private void AddButton(Transform parent, int index, Vector2 center, Vector2 size, Color color, string label, float textSize)
-    {
-        Transform q = MakeQuad(parent, "버튼 " + label, center, size, color, 1);
-        buttonPlates[index] = q.GetComponent<Renderer>();
-        buttonRects[index] = new Rect(center - size * 0.5f, size);
-        buttonBase[index] = color;
-        Place(MakeText(parent, label, textSize, TextAlignmentOptions.Center, 3), center, size.x);
-    }
-
-    /// <summary>판을 6동작 ↔ 자유 측정으로 바꾼다. 그 모드의 버튼·글자만 보이고, 안 보이는 버튼은 눌리지 않는다.</summary>
+    /// <summary>화면을 순서 측정 ↔ 자유 측정으로 바꾼다.</summary>
     public void SetMode(bool free)
     {
-        freeShown = free;
-        ApplyAreas();
-        SetButtonOn(10, !free);
-        SetButtonOn(11, free);
+        guidedArea.gameObject.SetActive(!free);
+        freeArea.gameObject.SetActive(free);
     }
 
-    /// <summary>진행 정보를 여닫는다. 열려 있는 동안 결과표(순서 탭) · 자유 측정의 글자와 버튼은 숨는다 — 숨은 버튼은 눌리지 않는다.</summary>
+    /// <summary>탭 창을 여닫는다(메인 화면은 그대로 둔다).</summary>
     public void ShowPopup(bool on)
     {
         if (popupShown == on) return;
         popupShown = on;
-        ApplyAreas();
+        popup.gameObject.SetActive(on);
     }
 
-    private void ApplyAreas()
+    /// <summary>탭 창의 탭 하나. cursor = 스틱이 올라가 있다 · current = 지금 재는 탭 · dim = 지금은 못 간다(재는 중인 탭이 있다).</summary>
+    public void SetPopupTab(int i, string label, bool cursor, bool current, bool dim)
     {
-        SetHot(-1, 0f);
-        guidedArea.gameObject.SetActive(!freeShown);
-        resultArea.gameObject.SetActive(!popupShown);
-        freeArea.gameObject.SetActive(freeShown && !popupShown);
-        popup.gameObject.SetActive(popupShown);
+        popupTabTexts[i].text = label;
+        popupTabTexts[i].color = dim ? GaugeDim : current ? TipColor : Color.white;
+        popupTabPlates[i].material.color = cursor ? TabOn : current ? TabCurrent : TabOff;
     }
 
-    /// <summary>자유 측정의 동작 탭(0 굴곡·신전 · 1 측굴 · 2 회전) 가운데 지금 것을 밝힌다.</summary>
+    /// <summary>탭 창의 아래 세 줄 — 지금 탭의 진행 · 알림 · 버튼 안내. resetAsk = 리셋 확인 창을 덮어 띄운다.</summary>
+    public void SetPopupLines(string progress, string hint, string keys, bool resetAsk)
+    {
+        popupProgress.text = progress;
+        popupHint.text = hint;
+        popupKeys.text = keys;
+        if (resetCard.gameObject.activeSelf != resetAsk) resetCard.gameObject.SetActive(resetAsk);
+    }
+
+    /// <summary>자유 측정의 동작 갈래(0 굴곡·신전 · 1 측굴 · 2 회전) 가운데 지금 것을 밝힌다.</summary>
     public void SetFreeTab(int tab)
     {
-        for (int i = 0; i < 3; i++) SetButtonOn(15 + i, i == tab);
+        for (int i = 0; i < 3; i++) freeTabPlates[i].material.color = i == tab ? TabOn : TabOff;
     }
 
-    /// <summary>켜고 끄는 버튼(모드 · 3축 표시 · 동작 탭)의 바탕색.</summary>
-    public void SetButtonOn(int index, bool on)
+    /// <summary>
+    /// 메인 화면을 헤드셋이 보는 쪽 멀리에 세운다. distance = 눈에서 화면까지(m) · width = 화면 폭(m) · rise = 화면 아랫변이 눈높이보다 높은 만큼(m).
+    /// 지움: 고개 숙임 → 화면은 늘 수평 앞에 선다. 탭 창은 화면 아래에 붙어 따라온다.
+    /// </summary>
+    public void PlacePanel(Transform eye, float distance, float width, float rise)
     {
-        buttonBase[index] = on ? TabOn : TabOff;
-        if (index != hot) buttonPlates[index].material.color = buttonBase[index];
-    }
-
-    /// <summary>판을 눈앞 오른쪽에 세운다(처음 한 번).</summary>
-    public void PlacePanel(Transform eye)
-    {
-        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;   // 지움: 고개 숙임 → 판은 늘 수평 앞에 선다
+        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;
         if (fwd.sqrMagnitude < 0.5f) fwd = Vector3.forward;
-        Vector3 right = Vector3.Cross(Vector3.up, fwd);
-        MovePanel(eye.position + fwd * 0.50f + right * 0.28f - Vector3.up * 0.08f, eye);
+        float k = Mathf.Max(0.2f, width) / PanelW;
+        panel.localScale = Vector3.one * k;
+        Vector3 pos = eye.position + fwd * distance + Vector3.up * (rise + PanelH * 0.5f * k);
+        panel.position = pos;
+        panel.rotation = Quaternion.LookRotation((pos - eye.position).normalized, Vector3.up);   // 눈을 마주 보게 살짝 숙인다
         panel.gameObject.SetActive(true);
         PanelPlaced = true;
     }
 
-    public void MovePanel(Vector3 pos, Transform eye)
-    {
-        panel.position = pos;
-        Vector3 away = pos - eye.position;
-        if (away.sqrMagnitude > 1e-4f) panel.rotation = Quaternion.LookRotation(away.normalized, Vector3.up);
-    }
-
-    /// <summary>컨트롤러 끝이 닿은 버튼 번호(없으면 -1). <paramref name="onPanel"/> = 버튼은 아니어도 판 위에 있다.</summary>
-    public int Touch(Vector3 tipPos, float depth, out bool onPanel)
-    {
-        onPanel = false;
-        if (!PanelPlaced) return -1;
-        Vector3 l = panel.InverseTransformPoint(tipPos);
-        if (Mathf.Abs(l.z) > depth) return -1;
-        if (Mathf.Abs(l.x) > PanelW * 0.5f + 0.01f || Mathf.Abs(l.y) > PanelH * 0.5f + 0.01f) return -1;
-        onPanel = true;
-        var p = new Vector2(l.x, l.y);
-        for (int i = 0; i < buttonRects.Length; i++)
-            if (buttonRects[i].Contains(p) && buttonPlates[i].gameObject.activeInHierarchy) return i;   // 다른 모드의 버튼은 같은 자리에 꺼져 있다
-        return -1;
-    }
-
-    /// <summary>판을 잡을 수 있는 거리인가.</summary>
-    public bool NearPanel(Vector3 tipPos, float margin)
-    {
-        if (!PanelPlaced) return false;
-        Vector3 l = panel.InverseTransformPoint(tipPos);
-        return Mathf.Abs(l.x) < PanelW * 0.5f + margin && Mathf.Abs(l.y) < PanelH * 0.5f + margin && Mathf.Abs(l.z) < margin;
-    }
-
-    /// <summary>닿은 버튼을 밝히고(-1이면 끔), 길게 누르기 진행(0~1)을 그린다.</summary>
-    public void SetHot(int index, float hold01)
-    {
-        if (index != hot)
-        {
-            if (hot >= 0) buttonPlates[hot].material.color = hot < 4 ? tabColor[hot] : buttonBase[hot];
-            if (index >= 0) buttonPlates[index].material.color = ButtonHot;
-            hot = index;
-        }
-        bool show = index >= 0 && hold01 > 0f;
-        if (fill.gameObject.activeSelf != show) fill.gameObject.SetActive(show);
-        if (show)
-        {
-            Rect r = buttonRects[index];
-            float w = r.width * Mathf.Clamp01(hold01);
-            fill.localPosition = new Vector3(r.xMin + w * 0.5f, r.yMin + 0.003f, -0.003f);
-            fill.localScale = new Vector3(w, 0.005f, 1f);
-        }
-    }
-
-    private readonly Color[] tabColor = { TabOff, TabOff, TabOff, TabOff };
-
     // ── 글자(상태가 바뀔 때만 부른다) ────────────────────────────────
-    public void SetTexts(string titleText, string instructionText, string noteText, int tab, string tipText)
+    /// <summary>자유 측정의 안내 · 알림과, 컨트롤러 끝의 이름표(두 모드 공통).</summary>
+    public void SetTexts(string instructionText, string noteText, string tipText)
     {
-        title.text = titleText;
         instruction.text = instructionText;
         note.text = noteText;
         tipLabel.text = tipText;
-        for (int i = 0; i < 4; i++)
-        {
-            tabColor[i] = i == tab ? TabOn : TabOff;
-            if (i != hot) buttonPlates[i].material.color = tabColor[i];
-        }
     }
 
-    /// <summary>순서 탭 맨 위 두 줄 — 지금 단계와 찍을 점(색은 리치 텍스트로 넣어 온다) · 알림.</summary>
+    /// <summary>순서 측정 맨 위 두 줄 — 지금 단계와 찍을 점(색은 리치 텍스트로 넣어 온다) · 알림.</summary>
     public void SetGuide(string line, string noteText)
     {
         guideLine.text = line;
         guideNote.text = noteText;
     }
 
-    /// <summary>결과표에서 지금 재는 동작의 줄을 밝힌다(-1이면 끔).</summary>
+    /// <summary>결과표에서 지금 재는 동작의 칸을 밝힌다(-1이면 끔).</summary>
     public void SetRowNow(int motion)
     {
         bool show = motion >= 0;
         if (rowNow.gameObject.activeSelf != show) rowNow.gameObject.SetActive(show);
-        if (show) rowNow.localPosition = new Vector3(0f, rowY[motion], -0.001f);
+        if (show) rowNow.localPosition = new Vector3(cellPos[motion].x, cellPos[motion].y, -0.001f);
     }
 
     /// <summary>
@@ -538,26 +437,6 @@ public class RomLineView
             p.SetPosition(0, OnPanel(gaugePivot[motion]));
             p.SetPosition(1, OnPanel(GaugePoint(motion, deg, GaugeR)));
         }
-    }
-
-    /// <summary>진행 정보의 한 줄(0~5). now = 지금 그 줄에 있다.</summary>
-    public void SetPopupRow(int row, string name, string steps, bool now)
-    {
-        popupNames[row].text = name;
-        popupSteps[row].text = steps;
-        if (!now) return;
-        popupNow.localPosition = new Vector3(0f, popupY[row], -0.002f);
-        if (!popupNow.gameObject.activeSelf) popupNow.gameObject.SetActive(true);
-    }
-
-    /// <summary>진행 정보의 아래 글자들. 밝힐 줄이 없으면(측정 끝) hideNow로 밝힘을 끈다.</summary>
-    public void SetPopupFoot(string hint, string progress, string keys1, string keys2, bool hideNow)
-    {
-        popupHint.text = hint;
-        popupProgress.text = progress;
-        popupKeys1.text = keys1;
-        popupKeys2.text = keys2;
-        if (hideNow && popupNow.gameObject.activeSelf) popupNow.gameObject.SetActive(false);
     }
 
     /// <summary>판 맨 아래 한 줄(모니터 화면의 주소).</summary>
@@ -741,7 +620,7 @@ public class RomLineView
     /// tipValid = 끝의 자리가 있다(추정값이라도) · tipTracked = 헤드셋 카메라가 실제로 보고 있다.
     /// 못 보고 있으면 끝 구슬을 빨갛게 그리고 이름표를 숨긴다 — 그 상태에서는 점이 찍히지 않는다는 표시다.
     /// </summary>
-    public void Tick(Transform eye, bool tipValid, bool tipTracked, Vector3 tipPos, bool showTipLabel, bool[] fingerValid, Vector3[] fingerPos)
+    public void Tick(Transform eye, bool tipValid, bool tipTracked, Vector3 tipPos, bool showTipLabel)
     {
         if (tipTracked != tipDrawnTracked)
         {
@@ -750,14 +629,6 @@ public class RomLineView
             tip.localScale = Vector3.one * PointRadius * (tipTracked ? 1.6f : 2.6f);
         }
         showTipLabel &= tipTracked;
-        // 손끝 구슬은 판 가까이(15cm) 왔을 때만 — 환자를 잡은 손 위에 떠다니지 않게
-        for (int i = 0; i < fingers.Length; i++)
-        {
-            bool show = fingerValid[i] && NearPanel(fingerPos[i], 0.15f);
-            if (fingers[i].gameObject.activeSelf != show) fingers[i].gameObject.SetActive(show);
-            if (show) fingers[i].position = fingerPos[i];
-        }
-
         if (tip.gameObject.activeSelf != tipValid) tip.gameObject.SetActive(tipValid);
         bool label = tipValid && showTipLabel;
         if (tipLabel.gameObject.activeSelf != label) tipLabel.gameObject.SetActive(label);
@@ -825,7 +696,7 @@ public class RomLineView
         var r = go.GetComponent<Renderer>();
         r.sharedMaterial = mat;
         r.material.color = c;
-        r.sortingOrder = order;   // 같은 투명 큐라 그리는 순서를 정해 준다: 판 0 · 버튼 1 · 차오름 2 · 글자 3
+        r.sortingOrder = order;   // 같은 투명 큐라 그리는 순서를 정해 준다: 판 0 · 탭 · 밝힘 1 · 그림 2 · 글자 3 · 리셋 확인 4 · 6
         return go.transform;
     }
 
