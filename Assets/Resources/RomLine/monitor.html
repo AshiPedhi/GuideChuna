@@ -17,7 +17,7 @@
          #demo-confirm = 확인을 기다리는 견본 · #demo-popup = 탭 창을 띄운 견본.
 -->
 <style>
-  :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFB060; --bad:#FF6B6B; --ok:#4ADE80; --orange:#FF6B05; }
+  :root { --bg:#0E1319; --card:#171E27; --line:#2A3542; --ink:#E9EEF4; --dim:#9AA8B8; --sag:#66B3FF; --front:#73E68C; --floor:#FFD94D; --warn:#FFD94D; --note:#CCDBED; --bad:#FF6B6B; --ok:#4ADE80; --neutral:#EBEBEB; --active:#FF6B05; --pressure:#F2994D; }
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:'Malgun Gothic','Noto Sans KR',sans-serif; }
   body { display:grid; grid-template-rows:auto 1fr auto; gap:10px; padding:12px; }
@@ -32,7 +32,7 @@
   .tab.cursor { border-color:#FFD94D; }
   .tabs .gap { width:10px; }
   #instruction { font-size:28px; font-weight:700; color:#FFF2A6; }
-  #note { font-size:16px; color:var(--warn); min-height:22px; }
+  #note { font-size:16px; color:var(--note); min-height:22px; }
   #track { font-size:22px; font-weight:800; padding:10px 18px; border-radius:8px; white-space:nowrap; }
   #track.ok { background:#123B22; color:var(--ok); } #track.bad { background:#4A1616; color:var(--bad); } #track.off { background:#333; color:#bbb; }
   main { display:grid; grid-template-columns:minmax(420px, 44%) 1fr; gap:10px; min-height:0; }
@@ -71,7 +71,7 @@
   #bConfirm { display:none; background:#1F7A3F; border-color:#2FA85A; font-weight:800; } #bConfirm.on { display:inline-block; }
   #popTabs { display:flex; gap:8px; justify-content:center; margin-bottom:14px; }
   #popAsk { display:none; margin:10px 0; padding:12px; border-radius:8px; background:#4A1616; color:#FFD0D0; text-align:center; font-size:20px; font-weight:700; } #popAsk.on { display:block; }
-  #res td.a { color:var(--orange); } #res td.p { color:#F2994D; } #res td.opp { color:var(--bad); } #res td.none { color:#445; font-weight:400; }
+  #res td.a { color:var(--active); } #res td.p { color:var(--pressure); } #res td.opp { color:var(--bad); } #res td.none { color:#445; font-weight:400; }
   #res tr.now td { background:#1F2936; } #res tr.now td.cur { text-decoration:underline; text-underline-offset:6px; }
   #res td.g { text-align:center; padding:1px 8px; } #res canvas { width:176px; height:92px; display:block; margin:0 auto; }
   #pop { display:none; position:fixed; inset:0; background:rgba(0,0,0,.6); align-items:center; justify-content:center; z-index:5; }
@@ -81,7 +81,7 @@
   .prow { display:grid; grid-template-columns:120px 1fr; align-items:center; padding:7px 12px; border-radius:8px; font-size:24px; }
   .prow.now { background:#1F2936; } .prow b.name { font-weight:700; }
   .prow span.todo { color:#8A96A6; } .prow span.done { color:var(--front); } .prow span.cur { color:var(--floor); font-weight:800; } .prow i { color:#556; font-style:normal; margin:0 12px; }
-  #popHint { margin-top:10px; text-align:center; color:var(--warn); font-size:17px; min-height:24px; }
+  #popHint { margin-top:10px; text-align:center; color:var(--note); font-size:17px; min-height:24px; }
   #popProg { text-align:center; font-size:22px; font-weight:700; margin:6px 0 12px; }
   #popKeys { text-align:center; color:var(--dim); font-size:15px; line-height:1.7; }
   #popBtns { display:flex; gap:8px; justify-content:center; margin-top:14px; }
@@ -144,6 +144,8 @@
 </div>
 <script>
 const COLORS = ['#66B3FF', '#73E68C', '#FFD94D'];
+// 역할마다 색 하나(10-12) — 헤드셋 안(RomLineView의 NeutralColor · ActiveColor · PressureColor)과 같은 값이다.
+const C_NEUTRAL = '#EBEBEB', C_ACTIVE = '#FF6B05', C_PRESSURE = '#F2994D';
 const DEMO = location.hash.startsWith('#demo');
 let demoTab = location.hash === '#demo-lat' ? 1 : location.hash === '#demo-rot' ? 2 : 0;
 let S = null, lastOk = 0, demoPopup = location.hash.endsWith('-popup'), demoConfirm = location.hash.endsWith('-confirm');
@@ -214,12 +216,12 @@ function drawGauge(cv, m, r) {
   for (let d = -90; d <= 90; d += 15) line(P(d, Rr - (d % 45 === 0 ? 11 : 6)), P(d, Rr));
   g.fillStyle = '#6B7A8F'; g.font = '13px sans-serif'; g.textBaseline = 'middle';
   g.textAlign = 'right'; g.fillText(GLEFT[m], px - Rr - 5, py - z * 2); g.textAlign = 'left'; g.fillText(GRIGHT[m], px + Rr + 5, py - z * 2);
-  g.strokeStyle = '#EDEDED'; g.lineWidth = 2.5; line([px, py], P(0, Rr));
+  g.strokeStyle = C_NEUTRAL; g.lineWidth = 2.5; line([px, py], P(0, Rr));
   const deg = x => Math.min(x.v, GMAX) * GSIDE[m] * (x.o ? -1 : 1);
-  if (r && r.p) { g.strokeStyle = '#F2994D'; g.lineWidth = 3; line([px, py], P(deg(r.p), Rr)); }
+  if (r && r.p) { g.strokeStyle = C_PRESSURE; g.lineWidth = 3; line([px, py], P(deg(r.p), Rr)); }
   if (r && r.a) {
     const d = deg(r.a);
-    g.strokeStyle = '#FF6B05'; g.lineWidth = 2;
+    g.strokeStyle = C_ACTIVE; g.lineWidth = 2;
     g.beginPath(); for (let i = 0; i <= 12; i++) { const q = P(d * i / 12, Rr * 0.45); i === 0 ? g.moveTo(q[0], q[1]) : g.lineTo(q[0], q[1]); } g.stroke();
     g.lineWidth = 4; line([px, py], P(d, Rr));
   }
@@ -377,14 +379,15 @@ function drawView(v, lines, col) {
 
   lines.forEach((l, i) => {
     const isLast = !l.ref && i === lines.length - 1;
-    g.strokeStyle = l.ref ? '#EDEDED' : (isLast ? '#FF8A2B' : '#B8530C'); g.lineWidth = l.ref ? 3 : (isLast ? 4 : 2.5);
+    // 순서 측정: 선 1 = 중립 · 2 = 능동 · 3 = 압박(역할 색). 자유 측정: 기준선 = 중립 색, 측정선 = 능동 색(가장 최근 선만 굵게)
+    g.strokeStyle = l.ref ? C_NEUTRAL : (S.mode !== 'free' && l.n === 3 ? C_PRESSURE : C_ACTIVE); g.lineWidth = l.ref ? 3 : (isLast ? 4 : 2.5);
     g.beginPath(); g.moveTo(X(l.a), Y(l.a)); g.lineTo(X(l.b), Y(l.b)); g.stroke();
     g.fillStyle = g.strokeStyle;
     g.beginPath(); g.arc(X(l.a), Y(l.a), 4.5, 0, 6.3); g.fill();           // 첫 점은 꽉 찬 점
     g.beginPath(); g.arc(X(l.b), Y(l.b), 4.5, 0, 6.3); g.stroke();         // 둘째 점은 빈 점 — 찍은 순서가 보인다
     g.font = 'bold 15px sans-serif'; g.fillText(l.n, (X(l.a) + X(l.b)) / 2 + 7, (Y(l.a) + Y(l.b)) / 2 - 5);
   });
-  if (S.pending) { g.fillStyle = '#FF8A2B'; g.beginPath(); g.arc(X(S.pending), Y(S.pending), 5, 0, 6.3); g.fill(); }
+  if (S.pending) { g.fillStyle = C_ACTIVE; g.beginPath(); g.arc(X(S.pending), Y(S.pending), 5, 0, 6.3); g.fill(); }
   if (S.tip) {
     g.strokeStyle = S.tracked ? '#FFF233' : '#FF6B6B'; g.lineWidth = 2;
     const x = X(S.tip), y = Y(S.tip);

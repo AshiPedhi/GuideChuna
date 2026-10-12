@@ -18,11 +18,11 @@ public class RomLineFreeView
     private const float AxisWidth = 0.006f;
     private const float FrameHeight = 1.9f;
 
-    private static readonly Color FirstColor = new Color(0.92f, 0.92f, 0.92f, 1f);   // 첫 선(기준선)
-    private static readonly Color LineColor = new Color(1f, 0.42f, 0.02f, 1f);
+    private static readonly Color FirstColor = RomLineView.NeutralColor;   // 기준선 = 중립과 같은 색
+    private static readonly Color LineColor = RomLineView.ActiveColor;     // 측정선 = 능동과 같은 색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color OffColor = new Color(0.40f, 0.43f, 0.48f, 1f);
-    private static readonly Color WarnColor = new Color(1f, 0.75f, 0.45f, 1f);
+    private static readonly Color WarnColor = new Color(1f, 0.85f, 0.30f, 1f);   // 알림 — 주황(측정값)과 섞이지 않게 노랑
     // 세 면의 색 — 판의 칸 머리글과 공간의 축이 같은 색이다
     private static readonly Color SagColor = new Color(0.40f, 0.70f, 1f, 1f);     // 굴곡·신전(옆에서 본 면)
     private static readonly Color FrontColor = new Color(0.45f, 0.90f, 0.55f, 1f); // 측굴(앞에서 본 면)

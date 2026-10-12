@@ -17,10 +17,12 @@ public class RomLineView
     private const int ArcSegments = 32;
 
     // ── 색 ──────────────────────────────────────────────────────────
-    private static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);
-    private static readonly Color ActiveColor = new Color(1f, 0.42f, 0.02f, 1f);      // 능동 #FF6B05
-    private static readonly Color PressureColor = new Color(0.62f, 0.26f, 0.01f, 1f); // 압박 #9E4203(명도만 낮춤)
-    private static readonly Color ArcColor = new Color(0.25f, 0.65f, 1f, 1f);
+    //   ★10-12 사용자 지시: 색은 <b>역할</b>마다 하나다 — 중립 · 능동 · 압박. 환자 위의 점 · 선 · 호 · 값 글자, 메인 화면의 값 글자 · 칸 머리글 · 각도기 선,
+    //     자유 측정의 선, 모니터 화면(monitor.html의 --neutral · --active · --pressure)이 전부 이 세 값을 쓴다. 다른 주황 계열을 새로 만들지 않는다.
+    //     알림 글자(NoteColor)도 주황이 아니다 — 주황은 측정값에만 쓴다.
+    public static readonly Color NeutralColor = new Color(0.92f, 0.92f, 0.92f, 1f);     // 중립 #EBEBEB
+    public static readonly Color ActiveColor = new Color(1f, 0.42f, 0.02f, 1f);       // 능동 #FF6B05
+    public static readonly Color PressureColor = new Color(0.95f, 0.60f, 0.30f, 1f);   // 압박 #F2994D — 종전 공간의 #9E4203은 어두운 화면에서 안 보여 화면만 따로 밝은 색을 썼다. 밝은 쪽으로 합쳤다
     private static readonly Color TipColor = new Color(1f, 0.95f, 0.2f, 1f);
     private static readonly Color TipLostColor = new Color(1f, 0.30f, 0.30f, 0.85f);   // 헤드셋이 컨트롤러를 못 보고 있다 — 자리는 추정값
     private static readonly Color PlateColor = new Color(0.07f, 0.09f, 0.12f, 0.92f);
@@ -93,7 +95,7 @@ public class RomLineView
         neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
         activeLine = MakeLine("능동 측정선", ActiveColor, 2);
         pressureLine = MakeLine("압박 측정선", PressureColor, 2);
-        arc = MakeLine("각도기", ArcColor, ArcSegments + 1);
+        arc = MakeLine("각도기", ActiveColor, ArcSegments + 1);   // 호는 중립선에서 능동선까지다 — 화면의 각도기 호와 같은 색
         activeText = MakeText(root, "", 0.11f, TextAlignmentOptions.Center, 5);
         pressureText = MakeText(root, "", 0.09f, TextAlignmentOptions.Center, 5);
         activeText.color = ActiveColor;
@@ -197,10 +199,9 @@ public class RomLineView
     private static readonly string[] GaugeLeft = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] GaugeRight = { "앞", "앞", "좌", "좌", "좌", "좌" };
     private static readonly string[] FreeTabNames = { "굴곡·신전", "측굴", "회전" };
-    private static readonly Color NoteColor = new Color(1f, 0.75f, 0.45f, 1f);
+    private static readonly Color NoteColor = new Color(0.80f, 0.86f, 0.93f, 1f);     // 알림 · 안내 — 주황(측정값)과 섞이지 않게 푸른 회색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color GaugeDim = new Color(0.42f, 0.48f, 0.56f, 1f);
-    private static readonly Color PanelPressure = new Color(0.95f, 0.6f, 0.3f, 1f);   // 판 위의 압박 — 공간의 압박색(#9E4203)은 어두운 판에서 안 보인다
     private static readonly Color OppositeColor = new Color(1f, 0.45f, 0.45f, 1f);    // 반대쪽으로 움직인 값
     private static readonly Color RowNowColor = new Color(0.15f, 0.21f, 0.29f, 1f);
     private static readonly Color PopupColor = new Color(0.09f, 0.12f, 0.17f, 0.96f);
@@ -224,7 +225,7 @@ public class RomLineView
             float cx = col == 0 ? -0.20f : 0.20f;
             Place(MakeText(resultArea, "측정", 0.075f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, headY), 0.10f).color = DimColor;
             Place(MakeText(resultArea, "능동", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, headY), 0.07f).color = ActiveColor;
-            Place(MakeText(resultArea, "압박", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PanelPressure;
+            Place(MakeText(resultArea, "압박", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PressureColor;
             Place(MakeText(resultArea, "각도기", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(cx + GaugeX, headY), 0.10f).color = DimColor;
         }
 
@@ -258,7 +259,7 @@ public class RomLineView
             Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0024f, NeutralColor);   // 0° = 중립
 
             gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0020f);
-            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PanelPressure, 2, 0.0030f);
+            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PressureColor, 2, 0.0030f);
             gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0036f);
         }
 
@@ -450,7 +451,7 @@ public class RomLineView
     {
         values[slot].text = text;
         values[slot].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
-        values[slot].color = opposite ? OppositeColor : slot % 2 == 0 ? ActiveColor : PanelPressure;
+        values[slot].color = opposite ? OppositeColor : slot % 2 == 0 ? ActiveColor : PressureColor;
     }
 
     /// <summary>비교 시험 줄. row 0 = 굴곡 · 1 = 신전.</summary>
