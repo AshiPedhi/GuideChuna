@@ -171,17 +171,21 @@ public class RomLineView
         freeArea.gameObject.SetActive(false);
         popup.gameObject.SetActive(false);
 
-        // ── 안내창(10-12 사용자 지시) ── 지금 무엇을 할지를 멀리 있는 화면이 아니라 사용자 가까이에 띄운다. 글 두 줄뿐이다:
-        //   윗줄 = 지금 단계와 찍을 점(또는 «A = 확인») · 아랫줄 = 그 단계의 안내 음성과 같은 문장(알림이 있으면 알림)
-        guide = new GameObject("안내창").transform;
+        // ── 안내(10-13 사용자 지시) ── 판을 없앴다. 반투명 테두리 안에 글만 띄우고, <b>헤드셋이 보는 쪽을 따라온다</b>(Tick).
+        //   윗줄 = 지금 할 일 한 문장(«굴곡 · 중립을 측정하세요» · «굴곡 측정 완료 …») · 아랫줄 = 알림이 있을 때만.
+        guide = new GameObject("안내").transform;
         guide.SetParent(root, false);
-        MakeQuad(guide, "바탕", Vector2.zero, new Vector2(GuideW, GuideH), PopupColor, 0);
-        guideLine = Place(MakeText(guide, "", 0.14f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.024f), GuideW - 0.02f);
-        guideNote = MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3);
-        guideNote.textWrappingMode = TextWrappingModes.Normal;   // 안내 문장은 길면 두 줄로 접는다
-        guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.03f, 0.05f);
-        guideNote.transform.localPosition = new Vector3(0f, -0.022f, -0.004f);
+        const float t = 0.0015f;   // 테두리 굵기
+        MakeQuad(guide, "테두리 위", new Vector2(0f, GuideH * 0.5f), new Vector2(GuideW, t), GuideBorder, 0);
+        MakeQuad(guide, "테두리 아래", new Vector2(0f, -GuideH * 0.5f), new Vector2(GuideW, t), GuideBorder, 0);
+        MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
+        MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
+        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.012f), GuideW - 0.02f);
+        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(0f, -0.022f), GuideW - 0.02f);
         guideNote.color = NoteColor;
+        // 바탕이 없어 밝은 배경(패스스루)에서 글자가 묻힌다 — 검은 외곽선을 두른다
+        guideLine.outlineColor = guideNote.outlineColor = new Color32(0, 0, 0, 255);
+        guideLine.outlineWidth = guideNote.outlineWidth = 0.22f;
         guide.gameObject.SetActive(false);
 
         // 맨 아래 한 줄 — 모니터 화면의 주소
@@ -198,7 +202,9 @@ public class RomLineView
     private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
-    private const float GuideW = 0.46f, GuideH = 0.11f;      // 안내창의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
+    private const float GuideW = 0.40f, GuideH = 0.085f;     // 안내 테두리의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
+    private const float GuideFollow = 3f;                    // 안내가 시선을 따라오는 빠르기(1/초) — 고개를 조금 움직여도 덜컹거리지 않게 늦게 따라온다
+    private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
@@ -217,7 +223,9 @@ public class RomLineView
     private static readonly Color ResetColor = new Color(0.42f, 0.13f, 0.13f, 1f);
 
     private Transform resultArea, popup, rowNow, resetCard;
-    private Transform guide;                 // 안내창 — 사용자 가까이에 따로 선다
+    private Transform guide;                 // 안내 — 헤드셋이 보는 쪽을 따라온다
+    private float guideDistance, guideDrop;
+    private bool guideSnapped;
     private TextMeshPro guideLine, guideNote;
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
@@ -376,9 +384,8 @@ public class RomLineView
     /// <summary>
     /// 메인 화면을 헤드셋이 보는 쪽 멀리에 세운다. distance = 눈에서 화면까지(m) · width = 화면 폭(m) · rise = 화면 아랫변이 눈높이보다 높은 만큼(m).
     /// 지움: 고개 숙임 → 화면은 늘 수평 앞에 선다. 탭 창은 화면 아래에 붙어 따라온다.
-    /// 안내창도 같이 세운다 — guideDistance = 눈에서 안내창까지(m) · guideDrop = 눈높이보다 낮은 만큼(m).
     /// </summary>
-    public void PlacePanel(Transform eye, float distance, float width, float rise, float guideDistance, float guideDrop)
+    public void PlacePanel(Transform eye, float distance, float width, float rise)
     {
         Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;
         if (fwd.sqrMagnitude < 0.5f) fwd = Vector3.forward;
@@ -388,13 +395,16 @@ public class RomLineView
         panel.position = pos;
         panel.rotation = Quaternion.LookRotation((pos - eye.position).normalized, Vector3.up);   // 눈을 마주 보게 살짝 숙인다
         panel.gameObject.SetActive(true);
-
-        // 안내창 — 같은 방향 가까이, 눈높이보다 아래. 눈을 마주 보게 젖힌다.
-        Vector3 gp = eye.position + fwd * guideDistance - Vector3.up * guideDrop;
-        guide.position = gp;
-        guide.rotation = Quaternion.LookRotation((gp - eye.position).normalized, Vector3.up);
-        guide.gameObject.SetActive(true);
         PanelPlaced = true;
+    }
+
+    /// <summary>안내를 켠다 — distance = 눈에서 안내까지(m) · drop = 시선의 가운데보다 아래로 내리는 만큼(m). 자리는 Tick이 매 프레임 따라가며 잡는다.</summary>
+    public void FollowGuide(float distance, float drop)
+    {
+        guideDistance = distance;
+        guideDrop = drop;
+        guideSnapped = false;
+        guide.gameObject.SetActive(true);
     }
 
     // ── 글자(상태가 바뀔 때만 부른다) ────────────────────────────────
@@ -404,7 +414,7 @@ public class RomLineView
         tipLabel.text = tipText;
     }
 
-    /// <summary>안내창의 두 줄 — 지금 단계와 찍을 점(색은 리치 텍스트로 넣어 온다) · 안내 문장이나 알림. 두 모드가 같이 쓴다.</summary>
+    /// <summary>안내의 두 줄 — 지금 할 일 한 문장(색은 리치 텍스트로 넣어 온다) · 알림(없으면 빈 줄). 두 모드가 같이 쓴다.</summary>
     public void SetGuide(string line, string noteText)
     {
         guideLine.text = line;
@@ -601,6 +611,14 @@ public class RomLineView
                 tipLabel.transform.position = tipPos + eye.right * 0.065f + eye.up * 0.012f;
                 Face(tipLabel.transform, eye);
             }
+        }
+        // 안내 — 헤드셋이 보는 쪽(고개 숙임까지)을 늦게 따라온다. 시선 가운데보다 조금 아래에 둬 찍는 자리를 가리지 않는다.
+        if (guide.gameObject.activeSelf)
+        {
+            Vector3 target = eye.position + eye.forward * guideDistance - eye.up * guideDrop;
+            guide.position = guideSnapped ? Vector3.Lerp(guide.position, target, 1f - Mathf.Exp(-GuideFollow * Time.unscaledDeltaTime)) : target;
+            guideSnapped = true;
+            Face(guide, eye);
         }
         for (int i = 0; i < neutralLabels.Length; i++)
             if (neutralLabels[i].gameObject.activeSelf) Face(neutralLabels[i].transform, eye);

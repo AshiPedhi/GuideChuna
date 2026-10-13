@@ -124,10 +124,10 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("메인 화면의 아랫변이 헤드셋 눈높이보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
     [SerializeField] private float screenRise = 0.30f;
 
-    [Header("=== 안내창(10-12) ===")]
-    [Tooltip("헤드셋에서 안내창까지의 거리(m). 지금 무엇을 할지 두 줄로 보여 주는 작은 창이다 — 메인 화면과 같은 때에 같은 방향으로 선다.")]
+    [Header("=== 안내(10-13) ===")]
+    [Tooltip("헤드셋에서 안내 글까지의 거리(m). 지금 할 일을 한 문장으로 보여 준다 — 판 없이 반투명 테두리와 글만 있고, 헤드셋이 보는 쪽을 따라온다.")]
     [SerializeField] private float guideDistance = 0.60f;
-    [Tooltip("안내창이 헤드셋 눈높이보다 낮은 만큼(m). 환자 머리를 가리면 더 내린다.")]
+    [Tooltip("안내 글을 시선의 가운데보다 아래로 내리는 만큼(m). 찍는 자리를 가리면 더 내린다.")]
     [SerializeField] private float guideDrop = 0.22f;
 
     [Header("=== 기타 ===")]
@@ -362,7 +362,8 @@ public class RomLineSession : MonoBehaviour
                 if (trackingWaitStart < 0f) trackingWaitStart = Time.unscaledTime;
                 if (Time.unscaledTime - trackingWaitStart < TrackingWaitSeconds) { Silent("헤드셋 추적을 기다린다"); return; }
             }
-            view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
+            view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
+            view.FollowGuide(guideDistance, guideDrop);
             Debug.Log($"[선실측] 메인 화면을 세웠다 — 눈 {eye.position:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 눈높이 위 {screenRise:F2}m");
             CaptureAxes("처음", false);
         }
@@ -575,7 +576,7 @@ public class RomLineSession : MonoBehaviour
                 stickReady = false;
                 axesAsk = false;
                 Buzz(0.08f, 0.6f);
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
                 CaptureAxes("스틱", true);
             }
             else if (aDown || undoTap || undoLong || triggerDown) SetAxesAsk(false, "다른 버튼");
@@ -1335,14 +1336,10 @@ public class RomLineSession : MonoBehaviour
         int lines = pts.Count / 2;
         bool half = pts.Count % 2 == 1;
 
-        string note = noteText;
-        if (note.Length == 0)
-            note = freeTab == 2 ? "바닥면으로 읽습니다 · 두 점은 늘 같은 순서로"
-                 : axesOn ? "환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로"
-                 : "3축이 꺼져 있어 직접 각만 나옵니다 · 두 점은 늘 같은 순서로";
+        string note = noteText;   // 아랫줄은 알림이 있을 때만(10-13)
         string instruction = $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요";
         view.SetTip("선 " + (lines + 1));
-        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + "   <color=#FFF233>" + instruction + "</color>", note);
+        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>선 " + (lines + 1) + "</color>", note);
         view.SetFreeTab(freeTab);
         RefreshPopup();
 
@@ -1477,7 +1474,7 @@ public class RomLineSession : MonoBehaviour
             case "resetAll": ResetAll("모니터"); break;
             case "rebase": if (freeMode) FreeRebase(); break;
             case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise, guideDistance, guideDrop);
+                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
                 CaptureAxes("모니터", true);
                 break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
@@ -1628,32 +1625,30 @@ public class RomLineSession : MonoBehaviour
 
         int tab = CurTab, cm = MotionOf(group);
         string instruction, tipText = "", guide, note = noteText, forMonitor;
+        // ★10-13 사용자 지시: 안내는 한 문장이다 — «○○ · 중립 / 능동 / 압박을 측정하세요». 어느 점을 찍으라는 말은 하지 않는다(컨트롤러 끝의 이름표에만 남는다).
+        //   동작 하나를 다 재면 «측정 완료 · 중립으로 돌아간 뒤 A = 확인». 아랫줄은 알림이 있을 때만 쓴다.
         if (Done)
         {
-            forMonitor = instruction = "모든 방향을 쟀습니다";
-            guide = "<color=#73E68C>모든 방향을 쟀습니다</color>";
-            if (note.Length == 0) note = "A = 탭 창 · 다시 재려면 B 길게(이 탭 지우기)나 탭 창의 리셋";
+            forMonitor = instruction = "모든 측정 완료";
+            guide = "<color=#73E68C>모든 측정 완료</color>";
         }
         else if (confirmWait)
         {
             // 동작 하나를 다 찍었다 — 확인을 기다린다
-            forMonitor = instruction = $"{MotionName[cm]}을 다 쟀습니다 — A = 확인 → {NextName(cm)}";
-            guide = $"{MotionName[cm]}을 다 쟀습니다   <color=#73E68C>A = 확인</color>  →  {NextName(cm)}";
-            if (note.Length == 0) note = "고치려면  B = 직선 취소 · B 길게 = 이 탭 지우기";
+            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 중립으로 돌아간 뒤 A = 확인";
+            guide = $"<color=#73E68C>{MotionName[cm]} 측정 완료</color> · 중립으로 돌아간 뒤 A = 확인";
         }
         else if (TabComplete(tab))
         {
-            forMonitor = instruction = guide = $"{TopTabName[tab]} 탭은 다 쟀습니다";
-            if (note.Length == 0) note = "A = 탭 창에서 다른 탭을 고릅니다 · 다시 재려면 B 길게(이 탭 지우기)";
+            forMonitor = instruction = guide = $"{TopTabName[tab]} 측정 완료";
         }
         else
         {
             RomLinePoint p = ExpectedPoint(group, index);
-            instruction = $"{PointName[(int)p]}을 찍으세요  ({index + 1}/{SizeOf(group)})";
+            instruction = $"{MotionName[cm]} · {PhaseName[PhaseOf(group)]}을 측정하세요";
             tipText = PointName[(int)p];
-            guide = $"{GroupTitle(group)}   <color=#FFF233>{instruction}</color>";
-            forMonitor = GroupTitle(group) + " — " + instruction;
-            if (note.Length == 0) note = NarrationText(cm, PhaseOf(group));   // 안내창의 아랫줄 = 그 단계의 안내 음성과 같은 문장
+            guide = $"{MotionName[cm]} · <color=#FFF233>{PhaseName[PhaseOf(group)]}</color>을 측정하세요";
+            forMonitor = instruction + $"  ({PointName[(int)p]} {index + 1}/{SizeOf(group)})";   // 모니터에는 찍을 점도 남긴다
         }
         view.SetTip(tipText);
         view.SetGuide(guide, note);
