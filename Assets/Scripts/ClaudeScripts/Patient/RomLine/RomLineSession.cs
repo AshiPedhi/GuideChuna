@@ -1725,13 +1725,10 @@ public class RomLineSession : MonoBehaviour
         RomLineResult ra = results[motion * 2], rp = results[motion * 2 + 1];
         RomLineDirect da = direct[motion * 2], dp = direct[motion * 2 + 1];
         if (ra.valid)
-        {
-            Vector3 normal = RomLineMath.PlaneNormal((RomLineMotion)motion, frame);
-            view.ShowMeasure(ra, rp.valid, rp, normal, pre + ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
-        }
+            view.ShowMeasure(ra, rp.valid, rp, pre + ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
         else if (da.valid)
         {
-            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], da.pivot, pre + da.angle.ToString("F1") + "°",
+            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], pre + da.angle.ToString("F1") + "°",
                             dp.valid, points[p0], points[p0 + 1], dp.valid ? "압박 " + dp.angle.ToString("F1") + "°" : "");
         }
         else view.ShowNeutralOnly(points[n0], points[n0 + 1]);   // 중립 기준선만 — 직선만 보인다

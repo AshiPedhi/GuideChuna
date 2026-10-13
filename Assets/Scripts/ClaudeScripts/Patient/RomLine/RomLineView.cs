@@ -13,9 +13,9 @@ public class RomLineView
     // ★10-13 사용자 지시: 공간의 선은 얇게(3mm → 1.5mm), 구슬도 조금 작게(반지름 5mm → 3.5mm).
     internal const float PointRadius = 0.0035f;
     private const float LineWidth = 0.0015f;
-    private const float ArcRadius = 0.06f;
-    private const float LineMargin = 0.04f;
-    private const int ArcSegments = 32;
+    // ★10-13 사용자 지시: 선은 <b>찍은 두 점 사이만</b> 긋는다. 종전에는 두 선의 교점까지 늘이고(끝은 4cm 더) 교점에 각도기 호를 세웠다 —
+    //   9/30 방식(«두 직선의 교점이 각도기의 축»)을 공간에 그대로 보이려던 것이다. 호는 뺐다(늘이지 않으면 교점이 선 밖에 뜬다). 값은 그대로다.
+    private const float LabelGap = 0.025f;   // 값 글자를 선 끝에서 띄우는 거리
 
     // ── 색 ──────────────────────────────────────────────────────────
     //   ★10-12 사용자 지시: 색은 <b>역할</b>마다 하나다 — 중립 · 능동 · 압박. 환자 위의 점 · 선 · 호 · 값 글자, 메인 화면의 값 글자 · 칸 머리글 · 각도기 선,
@@ -49,10 +49,9 @@ public class RomLineView
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
     private readonly Transform[] extraSpheres = new Transform[3];        // 비교 시험의 Gn(중립·능동·압박)
     private readonly TextMeshPro[] neutralLabels = new TextMeshPro[2];   // 기준(양쪽 Tr) 이름표
-    private LineRenderer neutralLine, activeLine, pressureLine, arc;
+    private LineRenderer neutralLine, activeLine, pressureLine;
     private LineRenderer cmpNeutralLine, cmpActiveLine, cmpPressureLine;   // 비교 시험의 Gl ~ Gn 선
     private TextMeshPro activeText, pressureText, cmpText;
-    private readonly Vector3[] arcPoints = new Vector3[ArcSegments + 1];
 
     // 컨트롤러 끝
     private Transform tip;
@@ -96,7 +95,6 @@ public class RomLineView
         neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
         activeLine = MakeLine("능동 측정선", ActiveColor, 2);
         pressureLine = MakeLine("압박 측정선", PressureColor, 2);
-        arc = MakeLine("각도기", ActiveColor, ArcSegments + 1);   // 호는 중립선에서 능동선까지다 — 화면의 각도기 호와 같은 색
         activeText = MakeText(root, "", 0.11f, TextAlignmentOptions.Center, 5);
         pressureText = MakeText(root, "", 0.09f, TextAlignmentOptions.Center, 5);
         activeText.color = ActiveColor;
@@ -518,7 +516,7 @@ public class RomLineView
     // ── 선·각도기 ───────────────────────────────────────────────────
     public void HideMeasure()
     {
-        neutralLine.enabled = activeLine.enabled = pressureLine.enabled = arc.enabled = false;
+        neutralLine.enabled = activeLine.enabled = pressureLine.enabled = false;
         activeText.gameObject.SetActive(false);
         pressureText.gameObject.SetActive(false);
     }
@@ -527,92 +525,48 @@ public class RomLineView
     public void ShowNeutralOnly(Vector3 a, Vector3 b)
     {
         HideMeasure();
-        Vector3 d = (b - a).normalized;
-        DrawLine(neutralLine, a - d * LineMargin, b + d * LineMargin);
+        DrawLine(neutralLine, a, b);
     }
 
-    /// <summary>능동(필수)·압박(있으면)을 그린다. 각도기는 능동 때의 교점에 세운다.</summary>
-    public void ShowMeasure(RomLineResult active, bool hasPressure, RomLineResult pressure, Vector3 normal, string activeLabel, string pressureLabel)
+    /// <summary>능동(필수)·압박(있으면)의 선을 찍은 두 점 사이에 긋고, 값은 그 선의 둘째 점 바깥에 띄운다.</summary>
+    public void ShowMeasure(RomLineResult active, bool hasPressure, RomLineResult pressure, string activeLabel, string pressureLabel)
     {
         HideMeasure();
-        Vector3 pivot = active.pivot;
-
-        float nMin, nMax;
-        Span(active.neutralA, active.neutralB, active.neutralDir, pivot, active.pivotOnLines, out nMin, out nMax);
-        DrawLine(neutralLine, active.neutralA + active.neutralDir * nMin, active.neutralA + active.neutralDir * nMax);
-
-        float aMin, aMax;
-        Span(active.markA, active.markB, active.markDir, pivot, active.pivotOnLines, out aMin, out aMax);
-        DrawLine(activeLine, active.markA + active.markDir * aMin, active.markA + active.markDir * aMax);
-
-        // 각도기 — 점들이 있는 쪽으로 편다(교점 건너편에 펴면 선은 있는데 점이 없는 쪽에 선다).
-        float side = Vector3.Dot((active.neutralA + active.neutralB) * 0.5f - pivot, active.neutralDir) >= 0f ? 1f : -1f;
-        Vector3 from = active.neutralDir * side;
-        for (int i = 0; i <= ArcSegments; i++)
-            arcPoints[i] = pivot + Quaternion.AngleAxis(active.signedAngle * i / ArcSegments, normal) * from * ArcRadius;
-        arc.positionCount = ArcSegments + 1;
-        arc.SetPositions(arcPoints);
-        arc.enabled = true;
-
-        Vector3 mid = Quaternion.AngleAxis(active.signedAngle * 0.5f, normal) * from;
+        DrawLine(neutralLine, active.neutralA, active.neutralB);
+        DrawLine(activeLine, active.markA, active.markB);
         activeText.text = activeLabel;
-        activeText.transform.position = pivot + mid * (ArcRadius + 0.03f);
+        activeText.transform.position = active.markB + active.markDir * LabelGap;
         activeText.gameObject.SetActive(true);
 
         if (hasPressure)
         {
-            float pMin, pMax;
-            Span(pressure.markA, pressure.markB, pressure.markDir, pressure.pivot, pressure.pivotOnLines, out pMin, out pMax);
-            DrawLine(pressureLine, pressure.markA + pressure.markDir * pMin, pressure.markA + pressure.markDir * pMax);
+            DrawLine(pressureLine, pressure.markA, pressure.markB);
             pressureText.text = pressureLabel;
-            pressureText.transform.position = pressure.markB + pressure.markDir * (LineMargin + 0.025f);
+            pressureText.transform.position = pressure.markB + pressure.markDir * LabelGap;
             pressureText.gameObject.SetActive(true);
         }
     }
 
-    /// <summary>
-    /// 면으로 옮기지 않은 3차원 선을 그대로 그린다(기준 Tr을 안 찍었을 때). 두 선은 공간에서 엇갈릴 수 있어
-    /// 각도기 호는 그리지 않고, 가장 가까운 자리에 값만 띄운다.
-    /// </summary>
-    public void ShowDirect(Vector3 nA, Vector3 nB, Vector3 aA, Vector3 aB, Vector3 pivot, string activeLabel,
+    /// <summary>면으로 옮기지 않은 3차원 선을 그대로 그린다(기준 Tr을 안 찍었을 때). 값은 선의 둘째 점 바깥에 띄운다.</summary>
+    public void ShowDirect(Vector3 nA, Vector3 nB, Vector3 aA, Vector3 aB, string activeLabel,
                            bool hasPressure, Vector3 pA, Vector3 pB, string pressureLabel)
     {
         HideMeasure();
-        DrawRaw(neutralLine, nA, nB);
-        DrawRaw(activeLine, aA, aB);
+        DrawLine(neutralLine, nA, nB);
+        DrawLine(activeLine, aA, aB);
         activeText.text = activeLabel;
-        activeText.transform.position = pivot + Vector3.up * 0.03f;
+        activeText.transform.position = aB + (aB - aA).normalized * LabelGap;
         activeText.gameObject.SetActive(true);
         if (hasPressure)
         {
-            DrawRaw(pressureLine, pA, pB);
+            DrawLine(pressureLine, pA, pB);
             pressureText.text = pressureLabel;
-            pressureText.transform.position = pB + (pB - pA).normalized * (LineMargin + 0.025f);
+            pressureText.transform.position = pB + (pB - pA).normalized * LabelGap;
             pressureText.gameObject.SetActive(true);
         }
     }
 
-    private static void DrawRaw(LineRenderer lr, Vector3 a, Vector3 b)
-    {
-        Vector3 d = (b - a).normalized;
-        DrawLine(lr, a - d * LineMargin, b + d * LineMargin);
-    }
-
-    // 선을 두 점과 교점을 모두 덮게 편다(교점이 실제 교점일 때만 교점까지 뻗는다).
-    private static void Span(Vector3 a, Vector3 b, Vector3 dir, Vector3 pivot, bool usePivot, out float min, out float max)
-    {
-        float tb = Vector3.Dot(b - a, dir);
-        min = Mathf.Min(0f, tb);
-        max = Mathf.Max(0f, tb);
-        if (usePivot)
-        {
-            float tp = Vector3.Dot(pivot - a, dir);
-            min = Mathf.Min(min, tp);
-            max = Mathf.Max(max, tp);
-        }
-        min -= LineMargin;
-        max += LineMargin;
-    }
+    private static void DrawRaw(LineRenderer lr, Vector3 a, Vector3 b) => DrawLine(lr, a, b);
 
     internal static void DrawLine(LineRenderer lr, Vector3 a, Vector3 b)
     {

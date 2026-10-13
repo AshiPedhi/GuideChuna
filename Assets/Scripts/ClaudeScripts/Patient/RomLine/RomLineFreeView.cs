@@ -14,7 +14,6 @@ public class RomLineFreeView
     /// <summary>판에 보이는 선의 수(가장 최근 것부터). 한 줄에 선 하나.</summary>
     public const int Rows = 8;
     private const int Cols = 3;               // 그 동작의 면 각 · 직접 각 · 알림
-    private const float LineMargin = 0.02f;
     private const float AxisWidth = 0.002f;
     // ★10-13 사용자 지시: 3축은 <b>바닥과 정면을 가를 수 있는 십자선만</b> 그린다 — 수직 기둥, 두 세로 면의 테두리,
     //   «정면 · 환자 오른쪽 / 왼쪽 · 굴곡·신전 면 · 측굴 면» 글자를 모두 뺐다. 정면은 화살표로만 가린다.
@@ -146,8 +145,7 @@ public class RomLineFreeView
             lines[i].startColor = lines[i].endColor = c;
             labels[i].color = c;
             Vector3 a = pts[i * 2], b = pts[i * 2 + 1];
-            Vector3 d = (b - a).normalized;
-            RomLineView.DrawLine(lines[i], a - d * LineMargin, b + d * LineMargin);
+            RomLineView.DrawLine(lines[i], a, b);   // 찍은 두 점 사이만(10-13)
             labels[i].text = (i + 1) + " · " + (Vector3.Distance(a, b) * 100f).ToString("F1") + "cm";
             labels[i].transform.position = (a + b) * 0.5f + Vector3.up * 0.015f;
         }
