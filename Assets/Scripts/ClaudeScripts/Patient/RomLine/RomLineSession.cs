@@ -468,11 +468,11 @@ public class RomLineSession : MonoBehaviour
         lastSilent = null;
     }
 
-    /// <summary>헤드셋에서 본 컨트롤러의 자리 — 거리(cm) · 좌우 각(오른쪽 +) · 위아래 각(위 +). 헤드셋 카메라의 시야를 벗어났는지 가리는 데 쓴다.</summary>
-    private void FromHeadset(out float distanceCm, out float sideDeg, out float upDeg)
+    /// <summary>헤드셋에서 본 컨트롤러의 자리 — 거리(mm) · 좌우 각(오른쪽 +) · 위아래 각(위 +). 헤드셋 카메라의 시야를 벗어났는지 가리는 데 쓴다.</summary>
+    private void FromHeadset(out float distanceMm, out float sideDeg, out float upDeg)
     {
         Vector3 rel = Quaternion.Inverse(eye.rotation) * (ctrlPos - eye.position);
-        distanceCm = rel.magnitude * 100f;
+        distanceMm = rel.magnitude * 1000f;   // ★10-13 사용자 지시: 길이는 화면 · 로그 · CSV 모두 mm이고 단위 글자를 붙이지 않는다
         sideDeg = Mathf.Atan2(rel.x, rel.z) * Mathf.Rad2Deg;
         upDeg = Mathf.Atan2(rel.y, new Vector2(rel.x, rel.z).magnitude) * Mathf.Rad2Deg;
     }
@@ -497,7 +497,7 @@ public class RomLineSession : MonoBehaviour
         {
             FromHeadset(out float dist, out float side, out float up);
             Vector3 toHead = (eye.position - ctrlPos).normalized;
-            sb.Append(" · 헤드셋에서 ").Append(dist.ToString("F0")).Append("cm · 좌우 ").Append(side.ToString("+0;-0")).Append("° · 위아래 ").Append(up.ToString("+0;-0"))
+            sb.Append(" · 헤드셋에서 ").Append(dist.ToString("F0")).Append(" · 좌우 ").Append(side.ToString("+0;-0")).Append("° · 위아래 ").Append(up.ToString("+0;-0"))
               .Append("° · 컨트롤러 윗면→헤드셋 ").Append(Vector3.Dot(ctrlRot * Vector3.up, toHead).ToString("+0.00;-0.00"))
               .Append(" · 앞면→헤드셋 ").Append(Vector3.Dot(ctrlRot * Vector3.forward, toHead).ToString("+0.00;-0.00"))
               .Append(" · 속도 ").Append(OVRInput.GetLocalControllerVelocity(active).magnitude.ToString("F2")).Append("m/s");
@@ -723,7 +723,7 @@ public class RomLineSession : MonoBehaviour
     private string PoseSuffix()
     {
         FromHeadset(out float dist, out float side, out float up);
-        return $" · 컨트롤러 자리 {markCtrlPos:F4} 회전 {markCtrlRot:F4} · 헤드셋에서 {dist:F0}cm 좌우 {side:+0;-0}° 위아래 {up:+0;-0}° · 추적된 지 {Time.unscaledTime - trackSince:F1}초 · t {Time.unscaledTime:F1}s";
+        return $" · 컨트롤러 자리 {markCtrlPos:F4} 회전 {markCtrlRot:F4} · 헤드셋에서 {dist:F0} 좌우 {side:+0;-0}° 위아래 {up:+0;-0}° · 추적된 지 {Time.unscaledTime - trackSince:F1}초 · t {Time.unscaledTime:F1}s";
     }
 
     // ── 동작 ────────────────────────────────────────────────────────
@@ -791,7 +791,7 @@ public class RomLineSession : MonoBehaviour
                 return;
             }
             Debug.Log($"[선실측] 기준 방향 — 오른쪽 {frame.right:F2} · 앞뒤 {frame.forward:F2} · 위 {frame.up:F2} · " +
-                      $"미주점 간격 {Vector3.Distance(points[0], points[1]) * 100f:F1}cm");
+                      $"미주점 간격 {Vector3.Distance(points[0], points[1]) * 1000f:F0}");
             for (int m = 0; m < 6; m++) { FaceCheck(m); RecomputeMotion(m); }   // 기준만 다시 찍었을 때 남아 있는 측정을 다시 잰다
         }
         else
@@ -799,7 +799,7 @@ public class RomLineSession : MonoBehaviour
             int m = MotionOf(group), ph = PhaseOf(group);
             if (ph == 0)
             {
-                Debug.Log($"[선실측] 중립선 — {MotionName[m]} · 길이 {Vector3.Distance(points[start], points[start + 1]) * 100f:F1}cm");
+                Debug.Log($"[선실측] 중립선 — {MotionName[m]} · 길이 {Vector3.Distance(points[start], points[start + 1]) * 1000f:F0}");
                 FaceCheck(m);
                 RecomputeMotion(m);
             }
@@ -867,7 +867,7 @@ public class RomLineSession : MonoBehaviour
         bool byGravity = !frame.valid && !RomLineMath.NeedsReference(motion);
         if (!frame.valid && !byGravity)
         {
-            Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · 면 위 —(기준 미주점을 안 찍었다)");
+            Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 1000f:F0} · 면 위 —(기준 미주점을 안 찍었다)");
             return;
         }
         RomLineResult r = RomLineMath.Measure(points[n0], points[n0 + 1], points[s0], points[s0 + 1], RomLineMath.PlaneNormal(motion, frame));
@@ -880,9 +880,9 @@ public class RomLineSession : MonoBehaviour
 
         bool match = RomLineMath.DirectionMatches(motion, r.signedAngle);
         Debug.Log($"[선실측] 값 — {title} 면 위 {r.angle:F1}°{(byGravity ? "(기준 없이 · 바닥면)" : "")} (부호 {r.signedAngle:+0.0;-0.0}{(match ? "" : " ★반대 방향")}) · " +
-                  $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 100f:F1}cm · " +
+                  $"직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 1000f:F0} · " +
                   $"면 밖 각 중립선 {r.neutralOffPlane:F1}° → 측정선 {r.markOffPlane:F1}° (변화 {r.markOffPlane - r.neutralOffPlane:+0.0;-0.0}°) · " +
-                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 100f:F1}cm)" : "멀거나 평행 — 첫 점에 세움")}");
+                  $"교점 {(r.pivotOnLines ? $"선 위(중립 첫 점에서 {Vector3.Distance(r.pivot, r.neutralA) * 1000f:F0})" : "멀거나 평행 — 첫 점에 세움")}");
         if (!match && GroupOf(m, ph) == group)
         {
             noteText = $"{MotionName[m]} 단계인데 반대쪽으로 움직인 값이다";
@@ -934,10 +934,10 @@ public class RomLineSession : MonoBehaviour
             cmpResults[slot] = cr;
         }
         RomLineDirect td = RomLineMath.MeasureDirect(points[n0], points[n0 + 1], points[s0], points[s0 + 1]);
-        Debug.Log($"[선실측] 비교 — {title} · 미주점~미간점 직접 {td.angle:F1}° · 미간점~턱끝점 직접 {cd.angle:F1}° (엇갈림 {cd.gap * 100f:F1}cm) · " +
+        Debug.Log($"[선실측] 비교 — {title} · 미주점~미간점 직접 {td.angle:F1}° · 미간점~턱끝점 직접 {cd.angle:F1}° (엇갈림 {cd.gap * 1000f:F0}) · " +
                   $"미간점~턱끝점 면 위 {(cr.valid ? cr.angle.ToString("F1") + "°" : "—(기준 미주점 없음)")} · " +
-                  $"선 길이 미간점~턱끝점 중립 {Vector3.Distance(points[n0 + 1], extra[gN]) * 100f:F1}cm → 측정 {Vector3.Distance(points[s0 + 1], extra[gS]) * 100f:F1}cm · " +
-                  $"미주점~미간점 중립 {Vector3.Distance(points[n0], points[n0 + 1]) * 100f:F1}cm → 측정 {Vector3.Distance(points[s0], points[s0 + 1]) * 100f:F1}cm");
+                  $"선 길이 미간점~턱끝점 중립 {Vector3.Distance(points[n0 + 1], extra[gN]) * 1000f:F0} → 측정 {Vector3.Distance(points[s0 + 1], extra[gS]) * 1000f:F0} · " +
+                  $"미주점~미간점 중립 {Vector3.Distance(points[n0], points[n0 + 1]) * 1000f:F0} → 측정 {Vector3.Distance(points[s0], points[s0 + 1]) * 1000f:F0}");
     }
 
     /// <summary>그 묶음의 점이 바뀌면 거기에 기대던 값을 지운다.</summary>
@@ -1258,7 +1258,7 @@ public class RomLineSession : MonoBehaviour
         FreeRefs[last] = last;
         CsvAdd("기준선으로", last);
         noteText = $"선 {last + 1}을 기준선으로 삼았다";
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 기준선 → 선 {last + 1}(길이 {FreeLength(last) * 100f:F1}cm)");
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 기준선 → 선 {last + 1}(길이 {FreeLength(last) * 1000f:F0})");
         Play(sndPress);
         dirty = true;
     }
@@ -1307,11 +1307,11 @@ public class RomLineSession : MonoBehaviour
         int rf = FreeRefs[line];
         var sb = new StringBuilder(320);
         sb.Append("[선실측] 자유(").Append(FreeTabName[freeTab]).Append(") — 선 ").Append(line + 1)
-          .Append(" · 길이 ").Append((FreeLength(line) * 100f).ToString("F1")).Append("cm");
+          .Append(" · 길이 ").Append((FreeLength(line) * 1000f).ToString("F0"));
         if (rf == line) { sb.Append(" · 기준선"); Debug.Log(sb.ToString()); return; }
 
         RomLineDirect d = FreeDirect(rf, line);
-        sb.Append(" ‖ 기준선(선 ").Append(rf + 1).Append(")과 직접 ").Append(d.angle.ToString("F1")).Append("°(엇갈림 ").Append((d.gap * 100f).ToString("F1")).Append("cm)");
+        sb.Append(" ‖ 기준선(선 ").Append(rf + 1).Append(")과 직접 ").Append(d.angle.ToString("F1")).Append("°(엇갈림 ").Append((d.gap * 1000f).ToString("F0")).Append(")");
         // 그 동작의 면이 먼저, 나머지 두 면은 «다른 면»으로 — 화면에는 그 동작의 면만 나온다. 로그에는 나중에 견줘 볼 수 있게 셋 다 남긴다.
         for (int k = 0; k < 3; k++)
         {
@@ -1367,7 +1367,7 @@ public class RomLineSession : MonoBehaviour
         for (int line = 0; line < lines; line++)
         {
             int row = line - firstRow, rf = refs[line];
-            float len = FreeLength(line) * 100f;
+            float len = FreeLength(line) * 1000f;   // mm
             string plane = "", warn = "";
             float directAngle = 0f;
             if (rf != line)
@@ -1385,14 +1385,14 @@ public class RomLineSession : MonoBehaviour
             }
             if (row >= 0)
             {
-                string name = $"선 {line + 1}  {len:F1}cm";
+                string name = $"선 {line + 1}  {len:F0}";
                 if (rf == line) freeView.SetRow(row, name, "기준선", "", "", true);
                 else freeView.SetRow(row, name, plane, directAngle.ToString("F1") + "°", warn, false);
             }
 
             if (line > 0) js.Append(',');
             js.Append("{\"n\":").Append(line + 1).Append(",\"ref\":").Append(rf == line ? "true" : "false").Append(",\"refOf\":").Append(rf + 1)
-              .Append(",\"len\":").Append(len.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"plane\":");
+              .Append(",\"len\":").Append(len.ToString("F0", CultureInfo.InvariantCulture)).Append(",\"plane\":");
             JsonStr(js, plane.Length > 1 ? plane : "").Append(",\"direct\":").Append(directAngle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
             JsonStr(js, warn).Append(",\"a\":");
             JsonVec(js, InAxes(pts[line * 2])).Append(",\"b\":");
@@ -1487,7 +1487,7 @@ public class RomLineSession : MonoBehaviour
     }
 
     // ── 기록(CSV) ───────────────────────────────────────────────────
-    private const string CsvHeader = "시각,경과(초),사건,동작,선,기준선,길이(cm),면,방향,면 각(도),직접 각(도),알림,움직인 모양,첫 점 x,첫 점 y,첫 점 z,둘째 점 x,둘째 점 y,둘째 점 z,환자 정면 x,환자 정면 z,끝점 x(mm),끝점 y(mm),끝점 z(mm)";
+    private const string CsvHeader = "시각,경과(초),사건,동작,선,기준선,길이(mm),면,방향,면 각(도),직접 각(도),알림,움직인 모양,첫 점 x,첫 점 y,첫 점 z,둘째 점 x,둘째 점 y,둘째 점 z,환자 정면 x,환자 정면 z,끝점 x(mm),끝점 y(mm),끝점 z(mm)";
 
     /// <summary>
     /// 한 줄을 기록한다 — 기기의 파일과 모니터의 «CSV 받기» 양쪽에. line이 0 이상이면 그 선의 값을 함께 적는다.
@@ -1503,7 +1503,7 @@ public class RomLineSession : MonoBehaviour
         {
             int rf = FreeRefs[line];
             List<Vector3> p = FreePts;
-            sb.Append(line + 1).Append(',').Append(rf + 1).Append(',').Append((FreeLength(line) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[freeTab]).Append(',');
+            sb.Append(line + 1).Append(',').Append(rf + 1).Append(',').Append((FreeLength(line) * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[freeTab]).Append(',');
             if (rf == line) sb.Append(",,,,,");
             else
             {
@@ -1792,7 +1792,7 @@ public class RomLineSession : MonoBehaviour
             first = false;
             js.Append("{\"n\":").Append(ph + 1).Append(",\"name\":");
             JsonStr(js, PhaseName[ph]).Append(",\"ref\":").Append(ph == 0 ? "true" : "false").Append(",\"refOf\":1,\"len\":")
-              .Append((Vector3.Distance(points[n], points[n + 1]) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(",\"plane\":");
+              .Append((Vector3.Distance(points[n], points[n + 1]) * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(",\"plane\":");
             JsonStr(js, planeText).Append(",\"direct\":").Append(directAngle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
             JsonStr(js, warn).Append(",\"a\":");
             JsonVec(js, InAxes(points[n])).Append(",\"b\":");
@@ -1915,7 +1915,7 @@ public class RomLineSession : MonoBehaviour
         sb.Length = 0;
         sb.Append(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append(',').Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
           .Append(",순서,").Append(MotionName[m]).Append(',').Append(PhaseName[ph]).Append(',').Append(ph == 0 ? "" : "중립").Append(',')
-          .Append((Vector3.Distance(points[n], points[n + 1]) * 100f).ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[plane]).Append(',');
+          .Append((Vector3.Distance(points[n], points[n + 1]) * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[plane]).Append(',');
         if (ph == 0) sb.Append(",,,,,");
         else
         {

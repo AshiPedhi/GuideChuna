@@ -105,7 +105,7 @@ public class RomLineFreeView
 
     // ── 점·선 ───────────────────────────────────────────────────────
     /// <summary>
-    /// 찍힌 점들(두 점마다 선 하나)을 그리고 선마다 «번호 · 길이»를 붙인다.
+    /// 찍힌 점들(두 점마다 선 하나)을 그리고 선마다 «번호 · 길이(mm)»를 붙인다.
     /// refOf[선] = 그 선이 견준 기준선의 번호 — 자기 번호와 같으면 기준선이라 흰색으로 그린다.
     /// </summary>
     public void SetPoints(List<Vector3> pts, List<int> refOf)
@@ -146,7 +146,7 @@ public class RomLineFreeView
             labels[i].color = c;
             Vector3 a = pts[i * 2], b = pts[i * 2 + 1];
             RomLineView.DrawLine(lines[i], a, b);   // 찍은 두 점 사이만(10-13)
-            labels[i].text = (i + 1) + " · " + (Vector3.Distance(a, b) * 100f).ToString("F1") + "cm";
+            labels[i].text = (i + 1) + " · " + (Vector3.Distance(a, b) * 1000f).ToString("F0");   // 길이는 mm, 단위 글자 없이(10-13)
             labels[i].transform.position = (a + b) * 0.5f + Vector3.up * 0.015f;
         }
     }

@@ -171,17 +171,17 @@ function cmd(c) {
 //   굴곡·신전 · 측굴 = 정중선(미간 → 턱), 회전 = 왼쪽 귀 → 미간. 각은 이 좌표에 맞춰 손으로 적은 값이다(실측 아님).
 const DEMO_SETS = [
   { plane:'옆면', instruction:'굴곡 · 압박 — 측정이 끝났습니다', tip:[0.03, 0.86, 0.12],
-    lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
-            {n:2, ref:false, refOf:1, len:9.0, plane:'굴곡 26.8°', direct:26.9, warn:'', a:[-0.001,0.82,0.075], b:[0.002,0.74,0.035]},
-            {n:3, ref:false, refOf:1, len:8.8, plane:'굴곡 39.3°', direct:39.5, warn:'', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ] },
+    lines:[ {n:1, ref:true, refOf:1, len:92, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
+            {n:2, ref:false, refOf:1, len:90, plane:'굴곡 26.8°', direct:26.9, warn:'', a:[-0.001,0.82,0.075], b:[0.002,0.74,0.035]},
+            {n:3, ref:false, refOf:1, len:88, plane:'굴곡 39.3°', direct:39.5, warn:'', a:[-0.005,0.78,0.105], b:[0.02,0.71,0.05]} ] },
   { plane:'앞면', instruction:'좌측굴 · 압박 — 측정이 끝났습니다', tip:[-0.09, 0.84, 0.05],
-    lines:[ {n:1, ref:true, refOf:1, len:9.2, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
-            {n:2, ref:false, refOf:1, len:9.0, plane:'좌측굴 20.0°', direct:20.3, warn:'', a:[-0.045,0.845,0.02], b:[-0.014,0.760,0.016]},
-            {n:3, ref:false, refOf:1, len:9.0, plane:'좌측굴 33.0°', direct:33.2, warn:'', a:[-0.074,0.8305,0.02], b:[-0.025,0.755,0.016]} ] },
+    lines:[ {n:1, ref:true, refOf:1, len:92, plane:'', direct:0, warn:'', a:[0,0.86,0.02], b:[0.004,0.768,0.015]},
+            {n:2, ref:false, refOf:1, len:90, plane:'좌측굴 20.0°', direct:20.3, warn:'', a:[-0.045,0.845,0.02], b:[-0.014,0.760,0.016]},
+            {n:3, ref:false, refOf:1, len:90, plane:'좌측굴 33.0°', direct:33.2, warn:'', a:[-0.074,0.8305,0.02], b:[-0.025,0.755,0.016]} ] },
   { plane:'바닥면', instruction:'우회전 · 압박 — 측정이 끝났습니다', tip:[0.09, 0.87, 0.07],
-    lines:[ {n:1, ref:true, refOf:1, len:14.6, plane:'', direct:0, warn:'', a:[-0.075,0.80,-0.02], b:[0,0.86,0.09]},
-            {n:2, ref:false, refOf:1, len:14.6, plane:'우회전 30.0°', direct:27.3, warn:'', a:[-0.075,0.80,0.0202], b:[0.045,0.86,0.0779]},
-            {n:3, ref:false, refOf:1, len:14.6, plane:'우회전 55.0°', direct:49.8, warn:'', a:[-0.0594,0.80,0.0499], b:[0.0737,0.86,0.0516]} ] } ];
+    lines:[ {n:1, ref:true, refOf:1, len:146, plane:'', direct:0, warn:'', a:[-0.075,0.80,-0.02], b:[0,0.86,0.09]},
+            {n:2, ref:false, refOf:1, len:146, plane:'우회전 30.0°', direct:27.3, warn:'', a:[-0.075,0.80,0.0202], b:[0.045,0.86,0.0779]},
+            {n:3, ref:false, refOf:1, len:146, plane:'우회전 55.0°', direct:49.8, warn:'', a:[-0.0594,0.80,0.0499], b:[0.0737,0.86,0.0516]} ] } ];
 
 function demoState() {
   const t = Date.now() / 1000, w = Math.sin(t) * 0.01, d = DEMO_SETS[demoTab];
@@ -332,14 +332,14 @@ function render() {
     const r = document.createElement('tr');
     r.className = l.ref ? 'ref' : (l === last ? 'last' : '');
     r.innerHTML = l.ref
-      ? `<td>${l.name || '선 ' + l.n}</td><td>${l.len.toFixed(1)}cm</td><td>${free ? '기준선' : '중립선'}</td><td></td><td></td>`
-      : `<td>${l.name || '선 ' + l.n}<span style="color:#667;font-size:13px">${free ? ' ← ' + l.refOf : ''}</span></td><td>${l.len.toFixed(1)}cm</td><td class="plane" style="color:${S.planeOn ? col : '#667'}">${l.plane || '—'}</td><td>${l.direct.toFixed(1)}°</td><td class="warn">${l.warn || ''}</td>`;
+      ? `<td>${l.name || '선 ' + l.n}</td><td>${free ? l.len.toFixed(0) : ''}</td><td>${free ? '기준선' : '중립선'}</td><td></td><td></td>`
+      : `<td>${l.name || '선 ' + l.n}<span style="color:#667;font-size:13px">${free ? ' ← ' + l.refOf : ''}</span></td><td>${free ? l.len.toFixed(0) : ''}</td><td class="plane" style="color:${S.planeOn ? col : '#667'}">${l.plane || '—'}</td><td>${l.direct.toFixed(1)}°</td><td class="warn">${l.warn || ''}</td>`;
     rows.appendChild(r);
   });
   el('bigValue').textContent = last ? (last.plane || ('직접 ' + last.direct.toFixed(1) + '°')) : '—';
   el('bigValue').style.color = last && last.plane ? col : 'var(--ink)';
   el('bigLabel').textContent = last ? (free ? `선 ${last.n} — 기준선(선 ${last.refOf})에서` : `${last.name} — 중립선에서`) : '가장 최근 측정선';
-  el('bigSub').textContent = last ? `직접 ${last.direct.toFixed(1)}° · 길이 ${last.len.toFixed(1)}cm` : '';
+  el('bigSub').textContent = last ? (free ? `직접 ${last.direct.toFixed(1)}° · 길이 ${last.len.toFixed(0)}` : `직접 ${last.direct.toFixed(1)}°`) : '';
   el('bigWarn').textContent = last ? (last.warn || '') : '';
 
   for (let v = 0; v < 3; v++) drawView(v, lines, col);
@@ -366,7 +366,7 @@ function drawView(v, lines, col) {
   const sc = Math.min(W, H - 26) / (2 * half), pick = PICK[v], c2 = pick(center);
   const X = p => W / 2 + (pick(p)[0] - c2[0]) * sc, Y = p => (H + 26) / 2 - (pick(p)[1] - c2[1]) * sc;
 
-  // 눈금 — 5cm
+  // 눈금 — 50mm(길이는 mm, 단위 글자 없이)
   g.strokeStyle = '#1D2631'; g.lineWidth = 1;
   for (let m = -Math.ceil(half / 0.05); m <= Math.ceil(half / 0.05); m++) {
     const d = m * 0.05 * sc;
@@ -374,7 +374,7 @@ function drawView(v, lines, col) {
     g.beginPath(); g.moveTo(0, (H + 26) / 2 + d); g.lineTo(W, (H + 26) / 2 + d); g.stroke();
   }
   g.fillStyle = '#56657A'; g.font = '12px sans-serif';
-  g.fillText('눈금 5cm', 8, H - 8);
+  g.fillText('눈금 50', 8, H - 8);
   g.fillText(['← 뒤   앞 →', '← 환자 오른쪽   왼쪽 →', '← 환자 오른쪽   (아래 = 앞)'][v], W - [84, 150, 170][v], H - 8);
 
   lines.forEach((l, i) => {
