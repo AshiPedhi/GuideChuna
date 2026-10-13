@@ -4,7 +4,7 @@ using UnityEngine;
 
 /// <summary>
 /// ★경추 ROM «선 실측» — 자유 측정의 표시(2026-10-07 신설).
-/// 점·선(개수 제한 없음)과 선마다의 길이 글자, 고정 3축(바닥 십자 · 기둥 · 두 세로 면의 테두리), 판의 결과 줄.
+/// 점·선(개수 제한 없음)과 선마다의 길이 글자, 고정 3축(바닥 십자와 정면 화살표뿐이다, 10-13), 판의 결과 줄.
 /// 동작(굴곡·신전 / 측굴 / 회전)마다 갈래가 나뉘어 있어, 지금 갈래의 선과 <b>그 동작의 면 값 하나</b>만 보여 준다.
 /// 계산은 하지 않는다 — <see cref="RomLineSession"/>이 준 값만 그린다. 만드는 도구는 <see cref="RomLineView"/> 것을 빌려 쓴다.
 /// ★글자·자리는 상태가 바뀔 때만 바꾼다. 매 프레임 하는 일은 글자를 눈 쪽으로 돌리는 것뿐이다(할당 없음).
@@ -15,7 +15,10 @@ public class RomLineFreeView
     public const int Rows = 8;
     private const int Cols = 3;               // 그 동작의 면 각 · 직접 각 · 알림
     private const float LineMargin = 0.02f;
-    private const float AxisWidth = 0.004f;
+    private const float AxisWidth = 0.002f;
+    // ★10-13 사용자 지시: 3축은 <b>바닥과 정면을 가를 수 있는 십자선만</b> 그린다 — 수직 기둥, 두 세로 면의 테두리,
+    //   «정면 · 환자 오른쪽 / 왼쪽 · 굴곡·신전 면 · 측굴 면» 글자를 모두 뺐다. 정면은 화살표로만 가린다.
+    //   자리 · 크기는 계산에 안 들어간다(방향만 쓴다).
     // ★10-13 사용자 지시: 3축은 <b>방향만 알 수 있게 작게</b> 그린다 — 키 1.9m · 폭 1m로 세웠더니 세로 선이 뒤쪽 메인 화면을 가렸다.
     //   자리 · 크기는 계산에 안 들어간다(방향만 쓴다). 바닥 십자와 두 면의 테두리를 같은 비율로 줄였다.
     private const float FrameHeight = 0.30f;   // 기둥 · 두 세로 면의 키
@@ -46,9 +49,7 @@ public class RomLineFreeView
     private TextMeshPro planeHead;
     private static readonly Color[] PlaneColors = { SagColor, FrontColor, FloorColor };
 
-    private LineRenderer axForward, axRight, axPole, axArrow, sagFrame, frontFrame;
-    private readonly TextMeshPro[] axLabels = new TextMeshPro[5];
-    private readonly Vector3[] four = new Vector3[4];
+    private LineRenderer axForward, axRight, axArrow;
 
     public void Build(RomLineView view, Transform parent, Transform panelArea, float tableTop)
     {
@@ -85,17 +86,6 @@ public class RomLineFreeView
         axForward = Axis("앞뒤 축", FloorColor, 2);
         axRight = Axis("좌우 축", FloorColor, 2);
         axArrow = Axis("정면 화살표", FloorColor, 3);
-        axPole = Axis("수직 축", DimColor, 2);
-        sagFrame = Axis("굴곡·신전 면", SagColor, 4);
-        frontFrame = Axis("측굴 면", FrontColor, 4);
-        sagFrame.loop = frontFrame.loop = true;
-        string[] names5 = { "정면", "환자 오른쪽", "환자 왼쪽", "굴곡·신전 면", "측굴 면" };
-        Color[] colors5 = { FloorColor, FloorColor, FloorColor, SagColor, FrontColor };
-        for (int i = 0; i < axLabels.Length; i++)
-        {
-            axLabels[i] = v.MakeText(axesRoot, names5[i], i == 0 ? 0.30f : 0.22f, TextAlignmentOptions.Center, 5);
-            axLabels[i].color = colors5[i];
-        }
         axesRoot.gameObject.SetActive(false);
         world.gameObject.SetActive(false);
     }
@@ -124,7 +114,7 @@ public class RomLineFreeView
         int n = pts.Count, ln = n / 2;
         while (spheres.Count < n)
         {
-            Transform s = v.MakeSphere("점(자유)", 0.005f, LineColor);
+            Transform s = v.MakeSphere("점(자유)", RomLineView.PointRadius, LineColor);
             s.SetParent(world, false);
             spheres.Add(s);
             sphereRenderers.Add(s.GetComponent<Renderer>());
@@ -200,7 +190,7 @@ public class RomLineFreeView
 
     // ── 고정 3축 ────────────────────────────────────────────────────
     /// <summary>
-    /// 바닥의 십자(정면 화살표) · 수직 기둥 · 두 세로 면의 테두리. origin은 바닥 위의 한 점이다.
+    /// 바닥의 십자와 정면 화살표. origin은 바닥 위의 한 점이다.
     /// ★자리는 뜻이 없다(방향만 쓴다) — 환자가 이 십자 위에 꼭 서지 않아도 정면만 화살표와 나란하면 된다.
     /// </summary>
     public void ShowAxes(bool show, Vector3 origin, RomLineFrame f)
@@ -212,31 +202,11 @@ public class RomLineFreeView
         Vector3 tipPos = o + f.forward * CrossFront;
         RomLineView.DrawLine(axForward, o - f.forward * CrossBack, tipPos);
         RomLineView.DrawLine(axRight, o - f.right * CrossSide, o + f.right * CrossSide);
-        RomLineView.DrawLine(axPole, o, o + f.up * FrameHeight);
         axArrow.positionCount = 3;
         axArrow.SetPosition(0, tipPos - f.forward * 0.06f + f.right * 0.035f);
         axArrow.SetPosition(1, tipPos);
         axArrow.SetPosition(2, tipPos - f.forward * 0.06f - f.right * 0.035f);
         axArrow.enabled = true;
-        Frame(sagFrame, o, f.forward, f.up);
-        Frame(frontFrame, o, f.right, f.up);
-
-        axLabels[0].transform.position = tipPos + f.forward * 0.06f + f.up * 0.03f;
-        axLabels[1].transform.position = o + f.right * (CrossSide + 0.09f) + f.up * 0.03f;
-        axLabels[2].transform.position = o - f.right * (CrossSide + 0.09f) + f.up * 0.03f;
-        axLabels[3].transform.position = o + f.forward * FrameHalf + f.up * (FrameHeight + 0.03f);
-        axLabels[4].transform.position = o + f.right * FrameHalf + f.up * (FrameHeight + 0.03f);
-    }
-
-    private void Frame(LineRenderer lr, Vector3 o, Vector3 side, Vector3 up)
-    {
-        four[0] = o - side * FrameHalf;
-        four[1] = o + side * FrameHalf;
-        four[2] = o + side * FrameHalf + up * FrameHeight;
-        four[3] = o - side * FrameHalf + up * FrameHeight;
-        lr.positionCount = 4;
-        lr.SetPositions(four);
-        lr.enabled = true;
     }
 
     // ── 매 프레임 ───────────────────────────────────────────────────
@@ -246,7 +216,5 @@ public class RomLineFreeView
         for (int i = 0; i < labels.Count; i++)
             if (labels[i].gameObject.activeSelf) RomLineView.Face(labels[i].transform, eye);
         if (angleText.gameObject.activeSelf) RomLineView.Face(angleText.transform, eye);
-        if (!axesRoot.gameObject.activeSelf) return;
-        for (int i = 0; i < axLabels.Length; i++) RomLineView.Face(axLabels[i].transform, eye);
     }
 }

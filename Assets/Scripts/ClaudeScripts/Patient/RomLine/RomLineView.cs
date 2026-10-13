@@ -10,8 +10,9 @@ public class RomLineView
 {
     // ── 크기(m) ─────────────────────────────────────────────────────
     public const float PanelW = 0.80f, PanelH = 0.38f;   // 메인 화면의 «배율 전» 크기. 실제 폭은 PlacePanel이 받는다(기본 2.5m → 배율 3.1)
-    private const float PointRadius = 0.005f;
-    private const float LineWidth = 0.003f;
+    // ★10-13 사용자 지시: 공간의 선은 얇게(3mm → 1.5mm), 구슬도 조금 작게(반지름 5mm → 3.5mm).
+    internal const float PointRadius = 0.0035f;
+    private const float LineWidth = 0.0015f;
     private const float ArcRadius = 0.06f;
     private const float LineMargin = 0.04f;
     private const int ArcSegments = 32;
