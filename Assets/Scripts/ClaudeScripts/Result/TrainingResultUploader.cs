@@ -18,7 +18,7 @@ public class TrainingResultUploader : MonoBehaviour
     [Tooltip("시나리오 완료 시 자동 전송")]
     [SerializeField] private bool autoUploadOnComplete = true;
 
-    [Tooltip("평가 모드만 전송 (false면 연습/평가 모두)")]
+    [Tooltip("평가 모드만 전송 (false면 연습/평가 모두). ★10-13 사용자 지시로 TrainingScene의 값을 false로 바꿨다 — 기록은 전부 올린다.")]
     [SerializeField] private bool sendOnEvaluationOnly = false;
 
     [Header("=== ResultData 고정값 ===")]
@@ -117,7 +117,7 @@ public class TrainingResultUploader : MonoBehaviour
             // 중도 종료(미완료)는 정식 점수와 구분되도록 표시 (서버/강사가 필터 가능)
             learnLevel1 = data.isOfficialEvaluation
                 ? (data.isCompleted ? "(평가)" : "(평가·미완료)")
-                : "(연습)",
+                : (data.isCompleted ? "(연습)" : "(연습·미완료)"),
             learnLevel2 = BuildLearnLevel2(data),
             totalCnt = "0",
             doneCnt = "0",
