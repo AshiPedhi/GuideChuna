@@ -1344,9 +1344,9 @@ public class RomLineSession : MonoBehaviour
         if (wait)
         {
             FreeMeasure(count - 1, out float wa, out _, out bool wc, out _, out _, out float wd);
-            string v = "각 " + wa.ToString("F1") + "°" + (wc ? " · 기준과의 차 " + wd.ToString("+0.0;-0.0") + "°" : "");
-            instruction = FreeTabName[freeTab] + " — " + v + " · 트리거 = 확인";
-            guideLine = FreeTabName[freeTab] + "  <color=#73E68C>" + v + "</color>";
+            string v = "각 " + wa.ToString("F1") + "°", vd = wc ? "차 " + wd.ToString("+0.0;-0.0") + "°" : "";   // 차 = 기준(첫 묶음)과의 각의 차
+            instruction = FreeTabName[freeTab] + " — " + v + (wc ? " · 기준과의 " + vd : "") + " · 트리거 = 확인";
+            guideLine = FreeTabName[freeTab] + "\n<color=#73E68C>" + v + "</color>" + (wc ? "\n" + vd : "");   // 안내는 폭이 좁다 — 줄을 나눈다
             if (guideNote.Length == 0) guideNote = "트리거 = 기록";
         }
         else
@@ -1660,7 +1660,7 @@ public class RomLineSession : MonoBehaviour
             string av = results[cm * 2].valid ? results[cm * 2].angle.ToString("F1") + "°" : "—";
             string pv = results[cm * 2 + 1].valid ? results[cm * 2 + 1].angle.ToString("F1") + "°" : "—";
             forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 = 확인";
-            guide = $"<color=#73E68C>{MotionName[cm]}</color> 능동 {av} · 압박 {pv}";
+            guide = $"<color=#73E68C>{MotionName[cm]}</color>\n능동 {av}\n압박 {pv}";   // 안내는 폭이 좁다 — 줄을 나눈다
             if (guideNote.Length == 0) guideNote = "트리거 = 기록";
         }
         else if (TabComplete(tab))

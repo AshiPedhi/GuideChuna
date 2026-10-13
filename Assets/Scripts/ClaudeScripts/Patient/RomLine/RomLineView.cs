@@ -180,8 +180,11 @@ public class RomLineView
         MakeQuad(guide, "테두리 아래", new Vector2(0f, -GuideH * 0.5f), new Vector2(GuideW, t), GuideBorder, 0);
         MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
         MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
-        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.012f), GuideW - 0.02f);
-        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3), new Vector2(0f, -0.022f), GuideW - 0.02f);
+        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.014f), GuideW - 0.02f);
+        guideLine.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, 0.08f);   // 세 줄까지(동작 · 능동 값 · 압박 값)
+        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Top, 3), new Vector2(0f, -0.058f), GuideW - 0.02f);
+        guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, 0.04f);   // 윗변이 테두리 안 맨 아래 줄 — 긴 알림은 줄을 바꿔 테두리 아래로 흘린다
+        guideNote.textWrappingMode = TextWrappingModes.Normal;
         guideNote.color = NoteColor;
         // 바탕이 없어 밝은 배경(패스스루)에서 글자가 묻힌다 — 검은 외곽선을 두른다
         guideLine.outlineColor = guideNote.outlineColor = new Color32(0, 0, 0, 255);
@@ -202,7 +205,7 @@ public class RomLineView
     private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
-    private const float GuideW = 0.40f, GuideH = 0.085f;     // 안내 테두리의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
+    private const float GuideW = 0.24f, GuideH = 0.12f;      // 안내 테두리의 실제 크기(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 글은 줄을 나눠 넣는다
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
