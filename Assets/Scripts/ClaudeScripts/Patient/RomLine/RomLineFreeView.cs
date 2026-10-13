@@ -15,8 +15,12 @@ public class RomLineFreeView
     public const int Rows = 8;
     private const int Cols = 3;               // 그 동작의 면 각 · 직접 각 · 알림
     private const float LineMargin = 0.02f;
-    private const float AxisWidth = 0.006f;
-    private const float FrameHeight = 1.9f;
+    private const float AxisWidth = 0.004f;
+    // ★10-13 사용자 지시: 3축은 <b>방향만 알 수 있게 작게</b> 그린다 — 키 1.9m · 폭 1m로 세웠더니 세로 선이 뒤쪽 메인 화면을 가렸다.
+    //   자리 · 크기는 계산에 안 들어간다(방향만 쓴다). 바닥 십자와 두 면의 테두리를 같은 비율로 줄였다.
+    private const float FrameHeight = 0.30f;   // 기둥 · 두 세로 면의 키
+    private const float FrameHalf = 0.25f;     // 두 세로 면의 반 폭
+    private const float CrossFront = 0.35f, CrossBack = 0.25f, CrossSide = 0.30f;   // 바닥 십자: 정면 쪽 · 뒤쪽 · 좌우
 
     private static readonly Color FirstColor = RomLineView.NeutralColor;   // 기준선 = 중립과 같은 색
     private static readonly Color LineColor = RomLineView.ActiveColor;     // 측정선 = 능동과 같은 색
@@ -89,7 +93,7 @@ public class RomLineFreeView
         Color[] colors5 = { FloorColor, FloorColor, FloorColor, SagColor, FrontColor };
         for (int i = 0; i < axLabels.Length; i++)
         {
-            axLabels[i] = v.MakeText(axesRoot, names5[i], i == 0 ? 0.5f : 0.35f, TextAlignmentOptions.Center, 5);
+            axLabels[i] = v.MakeText(axesRoot, names5[i], i == 0 ? 0.30f : 0.22f, TextAlignmentOptions.Center, 5);
             axLabels[i].color = colors5[i];
         }
         axesRoot.gameObject.SetActive(false);
@@ -205,31 +209,31 @@ public class RomLineFreeView
         if (!show) return;
 
         Vector3 o = origin + Vector3.up * 0.005f;   // 바닥에 묻히지 않게
-        Vector3 tipPos = o + f.forward * 0.7f;
-        RomLineView.DrawLine(axForward, o - f.forward * 0.5f, tipPos);
-        RomLineView.DrawLine(axRight, o - f.right * 0.6f, o + f.right * 0.6f);
+        Vector3 tipPos = o + f.forward * CrossFront;
+        RomLineView.DrawLine(axForward, o - f.forward * CrossBack, tipPos);
+        RomLineView.DrawLine(axRight, o - f.right * CrossSide, o + f.right * CrossSide);
         RomLineView.DrawLine(axPole, o, o + f.up * FrameHeight);
         axArrow.positionCount = 3;
-        axArrow.SetPosition(0, tipPos - f.forward * 0.12f + f.right * 0.07f);
+        axArrow.SetPosition(0, tipPos - f.forward * 0.06f + f.right * 0.035f);
         axArrow.SetPosition(1, tipPos);
-        axArrow.SetPosition(2, tipPos - f.forward * 0.12f - f.right * 0.07f);
+        axArrow.SetPosition(2, tipPos - f.forward * 0.06f - f.right * 0.035f);
         axArrow.enabled = true;
         Frame(sagFrame, o, f.forward, f.up);
         Frame(frontFrame, o, f.right, f.up);
 
-        axLabels[0].transform.position = tipPos + f.forward * 0.10f + f.up * 0.05f;
-        axLabels[1].transform.position = o + f.right * 0.70f + f.up * 0.05f;
-        axLabels[2].transform.position = o - f.right * 0.70f + f.up * 0.05f;
-        axLabels[3].transform.position = o + f.forward * 0.5f + f.up * (FrameHeight + 0.04f);
-        axLabels[4].transform.position = o + f.right * 0.5f + f.up * (FrameHeight + 0.04f);
+        axLabels[0].transform.position = tipPos + f.forward * 0.06f + f.up * 0.03f;
+        axLabels[1].transform.position = o + f.right * (CrossSide + 0.09f) + f.up * 0.03f;
+        axLabels[2].transform.position = o - f.right * (CrossSide + 0.09f) + f.up * 0.03f;
+        axLabels[3].transform.position = o + f.forward * FrameHalf + f.up * (FrameHeight + 0.03f);
+        axLabels[4].transform.position = o + f.right * FrameHalf + f.up * (FrameHeight + 0.03f);
     }
 
     private void Frame(LineRenderer lr, Vector3 o, Vector3 side, Vector3 up)
     {
-        four[0] = o - side * 0.5f;
-        four[1] = o + side * 0.5f;
-        four[2] = o + side * 0.5f + up * FrameHeight;
-        four[3] = o - side * 0.5f + up * FrameHeight;
+        four[0] = o - side * FrameHalf;
+        four[1] = o + side * FrameHalf;
+        four[2] = o + side * FrameHalf + up * FrameHeight;
+        four[3] = o - side * FrameHalf + up * FrameHeight;
         lr.positionCount = 4;
         lr.SetPositions(four);
         lr.enabled = true;
