@@ -199,8 +199,10 @@ public class RomLineView
     // ── 결과표 ── ★10-13 사용자 지시: 3 × 2 칸을 풀어 <b>왼쪽에 여섯 줄</b>(측정 명칭 | 능동 | 압박), <b>오른쪽에 각도기 셋</b>으로 나눈다.
     //   같은 단면의 두 동작(굴곡 · 신전 / 우측굴 · 좌측굴 / 우회전 · 좌회전)은 <b>한 각도기</b>에 좌우로 그린다 — 각도기는 그 두 줄 옆에 크게 선다.
     //   각도기 그림은 «보는 방향»을 정해 그린 약도다(찍은 점의 좌표를 그대로 옮긴 그림이 아니다). 값은 세션이 준 «면 위 각» 그대로다.
-    //     굴곡 · 신전 = 옆에서 본 그림(오른쪽이 환자 앞) · 측굴 = 앞에서 본 그림(마주 보므로 환자 오른쪽이 그림 왼쪽)
-    //     회전 = 위에서 본 그림(아래가 환자 앞 · 환자 오른쪽이 그림 왼쪽) — 모니터 화면의 세 그림과 같은 방향이다.
+    //   ★10-13 저녁 사용자 지시: 그림의 좌우를 뒤집었다 — 양옆 표시가 «뒤 · 앞» → «앞 · 뒤», «우 · 좌» → «좌 · 우»다. 글자만 바꾼 것이 아니라 선이 기우는 쪽(GaugeSide)도 같이 뒤집었다.
+    //     굴곡 · 신전 = 옆에서 본 그림(왼쪽이 환자 앞) · 측굴 = 환자 왼쪽이 그림 왼쪽 · 회전 = 위에서 본 그림(아래가 환자 앞 · 환자 왼쪽이 그림 왼쪽)
+    //     ★모니터 화면의 세 그림은 종전 방향 그대로다(헤드셋 결과표와 좌우가 반대다).
+    //   줄의 순서도 «좌측굴 · 우측굴», «좌회전 · 우회전»으로 바꿨다(DisplayRow) — 보여 주는 자리만이다. 재는 순서와 동작 번호(우 → 좌)는 그대로다.
     private const float RowH = 0.041f, GaugeR = 0.068f;
     private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
@@ -211,10 +213,11 @@ public class RomLineView
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
-    private static readonly float[] GaugeSide = { 1f, -1f, -1f, 1f, -1f, 1f };       // 그 동작이 제 방향으로 움직였을 때 선이 기우는 쪽(그림 오른쪽 +1)
+    private static readonly float[] GaugeSide = { -1f, 1f, 1f, -1f, 1f, -1f };       // 그 동작이 제 방향으로 움직였을 때 선이 기우는 쪽(그림 오른쪽 +1) — 10-13 저녁에 전부 뒤집었다
+    private static readonly int[] DisplayRow = { 0, 1, 3, 2, 5, 4 };                  // 동작 번호 → 결과표의 줄(좌측굴 · 좌회전을 먼저 보여 준다)
     private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
-    private static readonly string[] GaugeLeft = { "뒤", "뒤", "우", "우", "우", "우" };
-    private static readonly string[] GaugeRight = { "앞", "앞", "좌", "좌", "좌", "좌" };
+    private static readonly string[] GaugeLeft = { "앞", "앞", "좌", "좌", "좌", "좌" };
+    private static readonly string[] GaugeRight = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] FreeTabNames = { "3점", "4점", "연속" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
     private static readonly Color NoteColor = new Color(0.80f, 0.86f, 0.93f, 1f);     // 알림 · 안내 — 주황(측정값)과 섞이지 않게 푸른 회색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
@@ -254,7 +257,7 @@ public class RomLineView
         var tris = new System.Collections.Generic.List<int>(1200);
         for (int m = 0; m < 6; m++)
         {
-            float y = rowTop - RowH * (m + 0.5f);
+            float y = rowTop - RowH * (DisplayRow[m] + 0.5f);
             float pairY = rowTop - RowH * (m / 2 * 2 + 1);   // 같은 단면 두 줄의 가운데 — 각도기가 여기 선다
             cellPos[m] = new Vector2(LeftX, y);
             gaugePivot[m] = new Vector2(GaugeX, pairY - GaugeZeroY[m] * GaugeR * 0.5f);   // 두 동작이 같은 축을 쓴다
@@ -272,7 +275,7 @@ public class RomLineView
             Place(MakeText(resultArea, GaugeRight[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
             Place(MakeText(resultArea, GaugeView[m], 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0.345f, pairY), 0.10f).color = GaugeDim;
 
-            Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0012f, GaugeDim);
+            Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, pairY + RowH), new Vector2(PanelW * 0.5f - 0.01f, pairY + RowH), 0.0012f, GaugeDim);   // 두 줄 묶음의 윗변
             Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0016f, GaugeDim);
             for (int i = 0; i < 18; i++)
                 Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0016f, GaugeDim);
