@@ -212,7 +212,7 @@ public class RomLineView
     private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
     private static readonly string[] GaugeLeft = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] GaugeRight = { "앞", "앞", "좌", "좌", "좌", "좌" };
-    private static readonly string[] FreeTabNames = { "굴곡·신전", "측굴", "회전" };
+    private static readonly string[] FreeTabNames = { "3점 측정", "4점 측정", "연속 측정" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
     private static readonly Color NoteColor = new Color(0.80f, 0.86f, 0.93f, 1f);     // 알림 · 안내 — 주황(측정값)과 섞이지 않게 푸른 회색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color GaugeDim = new Color(0.42f, 0.48f, 0.56f, 1f);

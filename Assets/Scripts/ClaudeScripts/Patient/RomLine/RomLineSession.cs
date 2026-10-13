@@ -60,7 +60,10 @@ public enum RomLinePoint
 ///     (10-08의 «컨트롤러가 가리키는 방향»을 되돌렸다 — 그때는 판의 버튼을 누르느라 헤드셋이 판을 봤다. 이제 판 버튼이 없다). ★10-13: 메인 화면은 고정 자리에 그대로 둔다(PlaceFixed) — 축만 돈다.
 ///   컨트롤러에 없는 일(끝점 보정 · 기준선 바꾸기 · 나가기)은 모니터(브라우저)의 버튼으로만 한다. 자유 측정의 동작 갈래는 탭 창을 닫은 채 스틱 좌우다.
 ///
-/// ★자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
+/// ★★10-13 사용자 지시로 자유 측정을 다시 짰다 — 동작(굴곡·신전 / 측굴 / 회전)을 가르지 않고 <b>찍은 점들이 이루는 각 그대로</b>(3차원)를 낸다.
+///   방식 셋: 3점 측정 · 4점 측정 · 연속 측정(스틱 좌우로 바꾼다). 뜻은 아래 «자유 측정» 블록의 주석에 있다. 면에 내린 값 · 기준선 바꾸기 · «다른 동작으로 보임» 알림은 없앴다.
+///   아래 10-07 ~ 10-08의 설명은 그 전 구조다(지금 코드와 다르다).
+/// (옛 구조) 자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
 ///   측정선마다 길이, 기준선과 벌어진 각(«직접»), 그리고 <b>그 동작의 면 하나</b>에 내린 각(«면» — 옆면·앞면·바닥면)을 낸다.
 ///   면은 공간에 고정된 세 축(정면·좌우·수직)으로 세운다 — 양쪽 Tr을 찍지 않는다. 회전의 바닥면은 중력만 쓴다.
@@ -148,15 +151,14 @@ public class RomLineSession : MonoBehaviour
 
     // 자유 측정(10-07) — 두 점마다 선 하나, 개수 제한 없음
     private bool freeMode;
-    private int freeTab;                // 0 굴곡·신전 · 1 측굴 · 2 회전 — 갈래마다 점을 따로 모은다
+    private int freeTab;                // 자유 측정의 방식(10-13): 0 = 3점 측정 · 1 = 4점 측정 · 2 = 연속 측정 — 방식마다 점을 따로 모은다
     private readonly List<Vector3>[] freePts = { new List<Vector3>(64), new List<Vector3>(64), new List<Vector3>(64) };
-    // 선마다 «견준 기준선의 번호». 자기 번호와 같으면 그 선이 기준선이다(첫 선, 그리고 «기준선 바꾸기»로 삼은 선).
-    private readonly List<int>[] freeRefOf = { new List<int>(32), new List<int>(32), new List<int>(32) };
+    private readonly List<Vector3> freeAngleAt = new List<Vector3>(32);    // 공간에 띄울 각 글자의 자리와 글 — 상태가 바뀔 때만 다시 만든다
+    private readonly List<string> freeAngleText = new List<string>(32);
     private readonly RomLineFreeView freeView = new RomLineFreeView();
     private bool axesOn = true;
     private RomLineFrame axes;          // 공간에 고정된 세 축 — 양쪽 Tr이 하던 일을 대신한다
     private Vector3 axesOrigin;         // 바닥의 십자를 그리는 자리(방향만 쓰고 자리는 계산에 안 들어간다)
-    private const float FreeMaxOffPlane = 75f;   // 선이 그 면에서 이보다 많이 들려 있으면 그 면의 값은 비운다(그림자가 짧아 값이 튄다)
     private int group;      // 0 = 기준(양쪽 Tr), 1~18 = 동작 × (중립·능동·압박), 19 = 끝
     private int index;      // 그 묶음 안에서 다음에 찍을 점
 
@@ -604,7 +606,7 @@ public class RomLineSession : MonoBehaviour
             }
             else if (undoLong)
             {
-                Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 동작 지우기(자유 측정)" : "이 탭 지우기")}");
+                Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 방식의 점 지우기(자유 측정)" : "이 탭 지우기")}");
                 Buzz(0.12f, 0.8f);
                 if (freeMode) FreeClear(); else ResetTab(CurTab, "B/Y 길게");
             }
@@ -612,7 +614,7 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── 스틱 좌우 — 탭 창을 띄운 동안에는 탭 고르기, 닫은 채로는 자유 측정의 동작 갈래만 ──
+        // ── 스틱 좌우 — 탭 창을 띄운 동안에는 탭 고르기, 닫은 채로는 자유 측정의 방식(3점 · 4점 · 연속)만 ──
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
@@ -1099,18 +1101,17 @@ public class RomLineSession : MonoBehaviour
     }
 
     // ── 자유 측정(10-07) ────────────────────────────────────────────
-    private static readonly string[] FreeTabName = { "굴곡·신전", "측굴", "회전" };
-    private static readonly string[] FreePlaneName = { "옆면", "앞면", "바닥면" };
-    // 면마다 부호가 +일 때 / −일 때의 이름(RomLineMath.PositiveMeans: 굴곡 · 좌측굴 · 우회전이 +)
-    private static readonly string[] FreePlus = { "굴곡", "좌측굴", "우회전" };
-    private static readonly string[] FreeMinus = { "신전", "우측굴", "좌회전" };
-    private const float FreeReversedAngle = 150f;   // 기준선과 이보다 크게 벌어지면 두 점의 순서가 반대일 수 있다고 알린다
-    private const float FreeJudgeMinAngle = 10f;    // 이보다 작게 움직인 선은 «어느 동작처럼 움직였나»를 가르지 않는다(찍는 오차가 더 크다)
+    //   ★10-13 사용자 지시: 동작(굴곡·신전 / 측굴 / 회전)을 가르지 않는다 — 면에 내리지 않고 <b>찍은 점들이 이루는 각 그대로</b>(3차원)를 낸다.
+    //     3점 측정 = 세 점을 이어 찍는다. 가운데 점(2)에서 선 1-2와 선 2-3이 벌어진 각. 처음 찍은 묶음이 기준이고,
+    //                그 뒤 묶음은 기준과 견준 값 셋을 함께 낸다: 선 1-2가 돈 각 · 선 2-3이 돈 각 · 벌어진 각의 차(지금 − 기준).
+    //     4점 측정 = 두 점씩 선 둘(1-2 · 3-4). 두 선의 방향이 이루는 각.
+    //     연속 측정 = 점을 이어 가며 찍는다. 셋째 점부터, 앞 꼭짓점에서 꺾인 각(앞 선과 새 선이 그 점에서 벌어진 각)이 하나씩 나온다.
+    private static readonly string[] FreeTabName = { "3점 측정", "4점 측정", "연속 측정" };
+    private static readonly int[] FreeSetSize = { 3, 4, 0 };   // 한 묶음의 점 수. 0 = 묶음 없이 이어서
+    private static readonly string[] FreePlaneName = { "옆면", "앞면", "바닥면" };   // 순서 측정의 모니터 · CSV가 쓴다(자유 측정은 면을 쓰지 않는다)
 
     private List<Vector3> FreePts => freePts[freeTab];
-    private List<int> FreeRefs => freeRefOf[freeTab];
-    /// <summary>회전의 면(바닥)은 중력만 쓰므로 3축을 꺼도 나온다. 굴곡·신전과 측굴의 면은 3축이 있어야 한다.</summary>
-    private bool FreePlaneOn => freeTab == 2 || axesOn;
+
 
     private void SetFreeMode(bool on)
     {
@@ -1138,7 +1139,7 @@ public class RomLineSession : MonoBehaviour
         if (tab == freeTab) return;
         freeTab = tab;
         noteText = "";
-        Debug.Log($"[선실측] 자유 — 동작 → {FreeTabName[tab]}(찍어 둔 점 {FreePts.Count}개)");
+        Debug.Log($"[선실측] 자유 — 방식 → {FreeTabName[tab]}(찍어 둔 점 {FreePts.Count}개)");
         Play(sndPress);
         dirty = true;
     }
@@ -1192,33 +1193,66 @@ public class RomLineSession : MonoBehaviour
         Debug.Log($"[선실측] 자유 — 3축을 잡았다({why} · {how}) · 환자 정면 {axes.forward:F3} · 환자 오른쪽 {axes.right:F3} · 십자 자리 {axesOrigin:F2} · 눈 {eye.position:F2}");
     }
 
-    /// <summary>지금 갈래에서 새 선이 견줄 기준선의 번호(가장 최근에 기준선으로 삼은 선). 아직 없으면 -1.</summary>
-    private int FreeCurrentRef()
+    /// <summary>가운데 점 b에서 선 b-a와 선 b-c가 벌어진 각(도, 0 ~ 180). 한 줄로 곧게 찍으면 180이다.</summary>
+    private static float Corner(Vector3 a, Vector3 b, Vector3 c) => Vector3.Angle(a - b, c - b);
+
+    /// <summary>지금 방식에서 나온 측정의 수 — 3점 · 4점은 다 찍은 묶음, 연속은 꼭짓점(셋째 점부터 하나씩).</summary>
+    private int FreeCount()
     {
-        List<int> refs = FreeRefs;
-        for (int i = refs.Count - 1; i >= 0; i--)
-            if (refs[i] == i) return i;
-        return -1;
+        int n = FreePts.Count, size = FreeSetSize[freeTab];
+        return size > 0 ? n / size : Mathf.Max(0, n - 2);
+    }
+
+    /// <summary>
+    /// k번째 측정의 값. angle = 그 측정의 각 · at = 각 글자를 띄울 자리.
+    /// 3점 측정의 둘째 묶음부터는 기준(첫 묶음)과 견준 값도 준다(hasCompare): turn12 · turn23 = 선 1-2 · 선 2-3이 기준의 같은 선에서 돈 각, diff = 벌어진 각의 차(지금 − 기준).
+    /// ★화면 · 로그 · CSV · 모니터가 전부 이 함수 하나를 탄다.
+    /// </summary>
+    private void FreeMeasure(int k, out float angle, out Vector3 at, out bool hasCompare, out float turn12, out float turn23, out float diff)
+    {
+        List<Vector3> p = FreePts;
+        hasCompare = false;
+        turn12 = turn23 = diff = 0f;
+        if (freeTab == 0)
+        {
+            int o = k * 3;
+            angle = Corner(p[o], p[o + 1], p[o + 2]);
+            at = p[o + 1];
+            if (k == 0) return;
+            hasCompare = true;
+            turn12 = Vector3.Angle(p[1] - p[0], p[o + 1] - p[o]);
+            turn23 = Vector3.Angle(p[2] - p[1], p[o + 2] - p[o + 1]);
+            diff = angle - Corner(p[0], p[1], p[2]);
+        }
+        else if (freeTab == 1)
+        {
+            int o = k * 4;
+            angle = Vector3.Angle(p[o + 1] - p[o], p[o + 3] - p[o + 2]);
+            at = (p[o] + p[o + 1] + p[o + 2] + p[o + 3]) * 0.25f;
+        }
+        else
+        {
+            angle = Corner(p[k], p[k + 1], p[k + 2]);
+            at = p[k + 1];
+        }
     }
 
     private void FreeMark(Vector3 pos, float shake)
     {
         List<Vector3> pts = FreePts;
-        pts.Add(pos);
-        int n = pts.Count, line = (n + 1) / 2;
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 찍음 · 선 {line}의 {(n % 2 == 1 ? "첫" : "둘째")} 점 · 자리 {pos:F4} · 당기는 동안 끝점 이동 {shake * 1000f:F1}mm" + PoseSuffix());
-        if (n % 2 == 0)
+        int size = FreeSetSize[freeTab], before = FreeCount();
+        bool joined = pts.Count > 0 && (size == 0 || pts.Count % size != 0);   // 앞 점과 같은 묶음이다(선으로 이어지거나 한 각을 이룬다)
+        if (joined && Vector3.Distance(pts[pts.Count - 1], pos) < 0.005f)
         {
-            if (Vector3.Distance(pts[n - 2], pts[n - 1]) < 0.005f)
-            {
-                pts.RemoveAt(n - 1);
-                Deny("두 점이 같은 자리에 찍혔다 — 둘째 점을 다시 찍는다");
-                return;
-            }
-            int idx = line - 1, rf = FreeCurrentRef();
-            FreeRefs.Add(rf < 0 ? idx : rf);   // 첫 선은 스스로 기준선이다
-            LogFreeLine(idx);
-            CsvAdd("선", idx);
+            Deny("앞 점과 같은 자리에 찍혔다 — 다시 찍는다");
+            return;
+        }
+        pts.Add(pos);
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 찍음 · 점 {pts.Count} · 자리 {pos:F4} · 당기는 동안 끝점 이동 {shake * 1000f:F1}mm" + PoseSuffix());
+        if (FreeCount() > before)
+        {
+            LogFree(before);
+            CsvAdd("측정", before);
         }
         noteText = "";
         Play(sndMark);
@@ -1226,110 +1260,47 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
-    /// <summary>직선 단위 취소(10-12 저녁) — 찍다 만 선이 있으면 그 첫 점만, 없으면 마지막 선(두 점)을 통째로.</summary>
+    /// <summary>취소(B) — 찍다 만 묶음이 있으면 마지막 점 하나, 없으면 마지막 묶음을 통째로. 연속 측정은 늘 마지막 점 하나다.</summary>
     private void FreeUndo()
     {
         List<Vector3> pts = FreePts;
-        if (pts.Count == 0) { Deny("지울 직선이 없다"); return; }
-        if (pts.Count % 2 == 1) pts.RemoveAt(pts.Count - 1);
+        if (pts.Count == 0) { Deny("지울 점이 없다"); return; }
+        int size = FreeSetSize[freeTab], count = FreeCount();
+        if (size > 0 && pts.Count % size == 0)
+        {
+            CsvAdd("취소", count - 1);
+            pts.RemoveRange(pts.Count - size, size);
+        }
         else
         {
-            CsvAdd("취소", FreeRefs.Count - 1);
-            FreeRefs.RemoveAt(FreeRefs.Count - 1);
-            pts.RemoveRange(pts.Count - 2, 2);
+            if (size == 0 && count > 0) CsvAdd("취소", count - 1);
+            pts.RemoveAt(pts.Count - 1);
         }
         noteText = "";
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 직선 취소 → 남은 점 {pts.Count}개");
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 취소 → 남은 점 {pts.Count}개");
         Play(sndUndo);
         dirty = true;
     }
 
     private void FreeClear()
     {
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 이 동작을 지웠다(점 {FreePts.Count}개)");
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 이 방식의 점을 지웠다(점 {FreePts.Count}개)");
         if (FreePts.Count > 0) CsvAdd("지움", -1);
         FreePts.Clear();
-        FreeRefs.Clear();
         noteText = "";
         Play(sndUndo);
         dirty = true;
     }
 
-    /// <summary>방금 찍은 선을 새 기준선으로 삼는다 — 그 뒤에 찍는 선은 이 선과 견준다(앞서 찍은 선의 값은 그대로 둔다).</summary>
-    private void FreeRebase()
+    private void LogFree(int k)
     {
-        int last = FreeRefs.Count - 1;
-        if (last < 0) { Deny("기준선으로 삼을 선이 없다 — 선을 먼저 찍는다"); return; }
-        if (FreeRefs[last] == last) { Deny($"선 {last + 1}은 이미 기준선이다"); return; }
-        FreeRefs[last] = last;
-        CsvAdd("기준선으로", last);
-        noteText = $"선 {last + 1}을 기준선으로 삼았다";
-        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 기준선 → 선 {last + 1}(길이 {FreeLength(last) * 1000f:F0})");
-        Play(sndPress);
-        dirty = true;
-    }
-
-    private float FreeLength(int line) => Vector3.Distance(FreePts[line * 2], FreePts[line * 2 + 1]);
-    private Vector3 FreeDir(int line) => FreePts[line * 2 + 1] - FreePts[line * 2];
-
-    /// <summary>선 line이 선 from에서 벌어진 각 — 3차원 그대로(«직접»).</summary>
-    private RomLineDirect FreeDirect(int from, int line)
-    {
-        List<Vector3> p = FreePts;
-        return RomLineMath.MeasureDirect(p[from * 2], p[from * 2 + 1], p[line * 2], p[line * 2 + 1]);
-    }
-
-    /// <summary>
-    /// 선 line이 선 from에서 돌아간 각을 한 면에 내려 읽는다. plane 0 옆면(굴곡·신전) · 1 앞면(측굴) · 2 바닥면(회전).
-    /// 선이 그 면에서 너무 들려 있으면(<see cref="FreeMaxOffPlane"/>) false — 그림자가 짧아 값이 튄다.
-    /// ★6동작과 같은 함수(<see cref="RomLineMath.Measure"/> · <see cref="RomLineMath.PlaneNormal"/>)를 탄다.
-    /// </summary>
-    private bool FreePlane(int from, int line, int plane, out RomLineResult r)
-    {
-        List<Vector3> p = FreePts;
-        r = RomLineMath.Measure(p[from * 2], p[from * 2 + 1], p[line * 2], p[line * 2 + 1], RomLineMath.PlaneNormal((RomLineMotion)(plane * 2), axes));
-        return r.valid && r.neutralOffPlane <= FreeMaxOffPlane && r.markOffPlane <= FreeMaxOffPlane;
-    }
-
-    private static string FreeNamed(int plane, RomLineResult r)
-    {
-        return (r.signedAngle >= 0f ? FreePlus[plane] : FreeMinus[plane]) + " " + r.angle.ToString("F1") + "°";
-    }
-
-    /// <summary>
-    /// 그 선에 붙일 알림. 두 점의 순서가 반대로 보이거나, 고른 동작과 다른 동작처럼 움직였을 때만 글자가 있다(없으면 빈 글자).
-    /// ★알리기만 한다 — 값을 고치거나 찍기를 막지 않는다(회전은 실제로 90°를 넘고, 동작이 섞이는 것도 실제 일이다).
-    /// </summary>
-    private string FreeWarning(int from, int line, float directAngle, out int judged, out float first, out float second)
-    {
-        judged = RomLineMath.DominantPlane(FreeDir(from), FreeDir(line), axes, out first, out second);
-        if (directAngle > FreeReversedAngle) return "순서 반대?";
-        if (!axesOn || judged < 0 || judged == freeTab || directAngle < FreeJudgeMinAngle) return "";   // 3축을 껐으면 맞춰 놓지 않은 것이라 가르지 않는다
-        return FreeTabName[judged] + "으로 보임";
-    }
-
-    private void LogFreeLine(int line)
-    {
-        int rf = FreeRefs[line];
-        var sb = new StringBuilder(320);
-        sb.Append("[선실측] 자유(").Append(FreeTabName[freeTab]).Append(") — 선 ").Append(line + 1)
-          .Append(" · 길이 ").Append((FreeLength(line) * 1000f).ToString("F0"));
-        if (rf == line) { sb.Append(" · 기준선"); Debug.Log(sb.ToString()); return; }
-
-        RomLineDirect d = FreeDirect(rf, line);
-        sb.Append(" ‖ 기준선(선 ").Append(rf + 1).Append(")과 직접 ").Append(d.angle.ToString("F1")).Append("°(엇갈림 ").Append((d.gap * 1000f).ToString("F0")).Append(")");
-        // 그 동작의 면이 먼저, 나머지 두 면은 «다른 면»으로 — 화면에는 그 동작의 면만 나온다. 로그에는 나중에 견줘 볼 수 있게 셋 다 남긴다.
-        for (int k = 0; k < 3; k++)
-        {
-            int p = (freeTab + k) % 3;
-            bool ok = FreePlane(rf, line, p, out RomLineResult r);
-            sb.Append(k == 0 ? " · " : k == 1 ? " ‖ 다른 면 " : " · ").Append(FreePlaneName[p]).Append(' ').Append(ok ? FreeNamed(p, r) : "—")
-              .Append("(면 밖 ").Append(r.neutralOffPlane.ToString("F0")).Append("→").Append(r.markOffPlane.ToString("F0")).Append("°)");
-        }
-        string warn = FreeWarning(rf, line, d.angle, out int judged, out float first, out float second);
-        sb.Append(" ‖ 움직인 모양 ").Append(judged < 0 ? "가를 수 없음" : FreeTabName[judged]).Append('(').Append(first.ToString("F2")).Append(" / ").Append(second.ToString("F2")).Append(')');
-        if (warn.Length > 0) sb.Append(" ★").Append(warn);
-        if (!axesOn) sb.Append(" ‖ 3축 끔");
+        FreeMeasure(k, out float angle, out _, out bool cmp, out float t12, out float t23, out float diff);
+        var sb = new StringBuilder(200);
+        sb.Append("[선실측] 자유(").Append(FreeTabName[freeTab]).Append(") — ").Append(k + 1).Append(" · 각 ").Append(angle.ToString("F1")).Append('°');
+        if (freeTab == 0 && k == 0) sb.Append(" · 기준");
+        if (cmp)
+            sb.Append(" ‖ 기준(1)과 견줌 — 선 1-2 ").Append(t12.ToString("F1")).Append("° · 선 2-3 ").Append(t23.ToString("F1"))
+              .Append("° · 각의 차 ").Append(diff.ToString("+0.0;-0.0")).Append('°');
         Debug.Log(sb.ToString());
     }
 
@@ -1337,76 +1308,78 @@ public class RomLineSession : MonoBehaviour
     {
         dirty = false;
         List<Vector3> pts = FreePts;
-        List<int> refs = FreeRefs;
-        int lines = pts.Count / 2;
-        bool half = pts.Count % 2 == 1;
+        int size = FreeSetSize[freeTab], count = FreeCount();
 
         string note = noteText;   // 아랫줄은 알림이 있을 때만(10-13)
-        string instruction = $"선 {lines + 1}의 {(half ? "둘째" : "첫")} 점을 찍으세요";
-        view.SetTip("선 " + (lines + 1));
-        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>선 " + (lines + 1) + "</color>", note);
+        string step = size > 0 ? $"점 {pts.Count % size + 1}/{size}" : $"점 {pts.Count + 1}";
+        string instruction = FreeTabName[freeTab] + " — " + step;
+        view.SetTip(step);
+        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>" + step + "</color>", note);
         view.SetFreeTab(freeTab);
         RefreshPopup();
 
-        freeView.SetPoints(pts, refs);
-        freeView.SetTab(freeTab, FreePlaneOn, FreePlaneName[freeTab] + " 각");
+        freeView.SetShape(pts, freeTab);
+        if (freeTab == 0) freeView.SetHeads("번호", "각", "선 1-2 / 선 2-3이 돈 각", "각의 차");
+        else if (freeTab == 1) freeView.SetHeads("번호", "두 선의 각", "", "");
+        else freeView.SetHeads("꼭짓점", "꺾인 각", "", "");
         freeView.ShowAxes(axesOn, axesOrigin, axes);
 
-        // 모니터로 내보낼 상태 — 판과 같은 값을 같은 자리에서 만든다(따로 계산하면 두 화면이 어긋난다).
+        // 판 — 가장 최근 측정들(한 줄에 하나)과 공간의 각 글자. 같은 값을 FreeMeasure 하나에서 받는다.
+        freeAngleAt.Clear();
+        freeAngleText.Clear();
+        int firstRow = Mathf.Max(0, count - RomLineFreeView.Rows);
+        for (int k = 0; k < count; k++)
+        {
+            FreeMeasure(k, out float angle, out Vector3 at, out bool cmp, out float t12, out float t23, out float diff);
+            string a = angle.ToString("F1") + "°";
+            freeAngleAt.Add(at);
+            freeAngleText.Add(a);
+            int row = k - firstRow;
+            if (row < 0) continue;
+            bool isRef = freeTab == 0 && k == 0;
+            string name = freeTab == 2 ? "점 " + (k + 2) : (k + 1).ToString();
+            if (isRef) freeView.SetRow(row, name, a, "기준", "", true);
+            else if (cmp) freeView.SetRow(row, name, a, t12.ToString("F1") + "° / " + t23.ToString("F1") + "°", diff.ToString("+0.0;-0.0") + "°", false);
+            else freeView.SetRow(row, name, a, "", "", false);
+        }
+        for (int row = Mathf.Max(0, count - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
+        freeView.SetAngles(freeAngleAt, freeAngleText);
+
+        // 모니터로 내보낼 상태 — 선마다 한 줄. 그 선에서 각이 하나 완성되면(3점의 둘째 선 · 4점의 둘째 선 · 연속의 둘째 선부터) 그 값을 함께 싣는다.
         StringBuilder js = monitorSb;
         js.Length = 0;
         js.Append("\"mode\":\"free\",\"top\":4,\"tab\":").Append(freeTab);
         AppendTabsJson(js).Append(",\"instruction\":");
         JsonStr(js, instruction).Append(",\"note\":");
         JsonStr(js, note);
-        AppendPopupJson(js).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":").Append(FreePlaneOn ? "true" : "false").Append(",\"plane\":");
-        JsonStr(js, FreePlaneName[freeTab]).Append(",\"lines\":[");
-
-        // 판 — 가장 최근 선들. 한 줄에 선 하나: 길이 · 그 동작의 면 각 · 직접 각 · 알림. 모니터에는 선을 전부 보낸다.
-        int firstRow = Mathf.Max(0, lines - RomLineFreeView.Rows);
-        string label = "";
-        Vector3 at = Vector3.zero;
-        for (int line = 0; line < lines; line++)
+        AppendPopupJson(js).Append(",\"axesOn\":").Append(axesOn ? "true" : "false").Append(",\"planeOn\":true,\"plane\":\"\",\"lines\":[");
+        int seg = 0;
+        for (int i = 0; i + 1 < pts.Count; i++)
         {
-            int row = line - firstRow, rf = refs[line];
-            float len = FreeLength(line) * 1000f;   // mm
+            if (!RomLineFreeView.Linked(freeTab, i)) continue;
+            int k = freeTab == 0 ? (i % 3 == 1 ? i / 3 : -1) : freeTab == 1 ? (i % 4 == 2 ? i / 4 : -1) : i - 1;   // 이 선에서 완성되는 측정(없으면 -1)
             string plane = "", warn = "";
-            float directAngle = 0f;
-            if (rf != line)
+            float angle = 0f;
+            if (k >= 0 && k < count)
             {
-                RomLineDirect d = FreeDirect(rf, line);
-                directAngle = d.angle;
-                plane = !FreePlaneOn ? "" : FreePlane(rf, line, freeTab, out RomLineResult r) ? FreeNamed(freeTab, r) : "—";
-                warn = FreeWarning(rf, line, d.angle, out _, out _, out _);
-                if (line == lines - 1)
-                {
-                    // 환자 위 — 가장 최근 측정선 곁에 값을 띄운다(면 각이 있으면 그것, 없으면 직접 각).
-                    label = plane.Length > 1 ? plane : "직접 " + d.angle.ToString("F1") + "°";
-                    at = (pts[line * 2] + pts[line * 2 + 1]) * 0.5f + Vector3.up * 0.04f;
-                }
+                FreeMeasure(k, out angle, out _, out bool cmp, out float t12, out float t23, out float diff);
+                plane = angle.ToString("F1") + "°";
+                if (cmp) warn = "선 1-2 " + t12.ToString("F1") + "° · 선 2-3 " + t23.ToString("F1") + "° · 각의 차 " + diff.ToString("+0.0;-0.0") + "°";
             }
-            if (row >= 0)
-            {
-                string name = $"선 {line + 1}  {len:F0}";
-                if (rf == line) freeView.SetRow(row, name, "기준선", "", "", true);
-                else freeView.SetRow(row, name, plane, directAngle.ToString("F1") + "°", warn, false);
-            }
-
-            if (line > 0) js.Append(',');
-            js.Append("{\"n\":").Append(line + 1).Append(",\"ref\":").Append(rf == line ? "true" : "false").Append(",\"refOf\":").Append(rf + 1)
-              .Append(",\"len\":").Append(len.ToString("F0", CultureInfo.InvariantCulture)).Append(",\"plane\":");
-            JsonStr(js, plane.Length > 1 ? plane : "").Append(",\"direct\":").Append(directAngle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
+            if (seg++ > 0) js.Append(',');
+            js.Append("{\"n\":").Append(seg).Append(",\"ref\":").Append(freeTab == 0 && i < 3 ? "true" : "false").Append(",\"refOf\":1")
+              .Append(",\"len\":").Append((Vector3.Distance(pts[i], pts[i + 1]) * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(",\"plane\":");
+            JsonStr(js, plane).Append(",\"direct\":").Append(angle.ToString("F1", CultureInfo.InvariantCulture)).Append(",\"warn\":");
             JsonStr(js, warn).Append(",\"a\":");
-            JsonVec(js, InAxes(pts[line * 2])).Append(",\"b\":");
-            JsonVec(js, InAxes(pts[line * 2 + 1])).Append('}');
+            JsonVec(js, InAxes(pts[i])).Append(",\"b\":");
+            JsonVec(js, InAxes(pts[i + 1])).Append('}');
         }
-        for (int row = Mathf.Max(0, lines - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
-        freeView.SetAngleLabel(label, at);
-
         js.Append("],\"pending\":");
-        if (half) JsonVec(js, InAxes(pts[pts.Count - 1])); else js.Append("null");
+        bool loose = pts.Count > 0 && (pts.Count < 2 || !RomLineFreeView.Linked(freeTab, pts.Count - 2));   // 마지막 점이 아직 어느 선에도 안 들었다
+        if (loose) JsonVec(js, InAxes(pts[pts.Count - 1])); else js.Append("null");
         monitorBody = js.ToString();
     }
+
 
     // ── 모니터(10-07) ───────────────────────────────────────────────
     /// <summary>월드 좌표를 고정 3축의 좌표로 — [환자 오른쪽, 위(바닥에서), 환자 앞](m). 모니터의 세 방향 그림이 이 좌표로 그린다.</summary>
@@ -1477,7 +1450,7 @@ public class RomLineSession : MonoBehaviour
             case "confirm": if (!freeMode && confirmWait) Confirm("모니터"); else Deny("확인할 것이 없다 — 동작 하나의 세 직선을 다 찍은 뒤에 누른다"); break;
             case "clear": if (freeMode) FreeClear(); else ResetTab(CurTab, "모니터"); break;
             case "resetAll": ResetAll("모니터"); break;
-            case "rebase": if (freeMode) FreeRebase(); break;
+            case "rebase": Deny("기준 바꾸기는 없앴다 — 3점 측정은 처음 찍은 묶음이 기준이다"); break;
             case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
                 CaptureAxes("모니터", true);
                 break;
@@ -1500,25 +1473,25 @@ public class RomLineSession : MonoBehaviour
         sb.Length = 0;
         sb.Append(System.DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")).Append(',').Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
           .Append(',').Append(what).Append(',').Append(FreeTabName[freeTab]).Append(',');
-        if (line >= 0 && line < FreeRefs.Count)
+        if (line >= 0 && line < FreeCount())
         {
-            int rf = FreeRefs[line];
+            // 열은 순서 측정과 같은 자리를 쓴다: 선 = 측정 번호 · 기준선 = 견준 기준(3점의 둘째 묶음부터 1) · 길이 = 그 측정에 든 선들의 길이 합(mm) ·
+            //   직접 각 = 그 측정의 각 · 알림 = 기준과 견준 값. 면 · 방향 · 면 각은 비운다(면을 쓰지 않는다). 점은 그 측정의 첫 점과 끝 점이다(사이 점은 로그 «찍음»에 있다).
             List<Vector3> p = FreePts;
-            sb.Append(line + 1).Append(',').Append(rf + 1).Append(',').Append((FreeLength(line) * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(',').Append(FreePlaneName[freeTab]).Append(',');
-            if (rf == line) sb.Append(",,,,,");
-            else
-            {
-                RomLineDirect d = FreeDirect(rf, line);
-                bool ok = FreePlaneOn && FreePlane(rf, line, freeTab, out RomLineResult r0);
-                FreePlane(rf, line, freeTab, out RomLineResult r);
-                string warn = FreeWarning(rf, line, d.angle, out int judged, out _, out _);
-                sb.Append(ok ? (r.signedAngle >= 0f ? FreePlus[freeTab] : FreeMinus[freeTab]) : "").Append(',')
-                  .Append(ok ? r.angle.ToString("F1", CultureInfo.InvariantCulture) : "").Append(',')
-                  .Append(d.angle.ToString("F1", CultureInfo.InvariantCulture)).Append(',').Append(warn).Append(',').Append(judged < 0 ? "" : FreeTabName[judged]).Append(',');
-            }
+            int size = FreeSetSize[freeTab], first = size > 0 ? line * size : line, last = size > 0 ? first + size - 1 : line + 2;
+            float len = 0f;
+            for (int i = first; i < last; i++)
+                if (RomLineFreeView.Linked(freeTab, i)) len += Vector3.Distance(p[i], p[i + 1]);
+            FreeMeasure(line, out float angle, out _, out bool cmp, out float t12, out float t23, out float diff);
+            sb.Append(line + 1).Append(',').Append(cmp ? "1" : "").Append(',').Append((len * 1000f).ToString("F0", CultureInfo.InvariantCulture)).Append(",,,,")
+              .Append(angle.ToString("F1", CultureInfo.InvariantCulture)).Append(',');
+            if (cmp)
+                sb.Append("선 1-2 ").Append(t12.ToString("F1", CultureInfo.InvariantCulture)).Append(" · 선 2-3 ").Append(t23.ToString("F1", CultureInfo.InvariantCulture))
+                  .Append(" · 각의 차 ").Append(diff.ToString("+0.0;-0.0", CultureInfo.InvariantCulture));
+            sb.Append(",,");
             for (int k = 0; k < 2; k++)
             {
-                Vector3 v = p[line * 2 + k];
+                Vector3 v = p[k == 0 ? first : last];
                 sb.Append(v.x.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.y.ToString("F4", CultureInfo.InvariantCulture)).Append(',').Append(v.z.ToString("F4", CultureInfo.InvariantCulture)).Append(',');
             }
         }
@@ -1570,14 +1543,13 @@ public class RomLineSession : MonoBehaviour
         for (int i = 0; i < 6; i++) confirmed[i] = false;
         frame = axes;   // 고정 3축은 그대로다
         for (int i = 0; i < 12; i++) ClearResult(i);
-        int keep = freeTab, freeLines = 0;
+        int keep = freeTab, freePoints = 0;
         for (int t = 0; t < 3; t++)
         {
-            freeTab = t;                       // CsvAdd가 지금 갈래의 이름으로 적는다
-            freeLines += freeRefOf[t].Count;
+            freeTab = t;                       // CsvAdd가 지금 방식의 이름으로 적는다
+            freePoints += freePts[t].Count;
             if (freePts[t].Count > 0) CsvAdd("지움", -1);
             freePts[t].Clear();
-            freeRefOf[t].Clear();
         }
         freeTab = keep;
         resetAsk = false;
@@ -1587,7 +1559,7 @@ public class RomLineSession : MonoBehaviour
         index = 0;
         popupCursor = 0;
         noteText = "";
-        Debug.Log($"[선실측] 리셋 — 전체 측정 결과를 지웠다(자유 측정의 선 {freeLines}개 포함) ({why})");
+        Debug.Log($"[선실측] 리셋 — 전체 측정 결과를 지웠다(자유 측정의 점 {freePoints}개 포함) ({why})");
         Play(sndUndo);
         dirty = true;
     }
@@ -1740,9 +1712,8 @@ public class RomLineSession : MonoBehaviour
         int plane = m / 2;
 
         // 바닥의 3축 — 자유 측정의 점·선은 지우고 십자만 남긴다(찍어 둔 자유 측정 점은 그대로 있다. «기타»로 가면 다시 그린다).
-        freeView.SetPoints(NoPoints, NoRefs);
-        freeView.SetAngleLabel("", Vector3.zero);
-        freeView.SetTab(plane, true, FreePlaneName[plane] + " 각");
+        freeView.SetShape(NoPoints, 2);
+        freeView.SetAngles(NoPoints, NoTexts);
         freeView.ShowAxes(true, axesOrigin, axes);
 
         Announce();
@@ -1840,14 +1811,14 @@ public class RomLineSession : MonoBehaviour
     }
 
     private static readonly List<Vector3> NoPoints = new List<Vector3>(0);
-    private static readonly List<int> NoRefs = new List<int>(0);
+    private static readonly List<string> NoTexts = new List<string>(0);
 
-    /// <summary>모니터로 보내는 탭 목록 — 맨 위 다섯(topTabs)과 자유 측정의 갈래 셋(tabs · counts).</summary>
+    /// <summary>모니터로 보내는 탭 목록 — 맨 위 다섯(topTabs)과 자유 측정의 방식 셋(tabs · counts = 방식마다 찍어 둔 점 수).</summary>
     private StringBuilder AppendTabsJson(StringBuilder js)
     {
         js.Append(",\"topTabs\":[");
         for (int i = 0; i < TopTabName.Length; i++) { if (i > 0) js.Append(','); JsonStr(js, TopTabName[i]); }
-        return js.Append("],\"tabs\":[\"굴곡·신전\",\"측굴\",\"회전\"],\"counts\":[")
+        return js.Append("],\"tabs\":[\"3점 측정\",\"4점 측정\",\"연속 측정\"],\"counts\":[")
                  .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append(']');
     }
 

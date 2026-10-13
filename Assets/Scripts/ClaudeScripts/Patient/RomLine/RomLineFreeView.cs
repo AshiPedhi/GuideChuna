@@ -3,9 +3,10 @@ using TMPro;
 using UnityEngine;
 
 /// <summary>
-/// ★경추 ROM «선 실측» — 자유 측정의 표시(2026-10-07 신설).
-/// 점·선(개수 제한 없음)과 선마다의 길이 글자, 고정 3축(바닥 십자와 정면 화살표뿐이다, 10-13), 판의 결과 줄.
-/// 동작(굴곡·신전 / 측굴 / 회전)마다 갈래가 나뉘어 있어, 지금 갈래의 선과 <b>그 동작의 면 값 하나</b>만 보여 준다.
+/// ★경추 ROM «선 실측» — 자유 측정의 표시(2026-10-07 신설 · 10-13 다시 짬).
+/// ★10-13 사용자 지시: 자유 측정은 동작(굴곡·신전 / 측굴 / 회전)을 가르지 않고 <b>찍은 점들이 이루는 각 그대로</b>(3차원)를 낸다.
+///   방식 셋 — 3점 측정(세 점, 가운데 점에서 벌어진 각) · 4점 측정(두 점씩 선 둘, 두 선의 각) · 연속 측정(점을 이어 가며 꺾이는 각).
+/// 점·선(개수 제한 없음)과 선마다의 길이 글자, 각 글자, 고정 3축(바닥 십자와 정면 화살표뿐이다), 판의 결과 줄을 그린다.
 /// 계산은 하지 않는다 — <see cref="RomLineSession"/>이 준 값만 그린다. 만드는 도구는 <see cref="RomLineView"/> 것을 빌려 쓴다.
 /// ★글자·자리는 상태가 바뀔 때만 바꾼다. 매 프레임 하는 일은 글자를 눈 쪽으로 돌리는 것뿐이다(할당 없음).
 /// </summary>
@@ -13,7 +14,7 @@ public class RomLineFreeView
 {
     /// <summary>판에 보이는 선의 수(가장 최근 것부터). 한 줄에 선 하나.</summary>
     public const int Rows = 8;
-    private const int Cols = 3;               // 그 동작의 면 각 · 직접 각 · 알림
+    private const int Cols = 3;               // 각 · 견준 값 둘(방식마다 머리글이 다르다)
     private const float AxisWidth = 0.002f;
     // ★10-13 사용자 지시: 3축은 <b>바닥과 정면을 가를 수 있는 십자선만</b> 그린다 — 수직 기둥, 두 세로 면의 테두리,
     //   «정면 · 환자 오른쪽 / 왼쪽 · 굴곡·신전 면 · 측굴 면» 글자를 모두 뺐다. 정면은 화살표로만 가린다.
@@ -27,12 +28,8 @@ public class RomLineFreeView
     private static readonly Color FirstColor = RomLineView.NeutralColor;   // 기준선 = 중립과 같은 색
     private static readonly Color LineColor = RomLineView.ActiveColor;     // 측정선 = 능동과 같은 색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
-    private static readonly Color OffColor = new Color(0.40f, 0.43f, 0.48f, 1f);
-    private static readonly Color WarnColor = new Color(1f, 0.85f, 0.30f, 1f);   // 알림 — 주황(측정값)과 섞이지 않게 노랑
-    // 세 면의 색 — 판의 칸 머리글과 공간의 축이 같은 색이다
-    private static readonly Color SagColor = new Color(0.40f, 0.70f, 1f, 1f);     // 굴곡·신전(옆에서 본 면)
-    private static readonly Color FrontColor = new Color(0.45f, 0.90f, 0.55f, 1f); // 측굴(앞에서 본 면)
-    private static readonly Color FloorColor = new Color(1f, 0.85f, 0.30f, 1f);    // 회전(바닥)
+    // 바닥 십자의 색
+    private static readonly Color FloorColor = new Color(1f, 0.85f, 0.30f, 1f);
 
     private RomLineView v;
     private Transform world, axesRoot;
@@ -41,12 +38,12 @@ public class RomLineFreeView
     private readonly List<Renderer> sphereRenderers = new List<Renderer>(64);
     private readonly List<LineRenderer> lines = new List<LineRenderer>(32);
     private readonly List<TextMeshPro> labels = new List<TextMeshPro>(32);
-    private TextMeshPro angleText;
+    private readonly List<TextMeshPro> angleTexts = new List<TextMeshPro>(16);
 
     private readonly TextMeshPro[] names = new TextMeshPro[Rows];
     private readonly TextMeshPro[] cells = new TextMeshPro[Rows * Cols];
-    private TextMeshPro planeHead;
-    private static readonly Color[] PlaneColors = { SagColor, FrontColor, FloorColor };
+    private TextMeshPro headName;
+    private readonly TextMeshPro[] heads = new TextMeshPro[Cols];
 
     private LineRenderer axForward, axRight, axArrow;
 
@@ -56,27 +53,23 @@ public class RomLineFreeView
         world = new GameObject("자유 측정 표시").transform;
         world.SetParent(parent, false);
 
-        angleText = v.MakeText(world, "", 0.10f, TextAlignmentOptions.Center, 5);
-        angleText.color = LineColor;
-        angleText.gameObject.SetActive(false);
-
-        // ── 판의 결과 줄 ── 선 · 길이 | 그 동작의 면 각 | 직접 각 | 알림
-        //   10-12: 메인 화면이 넓어져(0.80 × 0.38, 배율 전) 칸을 벌리고 글자를 키웠다.
-        const float xName = -0.27f;
-        float[] x = { -0.06f, 0.10f, 0.27f };
-        float[] w = { 0.18f, 0.12f, 0.20f };
-        RomLineView.Place(v.MakeText(panelArea, "선 · 길이", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(xName, tableTop), 0.20f).color = DimColor;
-        planeHead = RomLineView.Place(v.MakeText(panelArea, "", 0.105f, TextAlignmentOptions.Center, 3), new Vector2(x[0], tableTop), w[0]);
-        RomLineView.Place(v.MakeText(panelArea, "직접 각", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(x[1], tableTop), w[1]).color = DimColor;
+        // ── 판의 결과 줄 ── 번호 | 각 | 견준 값 둘. 머리글은 방식마다 다르다(SetHeads).
+        const float xName = -0.33f;
+        float[] x = { -0.20f, 0.02f, 0.26f };
+        float[] w = { 0.14f, 0.24f, 0.20f };
+        headName = RomLineView.Place(v.MakeText(panelArea, "", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(xName, tableTop), 0.10f);
+        headName.color = DimColor;
+        for (int c = 0; c < Cols; c++)
+        {
+            heads[c] = RomLineView.Place(v.MakeText(panelArea, "", 0.10f, TextAlignmentOptions.Center, 3), new Vector2(x[c], tableTop), w[c]);
+            heads[c].color = DimColor;
+        }
         for (int r = 0; r < Rows; r++)
         {
             float y = tableTop - 0.030f - r * 0.0250f;
-            names[r] = RomLineView.Place(v.MakeText(panelArea, "", 0.125f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.20f);
-            cells[r * Cols] = RomLineView.Place(v.MakeText(panelArea, "", 0.14f, TextAlignmentOptions.Center, 3), new Vector2(x[0], y), w[0]);
-            cells[r * Cols + 1] = RomLineView.Place(v.MakeText(panelArea, "", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(x[1], y), w[1]);
-            cells[r * Cols + 1].color = DimColor;
-            cells[r * Cols + 2] = RomLineView.Place(v.MakeText(panelArea, "", 0.10f, TextAlignmentOptions.Left, 3), new Vector2(x[2], y), w[2]);
-            cells[r * Cols + 2].color = WarnColor;
+            names[r] = RomLineView.Place(v.MakeText(panelArea, "", 0.125f, TextAlignmentOptions.Left, 3), new Vector2(xName, y), 0.10f);
+            for (int c = 0; c < Cols; c++)
+                cells[r * Cols + c] = RomLineView.Place(v.MakeText(panelArea, "", c == 0 ? 0.14f : 0.12f, TextAlignmentOptions.Center, 3), new Vector2(x[c], y), w[c]);
         }
 
         // ── 고정 3축 ──
@@ -105,12 +98,12 @@ public class RomLineFreeView
 
     // ── 점·선 ───────────────────────────────────────────────────────
     /// <summary>
-    /// 찍힌 점들(두 점마다 선 하나)을 그리고 선마다 «번호 · 길이(mm)»를 붙인다.
-    /// refOf[선] = 그 선이 견준 기준선의 번호 — 자기 번호와 같으면 기준선이라 흰색으로 그린다.
+    /// 찍힌 점들과 그 사이의 선을 그리고 선마다 길이(mm)를 붙인다. mode 0 = 세 점씩(1-2 · 2-3) · 1 = 네 점씩(1-2 · 3-4) · 2 = 이어서(앞 점과 전부).
+    /// 3점 측정의 첫 묶음은 기준이라 흰색으로 그린다. ★어느 점끼리 잇는지는 <see cref="Linked"/> 하나가 정한다 — 세션(모니터로 보내는 선)도 같은 함수를 쓴다.
     /// </summary>
-    public void SetPoints(List<Vector3> pts, List<int> refOf)
+    public void SetShape(List<Vector3> pts, int mode)
     {
-        int n = pts.Count, ln = n / 2;
+        int n = pts.Count;
         while (spheres.Count < n)
         {
             Transform s = v.MakeSphere("점(자유)", RomLineView.PointRadius, LineColor);
@@ -124,66 +117,82 @@ public class RomLineFreeView
             if (spheres[i].gameObject.activeSelf != show) spheres[i].gameObject.SetActive(show);
             if (!show) continue;
             spheres[i].position = pts[i];
-            int line = i / 2;
-            sphereRenderers[i].material.color = line < refOf.Count && refOf[line] == line ? FirstColor : LineColor;   // 찍다 만 선의 첫 점은 측정선 색
+            sphereRenderers[i].material.color = mode == 0 && i < 3 ? FirstColor : LineColor;
         }
 
-        while (lines.Count < ln)
+        int seg = 0;
+        for (int i = 0; i + 1 < n; i++)
         {
-            LineRenderer lr = v.MakeLine("선(자유)", LineColor, 2);
-            lr.transform.SetParent(world, false);
-            lines.Add(lr);
-            labels.Add(v.MakeText(world, "", 0.07f, TextAlignmentOptions.Center, 5));
+            if (!Linked(mode, i)) continue;
+            if (lines.Count <= seg)
+            {
+                LineRenderer lr = v.MakeLine("선(자유)", LineColor, 2);
+                lr.transform.SetParent(world, false);
+                lines.Add(lr);
+                labels.Add(v.MakeText(world, "", 0.07f, TextAlignmentOptions.Center, 5));
+            }
+            Color c = mode == 0 && i < 3 ? FirstColor : LineColor;
+            lines[seg].startColor = lines[seg].endColor = c;
+            labels[seg].color = c;
+            Vector3 a = pts[i], b = pts[i + 1];
+            RomLineView.DrawLine(lines[seg], a, b);   // 찍은 두 점 사이만(10-13)
+            labels[seg].text = (Vector3.Distance(a, b) * 1000f).ToString("F0");   // 길이는 mm, 단위 글자 없이(10-13)
+            labels[seg].transform.position = (a + b) * 0.5f + Vector3.up * 0.012f;
+            if (!labels[seg].gameObject.activeSelf) labels[seg].gameObject.SetActive(true);
+            seg++;
         }
-        for (int i = 0; i < lines.Count; i++)
+        for (int i = seg; i < lines.Count; i++)
         {
-            bool show = i < ln;
-            lines[i].enabled = show;
-            if (labels[i].gameObject.activeSelf != show) labels[i].gameObject.SetActive(show);
-            if (!show) continue;
-            Color c = refOf[i] == i ? FirstColor : LineColor;
-            lines[i].startColor = lines[i].endColor = c;
-            labels[i].color = c;
-            Vector3 a = pts[i * 2], b = pts[i * 2 + 1];
-            RomLineView.DrawLine(lines[i], a, b);   // 찍은 두 점 사이만(10-13)
-            labels[i].text = (i + 1) + " · " + (Vector3.Distance(a, b) * 1000f).ToString("F0");   // 길이는 mm, 단위 글자 없이(10-13)
-            labels[i].transform.position = (a + b) * 0.5f + Vector3.up * 0.015f;
+            lines[i].enabled = false;
+            if (labels[i].gameObject.activeSelf) labels[i].gameObject.SetActive(false);
         }
     }
 
-    /// <summary>가장 최근 선 곁에 띄우는 각 글자(«첫 선 ○° · 앞 선 ○°»). 글자가 비면 끈다.</summary>
-    public void SetAngleLabel(string text, Vector3 pos)
+    /// <summary>점 i와 점 i+1을 선으로 잇는가. mode 0 = 세 점씩 · 1 = 네 점씩 · 2 = 이어서.</summary>
+    public static bool Linked(int mode, int i)
     {
-        bool show = text.Length > 0;
-        if (angleText.gameObject.activeSelf != show) angleText.gameObject.SetActive(show);
-        if (!show) return;
-        angleText.text = text;
-        angleText.transform.position = pos;
+        return mode == 2 || (mode == 0 ? i % 3 != 2 : i % 4 == 0 || i % 4 == 2);
+    }
+
+    /// <summary>각 글자들 — 자리(꼭짓점이나 두 선 사이)와 글. 개수가 줄면 남는 글자는 끈다.</summary>
+    public void SetAngles(List<Vector3> at, List<string> text)
+    {
+        while (angleTexts.Count < at.Count)
+        {
+            TextMeshPro t = v.MakeText(world, "", 0.10f, TextAlignmentOptions.Center, 5);
+            t.color = LineColor;
+            angleTexts.Add(t);
+        }
+        for (int i = 0; i < angleTexts.Count; i++)
+        {
+            bool show = i < at.Count;
+            if (angleTexts[i].gameObject.activeSelf != show) angleTexts[i].gameObject.SetActive(show);
+            if (!show) continue;
+            angleTexts[i].text = text[i];
+            angleTexts[i].transform.position = at[i] + Vector3.up * 0.022f;
+        }
     }
 
     // ── 판 ──────────────────────────────────────────────────────────
-    /// <summary>
-    /// 지금 갈래(0 굴곡·신전 · 1 측굴 · 2 회전)의 면 이름을 칸 머리글에 적고 그 면의 색으로 칠한다.
-    /// planeOn이 false면(3축을 꺼서 그 면을 세울 수 없다) 흐리게 한다.
-    /// </summary>
-    public void SetTab(int tab, bool planeOn, string head)
+    /// <summary>결과 줄의 머리글 넷(번호 칸 · 각 · 견준 값 둘). 방식을 바꿀 때 부른다.</summary>
+    public void SetHeads(string name, string a, string b, string c)
     {
-        Color c = planeOn ? PlaneColors[tab] : OffColor;
-        planeHead.text = head;
-        planeHead.color = c;
-        for (int r = 0; r < Rows; r++) cells[r * Cols].color = c;
+        headName.text = name;
+        heads[0].text = a;
+        heads[1].text = b;
+        heads[2].text = c;
     }
 
-    /// <summary>한 줄(선 하나). 빈 글자를 주면 그 칸은 비운다. isRef = 기준선(면 각 칸에 «기준선»이라고 적는다).</summary>
-    public void SetRow(int row, string name, string plane, string direct, string note, bool isRef)
+    /// <summary>한 줄(측정 하나). 빈 글자를 주면 그 칸은 비운다. isRef = 기준(3점 측정의 첫 묶음) — 흰색으로 적는다.</summary>
+    public void SetRow(int row, string name, string a, string b, string c, bool isRef)
     {
         names[row].text = name;
         names[row].color = isRef ? FirstColor : Color.white;
         int o = row * Cols;
-        cells[o].text = plane;
-        if (isRef) cells[o].color = DimColor;   // SetTab이 먼저 칠한 색 위에 — 기준선 줄만 흐리게
-        cells[o + 1].text = direct;
-        cells[o + 2].text = note;
+        cells[o].text = a;
+        cells[o].color = isRef ? FirstColor : LineColor;
+        cells[o + 1].text = b;
+        cells[o + 2].text = c;
     }
 
     // ── 고정 3축 ────────────────────────────────────────────────────
@@ -213,6 +222,7 @@ public class RomLineFreeView
         if (!world.gameObject.activeSelf) return;
         for (int i = 0; i < labels.Count; i++)
             if (labels[i].gameObject.activeSelf) RomLineView.Face(labels[i].transform, eye);
-        if (angleText.gameObject.activeSelf) RomLineView.Face(angleText.transform, eye);
+        for (int i = 0; i < angleTexts.Count; i++)
+            if (angleTexts[i].gameObject.activeSelf) RomLineView.Face(angleTexts[i].transform, eye);
     }
 }
