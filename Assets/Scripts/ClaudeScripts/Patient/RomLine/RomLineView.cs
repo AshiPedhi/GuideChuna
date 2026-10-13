@@ -200,7 +200,7 @@ public class RomLineView
     //   같은 단면의 두 동작(굴곡 · 신전 / 우측굴 · 좌측굴 / 우회전 · 좌회전)은 <b>한 각도기</b>에 좌우로 그린다 — 각도기는 그 두 줄 옆에 크게 선다.
     //   각도기 그림은 «보는 방향»을 정해 그린 약도다(찍은 점의 좌표를 그대로 옮긴 그림이 아니다). 값은 세션이 준 «면 위 각» 그대로다.
     //   ★10-13 저녁 사용자 지시: 그림의 좌우를 뒤집었다 — 양옆 표시가 «뒤 · 앞» → «앞 · 뒤», «우 · 좌» → «좌 · 우»다. 글자만 바꾼 것이 아니라 선이 기우는 쪽(GaugeSide)도 같이 뒤집었다.
-    //     굴곡 · 신전 = 옆에서 본 그림(왼쪽이 환자 앞) · 측굴 = 환자 왼쪽이 그림 왼쪽 · 회전 = 위에서 본 그림(아래가 환자 앞 · 환자 왼쪽이 그림 왼쪽)
+    //     굴곡 · 신전 = 옆에서 본 그림(왼쪽이 환자 앞) · 측굴 = 환자 왼쪽이 그림 왼쪽 · 회전 = 위에서 본 그림(위가 환자 앞 · 환자 왼쪽이 그림 왼쪽)
     //     ★모니터 화면의 세 그림은 종전 방향 그대로다(헤드셋 결과표와 좌우가 반대다).
     //   줄의 순서도 «좌측굴 · 우측굴», «좌회전 · 우회전»으로 바꿨다(DisplayRow) — 보여 주는 자리만이다. 재는 순서와 동작 번호(우 → 좌)는 그대로다.
     private const float RowH = 0.041f, GaugeR = 0.068f;
@@ -212,7 +212,7 @@ public class RomLineView
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
-    private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
+    private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, 1f, 1f };         // 0° 선이 향하는 쪽(위 +1 · 아래 −1) — 회전도 위로 세웠다(10-13 저녁 사용자 지시 · 종전에는 아래가 환자 앞이라 뒤집혀 보였다)
     private static readonly float[] GaugeSide = { -1f, 1f, 1f, -1f, 1f, -1f };       // 그 동작이 제 방향으로 움직였을 때 선이 기우는 쪽(그림 오른쪽 +1) — 10-13 저녁에 전부 뒤집었다
     private static readonly int[] DisplayRow = { 0, 1, 3, 2, 5, 4 };                  // 동작 번호 → 결과표의 줄(좌측굴 · 좌회전을 먼저 보여 준다)
     private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
