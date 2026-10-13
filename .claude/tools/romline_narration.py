@@ -2,7 +2,7 @@
 #   사용: python romline_narration.py            → 만들 파일만 보여 준다(dry-run)
 #         python romline_narration.py --write    → 없는 파일만 만든다
 #         python romline_narration.py --write --force [--only m0_p1,done]   → 문구를 고쳤을 때 덮어쓴다
-#   출력: Assets/Resources/RomLine/Narration/m{동작}_p{단계}.mp3 · done.mp3
+#   출력: Assets/Resources/RomLine/Narration/m{동작}_p{단계}.mp3 · m{동작}_done.mp3 · done.mp3
 #         동작 0 굴곡 · 1 신전 · 2 우측굴 · 3 좌측굴 · 4 우회전 · 5 좌회전 / 단계 0 중립 · 1 능동 · 2 압박
 #   ★RomLineSession이 이 이름으로 읽는다(Resources.Load "RomLine/Narration/m0_p0"). 이름을 바꾸면 조용히 무음이 된다.
 #   ★지우고 다시 만들지 않는다 — 같은 경로에 덮어써야 Unity가 guid를 유지한다. .meta는 Unity가 만든다.
@@ -13,24 +13,19 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 OUT = os.path.join(ROOT, "Assets", "Resources", "RomLine", "Narration")
 VOICE = "ko-KR-SunHiNeural"
 
-# (이름, 처음에 말할 동작 이름, 찍는 두 곳, 능동에서 시킬 움직임)
-MOTIONS = [
-    ("굴곡", "미간점과 턱끝점", "고개를 앞으로 끝까지 숙이게"),
-    ("신전", "미간점과 턱끝점", "고개를 뒤로 끝까지 젖히게"),
-    ("오른쪽 측굴", "미간점과 턱끝점", "고개를 오른쪽 어깨 쪽으로 끝까지 기울이게"),
-    ("왼쪽 측굴", "미간점과 턱끝점", "고개를 왼쪽 어깨 쪽으로 끝까지 기울이게"),
-    ("오른쪽 회전", "왼쪽 미주점과 미간점", "고개를 오른쪽으로 끝까지 돌리게"),
-    ("왼쪽 회전", "오른쪽 미주점과 미간점", "고개를 왼쪽으로 끝까지 돌리게"),
-]
+# ★10-13 사용자 지시: 음성은 화면의 안내 글 그대로다 — 어느 점을 찍으라는 말, 자세 설명을 하지 않는다.
+#   화면 글은 RomLineSession.Refresh가 만든다(«굴곡 · 중립을 측정하세요» · «굴곡 측정 완료 · 중립으로 돌아간 뒤 A = 확인»). 한쪽을 고치면 다른 쪽도 고친다.
+MOTIONS = ["굴곡", "신전", "우측굴", "좌측굴", "우회전", "좌회전"]   # RomLineSession.MotionName과 같다
+PHASES = ["중립", "능동", "압박"]
 
 
 def texts():
     out = {}
-    for m, (name, pts, move) in enumerate(MOTIONS):
-        out["m%d_p0" % m] = "%s을 측정합니다. 환자가 정면을 본 편안한 자세에서, %s을 차례로 찍으세요." % (name, pts)
-        out["m%d_p1" % m] = "환자가 스스로 %s 한 뒤, %s을 차례로 찍으세요." % (move, pts)
-        out["m%d_p2" % m] = "측정자가 같은 방향으로 조금 더 눌러 준 상태에서, %s을 차례로 찍으세요." % pts
-    out["done"] = "모든 방향의 측정이 끝났습니다."
+    for m, name in enumerate(MOTIONS):
+        for p, phase in enumerate(PHASES):
+            out["m%d_p%d" % (m, p)] = "%s, %s을 측정하세요." % (name, phase)
+        out["m%d_done" % m] = "%s 측정 완료. 중립으로 돌아간 뒤 에이 버튼으로 확인하세요." % name
+    out["done"] = "모든 측정 완료."
     return out
 
 

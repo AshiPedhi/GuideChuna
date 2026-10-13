@@ -1852,23 +1852,13 @@ public class RomLineSession : MonoBehaviour
     }
 
     // ── 안내 음성(10-08) ────────────────────────────────────────────
-    //   단계가 바뀔 때마다 한 문장. 파일은 .claude/tools/romline_narration.py가 만든다(m{동작}_p{단계} · done).
+    //   단계가 바뀔 때마다 한 문장. 파일은 .claude/tools/romline_narration.py가 만든다(m{동작}_p{단계} · m{동작}_done · done).
+    //   ★10-13 사용자 지시: 음성은 화면의 안내 글 그대로다(«굴곡, 중립을 측정하세요» · «굴곡 측정 완료. 중립으로 돌아간 뒤 A 버튼으로 확인하세요»).
+    //     어느 점을 찍으라는 말은 하지 않는다. 화면 글(Refresh)을 고치면 그 도구의 texts()도 고치고 파일을 다시 만든다.
     //   ★파일이 없으면 에러 없이 무음이다 — 그래서 읽은 개수와, 틀 때마다 어느 파일인지를 로그에 남긴다.
     private AudioSource narrSrc;
-    // 안내창에 띄우는 글 — ★안내 음성(.claude/tools/romline_narration.py의 texts())과 <b>같은 문장</b>이어야 한다. 한쪽을 고치면 다른 쪽도 고친다.
-    private static readonly string[] NarrName = { "굴곡", "신전", "오른쪽 측굴", "왼쪽 측굴", "오른쪽 회전", "왼쪽 회전" };
-    private static readonly string[] NarrPoints = { "미간점과 턱끝점", "미간점과 턱끝점", "미간점과 턱끝점", "미간점과 턱끝점", "왼쪽 미주점과 미간점", "오른쪽 미주점과 미간점" };
-    private static readonly string[] NarrMove = { "고개를 앞으로 끝까지 숙이게", "고개를 뒤로 끝까지 젖히게", "고개를 오른쪽 어깨 쪽으로 끝까지 기울이게",
-                                                  "고개를 왼쪽 어깨 쪽으로 끝까지 기울이게", "고개를 오른쪽으로 끝까지 돌리게", "고개를 왼쪽으로 끝까지 돌리게" };
-
-    private static string NarrationText(int m, int ph)
-    {
-        if (ph == 0) return $"{NarrName[m]}을 측정합니다. 환자가 정면을 본 편안한 자세에서, {NarrPoints[m]}을 차례로 찍으세요.";
-        if (ph == 1) return $"환자가 스스로 {NarrMove[m]} 한 뒤, {NarrPoints[m]}을 차례로 찍으세요.";
-        return $"측정자가 같은 방향으로 조금 더 눌러 준 상태에서, {NarrPoints[m]}을 차례로 찍으세요.";
-    }
-
-    private readonly AudioClip[] narr = new AudioClip[19];
+    private const int NarrDone = 18, NarrMotionDone = 19;   // 0~17 = 단계(동작 × 중립 · 능동 · 압박) · 18 = 전부 끝 · 19~24 = 동작 하나를 다 쟀다
+    private readonly AudioClip[] narr = new AudioClip[25];
     private int announced = -1;
 
     private void LoadNarration()
@@ -1882,16 +1872,21 @@ public class RomLineSession : MonoBehaviour
             narr[i] = Resources.Load<AudioClip>($"RomLine/Narration/m{i / 3}_p{i % 3}");
             if (narr[i] != null) found++;
         }
-        narr[18] = Resources.Load<AudioClip>("RomLine/Narration/done");
-        if (narr[18] != null) found++;
+        narr[NarrDone] = Resources.Load<AudioClip>("RomLine/Narration/done");
+        if (narr[NarrDone] != null) found++;
+        for (int m = 0; m < 6; m++)
+        {
+            narr[NarrMotionDone + m] = Resources.Load<AudioClip>($"RomLine/Narration/m{m}_done");
+            if (narr[NarrMotionDone + m] != null) found++;
+        }
         if (found == narr.Length) Debug.Log($"[선실측] 안내 음성 {found}개를 읽었다");
         else Debug.LogWarning($"[선실측] ★안내 음성 {narr.Length}개 중 {found}개만 읽었다 — 없는 단계는 무음이다(Resources/RomLine/Narration).");
     }
 
     private void Announce()
     {
-        // 확인을 기다리는 동안과 다 잰 탭을 보고 있는 동안은 말하지 않는다(-2) — 그 단계의 안내를 다시 틀지 않게.
-        int key = Done ? 18 : confirmWait || TabComplete(CurTab) ? -2 : group - 1;
+        // 확인을 기다리는 동안에는 «○○ 측정 완료 …»를 한 번 말한다. 다 잰 탭을 보고 있는 동안은 말하지 않는다(-2).
+        int key = Done ? NarrDone : confirmWait ? NarrMotionDone + MotionOf(group) : TabComplete(CurTab) ? -2 : group - 1;
         if (key == announced) return;
         announced = key;
         if (narrSrc == null || key < 0) return;
