@@ -13,7 +13,7 @@
   10-12: 순서 탭(굴곡 · 신전 · 측굴 · 회전)의 왼쪽은 결과표다 — 측정 명칭 · 능동 · 압박 · 그 동작의 단면에서 본 각도기.
          헤드셋 안의 메인 화면과 같은 값이다.
   10-12 저녁: 탭은 다섯 — 굴곡 · 신전 / 측굴 / 회전 / 리셋 / 자유 측정. 헤드셋에서는 «탭 창»(A 버튼)으로 따로 뜬다.
-         탭을 재는 중이면 다른 탭으로 못 간다. 동작 하나(중립 · 능동 · 압박)를 다 찍으면 멈추고 «확인»(A 버튼 · 아래 버튼)을 기다린다.
+         탭을 재는 중이면 다른 탭으로 못 간다. 동작 하나(중립 · 능동 · 압박)를 다 찍으면 멈추고 «확인»(트리거 · 아래 버튼)을 기다린다 — 헤드셋의 결과표는 확인해야 채워진다.
          #demo-confirm = 확인을 기다리는 견본 · #demo-popup = 탭 창을 띄운 견본.
 -->
 <style>
@@ -157,7 +157,7 @@ const GVIEW = ['옆에서 본 그림', '옆에서 본 그림', '앞에서 본 �
 const GZERO = [1, 1, 1, 1, -1, -1], GSIDE = [1, -1, -1, 1, -1, 1];   // 0° 선이 향하는 쪽(위 +1) · 제 방향으로 움직였을 때 기우는 쪽(오른쪽 +1)
 const GLEFT = ['뒤', '뒤', '우', '우', '우', '우'], GRIGHT = ['앞', '앞', '좌', '좌', '좌', '좌'];
 const GMAX = 100;   // 이보다 큰 각은 그림에서 여기까지만 그린다 — 숫자는 그대로 나온다
-const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기(세 직선을 다 찍은 뒤에는 확인) · <b>B</b> 직선 취소(길게 누르면 이 탭 지우기) · <b>스틱 좌우</b> 탭 창을 띄운 동안 탭 고르기 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
+const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기 · 세 직선을 다 찍은 뒤 <b>트리거</b> = 확인 · <b>B</b> 직선 취소(길게 누르면 이 탭 지우기) · <b>스틱 좌우</b> 탭 창을 띄운 동안 탭 고르기 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
 const KEYS_FREE = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기 · <b>B</b> 취소(길게 누르면 이 방식의 점 지우기) · <b>스틱 좌우</b> 방식 바꾸기 — 3점 · 4점 · 연속(탭 창을 띄운 동안에는 탭 고르기) · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
 
 function cmd(c) {
@@ -196,7 +196,7 @@ function demoState() {
     results:conf ? [R(26.8, 39.3), demoTab > 0 ? R(41.5, 52.0) : {a:null, p:null}, demoTab > 0 ? R(22.4, 30.1) : {a:null, p:null}, demoTab > 0 ? R(20.0, 33.0) : {a:null, p:null}, demoTab > 1 ? R(30.0, 55.0) : {a:null, p:null}, {a:null, p:null}]
                  : [R(26.8, 39.3), R(41.5, 52.0), R(22.4, 30.1), R(20.0, 33.0), R(30.0, 55.0), R(48.2, 61.7)],
     mode:'guided', top:demoTab, topTabs:['굴곡 · 신전','측굴','회전','리셋','자유 측정'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0],
-    instruction:conf ? ['굴곡을 다 쟀습니다 — A = 확인 → 신전', '좌측굴을 다 쟀습니다 — A = 확인 → 회전', '우회전을 다 쟀습니다 — A = 확인 → 좌회전'][demoTab] : d.instruction,
+    instruction:conf ? ['굴곡을 다 쟀습니다 — 트리거 = 확인 → 신전', '좌측굴을 다 쟀습니다 — 트리거 = 확인 → 회전', '우회전을 다 쟀습니다 — 트리거 = 확인 → 좌회전'][demoTab] : d.instruction,
     note:conf ? '고치려면  B = 직선 취소 · B 길게 = 이 탭 지우기' : '환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
     axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
     tip:[d.tip[0] + w, d.tip[1], d.tip[2]], eye:[0, 1.0, 1.0], lines:d.lines, pending:null };
@@ -259,7 +259,7 @@ function renderGuided(free) {
     ? S.tabs.map((name, i) => `<div class="prow${i === S.tab ? ' now' : ''}"><b class="name">${name}</b><span class="${i === S.tab ? 'cur' : 'todo'}">점 ${S.counts[i] || 0}개</span></div>`).join('')
     : MOTIONS.map((name, m) => `<div class="prow${m === S.cur ? ' now' : ''}"><b class="name">${name}</b><div>` +
         PHASES.map((ph, k) => `<span class="${m === S.cur && k === S.phase && !S.confirm ? 'cur' : steps[m * 3 + k] === '1' ? 'done' : 'todo'}">${ph}</span>`).join('<i>→</i>') +
-        (conf[m] === '1' ? '<i></i><span class="done">(확인)</span>' : m === S.cur && S.confirm ? '<i></i><span class="cur">(A = 확인)</span>' : '') + '</div></div>').join('');
+        (conf[m] === '1' ? '<i></i><span class="done">(확인)</span>' : m === S.cur && S.confirm ? '<i></i><span class="cur">(트리거 = 확인)</span>' : '') + '</div></div>').join('');
   el('popHint').textContent = S.locked ? '이 탭을 재는 중입니다 — 다 잰 뒤에 다른 탭으로 옮길 수 있습니다 (그만두려면 B 길게)' : free ? '자유 측정 — 찍은 점들이 이루는 각 그대로입니다(3점 측정은 처음 찍은 묶음이 기준)' : (S.hint || '');
   el('popProg').textContent = free ? '지금  ' + S.tabs[S.tab]
     : `찍은 직선 ${done} / 18 · ` + (S.cur < 0 ? '측정 끝' : S.confirm ? `${MOTIONS[S.cur]} — 확인을 기다립니다` : `지금  ${MOTIONS[S.cur]} · ${PHASES[S.phase]}  ${(S.index || 0) + 1}번째 점`);

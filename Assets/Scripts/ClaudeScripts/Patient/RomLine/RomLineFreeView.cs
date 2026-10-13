@@ -129,11 +129,10 @@ public class RomLineFreeView
                 LineRenderer lr = v.MakeLine("선(자유)", LineColor, 2);
                 lr.transform.SetParent(world, false);
                 lines.Add(lr);
-                labels.Add(v.MakeText(world, "", 0.07f, TextAlignmentOptions.Center, 5));
+                labels.Add(RomLineView.Outlined(v.MakeText(world, "", 0.07f, TextAlignmentOptions.Center, 5)));   // 글자는 선의 색을 따르지 않는다(10-13 오후)
             }
             Color c = mode == 0 && i < 3 ? FirstColor : LineColor;
             lines[seg].startColor = lines[seg].endColor = c;
-            labels[seg].color = c;
             Vector3 a = pts[i], b = pts[i + 1];
             RomLineView.DrawLine(lines[seg], a, b);   // 찍은 두 점 사이만(10-13)
             labels[seg].text = (Vector3.Distance(a, b) * 1000f).ToString("F0");   // 길이는 mm, 단위 글자 없이(10-13)
@@ -160,7 +159,7 @@ public class RomLineFreeView
         while (angleTexts.Count < at.Count)
         {
             TextMeshPro t = v.MakeText(world, "", 0.10f, TextAlignmentOptions.Center, 5);
-            t.color = LineColor;
+            RomLineView.Outlined(t);
             angleTexts.Add(t);
         }
         for (int i = 0; i < angleTexts.Count; i++)

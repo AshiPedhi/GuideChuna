@@ -132,6 +132,8 @@ public class RomLineSession : MonoBehaviour
     [SerializeField] private float guideDistance = 0.60f;
     [Tooltip("안내 글을 시선의 가운데보다 아래로 내리는 만큼(m). 찍는 자리를 가리면 더 내린다.")]
     [SerializeField] private float guideDrop = 0.22f;
+    [Tooltip("안내 글을 컨트롤러 끝에서 위로 띄우는 만큼(m) — 안내는 찍는 컨트롤러 바로 위에 붙어 다닌다(10-13). 컨트롤러가 안 잡힐 때만 위의 두 값(시선 앞)으로 돌아간다.")]
+    [SerializeField] private float guideRise = 0.10f;
 
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
@@ -174,6 +176,9 @@ public class RomLineSession : MonoBehaviour
     private float prevTrigger;
     private Vector3 armedPos;
     private float armedTime = -10f;
+    private const float ConfirmGuard = 0.5f;          // 마지막 점을 찍은 뒤 이만큼은 확인(트리거)을 받지 않는다 — 한 번 당긴 것이 두 번으로 읽혀 바로 기록되지 않게
+    private float waitSince = -10f;                   // 확인을 기다리기 시작한 때
+    private readonly int[] freeConfirmed = new int[3];   // 자유 측정 — 방식마다 확인(기록)한 측정의 수(3점 · 4점만 쓴다)
     private Vector3 armedCtrlPos, markCtrlPos;                              // 찍는 순간의 컨트롤러 자세 — 로그에 남겨, 나중에 끝점을 바꿔 다시 계산해 볼 수 있게
     private Quaternion armedCtrlRot = Quaternion.identity, markCtrlRot = Quaternion.identity;
 
@@ -572,7 +577,7 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── A/X — 리셋 확인 > 탭 창 닫기(«리셋» 위에서는 확인 창 띄우기) > 동작 확인 > 탭 창 열기 ──
+        // ── A/X — 리셋 확인 > 탭 창 닫기(«리셋» 위에서는 확인 창 띄우기) > 탭 창 열기 ── ★측정 확인은 트리거로 옮겼다(10-13, Mark)
         if (aDown)
         {
             if (resetAsk)
@@ -589,7 +594,6 @@ public class RomLineSession : MonoBehaviour
                 dirty = true;
             }
             else if (popupOn) SetPopup(false, "A/X 버튼");
-            else if (!freeMode && confirmWait) Confirm("A/X 버튼");
             else SetPopup(true, "A/X 버튼");
             return;
         }
@@ -720,7 +724,8 @@ public class RomLineSession : MonoBehaviour
     {
         SetPopup(false, "점 찍기", true);   // 재기 시작하면 결과표로 돌아간다
         if (freeMode) { FreeMark(pos, shake); return; }
-        if (confirmWait) { Deny($"{MotionName[MotionOf(group)]}을 다 쟀다 — A 버튼으로 확인한다(고치려면 B = 직선 취소)"); return; }
+        // ★10-13 사용자 지시: 확인은 트리거다 — 안내에 뜬 각을 보고 한 번 더 당기면 그때 결과표에 기록된다.
+        if (confirmWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) Confirm("트리거"); return; }
         if (TabComplete(CurTab))
         {
             Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 탭 창의 리셋"
@@ -799,10 +804,11 @@ public class RomLineSession : MonoBehaviour
         index = 0;
         if (group > 0 && PhaseOf(group) == 2)
         {
-            // ★10-12 저녁: 동작 하나(세 직선)를 다 찍으면 멈춘다 — A/X(확인)를 눌러야 다음 동작으로 넘어간다. group은 압박에 머문다.
+            // ★10-12 저녁: 동작 하나(세 직선)를 다 찍으면 멈춘다 — 확인(10-13부터 트리거)을 해야 결과표에 기록되고 다음 동작으로 넘어간다. group은 압박에 머문다.
             confirmWait = true;
+            waitSince = Time.unscaledTime;
             Play(sndDone);
-            Debug.Log($"[선실측] 확인 대기 — {MotionName[MotionOf(group)]}의 세 직선을 다 찍었다 · A/X = 확인 → {NextName(MotionOf(group))}");
+            Debug.Log($"[선실측] 확인 대기 — {MotionName[MotionOf(group)]}의 세 직선을 다 찍었다 · 트리거 = 확인(기록) → {NextName(MotionOf(group))}");
         }
         else group++;
     }
@@ -1106,11 +1112,13 @@ public class RomLineSession : MonoBehaviour
     //                그 뒤 묶음은 기준과 견준 값 셋을 함께 낸다: 선 1-2가 돈 각 · 선 2-3이 돈 각 · 벌어진 각의 차(지금 − 기준).
     //     4점 측정 = 두 점씩 선 둘(1-2 · 3-4). 두 선의 방향이 이루는 각.
     //     연속 측정 = 점을 이어 가며 찍는다. 셋째 점부터, 앞 꼭짓점에서 꺾인 각(앞 선과 새 선이 그 점에서 벌어진 각)이 하나씩 나온다.
-    private static readonly string[] FreeTabName = { "3점 측정", "4점 측정", "연속 측정" };
+    private static readonly string[] FreeTabName = { "3점", "4점", "연속" };   // «자유 측정»은 앞에 따로 붙는다(10-13)
     private static readonly int[] FreeSetSize = { 3, 4, 0 };   // 한 묶음의 점 수. 0 = 묶음 없이 이어서
     private static readonly string[] FreePlaneName = { "옆면", "앞면", "바닥면" };   // 순서 측정의 모니터 · CSV가 쓴다(자유 측정은 면을 쓰지 않는다)
 
     private List<Vector3> FreePts => freePts[freeTab];
+    /// <summary>자유 측정(3점 · 4점)에서 묶음을 다 찍고 확인(트리거)을 기다리는 중인가. 연속 측정은 확인 없이 바로 기록한다.</summary>
+    private bool FreeWait => FreeSetSize[freeTab] > 0 && FreeCount() > freeConfirmed[freeTab];
 
 
     private void SetFreeMode(bool on)
@@ -1158,7 +1166,7 @@ public class RomLineSession : MonoBehaviour
         if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
         fwd.Normalize();
         view.PlacePanel(origin + Vector3.up * FixedEyeHeight, fwd, screenDistance, screenWidth, screenRise);
-        view.FollowGuide(guideDistance, guideDrop);
+        view.FollowGuide(guideDistance, guideDrop, guideRise);
         Debug.Log($"[선실측] 메인 화면을 세웠다(고정 자리) — 추적 원점 {origin:F2} · 정면 {fwd:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 기준 눈높이 {FixedEyeHeight:F1}m 위 {screenRise:F2}m · 지금 눈 {eye.position:F2}");
         SetAxes(fwd, origin + fwd * FixedAxesAhead, "처음", "고정 자리(추적 원점의 정면)");
     }
@@ -1239,6 +1247,7 @@ public class RomLineSession : MonoBehaviour
 
     private void FreeMark(Vector3 pos, float shake)
     {
+        if (FreeWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) FreeConfirm(); return; }
         List<Vector3> pts = FreePts;
         int size = FreeSetSize[freeTab], before = FreeCount();
         bool joined = pts.Count > 0 && (size == 0 || pts.Count % size != 0);   // 앞 점과 같은 묶음이다(선으로 이어지거나 한 각을 이룬다)
@@ -1252,10 +1261,24 @@ public class RomLineSession : MonoBehaviour
         if (FreeCount() > before)
         {
             LogFree(before);
-            CsvAdd("측정", before);
+            if (size > 0) waitSince = Time.unscaledTime;   // 3점 · 4점 — 확인(트리거)을 받아야 기록한다
+            else CsvAdd("측정", before);
         }
         noteText = "";
         Play(sndMark);
+        Buzz(0.06f, 0.6f);
+        dirty = true;
+    }
+
+    /// <summary>자유 측정(3점 · 4점)의 확인 — 다 찍은 묶음을 기록한다(화면의 결과 줄 · CSV).</summary>
+    private void FreeConfirm()
+    {
+        int k = freeConfirmed[freeTab];
+        freeConfirmed[freeTab] = FreeCount();
+        for (int i = k; i < freeConfirmed[freeTab]; i++) CsvAdd("측정", i);
+        Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 확인(트리거) · {freeConfirmed[freeTab]}번째 측정을 기록했다");
+        noteText = "";
+        Play(sndDone);
         Buzz(0.06f, 0.6f);
         dirty = true;
     }
@@ -1268,7 +1291,7 @@ public class RomLineSession : MonoBehaviour
         int size = FreeSetSize[freeTab], count = FreeCount();
         if (size > 0 && pts.Count % size == 0)
         {
-            CsvAdd("취소", count - 1);
+            if (freeConfirmed[freeTab] >= count) { CsvAdd("취소", count - 1); freeConfirmed[freeTab] = count - 1; }   // 기록한 묶음만 «취소»를 남긴다
             pts.RemoveRange(pts.Count - size, size);
         }
         else
@@ -1287,6 +1310,7 @@ public class RomLineSession : MonoBehaviour
         Debug.Log($"[선실측] 자유({FreeTabName[freeTab]}) — 이 방식의 점을 지웠다(점 {FreePts.Count}개)");
         if (FreePts.Count > 0) CsvAdd("지움", -1);
         FreePts.Clear();
+        freeConfirmed[freeTab] = 0;
         noteText = "";
         Play(sndUndo);
         dirty = true;
@@ -1311,10 +1335,27 @@ public class RomLineSession : MonoBehaviour
         int size = FreeSetSize[freeTab], count = FreeCount();
 
         string note = noteText;   // 아랫줄은 알림이 있을 때만(10-13)
-        string step = size > 0 ? $"점 {pts.Count % size + 1}/{size}" : $"점 {pts.Count + 1}";
-        string instruction = FreeTabName[freeTab] + " — " + step;
-        view.SetTip(step);
-        view.SetGuide("자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>" + step + "</color>", note);
+        // ★10-13 사용자 지시: «점 1/3»은 찍은 수인지 찍을 차례인지 헷갈린다 → «1번째 점을 찍으세요»로 적는다.
+        //   3점 · 4점은 묶음을 다 찍으면 안내에 각을 띄우고 확인(트리거)을 기다린다 — 확인해야 화면의 결과 줄에 오른다.
+        bool wait = FreeWait;
+        int shown = size > 0 ? Mathf.Min(count, freeConfirmed[freeTab]) : count;   // 화면의 결과 줄에 올릴 측정의 수
+        string step = (size > 0 ? pts.Count % size + 1 : pts.Count + 1) + "번째 점";
+        string instruction, guideLine, guideNote = note;
+        if (wait)
+        {
+            FreeMeasure(count - 1, out float wa, out _, out bool wc, out _, out _, out float wd);
+            string v = "각 " + wa.ToString("F1") + "°" + (wc ? " · 기준과의 차 " + wd.ToString("+0.0;-0.0") + "°" : "");
+            instruction = FreeTabName[freeTab] + " — " + v + " · 트리거 = 확인";
+            guideLine = "자유 측정 · " + FreeTabName[freeTab] + " · <color=#73E68C>" + v + "</color>";
+            if (guideNote.Length == 0) guideNote = "트리거 = 기록 · B = 취소";
+        }
+        else
+        {
+            instruction = FreeTabName[freeTab] + " — " + step + "을 찍으세요";
+            guideLine = "자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>" + step + "</color>을 찍으세요";
+        }
+        view.SetTip(wait ? "" : step);
+        view.SetGuide(guideLine, guideNote);
         view.SetFreeTab(freeTab);
         RefreshPopup();
 
@@ -1327,7 +1368,7 @@ public class RomLineSession : MonoBehaviour
         // 판 — 가장 최근 측정들(한 줄에 하나)과 공간의 각 글자. 같은 값을 FreeMeasure 하나에서 받는다.
         freeAngleAt.Clear();
         freeAngleText.Clear();
-        int firstRow = Mathf.Max(0, count - RomLineFreeView.Rows);
+        int firstRow = Mathf.Max(0, shown - RomLineFreeView.Rows);
         for (int k = 0; k < count; k++)
         {
             FreeMeasure(k, out float angle, out Vector3 at, out bool cmp, out float t12, out float t23, out float diff);
@@ -1335,14 +1376,14 @@ public class RomLineSession : MonoBehaviour
             freeAngleAt.Add(at);
             freeAngleText.Add(a);
             int row = k - firstRow;
-            if (row < 0) continue;
+            if (row < 0 || k >= shown) continue;   // 확인하지 않은 묶음은 공간의 글자에만 뜬다
             bool isRef = freeTab == 0 && k == 0;
             string name = freeTab == 2 ? "점 " + (k + 2) : (k + 1).ToString();
             if (isRef) freeView.SetRow(row, name, a, "기준", "", true);
             else if (cmp) freeView.SetRow(row, name, a, t12.ToString("F1") + "° / " + t23.ToString("F1") + "°", diff.ToString("+0.0;-0.0") + "°", false);
             else freeView.SetRow(row, name, a, "", "", false);
         }
-        for (int row = Mathf.Max(0, count - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
+        for (int row = Mathf.Max(0, shown - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
         freeView.SetAngles(freeAngleAt, freeAngleText);
 
         // 모니터로 내보낼 상태 — 선마다 한 줄. 그 선에서 각이 하나 완성되면(3점의 둘째 선 · 4점의 둘째 선 · 연속의 둘째 선부터) 그 값을 함께 싣는다.
@@ -1550,6 +1591,7 @@ public class RomLineSession : MonoBehaviour
             freePoints += freePts[t].Count;
             if (freePts[t].Count > 0) CsvAdd("지움", -1);
             freePts[t].Clear();
+            freeConfirmed[t] = 0;
         }
         freeTab = keep;
         resetAsk = false;
@@ -1600,9 +1642,9 @@ public class RomLineSession : MonoBehaviour
         dirty = false;
 
         int tab = CurTab, cm = MotionOf(group);
-        string instruction, tipText = "", guide, note = noteText, forMonitor;
+        string instruction, tipText = "", guide, note = noteText, forMonitor, guideNote = noteText;
         // ★10-13 사용자 지시: 안내는 한 문장이다 — «○○ · 중립 / 능동 / 압박을 측정하세요». 어느 점을 찍으라는 말은 하지 않는다(컨트롤러 끝의 이름표에만 남는다).
-        //   동작 하나를 다 재면 «측정 완료 · 중립으로 돌아간 뒤 A = 확인». 아랫줄은 알림이 있을 때만 쓴다.
+        //   동작 하나를 다 재면 안내에 능동 · 압박의 각을 띄우고 확인(트리거)을 기다린다 — ★확인해야 결과표에 기록된다(10-13 오후). 아랫줄은 알림, 없으면 버튼 안내.
         if (Done)
         {
             forMonitor = instruction = "모든 측정 완료";
@@ -1611,8 +1653,11 @@ public class RomLineSession : MonoBehaviour
         else if (confirmWait)
         {
             // 동작 하나를 다 찍었다 — 확인을 기다린다
-            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 중립으로 돌아간 뒤 A = 확인";
-            guide = $"<color=#73E68C>{MotionName[cm]} 측정 완료</color> · 중립으로 돌아간 뒤 A = 확인";
+            string av = results[cm * 2].valid ? results[cm * 2].angle.ToString("F1") + "°" : "—";
+            string pv = results[cm * 2 + 1].valid ? results[cm * 2 + 1].angle.ToString("F1") + "°" : "—";
+            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 = 확인";
+            guide = $"<color=#73E68C>{MotionName[cm]}</color> 능동 {av} · 압박 {pv}";
+            if (guideNote.Length == 0) guideNote = "중립으로 돌아간 뒤 트리거 = 기록 · B = 취소";
         }
         else if (TabComplete(tab))
         {
@@ -1624,10 +1669,11 @@ public class RomLineSession : MonoBehaviour
             instruction = $"{MotionName[cm]} · {PhaseName[PhaseOf(group)]}을 측정하세요";
             tipText = PointName[(int)p];
             guide = $"{MotionName[cm]} · <color=#FFF233>{PhaseName[PhaseOf(group)]}</color>을 측정하세요";
-            forMonitor = instruction + $"  ({PointName[(int)p]} {index + 1}/{SizeOf(group)})";   // 모니터에는 찍을 점도 남긴다
+            forMonitor = instruction + $"  ({PointName[(int)p]} · {SizeOf(group)}점 중 {index + 1}번째)";   // 모니터에는 찍을 점도 남긴다
+            if (guideNote.Length == 0 && PhaseOf(group) == 2 && results[cm * 2].valid) guideNote = "능동 " + results[cm * 2].angle.ToString("F1") + "°";   // 압박을 재는 동안 방금 잰 능동 값
         }
         view.SetTip(tipText);
-        view.SetGuide(guide, note);
+        view.SetGuide(guide, guideNote);
         RefreshGuidedExtras(tab, forMonitor, note);
         RefreshPopup();
 
@@ -1637,12 +1683,14 @@ public class RomLineSession : MonoBehaviour
         view.SetRowNow(Done ? -1 : MotionOf(group));
         for (int m = 0; m < 6; m++)
         {
+            // ★10-13 오후 사용자 지시: 결과표의 값 · 각도기는 <b>확인(트리거)한 동작만</b> 채운다 — 찍는 대로 뜨지 않는다. 확인 전의 값은 안내와 공간의 글자에만 있다.
             RomLineResult a = results[m * 2], pr = results[m * 2 + 1];
-            bool aOpp = a.valid && !RomLineMath.DirectionMatches((RomLineMotion)m, a.signedAngle);
-            bool pOpp = pr.valid && !RomLineMath.DirectionMatches((RomLineMotion)m, pr.signedAngle);
-            view.SetValue(m * 2, a.valid ? a.angle.ToString("F1") + "°" : "—", m * 2 == current, aOpp);
-            view.SetValue(m * 2 + 1, pr.valid ? pr.angle.ToString("F1") + "°" : "—", m * 2 + 1 == current, pOpp);
-            view.SetGauge(m, a.valid, a.angle, aOpp, pr.valid, pr.angle, pOpp);
+            bool aOn = a.valid && confirmed[m], pOn = pr.valid && confirmed[m];
+            bool aOpp = aOn && !RomLineMath.DirectionMatches((RomLineMotion)m, a.signedAngle);
+            bool pOpp = pOn && !RomLineMath.DirectionMatches((RomLineMotion)m, pr.signedAngle);
+            view.SetValue(m * 2, aOn ? a.angle.ToString("F1") + "°" : "—", m * 2 == current, aOpp);
+            view.SetValue(m * 2 + 1, pOn ? pr.angle.ToString("F1") + "°" : "—", m * 2 + 1 == current, pOpp);
+            view.SetGauge(m, aOn, a.angle, aOpp, pOn, pr.angle, pOpp);
         }
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.
@@ -1696,10 +1744,10 @@ public class RomLineSession : MonoBehaviour
         RomLineResult ra = results[motion * 2], rp = results[motion * 2 + 1];
         RomLineDirect da = direct[motion * 2], dp = direct[motion * 2 + 1];
         if (ra.valid)
-            view.ShowMeasure(ra, rp.valid, rp, pre + ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
+            view.ShowMeasure(ra, rp.valid, rp, pre + "능동 " + ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
         else if (da.valid)
         {
-            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], pre + da.angle.ToString("F1") + "°",
+            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], pre + "능동 " + da.angle.ToString("F1") + "°",
                             dp.valid, points[p0], points[p0 + 1], dp.valid ? "압박 " + dp.angle.ToString("F1") + "°" : "");
         }
         else view.ShowNeutralOnly(points[n0], points[n0 + 1]);   // 중립 기준선만 — 직선만 보인다

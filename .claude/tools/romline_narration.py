@@ -14,7 +14,7 @@ OUT = os.path.join(ROOT, "Assets", "Resources", "RomLine", "Narration")
 VOICE = "ko-KR-SunHiNeural"
 
 # ★10-13 사용자 지시: 음성은 화면의 안내 글 그대로다 — 어느 점을 찍으라는 말, 자세 설명을 하지 않는다.
-#   화면 글은 RomLineSession.Refresh가 만든다(«굴곡 · 중립을 측정하세요» · «굴곡 측정 완료 · 중립으로 돌아간 뒤 A = 확인»). 한쪽을 고치면 다른 쪽도 고친다.
+#   화면 글은 RomLineSession.Refresh가 만든다(«굴곡 · 중립을 측정하세요» · «굴곡 능동 ○° · 압박 ○°» + «중립으로 돌아간 뒤 트리거 = 기록»). 한쪽을 고치면 다른 쪽도 고친다.
 MOTIONS = ["굴곡", "신전", "우측굴", "좌측굴", "우회전", "좌회전"]   # RomLineSession.MotionName과 같다
 PHASES = ["중립", "능동", "압박"]
 
@@ -24,7 +24,7 @@ def texts():
     for m, name in enumerate(MOTIONS):
         for p, phase in enumerate(PHASES):
             out["m%d_p%d" % (m, p)] = "%s, %s을 측정하세요." % (name, phase)
-        out["m%d_done" % m] = "%s 측정 완료. 중립으로 돌아간 뒤 에이 버튼으로 확인하세요." % name
+        out["m%d_done" % m] = "%s 측정 완료. 중립으로 돌아간 뒤 트리거로 확인하세요." % name
     out["done"] = "모든 측정 완료."
     return out
 

@@ -97,8 +97,8 @@ public class RomLineView
         pressureLine = MakeLine("압박 측정선", PressureColor, 2);
         activeText = MakeText(root, "", 0.11f, TextAlignmentOptions.Center, 5);
         pressureText = MakeText(root, "", 0.09f, TextAlignmentOptions.Center, 5);
-        activeText.color = ActiveColor;
-        pressureText.color = PressureColor;
+        Outlined(activeText);     // ★10-13 오후: 값 글자가 선과 같은 색이라 묻혔다 → 흰 글자 + 검은 외곽선. 어느 선의 값인지는 글자 앞의 «능동 / 압박»이 말한다
+        Outlined(pressureText);
         HideMeasure();
 
         // 비교 시험의 Gl ~ Gn 선 — Tr ~ Gl 선과 헷갈리지 않게 하늘색 계열로 그린다
@@ -203,7 +203,7 @@ public class RomLineView
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float GuideW = 0.40f, GuideH = 0.085f;     // 안내 테두리의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
-    private const float GuideFollow = 3f;                    // 안내가 시선을 따라오는 빠르기(1/초) — 고개를 조금 움직여도 덜컹거리지 않게 늦게 따라온다
+    private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
@@ -212,7 +212,7 @@ public class RomLineView
     private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
     private static readonly string[] GaugeLeft = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] GaugeRight = { "앞", "앞", "좌", "좌", "좌", "좌" };
-    private static readonly string[] FreeTabNames = { "3점 측정", "4점 측정", "연속 측정" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
+    private static readonly string[] FreeTabNames = { "3점", "4점", "연속" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
     private static readonly Color NoteColor = new Color(0.80f, 0.86f, 0.93f, 1f);     // 알림 · 안내 — 주황(측정값)과 섞이지 않게 푸른 회색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color GaugeDim = new Color(0.42f, 0.48f, 0.56f, 1f);
@@ -224,7 +224,7 @@ public class RomLineView
 
     private Transform resultArea, popup, rowNow, resetCard;
     private Transform guide;                 // 안내 — 헤드셋이 보는 쪽을 따라온다
-    private float guideDistance, guideDrop;
+    private float guideDistance, guideDrop, guideRise;
     private bool guideSnapped;
     private TextMeshPro guideLine, guideNote;
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
@@ -399,11 +399,16 @@ public class RomLineView
         PanelPlaced = true;
     }
 
-    /// <summary>안내를 켠다 — distance = 눈에서 안내까지(m) · drop = 시선의 가운데보다 아래로 내리는 만큼(m). 자리는 Tick이 매 프레임 따라가며 잡는다.</summary>
-    public void FollowGuide(float distance, float drop)
+    /// <summary>
+    /// 안내를 켠다 — rise = 컨트롤러 끝에서 위로 띄우는 만큼(m). 자리는 Tick이 매 프레임 따라가며 잡는다.
+    /// distance = 안내가 제 크기(GuideW)로 보이는 거리(m) — 컨트롤러가 그보다 가까우면 그만큼 줄여 같은 크기로 보이게 한다.
+    /// 컨트롤러가 안 잡힐 때는 시선 앞 distance, 가운데보다 drop 아래에 선다.
+    /// </summary>
+    public void FollowGuide(float distance, float drop, float rise)
     {
-        guideDistance = distance;
+        guideDistance = Mathf.Max(0.1f, distance);
         guideDrop = drop;
+        guideRise = rise;
         guideSnapped = false;
         guide.gameObject.SetActive(true);
     }
@@ -613,11 +618,21 @@ public class RomLineView
                 Face(tipLabel.transform, eye);
             }
         }
-        // 안내 — 헤드셋이 보는 쪽(고개 숙임까지)을 늦게 따라온다. 시선 가운데보다 조금 아래에 둬 찍는 자리를 가리지 않는다.
+        // 안내 — ★10-13 오후 사용자 지시: 찍는 컨트롤러 바로 위에 붙어 다닌다(찍는 자리에서 눈을 떼지 않고 각을 본다).
+        //   컨트롤러가 가까울수록 줄여 눈에는 같은 크기로 보인다. 컨트롤러가 안 잡히면 종전처럼 시선 앞에 선다.
         if (guide.gameObject.activeSelf)
         {
-            Vector3 target = eye.position + eye.forward * guideDistance - eye.up * guideDrop;
-            guide.position = guideSnapped ? Vector3.Lerp(guide.position, target, 1f - Mathf.Exp(-GuideFollow * Time.unscaledDeltaTime)) : target;
+            float scale = 1f;
+            Vector3 target;
+            if (tipValid)
+            {
+                scale = Mathf.Clamp(Vector3.Distance(eye.position, tipPos) / guideDistance, 0.35f, 1.2f);
+                target = tipPos + eye.up * (guideRise + GuideH * 0.5f * scale);
+            }
+            else target = eye.position + eye.forward * guideDistance - eye.up * guideDrop;
+            float f = guideSnapped ? 1f - Mathf.Exp(-GuideFollow * Time.unscaledDeltaTime) : 1f;
+            guide.position = Vector3.Lerp(guide.position, target, f);
+            guide.localScale = Vector3.one * Mathf.Lerp(guide.localScale.x, scale, f);
             guideSnapped = true;
             Face(guide, eye);
         }
@@ -693,6 +708,15 @@ public class RomLineView
         t.rectTransform.sizeDelta = new Vector2(0.2f, size * 2f);
         t.sortingOrder = order;
         t.text = text;
+        return t;
+    }
+
+    /// <summary>공간에 띄우는 값 글자 — 흰 글자에 검은 외곽선(선의 색과 겹치지 않고, 밝은 패스스루 배경에서도 읽힌다).</summary>
+    internal static TextMeshPro Outlined(TextMeshPro t)
+    {
+        t.color = Color.white;
+        t.outlineColor = new Color32(0, 0, 0, 255);
+        t.outlineWidth = 0.22f;
         return t;
     }
 
