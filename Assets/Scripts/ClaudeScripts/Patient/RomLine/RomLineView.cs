@@ -189,16 +189,17 @@ public class RomLineView
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
     }
 
-    // ── 결과표 ── 칸 하나에 동작 하나: 측정 명칭 | 능동 | 압박 | 그 동작의 단면에서 본 각도기
-    //   두 칸씩 세 줄 — 한 줄이 탭 하나다(굴곡 | 신전 / 우측굴 | 좌측굴 / 우회전 | 좌회전).
+    // ── 결과표 ── ★10-13 사용자 지시: 3 × 2 칸을 풀어 <b>왼쪽에 여섯 줄</b>(측정 명칭 | 능동 | 압박), <b>오른쪽에 각도기 셋</b>으로 나눈다.
+    //   같은 단면의 두 동작(굴곡 · 신전 / 우측굴 · 좌측굴 / 우회전 · 좌회전)은 <b>한 각도기</b>에 좌우로 그린다 — 각도기는 그 두 줄 옆에 크게 선다.
     //   각도기 그림은 «보는 방향»을 정해 그린 약도다(찍은 점의 좌표를 그대로 옮긴 그림이 아니다). 값은 세션이 준 «면 위 각» 그대로다.
     //     굴곡 · 신전 = 옆에서 본 그림(오른쪽이 환자 앞) · 측굴 = 앞에서 본 그림(마주 보므로 환자 오른쪽이 그림 왼쪽)
     //     회전 = 위에서 본 그림(아래가 환자 앞 · 환자 오른쪽이 그림 왼쪽) — 모니터 화면의 세 그림과 같은 방향이다.
-    private const float RowH = 0.080f, CellW = 0.39f, GaugeR = 0.050f;
-    private const float XName = -0.142f, XActive = -0.058f, XPressure = 0.020f, GaugeX = 0.125f;   // 칸 가운데에서 잰 자리
+    private const float RowH = 0.041f, GaugeR = 0.068f;
+    private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
+    private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float GuideW = 0.46f, GuideH = 0.11f;      // 안내창의 실제 크기(m) — 화면과 달리 배율을 걸지 않는다
-    private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(아랫줄을 침범한다) — 숫자는 그대로 나온다
+    private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, -1f, -1f };       // 0° 선이 향하는 쪽(위 +1 · 아래 −1)
     private static readonly float[] GaugeSide = { 1f, -1f, -1f, 1f, -1f, 1f };       // 그 동작이 제 방향으로 움직였을 때 선이 기우는 쪽(그림 오른쪽 +1)
@@ -228,47 +229,45 @@ public class RomLineView
     private void BuildResults(float top)
     {
         float headY = top - 0.098f, rowTop = top - 0.112f;
-        for (int col = 0; col < 2; col++)
-        {
-            float cx = col == 0 ? -0.20f : 0.20f;
-            Place(MakeText(resultArea, "측정", 0.12f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, headY), 0.10f).color = DimColor;
-            Place(MakeText(resultArea, "능동", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, headY), 0.07f).color = ActiveColor;
-            Place(MakeText(resultArea, "압박", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, headY), 0.07f).color = PressureColor;
-            Place(MakeText(resultArea, "각도기", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(cx + GaugeX, headY), 0.10f).color = DimColor;
-        }
+        Place(MakeText(resultArea, "측정", 0.12f, TextAlignmentOptions.Left, 3), new Vector2(XName, headY), 0.14f).color = DimColor;
+        Place(MakeText(resultArea, "능동", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XActive, headY), 0.10f).color = ActiveColor;
+        Place(MakeText(resultArea, "압박", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, headY), 0.10f).color = PressureColor;
+        Place(MakeText(resultArea, "각도기", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(GaugeX, headY), 0.10f).color = DimColor;
 
-        rowNow = MakeQuad(resultArea, "지금 칸", Vector2.zero, new Vector2(CellW - 0.006f, RowH - 0.006f), RowNowColor, 1);
+        rowNow = MakeQuad(resultArea, "지금 줄", Vector2.zero, new Vector2(LeftW, RowH - 0.004f), RowNowColor, 1);
         rowNow.gameObject.SetActive(false);
 
         // 움직이지 않는 그림(반원 · 눈금 · 0° 선 · 줄 사이 선)은 메시 하나로 만든다 — 그리는 호출이 하나다.
-        var verts = new System.Collections.Generic.List<Vector3>(1400);
-        var cols = new System.Collections.Generic.List<Color>(1400);
-        var tris = new System.Collections.Generic.List<int>(2100);
+        var verts = new System.Collections.Generic.List<Vector3>(800);
+        var cols = new System.Collections.Generic.List<Color>(800);
+        var tris = new System.Collections.Generic.List<int>(1200);
         for (int m = 0; m < 6; m++)
         {
-            float cx = m % 2 == 0 ? -0.20f : 0.20f, y = rowTop - RowH * (m / 2 + 0.5f);
-            cellPos[m] = new Vector2(cx, y);
-            gaugePivot[m] = new Vector2(cx + GaugeX, y - GaugeZeroY[m] * GaugeR * 0.5f);
+            float y = rowTop - RowH * (m + 0.5f);
+            float pairY = rowTop - RowH * (m / 2 * 2 + 1);   // 같은 단면 두 줄의 가운데 — 각도기가 여기 선다
+            cellPos[m] = new Vector2(LeftX, y);
+            gaugePivot[m] = new Vector2(GaugeX, pairY - GaugeZeroY[m] * GaugeR * 0.5f);   // 두 동작이 같은 축을 쓴다
 
-            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.22f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y + 0.011f), 0.10f);
-            Place(MakeText(resultArea, GaugeView[m], 0.10f, TextAlignmentOptions.Left, 3), new Vector2(cx + XName, y - 0.024f), 0.10f).color = GaugeDim;
-            values[m * 2] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(cx + XActive, y), 0.07f);
-            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(cx + XPressure, y), 0.07f);
-            Place(MakeText(resultArea, GaugeLeft[m], 0.10f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
-            Place(MakeText(resultArea, GaugeRight[m], 0.10f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.012f), 0.02f).color = GaugeDim;
-
-            if (m % 2 == 0)
-                Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0012f, GaugeDim);
-            Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0016f, GaugeDim);
-            for (int i = 0; i < 18; i++)
-                Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0016f, GaugeDim);
-            for (int deg = -90; deg <= 90; deg += 15)   // 눈금 15° — 45° · 90°는 길게
-                Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.009f : 0.005f)), GaugePoint(m, deg, GaugeR), 0.0016f, GaugeDim);
-            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0024f, NeutralColor);   // 0° = 중립
+            Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.22f, TextAlignmentOptions.Left, 3), new Vector2(XName, y), 0.14f);
+            values[m * 2] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(XActive, y), 0.10f);
+            values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, y), 0.10f);
 
             gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0020f);
             gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PressureColor, 2, 0.0030f);
             gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0036f);
+            if (m % 2 == 1) continue;   // 아래는 단면마다 한 번만 그린다
+
+            Place(MakeText(resultArea, GaugeLeft[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, GaugeRight[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
+            Place(MakeText(resultArea, GaugeView[m], 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0.345f, pairY), 0.10f).color = GaugeDim;
+
+            Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, y + RowH * 0.5f), new Vector2(PanelW * 0.5f - 0.01f, y + RowH * 0.5f), 0.0012f, GaugeDim);
+            Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0016f, GaugeDim);
+            for (int i = 0; i < 18; i++)
+                Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0016f, GaugeDim);
+            for (int deg = -90; deg <= 90; deg += 15)   // 눈금 15° — 45° · 90°는 길게
+                Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.011f : 0.006f)), GaugePoint(m, deg, GaugeR), 0.0016f, GaugeDim);
+            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0024f, NeutralColor);   // 0° = 중립
         }
 
         var go = new GameObject("각도기 바탕");
@@ -412,7 +411,7 @@ public class RomLineView
         guideNote.text = noteText;
     }
 
-    /// <summary>결과표에서 지금 재는 동작의 칸을 밝힌다(-1이면 끔).</summary>
+    /// <summary>결과표에서 지금 재는 동작의 줄을 밝힌다(-1이면 끔).</summary>
     public void SetRowNow(int motion)
     {
         bool show = motion >= 0;
