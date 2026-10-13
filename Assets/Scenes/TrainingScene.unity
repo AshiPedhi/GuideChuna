@@ -181265,7 +181265,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TrainingResultUploader
   resultTracker: {fileID: 1338513808}
   autoUploadOnComplete: 1
-  sendOnEvaluationOnly: 1
+  sendOnEvaluationOnly: 0
   subjectName: "VR\uD604\uD6C8\uCD94\uB098"
   competenyUnit: "\uB2E8\uC21C\uCD94\uB098(\uADFC\uB9C9\uC694\uBC95)"
   showDebugLogs: 1
