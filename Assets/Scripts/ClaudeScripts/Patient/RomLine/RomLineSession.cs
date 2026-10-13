@@ -120,7 +120,7 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("헤드셋에서 메인 화면까지의 거리(m). 화면은 헤드셋이 보는 쪽에 선다 — 처음 한 번, 그리고 «축 다시 잡기»(스틱 누르고 밀기) 때마다 다시 선다.")]
     [SerializeField] private float screenDistance = 2.5f;
     [Tooltip("메인 화면의 폭(m). 높이는 폭의 0.475배다. 탭 창은 같은 폭으로 그 아래에 붙는다.")]
-    [SerializeField] private float screenWidth = 2.0f;
+    [SerializeField] private float screenWidth = 2.5f;
     [Tooltip("메인 화면의 아랫변이 헤드셋 눈높이보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
     [SerializeField] private float screenRise = 0.30f;
 
