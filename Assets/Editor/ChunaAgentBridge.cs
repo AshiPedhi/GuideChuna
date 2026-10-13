@@ -788,7 +788,8 @@ public static partial class ChunaAgentBridge
             if (!s.isLoaded) continue;
             foreach (var root in s.GetRootGameObjects())
             {
-                if (root.name != parts[0]) continue;
+                // ★이름 끝에 공백이 붙은 오브젝트가 있다(TrainingScene의 «ScenarioSystem »). set은 경로를 Trim해서 넘기므로 공백을 뗀 이름으로도 맞춘다(10-13).
+                if (root.name != parts[0] && root.name.Trim() != parts[0]) continue;
                 Transform cur = root.transform;
                 bool ok = true;
                 for (int k = 1; k < parts.Length && ok; k++)
