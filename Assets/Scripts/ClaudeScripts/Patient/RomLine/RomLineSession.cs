@@ -57,7 +57,7 @@ public enum RomLinePoint
 ///   ★동작 하나(중립 · 능동 · 압박 세 직선)를 다 찍으면 <b>멈춘다</b>. A/X(확인)를 눌러야 다음 동작으로 넘어간다 — 신전을 확인하면 측굴이 저절로 시작된다.
 ///   지우기 셋: B/Y 짧게 = <b>직선 하나</b>(찍다 만 점이 있으면 그 점) · B/Y 1초 길게 = <b>지금 탭 전체</b> · 탭 창의 «리셋» = <b>전체 측정 결과</b>.
 ///   축 다시 잡기 = 스틱을 <b>눌러</b> 부르고, 스틱을 <b>밀어</b> 잡는다(두 단계 — 실수로 잡히지 않게). 방향은 <b>헤드셋이 보는 방향</b>이다
-///     (10-08의 «컨트롤러가 가리키는 방향»을 되돌렸다 — 그때는 판의 버튼을 누르느라 헤드셋이 판을 봤다. 이제 판 버튼이 없다). 메인 화면도 그쪽에 다시 선다.
+///     (10-08의 «컨트롤러가 가리키는 방향»을 되돌렸다 — 그때는 판의 버튼을 누르느라 헤드셋이 판을 봤다. 이제 판 버튼이 없다). ★10-13: 메인 화면은 고정 자리에 그대로 둔다(PlaceFixed) — 축만 돈다.
 ///   컨트롤러에 없는 일(끝점 보정 · 기준선 바꾸기 · 나가기)은 모니터(브라우저)의 버튼으로만 한다. 자유 측정의 동작 갈래는 탭 창을 닫은 채 스틱 좌우다.
 ///
 /// ★자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
@@ -116,12 +116,12 @@ public class RomLineSession : MonoBehaviour
              "0이면 열지 않는다. ★인증이 없다(같은 망의 누구나 볼 수 있고 버튼도 누를 수 있다) — 시험용이다.")]
     [SerializeField] private int monitorPort = 8090;
 
-    [Header("=== 메인 화면(10-12) ===")]
-    [Tooltip("헤드셋에서 메인 화면까지의 거리(m). 화면은 헤드셋이 보는 쪽에 선다 — 처음 한 번, 그리고 «축 다시 잡기»(스틱 누르고 밀기) 때마다 다시 선다.")]
+    [Header("=== 메인 화면(10-12 · 자리는 10-13부터 고정) ===")]
+    [Tooltip("추적 원점(메타 퀘스트의 «위치 재설정»이 맞추는 자리)에서 메인 화면까지의 거리(m). 화면은 원점의 정면에 처음 한 번 서고 그 뒤로 옮기지 않는다.")]
     [SerializeField] private float screenDistance = 2.5f;
     [Tooltip("메인 화면의 폭(m). 높이는 폭의 0.475배다. 탭 창은 같은 폭으로 그 아래에 붙는다.")]
     [SerializeField] private float screenWidth = 2.5f;
-    [Tooltip("메인 화면의 아랫변이 헤드셋 눈높이보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
+    [Tooltip("메인 화면의 아랫변이 기준 눈높이(바닥에서 1.5m)보다 높은 만큼(m). 환자 머리를 가리지 않게 띄운다. 탭 창은 이 아래로 내려온다(띄웠을 때만 보인다).")]
     [SerializeField] private float screenRise = 0.30f;
 
     [Header("=== 안내(10-13) ===")]
@@ -225,7 +225,6 @@ public class RomLineSession : MonoBehaviour
     private readonly RomLineView view = new RomLineView();
     private bool dirty = true;
     private string noteText = "";
-    private float trackingWaitStart = -1f;
     private float nextSilentLog;
     private string lastSilent;
 
@@ -234,9 +233,9 @@ public class RomLineSession : MonoBehaviour
 
     private const float PinchClose = 0.02f, PinchOpen = 0.04f;   // 엄지–검지 끝 거리(m). 사이는 그대로 — 떨림으로 깜박이지 않게
     private const float ArmThreshold = 0.15f;      // 트리거를 이만큼 당기기 시작한 순간의 자리를 찍는 자리로 쓴다
-    private const float TrackingWaitSeconds = 8f;
+    private const float FixedEyeHeight = 1.5f;     // 메인 화면을 세울 때 쓰는 기준 눈높이(바닥에서, m) — 헤드셋을 쓰지 않고 내려놓고 잴 때도 같은 자리에 서게 고정값을 쓴다
+    private const float FixedAxesAhead = 1.0f;     // 바닥 십자를 추적 원점에서 정면으로 띄우는 거리(m)
 
-    private bool EyeReady => eye != null && eye.position.y > 0.3f;
     /// <summary>여섯 동작을 모두 확인까지 마쳤다. ★group은 이제 19(끝)로 가지 않는다 — 마지막에 확인한 동작의 압박에 머문다(10-12 저녁).</summary>
     private bool Done => confirmed[0] && confirmed[1] && confirmed[2] && confirmed[3] && confirmed[4] && confirmed[5];
     private int CurTab => MotionOf(Mathf.Clamp(group, 1, GroupCount - 1)) / 2;   // 0 굴곡·신전 · 1 측굴 · 2 회전
@@ -354,19 +353,7 @@ public class RomLineSession : MonoBehaviour
         if (eye == null && Camera.main != null) eye = Camera.main.transform;
         if (eye == null) { Silent("눈(Camera.main)이 없다"); return; }
 
-        // ★첫 프레임에 자리를 잡지 않는다 — 추적이 붙기 전엔 눈이 원점이라 판이 발밑에 선다(09-21 전례).
-        if (!view.PanelPlaced)
-        {
-            if (!EyeReady)
-            {
-                if (trackingWaitStart < 0f) trackingWaitStart = Time.unscaledTime;
-                if (Time.unscaledTime - trackingWaitStart < TrackingWaitSeconds) { Silent("헤드셋 추적을 기다린다"); return; }
-            }
-            view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
-            view.FollowGuide(guideDistance, guideDrop);
-            Debug.Log($"[선실측] 메인 화면을 세웠다 — 눈 {eye.position:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 눈높이 위 {screenRise:F2}m");
-            CaptureAxes("처음", false);
-        }
+        if (!view.PanelPlaced) PlaceFixed();
 
         ReadController();
         ReadHands();
@@ -576,7 +563,6 @@ public class RomLineSession : MonoBehaviour
                 stickReady = false;
                 axesAsk = false;
                 Buzz(0.08f, 0.6f);
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
                 CaptureAxes("스틱", true);
             }
             else if (aDown || undoTap || undoLong || triggerDown) SetAxesAsk(false, "다른 버튼");
@@ -1158,7 +1144,26 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 고정 3축을 지금 헤드셋이 보는 방향으로 잡는다. 환자는 사용자(헤드셋)를 마주 본다고 놓는다 — 정면 = 헤드셋 쪽.
+    /// ★10-13 사용자 지시: 메인 화면과 3축을 <b>정해 둔 자리</b>에 세운다 — 추적 원점에서 정면(원점의 +Z)을 보는 쪽이다.
+    ///   환자는 측정자를 마주 본다고 놓으므로 환자 정면은 원점 쪽(−Z)이다. 헤드셋이 어디를 보고 있었는지는 쓰지 않는다
+    ///   (헤드셋을 쓰지 않고 내려놓고 잴 때도 같은 자리여야 한다). 자리를 맞추는 것은 메타 퀘스트의 «위치 재설정»이다 —
+    ///   씬의 추적 원점이 바닥 높이(FloorLevel)이고 OVRManager.AllowRecenter가 기본(true)이라 재설정하면 원점이 사용자 쪽으로 온다(코드로 읽은 것 · 기기 미검증).
+    ///   그 뒤 «축 다시 잡기»(스틱 누르고 밀기)는 3축만 돌린다 — 메인 화면은 그대로 둔다.
+    /// </summary>
+    private void PlaceFixed()
+    {
+        Vector3 origin = trackingSpace != null ? trackingSpace.position : Vector3.zero;
+        Vector3 fwd = trackingSpace != null ? Vector3.ProjectOnPlane(trackingSpace.forward, Vector3.up) : Vector3.forward;
+        if (fwd.sqrMagnitude < 0.01f) fwd = Vector3.forward;
+        fwd.Normalize();
+        view.PlacePanel(origin + Vector3.up * FixedEyeHeight, fwd, screenDistance, screenWidth, screenRise);
+        view.FollowGuide(guideDistance, guideDrop);
+        Debug.Log($"[선실측] 메인 화면을 세웠다(고정 자리) — 추적 원점 {origin:F2} · 정면 {fwd:F2} · 화면 {view.Panel.position:F2} · 거리 {screenDistance:F1}m · 폭 {screenWidth:F1}m · 기준 눈높이 {FixedEyeHeight:F1}m 위 {screenRise:F2}m · 지금 눈 {eye.position:F2}");
+        SetAxes(fwd, origin + fwd * FixedAxesAhead, "처음", "고정 자리(추적 원점의 정면)");
+    }
+
+    /// <summary>
+    /// 고정 3축을 지금 헤드셋이 보는 방향으로 다시 잡는다(«축 다시 잡기» — 필요할 때만 쓴다. 처음 자리는 PlaceFixed가 정한다).
     /// ★헤드셋을 쓰지 않고 정해 둔 자리에 놓아 기준으로 삼을 때도 같은 함수다.
     /// ★10-12 저녁 사용자 지시: 다시 잡을 때도 헤드셋 방향이다(10-08의 «컨트롤러가 가리키는 방향»은 뺐다 — 그 함수는 git 231cb83에 있다).
     ///   부르는 길은 «스틱을 누른 뒤 밀기»와 모니터의 버튼 둘이다.
@@ -1171,7 +1176,7 @@ public class RomLineSession : MonoBehaviour
         look.Normalize();
         SetAxes(look, eye.position + look * 1.0f, why, "헤드셋이 보던 방향");
         if (!tell) return;
-        noteText = "축을 다시 잡았다 — 헤드셋이 보는 쪽이 환자 · 메인 화면도 그쪽에 다시 세웠다";
+        noteText = "축을 다시 잡았다 — 헤드셋이 보는 쪽이 환자";   // 메인 화면은 옮기지 않는다(10-13)
         Play(sndPress);
     }
 
@@ -1474,7 +1479,6 @@ public class RomLineSession : MonoBehaviour
             case "resetAll": ResetAll("모니터"); break;
             case "rebase": if (freeMode) FreeRebase(); break;
             case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
-                view.PlacePanel(eye, screenDistance, screenWidth, screenRise);
                 CaptureAxes("모니터", true);
                 break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;

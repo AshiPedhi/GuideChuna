@@ -124,7 +124,7 @@
     <button id="bRebase" onclick="cmd('rebase')">기준선 바꾸기</button>
     <button id="bClear" onclick="if(confirm(this.textContent + ' — 찍은 것을 지울까요?'))cmd('clear')">이 탭 지우기</button>
     <button onclick="if(confirm('전체 측정 결과를 지울까요? (순서 측정과 자유 측정 전부)'))cmd('resetAll')">전체 리셋</button>
-    <button onclick="if(confirm('지금 헤드셋이 보는 방향으로 축과 메인 화면을 다시 잡을까요?'))cmd('axes')" title="헤드셋이 지금 보는 방향으로 잡는다">축 다시 잡기</button>
+    <button onclick="if(confirm('지금 헤드셋이 보는 방향으로 축을 다시 잡을까요? (메인 화면은 그대로 둡니다)'))cmd('axes')" title="헤드셋이 지금 보는 방향으로 잡는다">축 다시 잡기</button>
     <button id="bCalib" onclick="cmd('calib')">끝점 보정</button>
     <a class="btn" href="/csv" download>CSV 받기</a>
     <button onclick="if(confirm('측정을 끝내고 로비로 나갈까요?'))cmd('exit')">나가기</button>

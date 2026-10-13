@@ -382,18 +382,19 @@ public class RomLineView
     }
 
     /// <summary>
-    /// 메인 화면을 헤드셋이 보는 쪽 멀리에 세운다. distance = 눈에서 화면까지(m) · width = 화면 폭(m) · rise = 화면 아랫변이 눈높이보다 높은 만큼(m).
-    /// 지움: 고개 숙임 → 화면은 늘 수평 앞에 선다. 탭 창은 화면 아래에 붙어 따라온다.
+    /// 메인 화면을 세운다. eyePos = 화면을 볼 눈의 자리 · toward = 그 눈이 보는 수평 방향 · distance = 눈에서 화면까지(m) ·
+    /// width = 화면 폭(m) · rise = 화면 아랫변이 눈높이보다 높은 만큼(m). 탭 창은 화면 아래에 붙어 있다.
+    /// ★10-13 사용자 지시: 헤드셋이 아니라 <b>정해 둔 자리</b>에 한 번만 세운다 — 눈의 자리와 방향은 세션이 추적 원점에서 정해 준다.
     /// </summary>
-    public void PlacePanel(Transform eye, float distance, float width, float rise)
+    public void PlacePanel(Vector3 eyePos, Vector3 toward, float distance, float width, float rise)
     {
-        Vector3 fwd = Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;
+        Vector3 fwd = Vector3.ProjectOnPlane(toward, Vector3.up).normalized;
         if (fwd.sqrMagnitude < 0.5f) fwd = Vector3.forward;
         float k = Mathf.Max(0.2f, width) / PanelW;
         panel.localScale = Vector3.one * k;
-        Vector3 pos = eye.position + fwd * distance + Vector3.up * (rise + PanelH * 0.5f * k);
+        Vector3 pos = eyePos + fwd * distance + Vector3.up * (rise + PanelH * 0.5f * k);
         panel.position = pos;
-        panel.rotation = Quaternion.LookRotation((pos - eye.position).normalized, Vector3.up);   // 눈을 마주 보게 살짝 숙인다
+        panel.rotation = Quaternion.LookRotation((pos - eyePos).normalized, Vector3.up);   // 눈을 마주 보게 살짝 숙인다
         panel.gameObject.SetActive(true);
         PanelPlaced = true;
     }
