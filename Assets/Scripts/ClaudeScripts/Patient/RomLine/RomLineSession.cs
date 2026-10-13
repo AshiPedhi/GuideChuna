@@ -1339,20 +1339,21 @@ public class RomLineSession : MonoBehaviour
         //   3점 · 4점은 묶음을 다 찍으면 안내에 각을 띄우고 확인(트리거)을 기다린다 — 확인해야 화면의 결과 줄에 오른다.
         bool wait = FreeWait;
         int shown = size > 0 ? Mathf.Min(count, freeConfirmed[freeTab]) : count;   // 화면의 결과 줄에 올릴 측정의 수
-        string step = (size > 0 ? pts.Count % size + 1 : pts.Count + 1) + "번째 점";
+        string step = (size > 0 ? pts.Count % size + 1 : pts.Count + 1) + "번째 점";   // 컨트롤러 끝의 이름표 · 모니터용
         string instruction, guideLine, guideNote = note;
         if (wait)
         {
             FreeMeasure(count - 1, out float wa, out _, out bool wc, out _, out _, out float wd);
             string v = "각 " + wa.ToString("F1") + "°" + (wc ? " · 기준과의 차 " + wd.ToString("+0.0;-0.0") + "°" : "");
             instruction = FreeTabName[freeTab] + " — " + v + " · 트리거 = 확인";
-            guideLine = "자유 측정 · " + FreeTabName[freeTab] + " · <color=#73E68C>" + v + "</color>";
-            if (guideNote.Length == 0) guideNote = "트리거 = 기록 · B = 취소";
+            guideLine = FreeTabName[freeTab] + "  <color=#73E68C>" + v + "</color>";
+            if (guideNote.Length == 0) guideNote = "트리거 = 기록";
         }
         else
         {
             instruction = FreeTabName[freeTab] + " — " + step + "을 찍으세요";
-            guideLine = "자유 측정 · " + FreeTabName[freeTab] + " · <color=#FFF233>" + step + "</color>을 찍으세요";
+            // ★10-13 오후 사용자 지시: 안내 글은 최대한 줄인다 — 찍을 점만큼 빈 동그라미를 놓고 찍을 때마다 하나씩 채운다. 연속은 묶음이 없어 찍은 수만 적는다.
+            guideLine = FreeTabName[freeTab] + "  <color=#FFF233>" + (size > 0 ? Dots(pts.Count % size, size) : "● " + pts.Count) + "</color>";
         }
         view.SetTip(wait ? "" : step);
         view.SetGuide(guideLine, guideNote);
@@ -1629,6 +1630,9 @@ public class RomLineSession : MonoBehaviour
     }
 
     // ── 표시 갱신(상태가 바뀔 때만) ──────────────────────────────────
+    /// <summary>찍은 점은 ●, 남은 점은 ○ — 안내의 진행 표시(10-13 오후). 상태가 바뀔 때만 만든다.</summary>
+    private static string Dots(int filled, int total) => new string('●', Mathf.Clamp(filled, 0, total)) + new string('○', Mathf.Max(0, total - filled));
+
     private string GroupTitle(int g)
     {
         if (g <= 0) return "기준(쓰지 않음)";
@@ -1648,7 +1652,7 @@ public class RomLineSession : MonoBehaviour
         if (Done)
         {
             forMonitor = instruction = "모든 측정 완료";
-            guide = "<color=#73E68C>모든 측정 완료</color>";
+            guide = "<color=#73E68C>측정 완료</color>";
         }
         else if (confirmWait)
         {
@@ -1657,18 +1661,19 @@ public class RomLineSession : MonoBehaviour
             string pv = results[cm * 2 + 1].valid ? results[cm * 2 + 1].angle.ToString("F1") + "°" : "—";
             forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 = 확인";
             guide = $"<color=#73E68C>{MotionName[cm]}</color> 능동 {av} · 압박 {pv}";
-            if (guideNote.Length == 0) guideNote = "중립으로 돌아간 뒤 트리거 = 기록 · B = 취소";
+            if (guideNote.Length == 0) guideNote = "트리거 = 기록";
         }
         else if (TabComplete(tab))
         {
-            forMonitor = instruction = guide = $"{TopTabName[tab]} 측정 완료";
+            forMonitor = instruction = $"{TopTabName[tab]} 측정 완료";
+            guide = $"{TopTabName[tab]} 완료";
         }
         else
         {
             RomLinePoint p = ExpectedPoint(group, index);
             instruction = $"{MotionName[cm]} · {PhaseName[PhaseOf(group)]}을 측정하세요";
             tipText = PointName[(int)p];
-            guide = $"{MotionName[cm]} · <color=#FFF233>{PhaseName[PhaseOf(group)]}</color>을 측정하세요";
+            guide = $"{MotionName[cm]} · {PhaseName[PhaseOf(group)]}  <color=#FFF233>{Dots(index, SizeOf(group))}</color>";   // 찍을 점만큼 동그라미 — 찍으면 채운다
             forMonitor = instruction + $"  ({PointName[(int)p]} · {SizeOf(group)}점 중 {index + 1}번째)";   // 모니터에는 찍을 점도 남긴다
             if (guideNote.Length == 0 && PhaseOf(group) == 2 && results[cm * 2].valid) guideNote = "능동 " + results[cm * 2].angle.ToString("F1") + "°";   // 압박을 재는 동안 방금 잰 능동 값
         }
