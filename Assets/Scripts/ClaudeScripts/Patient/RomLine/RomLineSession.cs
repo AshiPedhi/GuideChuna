@@ -327,6 +327,7 @@ public class RomLineSession : MonoBehaviour
         freeMode = false;
         home = true;   // ★10-14 사용자 지시: 홈에서 시작한다(스틱 좌우로 탭을 고른다)
         HidePokeCursors();
+        LoadTipOffset();
         view.SetMode(false);
         freeView.SetVisible(true);   // 바닥의 3축 십자는 두 모드가 같이 쓴다
 
@@ -584,7 +585,14 @@ public class RomLineSession : MonoBehaviour
             stickReady = false;          // 누르면서 밀린 스틱이 그대로 «밀기»로 읽히지 않게 — 가운데로 돌아온 뒤에 듣는다
             return;
         }
-        if (calibrating) { SampleCalibration(); return; }
+        // ── 끝점 보정(10-14 사용자 지시: 컨트롤러로 바로) — 홈에서 트리거 = 시작, 보정 중 트리거 = 끝(스틱 누르기로도 끝난다) ──
+        if (calibrating)
+        {
+            if (triggerDown) EndCalibration("트리거");
+            else SampleCalibration();
+            return;
+        }
+        if (home && triggerDown && !resetAsk) { BeginCalibration(); return; }
 
         // ── 축 다시 잡기를 불러 둔 동안 — 스틱을 밀면(어느 쪽이든) 잡는다. 다른 버튼 · 트리거는 그만두기(점은 찍지 않는다) ──
         if (axesAsk)
@@ -671,7 +679,7 @@ public class RomLineSession : MonoBehaviour
         calibPos.Clear();
         calibRot.Clear();
         noteText = "끝점 보정 — 끝을 한 점에 대고 여러 방향으로 돌리세요";
-        Debug.Log($"[선실측] 끝점 보정 시작 — 지금 값 {tipOffset * 1000f:F1}mm · 끝을 움직이지 않는 한 점에 댄 채 컨트롤러를 여러 방향으로 돌린다(스틱을 다시 누르면 끝)");
+        Debug.Log($"[선실측] 끝점 보정 시작 — 지금 값 {tipOffset * 1000f:F1}mm · 끝을 움직이지 않는 한 점에 댄 채 컨트롤러를 여러 방향으로 돌린다(트리거 · 스틱 누르기 = 끝)");
         Play(sndPress);
         dirty = true;
     }
@@ -687,7 +695,7 @@ public class RomLineSession : MonoBehaviour
         }
         if (Time.unscaledTime < calibNextText) return;
         calibNextText = Time.unscaledTime + 0.5f;   // 글자는 0.5초에 한 번만 바꾼다
-        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 스틱을 다시 누르면 끝";
+        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 = 끝";
         dirty = true;
     }
 
@@ -718,10 +726,11 @@ public class RomLineSession : MonoBehaviour
         Debug.Log($"[선실측] 끝점 보정 끝({why}) — 표본 {n} · 돌린 범위 {calibRange:F0}° · {(left ? "왼쪽" : "오른쪽")} 컨트롤러 · " +
                   $"맞춘 끝점 {asRight * 1000f:F1}mm ↔ 쓰던 값 {tipOffset * 1000f:F1}mm (차이 {moved * 1000f:F1}mm) · " +
                   $"맞춘 값으로 남은 흔들림 rms {rms * 1000f:F1}mm(최대 {max * 1000f:F1}mm) · 쓰던 값으로는 rms {oldRms * 1000f:F1}mm(최대 {oldMax * 1000f:F1}mm) · " +
-                  $"고정점 {pivot:F3} · {(apply ? "★이번 Play에 적용했다(Play를 멈추면 씬 값에 옮겨 적는다)" : "적용 안 함 — 흔들림이 크다(끝이 미끄러졌거나 추적이 흔들렸다)")}");
+                  $"고정점 {pivot:F3} · {(apply ? "★적용했다 · 기기에 저장(다음 실행도 이 값)" : "적용 안 함 — 흔들림이 크다(끝이 미끄러졌거나 추적이 흔들렸다)")}");
         if (apply)
         {
             tipOffset = asRight;
+            SaveTipOffset();
             noteText = $"끝점 ({asRight.x * 1000f:F0}, {asRight.y * 1000f:F0}, {asRight.z * 1000f:F0})mm 로 바꿈 · 전과 {moved * 1000f:F0}mm 차이 · 흔들림 {oldRms * 1000f:F1} → {rms * 1000f:F1}mm";
             Play(sndDone);
         }
@@ -731,6 +740,27 @@ public class RomLineSession : MonoBehaviour
             Play(sndDeny);
         }
         dirty = true;
+    }
+
+    // ★10-14: 보정한 끝점을 기기에 남긴다(PlayerPrefs) — 촉을 단 채 앱을 다시 켜도 그 값을 쓴다. 저장값이 있으면 씬의 tipOffset보다 먼저다(Start에서 읽는다).
+    //   종전에는 그 실행에서만 쓰였다(Play를 멈추거나 앱을 끄면 씬 값으로 돌아갔다). 지우려면 PlayerPrefs의 RomLine.Tip 키를 지운다.
+    private const string TipKey = "RomLine.Tip";
+
+    private void SaveTipOffset()
+    {
+        PlayerPrefs.SetFloat(TipKey + ".x", tipOffset.x);
+        PlayerPrefs.SetFloat(TipKey + ".y", tipOffset.y);
+        PlayerPrefs.SetFloat(TipKey + ".z", tipOffset.z);
+        PlayerPrefs.Save();
+        Debug.Log($"[선실측] 끝점 저장 — {tipOffset * 1000f:F1}mm(다음 실행부터 이 값을 쓴다)");
+    }
+
+    private void LoadTipOffset()
+    {
+        if (!PlayerPrefs.HasKey(TipKey + ".z")) { Debug.Log($"[선실측] 저장된 끝점 없음 — 씬 값 {tipOffset * 1000f:F1}mm"); return; }
+        Vector3 scene = tipOffset;
+        tipOffset = new Vector3(PlayerPrefs.GetFloat(TipKey + ".x"), PlayerPrefs.GetFloat(TipKey + ".y"), PlayerPrefs.GetFloat(TipKey + ".z"));
+        Debug.Log($"[선실측] 저장된 끝점을 쓴다 — {tipOffset * 1000f:F1}mm(씬 값 {scene * 1000f:F1}mm)");
     }
 
     /// <summary>찍는 순간의 컨트롤러 자세와 시각 — 찍음 로그 끝에 붙인다(끝점을 바꿔 다시 계산하거나, 추적이 끊긴 때와 견줄 수 있게).</summary>
@@ -1663,7 +1693,7 @@ public class RomLineSession : MonoBehaviour
             else
             {
                 forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
-                guide = "A : 리셋\nB : 자유측정 모드변경";
+                guide = calibrating ? "<color=#FFF233>끝점 보정 중</color>\n트리거 : 끝" : "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";
             }
             if (guideNote.Length == 0 && Done) guideNote = "측정 완료";
         }
