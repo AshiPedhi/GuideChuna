@@ -1891,19 +1891,14 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 탭 줄의 글자 — 탭 다섯의 이름뿐이다(10-14: 늘 보인다 · 메인 화면 아래와 안내 위 두 곳). 지금 탭 · 다 잰 탭(초록) · 못 가는 탭(흐림)을 색으로 가른다.
+    /// 탭 줄의 글자 — 탭 다섯의 이름뿐이다(10-14: 늘 보인다 · 메인 화면 아래와 안내 위 두 곳). 지금 탭만 색으로 가른다.
     /// 자유 측정 탭의 이름은 지금 고른 방식이다(홈에서 B로 바꾼다).
     /// </summary>
     private void RefreshTabs()
     {
+        // ★10-14 사용자 지시: 탭은 <b>지금 하는 탭만</b> 드러낸다 — 다 잰 탭의 초록 글자 · 재는 중에 못 가는 탭의 흐린 글자를 뺐다(못 가면 스틱을 밀 때 알림이 뜬다).
         int cur = CurTop;
-        bool locked = TabLocked;
-        for (int t = 0; t < RomLineView.PopupTabs; t++)
-        {
-            string name = TopName(t);
-            string label = t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name;
-            view.SetTab(t, label, t == cur, locked && t != cur);
-        }
+        for (int t = 0; t < RomLineView.PopupTabs; t++) view.SetTab(t, TopName(t), t == cur, false);
         view.ShowResetAsk(resetAsk);
     }
 
