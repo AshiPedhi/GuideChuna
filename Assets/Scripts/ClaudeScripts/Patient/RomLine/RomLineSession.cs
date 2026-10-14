@@ -1759,7 +1759,7 @@ public class RomLineSession : MonoBehaviour
         else view.HideCompare();
 
         // 띠 — 지금 동작 것만(10-14 사용자 지시: 직선 대신 폭 있는 띠 · 각 글자 대신 길이 mm).
-        //   띠는 그 동작의 면 안에 눕힌다. 측정선은 값을 낸 면 위의 선(results — 각과 같은 선)을, 값이 아직 없으면 찍은 그대로를 그린다.
+        //   띠는 그 동작의 면에 수직으로 세운다(폭 = 면의 법선 방향). 측정선은 값을 낸 면 위의 선(results — 각과 같은 선)을, 값이 아직 없으면 찍은 그대로를 그린다.
         //   길이 글자는 찍은 두 점 사이의 실제 거리다(모니터 · CSV의 «길이»와 같다).
         if (motion < 0) { view.HideMeasure(); return; }
         Vector3 normal = frame.valid ? RomLineMath.PlaneNormal((RomLineMotion)motion, frame) : Vector3.zero;

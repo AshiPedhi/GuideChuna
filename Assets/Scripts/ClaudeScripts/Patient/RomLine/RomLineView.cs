@@ -15,8 +15,8 @@ public class RomLineView
     private const float LineWidth = 0.0015f;
     // ★10-13 사용자 지시: 선은 <b>찍은 두 점 사이만</b> 긋는다. 종전에는 두 선의 교점까지 늘이고(끝은 4cm 더) 교점에 각도기 호를 세웠다 —
     //   9/30 방식(«두 직선의 교점이 각도기의 축»)을 공간에 그대로 보이려던 것이다. 호는 뺐다(늘이지 않으면 교점이 선 밖에 뜬다). 값은 그대로다.
-    // ★10-14 사용자 지시: 순서 측정(여섯 동작)의 선은 <b>폭 있는 띠</b>로 그린다 — 띠는 그 동작의 면(옆면 · 앞면 · 바닥면) 안에 눕는다.
-    //   측정자가 그 면을 마주 보고 서면(측면 · 뒷면 · 위) 띠가 넓게 보인다. 값 글자 대신 <b>선 길이(mm)</b>를 띠 위에 띄운다. 자유 측정은 종전 그대로 가는 선 · 각 글자다.
+    // ★10-14 사용자 지시: 순서 측정(여섯 동작)의 선은 <b>폭 있는 띠</b>로 그린다 — 띠는 그 동작의 면(옆면 · 앞면 · 바닥면)에 <b>수직</b>으로 선다(10-14 사용자 정정 — 첫 판은 면 안에 눕혔다).
+    //   측정자가 면을 마주 보면 띠는 선처럼 얇게 보이고, 면을 비스듬히 보면 폭이 드러난다. 값 글자 대신 <b>선 길이(mm)</b>를 띠 위에 띄운다. 자유 측정은 종전 그대로 가는 선 · 각 글자다.
     private const float BandWidth = 0.012f;
     private const float BandAlpha = 0.55f;
     private const float LengthRise = 0.012f;   // 길이 글자를 띠 가운데에서 위로 띄우는 거리(자유 측정과 같다)
@@ -573,7 +573,7 @@ public class RomLineView
     }
 
     /// <summary>
-    /// 순서 측정의 띠 하나(10-14) — phase 0 중립 · 1 능동 · 2 압박. a · b = 띠의 두 끝, normal = 그 동작의 면의 법선(띠는 이 면 안에 눕는다),
+    /// 순서 측정의 띠 하나(10-14) — phase 0 중립 · 1 능동 · 2 압박. a · b = 띠의 두 끝, normal = 그 동작의 면의 법선(띠는 이 면에 수직으로 선다),
     /// length = 띠 위에 띄울 길이 글자(mm). show가 false면 그 띠와 글자를 끈다.
     /// </summary>
     public void SetBand(int phase, bool show, Vector3 a, Vector3 b, Vector3 normal, string length)
@@ -582,8 +582,11 @@ public class RomLineView
         TextMeshPro t = phase == 0 ? neutralText : phase == 1 ? activeText : pressureText;
         if (t.gameObject.activeSelf != show) t.gameObject.SetActive(show);
         if (!show) { lr.enabled = false; return; }
-        // TransformZ 정렬 — 띠의 폭은 «선 방향 × 이 트랜스폼의 Z»로 펴진다. Z를 면의 법선으로 두면 띠가 면 안에 눕는다.
-        if (normal.sqrMagnitude > 1e-6f) lr.transform.rotation = Quaternion.LookRotation(normal);
+        // TransformZ 정렬 — 띠의 폭은 «선 방향 × 이 트랜스폼의 Z»로 펴진다.
+        //   ★10-14 사용자 정정: 띠는 단면에 <b>수직</b>으로 선다(폭이 면의 법선 방향 — 단면 위에 세운 벽). 첫 판은 면 안에 눕혔다(오독).
+        //   그래서 Z = 선 방향 × 법선(면 안에 있고 선에 수직)으로 둔다 → 폭이 법선 쪽으로 펴진다. 띠는 선을 가운데에 두고 양쪽으로 반씩 선다.
+        Vector3 z = Vector3.Cross(b - a, normal);
+        if (z.sqrMagnitude > 1e-10f) lr.transform.rotation = Quaternion.LookRotation(z, normal);
         DrawLine(lr, a, b);
         t.text = length;
         t.transform.position = (a + b) * 0.5f + Vector3.up * LengthRise;
@@ -689,7 +692,7 @@ public class RomLineView
         return lr;
     }
 
-    /// <summary>순서 측정의 띠 — 반투명 · 폭 BandWidth · 트랜스폼의 Z에 맞춰 눕는다(SetBand가 Z를 면의 법선으로 돌린다).</summary>
+    /// <summary>순서 측정의 띠 — 반투명 · 폭 BandWidth · 폭은 트랜스폼의 Z에 수직으로 펴진다(SetBand가 Z를 «선 방향 × 법선»으로 돌려 폭이 법선 쪽을 향하게 한다).</summary>
     private LineRenderer MakeBand(string name, Color c)
     {
         LineRenderer lr = MakeLine(name, c, 2);
