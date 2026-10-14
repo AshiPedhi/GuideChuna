@@ -336,7 +336,7 @@ public class RomLineSession : MonoBehaviour
             var pageAsset = Resources.Load<TextAsset>("RomLine/monitor");
             if (monitor.Start(monitorPort, pageAsset != null ? pageAsset.text : ""))
             {
-                view.SetFooter("모니터  " + monitor.Url);
+                // ★10-14 사용자 지시: 메인 화면의 모니터 주소 줄을 뺐다(모니터는 기기에서 확인된 적이 없다). 서버는 그대로 열리고 주소는 로그에 남는다.
                 monitor.SetCsv(CsvHeader + "\n");
             }
         }
