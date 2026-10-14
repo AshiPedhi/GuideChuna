@@ -240,8 +240,8 @@ public class RomLineView
     private const float NearTabH = 0.027f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
     private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideFixedH = 0.100f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · ★고정 높이(10-14 사용자 지시: 높이가 바뀌지 않게 — 글은 가운데에 둔다) · 테두리 굵기
     private static readonly Color NearTabIdle = new Color(0.88f, 0.91f, 0.95f, 0.92f);   // 안내 위 탭 — 지금 탭이 아닌 것(바탕 없음). ★10-14: 0.75 알파는 눈에 안 들어온다는 지적으로 밝혔다
-    private static readonly Color NearTabLine = new Color(1f, 1f, 1f, 0.95f);            // 지금 탭의 밑줄(흰색)
-    private static readonly Color NearTabBg = new Color(0.20f, 0.50f, 1.00f, 0.85f);     // 지금 탭의 바탕 — ★10-14 사용자 지시: 노랑 말고 눈에 띄는 파랑
+    private static readonly Color NearTabLine = new Color(0.20f, 0.50f, 1.00f, 1f);      // 지금 탭의 밑줄 — ★10-14 사용자 지시: 노랑 말고 파랑(밑줄만 — 바탕은 옅은 흰색 그대로)
+    private static readonly Color NearTabBg = new Color(1f, 1f, 1f, 0.16f);              // 지금 탭의 옅은 바탕
     private const float GuideW = 0.24f;                       // 안내 테두리의 폭(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 높이는 10-14부터 글에 맞춘다(LayoutGuide)
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
