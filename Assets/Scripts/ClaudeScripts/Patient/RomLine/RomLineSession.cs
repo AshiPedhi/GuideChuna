@@ -94,7 +94,11 @@ public class RomLineSession : MonoBehaviour
     // ★10-12 사용자 지시: 영어 약어(Tr · Gl · Gn)를 화면 · 음성 · 문서에 쓰지 않는다 — 받은 한글 명칭 그대로(미주점 · 미간점 · 턱끝점).
     //   판의 안내 글자 · 공간의 이름표 · 로그 · 안내 음성(romline_narration.py)이 전부 이 이름이다.
     public static readonly string[] PointName = { "오른쪽 미주점", "왼쪽 미주점", "미간점", "턱끝점" };
-    private static readonly string[] TopTabName = { "굴곡 · 신전", "측굴", "회전", "리셋", "자유 측정" };   // 탭 창의 다섯(10-12 저녁). 3 = 리셋은 탭이 아니라 명령이다
+    // ★10-14 사용자 지시: 탭 = 홈 · 굴곡 · 신전 · 측굴 · 회전 · 자유 측정(지금 고른 방식의 이름 — FreeTopName). «리셋» 탭은 없앴다(홈에서 A).
+    //   탭 번호(top): 0 홈 · 1~3 순서 측정(CurTab + 1) · 4 자유 측정.
+    private static readonly string[] TopTabName = { "홈", "굴곡 · 신전", "측굴", "회전" };
+    private static readonly string[] GuidedTabName = { "굴곡 · 신전", "측굴", "회전" };   // CurTab(0~2)으로 찾는다
+    private static readonly string[] FreeTopName = { "3점 측정", "4점 측정", "연속 측정" };
     private static readonly string[] PhaseHint = { "환자 정면을 바닥 화살표에 맞추세요 · 정면을 본 편안한 자세", "환자가 스스로 끝까지 움직인 자세", "측정자가 같은 방향으로 조금 더 눌러 준 자세" };
     private static readonly string[] PhaseName = { "중립", "능동", "압박" };
 
@@ -190,10 +194,9 @@ public class RomLineSession : MonoBehaviour
     private readonly List<string> csvRows = new List<string>(128);
     private string csvPath;
 
-    // 탭 창 · 단계 멈춤(10-12 저녁)
-    private bool popupOn;
-    private int popupCursor;              // 탭 창에서 스틱이 올라가 있는 탭(0 굴곡·신전 · 1 측굴 · 2 회전 · 3 리셋 · 4 자유 측정)
-    private bool resetAsk;                // «전체 측정 결과를 지울까요?» 확인 창
+    // 탭 · 단계 멈춤(10-12 저녁 · 10-14 홈)
+    private bool home = true;             // 홈 탭 — 처음은 여기서 시작하고, 네 탭(굴곡 · 신전 · 측굴 · 회전)을 다 재면 여기로 돌아온다(10-14)
+    private bool resetAsk;                // «전체 측정 결과를 지울까요?» 확인 창(홈에서 A)
     private bool confirmWait;             // 동작 하나(세 직선)를 다 찍었다 — A/X(확인)를 기다린다
     private readonly bool[] confirmed = new bool[6];   // 동작마다 확인까지 마쳤는가
     private bool axesAsk;                 // «축 다시 잡기»를 불렀다(스틱 누름) — 스틱을 밀면 잡는다
@@ -249,11 +252,14 @@ public class RomLineSession : MonoBehaviour
     private bool HasLine(int g) => has[GroupStart(g)] && has[GroupStart(g) + 1];
     private bool TabComplete(int tab) => confirmed[tab * 2] && confirmed[tab * 2 + 1];
     /// <summary>그 탭을 재는 중이다 — 점이 하나라도 찍혔고 아직 다 재지 않았다. 이 동안에는 다른 탭으로 못 간다.</summary>
+    /// <summary>지금 탭의 번호 — 0 홈 · 1~3 순서 측정 · 4 자유 측정.</summary>
+    private int CurTop => home ? 0 : freeMode ? 4 : CurTab + 1;
+    private string TopName(int top) => top == 4 ? FreeTopName[freeTab] : TopTabName[top];
     private bool TabLocked
     {
         get
         {
-            if (freeMode) return false;
+            if (freeMode || home) return false;
             int tab = CurTab;
             if (TabComplete(tab)) return false;
             for (int i = GroupStart(GroupOf(tab * 2, 0)), end = GroupStart(GroupOf(tab * 2 + 1, 2)) + 2; i < end; i++)
@@ -319,6 +325,8 @@ public class RomLineSession : MonoBehaviour
         compareGlGn = false;
         group = GroupOf(0, 0);
         freeMode = false;
+        home = true;   // ★10-14 사용자 지시: 홈에서 시작한다(스틱 좌우로 탭을 고른다)
+        HidePokeCursors();
         view.SetMode(false);
         freeView.SetVisible(true);   // 바닥의 3축 십자는 두 모드가 같이 쓴다
 
@@ -368,7 +376,7 @@ public class RomLineSession : MonoBehaviour
 
         if (dirty) Refresh();
         PumpMonitor();
-        view.Tick(eye, tipShown, tipValid, tipPos, freeMode || (!confirmWait && !TabComplete(CurTab)));
+        view.Tick(eye, tipShown, tipValid, tipPos, !home && (freeMode || (!confirmWait && !TabComplete(CurTab))));
         freeView.Tick(eye);
     }
 
@@ -404,6 +412,22 @@ public class RomLineSession : MonoBehaviour
             nextTrackLog = Time.unscaledTime + 1f;
             Debug.Log($"[선실측] 추적 — 컨트롤러 {(tipValid ? "O" : "X")} · 왼손 {(fingerValid[0] ? "O" : "X")} · 오른손 {(fingerValid[1] ? "O" : "X")} · t {Time.unscaledTime:F1}s");
         }
+    }
+
+    /// <summary>
+    /// ★10-14 사용자 지시: 컨트롤러 끝의 흰 커서를 없앤다. 그 정체는 씬의 ControllerPokeInteractor(Meta 프리팹)에 든
+    ///   «PokeLocation» — 1cm 흰 구(Unlit, 흰색)다(프리팹 YAML로 확인 · 기기 미확인). 이 씬은 화면을 손으로 누르지 않으므로(10-12 저녁부터 버튼 없음)
+    ///   찌르기 인터랙터를 통째로 끈다. 씬 파일은 건드리지 않는다 — 씬이 내려가면 같이 사라진다.
+    /// </summary>
+    private void HidePokeCursors()
+    {
+        int off = 0;
+        foreach (Oculus.Interaction.PokeInteractor p in FindObjectsByType<Oculus.Interaction.PokeInteractor>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+        {
+            p.gameObject.SetActive(false);
+            off++;
+        }
+        Debug.Log($"[선실측] 찌르기 인터랙터(컨트롤러 끝 흰 커서) {off}개를 껐다{(off == 0 ? " ★하나도 없었다 — 흰 커서가 남아 있으면 다른 것이다" : "")}");
     }
 
     private void Buzz(float seconds, float amplitude)
@@ -577,28 +601,26 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── A/X — 리셋 확인 > 탭 창 닫기(«리셋» 위에서는 확인 창 띄우기) > 탭 창 열기 ── ★측정 확인은 트리거로 옮겼다(10-13, Mark)
+        // ── A/X — ★10-14 사용자 지시: 탭 창(A로 여닫기)을 없앴다. A는 홈에서만 «리셋»이다(확인 창 → A = 지우기 · B = 취소). 측정 확인은 트리거(10-13, Mark) ──
         if (aDown)
         {
             if (resetAsk)
             {
                 Buzz(0.12f, 0.8f);
-                ResetAll("탭 창의 리셋");
-                SetPopup(false, "리셋", true);
+                ResetAll("홈의 A");
             }
-            else if (popupOn && popupCursor == 3)
+            else if (home)
             {
                 resetAsk = true;
                 Debug.Log("[선실측] 리셋 확인 창 — A = 지우기 · B = 취소");
                 Play(sndPress);
                 dirty = true;
             }
-            else if (popupOn) SetPopup(false, "A/X 버튼");
-            else SetPopup(true, "A/X 버튼");
+            else Deny("A = 리셋은 홈에서만 — 스틱 좌우로 홈으로 가세요");
             return;
         }
 
-        // ── B/Y ──
+        // ── B/Y ── 홈에서는 자유 측정의 방식 바꾸기(3점 → 4점 → 연속 — 탭 이름이 따라 바뀐다, 10-14). 측정 탭에서는 취소 · 지우기
         if (undoTap || undoLong)
         {
             if (resetAsk)
@@ -608,6 +630,7 @@ public class RomLineSession : MonoBehaviour
                 Play(sndUndo);
                 dirty = true;
             }
+            else if (home) SetFreeTab((freeTab + 1) % 3);   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다)
             else if (undoLong)
             {
                 Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 방식의 점 지우기(자유 측정)" : "이 탭 지우기")}");
@@ -618,13 +641,11 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── 스틱 좌우 — 탭 창을 띄운 동안에는 탭 고르기, 닫은 채로는 자유 측정의 방식(3점 · 4점 · 연속)만 ──
+        // ── 스틱 좌우 — 탭을 바로 옮긴다(10-14: 탭 줄이 늘 보인다). 재는 중인 탭이면 받지 않는다. 확인 창이 떠 있는 동안은 A · B만 듣는다 ──
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            int d = stick.x > 0f ? 1 : -1;
-            if (popupOn) MoveCursor(d);
-            else if (freeMode) SetFreeTab(Mathf.Clamp(freeTab + d, 0, 2));
+            if (!resetAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, 4), "스틱");
             return;
         }
 
@@ -722,14 +743,14 @@ public class RomLineSession : MonoBehaviour
     // ── 동작 ────────────────────────────────────────────────────────
     private void Mark(Vector3 pos, float shake)
     {
-        SetPopup(false, "점 찍기", true);   // 재기 시작하면 결과표로 돌아간다
+        if (home) { Deny("홈 — 스틱 좌우로 잴 탭을 고르세요"); return; }
         if (freeMode) { FreeMark(pos, shake); return; }
         // ★10-13 사용자 지시: 확인은 트리거다 — 안내에 뜬 각을 보고 한 번 더 당기면 그때 결과표에 기록된다.
         if (confirmWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) Confirm("트리거"); return; }
         if (TabComplete(CurTab))
         {
-            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 탭 창의 리셋"
-                      : $"{TopTabName[CurTab]} 탭은 다 쟀다 — A로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
+            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 홈의 A(리셋)"
+                      : $"{GuidedTabName[CurTab]} 탭은 다 쟀다 — 스틱으로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
             return;
         }
 
@@ -958,6 +979,7 @@ public class RomLineSession : MonoBehaviour
     /// </summary>
     private void Undo()
     {
+        if (home) { Deny("홈에서는 지울 것이 없다"); return; }
         if (freeMode) { FreeUndo(); return; }
         if (index > 0)
         {
@@ -984,48 +1006,32 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
-    /// <summary>탭 창을 여닫는다. 열 때 스틱 자리는 지금 탭이다. quiet = 소리 없이(점을 찍어 닫힐 때 — 찍는 소리와 겹친다).</summary>
-    private void SetPopup(bool on, string why, bool quiet = false)
-    {
-        if (resetAsk) { resetAsk = false; dirty = true; }   // 탭 창이 여닫히면 리셋 확인도 접는다
-        if (popupOn == on) return;
-        popupOn = on;
-        if (on) popupCursor = freeMode ? 4 : CurTab;
-        Debug.Log($"[선실측] 탭 창 {(on ? "열림" : "닫힘")} ({why}) — {(freeMode ? "자유 측정 · " + FreeTabName[freeTab] : GroupTitle(group))}{(on && TabLocked ? " · 재는 중이라 탭을 옮길 수 없다" : "")}");
-        if (!quiet) Play(sndPress);
-        dirty = true;
-    }
+    private string LockText() => $"{GuidedTabName[CurTab]} 탭을 재는 중이다 — 다 잰 뒤에 옮긴다(그만두려면 B 길게 = 이 탭 지우기)";
 
-    /// <summary>탭 창에서 스틱을 민다. «리셋»(3) 위에서는 멈춰 있기만 한다 — A를 눌러야 확인 창이 뜬다. 나머지는 옮기는 대로 그 탭이 된다.</summary>
-    private void MoveCursor(int d)
+    /// <summary>탭을 옮긴다 — top 0 홈 · 1 굴곡·신전 · 2 측굴 · 3 회전 · 4 자유 측정(10-14). 재는 중인 탭이 있으면 받지 않는다(false).</summary>
+    private bool GoTab(int top, string why)
     {
-        if (resetAsk) return;   // 확인 창이 떠 있는 동안은 A · B만 듣는다
-        int next = Mathf.Clamp(popupCursor + d, 0, 4);
-        if (next == popupCursor) return;
-        if (TabLocked) { Deny(LockText()); return; }
-        popupCursor = next;
-        if (next == 3)
-        {
-            Debug.Log("[선실측] 탭 창 — 스틱이 «리셋» 위에 있다(A를 눌러야 묻는다)");
-            Play(sndPress);
-        }
-        else GoTab(next, "스틱");
-        dirty = true;
-    }
-
-    private string LockText() => $"{TopTabName[CurTab]} 탭을 재는 중이다 — 다 잰 뒤에 옮긴다(그만두려면 B 길게 = 이 탭 지우기)";
-
-    /// <summary>탭을 옮긴다 — 0 굴곡·신전 · 1 측굴 · 2 회전 · 4 자유 측정. 재는 중인 탭이 있으면 받지 않는다(false).</summary>
-    private bool GoTab(int tab, string why)
-    {
-        int cur = freeMode ? 4 : CurTab;
-        if (tab == cur) return true;
-        if (tab == 3 || tab < 0 || tab > 4) return false;
+        if (top == CurTop) return true;
+        if (top < 0 || top > 4) return false;
         if (TabLocked) { Deny(LockText()); return false; }
-        if (tab == 4) { SetFreeMode(true); return true; }
+        resetAsk = false;
+        if (top == 0) { GoHome(why); return true; }
+        home = false;
+        if (top == 4) { SetFreeMode(true); return true; }
         SetFreeMode(false);
-        Resume(tab, why);
+        Resume(top - 1, why);
         return true;
+    }
+
+    /// <summary>홈으로 — 메인 화면은 순서 측정의 결과표를 보여 준다. 공간의 선 · 점은 그리지 않는다(Refresh).</summary>
+    private void GoHome(string why)
+    {
+        SetFreeMode(false);
+        home = true;
+        noteText = "";
+        Debug.Log($"[선실측] 탭 → 홈 ({why})");
+        Play(sndPress);
+        dirty = true;
     }
 
     /// <summary>그 탭에서 이어서 잴 자리로 간다 — 아직 확인하지 않은 첫 동작의, 아직 없는 첫 직선. 세 직선이 다 있으면 확인을 기다린다.</summary>
@@ -1045,7 +1051,7 @@ public class RomLineSession : MonoBehaviour
             break;
         }
         noteText = "";
-        Debug.Log($"[선실측] 탭 → {TopTabName[tab]} · {(TabComplete(tab) ? "다 잰 탭" : GroupTitle(group) + (confirmWait ? "(확인 대기)" : ""))} ({why})");
+        Debug.Log($"[선실측] 탭 → {GuidedTabName[tab]} · {(TabComplete(tab) ? "다 잰 탭" : GroupTitle(group) + (confirmWait ? "(확인 대기)" : ""))} ({why})");
         Play(sndPress);
         dirty = true;
     }
@@ -1069,7 +1075,7 @@ public class RomLineSession : MonoBehaviour
         for (int k = 1; k < 3; k++)
         {
             int t = (m / 2 + k) % 3;
-            if (!TabComplete(t)) return TopTabName[t];
+            if (!TabComplete(t)) return GuidedTabName[t];
         }
         return "측정 끝";
     }
@@ -1087,11 +1093,11 @@ public class RomLineSession : MonoBehaviour
         int next = NextTab(tab);
         if (next >= 0) { Resume(next, "확인"); return; }
 
+        // ★10-14 사용자 지시: 네 탭(굴곡 · 신전 · 측굴 · 회전)을 다 재면 홈으로 돌아간다. 그 사이에는 종전처럼 다음 탭으로 저절로 넘어간다.
         group = GroupOf(tab * 2 + 1, 2);
-        noteText = "";
-        Play(sndDone);
         LogSummary("끝");
-        dirty = true;
+        GoHome("측정 끝");
+        Play(sndDone);
     }
 
     /// <summary>축 다시 잡기를 부른다 / 그만둔다. 부른 동안 스틱을 밀면 잡힌다(HandleInput).</summary>
@@ -1127,8 +1133,6 @@ public class RomLineSession : MonoBehaviour
         freeMode = on;
         noteText = "";
         view.SetMode(on);
-        announced = -1;                              // 순서 탭으로 돌아오면 그 단계의 안내를 다시 들려준다
-        if (on && narrSrc != null) narrSrc.Stop();
         if (on)
         {
             // 6동작의 공간 표시는 끈다(찍어 둔 값은 그대로 — 돌아오면 다시 그린다).
@@ -1358,7 +1362,7 @@ public class RomLineSession : MonoBehaviour
         view.SetTip(wait ? "" : step);
         view.SetGuide(guideLine, guideNote);
         view.SetFreeTab(freeTab);
-        RefreshPopup();
+        RefreshTabs();
 
         freeView.SetShape(pts, freeTab);
         if (freeTab == 0) freeView.SetHeads("번호", "각", "선 1-2 / 선 2-3이 돈 각", "각의 차");
@@ -1486,11 +1490,10 @@ public class RomLineSession : MonoBehaviour
                 if (!freeMode && !GoTab(4, "모니터")) break;   // 재는 중인 탭이 있으면 못 간다
                 SetFreeTab(command[3] - '0');
                 break;
-            case "top0": case "top1": case "top2": case "top4": GoTab(command[3] - '0', "모니터"); break;
+            case "top0": case "top1": case "top2": case "top3": case "top4": GoTab(command[3] - '0', "모니터"); break;   // 10-14: 0 홈 · 1~3 순서 측정 · 4 자유 측정
             case "undo": Undo(); break;
-            case "popup": SetPopup(!popupOn, "모니터"); break;
-            case "confirm": if (!freeMode && confirmWait) Confirm("모니터"); else Deny("확인할 것이 없다 — 동작 하나의 세 직선을 다 찍은 뒤에 누른다"); break;
-            case "clear": if (freeMode) FreeClear(); else ResetTab(CurTab, "모니터"); break;
+            case "confirm": if (!freeMode && !home && confirmWait) Confirm("모니터"); else Deny("확인할 것이 없다 — 동작 하나의 세 직선을 다 찍은 뒤에 누른다"); break;
+            case "clear": if (home) Deny("홈에서는 지울 탭이 없다"); else if (freeMode) FreeClear(); else ResetTab(CurTab, "모니터"); break;
             case "resetAll": ResetAll("모니터"); break;
             case "rebase": Deny("기준 바꾸기는 없앴다 — 3점 측정은 처음 찍은 묶음이 기준이다"); break;
             case "axes":   // 모니터의 버튼은 한 번에 잡는다(화면에서 따로 되묻는다)
@@ -1572,7 +1575,7 @@ public class RomLineSession : MonoBehaviour
         index = 0;
         confirmWait = false;
         noteText = "";
-        Debug.Log($"[선실측] 이 탭 지우기 — {TopTabName[tab]} ({why})");
+        Debug.Log($"[선실측] 이 탭 지우기 — {GuidedTabName[tab]} ({why})");
         Play(sndUndo);
         dirty = true;
     }
@@ -1598,9 +1601,9 @@ public class RomLineSession : MonoBehaviour
         resetAsk = false;
         confirmWait = false;
         SetFreeMode(false);
+        home = true;    // 리셋은 홈에서 한다 — 홈에 머문다(10-14)
         group = 1;      // 굴곡 · 중립부터(묶음 0 = 기준은 쓰지 않는다)
         index = 0;
-        popupCursor = 0;
         noteText = "";
         Debug.Log($"[선실측] 리셋 — 전체 측정 결과를 지웠다(자유 측정의 점 {freePoints}개 포함) ({why})");
         Play(sndUndo);
@@ -1649,7 +1652,22 @@ public class RomLineSession : MonoBehaviour
         string instruction, tipText = "", guide, note = noteText, forMonitor, guideNote = noteText;
         // ★10-13 사용자 지시: 안내는 한 문장이다 — «○○ · 중립 / 능동 / 압박을 측정하세요». 어느 점을 찍으라는 말은 하지 않는다(컨트롤러 끝의 이름표에만 남는다).
         //   동작 하나를 다 재면 안내에 능동 · 압박의 각을 띄우고 확인(트리거)을 기다린다 — ★확인해야 결과표에 기록된다(10-13 오후). 아랫줄은 알림, 없으면 버튼 안내.
-        if (Done)
+        if (home)
+        {
+            // ★10-14 사용자 지시: 홈의 안내 = 버튼 둘. B로 바꾼 자유 측정의 방식은 탭 이름(맨 끝 탭)이 보여 준다.
+            if (resetAsk)
+            {
+                forMonitor = instruction = "전체 측정 결과를 지울까요? — A = 지우기 · B = 취소";
+                guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\nA : 지우기   B : 취소";
+            }
+            else
+            {
+                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
+                guide = "A : 리셋\nB : 자유측정 모드변경";
+            }
+            if (guideNote.Length == 0 && Done) guideNote = "측정 완료";
+        }
+        else if (Done)
         {
             forMonitor = instruction = "모든 측정 완료";
             guide = "<color=#73E68C>측정 완료</color>";
@@ -1665,8 +1683,8 @@ public class RomLineSession : MonoBehaviour
         }
         else if (TabComplete(tab))
         {
-            forMonitor = instruction = $"{TopTabName[tab]} 측정 완료";
-            guide = $"{TopTabName[tab]} 완료";
+            forMonitor = instruction = $"{GuidedTabName[tab]} 측정 완료";
+            guide = $"{GuidedTabName[tab]} 완료";
         }
         else
         {
@@ -1680,12 +1698,12 @@ public class RomLineSession : MonoBehaviour
         view.SetTip(tipText);
         view.SetGuide(guide, guideNote);
         RefreshGuidedExtras(tab, forMonitor, note);
-        RefreshPopup();
+        RefreshTabs();
 
         // 결과표(10-12) — 한 줄에 동작 하나: 능동 · 압박의 «면 위 각»과 그 동작의 단면에서 본 각도기.
         //   ★그림이 따로 계산하지 않는다 — 숫자와 같은 값(results)을 그린다. 반대쪽으로 움직인 값은 로그 · 알림과 같은 함수(DirectionMatches)로 가른다.
-        int current = group >= 1 && !Done && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;
-        view.SetRowNow(Done ? -1 : MotionOf(group));
+        int current = group >= 1 && !Done && !home && PhaseOf(group) > 0 ? MotionOf(group) * 2 + PhaseOf(group) - 1 : -1;
+        view.SetRowNow(Done || home ? -1 : MotionOf(group));
         for (int m = 0; m < 6; m++)
         {
             // ★10-13 오후 사용자 지시: 결과표의 값 · 각도기는 <b>확인(트리거)한 동작만</b> 채운다 — 찍는 대로 뜨지 않는다. 확인 전의 값은 안내와 공간의 글자에만 있다.
@@ -1699,7 +1717,7 @@ public class RomLineSession : MonoBehaviour
         }
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.
-        int motion = group == 0 ? -1 : MotionOf(Mathf.Min(group, GroupCount - 1));
+        int motion = group == 0 || home ? -1 : MotionOf(Mathf.Min(group, GroupCount - 1));   // 홈에서는 공간에 아무것도 그리지 않는다(10-14)
         for (int i = 0; i < PointCount; i++)
         {
             bool show = has[i] && (i < 2 || (i - 2) / 6 == motion);
@@ -1739,23 +1757,24 @@ public class RomLineSession : MonoBehaviour
                              label, cmpDirect[ca].pivot - Vector3.up * 0.035f);
         }
         else view.HideCompare();
-        string pre = cmp ? "미주점~미간점 " : "";   // 비교 시험 중에는 어느 선의 값인지 글자에 밝힌다
 
-        // 선·각도기 — 지금 동작 것만.
+        // 띠 — 지금 동작 것만(10-14 사용자 지시: 직선 대신 폭 있는 띠 · 각 글자 대신 길이 mm).
+        //   띠는 그 동작의 면 안에 눕힌다. 측정선은 값을 낸 면 위의 선(results — 각과 같은 선)을, 값이 아직 없으면 찍은 그대로를 그린다.
+        //   길이 글자는 찍은 두 점 사이의 실제 거리다(모니터 · CSV의 «길이»와 같다).
         if (motion < 0) { view.HideMeasure(); return; }
-        int n0 = GroupStart(GroupOf(motion, 0)), a0 = GroupStart(GroupOf(motion, 1)), p0 = GroupStart(GroupOf(motion, 2));
-        if (!has[n0] || !has[n0 + 1]) { view.HideMeasure(); return; }
-
-        RomLineResult ra = results[motion * 2], rp = results[motion * 2 + 1];
-        RomLineDirect da = direct[motion * 2], dp = direct[motion * 2 + 1];
-        if (ra.valid)
-            view.ShowMeasure(ra, rp.valid, rp, pre + "능동 " + ra.angle.ToString("F1") + "°", rp.valid ? "압박 " + rp.angle.ToString("F1") + "°" : "");
-        else if (da.valid)
+        Vector3 normal = frame.valid ? RomLineMath.PlaneNormal((RomLineMotion)motion, frame) : Vector3.zero;
+        for (int ph = 0; ph < 3; ph++)
         {
-            view.ShowDirect(points[n0], points[n0 + 1], points[a0], points[a0 + 1], pre + "능동 " + da.angle.ToString("F1") + "°",
-                            dp.valid, points[p0], points[p0 + 1], dp.valid ? "압박 " + dp.angle.ToString("F1") + "°" : "");
+            int s = GroupStart(GroupOf(motion, ph));
+            bool show = has[s] && has[s + 1];
+            Vector3 a = points[show ? s : 0], b = points[show ? s + 1 : 0];
+            if (show)
+            {
+                RomLineResult r = ph == 0 ? results[motion * 2] : results[motion * 2 + ph - 1];   // 중립선은 능동 값이 있으면 그 면 위의 중립선
+                if (r.valid) { a = ph == 0 ? r.neutralA : r.markA; b = ph == 0 ? r.neutralB : r.markB; }
+            }
+            view.SetBand(ph, show, a, b, normal, show ? (Vector3.Distance(points[s], points[s + 1]) * 1000f).ToString("F0") : "");
         }
-        else view.ShowNeutralOnly(points[n0], points[n0 + 1]);   // 중립 기준선만 — 직선만 보인다
     }
 
     /// <summary>순서대로 재는 흐름의 나머지 표시 — 진행 줄 · 바닥의 3축 · 안내 음성 · 모니터로 보낼 상태.</summary>
@@ -1769,12 +1788,10 @@ public class RomLineSession : MonoBehaviour
         freeView.SetAngles(NoPoints, NoTexts);
         freeView.ShowAxes(true, axesOrigin, axes);
 
-        Announce();
-
         // 모니터 — 지금 동작의 세 선(중립 · 능동 · 압박)을 자유 측정과 같은 모양으로 보낸다.
         StringBuilder js = monitorSb;
         js.Length = 0;
-        js.Append("\"mode\":\"guided\",\"top\":").Append(tab).Append(",\"tab\":").Append(plane);
+        js.Append("\"mode\":\"guided\",\"top\":").Append(CurTop).Append(",\"tab\":").Append(plane);
         AppendTabsJson(js).Append(",\"instruction\":");
         JsonStr(js, instruction).Append(",\"note\":");
         JsonStr(js, note).Append(",\"axesOn\":true,\"planeOn\":true,\"plane\":");
@@ -1837,7 +1854,7 @@ public class RomLineSession : MonoBehaviour
     /// <summary>모니터로 보내는 탭 창 · 단계 멈춤의 상태 — 두 모드가 같은 이름으로 보낸다.</summary>
     private StringBuilder AppendPopupJson(StringBuilder js)
     {
-        js.Append(",\"popup\":").Append(popupOn ? "true" : "false").Append(",\"cursor\":").Append(popupCursor)
+        js.Append(",\"popup\":false,\"cursor\":").Append(CurTop)   // 탭 창은 없앴다(10-14) — 모니터가 읽는 이름만 남긴다
           .Append(",\"locked\":").Append(TabLocked ? "true" : "false").Append(",\"confirm\":").Append(!freeMode && confirmWait ? "true" : "false")
           .Append(",\"resetAsk\":").Append(resetAsk ? "true" : "false").Append(",\"confirmed\":\"");
         for (int m = 0; m < 6; m++) js.Append(confirmed[m] ? '1' : '0');
@@ -1845,20 +1862,18 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>
-    /// 탭 창의 글자 — 탭 다섯의 이름뿐이다(스틱이 올라간 탭 · 지금 탭 · 다 잰 탭은 색으로 가른다).
-    /// 닫혀 있으면 글자를 만들지 않는다.
+    /// 탭 줄의 글자 — 탭 다섯의 이름뿐이다(10-14: 늘 보인다 · 메인 화면 아래와 안내 위 두 곳). 지금 탭 · 다 잰 탭(초록) · 못 가는 탭(흐림)을 색으로 가른다.
+    /// 자유 측정 탭의 이름은 지금 고른 방식이다(홈에서 B로 바꾼다).
     /// </summary>
-    private void RefreshPopup()
+    private void RefreshTabs()
     {
-        view.ShowPopup(popupOn);
-        if (!popupOn) return;
-        int cur = freeMode ? 4 : CurTab;
+        int cur = CurTop;
         bool locked = TabLocked;
         for (int t = 0; t < RomLineView.PopupTabs; t++)
         {
-            // 탭 이름만 쓴다(10-12: 아래의 «완료» · 진행 글자와 설명 세 줄을 뺐다). 다 잰 탭은 이름을 초록으로 칠한다.
-            string label = t < 3 && TabComplete(t) ? "<color=#73E68C>" + TopTabName[t] + "</color>" : TopTabName[t];
-            view.SetPopupTab(t, label, t == popupCursor, t == cur, locked && t != cur);
+            string name = TopName(t);
+            string label = t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name;
+            view.SetTab(t, label, t == cur, locked && t != cur);
         }
         view.ShowResetAsk(resetAsk);
     }
@@ -1870,58 +1885,13 @@ public class RomLineSession : MonoBehaviour
     private StringBuilder AppendTabsJson(StringBuilder js)
     {
         js.Append(",\"topTabs\":[");
-        for (int i = 0; i < TopTabName.Length; i++) { if (i > 0) js.Append(','); JsonStr(js, TopTabName[i]); }
+        for (int i = 0; i < RomLineView.PopupTabs; i++) { if (i > 0) js.Append(','); JsonStr(js, TopName(i)); }
         return js.Append("],\"tabs\":[\"3점 측정\",\"4점 측정\",\"연속 측정\"],\"counts\":[")
                  .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append(']');
     }
 
-    // ── 안내 음성(10-08) ────────────────────────────────────────────
-    //   단계가 바뀔 때마다 한 문장. 파일은 .claude/tools/romline_narration.py가 만든다(m{동작}_p{단계} · m{동작}_done · done).
-    //   ★10-13 사용자 지시: 음성은 화면의 안내 글 그대로다(«굴곡, 중립을 측정하세요» · «굴곡 측정 완료. 중립으로 돌아간 뒤 A 버튼으로 확인하세요»).
-    //     어느 점을 찍으라는 말은 하지 않는다. 화면 글(Refresh)을 고치면 그 도구의 texts()도 고치고 파일을 다시 만든다.
-    //   ★파일이 없으면 에러 없이 무음이다 — 그래서 읽은 개수와, 틀 때마다 어느 파일인지를 로그에 남긴다.
-    private AudioSource narrSrc;
-    private const int NarrDone = 18, NarrMotionDone = 19;   // 0~17 = 단계(동작 × 중립 · 능동 · 압박) · 18 = 전부 끝 · 19~24 = 동작 하나를 다 쟀다
-    private readonly AudioClip[] narr = new AudioClip[25];
-    private int announced = -1;
-
-    private void LoadNarration()
-    {
-        narrSrc = gameObject.AddComponent<AudioSource>();
-        narrSrc.playOnAwake = false;
-        narrSrc.spatialBlend = 0f;
-        int found = 0;
-        for (int i = 0; i < 18; i++)
-        {
-            narr[i] = Resources.Load<AudioClip>($"RomLine/Narration/m{i / 3}_p{i % 3}");
-            if (narr[i] != null) found++;
-        }
-        narr[NarrDone] = Resources.Load<AudioClip>("RomLine/Narration/done");
-        if (narr[NarrDone] != null) found++;
-        for (int m = 0; m < 6; m++)
-        {
-            narr[NarrMotionDone + m] = Resources.Load<AudioClip>($"RomLine/Narration/m{m}_done");
-            if (narr[NarrMotionDone + m] != null) found++;
-        }
-        if (found == narr.Length) Debug.Log($"[선실측] 안내 음성 {found}개를 읽었다");
-        else Debug.LogWarning($"[선실측] ★안내 음성 {narr.Length}개 중 {found}개만 읽었다 — 없는 단계는 무음이다(Resources/RomLine/Narration).");
-    }
-
-    private void Announce()
-    {
-        // 확인을 기다리는 동안에는 «○○ 측정 완료 …»를 한 번 말한다. 다 잰 탭을 보고 있는 동안은 말하지 않는다(-2).
-        int key = Done ? NarrDone : confirmWait ? NarrMotionDone + MotionOf(group) : TabComplete(CurTab) ? -2 : group - 1;
-        if (key == announced) return;
-        announced = key;
-        if (narrSrc == null || key < 0) return;
-        narrSrc.Stop();
-        AudioClip c = key >= 0 && key < narr.Length ? narr[key] : null;
-        Debug.Log($"[선실측] 안내 음성 — {GroupTitle(group)} · {(c != null ? c.name : "★파일 없음(무음)")}");
-        if (c == null || soundVolume <= 0f) return;
-        narrSrc.clip = c;
-        narrSrc.volume = soundVolume;
-        narrSrc.Play();
-    }
+    // ── 안내 음성 ── ★10-14 사용자 지시로 없앴다. 파일과 만드는 도구(romline_narration.py)는 남아 있다 — 되살리려면 git 0f449c1의 LoadNarration · Announce.
+    //   짧은 효과음(찍음 · 취소 · 거부 · 누름 · 끝)은 그대로다.
 
     /// <summary>순서대로 재는 흐름의 기록 한 줄 — 자유 측정과 같은 열에 맞춘다(사건 = «순서»).</summary>
     private void CsvGuided(int m, int ph)
@@ -2037,7 +2007,6 @@ public class RomLineSession : MonoBehaviour
         sndDeny = Tone("거부", 300f, 300f, 0.12f);
         sndPress = Tone("누름", 1250f, 1250f, 0.045f);
         sndDone = Tone("끝", 660f, 1760f, 0.25f);
-        LoadNarration();
     }
 
     private static AudioClip Tone(string name, float f0, float f1, float seconds)

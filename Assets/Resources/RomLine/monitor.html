@@ -119,7 +119,6 @@
   </div>
   <div class="btns">
     <button id="bConfirm" onclick="cmd('confirm')">확인 → 다음</button>
-    <button id="bPopup" onclick="cmd('popup')">탭 창</button>
     <button onclick="cmd('undo')">직선 취소</button>
     <button id="bRebase" onclick="cmd('rebase')">기준선 바꾸기</button>
     <button id="bClear" onclick="if(confirm(this.textContent + ' — 찍은 것을 지울까요?'))cmd('clear')">이 탭 지우기</button>
@@ -157,12 +156,12 @@ const GVIEW = ['옆에서 본 그림', '옆에서 본 그림', '앞에서 본 �
 const GZERO = [1, 1, 1, 1, -1, -1], GSIDE = [1, -1, -1, 1, -1, 1];   // 0° 선이 향하는 쪽(위 +1) · 제 방향으로 움직였을 때 기우는 쪽(오른쪽 +1)
 const GLEFT = ['뒤', '뒤', '우', '우', '우', '우'], GRIGHT = ['앞', '앞', '좌', '좌', '좌', '좌'];
 const GMAX = 100;   // 이보다 큰 각은 그림에서 여기까지만 그린다 — 숫자는 그대로 나온다
-const KEYS_GUIDED = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기 · 세 직선을 다 찍은 뒤 <b>트리거</b> = 확인 · <b>B</b> 직선 취소(길게 누르면 이 탭 지우기) · <b>스틱 좌우</b> 탭 창을 띄운 동안 탭 고르기 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
-const KEYS_FREE = '<b>트리거</b> 점 찍기 · <b>A</b> 탭 창 열기 · 닫기 · <b>B</b> 취소(길게 누르면 이 방식의 점 지우기) · <b>스틱 좌우</b> 방식 바꾸기 — 3점 · 4점 · 연속(탭 창을 띄운 동안에는 탭 고르기) · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
+const KEYS_GUIDED = '<b>스틱 좌우</b> 탭 옮기기(홈 · 굴곡 · 신전 · 측굴 · 회전 · 자유 측정) · <b>트리거</b> 점 찍기 · 세 직선을 다 찍은 뒤 <b>트리거</b> = 확인 · <b>B</b> 직선 취소(길게 누르면 이 탭 지우기) · 홈에서 <b>A</b> 리셋 · <b>B</b> 자유 측정 방식 바꾸기 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
+const KEYS_FREE = '<b>스틱 좌우</b> 탭 옮기기 · <b>트리거</b> 점 찍기 · <b>B</b> 취소(길게 누르면 이 방식의 점 지우기) · 방식(3점 · 4점 · 연속)은 홈에서 <b>B</b>로 바꾼다 · <b>스틱 누르고 밀기</b> 축 다시 잡기(헤드셋이 보는 방향)';
 
 function cmd(c) {
   if (!DEMO) { fetch('/cmd?c=' + encodeURIComponent(c)).catch(() => {}); return; }
-  if (/^top[0-2]$/.test(c)) { demoTab = +c[3]; poll(); }   // 견본에서는 탭만 바뀐다
+  if (/^top[1-3]$/.test(c)) { demoTab = c[3] - 1; poll(); }   // 견본에서는 탭만 바뀐다
   if (c === 'popup') { demoPopup = !demoPopup; poll(); }
   if (c === 'confirm') { demoConfirm = false; poll(); }
 }
@@ -195,7 +194,7 @@ function demoState() {
     cur:cur, phase:2, index:0, hint:'측정자가 같은 방향으로 조금 더 눌러 준 자세', steps:conf ? ['111000000000000000', '111111111111000000', '111111111111111000'][demoTab] : '111111111111111111',
     results:conf ? [R(26.8, 39.3), demoTab > 0 ? R(41.5, 52.0) : {a:null, p:null}, demoTab > 0 ? R(22.4, 30.1) : {a:null, p:null}, demoTab > 0 ? R(20.0, 33.0) : {a:null, p:null}, demoTab > 1 ? R(30.0, 55.0) : {a:null, p:null}, {a:null, p:null}]
                  : [R(26.8, 39.3), R(41.5, 52.0), R(22.4, 30.1), R(20.0, 33.0), R(30.0, 55.0), R(48.2, 61.7)],
-    mode:'guided', top:demoTab, topTabs:['굴곡 · 신전','측굴','회전','리셋','자유 측정'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0],
+    mode:'guided', top:demoTab + 1, topTabs:['홈','굴곡 · 신전','측굴','회전','3점 측정'], tab:demoTab, tabs:['굴곡·신전','측굴','회전'], counts:[0,0,0],
     instruction:conf ? ['굴곡을 다 쟀습니다 — 트리거 = 확인 → 신전', '좌측굴을 다 쟀습니다 — 트리거 = 확인 → 회전', '우회전을 다 쟀습니다 — 트리거 = 확인 → 좌회전'][demoTab] : d.instruction,
     note:conf ? '고치려면  B = 직선 취소 · B 길게 = 이 탭 지우기' : '환자 정면을 바닥 화살표에 맞추세요 · 두 점은 늘 같은 순서로',
     axesOn:true, planeOn:true, plane:d.plane, tracked:true, calib:false, tipOffset:[-8,6,32], url:'http://192.168.0.12:8090', csv:9, t:t,
@@ -246,7 +245,6 @@ function renderGuided(free) {
   });
 
   el('pop').className = S.popup ? 'on' : '';
-  el('bPopup').className = S.popup ? 'on' : '';
   if (!S.popup) return;
   const steps = S.steps || '';
   let done = 0;
@@ -288,7 +286,7 @@ function render() {
   if (tabs.dataset.key !== key) {
     tabs.dataset.key = key;
     tabs.innerHTML = '';
-    top.forEach((name, i) => { const d = document.createElement('div'); d.dataset.top = i; d.onclick = () => { if (i !== 3) cmd('top' + i); else if (confirm('전체 측정 결과를 지울까요? (순서 측정과 자유 측정 전부)')) cmd('resetAll'); }; tabs.appendChild(d); });
+    top.forEach((name, i) => { const d = document.createElement('div'); d.dataset.top = i; d.onclick = () => cmd('top' + i); tabs.appendChild(d); });   // 10-14: 0 홈 · 1~3 순서 측정 · 4 자유 측정(리셋 탭은 없앴다 — 아래 «전체 리셋» 버튼)
     if (free) {
       const g = document.createElement('div'); g.className = 'gap'; tabs.appendChild(g);
       S.tabs.forEach((name, i) => { const d = document.createElement('div'); d.dataset.sub = i; d.onclick = () => cmd('tab' + i); tabs.appendChild(d); });
@@ -297,8 +295,8 @@ function render() {
   [...tabs.children].forEach(d => {
     if (d.dataset.top !== undefined) {
       const i = +d.dataset.top, on = i === S.top;
-      d.className = 'tab' + (on ? ' on' : '') + (i === 3 ? ' reset' : '') + (S.locked && !on ? ' locked' : '') + (S.popup && i === S.cursor ? ' cursor' : '');
-      d.style.background = on ? (free ? '#C9D3DE' : COLORS[S.tab]) : '';
+      d.className = 'tab' + (on ? ' on' : '') + (S.locked && !on ? ' locked' : '');
+      d.style.background = on ? (free || i === 0 ? '#C9D3DE' : COLORS[S.tab]) : '';
       d.textContent = top[i];
     } else if (d.dataset.sub !== undefined) {
       const i = +d.dataset.sub, on = i === S.tab;

@@ -15,7 +15,11 @@ public class RomLineView
     private const float LineWidth = 0.0015f;
     // ★10-13 사용자 지시: 선은 <b>찍은 두 점 사이만</b> 긋는다. 종전에는 두 선의 교점까지 늘이고(끝은 4cm 더) 교점에 각도기 호를 세웠다 —
     //   9/30 방식(«두 직선의 교점이 각도기의 축»)을 공간에 그대로 보이려던 것이다. 호는 뺐다(늘이지 않으면 교점이 선 밖에 뜬다). 값은 그대로다.
-    private const float LabelGap = 0.025f;   // 값 글자를 선 끝에서 띄우는 거리
+    // ★10-14 사용자 지시: 순서 측정(여섯 동작)의 선은 <b>폭 있는 띠</b>로 그린다 — 띠는 그 동작의 면(옆면 · 앞면 · 바닥면) 안에 눕는다.
+    //   측정자가 그 면을 마주 보고 서면(측면 · 뒷면 · 위) 띠가 넓게 보인다. 값 글자 대신 <b>선 길이(mm)</b>를 띠 위에 띄운다. 자유 측정은 종전 그대로 가는 선 · 각 글자다.
+    private const float BandWidth = 0.012f;
+    private const float BandAlpha = 0.55f;
+    private const float LengthRise = 0.012f;   // 길이 글자를 띠 가운데에서 위로 띄우는 거리(자유 측정과 같다)
 
     // ── 색 ──────────────────────────────────────────────────────────
     //   ★10-12 사용자 지시: 색은 <b>역할</b>마다 하나다 — 중립 · 능동 · 압박. 환자 위의 점 · 선 · 호 · 값 글자, 메인 화면의 값 글자 · 칸 머리글 · 각도기 선,
@@ -49,9 +53,9 @@ public class RomLineView
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
     private readonly Transform[] extraSpheres = new Transform[3];        // 비교 시험의 Gn(중립·능동·압박)
     private readonly TextMeshPro[] neutralLabels = new TextMeshPro[2];   // 기준(양쪽 Tr) 이름표
-    private LineRenderer neutralLine, activeLine, pressureLine;
+    private LineRenderer neutralLine, activeLine, pressureLine;            // 순서 측정의 띠(10-14)
     private LineRenderer cmpNeutralLine, cmpActiveLine, cmpPressureLine;   // 비교 시험의 Gl ~ Gn 선
-    private TextMeshPro activeText, pressureText, cmpText;
+    private TextMeshPro neutralText, activeText, pressureText, cmpText;    // 앞의 셋 = 띠마다 길이(mm, 10-14 — 종전에는 능동 · 압박의 각이었다)
 
     // 컨트롤러 끝
     private Transform tip;
@@ -92,13 +96,13 @@ public class RomLineView
             neutralLabels[i].gameObject.SetActive(false);
         }
 
-        neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
-        activeLine = MakeLine("능동 측정선", ActiveColor, 2);
-        pressureLine = MakeLine("압박 측정선", PressureColor, 2);
-        activeText = MakeText(root, "", 0.11f, TextAlignmentOptions.Center, 5);
-        pressureText = MakeText(root, "", 0.09f, TextAlignmentOptions.Center, 5);
-        Outlined(activeText);     // ★10-13 오후: 값 글자가 선과 같은 색이라 묻혔다 → 흰 글자 + 검은 외곽선. 어느 선의 값인지는 글자 앞의 «능동 / 압박»이 말한다
-        Outlined(pressureText);
+        neutralLine = MakeBand("중립 띠", NeutralColor);
+        activeLine = MakeBand("능동 띠", ActiveColor);
+        pressureLine = MakeBand("압박 띠", PressureColor);
+        // 길이 글자 — 흰 글자 + 검은 외곽선(띠의 색과 겹치지 않게 · 자유 측정의 길이 글자와 같은 크기)
+        neutralText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
+        activeText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
+        pressureText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
         HideMeasure();
 
         // 비교 시험의 Gl ~ Gn 선 — Tr ~ Gl 선과 헷갈리지 않게 하늘색 계열로 그린다
@@ -168,8 +172,19 @@ public class RomLineView
             for (int c = 0; c < 4; c++) compareValues[r * 4 + c] = MakeText(retired, "—", 0.08f, TextAlignmentOptions.Center, 3);
             SetCompare(r, false, "", "", "", "");
         }
-        freeArea.gameObject.SetActive(false);
-        popup.gameObject.SetActive(false);
+        freeArea.gameObject.SetActive(false);   // 탭 줄은 늘 보인다(10-14 — A로 여닫던 탭 창을 없앴다)
+
+        // ── 안내 띠(10-14 사용자 지시) ── 탭 줄 바로 아래 — 컨트롤러 위의 안내와 <b>같은 글</b>을 메인 화면 폭에 맞춰 한 줄로 펼친다.
+        Transform band = new GameObject("안내 띠").transform;
+        band.SetParent(panel, false);
+        band.localPosition = new Vector3(0f, -(PanelH * 0.5f + PopupGap + PopupH + PopupGap + BandH * 0.5f), 0f);
+        MakeQuad(band, "바탕", Vector2.zero, new Vector2(PanelW, BandH), PopupColor, 0);
+        wideLine = Place(MakeText(band, "", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.014f), PanelW - 0.03f);
+        wideNote = Place(MakeText(band, "", 0.17f, TextAlignmentOptions.Center, 3), new Vector2(0f, -0.021f), PanelW - 0.03f);
+        wideNote.color = NoteColor;
+        wideNote.enableAutoSizing = true;   // 긴 알림은 줄여서 한 줄에 넣는다(글이 바뀔 때만 다시 잰다)
+        wideNote.fontSizeMin = 0.10f;
+        wideNote.fontSizeMax = 0.17f;
 
         // ── 안내(10-13 사용자 지시) ── 판을 없앴다. 반투명 테두리 안에 글만 띄우고, <b>헤드셋이 보는 쪽을 따라온다</b>(Tick).
         //   윗줄 = 지금 할 일 한 문장(«굴곡 · 중립을 측정하세요» · «굴곡 측정 완료 …») · 아랫줄 = 알림이 있을 때만.
@@ -189,6 +204,16 @@ public class RomLineView
         // 바탕이 없어 밝은 배경(패스스루)에서 글자가 묻힌다 — 검은 외곽선을 두른다
         guideLine.outlineColor = guideNote.outlineColor = new Color32(0, 0, 0, 255);
         guideLine.outlineWidth = guideNote.outlineWidth = 0.22f;
+
+        // 탭 줄의 복제(10-14 사용자 지시) — 안내 테두리 바로 위. 메인 화면 아래의 탭 줄과 같은 이름 · 같은 색 규칙이다(SetTab이 둘을 같이 칠한다).
+        float nearY = GuideH * 0.5f + 0.004f + NearTabH * 0.5f;
+        for (int i = 0; i < PopupTabs; i++)
+        {
+            var c = new Vector2((i - 2f) * (NearTabW + 0.004f), nearY);
+            nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(NearTabW, NearTabH), TabOff, 1).GetComponent<Renderer>();
+            nearTabTexts[i] = Place(MakeText(guide, "", 0.075f, TextAlignmentOptions.Center, 3), c, NearTabW);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(NearTabW, NearTabH);
+        }
         guide.gameObject.SetActive(false);
 
         // 맨 아래 한 줄 — 모니터 화면의 주소
@@ -207,6 +232,8 @@ public class RomLineView
     private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
+    private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
+    private const float NearTabW = 0.056f, NearTabH = 0.024f; // 안내 위 탭 줄의 칸(실제 크기 m, 10-14) — 다섯 칸이 안내 테두리(0.24)보다 조금 넓다
     private const float GuideW = 0.24f, GuideH = 0.12f;      // 안내 테두리의 실제 크기(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 글은 줄을 나눠 넣는다
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
@@ -232,13 +259,14 @@ public class RomLineView
     private Transform guide;                 // 안내 — 헤드셋이 보는 쪽을 따라온다
     private float guideDistance, guideDrop, guideRise;
     private bool guideSnapped;
-    private TextMeshPro guideLine, guideNote;
+    private TextMeshPro guideLine, guideNote, wideLine, wideNote;
+    private readonly Renderer[] nearTabPlates = new Renderer[PopupTabs];
+    private readonly TextMeshPro[] nearTabTexts = new TextMeshPro[PopupTabs];
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
     private readonly LineRenderer[] gaugeArcs = new LineRenderer[6];     // 0° 선에서 능동 선까지의 호
     private readonly Renderer[] freeTabPlates = new Renderer[3], popupTabPlates = new Renderer[PopupTabs];
     private readonly TextMeshPro[] popupTabTexts = new TextMeshPro[PopupTabs];
-    private bool popupShown;
 
     private void BuildResults(float top)
     {
@@ -359,20 +387,16 @@ public class RomLineView
         freeArea.gameObject.SetActive(free);
     }
 
-    /// <summary>탭 창을 여닫는다(메인 화면은 그대로 둔다).</summary>
-    public void ShowPopup(bool on)
+    /// <summary>
+    /// 탭 하나 — 메인 화면 아래의 탭 줄과 안내 위의 탭 줄을 같이 칠한다(10-14).
+    /// current = 지금 탭 · dim = 지금은 못 간다(재는 중인 탭이 있다).
+    /// </summary>
+    public void SetTab(int i, string label, bool current, bool dim)
     {
-        if (popupShown == on) return;
-        popupShown = on;
-        popup.gameObject.SetActive(on);
-    }
-
-    /// <summary>탭 창의 탭 하나. cursor = 스틱이 올라가 있다 · current = 지금 재는 탭 · dim = 지금은 못 간다(재는 중인 탭이 있다).</summary>
-    public void SetPopupTab(int i, string label, bool cursor, bool current, bool dim)
-    {
-        popupTabTexts[i].text = label;
-        popupTabTexts[i].color = dim ? GaugeDim : current ? TipColor : Color.white;
-        popupTabPlates[i].material.color = cursor ? TabOn : current ? TabCurrent : TabOff;
+        Color text = dim ? GaugeDim : current ? TipColor : Color.white, plate = current ? TabOn : TabOff;
+        popupTabTexts[i].text = nearTabTexts[i].text = label;
+        popupTabTexts[i].color = nearTabTexts[i].color = text;
+        popupTabPlates[i].material.color = nearTabPlates[i].material.color = plate;
     }
 
     /// <summary>리셋 확인 창(«전체 측정 결과를 지울까요?»)을 탭 창 위에 덮어 띄운다 / 내린다.</summary>
@@ -426,11 +450,16 @@ public class RomLineView
         tipLabel.text = tipText;
     }
 
-    /// <summary>안내의 두 줄 — 지금 할 일 한 문장(색은 리치 텍스트로 넣어 온다) · 알림(없으면 빈 줄). 두 모드가 같이 쓴다.</summary>
+    /// <summary>
+    /// 안내의 두 줄 — 지금 할 일 한 문장(색은 리치 텍스트로 넣어 온다) · 알림(없으면 빈 줄). 두 모드가 같이 쓴다.
+    /// 메인 화면 아래의 안내 띠에도 같은 글을 넣는다 — 띠는 넓으니 줄바꿈을 띄어쓰기로 펼친다(상태가 바뀔 때만 불린다).
+    /// </summary>
     public void SetGuide(string line, string noteText)
     {
         guideLine.text = line;
         guideNote.text = noteText;
+        wideLine.text = line.Replace("\n", "     ");
+        wideNote.text = noteText;
     }
 
     /// <summary>결과표에서 지금 재는 동작의 줄을 밝힌다(-1이면 끔).</summary>
@@ -538,53 +567,26 @@ public class RomLineView
     public void HideMeasure()
     {
         neutralLine.enabled = activeLine.enabled = pressureLine.enabled = false;
+        neutralText.gameObject.SetActive(false);
         activeText.gameObject.SetActive(false);
         pressureText.gameObject.SetActive(false);
     }
 
-    /// <summary>중립 기준선만 그린다(아직 측정선이 없을 때) — 직선만 보인다.</summary>
-    public void ShowNeutralOnly(Vector3 a, Vector3 b)
+    /// <summary>
+    /// 순서 측정의 띠 하나(10-14) — phase 0 중립 · 1 능동 · 2 압박. a · b = 띠의 두 끝, normal = 그 동작의 면의 법선(띠는 이 면 안에 눕는다),
+    /// length = 띠 위에 띄울 길이 글자(mm). show가 false면 그 띠와 글자를 끈다.
+    /// </summary>
+    public void SetBand(int phase, bool show, Vector3 a, Vector3 b, Vector3 normal, string length)
     {
-        HideMeasure();
-        DrawLine(neutralLine, a, b);
-    }
-
-    /// <summary>능동(필수)·압박(있으면)의 선을 찍은 두 점 사이에 긋고, 값은 그 선의 둘째 점 바깥에 띄운다.</summary>
-    public void ShowMeasure(RomLineResult active, bool hasPressure, RomLineResult pressure, string activeLabel, string pressureLabel)
-    {
-        HideMeasure();
-        DrawLine(neutralLine, active.neutralA, active.neutralB);
-        DrawLine(activeLine, active.markA, active.markB);
-        activeText.text = activeLabel;
-        activeText.transform.position = active.markB + active.markDir * LabelGap;
-        activeText.gameObject.SetActive(true);
-
-        if (hasPressure)
-        {
-            DrawLine(pressureLine, pressure.markA, pressure.markB);
-            pressureText.text = pressureLabel;
-            pressureText.transform.position = pressure.markB + pressure.markDir * LabelGap;
-            pressureText.gameObject.SetActive(true);
-        }
-    }
-
-    /// <summary>면으로 옮기지 않은 3차원 선을 그대로 그린다(기준 Tr을 안 찍었을 때). 값은 선의 둘째 점 바깥에 띄운다.</summary>
-    public void ShowDirect(Vector3 nA, Vector3 nB, Vector3 aA, Vector3 aB, string activeLabel,
-                           bool hasPressure, Vector3 pA, Vector3 pB, string pressureLabel)
-    {
-        HideMeasure();
-        DrawLine(neutralLine, nA, nB);
-        DrawLine(activeLine, aA, aB);
-        activeText.text = activeLabel;
-        activeText.transform.position = aB + (aB - aA).normalized * LabelGap;
-        activeText.gameObject.SetActive(true);
-        if (hasPressure)
-        {
-            DrawLine(pressureLine, pA, pB);
-            pressureText.text = pressureLabel;
-            pressureText.transform.position = pB + (pB - pA).normalized * LabelGap;
-            pressureText.gameObject.SetActive(true);
-        }
+        LineRenderer lr = phase == 0 ? neutralLine : phase == 1 ? activeLine : pressureLine;
+        TextMeshPro t = phase == 0 ? neutralText : phase == 1 ? activeText : pressureText;
+        if (t.gameObject.activeSelf != show) t.gameObject.SetActive(show);
+        if (!show) { lr.enabled = false; return; }
+        // TransformZ 정렬 — 띠의 폭은 «선 방향 × 이 트랜스폼의 Z»로 펴진다. Z를 면의 법선으로 두면 띠가 면 안에 눕는다.
+        if (normal.sqrMagnitude > 1e-6f) lr.transform.rotation = Quaternion.LookRotation(normal);
+        DrawLine(lr, a, b);
+        t.text = length;
+        t.transform.position = (a + b) * 0.5f + Vector3.up * LengthRise;
     }
 
     private static void DrawRaw(LineRenderer lr, Vector3 a, Vector3 b) => DrawLine(lr, a, b);
@@ -644,6 +646,7 @@ public class RomLineView
         }
         for (int i = 0; i < neutralLabels.Length; i++)
             if (neutralLabels[i].gameObject.activeSelf) Face(neutralLabels[i].transform, eye);
+        if (neutralText.gameObject.activeSelf) Face(neutralText.transform, eye);
         if (activeText.gameObject.activeSelf) Face(activeText.transform, eye);
         if (pressureText.gameObject.activeSelf) Face(pressureText.transform, eye);
         if (cmpText.gameObject.activeSelf) Face(cmpText.transform, eye);
@@ -683,6 +686,18 @@ public class RomLineView
         lr.numCapVertices = 2;
         lr.sortingOrder = 3;
         lr.enabled = false;
+        return lr;
+    }
+
+    /// <summary>순서 측정의 띠 — 반투명 · 폭 BandWidth · 트랜스폼의 Z에 맞춰 눕는다(SetBand가 Z를 면의 법선으로 돌린다).</summary>
+    private LineRenderer MakeBand(string name, Color c)
+    {
+        LineRenderer lr = MakeLine(name, c, 2);
+        lr.alignment = LineAlignment.TransformZ;
+        lr.startWidth = lr.endWidth = BandWidth;
+        lr.numCapVertices = 0;   // 끝이 둥글면 면이 아니라 막대처럼 보인다
+        c.a = BandAlpha;
+        lr.startColor = lr.endColor = c;
         return lr;
     }
 
