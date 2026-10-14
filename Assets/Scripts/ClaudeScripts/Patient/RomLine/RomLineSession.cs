@@ -1758,11 +1758,10 @@ public class RomLineSession : MonoBehaviour
         }
         else view.HideCompare();
 
-        // 띠 — 지금 동작 것만(10-14 사용자 지시: 직선 대신 폭 있는 띠 · 각 글자 대신 길이 mm).
-        //   띠는 그 동작의 면에 수직으로 세운다(폭 = 면의 법선 방향). 측정선은 값을 낸 면 위의 선(results — 각과 같은 선)을, 값이 아직 없으면 찍은 그대로를 그린다.
+        // 선 — 지금 동작 것만(10-14 사용자 지시: 각 글자 대신 길이 mm).
+        //   측정선은 값을 낸 면 위의 선(results — 각과 같은 선)을, 값이 아직 없으면 찍은 그대로를 그린다.
         //   길이 글자는 찍은 두 점 사이의 실제 거리다(모니터 · CSV의 «길이»와 같다).
         if (motion < 0) { view.HideMeasure(); return; }
-        Vector3 normal = frame.valid ? RomLineMath.PlaneNormal((RomLineMotion)motion, frame) : Vector3.zero;
         for (int ph = 0; ph < 3; ph++)
         {
             int s = GroupStart(GroupOf(motion, ph));
@@ -1773,7 +1772,7 @@ public class RomLineSession : MonoBehaviour
                 RomLineResult r = ph == 0 ? results[motion * 2] : results[motion * 2 + ph - 1];   // 중립선은 능동 값이 있으면 그 면 위의 중립선
                 if (r.valid) { a = ph == 0 ? r.neutralA : r.markA; b = ph == 0 ? r.neutralB : r.markB; }
             }
-            view.SetBand(ph, show, a, b, normal, show ? (Vector3.Distance(points[s], points[s + 1]) * 1000f).ToString("F0") : "");
+            view.SetSegment(ph, show, a, b, show ? (Vector3.Distance(points[s], points[s + 1]) * 1000f).ToString("F0") : "");
         }
     }
 

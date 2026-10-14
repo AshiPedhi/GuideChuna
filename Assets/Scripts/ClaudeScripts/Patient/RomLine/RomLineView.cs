@@ -15,11 +15,9 @@ public class RomLineView
     private const float LineWidth = 0.0015f;
     // ★10-13 사용자 지시: 선은 <b>찍은 두 점 사이만</b> 긋는다. 종전에는 두 선의 교점까지 늘이고(끝은 4cm 더) 교점에 각도기 호를 세웠다 —
     //   9/30 방식(«두 직선의 교점이 각도기의 축»)을 공간에 그대로 보이려던 것이다. 호는 뺐다(늘이지 않으면 교점이 선 밖에 뜬다). 값은 그대로다.
-    // ★10-14 사용자 지시: 순서 측정(여섯 동작)의 선은 <b>폭 있는 띠</b>로 그린다 — 띠는 그 동작의 면(옆면 · 앞면 · 바닥면)에 <b>수직</b>으로 선다(10-14 사용자 정정 — 첫 판은 면 안에 눕혔다).
-    //   측정자가 면을 마주 보면 띠는 선처럼 얇게 보이고, 면을 비스듬히 보면 폭이 드러난다. 값 글자 대신 <b>선 길이(mm)</b>를 띠 위에 띄운다. 자유 측정은 종전 그대로 가는 선 · 각 글자다.
-    private const float BandWidth = 0.012f;
-    private const float BandAlpha = 0.55f;
-    private const float LengthRise = 0.012f;   // 길이 글자를 띠 가운데에서 위로 띄우는 거리(자유 측정과 같다)
+    // ★10-14 사용자 지시: 순서 측정(여섯 동작)은 공간에 각 글자를 띄우지 않고 선마다 <b>길이(mm)</b>를 선 위에 띄운다. 자유 측정은 종전 그대로 각 글자다.
+    //   (같은 날 선을 폭 있는 띠로 바꿨다가 사용자 지시로 직선으로 되돌렸다.)
+    private const float LengthRise = 0.012f;   // 길이 글자를 선 가운데에서 위로 띄우는 거리(자유 측정과 같다)
 
     // ── 색 ──────────────────────────────────────────────────────────
     //   ★10-12 사용자 지시: 색은 <b>역할</b>마다 하나다 — 중립 · 능동 · 압박. 환자 위의 점 · 선 · 호 · 값 글자, 메인 화면의 값 글자 · 칸 머리글 · 각도기 선,
@@ -53,9 +51,9 @@ public class RomLineView
     private readonly Transform[] spheres = new Transform[RomLineSession.PointCount];
     private readonly Transform[] extraSpheres = new Transform[3];        // 비교 시험의 Gn(중립·능동·압박)
     private readonly TextMeshPro[] neutralLabels = new TextMeshPro[2];   // 기준(양쪽 Tr) 이름표
-    private LineRenderer neutralLine, activeLine, pressureLine;            // 순서 측정의 띠(10-14)
+    private LineRenderer neutralLine, activeLine, pressureLine;            // 순서 측정의 세 선
     private LineRenderer cmpNeutralLine, cmpActiveLine, cmpPressureLine;   // 비교 시험의 Gl ~ Gn 선
-    private TextMeshPro neutralText, activeText, pressureText, cmpText;    // 앞의 셋 = 띠마다 길이(mm, 10-14 — 종전에는 능동 · 압박의 각이었다)
+    private TextMeshPro neutralText, activeText, pressureText, cmpText;    // 앞의 셋 = 선마다 길이(mm, 10-14 — 종전에는 능동 · 압박의 각이었다)
 
     // 컨트롤러 끝
     private Transform tip;
@@ -96,10 +94,10 @@ public class RomLineView
             neutralLabels[i].gameObject.SetActive(false);
         }
 
-        neutralLine = MakeBand("중립 띠", NeutralColor);
-        activeLine = MakeBand("능동 띠", ActiveColor);
-        pressureLine = MakeBand("압박 띠", PressureColor);
-        // 길이 글자 — 흰 글자 + 검은 외곽선(띠의 색과 겹치지 않게 · 자유 측정의 길이 글자와 같은 크기)
+        neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
+        activeLine = MakeLine("능동 측정선", ActiveColor, 2);
+        pressureLine = MakeLine("압박 측정선", PressureColor, 2);
+        // 길이 글자 — 흰 글자 + 검은 외곽선(선의 색과 겹치지 않게 · 자유 측정의 길이 글자와 같은 크기)
         neutralText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
         activeText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
         pressureText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
@@ -573,20 +571,15 @@ public class RomLineView
     }
 
     /// <summary>
-    /// 순서 측정의 띠 하나(10-14) — phase 0 중립 · 1 능동 · 2 압박. a · b = 띠의 두 끝, normal = 그 동작의 면의 법선(띠는 이 면에 수직으로 선다),
-    /// length = 띠 위에 띄울 길이 글자(mm). show가 false면 그 띠와 글자를 끈다.
+    /// 순서 측정의 선 하나(10-14) — phase 0 중립 · 1 능동 · 2 압박. a · b = 선의 두 끝,
+    /// length = 선 위에 띄울 길이 글자(mm). show가 false면 그 선과 글자를 끈다.
     /// </summary>
-    public void SetBand(int phase, bool show, Vector3 a, Vector3 b, Vector3 normal, string length)
+    public void SetSegment(int phase, bool show, Vector3 a, Vector3 b, string length)
     {
         LineRenderer lr = phase == 0 ? neutralLine : phase == 1 ? activeLine : pressureLine;
         TextMeshPro t = phase == 0 ? neutralText : phase == 1 ? activeText : pressureText;
         if (t.gameObject.activeSelf != show) t.gameObject.SetActive(show);
         if (!show) { lr.enabled = false; return; }
-        // TransformZ 정렬 — 띠의 폭은 «선 방향 × 이 트랜스폼의 Z»로 펴진다.
-        //   ★10-14 사용자 정정: 띠는 단면에 <b>수직</b>으로 선다(폭이 면의 법선 방향 — 단면 위에 세운 벽). 첫 판은 면 안에 눕혔다(오독).
-        //   그래서 Z = 선 방향 × 법선(면 안에 있고 선에 수직)으로 둔다 → 폭이 법선 쪽으로 펴진다. 띠는 선을 가운데에 두고 양쪽으로 반씩 선다.
-        Vector3 z = Vector3.Cross(b - a, normal);
-        if (z.sqrMagnitude > 1e-10f) lr.transform.rotation = Quaternion.LookRotation(z, normal);
         DrawLine(lr, a, b);
         t.text = length;
         t.transform.position = (a + b) * 0.5f + Vector3.up * LengthRise;
@@ -689,18 +682,6 @@ public class RomLineView
         lr.numCapVertices = 2;
         lr.sortingOrder = 3;
         lr.enabled = false;
-        return lr;
-    }
-
-    /// <summary>순서 측정의 띠 — 반투명 · 폭 BandWidth · 폭은 트랜스폼의 Z에 수직으로 펴진다(SetBand가 Z를 «선 방향 × 법선»으로 돌려 폭이 법선 쪽을 향하게 한다).</summary>
-    private LineRenderer MakeBand(string name, Color c)
-    {
-        LineRenderer lr = MakeLine(name, c, 2);
-        lr.alignment = LineAlignment.TransformZ;
-        lr.startWidth = lr.endWidth = BandWidth;
-        lr.numCapVertices = 0;   // 끝이 둥글면 면이 아니라 막대처럼 보인다
-        c.a = BandAlpha;
-        lr.startColor = lr.endColor = c;
         return lr;
     }
 
