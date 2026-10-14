@@ -1727,12 +1727,23 @@ public class RomLineSession : MonoBehaviour
                 forMonitor = instruction = "전체 측정 결과를 지울까요? — A = 지우기 · B = 취소";
                 guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\n" + SubInfo + "A : 지우기   B : 취소</size>";
             }
+            else if (calibrating)
+            {
+                forMonitor = instruction = "끝점 보정 중 — 트리거 = 끝";
+                guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
+            }
+            else if (Done)
+            {
+                // ★10-14 사용자 지시: 여섯 동작을 다 재고 홈으로 돌아와도 기록을 보여야 한다 — 여섯 줄(결과표 순서: 좌 → 우)이 주 정보, 조작 설명은 서브(작게).
+                forMonitor = instruction = "모든 측정 완료 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
+                guide = "<color=#73E68C>측정 완료</color>\n" + RecordLine(0) + "\n" + RecordLine(1) + "\n" + RecordLine(3) + "\n" + RecordLine(2) + "\n"
+                      + RecordLine(5) + "\n" + RecordLine(4) + "\n" + SubInfo + "A : 리셋   B : 자유측정 모드변경   트리거 : 끝점 보정</size>";
+            }
             else
             {
                 forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
-                guide = calibrating ? "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>" : "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";   // 전부 같은 종류(조작)라 줄이지 않는다
+                guide = "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";   // 전부 같은 종류(조작)라 줄이지 않는다
             }
-            if (guideNote.Length == 0 && Done) guideNote = "측정 완료";
         }
         else if (Done)
         {
