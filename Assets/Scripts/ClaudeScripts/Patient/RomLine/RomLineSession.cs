@@ -1350,6 +1350,20 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
+    /// <summary>
+    /// 3점 측정 — k번째 측정의 각에서 <b>바로 앞 측정</b>의 각을 뺀 값(10-14 사용자 지시: 기준(첫 묶음)과의 차와 함께 보인다).
+    /// 셋째 묶음부터만 낸다(둘째 묶음은 바로 앞이 곧 기준이라 같은 값이다).
+    /// </summary>
+    private bool FreePrevDiff(int k, out float prev)
+    {
+        prev = 0f;
+        if (freeTab != 0 || k < 2) return false;
+        List<Vector3> p = FreePts;
+        int o = k * 3, q = (k - 1) * 3;
+        prev = Corner(p[o], p[o + 1], p[o + 2]) - Corner(p[q], p[q + 1], p[q + 2]);
+        return true;
+    }
+
     private void LogFree(int k)
     {
         FreeMeasure(k, out float angle, out _, out bool cmp, out float t12, out float t23, out float diff);
@@ -1359,6 +1373,7 @@ public class RomLineSession : MonoBehaviour
         if (cmp)
             sb.Append(" ‖ 기준(1)과 견줌 — 선 1-2 ").Append(t12.ToString("F1")).Append("° · 선 2-3 ").Append(t23.ToString("F1"))
               .Append("° · 각의 차 ").Append(diff.ToString("+0.0;-0.0")).Append('°');
+        if (FreePrevDiff(k, out float prev)) sb.Append(" ‖ 이전(").Append(k).Append(")과의 차 ").Append(prev.ToString("+0.0;-0.0")).Append('°');
         Debug.Log(sb.ToString());
     }
 
@@ -1378,8 +1393,10 @@ public class RomLineSession : MonoBehaviour
         if (wait)
         {
             FreeMeasure(count - 1, out float wa, out _, out bool wc, out _, out _, out float wd);
-            string v = "각 " + wa.ToString("F1") + "°", vd = wc ? "차 " + wd.ToString("+0.0;-0.0") + "°" : "";   // 차 = 기준(첫 묶음)과의 각의 차
-            instruction = FreeTabName[freeTab] + " — " + v + (wc ? " · 기준과의 " + vd : "") + " · 트리거 = 확인";
+            // 기준 = 첫 묶음과의 각의 차 · 이전 = 바로 앞 묶음과의 각의 차(10-14 · 셋째 묶음부터)
+            string v = "각 " + wa.ToString("F1") + "°", vd = wc ? "기준 " + wd.ToString("+0.0;-0.0") + "°" : "";
+            if (FreePrevDiff(count - 1, out float wp)) vd += " · 이전 " + wp.ToString("+0.0;-0.0") + "°";
+            instruction = FreeTabName[freeTab] + " — " + v + (wc ? " · 차 " + vd : "") + " · 트리거 = 확인";
             guideLine = FreeTabName[freeTab] + "\n<color=#73E68C>" + v + "</color>" + (wc ? "\n" + vd : "");   // 안내는 폭이 좁다 — 줄을 나눈다
             if (guideNote.Length == 0) guideNote = "트리거 = 기록";
         }
@@ -1395,7 +1412,7 @@ public class RomLineSession : MonoBehaviour
         RefreshTabs();
 
         freeView.SetShape(pts, freeTab);
-        if (freeTab == 0) freeView.SetHeads("번호", "각", "선 1-2 / 선 2-3이 돈 각", "각의 차");
+        if (freeTab == 0) freeView.SetHeads("번호", "각", "선 1-2 / 선 2-3이 돈 각", "차(기준 / 이전)");
         else if (freeTab == 1) freeView.SetHeads("번호", "두 선의 각", "", "");
         else freeView.SetHeads("꼭짓점", "꺾인 각", "", "");
         freeView.ShowAxes(axesOn, axesOrigin, axes);
@@ -1415,7 +1432,12 @@ public class RomLineSession : MonoBehaviour
             bool isRef = freeTab == 0 && k == 0;
             string name = freeTab == 2 ? "점 " + (k + 2) : (k + 1).ToString();
             if (isRef) freeView.SetRow(row, name, a, "기준", "", true);
-            else if (cmp) freeView.SetRow(row, name, a, t12.ToString("F1") + "° / " + t23.ToString("F1") + "°", diff.ToString("+0.0;-0.0") + "°", false);
+            else if (cmp)
+            {
+                string d = diff.ToString("+0.0;-0.0") + "°";
+                if (FreePrevDiff(k, out float pd)) d += " / " + pd.ToString("+0.0;-0.0") + "°";
+                freeView.SetRow(row, name, a, t12.ToString("F1") + "° / " + t23.ToString("F1") + "°", d, false);
+            }
             else freeView.SetRow(row, name, a, "", "", false);
         }
         for (int row = Mathf.Max(0, shown - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
@@ -1441,6 +1463,7 @@ public class RomLineSession : MonoBehaviour
                 FreeMeasure(k, out angle, out _, out bool cmp, out float t12, out float t23, out float diff);
                 plane = angle.ToString("F1") + "°";
                 if (cmp) warn = "선 1-2 " + t12.ToString("F1") + "° · 선 2-3 " + t23.ToString("F1") + "° · 각의 차 " + diff.ToString("+0.0;-0.0") + "°";
+                if (FreePrevDiff(k, out float pd)) warn += " · 이전과의 차 " + pd.ToString("+0.0;-0.0") + "°";
             }
             if (seg++ > 0) js.Append(',');
             js.Append("{\"n\":").Append(seg).Append(",\"ref\":").Append(freeTab == 0 && i < 3 ? "true" : "false").Append(",\"refOf\":1")
@@ -1563,6 +1586,8 @@ public class RomLineSession : MonoBehaviour
             if (cmp)
                 sb.Append("선 1-2 ").Append(t12.ToString("F1", CultureInfo.InvariantCulture)).Append(" · 선 2-3 ").Append(t23.ToString("F1", CultureInfo.InvariantCulture))
                   .Append(" · 각의 차 ").Append(diff.ToString("+0.0;-0.0", CultureInfo.InvariantCulture));
+            if (FreePrevDiff(line, out float pd))
+                sb.Append(" · 이전과의 차 ").Append(pd.ToString("+0.0;-0.0", CultureInfo.InvariantCulture));
             sb.Append(",,");
             for (int k = 0; k < 2; k++)
             {
@@ -1666,6 +1691,14 @@ public class RomLineSession : MonoBehaviour
     /// <summary>찍은 점은 ●, 남은 점은 ○ — 안내의 진행 표시(10-13 오후). 상태가 바뀔 때만 만든다.</summary>
     private static string Dots(int filled, int total) => new string('●', Mathf.Clamp(filled, 0, total)) + new string('○', Mathf.Max(0, total - filled));
 
+    /// <summary>안내에 넣는 기록 한 줄 — «굴곡  37.2° / 41.8°»(능동 / 압박, 색은 결과표와 같다). 다 잰 탭에서만 부른다(상태가 바뀔 때만).</summary>
+    private string RecordLine(int m)
+    {
+        string a = results[m * 2].valid ? results[m * 2].angle.ToString("F1") + "°" : "—";
+        string p = results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") + "°" : "—";
+        return MotionName[m] + "  <color=#FF6B05>" + a + "</color> / <color=#F2994D>" + p + "</color>";
+    }
+
     private string GroupTitle(int g)
     {
         if (g <= 0) return "기준(쓰지 않음)";
@@ -1713,8 +1746,12 @@ public class RomLineSession : MonoBehaviour
         }
         else if (TabComplete(tab))
         {
+            // ★10-14 사용자 지시: 다 잰 탭에서는 안내에 그 탭의 기록(두 동작 × 능동 / 압박)을 보이고, 마지막 줄에 초기화 방법을 적는다.
+            //   두 동작의 순서는 결과표와 같다(측굴 · 회전은 좌 → 우 — RomLineView.DisplayRow).
+            int first = tab == 0 ? 0 : tab * 2 + 1, second = tab == 0 ? 1 : tab * 2;
             forMonitor = instruction = $"{GuidedTabName[tab]} 측정 완료";
-            guide = $"{GuidedTabName[tab]} 완료";
+            guide = "<color=#73E68C>" + GuidedTabName[tab] + " 완료</color>\n" + RecordLine(first) + "\n" + RecordLine(second);
+            if (guideNote.Length == 0) guideNote = "B 길게 : 초기화";
         }
         else
         {
@@ -1896,9 +1933,13 @@ public class RomLineSession : MonoBehaviour
     /// </summary>
     private void RefreshTabs()
     {
-        // ★10-14 사용자 지시: 탭은 <b>지금 하는 탭만</b> 드러낸다 — 다 잰 탭의 초록 글자 · 재는 중에 못 가는 탭의 흐린 글자를 뺐다(못 가면 스틱을 밀 때 알림이 뜬다).
+        // ★10-14 사용자 지시: 재는 중에 못 가는 탭의 흐린 글자는 뺐다(못 가면 스틱을 밀 때 알림이 뜬다). 다 잰 탭의 초록 글자는 (같은 날 다시) 둔다.
         int cur = CurTop;
-        for (int t = 0; t < RomLineView.PopupTabs; t++) view.SetTab(t, TopName(t), t == cur, false);
+        for (int t = 0; t < RomLineView.PopupTabs; t++)
+        {
+            string name = TopName(t);
+            view.SetTab(t, t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name, t == cur, false);
+        }
         view.ShowResetAsk(resetAsk);
     }
 
