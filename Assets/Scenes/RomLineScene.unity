@@ -2305,8 +2305,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd9902ec5866ea64e93d862ca4f44e47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RomLineSession
-  tipOffset: {x: -0.005, y: 0, z: 0.033}
+  tipOffset: {x: -0.007500917, y: 0.010044916, z: 0.04597944}
   compareGlGn: 1
+  handInput: 0
+  monitorPort: 8090
+  screenDistance: 2.5
+  screenWidth: 3.5
+  screenRise: -0.45
+  guideDistance: 0.6
+  guideDrop: 0.22
+  guideRise: 0.05
   soundVolume: 1
   lobbySceneName: lobby
 --- !u!4 &1028655594
