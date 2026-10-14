@@ -181,6 +181,9 @@ public class RomLineView
         wideNote = Place(MakeText(band, "", 0.17f, TextAlignmentOptions.Center, 3), new Vector2(0f, -0.021f), PanelW - 0.03f);
         wideNote.color = NoteColor;
         wideNote.enableAutoSizing = true;   // 긴 알림은 줄여서 한 줄에 넣는다(글이 바뀔 때만 다시 잰다)
+        wideLine.enableAutoSizing = true;   // 이어 붙인 한 줄이 바보다 길면 줄여서 넣는다(바의 높이는 그대로)
+        wideLine.fontSizeMin = 0.15f;
+        wideLine.fontSizeMax = 0.26f;
         wideNote.fontSizeMin = 0.10f;
         wideNote.fontSizeMax = 0.17f;
 
@@ -496,7 +499,7 @@ public class RomLineView
         float w = GuideW - 0.02f;
         LayoutGuide(line.Length > 0 ? guideLine.GetPreferredValues(line, w, 0f).y : 0f,
                     noteText.Length > 0 ? guideNote.GetPreferredValues(noteText, w, 0f).y : 0f);
-        wideLine.text = line.Replace("\n", "     ");
+        wideLine.text = line.Replace("\n", "   ·   ");   // ★10-14 사용자 지시: 벽면UI의 안내 띠는 긴 바 그대로 — 컨트롤러UI의 여러 줄을 « · »로 이어 한 줄에 담는다
         wideNote.text = noteText;
     }
 
