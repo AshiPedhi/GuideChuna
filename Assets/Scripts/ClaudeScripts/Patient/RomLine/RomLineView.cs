@@ -198,6 +198,7 @@ public class RomLineView
         borderLeft = MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
         borderRight = MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
         guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
+        guideLine.textWrappingMode = TextWrappingModes.Normal;   // 긴 줄(«트리거 : 컨트롤러 끝점 보정» 등)은 테두리 안에서 줄을 바꾼다 — 높이는 LayoutGuide가 맞춘다
         guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
         guideNote.textWrappingMode = TextWrappingModes.Normal;
         guideNote.color = NoteColor;

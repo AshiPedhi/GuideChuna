@@ -1732,24 +1732,15 @@ public class RomLineSession : MonoBehaviour
                 forMonitor = instruction = "끝점 보정 중 — 트리거 : 끝";
                 guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
             }
-            else if (Done)
-            {
-                // ★10-14 사용자 지시: 여섯 동작을 다 재고 홈으로 돌아와도 기록을 보여야 한다 — 여섯 줄(결과표 순서: 좌 → 우)이 주 정보, 조작 설명은 서브(작게).
-                forMonitor = instruction = "모든 측정 완료 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 : 탭 고르기";
-                guide = "<color=#73E68C>측정 완료</color>\n" + RecordLine(0) + "\n" + RecordLine(1) + "\n" + RecordLine(3) + "\n" + RecordLine(2) + "\n"
-                      + RecordLine(5) + "\n" + RecordLine(4) + "\n" + SubInfo + "A : 리셋   B : 자유측정 모드변경   트리거 : 끝점 보정</size>";
-            }
             else
             {
-                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 : 탭 고르기";
-                guide = "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";   // 전부 같은 종류(조작)라 줄이지 않는다
+                // ★10-14 사용자 정정: 홈에는 조작 설명만 둔다(다 잰 뒤에도 — 기록은 각 탭에서 본다). 전부 같은 종류(조작)라 줄이지 않는다.
+                //   Meta 버튼 길게 = 메타 퀘스트 시스템의 «뷰 재설정»(추적 원점을 지금 자리로) — 벽면UI · 바닥 축이 그 원점에 맞춰 선다(PlaceFixed).
+                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 트리거 : 컨트롤러 끝점 보정 · Meta 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
+                guide = "A : 리셋\nB : 자유측정 모드변경\n트리거 : 컨트롤러 끝점 보정\nMeta 버튼 길게 : 뷰 재설정";
             }
         }
-        else if (Done)
-        {
-            forMonitor = instruction = "모든 측정 완료";
-            guide = "<color=#73E68C>측정 완료</color>";
-        }
+        // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).
         else if (confirmWait)
         {
             // 동작 하나를 다 찍었다 — 확인을 기다린다
