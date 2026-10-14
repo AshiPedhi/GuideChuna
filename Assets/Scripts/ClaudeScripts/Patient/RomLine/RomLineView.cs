@@ -251,7 +251,7 @@ public class RomLineView
     private static readonly int[] DisplayRow = { 0, 1, 3, 2, 5, 4 };                  // 동작 번호 → 결과표의 줄(좌측굴 · 좌회전을 먼저 보여 준다)
     private static readonly string[] GaugeLeft = { "앞", "앞", "좌", "좌", "좌", "좌" };
     private static readonly string[] GaugeRight = { "뒤", "뒤", "우", "우", "우", "우" };
-    private static readonly string[] FreeTabNames = { "3점", "4점", "연속" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
+    private static readonly string[] FreeTabNames = { "3점", "2선", "연속" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
     private static readonly Color NoteColor = new Color(0.80f, 0.86f, 0.93f, 1f);     // 알림 · 안내 — 주황(측정값)과 섞이지 않게 푸른 회색
     private static readonly Color DimColor = new Color(0.72f, 0.76f, 0.82f, 1f);
     private static readonly Color GaugeDim = new Color(0.42f, 0.48f, 0.56f, 1f);

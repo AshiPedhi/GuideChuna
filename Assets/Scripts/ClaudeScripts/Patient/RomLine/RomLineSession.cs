@@ -61,7 +61,7 @@ public enum RomLinePoint
 ///   컨트롤러에 없는 일(끝점 보정 · 기준선 바꾸기 · 나가기)은 모니터(브라우저)의 버튼으로만 한다. 자유 측정의 동작 갈래는 탭 창을 닫은 채 스틱 좌우다.
 ///
 /// ★★10-13 사용자 지시로 자유 측정을 다시 짰다 — 동작(굴곡·신전 / 측굴 / 회전)을 가르지 않고 <b>찍은 점들이 이루는 각 그대로</b>(3차원)를 낸다.
-///   방식 셋: 3점 측정 · 4점 측정 · 연속 측정(스틱 좌우로 바꾼다). 뜻은 아래 «자유 측정» 블록의 주석에 있다. 면에 내린 값 · 기준선 바꾸기 · «다른 동작으로 보임» 알림은 없앴다.
+///   방식 셋: 3점 측정 · 2선 측정(10-14까지 «4점 측정») · 연속 측정(스틱 좌우로 바꾼다). 뜻은 아래 «자유 측정» 블록의 주석에 있다. 면에 내린 값 · 기준선 바꾸기 · «다른 동작으로 보임» 알림은 없앴다.
 ///   아래 10-07 ~ 10-08의 설명은 그 전 구조다(지금 코드와 다르다).
 /// (옛 구조) 자유 측정(10-07): 기준점도 정해진 순서도 없다. 두 점마다 선 하나, 개수 제한 없이 찍는다.
 ///   동작마다 갈래(탭)를 나눈다 — 굴곡·신전 / 측굴 / 회전. 갈래마다 점을 따로 모으고, 처음 찍은 선이 <b>기준선</b>이다.
@@ -98,7 +98,7 @@ public class RomLineSession : MonoBehaviour
     //   탭 번호(top): 0 홈 · 1~3 순서 측정(CurTab + 1) · 4 자유 측정.
     private static readonly string[] TopTabName = { "홈", "굴곡·신전", "측굴", "회전" };
     private static readonly string[] GuidedTabName = { "굴곡·신전", "측굴", "회전" };   // CurTab(0~2)으로 찾는다
-    private static readonly string[] FreeTopName = { "3점 측정", "4점 측정", "연속 측정" };
+    private static readonly string[] FreeTopName = { "3점", "2선", "연속" };   // ★10-14 사용자 지시: «측정»은 공통이라 뺀다
     private static readonly string[] PhaseHint = { "환자 정면을 바닥 화살표에 맞추세요 · 정면을 본 편안한 자세", "환자가 스스로 끝까지 움직인 자세", "측정자가 같은 방향으로 조금 더 눌러 준 자세" };
     private static readonly string[] PhaseName = { "중립", "능동", "압박" };
 
@@ -157,7 +157,7 @@ public class RomLineSession : MonoBehaviour
 
     // 자유 측정(10-07) — 두 점마다 선 하나, 개수 제한 없음
     private bool freeMode;
-    private int freeTab;                // 자유 측정의 방식(10-13): 0 = 3점 측정 · 1 = 4점 측정 · 2 = 연속 측정 — 방식마다 점을 따로 모은다
+    private int freeTab;                // 자유 측정의 방식(10-13): 0 = 3점 측정 · 1 = 2선 측정(종전 «4점» — 10-14 개명) · 2 = 연속 측정 — 방식마다 점을 따로 모은다
     private readonly List<Vector3>[] freePts = { new List<Vector3>(64), new List<Vector3>(64), new List<Vector3>(64) };
     private readonly List<Vector3> freeAngleAt = new List<Vector3>(32);    // 공간에 띄울 각 글자의 자리와 글 — 상태가 바뀔 때만 다시 만든다
     private readonly List<string> freeAngleText = new List<string>(32);
@@ -182,7 +182,7 @@ public class RomLineSession : MonoBehaviour
     private float armedTime = -10f;
     private const float ConfirmGuard = 0.5f;          // 마지막 점을 찍은 뒤 이만큼은 확인(트리거)을 받지 않는다 — 한 번 당긴 것이 두 번으로 읽혀 바로 기록되지 않게
     private float waitSince = -10f;                   // 확인을 기다리기 시작한 때
-    private readonly int[] freeConfirmed = new int[3];   // 자유 측정 — 방식마다 확인(기록)한 측정의 수(3점 · 4점만 쓴다)
+    private readonly int[] freeConfirmed = new int[3];   // 자유 측정 — 방식마다 확인(기록)한 측정의 수(3점 · 2선만 쓴다)
     private Vector3 armedCtrlPos, markCtrlPos;                              // 찍는 순간의 컨트롤러 자세 — 로그에 남겨, 나중에 끝점을 바꿔 다시 계산해 볼 수 있게
     private Quaternion armedCtrlRot = Quaternion.identity, markCtrlRot = Quaternion.identity;
 
@@ -628,7 +628,7 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── B/Y ── 홈에서는 자유 측정의 방식 바꾸기(3점 → 4점 → 연속 — 탭 이름이 따라 바뀐다, 10-14). 측정 탭에서는 취소 · 지우기
+        // ── B/Y ── 홈에서는 자유 측정의 방식 바꾸기(3점 → 2선 → 연속 — 탭 이름이 따라 바뀐다, 10-14). 측정 탭에서는 취소 · 지우기
         if (undoTap || undoLong)
         {
             if (resetAsk)
@@ -1146,14 +1146,14 @@ public class RomLineSession : MonoBehaviour
     //   ★10-13 사용자 지시: 동작(굴곡·신전 / 측굴 / 회전)을 가르지 않는다 — 면에 내리지 않고 <b>찍은 점들이 이루는 각 그대로</b>(3차원)를 낸다.
     //     3점 측정 = 세 점을 이어 찍는다. 가운데 점(2)에서 선 1-2와 선 2-3이 벌어진 각. 처음 찍은 묶음이 기준이고,
     //                그 뒤 묶음은 기준과 견준 값 셋을 함께 낸다: 선 1-2가 돈 각 · 선 2-3이 돈 각 · 벌어진 각의 차(지금 − 기준).
-    //     4점 측정 = 두 점씩 선 둘(1-2 · 3-4). 두 선의 방향이 이루는 각.
+    //     2선 측정(10-14까지 «4점») = 두 점씩 선 둘(1-2 · 3-4). 두 선의 방향이 이루는 각.
     //     연속 측정 = 점을 이어 가며 찍는다. 셋째 점부터, 앞 꼭짓점에서 꺾인 각(앞 선과 새 선이 그 점에서 벌어진 각)이 하나씩 나온다.
-    private static readonly string[] FreeTabName = { "3점", "4점", "연속" };   // «자유 측정»은 앞에 따로 붙는다(10-13)
+    private static readonly string[] FreeTabName = { "3점", "2선", "연속" };   // «자유 측정»은 앞에 따로 붙는다(10-13)
     private static readonly int[] FreeSetSize = { 3, 4, 0 };   // 한 묶음의 점 수. 0 = 묶음 없이 이어서
     private static readonly string[] FreePlaneName = { "옆면", "앞면", "바닥면" };   // 순서 측정의 모니터 · CSV가 쓴다(자유 측정은 면을 쓰지 않는다)
 
     private List<Vector3> FreePts => freePts[freeTab];
-    /// <summary>자유 측정(3점 · 4점)에서 묶음을 다 찍고 확인(트리거)을 기다리는 중인가. 연속 측정은 확인 없이 바로 기록한다.</summary>
+    /// <summary>자유 측정(3점 · 2선)에서 묶음을 다 찍고 확인(트리거)을 기다리는 중인가. 연속 측정은 확인 없이 바로 기록한다.</summary>
     private bool FreeWait => FreeSetSize[freeTab] > 0 && FreeCount() > freeConfirmed[freeTab];
 
 
@@ -1238,7 +1238,7 @@ public class RomLineSession : MonoBehaviour
     /// <summary>가운데 점 b에서 선 b-a와 선 b-c가 벌어진 각(도, 0 ~ 180). 한 줄로 곧게 찍으면 180이다.</summary>
     private static float Corner(Vector3 a, Vector3 b, Vector3 c) => Vector3.Angle(a - b, c - b);
 
-    /// <summary>지금 방식에서 나온 측정의 수 — 3점 · 4점은 다 찍은 묶음, 연속은 꼭짓점(셋째 점부터 하나씩).</summary>
+    /// <summary>지금 방식에서 나온 측정의 수 — 3점 · 2선은 다 찍은 묶음, 연속은 꼭짓점(셋째 점부터 하나씩).</summary>
     private int FreeCount()
     {
         int n = FreePts.Count, size = FreeSetSize[freeTab];
@@ -1295,7 +1295,7 @@ public class RomLineSession : MonoBehaviour
         if (FreeCount() > before)
         {
             LogFree(before);
-            if (size > 0) waitSince = Time.unscaledTime;   // 3점 · 4점 — 확인(트리거)을 받아야 기록한다
+            if (size > 0) waitSince = Time.unscaledTime;   // 3점 · 2선 — 확인(트리거)을 받아야 기록한다
             else CsvAdd("측정", before);
         }
         noteText = "";
@@ -1304,7 +1304,7 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
-    /// <summary>자유 측정(3점 · 4점)의 확인 — 다 찍은 묶음을 기록한다(화면의 결과 줄 · CSV).</summary>
+    /// <summary>자유 측정(3점 · 2선)의 확인 — 다 찍은 묶음을 기록한다(화면의 결과 줄 · CSV).</summary>
     private void FreeConfirm()
     {
         int k = freeConfirmed[freeTab];
@@ -1385,7 +1385,7 @@ public class RomLineSession : MonoBehaviour
 
         string note = noteText;   // 아랫줄은 알림이 있을 때만(10-13)
         // ★10-13 사용자 지시: «점 1/3»은 찍은 수인지 찍을 차례인지 헷갈린다 → «1번째 점을 찍으세요»로 적는다.
-        //   3점 · 4점은 묶음을 다 찍으면 안내에 각을 띄우고 확인(트리거)을 기다린다 — 확인해야 화면의 결과 줄에 오른다.
+        //   3점 · 2선은 묶음을 다 찍으면 안내에 각을 띄우고 확인(트리거)을 기다린다 — 확인해야 화면의 결과 줄에 오른다.
         bool wait = FreeWait;
         int shown = size > 0 ? Mathf.Min(count, freeConfirmed[freeTab]) : count;   // 화면의 결과 줄에 올릴 측정의 수
         string step = (size > 0 ? pts.Count % size + 1 : pts.Count + 1) + "번째 점";   // 컨트롤러 끝의 이름표 · 모니터용
@@ -1404,7 +1404,10 @@ public class RomLineSession : MonoBehaviour
         {
             instruction = FreeTabName[freeTab] + " — " + step + "을 찍으세요";
             // ★10-13 오후 사용자 지시: 안내 글은 최대한 줄인다 — 찍을 점만큼 빈 동그라미를 놓고 찍을 때마다 하나씩 채운다. 연속은 묶음이 없어 찍은 수만 적는다.
-            guideLine = FreeTabName[freeTab] + "  <color=#FFF233>" + (size > 0 ? Dots(pts.Count % size, size) : "● " + pts.Count) + "</color>";
+            //   ★10-14 사용자 지시: 2선 측정은 선마다 동그라미를 띄어 나눈다(«●● ●○») — 두 점씩 선 둘이라는 것이 보이게.
+            string dots = freeTab == 1 ? Dots(Mathf.Min(pts.Count % size, 2), 2) + " " + Dots(Mathf.Max(0, pts.Count % size - 2), 2)
+                        : size > 0 ? Dots(pts.Count % size, size) : "● " + pts.Count;
+            guideLine = FreeTabName[freeTab] + "  <color=#FFF233>" + dots + "</color>";
         }
         view.SetTip(wait ? "" : step);
         view.SetGuide(guideLine, guideNote);
@@ -1443,7 +1446,7 @@ public class RomLineSession : MonoBehaviour
         for (int row = Mathf.Max(0, shown - firstRow); row < RomLineFreeView.Rows; row++) freeView.SetRow(row, "", "", "", "", false);
         freeView.SetAngles(freeAngleAt, freeAngleText);
 
-        // 모니터로 내보낼 상태 — 선마다 한 줄. 그 선에서 각이 하나 완성되면(3점의 둘째 선 · 4점의 둘째 선 · 연속의 둘째 선부터) 그 값을 함께 싣는다.
+        // 모니터로 내보낼 상태 — 선마다 한 줄. 그 선에서 각이 하나 완성되면(3점의 둘째 선 · 2선의 둘째 선 · 연속의 둘째 선부터) 그 값을 함께 싣는다.
         StringBuilder js = monitorSb;
         js.Length = 0;
         js.Append("\"mode\":\"free\",\"top\":4,\"tab\":").Append(freeTab);
@@ -1959,7 +1962,7 @@ public class RomLineSession : MonoBehaviour
     {
         js.Append(",\"topTabs\":[");
         for (int i = 0; i < RomLineView.PopupTabs; i++) { if (i > 0) js.Append(','); JsonStr(js, TopName(i)); }
-        return js.Append("],\"tabs\":[\"3점 측정\",\"4점 측정\",\"연속 측정\"],\"counts\":[")
+        return js.Append("],\"tabs\":[\"3점\",\"2선\",\"연속\"],\"counts\":[")
                  .Append(freePts[0].Count).Append(',').Append(freePts[1].Count).Append(',').Append(freePts[2].Count).Append(']');
     }
 
