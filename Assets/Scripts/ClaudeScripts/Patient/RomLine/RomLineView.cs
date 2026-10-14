@@ -382,7 +382,7 @@ public class RomLineView
         resetCard.localPosition = new Vector3(0f, -0.018f, 0f);   // 탭 줄보다 키가 커서 아래로 조금 내려 덮는다
         MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.56f, 0.116f), ResetColor, 4);
         MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.19f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.026f, -0.008f);
-        MakeText(resetCard, "A = 지우기          B = 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
+        MakeText(resetCard, "A : 지우기          B : 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
         resetCard.gameObject.SetActive(false);
     }
 

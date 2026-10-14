@@ -52,7 +52,7 @@ public enum RomLinePoint
 /// ★★10-12 저녁 사용자 지시 — 화면과 조작을 다시 짰다(위 «10-12» 문단의 «진행 정보 · 스틱으로 단계 옮기기 · 이 동작 다시»를 대신한다):
 ///   <b>메인 화면</b>은 크고 넓게, 뒤쪽 멀리 세운다(결과표 — 굴곡 | 신전 / 우측굴 | 좌측굴 / 우회전 | 좌회전). 누르는 버튼은 화면에 없다.
 ///   <b>탭 창</b>은 메인 화면 아래에 따로 뜬다 — 탭 다섯: 굴곡 · 신전 / 측굴 / 회전 / 리셋 / 자유 측정.
-///   A/X = 탭 창 여닫기. 띄운 채 스틱 좌우로 탭을 옮기면 <b>옮기는 대로</b> 그 탭이 된다. «리셋»만 A로 골라야 하고 확인 창이 한 번 더 뜬다(A = 지우기 · B = 취소).
+///   A/X = 탭 창 여닫기. 띄운 채 스틱 좌우로 탭을 옮기면 <b>옮기는 대로</b> 그 탭이 된다. «리셋»만 A로 골라야 하고 확인 창이 한 번 더 뜬다(A : 지우기 · B : 취소).
 ///   ★탭을 <b>재는 중</b>(점이 하나라도 찍혔고 아직 다 재지 않았다)이면 스틱을 밀어도 탭이 바뀌지 않는다. 그만두려면 B/Y 길게로 그 탭을 지운다.
 ///   ★동작 하나(중립 · 능동 · 압박 세 직선)를 다 찍으면 <b>멈춘다</b>. A/X(확인)를 눌러야 다음 동작으로 넘어간다 — 신전을 확인하면 측굴이 저절로 시작된다.
 ///   지우기 셋: B/Y 짧게 = <b>직선 하나</b>(찍다 만 점이 있으면 그 점) · B/Y 1초 길게 = <b>지금 탭 전체</b> · 탭 창의 «리셋» = <b>전체 측정 결과</b>.
@@ -202,7 +202,7 @@ public class RomLineSession : MonoBehaviour
     private bool axesAsk;                 // «축 다시 잡기»를 불렀다(스틱 누름) — 스틱을 밀면 잡는다
     private float axesAskStart;
     private const float AxesAskSeconds = 8f;
-    private float undoHoldStart = -1f;    // B/Y — 짧게 = 직선 취소(뗄 때), 길게 = 이 탭 지우기
+    private float undoHoldStart = -1f;    // B/Y — 짧게 : 직선 취소(뗄 때), 길게 : 이 탭 지우기
     private bool undoHoldFired;
     private const float ResetHoldSeconds = 1.0f;
 
@@ -585,7 +585,7 @@ public class RomLineSession : MonoBehaviour
             stickReady = false;          // 누르면서 밀린 스틱이 그대로 «밀기»로 읽히지 않게 — 가운데로 돌아온 뒤에 듣는다
             return;
         }
-        // ── 끝점 보정(10-14 사용자 지시: 컨트롤러로 바로) — 홈에서 트리거 = 시작, 보정 중 트리거 = 끝(스틱 누르기로도 끝난다) ──
+        // ── 끝점 보정(10-14 사용자 지시: 컨트롤러로 바로) — 홈에서 트리거 : 시작, 보정 중 트리거 : 끝(스틱 누르기로도 끝난다) ──
         if (calibrating)
         {
             if (triggerDown) EndCalibration("트리거");
@@ -609,7 +609,7 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── A/X — ★10-14 사용자 지시: 탭 창(A로 여닫기)을 없앴다. A는 홈에서만 «리셋»이다(확인 창 → A = 지우기 · B = 취소). 측정 확인은 트리거(10-13, Mark) ──
+        // ── A/X — ★10-14 사용자 지시: 탭 창(A로 여닫기)을 없앴다. A는 홈에서만 «리셋»이다(확인 창 → A : 지우기 · B : 취소). 측정 확인은 트리거(10-13, Mark) ──
         if (aDown)
         {
             if (resetAsk)
@@ -620,11 +620,11 @@ public class RomLineSession : MonoBehaviour
             else if (home)
             {
                 resetAsk = true;
-                Debug.Log("[선실측] 리셋 확인 창 — A = 지우기 · B = 취소");
+                Debug.Log("[선실측] 리셋 확인 창 — A : 지우기 · B : 취소");
                 Play(sndPress);
                 dirty = true;
             }
-            else Deny("A = 리셋은 홈에서만 — 스틱 좌우로 홈으로 가세요");
+            else Deny("A : 리셋은 홈에서만 — 스틱 좌우로 홈으로 가세요");
             return;
         }
 
@@ -695,7 +695,7 @@ public class RomLineSession : MonoBehaviour
         }
         if (Time.unscaledTime < calibNextText) return;
         calibNextText = Time.unscaledTime + 0.5f;   // 글자는 0.5초에 한 번만 바꾼다
-        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 = 끝";
+        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 : 끝";
         dirty = true;
     }
 
@@ -859,7 +859,7 @@ public class RomLineSession : MonoBehaviour
             confirmWait = true;
             waitSince = Time.unscaledTime;
             Play(sndDone);
-            Debug.Log($"[선실측] 확인 대기 — {MotionName[MotionOf(group)]}의 세 직선을 다 찍었다 · 트리거 = 확인(기록) → {NextName(MotionOf(group))}");
+            Debug.Log($"[선실측] 확인 대기 — {MotionName[MotionOf(group)]}의 세 직선을 다 찍었다 · 트리거 : 확인(기록) → {NextName(MotionOf(group))}");
         }
         else group++;
     }
@@ -1036,7 +1036,7 @@ public class RomLineSession : MonoBehaviour
         dirty = true;
     }
 
-    private string LockText() => $"{GuidedTabName[CurTab]} 탭을 재는 중이다 — 다 잰 뒤에 옮긴다(그만두려면 B 길게 = 이 탭 지우기)";
+    private string LockText() => $"{GuidedTabName[CurTab]} 탭을 재는 중이다 — 다 잰 뒤에 옮긴다(그만두려면 B 길게 : 이 탭 지우기)";
 
     /// <summary>탭을 옮긴다 — top 0 홈 · 1 굴곡·신전 · 2 측굴 · 3 회전 · 4 자유 측정(10-14). 재는 중인 탭이 있으면 받지 않는다(false).</summary>
     private bool GoTab(int top, string why)
@@ -1396,9 +1396,9 @@ public class RomLineSession : MonoBehaviour
             // 기준 = 첫 묶음과의 각의 차 · 이전 = 바로 앞 묶음과의 각의 차(10-14 · 셋째 묶음부터)
             string v = "각 " + wa.ToString("F1") + "°", vd = wc ? "기준 " + wd.ToString("+0.0;-0.0") + "°" : "";
             if (FreePrevDiff(count - 1, out float wp)) vd += " · 이전 " + wp.ToString("+0.0;-0.0") + "°";
-            instruction = FreeTabName[freeTab] + " — " + v + (wc ? " · 차 " + vd : "") + " · 트리거 = 확인";
+            instruction = FreeTabName[freeTab] + " — " + v + (wc ? " · 차 " + vd : "") + " · 트리거 : 확인";
             guideLine = FreeTabName[freeTab] + "\n<color=#73E68C>" + v + "</color>" + (wc ? "\n" + vd : "");   // 안내는 폭이 좁다 — 줄을 나눈다
-            if (guideNote.Length == 0) guideNote = "트리거 = 기록";
+            if (guideNote.Length == 0) guideNote = "트리거 : 기록";
         }
         else
         {
@@ -1724,24 +1724,24 @@ public class RomLineSession : MonoBehaviour
             // ★10-14 사용자 지시: 홈의 안내 = 버튼 둘. B로 바꾼 자유 측정의 방식은 탭 이름(맨 끝 탭)이 보여 준다.
             if (resetAsk)
             {
-                forMonitor = instruction = "전체 측정 결과를 지울까요? — A = 지우기 · B = 취소";
+                forMonitor = instruction = "전체 측정 결과를 지울까요? — A : 지우기 · B : 취소";
                 guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\n" + SubInfo + "A : 지우기   B : 취소</size>";
             }
             else if (calibrating)
             {
-                forMonitor = instruction = "끝점 보정 중 — 트리거 = 끝";
+                forMonitor = instruction = "끝점 보정 중 — 트리거 : 끝";
                 guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
             }
             else if (Done)
             {
                 // ★10-14 사용자 지시: 여섯 동작을 다 재고 홈으로 돌아와도 기록을 보여야 한다 — 여섯 줄(결과표 순서: 좌 → 우)이 주 정보, 조작 설명은 서브(작게).
-                forMonitor = instruction = "모든 측정 완료 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
+                forMonitor = instruction = "모든 측정 완료 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 : 탭 고르기";
                 guide = "<color=#73E68C>측정 완료</color>\n" + RecordLine(0) + "\n" + RecordLine(1) + "\n" + RecordLine(3) + "\n" + RecordLine(2) + "\n"
                       + RecordLine(5) + "\n" + RecordLine(4) + "\n" + SubInfo + "A : 리셋   B : 자유측정 모드변경   트리거 : 끝점 보정</size>";
             }
             else
             {
-                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
+                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 : 탭 고르기";
                 guide = "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";   // 전부 같은 종류(조작)라 줄이지 않는다
             }
         }
@@ -1755,9 +1755,9 @@ public class RomLineSession : MonoBehaviour
             // 동작 하나를 다 찍었다 — 확인을 기다린다
             string av = results[cm * 2].valid ? results[cm * 2].angle.ToString("F1") + "°" : "—";
             string pv = results[cm * 2 + 1].valid ? results[cm * 2 + 1].angle.ToString("F1") + "°" : "—";
-            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 = 확인";
+            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 : 확인";
             guide = $"<color=#73E68C>{MotionName[cm]}</color>\n능동 {av}\n압박 {pv}";   // 안내는 폭이 좁다 — 줄을 나눈다
-            if (guideNote.Length == 0) guideNote = "트리거 = 기록";
+            if (guideNote.Length == 0) guideNote = "트리거 : 기록";
         }
         else if (TabComplete(tab))
         {
@@ -1800,6 +1800,7 @@ public class RomLineSession : MonoBehaviour
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.
         int motion = group == 0 || home ? -1 : MotionOf(Mathf.Min(group, GroupCount - 1));   // 홈에서는 공간에 아무것도 그리지 않는다(10-14)
+        if (motion >= 0 && confirmed[motion]) motion = -1;   // ★10-14 사용자 지시: 측정을 마친(확인한) 동작의 선 · 점은 공간에서 싹 지운다(다 잰 탭에 남던 마지막 동작의 선)
         for (int i = 0; i < PointCount; i++)
         {
             bool show = has[i] && (i < 2 || (i - 2) / 6 == motion);
