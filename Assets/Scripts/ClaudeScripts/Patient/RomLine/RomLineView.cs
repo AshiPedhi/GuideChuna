@@ -188,30 +188,34 @@ public class RomLineView
         //   윗줄 = 지금 할 일 한 문장(«굴곡 · 중립을 측정하세요» · «굴곡 측정 완료 …») · 아랫줄 = 알림이 있을 때만.
         guide = new GameObject("안내").transform;
         guide.SetParent(root, false);
-        const float t = 0.0015f;   // 테두리 굵기
-        MakeQuad(guide, "테두리 위", new Vector2(0f, GuideH * 0.5f), new Vector2(GuideW, t), GuideBorder, 0);
-        MakeQuad(guide, "테두리 아래", new Vector2(0f, -GuideH * 0.5f), new Vector2(GuideW, t), GuideBorder, 0);
-        MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
-        MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(t, GuideH), GuideBorder, 0);
-        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), new Vector2(0f, 0.014f), GuideW - 0.02f);
-        guideLine.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, 0.08f);   // 세 줄까지(동작 · 능동 값 · 압박 값)
-        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Top, 3), new Vector2(0f, -0.058f), GuideW - 0.02f);
-        guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, 0.04f);   // 윗변이 테두리 안 맨 아래 줄 — 긴 알림은 줄을 바꿔 테두리 아래로 흘린다
+        // ★10-14 사용자 지시: 빈 공간이 많다 → 테두리 높이를 <b>글 높이에 맞춘다</b>(SetGuide가 글이 바뀔 때마다 다시 잰다 · LayoutGuide).
+        //   긴 알림도 이제 테두리 밖으로 흐르지 않고 테두리가 늘어난다.
+        borderTop = MakeQuad(guide, "테두리 위", Vector2.zero, new Vector2(GuideW, GuideBorderT), GuideBorder, 0);
+        borderBottom = MakeQuad(guide, "테두리 아래", Vector2.zero, new Vector2(GuideW, GuideBorderT), GuideBorder, 0);
+        borderLeft = MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
+        borderRight = MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
+        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
+        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
         guideNote.textWrappingMode = TextWrappingModes.Normal;
         guideNote.color = NoteColor;
         // 바탕이 없어 밝은 배경(패스스루)에서 글자가 묻힌다 — 검은 외곽선을 두른다
         guideLine.outlineColor = guideNote.outlineColor = new Color32(0, 0, 0, 255);
         guideLine.outlineWidth = guideNote.outlineWidth = 0.22f;
 
-        // 탭 줄의 복제(10-14 사용자 지시) — 안내 테두리 바로 위. 메인 화면 아래의 탭 줄과 같은 이름 · 같은 색 규칙이다(SetTab이 둘을 같이 칠한다).
-        float nearY = GuideH * 0.5f + 0.004f + NearTabH * 0.5f;
+        // 탭 줄의 복제(10-14 사용자 지시) — 안내 테두리 바로 위, <b>테두리 폭에 맞춘다</b>.
+        //   ★같은 날 사용자 지시: 메인 화면의 탭(칸 바탕)을 그대로 옮긴 첫 판은 너무 튀었다 → 바탕 없이 글자만, 지금 탭만 밝은 글자 + 밑줄.
+        float cellW = (GuideW - NearTabGap * (PopupTabs - 1)) / PopupTabs;
         for (int i = 0; i < PopupTabs; i++)
         {
-            var c = new Vector2((i - 2f) * (NearTabW + 0.004f), nearY);
-            nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(NearTabW, NearTabH), TabOff, 1).GetComponent<Renderer>();
-            nearTabTexts[i] = Place(MakeText(guide, "", 0.075f, TextAlignmentOptions.Center, 3), c, NearTabW);
-            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(NearTabW, NearTabH);
+            var c = new Vector2((i - 2f) * (cellW + NearTabGap), 0f);
+            nearTabTexts[i] = Place(MakeText(guide, "", 0.068f, TextAlignmentOptions.Center, 3), c, cellW);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
+            nearTabTexts[i].outlineColor = new Color32(0, 0, 0, 255);
+            nearTabTexts[i].outlineWidth = 0.2f;
+            nearTabLines[i] = MakeQuad(guide, "탭 밑줄 " + i, c, new Vector2(cellW * 0.7f, 0.0015f), NearTabLine, 1);
+            nearTabLines[i].gameObject.SetActive(false);
         }
+        LayoutGuide(0f, 0f);
         guide.gameObject.SetActive(false);
 
         // 맨 아래 한 줄 — 모니터 화면의 주소
@@ -231,8 +235,11 @@ public class RomLineView
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
-    private const float NearTabW = 0.056f, NearTabH = 0.024f; // 안내 위 탭 줄의 칸(실제 크기 m, 10-14) — 다섯 칸이 안내 테두리(0.24)보다 조금 넓다
-    private const float GuideW = 0.24f, GuideH = 0.12f;      // 안내 테두리의 실제 크기(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 글은 줄을 나눠 넣는다
+    private const float NearTabH = 0.020f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
+    private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · 테두리 굵기(10-14)
+    private static readonly Color NearTabIdle = new Color(0.78f, 0.82f, 0.88f, 0.75f);   // 안내 위 탭 — 지금 탭이 아닌 것(흐린 글자, 바탕 없음)
+    private static readonly Color NearTabLine = new Color(1f, 1f, 1f, 0.85f);            // 지금 탭의 밑줄
+    private const float GuideW = 0.24f;                       // 안내 테두리의 폭(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 높이는 10-14부터 글에 맞춘다(LayoutGuide)
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
@@ -258,8 +265,10 @@ public class RomLineView
     private float guideDistance, guideDrop, guideRise;
     private bool guideSnapped;
     private TextMeshPro guideLine, guideNote, wideLine, wideNote;
-    private readonly Renderer[] nearTabPlates = new Renderer[PopupTabs];
+    private readonly Transform[] nearTabLines = new Transform[PopupTabs];
     private readonly TextMeshPro[] nearTabTexts = new TextMeshPro[PopupTabs];
+    private Transform borderTop, borderBottom, borderLeft, borderRight;
+    private float guideH = GuideMinH;        // 지금 안내 테두리의 높이(글에 맞춘다 — LayoutGuide)
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
     private readonly LineRenderer[] gaugeArcs = new LineRenderer[6];     // 0° 선에서 능동 선까지의 호
@@ -391,10 +400,41 @@ public class RomLineView
     /// </summary>
     public void SetTab(int i, string label, bool current, bool dim)
     {
-        Color text = dim ? GaugeDim : current ? TipColor : Color.white, plate = current ? TabOn : TabOff;
-        popupTabTexts[i].text = nearTabTexts[i].text = label;
-        popupTabTexts[i].color = nearTabTexts[i].color = text;
-        popupTabPlates[i].material.color = nearTabPlates[i].material.color = plate;
+        popupTabTexts[i].text = label;
+        popupTabTexts[i].color = dim ? GaugeDim : current ? TipColor : Color.white;
+        popupTabPlates[i].material.color = current ? TabOn : TabOff;
+
+        // 안내 위 탭 — 바탕 없이 글자만. 지금 탭 = 흰 굵은 글자 + 밑줄 · 나머지 = 흐린 글자. 칸이 좁아 « · » 둘레의 띄어쓰기를 붙인다(글이 바뀔 때만 불린다).
+        nearTabTexts[i].text = label.Replace(" · ", "·");
+        nearTabTexts[i].color = dim ? GaugeDim : current ? Color.white : NearTabIdle;
+        nearTabTexts[i].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+        if (nearTabLines[i].gameObject.activeSelf != current) nearTabLines[i].gameObject.SetActive(current);
+    }
+
+    /// <summary>
+    /// 안내 테두리를 글 높이에 맞춘다(10-14). lineH · noteH = 두 줄의 글 높이(없으면 0). 윗줄은 위에서부터, 알림은 그 아래에 놓는다.
+    /// 탭 줄은 테두리 윗변 바로 위다. 글이 바뀔 때만 불린다.
+    /// </summary>
+    private void LayoutGuide(float lineH, float noteH)
+    {
+        float inner = lineH + (noteH > 0f ? GuideNoteGap + noteH : 0f);
+        guideH = Mathf.Max(GuideMinH, inner + GuidePad * 2f);
+        float top = guideH * 0.5f, y = top - (guideH - inner) * 0.5f;   // 글 묶음을 테두리 가운데에
+        guideLine.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, Mathf.Max(lineH, 0.001f));
+        guideLine.transform.localPosition = new Vector3(0f, y - lineH * 0.5f, -0.004f);
+        guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, Mathf.Max(noteH, 0.001f));
+        guideNote.transform.localPosition = new Vector3(0f, y - lineH - GuideNoteGap - noteH * 0.5f, -0.004f);
+
+        borderTop.localPosition = new Vector3(0f, top, borderTop.localPosition.z);
+        borderBottom.localPosition = new Vector3(0f, -top, borderBottom.localPosition.z);
+        borderLeft.localScale = borderRight.localScale = new Vector3(GuideBorderT, guideH, 1f);
+        float tabY = top + 0.003f + NearTabH * 0.5f;
+        for (int i = 0; i < PopupTabs; i++)
+        {
+            Vector3 p = nearTabTexts[i].transform.localPosition;
+            nearTabTexts[i].transform.localPosition = new Vector3(p.x, tabY, p.z);
+            nearTabLines[i].localPosition = new Vector3(p.x, tabY - NearTabH * 0.5f, nearTabLines[i].localPosition.z);
+        }
     }
 
     /// <summary>리셋 확인 창(«전체 측정 결과를 지울까요?»)을 탭 창 위에 덮어 띄운다 / 내린다.</summary>
@@ -456,6 +496,9 @@ public class RomLineView
     {
         guideLine.text = line;
         guideNote.text = noteText;
+        float w = GuideW - 0.02f;
+        LayoutGuide(line.Length > 0 ? guideLine.GetPreferredValues(line, w, 0f).y : 0f,
+                    noteText.Length > 0 ? guideNote.GetPreferredValues(noteText, w, 0f).y : 0f);
         wideLine.text = line.Replace("\n", "     ");
         wideNote.text = noteText;
     }
@@ -631,7 +674,7 @@ public class RomLineView
             if (tipValid)
             {
                 scale = Mathf.Clamp(Vector3.Distance(eye.position, tipPos) / guideDistance, 0.35f, 1.2f);
-                target = tipPos + eye.up * (guideRise + GuideH * 0.5f * scale);
+                target = tipPos + eye.up * (guideRise + guideH * 0.5f * scale);
             }
             else target = eye.position + eye.forward * guideDistance - eye.up * guideDrop;
             float f = guideSnapped ? 1f - Mathf.Exp(-GuideFollow * Time.unscaledDeltaTime) : 1f;
