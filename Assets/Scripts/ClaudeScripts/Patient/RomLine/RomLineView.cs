@@ -208,11 +208,13 @@ public class RomLineView
         for (int i = 0; i < PopupTabs; i++)
         {
             var c = new Vector2((i - 2f) * (cellW + NearTabGap), 0f);
-            nearTabTexts[i] = Place(MakeText(guide, "", 0.068f, TextAlignmentOptions.Center, 3), c, cellW);
+            nearTabTexts[i] = Place(MakeText(guide, "", 0.076f, TextAlignmentOptions.Center, 3), c, cellW);
             nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
             nearTabTexts[i].outlineColor = new Color32(0, 0, 0, 255);
             nearTabTexts[i].outlineWidth = 0.2f;
-            nearTabLines[i] = MakeQuad(guide, "탭 밑줄 " + i, c, new Vector2(cellW * 0.7f, 0.0015f), NearTabLine, 1);
+            nearTabBgs[i] = MakeQuad(guide, "탭 바탕 " + i, c, new Vector2(cellW, NearTabH), NearTabBg, 1);   // 지금 탭만 켠다 — 옅은 바탕으로 «여기»를 보인다
+            nearTabBgs[i].gameObject.SetActive(false);
+            nearTabLines[i] = MakeQuad(guide, "탭 밑줄 " + i, c, new Vector2(cellW * 0.8f, 0.0025f), NearTabLine, 2);
             nearTabLines[i].gameObject.SetActive(false);
         }
         LayoutGuide(0f, 0f);
@@ -235,10 +237,11 @@ public class RomLineView
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
-    private const float NearTabH = 0.020f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
+    private const float NearTabH = 0.022f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
     private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · 테두리 굵기(10-14)
-    private static readonly Color NearTabIdle = new Color(0.78f, 0.82f, 0.88f, 0.75f);   // 안내 위 탭 — 지금 탭이 아닌 것(흐린 글자, 바탕 없음)
-    private static readonly Color NearTabLine = new Color(1f, 1f, 1f, 0.85f);            // 지금 탭의 밑줄
+    private static readonly Color NearTabIdle = new Color(0.88f, 0.91f, 0.95f, 0.92f);   // 안내 위 탭 — 지금 탭이 아닌 것(바탕 없음). ★10-14: 0.75 알파는 눈에 안 들어온다는 지적으로 밝혔다
+    private static readonly Color NearTabLine = new Color(1f, 0.95f, 0.2f, 1f);           // 지금 탭의 밑줄 — 메인 화면 탭 줄의 «지금 탭» 글자색(TipColor)과 같은 노랑
+    private static readonly Color NearTabBg = new Color(1f, 1f, 1f, 0.16f);              // 지금 탭의 옅은 바탕
     private const float GuideW = 0.24f;                       // 안내 테두리의 폭(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 높이는 10-14부터 글에 맞춘다(LayoutGuide)
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
@@ -265,7 +268,7 @@ public class RomLineView
     private float guideDistance, guideDrop, guideRise;
     private bool guideSnapped;
     private TextMeshPro guideLine, guideNote, wideLine, wideNote;
-    private readonly Transform[] nearTabLines = new Transform[PopupTabs];
+    private readonly Transform[] nearTabLines = new Transform[PopupTabs], nearTabBgs = new Transform[PopupTabs];
     private readonly TextMeshPro[] nearTabTexts = new TextMeshPro[PopupTabs];
     private Transform borderTop, borderBottom, borderLeft, borderRight;
     private float guideH = GuideMinH;        // 지금 안내 테두리의 높이(글에 맞춘다 — LayoutGuide)
@@ -409,6 +412,7 @@ public class RomLineView
         nearTabTexts[i].color = dim ? GaugeDim : current ? Color.white : NearTabIdle;
         nearTabTexts[i].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
         if (nearTabLines[i].gameObject.activeSelf != current) nearTabLines[i].gameObject.SetActive(current);
+        if (nearTabBgs[i].gameObject.activeSelf != current) nearTabBgs[i].gameObject.SetActive(current);
     }
 
     /// <summary>
@@ -434,6 +438,7 @@ public class RomLineView
             Vector3 p = nearTabTexts[i].transform.localPosition;
             nearTabTexts[i].transform.localPosition = new Vector3(p.x, tabY, p.z);
             nearTabLines[i].localPosition = new Vector3(p.x, tabY - NearTabH * 0.5f, nearTabLines[i].localPosition.z);
+            nearTabBgs[i].localPosition = new Vector3(p.x, tabY, nearTabBgs[i].localPosition.z);
         }
     }
 
