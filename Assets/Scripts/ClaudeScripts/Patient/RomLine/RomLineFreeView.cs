@@ -15,7 +15,10 @@ public class RomLineFreeView
     /// <summary>판에 보이는 선의 수(가장 최근 것부터). 한 줄에 선 하나.</summary>
     public const int Rows = 8;
     private const int Cols = 3;               // 각 · 견준 값 둘(방식마다 머리글이 다르다)
-    private const float AxisWidth = 0.002f;
+    // ★10-14 사용자 지시: 바닥 축은 박스테이프만 한 폭(48mm)으로 바닥에 납작하게 깐다(TransformZ = 위 — 폭이 바닥면에 눕는다). 길이는 두 배.
+    private const float AxisWidth = 0.048f;
+    private const float ArrowBack = 0.15f, ArrowSide = 0.10f;   // 정면 화살촉(폭에 맞춰 키움)
+    private const string FacingText = "환자 시선 방향";        // ★바닥 축의 글자는 이것 하나(같은 날 사용자 지시)
     // ★10-13 사용자 지시: 3축은 <b>바닥과 정면을 가를 수 있는 십자선만</b> 그린다 — 수직 기둥, 두 세로 면의 테두리,
     //   «정면 · 환자 오른쪽 / 왼쪽 · 굴곡·신전 면 · 측굴 면» 글자를 모두 뺐다. 정면은 화살표로만 가린다.
     //   자리 · 크기는 계산에 안 들어간다(방향만 쓴다).
@@ -23,7 +26,7 @@ public class RomLineFreeView
     //   자리 · 크기는 계산에 안 들어간다(방향만 쓴다). 바닥 십자와 두 면의 테두리를 같은 비율로 줄였다.
     private const float FrameHeight = 0.30f;   // 기둥 · 두 세로 면의 키
     private const float FrameHalf = 0.25f;     // 두 세로 면의 반 폭
-    private const float CrossFront = 0.35f, CrossBack = 0.25f, CrossSide = 0.30f;   // 바닥 십자: 정면 쪽 · 뒤쪽 · 좌우
+    private const float CrossFront = 0.70f, CrossBack = 0.50f, CrossSide = 0.60f;   // 바닥 십자: 정면 쪽 · 뒤쪽 · 좌우
 
     private static readonly Color FirstColor = RomLineView.NeutralColor;   // 기준선 = 중립과 같은 색
     private static readonly Color LineColor = RomLineView.ActiveColor;     // 측정선 = 능동과 같은 색
@@ -46,6 +49,7 @@ public class RomLineFreeView
     private readonly TextMeshPro[] heads = new TextMeshPro[Cols];
 
     private LineRenderer axForward, axRight, axArrow;
+    private TextMeshPro facingLabel;   // 바닥 축의 글자 하나 — «환자 시선 방향»(눈 쪽으로 돌린다)
 
     public void Build(RomLineView view, Transform parent, Transform panelArea, float tableTop)
     {
@@ -78,6 +82,8 @@ public class RomLineFreeView
         axForward = Axis("앞뒤 축", FloorColor, 2);
         axRight = Axis("좌우 축", FloorColor, 2);
         axArrow = Axis("정면 화살표", FloorColor, 3);
+        facingLabel = RomLineView.Outlined(v.MakeText(axesRoot, FacingText, 0.20f, TextAlignmentOptions.Center, 5));
+        facingLabel.rectTransform.sizeDelta = new Vector2(0.40f, 0.05f);
         axesRoot.gameObject.SetActive(false);
         world.gameObject.SetActive(false);
     }
@@ -87,6 +93,9 @@ public class RomLineFreeView
         LineRenderer lr = v.MakeLine(name, c, count);
         lr.transform.SetParent(axesRoot, false);
         lr.startWidth = lr.endWidth = AxisWidth;
+        lr.alignment = LineAlignment.TransformZ;                        // 폭이 «선 방향 × Z»로 펴진다 — Z를 위로 두면 바닥에 납작하다
+        lr.transform.rotation = Quaternion.LookRotation(Vector3.up, Vector3.forward);
+        lr.numCapVertices = 0;                                          // 테이프처럼 끝이 각지게
         return lr;
     }
 
@@ -209,16 +218,18 @@ public class RomLineFreeView
         RomLineView.DrawLine(axForward, o - f.forward * CrossBack, tipPos);
         RomLineView.DrawLine(axRight, o - f.right * CrossSide, o + f.right * CrossSide);
         axArrow.positionCount = 3;
-        axArrow.SetPosition(0, tipPos - f.forward * 0.06f + f.right * 0.035f);
+        axArrow.SetPosition(0, tipPos - f.forward * ArrowBack + f.right * ArrowSide);
         axArrow.SetPosition(1, tipPos);
-        axArrow.SetPosition(2, tipPos - f.forward * 0.06f - f.right * 0.035f);
+        axArrow.SetPosition(2, tipPos - f.forward * ArrowBack - f.right * ArrowSide);
         axArrow.enabled = true;
+        facingLabel.transform.position = tipPos + f.forward * 0.10f + Vector3.up * 0.03f;   // 화살촉 바로 앞 — 바닥에서 조금 띄운다
     }
 
     // ── 매 프레임 ───────────────────────────────────────────────────
     public void Tick(Transform eye)
     {
         if (!world.gameObject.activeSelf) return;
+        if (axesRoot.gameObject.activeSelf) RomLineView.Face(facingLabel.transform, eye);
         for (int i = 0; i < labels.Count; i++)
             if (labels[i].gameObject.activeSelf) RomLineView.Face(labels[i].transform, eye);
         for (int i = 0; i < angleTexts.Count; i++)
