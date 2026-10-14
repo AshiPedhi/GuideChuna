@@ -250,7 +250,6 @@ public class RomLineView
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, 1f, 1f };         // 0° 선이 향하는 쪽(위 +1 · 아래 −1) — 회전도 위로 세웠다(10-13 저녁 사용자 지시 · 종전에는 아래가 환자 앞이라 뒤집혀 보였다)
     private static readonly float[] GaugeSide = { -1f, 1f, 1f, -1f, 1f, -1f };       // 그 동작이 제 방향으로 움직였을 때 선이 기우는 쪽(그림 오른쪽 +1) — 10-13 저녁에 전부 뒤집었다
     private static readonly int[] DisplayRow = { 0, 1, 3, 2, 5, 4 };                  // 동작 번호 → 결과표의 줄(좌측굴 · 좌회전을 먼저 보여 준다)
-    private static readonly string[] GaugeView = { "옆에서 본 그림", "옆에서 본 그림", "앞에서 본 그림", "앞에서 본 그림", "위에서 본 그림", "위에서 본 그림" };
     private static readonly string[] GaugeLeft = { "앞", "앞", "좌", "좌", "좌", "좌" };
     private static readonly string[] GaugeRight = { "뒤", "뒤", "우", "우", "우", "우" };
     private static readonly string[] FreeTabNames = { "3점", "4점", "연속" };   // 자유 측정의 방식(10-13) — RomLineSession.FreeTabName과 같다
@@ -284,7 +283,7 @@ public class RomLineView
         Place(MakeText(resultArea, "측정", 0.12f, TextAlignmentOptions.Left, 3), new Vector2(XName, headY), 0.14f).color = DimColor;
         Place(MakeText(resultArea, "능동", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XActive, headY), 0.10f).color = ActiveColor;
         Place(MakeText(resultArea, "압박", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, headY), 0.10f).color = PressureColor;
-        Place(MakeText(resultArea, "각도기", 0.12f, TextAlignmentOptions.Center, 3), new Vector2(GaugeX, headY), 0.10f).color = DimColor;
+        // ★10-14 사용자 지시: «각도기» 머리글과 각도기 옆의 «옆에서 / 앞에서 / 위에서 본 그림» 글자를 뺐다(양옆의 앞 · 뒤 / 좌 · 우 표시는 둔다).
 
         rowNow = MakeQuad(resultArea, "지금 줄", Vector2.zero, new Vector2(LeftW, RowH - 0.004f), RowNowColor, 1);
         rowNow.gameObject.SetActive(false);
@@ -311,7 +310,6 @@ public class RomLineView
 
             Place(MakeText(resultArea, GaugeLeft[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
             Place(MakeText(resultArea, GaugeRight[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.right * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
-            Place(MakeText(resultArea, GaugeView[m], 0.10f, TextAlignmentOptions.Center, 3), new Vector2(0.345f, pairY), 0.10f).color = GaugeDim;
 
             Seg(verts, cols, tris, new Vector2(-PanelW * 0.5f + 0.01f, pairY + RowH), new Vector2(PanelW * 0.5f - 0.01f, pairY + RowH), 0.0012f, GaugeDim);   // 두 줄 묶음의 윗변
             Seg(verts, cols, tris, gaugePivot[m] + Vector2.left * GaugeR, gaugePivot[m] + Vector2.right * GaugeR, 0.0016f, GaugeDim);
