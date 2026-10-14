@@ -208,7 +208,7 @@ public class RomLineView
         for (int i = 0; i < PopupTabs; i++)
         {
             var c = new Vector2((i - 2f) * (cellW + NearTabGap), 0f);
-            nearTabTexts[i] = Place(MakeText(guide, "", 0.076f, TextAlignmentOptions.Center, 3), c, cellW);
+            nearTabTexts[i] = Place(MakeText(guide, "", 0.092f, TextAlignmentOptions.Center, 3), c, cellW);
             nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
             nearTabTexts[i].outlineColor = new Color32(0, 0, 0, 255);
             nearTabTexts[i].outlineWidth = 0.2f;
@@ -237,11 +237,11 @@ public class RomLineView
     private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
-    private const float NearTabH = 0.022f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
-    private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · 테두리 굵기(10-14)
+    private const float NearTabH = 0.027f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
+    private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideFixedH = 0.100f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · ★고정 높이(10-14 사용자 지시: 높이가 바뀌지 않게 — 글은 가운데에 둔다) · 테두리 굵기
     private static readonly Color NearTabIdle = new Color(0.88f, 0.91f, 0.95f, 0.92f);   // 안내 위 탭 — 지금 탭이 아닌 것(바탕 없음). ★10-14: 0.75 알파는 눈에 안 들어온다는 지적으로 밝혔다
-    private static readonly Color NearTabLine = new Color(1f, 0.95f, 0.2f, 1f);           // 지금 탭의 밑줄 — 메인 화면 탭 줄의 «지금 탭» 글자색(TipColor)과 같은 노랑
-    private static readonly Color NearTabBg = new Color(1f, 1f, 1f, 0.16f);              // 지금 탭의 옅은 바탕
+    private static readonly Color NearTabLine = new Color(1f, 1f, 1f, 0.95f);            // 지금 탭의 밑줄(흰색)
+    private static readonly Color NearTabBg = new Color(0.20f, 0.50f, 1.00f, 0.85f);     // 지금 탭의 바탕 — ★10-14 사용자 지시: 노랑 말고 눈에 띄는 파랑
     private const float GuideW = 0.24f;                       // 안내 테두리의 폭(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 높이는 10-14부터 글에 맞춘다(LayoutGuide)
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
@@ -420,7 +420,7 @@ public class RomLineView
     private void LayoutGuide(float lineH, float noteH)
     {
         float inner = lineH + (noteH > 0f ? GuideNoteGap + noteH : 0f);
-        guideH = Mathf.Max(GuideMinH, inner + GuidePad * 2f);
+        guideH = Mathf.Max(GuideFixedH, inner + GuidePad * 2f);   // 고정 높이 — 글이 넘칠 때만 늘어난다
         float top = guideH * 0.5f, y = top - (guideH - inner) * 0.5f;   // 글 묶음을 테두리 가운데에
         guideLine.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, Mathf.Max(lineH, 0.001f));
         guideLine.transform.localPosition = new Vector3(0f, y - lineH * 0.5f, -0.004f);

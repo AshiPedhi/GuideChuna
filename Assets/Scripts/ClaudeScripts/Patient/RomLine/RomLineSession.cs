@@ -96,8 +96,8 @@ public class RomLineSession : MonoBehaviour
     public static readonly string[] PointName = { "오른쪽 미주점", "왼쪽 미주점", "미간점", "턱끝점" };
     // ★10-14 사용자 지시: 탭 = 홈 · 굴곡 · 신전 · 측굴 · 회전 · 자유 측정(지금 고른 방식의 이름 — FreeTopName). «리셋» 탭은 없앴다(홈에서 A).
     //   탭 번호(top): 0 홈 · 1~3 순서 측정(CurTab + 1) · 4 자유 측정.
-    private static readonly string[] TopTabName = { "홈", "굴곡 · 신전", "측굴", "회전" };
-    private static readonly string[] GuidedTabName = { "굴곡 · 신전", "측굴", "회전" };   // CurTab(0~2)으로 찾는다
+    private static readonly string[] TopTabName = { "홈", "굴곡·신전", "측굴", "회전" };
+    private static readonly string[] GuidedTabName = { "굴곡·신전", "측굴", "회전" };   // CurTab(0~2)으로 찾는다
     private static readonly string[] FreeTopName = { "3점 측정", "4점 측정", "연속 측정" };
     private static readonly string[] PhaseHint = { "환자 정면을 바닥 화살표에 맞추세요 · 정면을 본 편안한 자세", "환자가 스스로 끝까지 움직인 자세", "측정자가 같은 방향으로 조금 더 눌러 준 자세" };
     private static readonly string[] PhaseName = { "중립", "능동", "압박" };
