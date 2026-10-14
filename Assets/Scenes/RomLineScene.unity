@@ -2309,7 +2309,7 @@ MonoBehaviour:
   compareGlGn: 1
   handInput: 0
   monitorPort: 8090
-  screenDistance: 2.5
+  screenDistance: 3.2
   screenWidth: 3.5
   screenRise: -0.45
   guideDistance: 0.6
