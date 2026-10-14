@@ -1691,6 +1691,9 @@ public class RomLineSession : MonoBehaviour
     /// <summary>찍은 점은 ●, 남은 점은 ○ — 안내의 진행 표시(10-13 오후). 상태가 바뀔 때만 만든다.</summary>
     private static string Dots(int filled, int total) => new string('●', Mathf.Clamp(filled, 0, total)) + new string('○', Mathf.Max(0, total - filled));
 
+    // ★10-14 사용자 지시: 조작 안내(«A : 리셋» 같은 버튼 설명)는 서브 정보라 안내의 본문보다 작게 쓴다. 안내 아랫줄(알림)은 원래 작아(0.085) 그대로 둔다.
+    private const string SubInfo = "<size=72%>";
+
     /// <summary>안내에 넣는 기록 한 줄 — «굴곡  37.2° / 41.8°»(능동 / 압박, 색은 결과표와 같다). 다 잰 탭에서만 부른다(상태가 바뀔 때만).</summary>
     private string RecordLine(int m)
     {
@@ -1721,12 +1724,12 @@ public class RomLineSession : MonoBehaviour
             if (resetAsk)
             {
                 forMonitor = instruction = "전체 측정 결과를 지울까요? — A = 지우기 · B = 취소";
-                guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\nA : 지우기   B : 취소";
+                guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\n" + SubInfo + "A : 지우기   B : 취소</size>";
             }
             else
             {
                 forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 스틱 좌우 = 탭 고르기";
-                guide = calibrating ? "<color=#FFF233>끝점 보정 중</color>\n트리거 : 끝" : "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정";
+                guide = calibrating ? "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>" : SubInfo + "A : 리셋\nB : 자유측정 모드변경\n트리거 : 끝점 보정</size>";
             }
             if (guideNote.Length == 0 && Done) guideNote = "측정 완료";
         }
