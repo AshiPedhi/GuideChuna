@@ -1698,12 +1698,19 @@ public class RomLineSession : MonoBehaviour
     //   안내 아랫줄(알림)은 원래 작아(0.085) 그대로 둔다.
     private const string SubInfo = "<size=72%>";
 
-    /// <summary>안내에 넣는 기록 한 줄 — «굴곡  37.2° / 41.8°»(능동 / 압박, 색은 결과표와 같다). 다 잰 탭에서만 부른다(상태가 바뀔 때만).</summary>
+    /// <summary>안내에 넣는 기록 한 줄 — «굴곡  37.2° / 41.8° / +4.6°»(능동 / 압박 / 차이, 색은 결과표와 같다). 다 잰 탭에서만 부른다(상태가 바뀔 때만).</summary>
     private string RecordLine(int m)
     {
         string a = results[m * 2].valid ? results[m * 2].angle.ToString("F1") + "°" : "—";
         string p = results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") + "°" : "—";
-        return MotionName[m] + "  <color=#FF6B05>" + a + "</color> / <color=#F2994D>" + p + "</color>";
+        return MotionName[m] + "  <color=#FF6B05>" + a + "</color> / <color=#F2994D>" + p + "</color> / " + DiffText(m);   // ★10-15 사용자 지시: 압박 뒤에 « / 차이»
+    }
+
+    /// <summary>차이 = 압박 − 능동(능동에서 압박으로 얼마나 더 갔나) — «+4.6°». 둘 중 하나라도 없으면 «—». ★10-15 사용자 지시(부호 붙임).</summary>
+    private string DiffText(int m)
+    {
+        if (!results[m * 2].valid || !results[m * 2 + 1].valid) return "—";
+        return (results[m * 2 + 1].angle - results[m * 2].angle).ToString("+0.0;-0.0;0.0") + "°";
     }
 
     private string GroupTitle(int g)
@@ -1750,8 +1757,9 @@ public class RomLineSession : MonoBehaviour
             // 동작 하나를 다 찍었다 — 확인을 기다린다
             string av = results[cm * 2].valid ? results[cm * 2].angle.ToString("F1") + "°" : "—";
             string pv = results[cm * 2 + 1].valid ? results[cm * 2 + 1].angle.ToString("F1") + "°" : "—";
-            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} · 중립으로 돌아간 뒤 트리거 : 확인";
-            guide = $"<color=#73E68C>{MotionName[cm]}</color>\n능동 {av}\n압박 {pv}";   // 안내는 폭이 좁다 — 줄을 나눈다
+            string dv = DiffText(cm);   // ★10-15 사용자 지시: 압박 뒤에 « / 차이»
+            forMonitor = instruction = $"{MotionName[cm]} 측정 완료 · 능동 {av} · 압박 {pv} / {dv} · 중립으로 돌아간 뒤 트리거 : 확인";
+            guide = $"<color=#73E68C>{MotionName[cm]}</color>\n능동 {av}\n압박 {pv} / {dv}";   // 안내는 폭이 좁다 — 줄을 나눈다
             if (guideNote.Length == 0) guideNote = "트리거 : 기록";
         }
         else if (TabComplete(tab))
@@ -1790,6 +1798,7 @@ public class RomLineSession : MonoBehaviour
             bool pOpp = pOn && !RomLineMath.DirectionMatches((RomLineMotion)m, pr.signedAngle);
             view.SetValue(m * 2, aOn ? a.angle.ToString("F1") + "°" : "—", m * 2 == current, aOpp);
             view.SetValue(m * 2 + 1, pOn ? pr.angle.ToString("F1") + "°" : "—", m * 2 + 1 == current, pOpp);
+            view.SetDiff(m, aOn && pOn ? DiffText(m) : "—", current >= 0 && current / 2 == m);   // ★10-15: 차이 칸(압박 − 능동)
             view.SetGauge(m, aOn, a.angle, aOpp, pOn, pr.angle, pOpp);
         }
 

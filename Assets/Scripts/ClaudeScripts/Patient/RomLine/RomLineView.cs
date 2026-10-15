@@ -234,8 +234,9 @@ public class RomLineView
     //     ★모니터 화면의 세 그림은 종전 방향 그대로다(헤드셋 결과표와 좌우가 반대다).
     //   줄의 순서도 «좌측굴 · 우측굴», «좌회전 · 우회전»으로 바꿨다(DisplayRow) — 보여 주는 자리만이다. 재는 순서와 동작 번호(우 → 좌)는 그대로다.
     private const float RowH = 0.041f, GaugeR = 0.068f;
-    private const float XName = -0.31f, XActive = -0.17f, XPressure = -0.05f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
-    private const float LeftX = -0.18f, LeftW = 0.42f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
+    // ★10-15 사용자 지시: 압박과 각도기 사이에 «차이»(압박 − 능동 — 능동에서 압박으로 얼마나 더 갔나) 칸을 넣었다. 그 자리를 내려고 능동 · 압박 칸을 왼쪽으로 당기고 지금 줄 띠를 넓혔다.
+    private const float XName = -0.31f, XActive = -0.19f, XPressure = -0.08f, XDiff = 0.03f, GaugeX = 0.20f;   // 판 가운데에서 잰 자리
+    private const float LeftX = -0.16f, LeftW = 0.46f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
     private const float NearTabH = 0.027f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
@@ -273,6 +274,8 @@ public class RomLineView
     private readonly Vector2[] cellPos = new Vector2[6], gaugePivot = new Vector2[6];
     private readonly LineRenderer[] gaugeLines = new LineRenderer[12];   // 동작 × (능동 · 압박)
     private readonly LineRenderer[] gaugeArcs = new LineRenderer[6];     // 0° 선에서 능동 선까지의 호
+    private readonly TextMeshPro[] diffs = new TextMeshPro[6];           // 동작마다 «차이»(압박 − 능동, 10-15)
+    private static readonly Color DiffColor = new Color(0.92f, 0.92f, 0.92f, 1f);   // 능동 · 압박 색과 섞이지 않게 흰색
     private readonly Renderer[] freeTabPlates = new Renderer[3], popupTabPlates = new Renderer[PopupTabs];
     private readonly TextMeshPro[] popupTabTexts = new TextMeshPro[PopupTabs];
 
@@ -282,6 +285,7 @@ public class RomLineView
         Place(MakeText(resultArea, "측정", 0.12f, TextAlignmentOptions.Left, 3), new Vector2(XName, headY), 0.14f).color = DimColor;
         Place(MakeText(resultArea, "능동", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XActive, headY), 0.10f).color = ActiveColor;
         Place(MakeText(resultArea, "압박", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, headY), 0.10f).color = PressureColor;
+        Place(MakeText(resultArea, "차이", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XDiff, headY), 0.10f).color = DiffColor;
         // ★10-14 사용자 지시: «각도기» 머리글과 각도기 옆의 «옆에서 / 앞에서 / 위에서 본 그림» 글자를 뺐다(양옆의 앞 · 뒤 / 좌 · 우 표시는 둔다).
 
         rowNow = MakeQuad(resultArea, "지금 줄", Vector2.zero, new Vector2(LeftW, RowH - 0.004f), RowNowColor, 1);
@@ -301,10 +305,13 @@ public class RomLineView
             Place(MakeText(resultArea, RomLineSession.MotionName[m], 0.22f, TextAlignmentOptions.Left, 3), new Vector2(XName, y), 0.14f);
             values[m * 2] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(XActive, y), 0.10f);
             values[m * 2 + 1] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, y), 0.10f);
+            diffs[m] = Place(MakeText(resultArea, "—", 0.26f, TextAlignmentOptions.Center, 3), new Vector2(XDiff, y), 0.10f);
+            diffs[m].color = DiffColor;
 
-            gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0020f);
-            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PressureColor, 2, 0.0030f);
-            gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0036f);
+            // ★10-15 사용자 지시: 각도기의 측정 선(능동 · 압박 · 능동 호 · 중립 0° 선)을 절반 굵기로. 반원 테두리 · 눈금은 그대로다.
+            gaugeArcs[m] = MakePanelLine("각도기 호", ActiveColor, GaugeArcSegments + 1, 0.0010f);
+            gaugeLines[m * 2 + 1] = MakePanelLine("각도기 압박선", PressureColor, 2, 0.0015f);
+            gaugeLines[m * 2] = MakePanelLine("각도기 능동선", ActiveColor, 2, 0.0018f);
             if (m % 2 == 1) continue;   // 아래는 단면마다 한 번만 그린다
 
             Place(MakeText(resultArea, GaugeLeft[m], 0.12f, TextAlignmentOptions.Center, 3), gaugePivot[m] + Vector2.left * (GaugeR + 0.014f), 0.02f).color = GaugeDim;
@@ -316,7 +323,7 @@ public class RomLineView
                 Seg(verts, cols, tris, GaugePoint(m, -90f + i * 10f, GaugeR), GaugePoint(m, -80f + i * 10f, GaugeR), 0.0016f, GaugeDim);
             for (int deg = -90; deg <= 90; deg += 15)   // 눈금 15° — 45° · 90°는 길게
                 Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.011f : 0.006f)), GaugePoint(m, deg, GaugeR), 0.0016f, GaugeDim);
-            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0024f, NeutralColor);   // 0° = 중립
+            Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0012f, NeutralColor);   // 0° = 중립 (10-15 절반으로)
         }
 
         var go = new GameObject("각도기 바탕");
@@ -549,6 +556,13 @@ public class RomLineView
         values[slot].text = text;
         values[slot].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
         values[slot].color = opposite ? OppositeColor : slot % 2 == 0 ? ActiveColor : PressureColor;
+    }
+
+    /// <summary>결과표의 «차이» 칸(동작 m) — 압박 − 능동. current = 지금 재는 동작이면 굵게.</summary>
+    public void SetDiff(int m, string text, bool current)
+    {
+        if (diffs[m].text != text) diffs[m].text = text;
+        diffs[m].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
     }
 
     /// <summary>비교 시험 줄. row 0 = 굴곡 · 1 = 신전.</summary>
