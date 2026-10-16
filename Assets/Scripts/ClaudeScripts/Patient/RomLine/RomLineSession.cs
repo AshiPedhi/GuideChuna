@@ -91,9 +91,9 @@ public class RomLineSession : MonoBehaviour
     public const int PointCount = 38;          // 묶음마다 2점
 
     public static readonly string[] MotionName = { "굴곡", "신전", "우측굴", "좌측굴", "우회전", "좌회전" };
-    // ★10-12 사용자 지시: 영어 약어(Tr · Gl · Gn)를 화면 · 음성 · 문서에 쓰지 않는다 — 받은 한글 명칭 그대로(미주점 · 미간점 · 턱끝점).
+    // ★10-12 사용자 지시: 영어 약어(Tr · Gl · Gn)를 화면 · 음성 · 문서에 쓰지 않는다 — 받은 한글 명칭 그대로(이주점 · 미간점 · 턱끝점).
     //   판의 안내 글자 · 공간의 이름표 · 로그 · 안내 음성(romline_narration.py)이 전부 이 이름이다.
-    public static readonly string[] PointName = { "오른쪽 미주점", "왼쪽 미주점", "미간점", "턱끝점" };
+    public static readonly string[] PointName = { "오른쪽 이주점", "왼쪽 이주점", "미간점", "턱끝점" };
     // ★10-14 사용자 지시: 탭 = 홈 · 굴곡 · 신전 · 측굴 · 회전 · 자유 측정(지금 고른 방식의 이름 — FreeTopName). «리셋» 탭은 없앴다(홈에서 A).
     //   탭 번호(top): 0 홈 · 1~3 순서 측정(CurTab + 1) · 4 자유 측정.
     private static readonly string[] TopTabName = { "홈", "굴곡·신전", "측굴", "회전" };
@@ -108,7 +108,7 @@ public class RomLineSession : MonoBehaviour
     [SerializeField] private Vector3 tipOffset = new Vector3(0f, 0f, 0.033f);
 
     [Header("=== 비교 시험 ===")]
-    [Tooltip("켜면 굴곡·신전에서 한 자세마다 세 점(오른쪽 미주점 → 미간점 → 턱끝점)을 찍어 미주점~미간점 선과 미간점~턱끝점 선의 값을 나란히 낸다.\n" +
+    [Tooltip("켜면 굴곡·신전에서 한 자세마다 세 점(오른쪽 이주점 → 미간점 → 턱끝점)을 찍어 이주점~미간점 선과 미간점~턱끝점 선의 값을 나란히 낸다.\n" +
              "미간점~턱끝점 값은 판의 결과표 아래 한 줄과 로그 «[선실측] 비교»에 나온다. 측굴·회전은 그대로다.")]
     [SerializeField] private bool compareGlGn = false;
 
@@ -832,11 +832,11 @@ public class RomLineSession : MonoBehaviour
             {
                 has[0] = has[1] = false;
                 index = 0;
-                Deny("양쪽 미주점이 위아래로 겹쳐 찍혔다 — 기준을 다시 찍는다");
+                Deny("양쪽 이주점이 위아래로 겹쳐 찍혔다 — 기준을 다시 찍는다");
                 return;
             }
             Debug.Log($"[선실측] 기준 방향 — 오른쪽 {frame.right:F2} · 앞뒤 {frame.forward:F2} · 위 {frame.up:F2} · " +
-                      $"미주점 간격 {Vector3.Distance(points[0], points[1]) * 1000f:F0}");
+                      $"이주점 간격 {Vector3.Distance(points[0], points[1]) * 1000f:F0}");
             for (int m = 0; m < 6; m++) { FaceCheck(m); RecomputeMotion(m); }   // 기준만 다시 찍었을 때 남아 있는 측정을 다시 잰다
         }
         else
@@ -880,8 +880,8 @@ public class RomLineSession : MonoBehaviour
         if (!RomLineMath.FaceForward(ref frame, (points[0] + points[1]) * 0.5f, points[n0 + gi])) return;
 
         (points[0], points[1]) = (points[1], points[0]);
-        noteText = "양쪽 미주점이 바뀌어 찍혀 바로잡았다";
-        Debug.Log("[선실측] ★양쪽 미주점을 바꿔 찍은 것으로 보인다(미간점이 뒤쪽에 있었다) — 좌우를 바로잡았다.");
+        noteText = "양쪽 이주점이 바뀌어 찍혀 바로잡았다";
+        Debug.Log("[선실측] ★양쪽 이주점을 바꿔 찍은 것으로 보인다(미간점이 뒤쪽에 있었다) — 좌우를 바로잡았다.");
         for (int k = 0; k < 6; k++) RecomputeMotion(k);
     }
 
@@ -913,7 +913,7 @@ public class RomLineSession : MonoBehaviour
         bool byGravity = !frame.valid && !RomLineMath.NeedsReference(motion);
         if (!frame.valid && !byGravity)
         {
-            Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 1000f:F0} · 면 위 —(기준 미주점을 안 찍었다)");
+            Debug.Log($"[선실측] 값 — {title} 직접(3차원) {dr.angle:F1}° · 두 선 엇갈림 {dr.gap * 1000f:F0} · 면 위 —(기준 이주점을 안 찍었다)");
             return;
         }
         RomLineResult r = RomLineMath.Measure(points[n0], points[n0 + 1], points[s0], points[s0 + 1], RomLineMath.PlaneNormal(motion, frame));
@@ -953,7 +953,7 @@ public class RomLineSession : MonoBehaviour
           .Append(' ').Append(PointName[(int)b]).Append(' ').Append(points[s0 + 1].ToString("F4"));
         if (hasExtra[gS]) sb.Append(" 턱끝점 ").Append(extra[gS].ToString("F4"));
         if (has[0] && has[1])
-            sb.Append(" · 기준 오른쪽 미주점 ").Append(points[0].ToString("F4")).Append(" 왼쪽 미주점 ").Append(points[1].ToString("F4"));
+            sb.Append(" · 기준 오른쪽 이주점 ").Append(points[0].ToString("F4")).Append(" 왼쪽 이주점 ").Append(points[1].ToString("F4"));
         Debug.Log(sb.ToString());
     }
 
@@ -980,10 +980,10 @@ public class RomLineSession : MonoBehaviour
             cmpResults[slot] = cr;
         }
         RomLineDirect td = RomLineMath.MeasureDirect(points[n0], points[n0 + 1], points[s0], points[s0 + 1]);
-        Debug.Log($"[선실측] 비교 — {title} · 미주점~미간점 직접 {td.angle:F1}° · 미간점~턱끝점 직접 {cd.angle:F1}° (엇갈림 {cd.gap * 1000f:F0}) · " +
-                  $"미간점~턱끝점 면 위 {(cr.valid ? cr.angle.ToString("F1") + "°" : "—(기준 미주점 없음)")} · " +
+        Debug.Log($"[선실측] 비교 — {title} · 이주점~미간점 직접 {td.angle:F1}° · 미간점~턱끝점 직접 {cd.angle:F1}° (엇갈림 {cd.gap * 1000f:F0}) · " +
+                  $"미간점~턱끝점 면 위 {(cr.valid ? cr.angle.ToString("F1") + "°" : "—(기준 이주점 없음)")} · " +
                   $"선 길이 미간점~턱끝점 중립 {Vector3.Distance(points[n0 + 1], extra[gN]) * 1000f:F0} → 측정 {Vector3.Distance(points[s0 + 1], extra[gS]) * 1000f:F0} · " +
-                  $"미주점~미간점 중립 {Vector3.Distance(points[n0], points[n0 + 1]) * 1000f:F0} → 측정 {Vector3.Distance(points[s0], points[s0 + 1]) * 1000f:F0}");
+                  $"이주점~미간점 중립 {Vector3.Distance(points[n0], points[n0 + 1]) * 1000f:F0} → 측정 {Vector3.Distance(points[s0], points[s0 + 1]) * 1000f:F0}");
     }
 
     /// <summary>그 묶음의 점이 바뀌면 거기에 기대던 값을 지운다.</summary>
