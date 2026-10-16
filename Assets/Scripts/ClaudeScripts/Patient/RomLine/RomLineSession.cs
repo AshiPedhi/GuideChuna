@@ -1781,8 +1781,8 @@ public class RomLineSession : MonoBehaviour
         else if (TabComplete(tab))
         {
             // ★10-14 사용자 지시: 다 잰 탭에서는 안내에 그 탭의 기록(두 동작 × 능동 / 압박)을 보이고, 마지막 줄에 초기화 방법을 적는다.
-            //   두 동작의 순서는 결과표와 같다(측굴 · 회전은 좌 → 우 — RomLineView.DisplayRow).
-            int first = tab == 0 ? 0 : tab * 2 + 1, second = tab == 0 ? 1 : tab * 2;
+            //   두 동작의 순서는 결과표와 같다 — ★10-16부터 재는 순서(우 → 좌 · RomLineView.DisplayRow).
+            int first = tab * 2, second = tab * 2 + 1;
             forMonitor = instruction = $"{GuidedTabName[tab]} 측정 완료";
             guide = "<color=#73E68C>" + GuidedTabName[tab] + " 완료</color>\n" + RecordLine(first) + "\n" + RecordLine(second);
             if (guideNote.Length == 0) guideNote = "B 길게 : 초기화";
