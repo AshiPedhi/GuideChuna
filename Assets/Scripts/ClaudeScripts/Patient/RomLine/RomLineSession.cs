@@ -294,8 +294,10 @@ public class RomLineSession : MonoBehaviour
             case RomLineMotion.Extension:
             case RomLineMotion.LateralRight:
             case RomLineMotion.LateralLeft: a = RomLinePoint.Gl; b = RomLinePoint.Gn; break;       // 정중선: Gl ~ Gn
-            case RomLineMotion.RotationRight: a = RomLinePoint.TrLeft; b = RomLinePoint.Gl; break; // 반대쪽(왼쪽) Tr ~ Gl
-            default: a = RomLinePoint.TrRight; b = RomLinePoint.Gl; break;                         // 좌회전: 오른쪽 Tr ~ Gl
+            // ★10-16 교수님 지시(사용자 전달): 모든 동작이 미간점을 쓰므로 <b>미간점에서 시작</b>으로 통일한다(종전 회전은 이주점 → 미간점).
+            //   두 선(중립 · 측정)이 함께 뒤집히므로 평면 각 · 직접 각의 크기와 부호는 그대로다(RomLineVerify로 확인).
+            case RomLineMotion.RotationRight: a = RomLinePoint.Gl; b = RomLinePoint.TrLeft; break; // 미간점 ~ 반대쪽(왼쪽) Tr
+            default: a = RomLinePoint.Gl; b = RomLinePoint.TrRight; break;                         // 좌회전: 미간점 ~ 오른쪽 Tr
         }
     }
 
