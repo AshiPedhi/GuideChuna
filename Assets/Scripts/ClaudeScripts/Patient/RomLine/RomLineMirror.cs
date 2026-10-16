@@ -14,6 +14,12 @@ using UnityEngine.Rendering;
 /// 두 장의 이미지를 받아 보여 준다. 서버는 <see cref="RomLineMonitor"/> 그대로다.
 ///   /wall.jpg  벽면UI — 메인 화면 바로 앞에 세운 전용 카메라가 찍는다. 헤드셋에 보이는 것과 같은 화면이다.
 ///   /cam.jpg   현실 영상 — Meta Passthrough Camera Access(MRUK <see cref="PassthroughCameraAccess"/>, Quest 3/3S).
+///              ★10-16 사용자 요청: 카메라 영상에는 앱이 그린 것(컨트롤러 끝점 · 선 · 각도기)이 없다 → 패스스루 카메라와
+///              <b>같은 자리 · 같은 화각</b>의 가상 카메라로 앱 화면을 한 번 더 그려 영상 위에 겹친다(camOverlay).
+///              자리 = SDK GetCameraPose(★추적 공간 기준 → 리그 trackingSpace를 곱해 월드로), 화각 = SDK ViewportPointToRay의 두 모서리.
+///              화각을 따로 계산하지 않는다 — SDK가 영상과 3D를 잇는 함수를 그대로 탄다(규칙 9: 미리보기는 실제와 같은 함수).
+///              겹치기는 CPU에서 한다: 투명 바탕(0,0,0,0)에 그린 가상 화면을 읽어 out = 가상 + 영상 × (1 − 알파).
+///              헤드셋도 눈 버퍼의 알파로 패스스루와 합치므로 같은 규칙이다(추정 — 기기에서 눈으로 확인).
 ///   /mirrorinfo 진단(지원 여부 · 해상도 · 초당 장수 · JPEG 만드는 시간 · 착용 여부)
 /// 버튼은 종전 모니터와 같은 /cmd?c= 길을 탄다 — 앱의 RunMonitorCommand가 실행한다(양방향).
 ///
@@ -38,6 +44,8 @@ public class RomLineMirror : MonoBehaviour
     [SerializeField] private Vector2Int camResolution = new Vector2Int(640, 480);
     [Tooltip("현실 영상을 보내는 간격(초).")]
     [SerializeField] private float camInterval = 0.1f;
+    [Tooltip("현실 영상 위에 앱 화면(끝점 · 선 · 각도기 · 벽면UI)을 겹친다. 끄면 카메라 영상만 보낸다.")]
+    [SerializeField] private bool camOverlay = true;
 
     [Header("=== 공통 ===")]
     [Range(30, 95)] [SerializeField] private int jpegQuality = 70;
@@ -69,6 +77,11 @@ public class RomLineMirror : MonoBehaviour
     private byte[] camBuf;
     private int camW, camH;
     private int camFrames; private double camEncodeMs;
+    private Camera overlayCam;
+    private RenderTexture overlayRt;
+    private byte[] overlayBuf;
+    private Transform trackingSpace;
+    private bool overlayLogged;
 
     private float diagNext, diagFrom;
     private readonly StringBuilder info = new StringBuilder(512);
@@ -124,11 +137,6 @@ public class RomLineMirror : MonoBehaviour
                 pcaState = $"받는 중 {pcaShownRes.x}×{pcaShownRes.y}";
                 Debug.Log("[선실측] 미러링 — 현실 영상: 첫 영상 · " + pcaState);
             }
-            if (!camBusy && now >= camNext && monitor.ImageWatched("cam") && pca.IsUpdatedThisFrame)
-            {
-                camNext = now + camInterval;
-                CaptureCam();
-            }
         }
 
         if (diagInterval > 0f && now >= diagNext) Diagnose(now);
@@ -144,7 +152,79 @@ public class RomLineMirror : MonoBehaviour
         px.Reinterpret<byte>(4).CopyTo(camBuf);
         camW = r.x; camH = r.y;
         camBusy = true;
-        ThreadPool.QueueUserWorkItem(_ => Encode(camBuf, camW, camH, "cam"));
+        if (!camOverlay || !SystemInfo.supportsAsyncGPUReadback)
+        {
+            ThreadPool.QueueUserWorkItem(_ => Encode(camBuf, camW, camH, "cam"));
+            return;
+        }
+
+        // 앱 화면을 패스스루 카메라 자리에서 다시 그린다
+        EnsureOverlay(r);
+        Pose pose = pca.GetCameraPose();   // 영상이 찍힌 시각의 자세 · ★추적 공간 기준
+        if (trackingSpace == null) { var rig = FindFirstObjectByType<OVRCameraRig>(); if (rig != null) trackingSpace = rig.trackingSpace; }
+        Vector3 pos = trackingSpace != null ? trackingSpace.TransformPoint(pose.position) : pose.position;
+        Quaternion rot = trackingSpace != null ? trackingSpace.rotation * pose.rotation : pose.rotation;
+        overlayCam.transform.SetPositionAndRotation(pos, rot);
+
+        Quaternion inv = Quaternion.Inverse(pose.rotation);   // 광선과 자세는 같은 공간(추적 공간)이다
+        Vector3 lo = inv * pca.ViewportPointToRay(Vector2.zero).direction, hi = inv * pca.ViewportPointToRay(Vector2.one).direction;
+        const float n = 0.03f, f = 30f;
+        overlayCam.projectionMatrix = Matrix4x4.Frustum(lo.x / lo.z * n, hi.x / hi.z * n, lo.y / lo.z * n, hi.y / hi.z * n, n, f);
+        Camera eyeCam = Camera.main;
+        overlayCam.cullingMask = eyeCam != null ? eyeCam.cullingMask : ~0;
+        overlayCam.Render();
+        if (!overlayLogged)
+        {
+            overlayLogged = true;
+            Debug.Log($"[선실측] 미러링 — 겹치기 카메라 · {r.x}×{r.y} · 화각 좌 {Mathf.Atan(lo.x / lo.z) * Mathf.Rad2Deg:F1}° 우 {Mathf.Atan(hi.x / hi.z) * Mathf.Rad2Deg:F1}° " +
+                      $"아래 {Mathf.Atan(lo.y / lo.z) * Mathf.Rad2Deg:F1}° 위 {Mathf.Atan(hi.y / hi.z) * Mathf.Rad2Deg:F1}° · 카메라 {pos:F3} · 눈 {(eyeCam != null ? eyeCam.transform.position.ToString("F3") : "없음")} · " +
+                      $"추적 공간 {(trackingSpace != null ? trackingSpace.position.ToString("F3") + " " + trackingSpace.rotation.eulerAngles.ToString("F1") : "★없음(추적 공간 = 월드로 본다)")} · 가림 마스크 {overlayCam.cullingMask}");
+        }
+        AsyncGPUReadback.Request(overlayRt, 0, TextureFormat.RGBA32, OnOverlayRead);
+    }
+
+    private void EnsureOverlay(Vector2Int r)
+    {
+        if (overlayRt != null && overlayRt.width == r.x && overlayRt.height == r.y) return;
+        if (overlayRt != null) { overlayRt.Release(); Destroy(overlayRt); }
+        overlayRt = new RenderTexture(r.x, r.y, 24, RenderTextureFormat.ARGB32) { name = "미러링 겹치기" };
+        if (overlayCam == null)
+        {
+            var go = new GameObject("미러링 카메라(겹치기)");
+            go.transform.SetParent(transform, false);
+            overlayCam = go.AddComponent<Camera>();
+            overlayCam.enabled = false;   // Render()로만 찍는다
+            overlayCam.clearFlags = CameraClearFlags.SolidColor;
+            overlayCam.backgroundColor = new Color(0f, 0f, 0f, 0f);   // 투명 바탕 — 알파가 곧 «앱이 그린 자리»다
+            overlayCam.stereoTargetEye = StereoTargetEyeMask.None;
+            overlayCam.allowHDR = false;
+            overlayCam.allowMSAA = false;
+        }
+        overlayCam.targetTexture = overlayRt;
+    }
+
+    private void OnOverlayRead(AsyncGPUReadbackRequest req)
+    {
+        if (req.hasError || camBuf == null) { camBusy = false; return; }
+        NativeArray<byte> data = req.GetData<byte>();
+        if (data.Length != camBuf.Length) { camBusy = false; return; }
+        if (overlayBuf == null || overlayBuf.Length != data.Length) overlayBuf = new byte[data.Length];
+        data.CopyTo(overlayBuf);
+        ThreadPool.QueueUserWorkItem(_ =>
+        {
+            // out = 가상 + 영상 × (1 − 알파) — 투명 바탕에 SrcAlpha 섞기로 그린 색은 이미 알파가 곱해져 있다
+            byte[] c = camBuf, o = overlayBuf;
+            for (int i = 0; i < c.Length; i += 4)
+            {
+                int a = o[i + 3];
+                if (a == 0) continue;
+                int ia = 255 - a;
+                c[i] = (byte)Math.Min(255, o[i] + c[i] * ia / 255);
+                c[i + 1] = (byte)Math.Min(255, o[i + 1] + c[i + 1] * ia / 255);
+                c[i + 2] = (byte)Math.Min(255, o[i + 2] + c[i + 2] * ia / 255);
+            }
+            Encode(c, camW, camH, "cam");
+        });
     }
 
     // ── 벽면UI ───────────────────────────────────────────────────────
@@ -152,6 +232,11 @@ public class RomLineMirror : MonoBehaviour
     {
         if (monitor == null || monitor.Port == 0 || view == null || view.Panel == null || !view.PanelPlaced) return;
         float now = Time.unscaledTime;
+        if (pca != null && pca.IsPlaying && !camBusy && now >= camNext && monitor.ImageWatched("cam") && pca.IsUpdatedThisFrame)
+        {
+            camNext = now + camInterval;
+            CaptureCam();   // 겹칠 가상 화면이 이번 프레임의 끝점 · 선을 그리게 LateUpdate에서
+        }
         if (wallBusy || now < wallNext || !monitor.ImageWatched("wall")) return;
         if (!SystemInfo.supportsAsyncGPUReadback)
         {
@@ -252,5 +337,6 @@ public class RomLineMirror : MonoBehaviour
     private void OnDestroy()
     {
         if (wallRt != null) { wallRt.Release(); Destroy(wallRt); wallRt = null; }
+        if (overlayRt != null) { overlayRt.Release(); Destroy(overlayRt); overlayRt = null; }
     }
 }
