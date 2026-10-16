@@ -122,6 +122,8 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("모니터 화면을 내보내는 포트. 같은 Wi-Fi의 브라우저에서 http://(헤드셋 IP):포트 로 연다 — 주소는 판 맨 아래와 로그에 나온다.\n" +
              "0이면 열지 않는다. ★인증이 없다(같은 망의 누구나 볼 수 있고 버튼도 누를 수 있다) — 시험용이다.")]
     [SerializeField] private int monitorPort = 8090;
+    [Tooltip("관제 미러링(벽면UI · 현실 영상 이미지). 비어 있으면 실행할 때 기본값으로 붙인다(10-16).")]
+    [SerializeField] private RomLineMirror mirror;
 
     [Header("=== 메인 화면(10-12 · 자리는 10-13부터 고정) ===")]
     [Tooltip("추적 원점(메타 퀘스트의 «위치 재설정»이 맞추는 자리)에서 메인 화면까지의 거리(m). 화면은 원점의 정면에 처음 한 번 서고 그 뒤로 옮기지 않는다.")]
@@ -333,11 +335,19 @@ public class RomLineSession : MonoBehaviour
 
         if (monitorPort > 0)
         {
-            var pageAsset = Resources.Load<TextAsset>("RomLine/monitor");
+            // ★10-16 사용자 지시: 화면은 관제 미러링(mirror.html)이다 — 종전 monitor.html · webrtc 미러링은 쓰지 않는다.
+            var pageAsset = Resources.Load<TextAsset>("RomLine/mirror");
             if (monitor.Start(monitorPort, pageAsset != null ? pageAsset.text : ""))
             {
                 // ★10-14 사용자 지시: 메인 화면의 모니터 주소 줄을 뺐다(모니터는 기기에서 확인된 적이 없다). 서버는 그대로 열리고 주소는 로그에 남는다.
                 monitor.SetCsv(CsvHeader + "\n");
+                if (mirror == null)
+                {
+                    // ★런타임에 붙이면 인스펙터 튜닝이 저장되지 않는다 — 튜닝하려면 씬의 이 오브젝트에 RomLineMirror를 올린다.
+                    mirror = gameObject.AddComponent<RomLineMirror>();
+                    Debug.Log("[선실측] 미러링 — 씬에 RomLineMirror가 없어 기본값으로 붙였다(튜닝하려면 씬에 올릴 것)");
+                }
+                mirror.Init(monitor, view);
             }
         }
         try

@@ -14,8 +14,9 @@ using UnityEngine;
 /// 그래서 헤드셋 앱이 작은 웹 서버를 열고, 같은 Wi-Fi의 PC·태블릿이 <b>브라우저</b>로 그 주소를 열어 화면을 본다
 /// (따로 깔 프로그램이 없다). 영상을 보내는 것이 아니라 <b>값</b>(선·각·추적 상태)을 보낸다 — 가볍고, 미러링 영상 경로와 무관하다.
 ///
-///   GET /        모니터 화면(Resources/RomLine/monitor.html 그대로)
+///   GET /        관제 미러링 화면(Resources/RomLine/mirror.html — 10-16부터. 종전 monitor.html은 미사용)
 ///   GET /state   지금 상태(JSON) — 화면이 0.15초마다 묻는다
+///   GET /wall.jpg · /cam.jpg · /mirrorinfo   미러링 이미지 · 진단(RomLineMirror가 넣는다, 10-16)
 ///   GET /cmd?c=  화면의 버튼이 보낸 명령 — 주 스레드가 꺼내 처리한다
 ///   GET /csv     이번 실행에서 찍은 기록(CSV)
 ///
@@ -61,7 +62,7 @@ public class RomLineMonitor
         running = true;
         thread = new Thread(Loop) { IsBackground = true, Name = "RomLineMonitor" };
         thread.Start();
-        Debug.Log($"[선실측] 모니터 — 열었다 · 같은 Wi-Fi의 브라우저에서 {Url} · 화면 {(page.Length > 0 ? page.Length + "자" : "★없음(Resources/RomLine/monitor.html을 못 읽었다)")}");
+        Debug.Log($"[선실측] 모니터 — 열었다 · 같은 Wi-Fi의 브라우저에서 {Url} · 화면 {(page.Length > 0 ? page.Length + "자" : "★없음(Resources/RomLine/mirror.html을 못 읽었다)")}");
         return true;
     }
 
@@ -73,6 +74,21 @@ public class RomLineMonitor
         listener = null;
         Debug.Log("[선실측] 모니터 — 닫았다");
     }
+
+    // ── 관제 미러링 이미지(10-16, RomLineMirror가 넣는다) ──
+    private volatile byte[] wallJpg, camJpg;
+    private volatile string mirrorInfo = "{}";
+    private long wallPollTicks, camPollTicks;
+
+    /// <summary>최근 3초 안에 화면이 그 이미지(«wall» · «cam»)를 물어 갔는가 — 아무도 안 보면 찍지 않는다.</summary>
+    public bool ImageWatched(string name)
+    {
+        long t = name == "wall" ? Interlocked.Read(ref wallPollTicks) : Interlocked.Read(ref camPollTicks);
+        return DateTime.UtcNow.Ticks - t < TimeSpan.TicksPerSecond * 3;
+    }
+    /// <summary>JPEG 한 장을 건넨다(아무 스레드에서나).</summary>
+    public void SetImage(string name, byte[] jpg) { if (name == "wall") wallJpg = jpg; else camJpg = jpg; }
+    public void SetMirrorInfo(string json) { mirrorInfo = json; }
 
     /// <summary>주 스레드가 만든 상태(JSON)를 건넨다.</summary>
     public void SetState(string json) { stateJson = json; }
@@ -126,6 +142,16 @@ public class RomLineMonitor
                     if (c.Length > 0 && c.Length <= 24) commands.Enqueue(c);
                     Send(st, "200 OK", "application/json; charset=utf-8", Encoding.ASCII.GetBytes("{\"ok\":true}"), null);
                 }
+                else if (path.StartsWith("/wall.jpg") || path.StartsWith("/cam.jpg"))
+                {
+                    bool wall = path.StartsWith("/wall");
+                    Interlocked.Exchange(ref wall ? ref wallPollTicks : ref camPollTicks, DateTime.UtcNow.Ticks);
+                    byte[] jpg = wall ? wallJpg : camJpg;
+                    if (jpg != null) Send(st, "200 OK", "image/jpeg", jpg, null);
+                    else Send(st, "503 Service Unavailable", "text/plain; charset=utf-8", Encoding.ASCII.GetBytes("no image yet"), null);   // 첫 장 전 · 지원 안 함
+                }
+                else if (path.StartsWith("/mirrorinfo"))
+                    Send(st, "200 OK", "application/json; charset=utf-8", Encoding.UTF8.GetBytes(mirrorInfo), null);
                 else if (path.StartsWith("/csv"))
                 {
                     byte[] body = Encoding.UTF8.GetBytes(csvText);

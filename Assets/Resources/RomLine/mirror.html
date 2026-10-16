@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- 경추 ROM «선 실측» 관제 미러링 (2026-10-16 신설). 헤드셋 앱(RomLineMonitor)이 그대로 내보낸다.
+     벽면UI(/wall.jpg) · 현실 영상(/cam.jpg)을 받자마자 다음 장을 묻는다. 버튼은 /cmd?c= 로 앱에 명령을 보낸다(양방향). -->
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>선 실측 관제</title>
+<style>
+  :root { --bg:#0b0d11; --card:#151a21; --line:#262e39; --text:#e8ecf1; --dim:#8a96a6; --ok:#3ccf7a; --warn:#f2c94c; --bad:#ff6b6b; --act:#FF6B05; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; background:var(--bg); color:var(--text); font-family:"Noto Sans KR","Malgun Gothic",sans-serif; }
+  body { padding:12px 16px 20px; }
+  #bar { display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; font-size:14px; color:var(--dim); margin-bottom:10px; }
+  #bar b { color:var(--text); font-weight:600; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--bad); margin-right:5px; vertical-align:middle; }
+  .dot.on { background:var(--ok); }
+  #tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  #tabs button.cur { background:var(--act); border-color:var(--act); color:#111; font-weight:700; }
+  #views { display:grid; grid-template-columns: 3fr 2fr; gap:12px; }
+  @media (max-width: 900px) { #views { grid-template-columns: 1fr; } }
+  .view { background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; position:relative; cursor:zoom-in; }
+  .view h3 { margin:0; padding:7px 12px; font-size:13px; font-weight:600; color:var(--dim); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+  .view img { display:block; width:100%; height:auto; background:#000; min-height:120px; }
+  .view .empty { position:absolute; inset:34px 0 0 0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:14px; text-align:center; padding:12px; }
+  .view.big { position:fixed; inset:10px; z-index:10; cursor:zoom-out; display:flex; flex-direction:column; }
+  .view.big img { flex:1; object-fit:contain; height:0; min-height:0; }
+  #msg { margin:10px 0; font-size:15px; min-height:22px; }
+  #msg .note { color:var(--warn); margin-left:10px; font-size:14px; }
+  #ctl { display:flex; flex-wrap:wrap; gap:8px; }
+  button { background:#1d242e; color:var(--text); border:1px solid #34404f; border-radius:8px; padding:10px 14px; font-size:15px; font-family:inherit; cursor:pointer; }
+  button:active { transform:translateY(1px); }
+  button.main { background:#1f5133; border-color:#2f7a4c; font-weight:700; }
+  button.danger { border-color:#6b2f2f; }
+  #ctl .sp { flex:1; }
+  #sent { font-size:13px; color:var(--dim); margin-top:8px; min-height:18px; }
+</style>
+</head>
+<body>
+<div id="bar">
+  <span><span class="dot" id="dConn"></span><b id="conn">연결하는 중…</b></span>
+  <span><span class="dot" id="dTrack"></span>컨트롤러 <b id="track">—</b></span>
+  <span>착용 <b id="worn">—</b></span>
+  <span>벽면UI <b id="wfps">—</b> · 현실 영상 <b id="cfps">—</b> · 앱 <b id="afps">—</b></span>
+  <span id="camState"></span>
+</div>
+
+<div id="tabs"></div>
+
+<div id="views">
+  <div class="view" id="vWall"><h3><span>벽면UI</span><span>누르면 크게</span></h3><img id="iWall" alt=""><div class="empty" id="eWall">벽면UI를 기다리는 중…</div></div>
+  <div class="view" id="vCam"><h3><span>현실 영상</span><span>누르면 크게</span></h3><img id="iCam" alt=""><div class="empty" id="eCam">현실 영상을 기다리는 중…</div></div>
+</div>
+
+<div id="msg"><span id="ins"></span><span class="note" id="note"></span></div>
+
+<div id="ctl">
+  <button class="main" onclick="cmd('confirm')">확인 → 다음</button>
+  <button onclick="cmd('undo')">직선 취소</button>
+  <button class="danger" onclick="if(confirm('이 탭에서 찍은 것을 지울까요?'))cmd('clear')">이 탭 지우기</button>
+  <button class="danger" onclick="if(confirm('전체 측정 결과를 지울까요?'))cmd('resetAll')">전체 리셋</button>
+  <button onclick="if(confirm('지금 헤드셋이 보는 방향으로 축을 다시 잡을까요?'))cmd('axes')">축 다시 잡기</button>
+  <button onclick="cmd('calib')">끝점 보정</button>
+  <span class="sp"></span>
+  <button onclick="location.href='/csv'">CSV 받기</button>
+  <button class="danger" onclick="if(confirm('측정을 끝내고 로비로 나갈까요?'))cmd('exit')">나가기</button>
+</div>
+<div id="sent"></div>
+
+<script>
+const TABS = ['홈', '굴곡 · 신전', '측굴', '회전', '자유'];
+const $ = id => document.getElementById(id);
+const tabsEl = $('tabs');
+TABS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });
+
+function cmd(c) {
+  $('sent').textContent = '보냄: ' + c + ' …';
+  fetch('/cmd?c=' + encodeURIComponent(c), { cache: 'no-store' })
+    .then(r => { $('sent').textContent = r.ok ? '보냄: ' + c + ' (앱이 받음 — 결과는 벽면UI와 안내 줄로 확인)' : '★보내지 못함: ' + c; })
+    .catch(() => { $('sent').textContent = '★보내지 못함(연결 끊김): ' + c; });
+}
+
+// 이미지는 받자마자 다음 장을 묻는다 — 헤드셋이 만드는 속도만큼만 오고 쌓이지 않는다.
+function stream(path, img, empty, minGap) {
+  let url = null;
+  const next = delay => setTimeout(load, delay);
+  function load() {
+    const t0 = performance.now();
+    fetch(path + '?t=' + Date.now(), { cache: 'no-store' }).then(r => {
+      if (!r.ok) throw r.status;
+      return r.blob();
+    }).then(b => {
+      const u = URL.createObjectURL(b);
+      img.onload = () => { if (url) URL.revokeObjectURL(url); url = u; empty.style.display = 'none'; next(Math.max(0, minGap - (performance.now() - t0))); };
+      img.src = u;
+    }).catch(e => { empty.style.display = 'flex'; if (e === 503) empty.textContent = empty.dataset.wait || empty.textContent; next(1000); });
+  }
+  load();
+}
+stream('/wall.jpg', $('iWall'), $('eWall'), 80);
+stream('/cam.jpg', $('iCam'), $('eCam'), 80);
+
+['vWall', 'vCam'].forEach(id => $(id).onclick = () => $(id).classList.toggle('big'));
+
+function poll() {
+  fetch('/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    $('conn').textContent = '연결됨'; $('dConn').classList.add('on');
+    $('track').textContent = s.calib ? '끝점 보정 중' : (s.tracked ? '추적 중' : '★놓침');
+    $('dTrack').classList.toggle('on', !!s.tracked);
+    $('ins').textContent = s.instruction || '';
+    $('note').textContent = s.note || '';
+    const top = typeof s.top === 'number' ? s.top : -1;
+    [...tabsEl.children].forEach((b, i) => b.classList.toggle('cur', i === top));
+  }).catch(() => { $('conn').textContent = '★연결 끊김'; $('dConn').classList.remove('on'); })
+    .finally(() => setTimeout(poll, 300));
+}
+poll();
+
+function info() {
+  fetch('/mirrorinfo', { cache: 'no-store' }).then(r => r.json()).then(m => {
+    if (m.wallFps === undefined) return;
+    $('wfps').textContent = m.wallFps + '장/s';
+    $('cfps').textContent = m.camSupported ? m.camFps + '장/s' : '지원 안 함';
+    $('afps').textContent = m.appFps + 'fps';
+    $('worn').textContent = m.worn ? '쓰고 있음' : '거치(안 씀)';
+    $('camState').textContent = m.camState || '';
+    if (!m.camSupported) $('eCam').textContent = '현실 영상 지원 안 함 — ' + (m.camState || '');
+  }).catch(() => {}).finally(() => setTimeout(info, 1000));
+}
+info();
+</script>
+</body>
+</html>
