@@ -372,11 +372,36 @@ public class RomLineView
     // ── 탭 창 ── A/X로 부른다. 메인 화면 아래에 따로 뜬다. 탭 다섯 + 지금 탭의 진행 + 알림 + 버튼 안내.
     //   «리셋»만 고른 뒤 A를 눌러야 하고(확인 창이 한 번 더 뜬다), 나머지 탭은 스틱이 옮겨 가는 대로 바뀐다.
     public const int PopupTabs = 5;
+    private const float PopupTabW = 0.150f, PopupTabGap = 0.006f;
+
+    /// <summary>
+    /// 보이는 탭 수(10-16 사용자 지시: 자유 측정 탭을 끄면 4). 남는 탭은 끄고, 나머지를 두 탭 줄(메인 화면 아래 · 안내 위) 가운데로 모은다.
+    /// 탭 칸의 폭은 그대로다. 한 번만 부른다(Build 뒤).
+    /// </summary>
+    public void SetTabCount(int n)
+    {
+        float cellW = (GuideW - NearTabGap * (PopupTabs - 1)) / PopupTabs;
+        for (int i = 0; i < PopupTabs; i++)
+        {
+            bool on = i < n;
+            popupTabPlates[i].gameObject.SetActive(on);
+            popupTabTexts[i].gameObject.SetActive(on);
+            nearTabPlates[i].gameObject.SetActive(on);
+            nearTabTexts[i].gameObject.SetActive(on);
+            float k = i - (n - 1) * 0.5f;
+            SetX(popupTabPlates[i].transform, k * (PopupTabW + PopupTabGap));
+            SetX(popupTabTexts[i].transform, k * (PopupTabW + PopupTabGap));
+            SetX(nearTabPlates[i].transform, k * (cellW + NearTabGap));
+            SetX(nearTabTexts[i].transform, k * (cellW + NearTabGap));
+        }
+    }
+
+    private static void SetX(Transform t, float x) { Vector3 p = t.localPosition; t.localPosition = new Vector3(x, p.y, p.z); }
 
     private void BuildPopup()
     {
         MakeQuad(popup, "바탕", Vector2.zero, new Vector2(PanelW, PopupH), PopupColor, 0);
-        const float w = 0.150f, gap = 0.006f, h = 0.064f;
+        const float w = PopupTabW, gap = PopupTabGap, h = 0.064f;
         for (int i = 0; i < PopupTabs; i++)
         {
             var c = new Vector2((i - 2f) * (w + gap), 0f);

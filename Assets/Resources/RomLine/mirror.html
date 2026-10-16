@@ -68,7 +68,7 @@
 <div id="sent"></div>
 
 <script>
-const TABS = ['홈', '굴곡 · 신전', '측굴', '회전', '자유'];
+const TABS = ['홈', '굴곡 · 신전', '측굴', '회전'];   // 10-16: 자유 측정 탭은 앱에서 꺼 두었다(top4)
 const $ = id => document.getElementById(id);
 const tabsEl = $('tabs');
 TABS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });

@@ -257,6 +257,11 @@ public class RomLineSession : MonoBehaviour
     /// <summary>지금 탭의 번호 — 0 홈 · 1~3 순서 측정 · 4 자유 측정.</summary>
     private int CurTop => home ? 0 : freeMode ? 4 : CurTab + 1;
     private string TopName(int top) => top == 4 ? FreeTopName[freeTab] : TopTabName[top];
+
+    // ★10-16 사용자 지시: 자유 측정(3점 · 2선 · 연속)은 지금 쓰지 않는다 — 탭을 감추고 들어가는 길(스틱 · 모니터 · 홈 B)을 막는다. 코드는 그대로 둔다.
+    //   다시 쓰려면 이 값만 true로 바꾼다(런타임 값이라 씬에 굳지 않는다).
+    private static readonly bool FreeTabOn = false;
+    private static int LastTop => FreeTabOn ? 4 : 3;
     private bool TabLocked
     {
         get
@@ -331,6 +336,7 @@ public class RomLineSession : MonoBehaviour
         HidePokeCursors();
         LoadTipOffset();
         view.SetMode(false);
+        view.SetTabCount(LastTop + 1);   // 10-16: 자유 측정을 끄면 탭 넷
         freeView.SetVisible(true);   // 바닥의 3축 십자는 두 모드가 같이 쓴다
 
         if (monitorPort > 0)
@@ -648,7 +654,7 @@ public class RomLineSession : MonoBehaviour
                 Play(sndUndo);
                 dirty = true;
             }
-            else if (home) SetFreeTab((freeTab + 1) % 3);   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다)
+            else if (home) { if (FreeTabOn) SetFreeTab((freeTab + 1) % 3); }   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다) · 10-16: 자유 측정을 끄면 아무 일도 없다
             else if (undoLong)
             {
                 Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 방식의 점 지우기(자유 측정)" : "이 탭 지우기")}");
@@ -663,7 +669,7 @@ public class RomLineSession : MonoBehaviour
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            if (!resetAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, 4), "스틱");
+            if (!resetAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");
             return;
         }
 
@@ -1052,7 +1058,7 @@ public class RomLineSession : MonoBehaviour
     private bool GoTab(int top, string why)
     {
         if (top == CurTop) return true;
-        if (top < 0 || top > 4) return false;
+        if (top < 0 || top > LastTop) return false;   // 10-16: 자유 측정을 끄면 4는 없다
         if (TabLocked) { Deny(LockText()); return false; }
         resetAsk = false;
         if (top == 0) { GoHome(why); return true; }
@@ -1757,8 +1763,8 @@ public class RomLineSession : MonoBehaviour
                 // ★10-14 사용자 정정: 홈에는 조작 설명만 둔다(다 잰 뒤에도 — 기록은 각 탭에서 본다). 전부 같은 종류(조작)라 줄이지 않는다.
                 //   Meta 버튼 길게 = 메타 퀘스트 시스템의 «뷰 재설정»(추적 원점을 지금 자리로) — 벽면UI · 바닥 축이 그 원점에 맞춰 선다(PlaceFixed).
                 //   ★Meta 버튼은 로고 모양을 닮은 «∞»로 적는다(NotoSansKR-Bold에 있다 — 10-14 fontTools로 확인). 이 줄만 작게(사용자 지시).
-                forMonitor = instruction = "홈 — A : 리셋 · B : 자유측정 모드변경 · 트리거 : 컨트롤러 끝점 보정 · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
-                guide = "A : 리셋\nB : 자유측정 모드변경\n트리거 : 컨트롤러 끝점 보정\n" + SubInfo + "∞ 버튼 길게 : 뷰 재설정</size>";
+                forMonitor = instruction = "홈 — A : 리셋" + (FreeTabOn ? " · B : 자유측정 모드변경" : "") + " · 트리거 : 컨트롤러 끝점 보정 · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
+                guide = "A : 리셋\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + "트리거 : 컨트롤러 끝점 보정\n" + SubInfo + "∞ 버튼 길게 : 뷰 재설정</size>";
             }
         }
         // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).
