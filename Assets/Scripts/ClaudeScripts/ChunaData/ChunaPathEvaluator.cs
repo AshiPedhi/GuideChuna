@@ -1648,6 +1648,32 @@ public class ChunaPathEvaluator : MonoBehaviour
             contactTargetIndicator.Hide();
     }
 
+    /// <summary>
+    /// ★진단(2026-10-19) — 접촉 판정이 <b>무엇을 무엇과</b> 비교했나. 손 위치 · 대상 콜라이더의 판정 상자(bounds) ·
+    /// 손과 상자 사이 거리를 한 줄에 둔다. 팔 터치가 손을 대기도 전에 인정되는 이유를 가리려고 둔다
+    /// (판정은 캡슐이 아니라 월드 축 상자라, 비스듬한 팔은 상자가 실제보다 크다 — 그게 원인인지 잰다).
+    /// ★접촉이 래치되는 순간과 접촉 단계에 들어오는 순간에만 부른다(매 프레임 아님).
+    /// </summary>
+    public string DescribeContactForLog()
+    {
+        var cols = new List<Collider>();
+        CollectActiveContactColliders(cols);
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"대상 {(activeContactTargets != null && activeContactTargets.Length > 0 ? activeContactTargets[0].ToString() : "-")}");
+        sb.Append($" · 접촉 플래그 왼 {(isLeftHandTouchingPatient ? "★닿음" : "-")} / 오른 {(isRightHandTouchingPatient ? "★닿음" : "-")}");
+        Vector3? lp = playerLeftHand != null ? playerLeftHand.transform.position : (Vector3?)null;
+        Vector3? rp = playerRightHand != null ? playerRightHand.transform.position : (Vector3?)null;
+        sb.Append($" · 왼손 {(lp.HasValue ? lp.Value.ToString("F2") : "★없음")} · 오른손 {(rp.HasValue ? rp.Value.ToString("F2") : "★없음")}");
+        foreach (var c in cols)
+        {
+            var b = c.bounds;
+            float dl = lp.HasValue ? Mathf.Sqrt(b.SqrDistance(lp.Value)) : -1f;
+            float dr = rp.HasValue ? Mathf.Sqrt(b.SqrDistance(rp.Value)) : -1f;
+            sb.Append($" ‖ {c.name} 상자 중심 {b.center:F2} 크기 {b.size:F2} · 손까지 왼 {dl:F2}m 오른 {dr:F2}m");
+        }
+        return sb.ToString();
+    }
+
     /// <summary>현재 activeContactTargets가 가리키는 실제 콜라이더들을 중복 없이 모은다.</summary>
     private void CollectActiveContactColliders(List<Collider> results)
     {

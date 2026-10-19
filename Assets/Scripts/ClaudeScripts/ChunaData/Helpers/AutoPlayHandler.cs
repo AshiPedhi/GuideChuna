@@ -97,6 +97,8 @@ public class AutoPlayHandler
                 {
                     gateLatched = true;
                     ChunaLogger.Log("<color=green>[AutoPlay] 접촉 감지 - 이후 손을 떼도 끝까지 재생합니다 (touchOnce)</color>");
+                    // ★진단(2026-10-19): 무엇이 닿아 인정됐나 — 시작 몇 초 만에 래치되면 '저절로 넘어간다'가 된다.
+                    ChunaLogger.LogWarning($"<color=orange>[접촉판정] 래치 순간 (시작 후 {Time.time - autoPlayStartTime:F1}초) — {owner.DescribeContactForLog()}</color>");
                 }
             }
             else if (gateLatched)

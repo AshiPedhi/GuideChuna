@@ -1052,6 +1052,11 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         // Gated AutoPlay 시작 (ChunaPathEvaluator가 conditionType으로 gated 자동 판단)
         chunaPathEvaluator.StartAutoPlayFromSubStep(subStep);
 
+        // ★진단(2026-10-19): 단계에 들어오는 순간 손이 이미 판정 상자 안에 있나(거리 0 = 안).
+        //   팔 터치가 손을 대기도 전에 넘어가던 것(10-19 로그: 시작 직후 오른손 Arms 접촉)을 가린다.
+        //   ★접촉 플래그는 아직 앞 단계 대상 기준일 수 있다 — 거리 값을 본다.
+        ChunaLogger.LogWarning($"<color=orange>[접촉판정] 단계 진입 — substep {subStep.subStepNo} · {chunaPathEvaluator.DescribeContactForLog()}</color>");
+
         // StartHold 없이 즉시 가이드 손 재생 (주동수 없음)
         // ★구간을 (0,1)로 명시하고 루프를 끈다.
         //   인자 없는 오버로드는 runtimeGuideStartRatio/EndRatio(기본 0~0.4)와 loopGuideHands(=1)를 쓴다
