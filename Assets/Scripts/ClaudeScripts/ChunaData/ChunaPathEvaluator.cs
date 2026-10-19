@@ -1892,6 +1892,16 @@ public class ChunaPathEvaluator : MonoBehaviour
     public void HoldCurrentPose()
     {
         if (patientAnimator == null) return;
+
+        // ★구간 재생(anim=시작:끝)이 도는 중이면 손대지 않는다(2026-10-19). 구간 재생은 끝 지점에 닿으면
+        //   <b>스스로</b> 그 자세를 고정한다(LateUpdate). 여기서 끼어들면 속도를 0으로 눌러 끝 지점에 영영 못 닿는다 —
+        //   [계속하기]로 파지 단계를 넘겼을 때 환자세우기가 0%에서 멈춰 굳은 것이 그 꼴이었다(10-19 로그 실측).
+        if (rangeActive)
+        {
+            ChunaLogger.Log("<color=green>[Animation] 자세 고정 건너뜀 — 구간 재생 중(끝 지점에서 스스로 고정한다)</color>");
+            return;
+        }
+
         var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
         holdPoseHash = st.shortNameHash;
         holdPoseActive = true;
@@ -2441,6 +2451,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (pendingAnimationStart)
         {
             BeginDeferredAnimation();
+            // ★Animator.Play는 <b>다음 프레임</b>에야 상태에 반영된다. 넘기기는 같은 프레임에 바로 다음 단계로 들어가고,
+            //   그 단계의 자세 고정(HoldCurrentPose)이 <b>앞 자세</b>를 읽어 붙잡아 버린다(10-19 로그: 팔모으기 100%를 잡고
+            //   속도 0 → 새 애니가 0%에서 굳음). 지금 한 번 평가해 새 상태가 바로 읽히게 한다.
+            if (patientAnimator != null) patientAnimator.Update(0f);
+            if (secondaryPatientAnimator != null) secondaryPatientAnimator.Update(0f);
             return SkipPrep.보류애니재생;
         }
         return SkipPrep.없음;
