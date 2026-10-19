@@ -43,8 +43,18 @@ public class ScenarioConditionManager : MonoBehaviour
     [Tooltip("완료 피드백(유사도) 표시 시간 (초). ★진행을 막지 않는다.")]
     [SerializeField] private float feedbackVisibleSeconds = 2.5f;
 
-    [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초)")]
+    [Tooltip("20초 이상 진행 안될 경우 토글 버튼 활성화 (초) — ★빌드(배포)에서 쓰는 값")]
     [SerializeField] private float progressTimeout = 20f;
+
+    // ★2026-10-19 사용자 지시: «테스트할 때만 5초, 실제 빌드해서 배포할 때는 20초».
+    //   에디터 Play(Link 테스트 포함)에서만 이 값을 쓴다. 빌드에서는 위 progressTimeout.
+    //   ★#if UNITY_EDITOR로 가르지 않는다 — Application.isEditor 분기라 빌드에서도 컴파일되고(규칙 10) 그냥 안 쓰인다.
+    [Tooltip("에디터 Play에서만 쓰는 [계속하기] 대기 시간(초). 빌드에서는 무시되고 progressTimeout을 쓴다. 0 이하면 에디터도 progressTimeout.")]
+    [SerializeField] private float editorTestProgressTimeout = 5f;
+
+    /// <summary>지금 실제로 먹는 [계속하기] 대기 시간 — 에디터면 테스트 값, 빌드면 배포 값.</summary>
+    private float EffectiveProgressTimeout =>
+        Application.isEditor && editorTestProgressTimeout > 0f ? editorTestProgressTimeout : progressTimeout;
 
     /// <summary>
     /// 게이트 조건도 duration도 없는 '작업' 단계의 폴백 진행 시간(초).
@@ -1211,12 +1221,12 @@ public class ScenarioConditionManager : MonoBehaviour
             //   20초 버튼은 조건 판정 루프(ConditionCheckRoutine)에만 있어서, AutoPlay를 기다리는 이 경로는
             //   닿기 전까지 넘어갈 수단이 아예 없었다(10-19 로그: 36초 대기, '20초 경과' 0건).
             //   ★경추ROM은 자기 정체 버튼이 있다(ExternalStartHandler 등록) — 거기엔 띄우지 않는다.
-            if (!skipOffered && Time.unscaledTime - waitStart >= progressTimeout &&
+            if (!skipOffered && Time.unscaledTime - waitStart >= EffectiveProgressTimeout &&
                 pathEvaluator.IsAutoPlayWaitingForContact &&
                 guideUIController != null && guideUIController.ExternalStartHandler == null)
             {
                 skipOffered = true;
-                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 접촉 대기 단계, 토글 버튼 활성화</color>");
+                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {EffectiveProgressTimeout}초 경과 - 접촉 대기 단계, 토글 버튼 활성화</color>");
                 guideUIController.EnableStartToggle();
             }
 
@@ -1401,10 +1411,10 @@ public class ScenarioConditionManager : MonoBehaviour
             elapsedTime += checkInterval;
 
             // 20초 타임아웃 체크
-            if (!timeoutTriggered && elapsedTime >= progressTimeout)
+            if (!timeoutTriggered && elapsedTime >= EffectiveProgressTimeout)
             {
                 timeoutTriggered = true;
-                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 진행 안됨 감지, 토글 버튼 활성화</color>");
+                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {EffectiveProgressTimeout}초 경과 - 진행 안됨 감지, 토글 버튼 활성화</color>");
 
                 // 토글 버튼 활성화
                 if (guideUIController != null)
