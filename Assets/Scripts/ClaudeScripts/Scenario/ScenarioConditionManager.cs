@@ -1204,8 +1204,22 @@ public class ScenarioConditionManager : MonoBehaviour
         //   잘 끝나면 한 줄도 안 남는다 — 3초를 넘긴 뒤 3초마다만 말한다.
         float waitStart = Time.unscaledTime;
         float nextStallLog = waitStart + 3f;
+        bool skipOffered = false;
         while (pathEvaluator.IsAutoPlayMode)
         {
+            // ★접촉을 기다리는 단계(무릎·팔 터치 = PassiveStretch)에도 [계속하기]를 띄운다(2026-10-19).
+            //   20초 버튼은 조건 판정 루프(ConditionCheckRoutine)에만 있어서, AutoPlay를 기다리는 이 경로는
+            //   닿기 전까지 넘어갈 수단이 아예 없었다(10-19 로그: 36초 대기, '20초 경과' 0건).
+            //   ★경추ROM은 자기 정체 버튼이 있다(ExternalStartHandler 등록) — 거기엔 띄우지 않는다.
+            if (!skipOffered && Time.unscaledTime - waitStart >= progressTimeout &&
+                pathEvaluator.IsAutoPlayWaitingForContact &&
+                guideUIController != null && guideUIController.ExternalStartHandler == null)
+            {
+                skipOffered = true;
+                ChunaLogger.LogWarning($"<color=yellow>[ConditionManager] {progressTimeout}초 경과 - 접촉 대기 단계, 토글 버튼 활성화</color>");
+                guideUIController.EnableStartToggle();
+            }
+
             if (Time.unscaledTime >= nextStallLog)
             {
                 nextStallLog = Time.unscaledTime + 3f;

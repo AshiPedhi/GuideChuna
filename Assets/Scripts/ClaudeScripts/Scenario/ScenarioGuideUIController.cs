@@ -1032,6 +1032,17 @@ public class ScenarioGuideUIController : MonoBehaviour
 
             ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
             LogLeavingSubStepForSkip();
+
+            // ★떠나는 단계의 환자 동작을 먼저 대신 해 준다(2026-10-19). 접촉 대기 단계(무릎·팔 터치)는
+            //   닿은 것으로 열어 끝까지 재생한 뒤 <b>스스로</b> 넘어간다 — 여기서 또 넘기면 두 번 넘어간다.
+            //   ★외부 처리기가 걸린 시나리오(경추ROM)는 자기 규칙이 있다 — 그 버튼이 아니라서 여기로 흘러와도 손대지 않는다.
+            if (ExternalStartHandler == null && scenarioManager.PrepareLeavingSubStepForSkip())
+            {
+                startToggle.isOn = false;
+                SetStartToggleVisible(false);   // 재생이 끝나 넘어갈 때까지 또 누르지 않게
+                return;
+            }
+
             scenarioManager.NextSubStep();
 
             // 토글 상태 초기화 (다음 클릭을 위해)

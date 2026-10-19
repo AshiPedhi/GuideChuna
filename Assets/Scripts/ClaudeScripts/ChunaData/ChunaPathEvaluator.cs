@@ -2372,8 +2372,13 @@ public class ChunaPathEvaluator : MonoBehaviour
         string anim = "애니메이터 ★없음";
         if (patientAnimator != null)
         {
+            // ★지정 클립 이름과 <b>실제로 돌고 있는 상태</b>를 가른다. 보류 중이면 실제로는 앞 자세가 남아 있다
+            //   (10-19 첫 로그가 '환자내리기 1.00'으로 찍혔는데 실제는 환자세우기 끝 자세였다 — 섞인 값).
             var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
-            anim = $"애니 '{currentAnimationStateName}' {st.normalizedTime:0.00} · 속도 {patientAnimator.speed:0.##}";
+            bool same = !string.IsNullOrEmpty(currentAnimationStateName) &&
+                        st.shortNameHash == Animator.StringToHash(currentAnimationStateName);
+            anim = $"지정 클립 '{currentAnimationStateName}' · 실제 상태 {(same ? "같음" : "★다른 클립(앞 자세)")} " +
+                   $"{st.normalizedTime:0.00} · 속도 {patientAnimator.speed:0.##}";
         }
         return $"AutoPlay {(autoPlayHandler.IsAutoPlayMode ? "★켜짐" : "꺼짐")}" +
                (autoPlayHandler.IsAutoPlayMode
@@ -2382,6 +2387,42 @@ public class ChunaPathEvaluator : MonoBehaviour
                $" · {anim} · 구간재생 {(rangeActive ? "중" : "-")} · 자세유지 {(holdPoseActive ? "중" : "-")}" +
                $" · 보류 클립 {(pendingAnimationStart ? "★있음" : "-")}";
     }
+
+    /// <summary>[계속하기]로 넘길 때 떠나는 단계를 어떻게 정리했나.</summary>
+    public enum SkipPrep
+    {
+        없음,               // 정리할 것 없음 — 종전대로 바로 다음 단계
+        보류애니재생,       // 파지 대기로 걸어 둔 환자 애니를 지금 틀었다 — 바로 다음 단계
+        접촉게이트열림,     // 접촉 대기 AutoPlay를 닿은 것으로 열었다 — 끝까지 재생 후 스스로 넘어간다
+        이미재생중,         // 접촉 AutoPlay가 이미 재생 중 — 끝나면 스스로 넘어간다
+    }
+
+    /// <summary>
+    /// ★[계속하기]로 넘기기 직전(2026-10-19) — 떠나는 단계가 <b>하기로 한 환자 동작</b>을 대신 해 준다.
+    /// 공용 경로는 단계 번호만 넘겨서, 손이 닿아야 트는 애니가 영영 안 돌아 환자가 굳었다
+    /// (흉추 신전 파지·내리기 · 무릎·팔 터치 — 10-19 로그 실측).
+    /// ★손이 닿았을 때 부르는 함수를 그대로 쓴다(<see cref="BeginDeferredAnimation"/> ·
+    ///   <see cref="AutoPlayHandler.ForceOpenGateForSkip"/>). 넘기기 전용 재생 경로를 따로 만들지 않는다.
+    /// </summary>
+    public SkipPrep PrepareSkip()
+    {
+        if (autoPlayHandler.IsAutoPlayMode && autoPlayHandler.IsGated)
+        {
+            if (autoPlayHandler.IsGateLatched) return SkipPrep.이미재생중;
+            autoPlayHandler.ForceOpenGateForSkip();
+            return SkipPrep.접촉게이트열림;
+        }
+        if (pendingAnimationStart)
+        {
+            BeginDeferredAnimation();
+            return SkipPrep.보류애니재생;
+        }
+        return SkipPrep.없음;
+    }
+
+    /// <summary>접촉을 기다리는 AutoPlay(게이트 닫힘)인가 — [계속하기]를 띄울지 판단용.</summary>
+    public bool IsAutoPlayWaitingForContact =>
+        autoPlayHandler.IsAutoPlayMode && autoPlayHandler.IsGated && !autoPlayHandler.IsGateLatched;
 
     /// <summary>
     /// 현재 AutoPlay 모드인지 확인

@@ -207,6 +207,21 @@ public class AutoPlayHandler
     }
 
     /// <summary>
+    /// ★[계속하기]로 넘길 때(2026-10-19) — 접촉 게이트를 <b>닿은 것으로</b>연다.
+    /// 그다음은 손이 닿았을 때와 똑같다: 다음 프레임 <see cref="UpdateAutoPlay"/>가 보류 클립을 틀고,
+    /// 클립이 끝나면 정상 완료 경로(OnAutoPlayCompleted)로 단계가 넘어간다.
+    /// ★게이트 없는 AutoPlay는 건드리지 않는다(false).
+    /// </summary>
+    public bool ForceOpenGateForSkip()
+    {
+        if (!isAutoPlayMode || !isGated) return false;
+        latchGate = true;
+        gateLatched = true;
+        ChunaLogger.Log("<color=green>[AutoPlay] [계속하기] — 접촉한 것으로 게이트를 열었다(끝까지 재생 후 넘어간다)</color>");
+        return true;
+    }
+
+    /// <summary>
     /// Complete auto play and reset state.
     /// </summary>
     public void CompleteAutoPlay()

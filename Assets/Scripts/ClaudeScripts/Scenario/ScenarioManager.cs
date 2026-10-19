@@ -444,6 +444,26 @@ public class ScenarioManager : MonoBehaviour
     }
 
     /// <summary>
+    /// ★[계속하기]로 넘기기 직전(2026-10-19) — 떠나는 단계가 하기로 한 환자 동작을 대신 해 준다.
+    /// true를 돌려주면 <b>그 단계가 스스로 넘어간다</b>(접촉 AutoPlay를 열어 끝까지 재생) —
+    /// 부른 쪽은 NextSubStep을 부르면 안 된다(두 번 넘어간다).
+    /// ★경추ROM은 가이드UI의 ExternalStartHandler가 먼저 가져가서 여기 오지 않는다.
+    /// </summary>
+    public bool PrepareLeavingSubStepForSkip()
+    {
+        if (chunaPathEvaluator == null) return false;
+
+        var r = chunaPathEvaluator.PrepareSkip();
+        // 파지로 다시 트는 것을 푼다 — 다음 단계에서 손이 닿아도 지난 단계 애니가 또 돌지 않게.
+        if (r == ChunaPathEvaluator.SkipPrep.보류애니재생) cranialController?.DisarmAnimationOnGrip();
+
+        if (r != ChunaPathEvaluator.SkipPrep.없음)
+            ChunaLogger.Log($"<color=orange>[넘기기] 떠나는 단계 정리 — {r} (substep {currentSubStep?.subStepNo})</color>");
+
+        return r == ChunaPathEvaluator.SkipPrep.접촉게이트열림 || r == ChunaPathEvaluator.SkipPrep.이미재생중;
+    }
+
+    /// <summary>
     /// 다음 SubStep으로 진행
     /// </summary>
     public void NextSubStep()
