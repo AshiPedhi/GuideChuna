@@ -1,6 +1,6 @@
-// ★[미사용 2026-08-31] 씬·프리팹에 배선이 없고, 다른 스크립트에서 부르지도 않는다.
-//   지우지 않고 남겨 둔다 — 읽는 사람이 "이게 지금 도는 코드"라고 오해하지 않도록 이 줄을 단다.
-//   판정 근거와 재확인 방법: .claude/tools/deadscan.py
+// ★2026-10-19 정정: 08-31에 «미사용» 배너를 달았는데 <b>틀렸다.</b> 씬 배선은 없지만
+//   RuntimeInitializeOnLoadMethod로 Play마다 저절로 붙어 돈다(오늘 로그의 [AnimWatcher] 줄이 전부 여기서 나왔다).
+//   deadscan의 두 조건(씬 guid · 이름 참조)으로는 안 잡히는 경우다 — 자동 생성 속성도 봐야 한다.
 using UnityEngine;
 
 /// <summary>
@@ -85,7 +85,45 @@ public class PatientAnimatorWatcher : MonoBehaviour
             Debug.Log($"<color=cyan>[AnimWatcher] substep 전환: '{lastSubStep}' → '{sub}' " +
                       $"(현재 hash={st.shortNameHash}, 정규화시간 {st.normalizedTime:F2})</color>");
             lastSubStep = sub;
+            LogBodyPose("substep 전환");
         }
+
+        // ③ 몸이 실제로 누워 있나(2026-10-19) — 복와위에서 환자가 선 채 사용자를 마주 보던 것(간헐)을 잰다.
+        //   로그로는 '복와위 대기'가 정상 재생 중이었는데 화면은 서 있었다 → 상태 이름이 아니라 몸 방향을 직접 본다.
+        //   ★기울기가 15° 넘게 바뀔 때만 찍는다(자기 침묵).
+        float tilt = BodyTiltDeg();
+        if (tilt >= 0f && (lastTilt < 0f || Mathf.Abs(tilt - lastTilt) > 15f))
+        {
+            LogBodyPose(lastTilt < 0f ? "첫 측정" : $"몸 기울기 변화 {lastTilt:F0}° → {tilt:F0}°");
+        }
+    }
+
+    private float lastTilt = -1f;
+    private Transform hips, head;
+
+    /// <summary>골반 → 머리 방향이 세로선과 이루는 각(°). 서면 ≈0 · 누우면 ≈90. 못 재면 -1.</summary>
+    private float BodyTiltDeg()
+    {
+        if (target == null || !target.isHuman) return -1f;
+        if (hips == null) hips = target.GetBoneTransform(HumanBodyBones.Hips);
+        if (head == null) head = target.GetBoneTransform(HumanBodyBones.Head);
+        if (hips == null || head == null) return -1f;
+        Vector3 d = head.position - hips.position;
+        if (d.sqrMagnitude < 1e-6f) return -1f;
+        return Vector3.Angle(d, Vector3.up);
+    }
+
+    private void LogBodyPose(string why)
+    {
+        float tilt = BodyTiltDeg();
+        lastTilt = tilt;
+        Transform t = target.transform;
+        Transform p = t.parent;
+        Debug.Log($"<color=magenta>[AnimWatcher·자세] {why} — 몸 기울기 {tilt:F0}° ({(tilt < 0f ? "못 잼" : tilt > 60f ? "누움" : tilt < 30f ? "★섬" : "기움")}) · " +
+                  $"컨트롤러 '{(target.runtimeAnimatorController != null ? target.runtimeAnimatorController.name : "없음")}' · " +
+                  $"c9 로컬회전 {t.localEulerAngles:F1} 월드회전 {t.eulerAngles:F1} · " +
+                  $"부모 '{(p != null ? p.name : "-")}' 회전 {(p != null ? p.eulerAngles.ToString("F1") : "-")} · " +
+                  $"c9 로컬위치 {t.localPosition:F2} · substep='{lastSubStep}'</color>");
     }
 
     private ScenarioManager cachedManager;
