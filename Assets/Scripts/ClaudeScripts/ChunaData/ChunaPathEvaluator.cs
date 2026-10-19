@@ -2356,6 +2356,31 @@ public class ChunaPathEvaluator : MonoBehaviour
 
         // AutoPlay 시작
         StartAutoPlay(duration, gated, latchGate, requireBothHands);
+        autoPlayOwnerLabel = $"substep {subStep.subStepNo} · {subStep.conditionType} · 클립 {subStep.patientAnimationClip}";
+    }
+
+    // ★진단용(2026-10-19): 이 AutoPlay를 <b>어느 substep이 켰는지</b>. [계속하기]로 넘긴 뒤에도
+    //   앞 단계의 AutoPlay가 살아 있는지를 가리려고 둔다. 로그 문자열에만 쓴다.
+    private string autoPlayOwnerLabel = "-";
+
+    /// <summary>
+    /// ★진단 한 줄(2026-10-19) — AutoPlay와 환자 애니의 지금 상태.
+    /// [계속하기]로 넘길 때와 다음 단계가 AutoPlay를 오래 기다릴 때만 부른다(매 프레임 부르지 않는다).
+    /// </summary>
+    public string DescribeAutoPlayForLog()
+    {
+        string anim = "애니메이터 ★없음";
+        if (patientAnimator != null)
+        {
+            var st = patientAnimator.GetCurrentAnimatorStateInfo(0);
+            anim = $"애니 '{currentAnimationStateName}' {st.normalizedTime:0.00} · 속도 {patientAnimator.speed:0.##}";
+        }
+        return $"AutoPlay {(autoPlayHandler.IsAutoPlayMode ? "★켜짐" : "꺼짐")}" +
+               (autoPlayHandler.IsAutoPlayMode
+                   ? $"(켠 단계: {autoPlayOwnerLabel} · 접촉 게이트 {(autoPlayHandler.IsGated ? (autoPlayHandler.IsGateLatched ? "열림(래치)" : "★닫힘") : "없음")})"
+                   : "") +
+               $" · {anim} · 구간재생 {(rangeActive ? "중" : "-")} · 자세유지 {(holdPoseActive ? "중" : "-")}" +
+               $" · 보류 클립 {(pendingAnimationStart ? "★있음" : "-")}";
     }
 
     /// <summary>

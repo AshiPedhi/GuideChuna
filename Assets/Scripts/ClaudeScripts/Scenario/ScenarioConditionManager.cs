@@ -1199,8 +1199,22 @@ public class ScenarioConditionManager : MonoBehaviour
         isWaitingForAutoPlay = true;
         ChunaLogger.Log("<color=yellow>[ConditionManager] AutoPlay 완료 대기 중...</color>");
 
+        // ★진단(2026-10-19): 오래 기다리면 <b>누구의</b> AutoPlay를 기다리는지 찍는다.
+        //   [계속하기]로 넘긴 앞 단계의 AutoPlay가 남아 있으면 여기서 영영 기다린다(추정).
+        //   잘 끝나면 한 줄도 안 남는다 — 3초를 넘긴 뒤 3초마다만 말한다.
+        float waitStart = Time.unscaledTime;
+        float nextStallLog = waitStart + 3f;
         while (pathEvaluator.IsAutoPlayMode)
         {
+            if (Time.unscaledTime >= nextStallLog)
+            {
+                nextStallLog = Time.unscaledTime + 3f;
+                SubStepData cur = scenarioManager != null ? scenarioManager.CurrentSubStep : null;
+                ChunaLogger.LogWarning(
+                    $"<color=orange>[넘기기·대기] AutoPlay가 안 끝나 진행이 멈춰 있다 {Time.unscaledTime - waitStart:F0}초 — " +
+                    $"지금 단계 {scenarioManager?.CurrentStep?.stepName} / substep {cur?.subStepNo} · 조건 {cur?.conditionType} · " +
+                    $"{pathEvaluator.DescribeAutoPlayForLog()}</color>");
+            }
             yield return null;
         }
 

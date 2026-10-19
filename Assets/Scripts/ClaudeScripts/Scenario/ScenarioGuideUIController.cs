@@ -1031,11 +1031,31 @@ public class ScenarioGuideUIController : MonoBehaviour
             }
 
             ChunaLogger.Log("[GuideUI] 시작 토글 클릭 - 다음 SubStep으로 진행");
+            LogLeavingSubStepForSkip();
             scenarioManager.NextSubStep();
 
             // 토글 상태 초기화 (다음 클릭을 위해)
             startToggle.isOn = false;
         }
+    }
+
+    /// <summary>
+    /// ★진단(2026-10-19) — [계속하기]·[다음]으로 넘기는 순간, <b>떠나는 단계</b>가 무엇을 남기고 가는지 찍는다.
+    /// 공용 경로(NextSubStep)는 단계 번호만 넘기고 떠나는 단계의 AutoPlay를 끝내지 않는다.
+    /// 접촉을 기다리던 AutoPlay가 남으면 환자 애니 속도를 계속 0으로 누르고, 다음 단계가
+    /// 그 AutoPlay를 기다리며 굳을 수 있다(코드 읽기로 본 추정 — 이 로그로 가린다).
+    /// ★경추ROM은 ExternalStartHandler가 먼저 가져가 여기까지 오지 않는다.
+    /// </summary>
+    private void LogLeavingSubStepForSkip()
+    {
+        SubStepData sub = scenarioManager.CurrentSubStep;
+        StepData step = scenarioManager.CurrentStep;
+        // 넘길 때 한 번만 찾는다(매 프레임 아님). 씬에 직렬화된 참조가 비어 있을 수 있다.
+        ChunaPathEvaluator ev = pathEvaluator != null ? pathEvaluator : FindFirstObjectByType<ChunaPathEvaluator>();
+        ChunaLogger.LogWarning(
+            $"<color=orange>[넘기기] 떠나는 단계 — {scenarioManager.CurrentPhase?.phaseName} / {step?.stepName} / " +
+            $"substep {sub?.subStepNo} · 조건 {sub?.conditionType} · " +
+            $"{(ev != null ? ev.DescribeAutoPlayForLog() : "ChunaPathEvaluator ★없음")}</color>");
     }
 
     /// <summary>
