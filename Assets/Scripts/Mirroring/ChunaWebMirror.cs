@@ -93,7 +93,7 @@ public class ChunaWebMirror : MonoBehaviour
         if (sh == null || !sh.isSupported) { Debug.LogError("[웹미러] ★셰이더 없음/미지원"); enabled = false; yield break; }
         mat = new Material(sh);
         mat.SetFloat("_Slice", 0f);
-        flip = Prop("debug.coco.webmirror.flip", "1") == "1";   // ★읽어 온 줄은 RT의 v = 0부터 온다(10-20 HwMirror) — JPEG는 맨 윗줄부터라 기본으로 뒤집는다(기기 이미지로 확인할 것)
+        flip = Prop("debug.coco.webmirror.flip", "0") == "1";   // ★10-20 기기(3S · GLES3): 뒤집으면 거꾸로였다 — 기본은 안 뒤집는다
         mat.SetFloat("_FlipY", flip ? 1f : 0f);
 
         cb = new CommandBuffer { name = "WebMirrorCapture" };
