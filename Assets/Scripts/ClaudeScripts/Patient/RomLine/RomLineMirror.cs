@@ -84,6 +84,10 @@ public class RomLineMirror : MonoBehaviour
     private bool overlayLogged;
 
     private float diagNext, diagFrom;
+
+    /// <summary>관제 화면의 해상도 버튼(10-20 사용자 지시 · 우측 상단 셋). 전부 4:3 — 화면 칸의 비율이 안 바뀐다. 지원 목록은 기기 로그로 확인(320×240 ~ 1280×1280).</summary>
+    public static readonly Vector2Int[] CamChoices = { new Vector2Int(640, 480), new Vector2Int(800, 600), new Vector2Int(1280, 960) };
+    private Vector2Int pendingRes;   // 바꿀 해상도 — 인코딩 중인 장이 끝난 뒤(camBusy 아님)에 카메라를 다시 연다
     private readonly StringBuilder info = new StringBuilder(512);
 
     public void Init(RomLineMonitor m, RomLineView v)
@@ -124,10 +128,30 @@ public class RomLineMirror : MonoBehaviour
         pcaState = "권한 · 첫 영상 기다리는 중";
     }
 
+    /// <summary>현실 영상 해상도를 바꾼다(관제 화면 버튼 → /cmd?c=camN). 실제로 바꾸는 건 Update — 쓰던 버퍼를 인코딩 스레드가 아직 들고 있을 수 있다.</summary>
+    public void RequestCamResolution(int choice)
+    {
+        if (choice < 0 || choice >= CamChoices.Length) return;
+        if (pca == null) { Debug.LogWarning("[선실측] ★미러링 — 해상도 바꾸기: 현실 영상이 없다(" + pcaState + ")"); return; }
+        pendingRes = CamChoices[choice];
+    }
+
     private void Update()
     {
         if (monitor == null || monitor.Port == 0) return;
         float now = Time.unscaledTime;
+
+        if (pendingRes != default && pca != null && !camBusy)
+        {
+            Debug.Log($"[선실측] 미러링 — 현실 영상 해상도 {camResolution.x}×{camResolution.y} → {pendingRes.x}×{pendingRes.y}(카메라를 다시 연다)");
+            camResolution = pendingRes;
+            pendingRes = default;
+            pca.gameObject.SetActive(false);   // OnEnable이 RequestedResolution으로 다시 연다(StartCamera와 같은 길)
+            pca.RequestedResolution = camResolution;
+            pca.gameObject.SetActive(true);
+            pcaShownRes = default;
+            pcaState = "해상도 바꾸는 중";
+        }
 
         if (pca != null && pca.IsPlaying)
         {
@@ -319,6 +343,7 @@ public class RomLineMirror : MonoBehaviour
         info.Length = 0;
         info.Append("{\"camSupported\":").Append(PassthroughCameraAccess.IsSupported ? "true" : "false")
             .Append(",\"camState\":\"").Append(pcaState).Append('"')
+            .Append(",\"camRes\":\"").Append(camResolution.x).Append('x').Append(camResolution.y).Append('"')
             .Append(",\"wallFps\":").Append((wf / span).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))
             .Append(",\"camFps\":").Append((cf / span).ToString("F1", System.Globalization.CultureInfo.InvariantCulture))
             .Append(",\"wallMs\":").Append(wms.ToString("F0", System.Globalization.CultureInfo.InvariantCulture))

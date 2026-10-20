@@ -1576,6 +1576,7 @@ public class RomLineSession : MonoBehaviour
                 break;
             case "calib": if (calibrating) EndCalibration("모니터"); else BeginCalibration(); break;
             case "exit": Exit(); break;
+            case "cam0": case "cam1": case "cam2": if (mirror != null) mirror.RequestCamResolution(command[3] - '0'); break;   // ★10-20: 관제 화면의 해상도 버튼
             default: Debug.LogWarning($"[선실측] ★모니터 명령 «{command}»을 모른다"); break;
         }
     }
