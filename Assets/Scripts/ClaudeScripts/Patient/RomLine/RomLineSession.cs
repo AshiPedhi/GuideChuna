@@ -1522,6 +1522,7 @@ public class RomLineSession : MonoBehaviour
         {
             char c = s[i];
             if (c == '"' || c == '\\') sb.Append('\\').Append(c);
+            else if (c == '\n') sb.Append("\\n");   // ★10-20: 관제 화면이 안내(guide)를 헤드셋처럼 줄을 나눠 그린다 — 종전엔 빈칸으로 바꿔 한 줄이 됐다
             else if (c < ' ') sb.Append(' ');
             else sb.Append(c);
         }
