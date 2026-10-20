@@ -19,17 +19,20 @@
   header img { height:36px; width:auto; display:block; }
   header h1 { margin:0; font-size:24px; font-weight:700; letter-spacing:0.02em; }
   main { flex:1; min-height:0; display:grid; grid-template-columns: minmax(380px, 460px) 1fr; gap:14px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } #mirror { min-height:300px; } }
   #left { display:flex; flex-direction:column; gap:12px; min-height:0; }
+
+  /* 연결 · 컨트롤러 · 착용 — 컨트롤러UI 바로 아래(10-20 사용자 지시) */
+  #conninfo { display:flex; flex-wrap:wrap; gap:4px 18px; font-size:14px; color:var(--dim); padding:0 4px; }
+  #conninfo b { color:var(--text); font-weight:600; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; }
 
   /* 컨트롤러UI — 탭 줄(칸 바탕 · 지금 탭 = 파란 칸 + 노란 글자 · 다 잰 탭 = 초록 글자) + 반투명 테두리 안내 */
   #tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; margin-bottom:6px; }
-  #tabs button { background:var(--tabOff); color:#fff; border:0; border-radius:4px; padding:8px 4px; font-size:15px; font-family:inherit; cursor:pointer; }
+  #tabs button { background:var(--tabOff); color:#fff; border:0; border-radius:4px; padding:9px 4px; font-size:17px; font-family:inherit; cursor:pointer; }
   #tabs button.done { color:var(--done); }
   #tabs button.cur { background:var(--tabOn); color:var(--tabCur); font-weight:700; }
   /* ★10-20 사용자 지시: 안내 상자는 고정 크기 — 줄 수가 바뀌어도 아래 결과가 밀리지 않는다(가장 긴 안내 = 세 줄 + 알림 한 줄) */
-  #guide { border:1.5px solid rgba(255,255,255,0.35); border-radius:4px; padding:10px 14px; height:150px; overflow:hidden; text-align:center;
+  #guide { border:1.5px solid rgba(255,255,255,0.35); border-radius:4px; padding:10px 14px; height:170px; overflow:hidden; text-align:center;
            display:flex; flex-direction:column; justify-content:center; }
 
   /* 미러링 해상도(오른쪽 위) — 지금 해상도만 파란 칸 */
@@ -37,9 +40,9 @@
   #res span { margin-right:6px; }
   #res button { background:var(--tabOff); color:#fff; border:0; border-radius:4px; padding:7px 12px; font-size:14px; font-family:inherit; cursor:pointer; }
   #res button.cur { background:var(--tabOn); color:var(--tabCur); font-weight:700; }
-  #gLine { font-size:20px; line-height:1.5; }
+  #gLine { font-size:23px; line-height:1.5; }
   #gLine .sub { font-size:72%; }
-  #gNote { font-size:15px; color:var(--note); margin-top:6px; }
+  #gNote { font-size:17px; color:var(--note); margin-top:6px; }
   #gNote:empty { display:none; }
 
   /* 결과(벽면UI 자료 · 각도기 없음) — 확인(트리거)한 동작만 채운다(헤드셋 결과표와 같다) */
@@ -68,6 +71,25 @@
   #mirror img { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; }
   #mirror.big { position:fixed; inset:0; z-index:10; border-radius:0; cursor:zoom-out; }
   #eCam { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim); font-size:15px; text-align:center; padding:12px; }
+
+  /* ★10-20 사용자 지시: 모바일 대응 — 좁으면 한 줄로 쌓는다. 순서 = 컨트롤러UI → 연결 상태 → 미러링(4:3) → 결과 → 아래 줄 */
+  @media (max-width: 900px) {
+    html, body { height:auto; }
+    body { padding:8px 10px 12px; }
+    header { flex-wrap:wrap; gap:8px 12px; }
+    header img { height:28px; }
+    header h1 { font-size:20px; }
+    #res { margin-left:0; width:100%; }
+    #res button { flex:1; padding:8px 4px; }
+    main { display:flex; flex-direction:column; gap:10px; }
+    #left { display:contents; }
+    #ctrl { order:1; } #conninfo { order:2; } #mirror { order:3; } #result { order:4; }
+    #mirror { position:relative; width:100%; aspect-ratio:4 / 3; flex:none; }
+    #guide { height:auto; min-height:130px; }
+    td { font-size:17px; padding:8px 2px; } td.n { font-size:16px; } th { font-size:13px; }
+    #foot { flex-wrap:wrap; }
+    #btns { width:100%; } #btns button { flex:1; }
+  }
 </style>
 </head>
 <body>
@@ -84,7 +106,13 @@
       <div id="guide"><div id="gLine">연결하는 중…</div><div id="gNote"></div></div>
     </div>
 
-    <div class="card">
+    <div id="conninfo">
+      <span><span class="dot" id="dConn"></span><b id="conn">연결하는 중…</b></span>
+      <span><span class="dot" id="dTrack"></span>컨트롤러 <b id="track">—</b></span>
+      <span>착용 <b id="worn">—</b></span>
+    </div>
+
+    <div class="card" id="result">
       <table>
         <thead><tr><th class="n">측정</th><th class="a">능동</th><th class="p">압박</th><th class="d">차이</th></tr></thead>
         <tbody id="rows"></tbody>
@@ -99,9 +127,6 @@
 <!-- ★10-20 사용자 지시: 상태 · 버튼은 맨 아래 한 줄(전체 폭) -->
 <footer id="foot">
   <div id="status">
-    <span><span class="dot" id="dConn"></span><b id="conn">연결하는 중…</b></span>
-    <span><span class="dot" id="dTrack"></span>컨트롤러 <b id="track">—</b></span>
-    <span>착용 <b id="worn">—</b></span>
     <span>미러링 <b id="cfps">—</b> · 앱 <b id="afps">—</b> <span id="camState"></span></span>
     <span id="sent"></span>
   </div>
