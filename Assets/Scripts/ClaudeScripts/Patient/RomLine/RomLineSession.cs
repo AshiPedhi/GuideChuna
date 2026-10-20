@@ -1800,7 +1800,7 @@ public class RomLineSession : MonoBehaviour
         }
         view.SetTip(tipText);
         view.SetGuide(guide, guideNote);
-        RefreshGuidedExtras(tab, forMonitor, note);
+        RefreshGuidedExtras(tab, forMonitor, note, guide, guideNote);
         RefreshTabs();
 
         // 결과표(10-12) — 한 줄에 동작 하나: 능동 · 압박의 «면 위 각»과 그 동작의 단면에서 본 각도기.
@@ -1882,7 +1882,7 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>순서대로 재는 흐름의 나머지 표시 — 진행 줄 · 바닥의 3축 · 안내 음성 · 모니터로 보낼 상태.</summary>
-    private void RefreshGuidedExtras(int tab, string instruction, string note)
+    private void RefreshGuidedExtras(int tab, string instruction, string note, string guide, string guideNote)
     {
         int m = MotionOf(Mathf.Min(group, GroupCount - 1));
         int plane = m / 2;
@@ -1900,6 +1900,12 @@ public class RomLineSession : MonoBehaviour
         JsonStr(js, instruction).Append(",\"note\":");
         JsonStr(js, note).Append(",\"axesOn\":true,\"planeOn\":true,\"plane\":");
         JsonStr(js, FreePlaneName[plane]);
+        // ★10-20 사용자 지시: 관제 화면은 컨트롤러UI 디자인으로 탭 · 안내를 그린다 — 헤드셋 안내와 같은 글(TMP 서식 태그 그대로 · 화면이 HTML로 바꾼다)과 다 잰 탭(1 · 0)을 보낸다.
+        js.Append(",\"guide\":");
+        JsonStr(js, guide).Append(",\"guideNote\":");
+        JsonStr(js, guideNote).Append(",\"tabDone\":\"");
+        for (int t = 0; t < 3; t++) js.Append(TabComplete(t) ? '1' : '0');
+        js.Append('"');
 
         // 결과표 · 진행 정보(10-12) — 판과 같은 값을 보낸다. steps = 묶음 1~18을 다 찍었는가(1 · 0), results = 동작 × (능동 a · 압박 p)
         AppendPopupJson(js).Append(",\"cur\":").Append(Done ? -1 : m).Append(",\"phase\":").Append(Done ? -1 : PhaseOf(group))
