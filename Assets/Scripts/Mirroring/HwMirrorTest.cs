@@ -181,6 +181,17 @@ public class HwMirrorTest : MonoBehaviour
         frames++; dtSum += Time.unscaledDeltaTime;
         float now = Time.unscaledTime;
 
+        // ★씬이 바뀌면 눈 카메라도 새로 생긴다(로비 → 실습 · 10-20 추나 시험) — 잡기 명령을 새 카메라로 옮긴다.
+        //   종전엔 첫 씬 카메라에만 붙어 실습 씬에서 사본이 멈췄다(같은 장면을 계속 보냈다).
+        Camera main = Camera.main;
+        if (main != null && main != cam)
+        {
+            if (cam != null) cam.RemoveCommandBuffer(camEvent, cb);
+            cam = main;
+            cam.AddCommandBuffer(camEvent, cb);
+            Debug.Log($"[HwMirror] 카메라 옮김 — '{cam.name}' · 씬 {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}");
+        }
+
         if (now >= nextSend)
         {
             int slot = -1;
