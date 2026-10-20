@@ -197,6 +197,9 @@ public class PatientPositionManager : MonoBehaviour
              "정상 해법은 홀더를 지정하는 것 — 메뉴 GuideChuna/환자 이동 홀더 만들기.")]
     [SerializeField] private bool holdPresetAgainstAnimation = false;
 
+    /// <summary>useAnimationRotation 프리셋(복와위)에서 홀더에 거는 로컬 회전 — 08-18 씬 값 (0, -89.8, 0).</summary>
+    private static readonly Quaternion AnimationRotationMoveRootLocal = Quaternion.Euler(0f, -89.82f, 0f);
+
     /// <summary>홀더 방식을 쓰는가(= 애니메이션과 싸울 필요가 없는 상태).</summary>
     private bool UsingMoveRoot => patientMoveRoot != null && patientMoveRoot != patientRoot;
 
@@ -281,6 +284,13 @@ public class PatientPositionManager : MonoBehaviour
                     Quaternion want = Quaternion.Euler(preset.patientRotation);
                     Quaternion deltaRot = want * Quaternion.Inverse(patientRoot.rotation);
                     patientMoveRoot.rotation = deltaRot * patientMoveRoot.rotation;
+                }
+                else
+                {
+                    //   ★그렇다고 홀더 회전을 그대로 두면 자세가 <b>씬에 저장된 홀더 회전</b>에 달린다.
+                    //     08-24 씬 저장으로 홀더가 X 87°가 되자 클립의 엎드림(약 89°)과 상쇄돼 환자가 섰다
+                    //     (2026-10-20 실측: 몸 기울기 7° · 부모 회전 (87, 0, 0)). 복와위가 맞던 08-14~08-18 값으로 고정한다.
+                    patientMoveRoot.localRotation = AnimationRotationMoveRootLocal;
                 }
                 // ② 그다음 남은 위치 차이만큼 홀더를 평행이동
                 patientMoveRoot.position += preset.patientPosition - patientRoot.position;
