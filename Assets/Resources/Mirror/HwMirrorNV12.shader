@@ -18,6 +18,7 @@ Shader "Hidden/HwMirrorNV12"
             UNITY_DECLARE_TEX2DARRAY(_MainTex);
             float _Slice;
             float _FlipY;
+            float _Pattern;     // 1이면 눈 화면 대신 시험 패턴(가로 = 빨강 · 세로 = 초록) — NV12 · 읽기 · 압축 경로만 따로 본다
             float4 _OutSize;    // (W, H, 1/W, 1/H) — H는 영상 높이(출력 RT 높이의 2/3)
 
             struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
@@ -32,6 +33,7 @@ Shader "Hidden/HwMirrorNV12"
 
             float3 Eye(float2 uv)
             {
+                if (_Pattern > 0.5) return GammaToLinearSpace(float3(uv.x, uv.y, 0.5));
                 if (_FlipY > 0.5) uv.y = 1 - uv.y;
                 return UNITY_SAMPLE_TEX2DARRAY(_MainTex, float3(uv, _Slice)).rgb;
             }
@@ -39,9 +41,10 @@ Shader "Hidden/HwMirrorNV12"
             fixed4 frag(v2f i) : SV_Target
             {
                 float W = _OutSize.x, H = _OutSize.y;
-                // 출력 픽셀 좌표(위에서부터). RT의 v는 아래가 0이라 뒤집는다.
+                // 출력 픽셀 좌표. ★읽어 온 데이터는 RT의 v = 0 줄부터 들어온다(10-20 기기: 위부터라고 두었다가 Y와 UV가 엇갈렸다)
+                //   → 버퍼 첫 줄 = v 0 줄 = 영상 맨 윗줄로 둔다.
                 float px = floor(i.uv.x * W);
-                float py = floor((1 - i.uv.y) * H * 1.5);
+                float py = floor(i.uv.y * H * 1.5);
                 if (py < H)
                 {
                     float3 c = LinearToGammaSpace(Eye(float2((px + 0.5) / W, 1 - (py + 0.5) / H)));
@@ -55,6 +58,26 @@ Shader "Hidden/HwMirrorNV12"
                 float u = 128 + dot(c, float3(-37.797, -74.203, 112.0));
                 float v = 128 + dot(c, float3(112.0, -93.786, -18.214));
                 return (fmod(px, 2) < 0.5 ? u : v) / 255.0;
+            }
+            ENDCG
+        }
+
+        // 패스 1 — 눈 화면 사본 그대로(진단용 작은 썸네일 · 알파 포함)
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma require 2darray
+            #include "UnityCG.cginc"
+            UNITY_DECLARE_TEX2DARRAY(_MainTex);
+            float _Slice;
+            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+            v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
+            fixed4 frag(v2f i) : SV_Target
+            {
+                float4 c = UNITY_SAMPLE_TEX2DARRAY(_MainTex, float3(i.uv, _Slice));
+                return float4(LinearToGammaSpace(c.rgb), c.a);
             }
             ENDCG
         }

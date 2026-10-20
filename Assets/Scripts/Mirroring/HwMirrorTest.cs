@@ -13,7 +13,9 @@ using UnityEngine.XR;
 ///   adb shell setprop debug.coco.hwmirror 1        켜기(앱을 다시 시작해야 먹는다)
 ///   adb shell setprop debug.coco.hwmirror.w 1280   영상 가로(세로는 눈 화면 비율 · 16의 배수로 맞춘다)
 ///   adb shell setprop debug.coco.hwmirror.fps 60   보내는 상한
-///   adb shell setprop debug.coco.hwmirror.mode 0   눈 화면 잡는 방식(0 CurrentActive Blit · 1 CameraTarget Blit · 2 CopyTexture)
+///   adb shell setprop debug.coco.hwmirror.mode 0   눈 화면 잡는 방식(0 CurrentActive Blit · 1 CameraTarget Blit · 2 CopyTexture · 3 슬라이스 지정 Blit)
+///   adb shell setprop debug.coco.hwmirror.evt 3    잡는 시점(0 AfterForwardOpaque · 1 AfterSkybox · 2 AfterForwardAlpha · 3 BeforeImageEffects · 4 AfterEverything)
+///   adb shell setprop debug.coco.hwmirror.pattern 0 1이면 눈 화면 대신 시험 패턴
 ///   adb shell setprop debug.coco.hwmirror.flip 0   위아래 뒤집기
 /// PC: adb forward tcp:8091 tcp:8091 → ffmpeg -f h264 -i tcp://127.0.0.1:8091 …(또는 헤드셋 IP로 바로)
 /// 로그: adb logcat -s Unity HwMirror | 진단은 «[HwMirror]» 2초마다.
@@ -51,7 +53,8 @@ public class HwMirrorTest : MonoBehaviour
 
     private static int PropInt(string key, int def) => int.TryParse(Prop(key, def.ToString()), out int v) ? v : def;
 
-    private int outW, outH, fps, mode;
+    private int outW, outH, fps, mode, evt;
+    private CameraEvent camEvent = CameraEvent.AfterEverything;
     private bool flip;
     private Camera cam;
     private CommandBuffer cb;
@@ -59,9 +62,13 @@ public class HwMirrorTest : MonoBehaviour
     private Material mat;
 
     // 읽어 오기 두 칸(번갈아 쓴다). 각 칸 = NativeArray + 그걸 감싼 Java direct ByteBuffer(전역 참조).
-    private NativeArray<byte>[] bufs = new NativeArray<byte>[2];
-    private IntPtr[] jbufs = new IntPtr[2];
-    private bool[] busy = new bool[2];
+    // ★두 칸이면 읽기 지연(2~3프레임)에 막혀 초당 48장에 그쳤다(10-20 기기 2차) → 네 칸.
+    private const int Slots = 4;
+    private NativeArray<byte>[] bufs = new NativeArray<byte>[Slots];
+    private IntPtr[] jbufs = new IntPtr[Slots];
+    private bool[] busy = new bool[Slots];
+    private RenderTexture thumbRt;
+    private string thumbInfo = "-";
 
     private AndroidJavaObject enc;
     private IntPtr feedMethod;
@@ -74,11 +81,27 @@ public class HwMirrorTest : MonoBehaviour
     private float lastMean = -1f;
     private readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
 
-    private void Start()
+    private bool ready;
+
+    // ★시작 직후(AfterSceneLoad)엔 XR이 아직 눈 화면을 안 만들어 eyeTextureDesc가 256×256 Tex2D로 나온다
+    //   (10-20 기기 1차: 그 크기로 사본을 만들어 영상이 회색 한 장이었다) → 실제 눈 화면 크기가 나올 때까지 기다린다.
+    private System.Collections.IEnumerator Start()
+    {
+        float until = Time.realtimeSinceStartup + 15f;
+        while (Time.realtimeSinceStartup < until &&
+               (Camera.main == null || !XRSettings.isDeviceActive || XRSettings.eyeTextureDesc.width <= 256))
+            yield return null;
+        yield return null;
+        Init();
+        ready = enabled;
+    }
+
+    private void Init()
     {
         int w = PropInt("debug.coco.hwmirror.w", 1280);
         fps = Mathf.Clamp(PropInt("debug.coco.hwmirror.fps", 60), 1, 120);
         mode = PropInt("debug.coco.hwmirror.mode", 0);
+        bool pattern = PropInt("debug.coco.hwmirror.pattern", 0) == 1;
         flip = PropInt("debug.coco.hwmirror.flip", 0) == 1;
         int bitrate = PropInt("debug.coco.hwmirror.bitrate", 16000000);
 
@@ -109,19 +132,30 @@ public class HwMirrorTest : MonoBehaviour
         mat.SetFloat("_Slice", 0f);
         mat.SetFloat("_FlipY", flip ? 1f : 0f);
         mat.SetVector("_OutSize", new Vector4(outW, outH, 1f / outW, 1f / outH));
+        mat.SetFloat("_Pattern", pattern ? 1f : 0f);
+        thumbRt = new RenderTexture(64, 64, 0, RenderTextureFormat.ARGB32) { name = "HwMirrorThumb" };
+        thumbRt.Create();
 
+        // ★AfterEverything에서 CurrentActive · CameraTarget · CopyTexture 셋 다 사본이 비었다(10-20 기기 3차: 최대 0 · 알파 0)
+        //   → 잡는 시점(evt)과 슬라이스 지정 Blit(mode 3)을 기기 속성으로 바꿔 가며 잰다.
+        evt = PropInt("debug.coco.hwmirror.evt", 3);   // ★10-20 기기: 2(AfterForwardAlpha) · 3(BeforeImageEffects)만 잡혔다 — 0 · 1 · 4는 빈 사본
+        CameraEvent[] evts = { CameraEvent.AfterForwardOpaque, CameraEvent.AfterSkybox, CameraEvent.AfterForwardAlpha,
+                               CameraEvent.BeforeImageEffects, CameraEvent.AfterEverything };
+        camEvent = evts[Mathf.Clamp(evt, 0, evts.Length - 1)];
         cb = new CommandBuffer { name = "HwMirrorCapture" };
         switch (mode)
         {
             case 1: cb.Blit(BuiltinRenderTextureType.CameraTarget, eyeCopy); break;
             case 2: cb.CopyTexture(BuiltinRenderTextureType.CameraTarget, eyeCopy); break;
+            case 3: cb.Blit(BuiltinRenderTextureType.CurrentActive, eyeCopy, 0, 0); break;
             default: cb.Blit(BuiltinRenderTextureType.CurrentActive, eyeCopy); break;
         }
-        cb.Blit(eyeCopy, nv12Rt, mat);
-        cam.AddCommandBuffer(CameraEvent.AfterEverything, cb);
+        // ★NV12 변환은 카메라 명령 안에서 하지 않는다 — XR 양안 상태가 걸린 채 그리면 출력 RT의 일부만 칠해졌다(10-20 기기 2차:
+        //   위쪽 일부만 Y=16 · 나머지 0). Update에서 Graphics.Blit로 따로 한다.
+        cam.AddCommandBuffer(camEvent, cb);
 
         int len = outW * outH * 3 / 2;
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < Slots; i++)
         {
             bufs[i] = new NativeArray<byte>(len, Allocator.Persistent, NativeArrayOptions.ClearMemory);
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -137,21 +171,25 @@ public class HwMirrorTest : MonoBehaviour
         feedMethod = AndroidJNI.GetMethodID(enc.GetRawClass(), "feed", "(Ljava/nio/ByteBuffer;J)Z");
 #endif
         Debug.Log($"[HwMirror] 시작 — 카메라 '{cam.name}' · 눈 화면 {eye.width}×{eye.height} 깊이 {eye.volumeDepth} msaa {eye.msaaSamples} " +
-                  $"{eye.dimension} {eye.graphicsFormat} · 출력 {outW}×{outH} · {fps}fps · 잡기 방식 {mode} · 뒤집기 {flip} · " +
-                  $"압축기 {encoderName} · 그래픽 {SystemInfo.graphicsDeviceType} · 포트 {Port}");
+                  $"{eye.dimension} {eye.graphicsFormat} · 출력 {outW}×{outH} · {fps}fps · 잡기 방식 {mode} · 시점 {camEvent} · 뒤집기 {flip} · " +
+                  $"패턴 {pattern} · 압축기 {encoderName} · 그래픽 {SystemInfo.graphicsDeviceType} · 포트 {Port}");
     }
 
     private void Update()
     {
+        if (!ready) return;
         frames++; dtSum += Time.unscaledDeltaTime;
         float now = Time.unscaledTime;
 
         if (now >= nextSend)
         {
-            int slot = !busy[0] ? 0 : !busy[1] ? 1 : -1;
+            int slot = -1;
+            for (int i = 0; i < Slots; i++) if (!busy[i]) { slot = i; break; }
             if (slot >= 0)
             {
-                nextSend = now + 1f / fps;
+                Graphics.Blit(eyeCopy, nv12Rt, mat, 0);
+                // ★now + 간격으로 두면 72fps 앱에서 60 상한이 한 장 걸러 36이 된다(10-20 기기 1차) → 간격을 쌓아 간다.
+                nextSend = Mathf.Max(nextSend + 1f / fps, now - 1f / fps);
                 busy[slot] = true; reqs++;
                 int s = slot;
                 AsyncGPUReadback.RequestIntoNativeArray(ref bufs[s], nv12Rt, 0, r => OnRead(r, s));
@@ -161,15 +199,32 @@ public class HwMirrorTest : MonoBehaviour
         if (now >= nextDiag)
         {
             float span = Mathf.Max(0.001f, dtSum);
+            Graphics.Blit(eyeCopy, thumbRt, mat, 1);
+            AsyncGPUReadback.Request(thumbRt, 0, OnThumb);
             string js = "-";
 #if UNITY_ANDROID && !UNITY_EDITOR
             if (enc != null) js = enc.Call<string>("stats");
 #endif
             Debug.Log($"[HwMirror] 앱 {frames / span:F1}fps · 읽기 요청 {reqs} 완료 {done} 넘김 {fed} 거절 {rejected} 오류 {errors} " +
-                      $"(2초) · 화면 평균 밝기 {lastMean:F1}(0~255 · 16 근처면 검은 화면) · Java: {js}");
+                      $"(2초) · 화면 평균 밝기 {lastMean:F1}(0~255 · 16 근처면 검은 화면) · 눈 사본 {thumbInfo} · Java: {js}");
             frames = 0; dtSum = 0; reqs = done = fed = rejected = errors = 0;
             nextDiag = now + 2f;
         }
+    }
+
+    /// <summary>눈 화면 사본 64×64 — 평균 · 최대 RGB와 알파. 최대가 0이면 사본이 빈 것이다(잡기 실패).</summary>
+    private void OnThumb(AsyncGPUReadbackRequest r)
+    {
+        if (r.hasError) { thumbInfo = "읽기 오류"; return; }
+        var d = r.GetData<Color32>();
+        long sr = 0, sg = 0, sb = 0, sa = 0; int mx = 0;
+        for (int i = 0; i < d.Length; i++)
+        {
+            Color32 c = d[i]; sr += c.r; sg += c.g; sb += c.b; sa += c.a;
+            int m = Mathf.Max(c.r, Mathf.Max(c.g, c.b)); if (m > mx) mx = m;
+        }
+        int n = Mathf.Max(1, d.Length);
+        thumbInfo = $"평균 ({sr / n},{sg / n},{sb / n}) 알파 {sa / n} 최대 {mx}";
     }
 
     private void OnRead(AsyncGPUReadbackRequest r, int slot)
@@ -200,13 +255,14 @@ public class HwMirrorTest : MonoBehaviour
 
     private void OnDestroy()
     {
-        if (cam != null && cb != null) cam.RemoveCommandBuffer(CameraEvent.AfterEverything, cb);
+        if (cam != null && cb != null) cam.RemoveCommandBuffer(camEvent, cb);
 #if UNITY_ANDROID && !UNITY_EDITOR
         if (enc != null) { enc.Call("stop"); enc.Dispose(); }
-        for (int i = 0; i < 2; i++) if (jbufs[i] != IntPtr.Zero) AndroidJNI.DeleteGlobalRef(jbufs[i]);
+        for (int i = 0; i < Slots; i++) if (jbufs[i] != IntPtr.Zero) AndroidJNI.DeleteGlobalRef(jbufs[i]);
 #endif
         AsyncGPUReadback.WaitAllRequests();
-        for (int i = 0; i < 2; i++) if (bufs[i].IsCreated) bufs[i].Dispose();
+        for (int i = 0; i < Slots; i++) if (bufs[i].IsCreated) bufs[i].Dispose();
+        if (thumbRt != null) thumbRt.Release();
         if (eyeCopy != null) eyeCopy.Release();
         if (nv12Rt != null) nv12Rt.Release();
     }
