@@ -81,5 +81,28 @@ Shader "Hidden/HwMirrorNV12"
             }
             ENDCG
         }
+
+        // 패스 2 — 웹 미러링(ChunaWebMirror · 10-20)용: 눈 화면 사본을 줄여 감마 색으로. _FlipY = 1이면 위아래를 뒤집는다(읽어 온 줄 순서 보정). 알파는 1.
+        Pass
+        {
+            CGPROGRAM
+            #pragma vertex vert
+            #pragma fragment frag
+            #pragma require 2darray
+            #include "UnityCG.cginc"
+            UNITY_DECLARE_TEX2DARRAY(_MainTex);
+            float _Slice;
+            float _FlipY;
+            struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
+            v2f vert(appdata_img v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.texcoord; return o; }
+            fixed4 frag(v2f i) : SV_Target
+            {
+                float2 uv = i.uv;
+                if (_FlipY > 0.5) uv.y = 1 - uv.y;
+                float3 c = UNITY_SAMPLE_TEX2DARRAY(_MainTex, float3(uv, _Slice)).rgb;
+                return float4(LinearToGammaSpace(c), 1);
+            }
+            ENDCG
+        }
     }
 }
