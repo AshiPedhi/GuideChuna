@@ -95,6 +95,7 @@ public class RomLineMirror : MonoBehaviour
         monitor = m;
         view = v;
         StartCamera();
+        StartVideo();
         Debug.Log($"[선실측] 미러링 — 붙었다 · 벽면UI {wallWidth}px 간격 {wallInterval:F2}s · 현실 영상 {camResolution.x}×{camResolution.y} 간격 {camInterval:F2}s · JPEG {jpegQuality}");
     }
 
@@ -163,6 +164,18 @@ public class RomLineMirror : MonoBehaviour
             }
         }
 
+        if (video != null && now >= videoPollNext)   // 붙은 화면 수 — 0.5초마다(JNI 호출이라 매 프레임 하지 않는다)
+        {
+            videoPollNext = now + 0.5f;
+            int c = video.Call<int>("clientCount");
+            if (c != videoClients)
+            {
+                Debug.Log($"[선실측] 미러링 영상 — 보는 화면 {videoClients} → {c}");
+                videoClients = c;
+                videoState = c > 0 ? "보내는 중 · 화면 " + c : "대기(보는 화면 없음)";
+            }
+        }
+
         if (diagInterval > 0f && now >= diagNext) Diagnose(now);
     }
 
@@ -182,7 +195,13 @@ public class RomLineMirror : MonoBehaviour
             return;
         }
 
-        // 앱 화면을 패스스루 카메라 자리에서 다시 그린다
+        RenderOverlay(r);
+        AsyncGPUReadback.Request(overlayRt, 0, TextureFormat.RGBA32, OnOverlayRead);
+    }
+
+    /// <summary>앱 화면을 패스스루 카메라 자리 · 화각에서 투명 바탕에 다시 그린다(overlayRt). JPEG · 영상 경로가 같이 쓴다.</summary>
+    private void RenderOverlay(Vector2Int r)
+    {
         EnsureOverlay(r);
         Pose pose = pca.GetCameraPose();   // 영상이 찍힌 시각의 자세 · ★추적 공간 기준
         if (trackingSpace == null) { var rig = FindFirstObjectByType<OVRCameraRig>(); if (rig != null) trackingSpace = rig.trackingSpace; }
@@ -204,7 +223,139 @@ public class RomLineMirror : MonoBehaviour
                       $"아래 {Mathf.Atan(lo.y / lo.z) * Mathf.Rad2Deg:F1}° 위 {Mathf.Atan(hi.y / hi.z) * Mathf.Rad2Deg:F1}° · 카메라 {pos:F3} · 눈 {(eyeCam != null ? eyeCam.transform.position.ToString("F3") : "없음")} · " +
                       $"추적 공간 {(trackingSpace != null ? trackingSpace.position.ToString("F3") + " " + trackingSpace.rotation.eulerAngles.ToString("F1") : "★없음(추적 공간 = 월드로 본다)")} · 가림 마스크 {overlayCam.cullingMask}");
         }
-        AsyncGPUReadback.Request(overlayRt, 0, TextureFormat.RGBA32, OnOverlayRead);
+    }
+
+    // ── 영상(H.264) 경로(10-21 사용자 지시: JPEG 대신 하드웨어 압축 — 배터리 · 발열) ─────────────
+    //   GPU에서 «현실 영상 + 앱 겹치기 → NV12»(RomMirrorNV12 셰이더) → 비동기 읽기 → Java RomVideoEncoder(MediaCodec AVC) → :8092 /video.
+    //   CPU는 읽어 온 NV12를 압축기 입력 칸에 옮기는 일만 한다(종전 JPEG 경로: 겹치기 · JPEG 압축을 CPU가 했다).
+    //   보는 화면(브라우저)이 붙어 있을 때만 찍는다. 붙은 화면이 없거나 기기가 지원 안 하면 종전 JPEG 경로(/cam.jpg)가 그대로 돈다.
+    private const int VideoPort = 8092;
+    private const int VideoSlots = 3;
+    private AndroidJavaObject video;
+    private IntPtr videoFeed;
+    private readonly jvalue[] videoArgs = new jvalue[2];
+    private readonly NativeArray<byte>[] vBufs = new NativeArray<byte>[VideoSlots];
+    private readonly IntPtr[] vJBufs = new IntPtr[VideoSlots];
+    private readonly bool[] vBusy = new bool[VideoSlots];
+    private RenderTexture nv12Rt;
+    private Material nv12Mat = null;   // Android 분기에서만 만든다
+    private Vector2Int videoRes;
+    private int videoClients, vidFed;
+    private float videoPollNext, vidNext;
+    private string videoState = "꺼짐";
+    private readonly System.Diagnostics.Stopwatch videoClock = System.Diagnostics.Stopwatch.StartNew();
+
+    private void StartVideo()
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        if (!SystemInfo.supportsAsyncGPUReadback) { videoState = "지원 안 함(GPU 비동기 읽기 없음)"; Debug.Log("[선실측] 미러링 영상 — " + videoState); return; }
+        Shader sh = Resources.Load<Shader>("RomLine/RomMirrorNV12");
+        if (sh == null || !sh.isSupported) { videoState = "셰이더 없음"; Debug.LogWarning("[선실측] ★미러링 영상 — 셰이더 RomLine/RomMirrorNV12가 없거나 지원 안 함"); return; }
+        nv12Mat = new Material(sh);
+        nv12Mat.SetFloat("_FlipY", AndroidProp("debug.coco.romvideo.flip") == "1" ? 1f : 0f);   // 기기에서 거꾸로 나오면 adb shell setprop debug.coco.romvideo.flip 1
+        try
+        {
+            video = new AndroidJavaObject("com.coco.chuna.mirror.RomVideoEncoder");
+            if (!video.Call<bool>("listen", VideoPort))
+            {
+                video.Dispose(); video = null;
+                videoState = $"포트 {VideoPort}를 못 열었다";
+                Debug.LogWarning("[선실측] ★미러링 영상 — " + videoState + " — JPEG로만 보낸다");
+                return;
+            }
+            videoFeed = AndroidJNI.GetMethodID(video.GetRawClass(), "feed", "(Ljava/nio/ByteBuffer;J)Z");
+            videoState = "대기(보는 화면 없음)";
+            Debug.Log($"[선실측] 미러링 영상 — 열었다 · 포트 {VideoPort} · 보는 화면이 붙으면 압축을 시작한다");
+        }
+        catch (Exception e)
+        {
+            video = null;
+            videoState = "시작 실패";
+            Debug.LogWarning("[선실측] ★미러링 영상 — 시작 실패(" + e.Message + ") — JPEG로만 보낸다");
+        }
+#endif
+    }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+    private static string AndroidProp(string key)
+    {
+        try { using (var sp = new AndroidJavaClass("android.os.SystemProperties")) return sp.CallStatic<string>("get", key, ""); }
+        catch (Exception) { return ""; }
+    }
+#endif
+
+    /// <summary>압축기 · NV12 버퍼를 지금 해상도에 맞춘다. 읽는 중인 칸이 있으면 다음 장으로 미룬다(false).</summary>
+    private bool EnsureVideo(Vector2Int r)
+    {
+        if (videoRes == r && nv12Rt != null) return true;
+        for (int i = 0; i < VideoSlots; i++) if (vBusy[i]) return false;
+        FreeVideoBuffers();
+        int fps = Mathf.Max(1, Mathf.RoundToInt(1f / Mathf.Max(0.001f, camInterval)));
+        int bitrate = Mathf.Max(800000, Mathf.RoundToInt(r.x * r.y * fps * 0.3f));   // 640×480 · 15장 ≈ 1.4Mbps
+        string name = video.Call<string>("configure", r.x, r.y, fps, bitrate);
+        if (name.StartsWith("실패")) { videoState = "압축기 " + name; Debug.LogWarning("[선실측] ★미러링 영상 — " + videoState); return false; }
+        nv12Rt = new RenderTexture(r.x, r.y * 3 / 2, 0, RenderTextureFormat.R8, RenderTextureReadWrite.Linear) { name = "미러링 영상 NV12" };
+        nv12Rt.Create();
+        nv12Mat.SetVector("_OutSize", new Vector4(r.x, r.y, 1f / r.x, 1f / r.y));
+        int len = r.x * r.y * 3 / 2;
+        for (int i = 0; i < VideoSlots; i++)
+        {
+            vBufs[i] = new NativeArray<byte>(len, Allocator.Persistent, NativeArrayOptions.ClearMemory);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            IntPtr local = AndroidJNI.NewDirectByteBuffer(vBufs[i]);
+            vJBufs[i] = AndroidJNI.NewGlobalRef(local);
+            AndroidJNI.DeleteLocalRef(local);
+#endif
+        }
+        videoRes = r;
+        Debug.Log($"[선실측] 미러링 영상 — 압축기 {r.x}×{r.y} · {fps}장/s · {bitrate / 1000}kbps · {name}");
+        return true;
+    }
+
+    private void FreeVideoBuffers()
+    {
+        for (int i = 0; i < VideoSlots; i++)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (vJBufs[i] != IntPtr.Zero) { AndroidJNI.DeleteGlobalRef(vJBufs[i]); vJBufs[i] = IntPtr.Zero; }
+#endif
+            if (vBufs[i].IsCreated) vBufs[i].Dispose();
+        }
+        if (nv12Rt != null) { nv12Rt.Release(); Destroy(nv12Rt); nv12Rt = null; }
+        videoRes = default;
+    }
+
+    private void CaptureVideo(float now)
+    {
+        Vector2Int r = pca.CurrentResolution;
+        if (r.x <= 0 || !EnsureVideo(r)) return;
+        int slot = -1;
+        for (int i = 0; i < VideoSlots; i++) if (!vBusy[i]) { slot = i; break; }
+        if (slot < 0) return;
+        vidNext = Mathf.Max(vidNext + camInterval, now - camInterval);   // 간격을 쌓아 간다 — now + 간격이면 72fps에서 한 장씩 걸러진다(HwMirrorTest 10-20)
+
+        Texture cam = pca.GetTexture();
+        if (camOverlay) { RenderOverlay(r); nv12Mat.SetTexture("_OverlayTex", overlayRt); }
+        else nv12Mat.SetTexture("_OverlayTex", Texture2D.blackTexture);   // 알파 0 — 영상만
+        nv12Mat.SetTexture("_CamTex", cam);
+        Graphics.Blit(cam, nv12Rt, nv12Mat, 0);
+        vBusy[slot] = true;
+        int s = slot;
+        AsyncGPUReadback.RequestIntoNativeArray(ref vBufs[s], nv12Rt, 0, req => OnVideoRead(req, s));
+    }
+
+    private void OnVideoRead(AsyncGPUReadbackRequest req, int slot)
+    {
+        try
+        {
+            if (req.hasError || !vBufs[slot].IsCreated || video == null) return;
+#if UNITY_ANDROID && !UNITY_EDITOR
+            videoArgs[0].l = vJBufs[slot];
+            videoArgs[1].j = videoClock.ElapsedTicks * 1000000L / System.Diagnostics.Stopwatch.Frequency;
+            if (AndroidJNI.CallBooleanMethod(video.GetRawObject(), videoFeed, videoArgs)) vidFed++;
+#endif
+        }
+        finally { vBusy[slot] = false; }
     }
 
     private void EnsureOverlay(Vector2Int r)
@@ -256,6 +407,8 @@ public class RomLineMirror : MonoBehaviour
     {
         if (monitor == null || monitor.Port == 0 || view == null || view.Panel == null || !view.PanelPlaced) return;
         float now = Time.unscaledTime;
+        if (videoClients > 0 && video != null && pca != null && pca.IsPlaying && pca.IsUpdatedThisFrame && now >= vidNext)
+            CaptureVideo(now);   // 영상 경로 — 보는 화면이 붙어 있을 때만
         if (pca != null && pca.IsPlaying && !camBusy && now >= camNext && monitor.ImageWatched("cam") && pca.IsUpdatedThisFrame)
         {
             camNext = now + camInterval;
@@ -339,6 +492,9 @@ public class RomLineMirror : MonoBehaviour
         double wms = wf > 0 ? wallEncodeMs / wf : 0, cms = cf > 0 ? camEncodeMs / cf : 0;
         wallEncodeMs = camEncodeMs = 0;
         bool worn = OVRManager.isHmdPresent && OVRManager.instance != null && OVRManager.instance.isUserPresent;
+        int vf = vidFed; vidFed = 0;
+        string vStats = video != null ? video.Call<string>("stats") : "";
+        if (videoClients > 0) { cf = vf; cms = 0; }   // 영상으로 보는 중이면 «헤드셋 장수»는 압축기에 넣은 장수다
 
         info.Length = 0;
         info.Append("{\"camSupported\":").Append(PassthroughCameraAccess.IsSupported ? "true" : "false")
@@ -352,9 +508,14 @@ public class RomLineMirror : MonoBehaviour
             .Append(",\"battery\":").Append(RomLineView.BatteryPercent())   // 10-21: 관제 화면 정보 줄의 배터리(-1 = 모름)
             .Append(",\"charging\":").Append(RomLineView.BatteryCharging() ? "true" : "false")
             .Append(",\"appFps\":").Append((1f / Mathf.Max(0.0001f, Time.smoothDeltaTime)).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))
-            .Append('}');
+            .Append(",\"videoPort\":").Append(video != null ? VideoPort : 0)   // 10-21 영상 경로 — 0이면 화면은 JPEG로만 받는다
+            .Append(",\"videoState\":\"").Append(videoState).Append('"');
+        if (vStats.Length > 0) info.Append(',').Append(vStats);
+        info.Append('}');
         monitor.SetMirrorInfo(info.ToString());
 
+        if (videoClients > 0)
+            Debug.Log($"[선실측] 미러링 영상 진단 — 넣음 {vf / span:F1}장/s · {videoState} · Java {vStats} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps");
         if (monitor.ImageWatched("wall") || monitor.ImageWatched("cam"))
             Debug.Log($"[선실측] 미러링 진단 — 벽면UI {wf / span:F1}장/s · 인코딩 {wms:F0}ms · 현실 영상 {cf / span:F1}장/s · 인코딩 {cms:F0}ms · {pcaState} · 착용 {(worn ? "예" : "아니오")} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps");
         diagFrom = now;
@@ -365,5 +526,8 @@ public class RomLineMirror : MonoBehaviour
     {
         if (wallRt != null) { wallRt.Release(); Destroy(wallRt); wallRt = null; }
         if (overlayRt != null) { overlayRt.Release(); Destroy(overlayRt); overlayRt = null; }
+        if (video != null) { try { video.Call("stop"); } catch (Exception) { } video.Dispose(); video = null; }
+        AsyncGPUReadback.WaitAllRequests();
+        FreeVideoBuffers();
     }
 }
