@@ -70,8 +70,7 @@
   .ctl svg { width:34px; height:34px; display:block; }
   .ctl.on { color:var(--ok); }
   .ctl.on svg { filter:drop-shadow(0 0 4px rgba(60,207,122,0.85)); }
-  .ctl.use b { color:var(--text); }
-  .ctl b { font-weight:600; }
+  .ctl b { font-weight:700; font-size:13px; }
   #hmd { display:flex; align-items:center; gap:7px; margin-left:6px; font-size:14px; color:var(--dim); }
   #hmd svg { width:34px; height:18px; display:block; }
   #hmd b { color:var(--text); font-weight:600; }
@@ -92,7 +91,7 @@
     header h1 { font-size:20px; }
     #stage, #grp, #left { display:contents; }
     body > * { flex:none; }
-    #ctrl { order:1; flex:none; } #mirror { order:2; } #result { order:3; flex:none; }
+    #ctrl { order:1; flex:none; } #result { order:2; flex:none; } #mirror { order:3; }   /* 10-21: 컨트롤러UI · 기록은 묶음 — 영상은 그 아래 */
     #mirror { width:100% !important; height:auto !important; aspect-ratio:4 / 3; }
     #result { padding:6px 10px; }
     td { font-size:17px; padding:8px 2px; } td.n { font-size:16px; } th { font-size:13px; }
@@ -129,17 +128,20 @@
 
 <footer>
   <div id="devs">
-    <div class="ctl" id="cL"><svg viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="21" cy="14" r="10"/><path d="M15 22 L13 35 Q13 38 16 37 L22 24"/></g></svg><span><b>왼쪽</b></span></div>
-    <div class="ctl" id="cR"><svg viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(40 0) scale(-1 1)"><circle cx="21" cy="14" r="10"/><path d="M15 22 L13 35 Q13 38 16 37 L22 24"/></g></svg><span><b>오른쪽</b></span></div>
+    <!-- 컨트롤러 아이콘 = Quest 3/3S Touch Plus(링 없음) 윤곽. Meta SDK에는 2D 아이콘이 없어(3D 모델 텍스처뿐) 직접 그렸다(10-21) -->
+    <svg width="0" height="0" style="position:absolute"><symbol id="touchPlus" viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 8 Q11 3 17 3 L26 3 Q32 3 31 9 L30 15 Q29 20 24 20 L16 20 Q11 20 11 15 Z"/><path d="M15 20 L13 35 Q13 38.5 16.5 37.5 L22 20"/>
+      <circle cx="18" cy="10" r="3.4"/><circle cx="25.5" cy="8.5" r="1.4" fill="currentColor"/><circle cx="24.5" cy="14" r="1.4" fill="currentColor"/></g></symbol></svg>
+    <div class="ctl" id="cL"><svg viewBox="0 0 40 40"><use href="#touchPlus"/></svg><span><b>L</b></span></div>
+    <div class="ctl" id="cR"><svg viewBox="0 0 40 40"><g transform="translate(40 0) scale(-1 1)"><use href="#touchPlus"/></g></svg><span><b>R</b></span></div>
     <div id="hmd" title="헤드셋 배터리">
       <svg viewBox="0 0 34 18"><rect x="1" y="1" width="28" height="16" rx="3" fill="none" stroke="#b8c2d1" stroke-width="2"/><rect x="30" y="6" width="3" height="6" rx="1" fill="#b8c2d1"/><rect id="bFill" x="4" y="4" width="0" height="10" rx="1" fill="#55606e"/></svg>
       <span>헤드셋 <b id="batt">—</b></span>
     </div>
   </div>
   <div id="info">
-    <span><span class="dot" id="dConn"></span><b id="conn">연결하는 중…</b></span>
+    <span id="connBox"><b id="conn" style="color:var(--bad)">연결하는 중…</b></span>   <!-- 10-21: 연결됨 · 착용은 뺐다 — 끊겼을 때만 보인다 -->
     <span>끝점 <b id="track">—</b></span>
-    <span>착용 <b id="worn">—</b></span>
     <span>앱 <b id="afps">—</b></span>
     <span>미러링 헤드셋 <b id="cfps">—</b> · 받음 <b id="rfps">—</b> · 한 장 <b id="rms">—</b></span>
     <span id="camState"></span>
@@ -210,16 +212,12 @@ function val(cell, r, on) {
 let lastGuide = null, lastNote = null;
 function poll() {
   fetch('/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
-    $('conn').textContent = '연결됨'; $('dConn').classList.add('on');
+    $('connBox').style.display = 'none';
     $('track').textContent = s.calib ? '보정 중' : (s.tracked ? '추적 중' : '★놓침');
     if (s.title && $('title').textContent !== s.title) { $('title').textContent = s.title; document.title = s.title; }
-    // 컨트롤러 좌우 — 연결되면 초록 테두리 · 찍는 쪽은 «· 측정»
-    [['cL', s.ctrlL, 'L', '왼쪽'], ['cR', s.ctrlR, 'R', '오른쪽']].forEach(([id, on, k, name]) => {
-      const e = $(id), use = s.active === k;
-      e.classList.toggle('on', !!on); e.classList.toggle('use', use);
-      const t = name + (use ? ' · 측정' : '');
-      if (e.lastChild.textContent !== t) e.lastChild.innerHTML = '<b>' + t + '</b>';
-    });
+    // 컨트롤러 좌우 — 연결되면 초록 테두리(글자는 L · R만 · 10-21)
+    $('cL').classList.toggle('on', !!s.ctrlL);
+    $('cR').classList.toggle('on', !!s.ctrlR);
 
     // 컨트롤러UI — 안내 글은 헤드셋과 같은 글(guide)이고, 없으면(자유 측정 등) 모니터용 한 줄(instruction)
     const g = s.guide !== undefined ? s.guide : (s.instruction || ''), n = s.guide !== undefined ? (s.guideNote || '') : (s.note || '');
@@ -237,7 +235,7 @@ function poll() {
       c.d.textContent = on && r.a && r.p ? ((x => (x > 0 ? '+' : '') + x.toFixed(1))(r.p.v - r.a.v)) + '°' : '—';
       c.tr.classList.toggle('now', m === now);
     });
-  }).catch(() => { $('conn').textContent = '★연결 끊김'; $('dConn').classList.remove('on'); })
+  }).catch(() => { $('conn').textContent = '★연결 끊김'; $('connBox').style.display = ''; })
     .finally(() => setTimeout(poll, 300));
 }
 poll();
@@ -288,7 +286,6 @@ function info() {
     if (m.wallFps === undefined) return;
     $('cfps').textContent = m.camSupported ? m.camFps + '장/s' : '지원 안 함';
     $('afps').textContent = m.appFps + 'fps';
-    $('worn').textContent = m.worn ? '쓰고 있음' : '거치(안 씀)';
     batt(m);
     $('camState').textContent = m.camState || '';
     if (Date.now() - resPicked > 8000) [...resEl.options].forEach(o => { if (o.dataset.r === m.camRes) resEl.value = o.value; });
