@@ -42,8 +42,8 @@ public class RomLineMirror : MonoBehaviour
     [Header("=== 현실 영상 (Passthrough Camera Access) ===")]
     [Tooltip("요청할 카메라 해상도. 지원 목록에 없으면 바로 아래 해상도가 골라진다.")]
     [SerializeField] private Vector2Int camResolution = new Vector2Int(640, 480);
-    [Tooltip("현실 영상을 보내는 간격(초). 10-20 사용자 요구 12~24장/s — 0.05초(최대 20장/s, 실제는 인코딩 시간에 달린다).")]
-    [SerializeField] private float camInterval = 0.05f;
+    [Tooltip("현실 영상을 보내는 간격(초). 10-21 사용자 지시: 상한을 낮춰 배터리 · 발열을 줄인다 — 1/15초(최대 15장/s · 종전 0.05 = 20장/s). 런타임 AddComponent라 코드 기본값이 먹는다.")]
+    [SerializeField] private float camInterval = 1f / 15f;
     [Tooltip("현실 영상 위에 앱 화면(끝점 · 선 · 각도기 · 벽면UI)을 겹친다. 끄면 카메라 영상만 보낸다.")]
     [SerializeField] private bool camOverlay = true;
 
