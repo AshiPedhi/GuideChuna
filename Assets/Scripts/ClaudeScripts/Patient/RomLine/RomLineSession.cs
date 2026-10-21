@@ -1552,6 +1552,8 @@ public class RomLineSession : MonoBehaviour
         view.SetBattery(pct, charging);
     }
 
+    private const string MonitorTitle = "경추ROM진단";   // 관제 화면 타이틀 — 이 씬이 돌리는 실습
+
     private void PumpMonitor()
     {
         if (monitor.Port == 0) return;
@@ -1562,7 +1564,13 @@ public class RomLineSession : MonoBehaviour
         StringBuilder js = monitorLive;
         js.Length = 0;
         js.Append("{\"t\":").Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
-          .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false").Append(",\"tip\":");
+          .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false")
+          // 10-21 관제 화면 아래 줄: 실행 중인 실습 이름(타이틀) · 좌우 컨트롤러 연결 · 찍는 쪽
+          .Append(",\"title\":\"").Append(MonitorTitle).Append('"')
+          .Append(",\"ctrlL\":").Append(OVRInput.IsControllerConnected(OVRInput.Controller.LTouch) ? "true" : "false")
+          .Append(",\"ctrlR\":").Append(OVRInput.IsControllerConnected(OVRInput.Controller.RTouch) ? "true" : "false")
+          .Append(",\"active\":\"").Append(UsingLeft ? 'L' : 'R').Append('"')
+          .Append(",\"tip\":");
         if (axes.valid) JsonVec(js, InAxes(tipPos)); else js.Append("null");
         js.Append(",\"eye\":");
         if (axes.valid && eye != null) JsonVec(js, InAxes(eye.position)); else js.Append("null");
