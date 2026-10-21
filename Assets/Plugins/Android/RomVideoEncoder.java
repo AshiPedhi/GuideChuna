@@ -20,7 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * ★선 실측 관제 미러링 — 영상(H.264) 경로(2026-10-21 사용자 지시: JPEG 대신 하드웨어 압축으로 배터리 · 발열을 줄인다).
  *
  * Unity(RomLineMirror)가 GPU에서 만든 NV12 한 장을 feed()로 넘기면 MediaCodec(하드웨어 AVC)으로 압축하고,
- * 나온 Annex-B 스트림을 HTTP(GET /video)로 붙은 브라우저마다 흘린다. 브라우저는 jmuxer로 MSE에 넣어 &lt;video&gt;로 튼다.
+ * 나온 Annex-B 한 장마다 앞에 길이 4바이트(빅엔디언)를 붙여 HTTP(GET /video)로 붙은 브라우저마다 흘린다(10-21 지연 줄임). 브라우저는 jmuxer로 MSE에 넣어 &lt;video&gt;로 튼다.
  * 관제 화면(:8090, RomLineMonitor)과 포트가 다르므로 응답에 CORS 머리글을 단다.
  *
  * 브라우저마다 보내는 스레드와 줄(최대 QueueMax장)을 따로 둔다 — 느린 화면 하나가 압축 · 다른 화면을 막지 않는다.
@@ -180,6 +180,12 @@ public class RomVideoEncoder {
             } catch (Exception e) { break; }
             if ((info.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) { config = data; continue; }
             outFrames++; outBytes += data.length;
+            // ★10-21: 한 장마다 앞에 길이(4바이트 · 빅엔디언)를 붙인다 — 브라우저가 다음 장의 시작 부호를 기다리지 않고 받는 즉시 튼다(한 장 지연 제거)
+            int len = data.length;
+            byte[] pkt = new byte[len + 4];
+            pkt[0] = (byte) (len >>> 24); pkt[1] = (byte) (len >>> 16); pkt[2] = (byte) (len >>> 8); pkt[3] = (byte) len;
+            System.arraycopy(data, 0, pkt, 4, len);
+            data = pkt;
             boolean key = (info.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0;
             boolean needKey = false;
             for (Client cl : clients) {

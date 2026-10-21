@@ -303,14 +303,10 @@ function startVideo() {
     console.log('[미러링] 영상 멈춤 — ' + why + ' · 받은 장 ' + frames);
     setTimeout(startVideo, 1500);   // 해상도를 바꾸면 헤드셋이 끊는다 — 새 크기로 다시 붙는다
   }
-  // Annex-B → 한 장씩(접근 단위). 새 장의 시작 = AUD · SPS · PPS · SEI, 또는 이미 슬라이스가 있는데 first_mb = 0인 슬라이스.
-  let pend = new Uint8Array(0), nals = [], hasVcl = false;
-  function emit() {
-    if (!nals.length) return;
-    let n = 0; nals.forEach(x => n += x.length + 4);
-    const out = new Uint8Array(n); let o = 0;
-    nals.forEach(x => { out.set([0, 0, 0, 1], o); out.set(x, o + 4); o += x.length + 4; });
-    nals = []; hasVcl = false;
+  // 헤드셋은 한 장(Annex-B 접근 단위)마다 앞에 길이 4바이트(빅엔디언)를 붙여 보낸다(10-21) — 다 받는 즉시 튼다.
+  //   (종전: 시작 부호로 잘라 «다음 장이 와야» 앞 장을 넘겼다 — 한 장(약 0.07초) 늦었다)
+  let pend = new Uint8Array(0);
+  function emit(out) {
     const t = performance.now(), d = last ? Math.min(300, Math.max(20, t - last)) : 66;
     last = t;
     jm.feed({ video: out, duration: d });
@@ -320,22 +316,18 @@ function startVideo() {
       $('mmode').textContent = '영상';
     }
   }
-  function nal(x) {
-    const type = x[0] & 0x1f, vcl = type === 1 || type === 5;
-    if (hasVcl && (type === 9 || type === 7 || type === 8 || type === 6 || (vcl && (x[1] & 0x80)))) emit();
-    nals.push(x);
-    if (vcl) hasVcl = true;
-  }
   function push(chunk) {
-    const b = new Uint8Array(pend.length + chunk.length); b.set(pend); b.set(chunk, pend.length);
-    let start = -1, i = 0;
-    for (; i + 2 < b.length; i++) {
-      if (b[i] === 0 && b[i + 1] === 0 && b[i + 2] === 1) {
-        if (start >= 0) { let e = i; if (e > start && b[e - 1] === 0) e--; if (e > start) nal(b.subarray(start, e)); }
-        start = i + 3; i += 2;
-      }
+    let b = chunk;
+    if (pend.length) { b = new Uint8Array(pend.length + chunk.length); b.set(pend); b.set(chunk, pend.length); }
+    let o = 0;
+    while (b.length - o >= 4) {
+      const len = ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+      if (len === 0 || len > 8000000) throw new Error('길이 이상 ' + len);   // 형식이 어긋났다(옛 헤드셋 앱 등) → 사진으로 돌아간다
+      if (b.length - o - 4 < len) break;
+      emit(b.slice(o + 4, o + 4 + len));
+      o += 4 + len;
     }
-    pend = start >= 0 ? b.slice(start - 3) : b.slice(Math.max(0, b.length - 3));   // 마지막 NAL은 다음 시작 부호가 올 때까지 둔다
+    pend = b.slice(o);
   }
   fetch('http://' + location.hostname + ':' + videoPort + '/video', { cache: 'no-store', signal: ctrl.signal }).then(r => {
     if (!r.ok || !r.body) throw r.status;
@@ -350,13 +342,15 @@ function startVideo() {
   }).catch(e => stop('연결 실패 ' + e));
   vid.play().catch(() => { });
 }
-// 지연이 쌓이지 않게 — 버퍼 끝에서 0.4초 넘게 뒤처지면 끝으로 건너뛴다
+// 지연이 쌓이지 않게(10-21 사용자: «살짝 지연») — 받아 놓고 안 튼 분량이 0.12초를 넘으면 재생을 빠르게 해 따라잡는다(최대 1.5배 · 끊김 없이).
+//   1초 넘게 밀리면(탭이 뒤에 있었다 등) 끝으로 건너뛴다. 종전엔 0.4초까지 그냥 두어 0.2~0.3초가 늘 쌓여 있었다(기기 실측).
 setInterval(() => {
   if (mode !== 'video' || !vid.buffered.length) return;
-  const end = vid.buffered.end(vid.buffered.length - 1);
-  if (end - vid.currentTime > 0.4) vid.currentTime = Math.max(0, end - 0.05);
+  const end = vid.buffered.end(vid.buffered.length - 1), lag = end - vid.currentTime;
+  if (lag > 1.0) { vid.currentTime = Math.max(0, end - 0.03); vid.playbackRate = 1; }
+  else vid.playbackRate = lag > 0.12 ? Math.min(1.5, 1 + (lag - 0.06) * 3) : 1;
   if (vid.paused) vid.play().catch(() => { });
-}, 500);
+}, 200);
 vid.addEventListener('resize', () => {
   const a = vid.videoWidth / vid.videoHeight;
   if (a > 0 && Math.abs(a - aspect) > 0.01) { aspect = a; layout(); }
