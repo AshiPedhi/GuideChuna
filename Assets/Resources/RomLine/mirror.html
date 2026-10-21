@@ -110,6 +110,7 @@
       <span><span class="dot" id="dConn"></span><b id="conn">연결하는 중…</b></span>
       <span><span class="dot" id="dTrack"></span>컨트롤러 <b id="track">—</b></span>
       <span>착용 <b id="worn">—</b></span>
+      <span>배터리 <b id="batt">—</b></span>
     </div>
 
     <div class="card" id="result">
@@ -223,12 +224,20 @@ poll();
 })();
 $('mirror').onclick = () => $('mirror').classList.toggle('big');
 
+// 배터리(10-21) — 구간 색은 헤드셋 RomLineView.BatteryBand와 같다: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강
+function batt(m) {
+  const e = $('batt');
+  if (m.battery === undefined || m.battery < 0) { e.textContent = '—'; e.style.color = ''; return; }
+  e.textContent = m.battery + '%' + (m.charging ? ' · 충전 중' : '');
+  e.style.color = m.battery > 50 ? '#73E68C' : m.battery > 20 ? '#FFF233' : '#FF6B6B';
+}
 function info() {
   fetch('/mirrorinfo', { cache: 'no-store' }).then(r => r.json()).then(m => {
     if (m.wallFps === undefined) return;
     $('cfps').textContent = m.camSupported ? m.camFps + '장/s' : '지원 안 함';
     $('afps').textContent = m.appFps + 'fps';
     $('worn').textContent = m.worn ? '쓰고 있음' : '거치(안 씀)';
+    batt(m);
     $('camState').textContent = m.camState ? '· ' + m.camState : '';
     [...resEl.querySelectorAll('button')].forEach(b => b.classList.toggle('cur', b.dataset.r === m.camRes));
     if (!m.camSupported) $('eCam').textContent = '현실 영상 지원 안 함 — ' + (m.camState || '');

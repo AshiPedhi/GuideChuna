@@ -224,6 +224,42 @@ public class RomLineView
         // 맨 아래 한 줄 — 모니터 화면의 주소
         footer = Place(MakeText(panel, "", 0.075f, TextAlignmentOptions.Center, 3), new Vector2(0f, -PanelH * 0.5f + 0.010f), PanelW - 0.02f);
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
+
+        // 배터리(10-21 사용자 지시) — 벽면UI는 오른쪽 위 모서리(타이틀 자리의 끝), 컨트롤러UI는 탭 줄 바로 위 오른쪽(LayoutGuide가 높이를 맞춘다)
+        wallBattery = Place(MakeText(panel, "", 0.13f, TextAlignmentOptions.Right, 3), new Vector2(PanelW * 0.5f - 0.01f - 0.08f, PanelH * 0.5f - 0.03f), 0.16f);
+        nearBattery = Outlined(Place(MakeText(guide, "", 0.075f, TextAlignmentOptions.Right, 3), Vector2.zero, GuideW));
+        SetBattery(-1, false);
+        LayoutGuide(0f, 0f);
+    }
+
+    // ── 배터리 ── 색은 잔량 구간마다 하나: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강. 관제 화면(mirror.html · chuna_mirror.html)도 같은 구간이다.
+    //   ★주황은 측정값 색이라 쓰지 않는다(10-12 색 규칙).
+    private TextMeshPro wallBattery, nearBattery;
+    private static readonly Color BatteryHigh = new Color(0.45f, 0.90f, 0.55f, 1f);   // #73E68C(다 잰 탭과 같다)
+    private static readonly Color BatteryMid = new Color(1f, 0.95f, 0.20f, 1f);       // #FFF233
+    private static readonly Color BatteryLow = new Color(1f, 0.42f, 0.42f, 1f);       // #FF6B6B
+
+    /// <summary>잔량(0~100). 읽을 수 없으면 -1(에디터 · 배터리 없는 PC).</summary>
+    public static int BatteryPercent() => SystemInfo.batteryLevel < 0f ? -1 : Mathf.RoundToInt(SystemInfo.batteryLevel * 100f);
+    /// <summary>전원에 꽂혀 있다(충전 중 · 완충).</summary>
+    public static bool BatteryCharging() => SystemInfo.batteryStatus == BatteryStatus.Charging || SystemInfo.batteryStatus == BatteryStatus.Full;
+    /// <summary>색 구간: -1 모름 · 0 낮음(≤20) · 1 중간(≤50) · 2 높음.</summary>
+    public static int BatteryBand(int pct) => pct < 0 ? -1 : pct <= 20 ? 0 : pct <= 50 ? 1 : 2;
+
+    /// <summary>두 화면의 배터리 글자(바뀔 때만 부른다). «배터리» 글자는 흐린 색, 숫자만 구간 색이다.</summary>
+    public void SetBattery(int pct, bool charging)
+    {
+        string text;
+        if (pct < 0) text = "배터리 —";
+        else
+        {
+            int band = BatteryBand(pct);
+            Color c = band == 2 ? BatteryHigh : band == 1 ? BatteryMid : BatteryLow;
+            text = "배터리 <color=#" + ColorUtility.ToHtmlStringRGB(c) + ">" + pct + "%</color>" + (charging ? " · 충전 중" : "");
+        }
+        wallBattery.text = nearBattery.text = text;
+        wallBattery.color = DimColor;
+        nearBattery.color = NoteColor;
     }
 
     // ── 결과표 ── ★10-13 사용자 지시: 3 × 2 칸을 풀어 <b>왼쪽에 여섯 줄</b>(측정 명칭 | 능동 | 압박), <b>오른쪽에 각도기 셋</b>으로 나눈다.
@@ -469,6 +505,7 @@ public class RomLineView
             nearTabTexts[i].transform.localPosition = new Vector3(p.x, tabY, p.z);
             nearTabPlates[i].transform.localPosition = new Vector3(p.x, tabY, nearTabPlates[i].transform.localPosition.z);
         }
+        if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + NearTabH * 0.5f + 0.008f, -0.004f);
     }
 
     /// <summary>리셋 확인 창(«전체 측정 결과를 지울까요?»)을 탭 창 위에 덮어 띄운다 / 내린다.</summary>

@@ -349,6 +349,8 @@ public class RomLineMirror : MonoBehaviour
             .Append(",\"wallMs\":").Append(wms.ToString("F0", System.Globalization.CultureInfo.InvariantCulture))
             .Append(",\"camMs\":").Append(cms.ToString("F0", System.Globalization.CultureInfo.InvariantCulture))
             .Append(",\"worn\":").Append(worn ? "true" : "false")
+            .Append(",\"battery\":").Append(RomLineView.BatteryPercent())   // 10-21: 관제 화면 정보 줄의 배터리(-1 = 모름)
+            .Append(",\"charging\":").Append(RomLineView.BatteryCharging() ? "true" : "false")
             .Append(",\"appFps\":").Append((1f / Mathf.Max(0.0001f, Time.smoothDeltaTime)).ToString("F0", System.Globalization.CultureInfo.InvariantCulture))
             .Append('}');
         monitor.SetMirrorInfo(info.ToString());

@@ -187,7 +187,9 @@ public class ChunaWebMirror : MonoBehaviour
             .Append(",\"hands\":\"").Append(lh && rh ? "양손" : lh ? "왼손만" : rh ? "오른손만" : "안 잡힘").Append('"')
             .Append(",\"touch\":\"").Append(lt && rt ? "양쪽" : lt ? "왼쪽" : rt ? "오른쪽" : "없음").Append('"');
         bool worn = OVRManager.isHmdPresent && OVRManager.instance != null && OVRManager.instance.isUserPresent;
-        info.Append(",\"worn\":").Append(worn ? "true" : "false").Append('}');
+        info.Append(",\"worn\":").Append(worn ? "true" : "false")
+            .Append(",\"battery\":").Append(RomLineView.BatteryPercent())   // 10-21: 배터리(-1 = 모름) · 색 구간은 RomLineView.BatteryBand와 같다
+            .Append(",\"charging\":").Append(RomLineView.BatteryCharging() ? "true" : "false").Append('}');
         server.SetMirrorInfo(info.ToString());
         if (server.ImageWatched("cam"))
             Debug.Log($"[웹미러] 진단 — {n / span:F1}장/s · 인코딩 {ms:F0}ms · {outW}×{outH} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps");

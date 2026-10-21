@@ -48,6 +48,7 @@
   <span><span class="dot" id="dHand"></span>손 추적 <b id="hands">—</b></span>
   <span>컨트롤러 <b id="touch">—</b></span>
   <span>착용 <b id="worn">—</b></span>
+  <span>배터리 <b id="batt">—</b></span>
   <span>미러링 <b id="cfps">—</b> · 인코딩 <b id="cms">—</b> · 앱 <b id="afps">—</b></span>
   <span>해상도 <b id="cres">—</b></span>
   <span>씬 <b id="scene">—</b></span>
@@ -73,6 +74,13 @@ const resEl = $('res');
   load();
 })();
 $('mirror').onclick = () => $('mirror').classList.toggle('big');
+// 배터리(10-21) — 구간 색은 헤드셋 RomLineView.BatteryBand와 같다: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강
+function batt(m) {
+  const e = $('batt');
+  if (m.battery === undefined || m.battery < 0) { e.textContent = '—'; e.style.color = ''; return; }
+  e.textContent = m.battery + '%' + (m.charging ? ' · 충전 중' : '');
+  e.style.color = m.battery > 50 ? '#73E68C' : m.battery > 20 ? '#FFF233' : '#FF6B6B';
+}
 function info() {
   fetch('/mirrorinfo', { cache: 'no-store' }).then(r => r.json()).then(m => {
     $('conn').textContent = '연결됨'; $('dConn').classList.add('on');
@@ -80,7 +88,7 @@ function info() {
     $('cfps').textContent = m.camFps + '장/s'; $('cms').textContent = m.camMs + 'ms'; $('afps').textContent = m.appFps + 'fps';
     $('cres').textContent = (m.camRes || '').replace('x', '×'); $('scene').textContent = m.scene || '—';
     $('hands').textContent = m.handOn === false ? '꺼짐' : (m.hands || '—'); $('dHand').classList.toggle('on', m.hands === '양손');
-    $('touch').textContent = m.touch || '—'; $('worn').textContent = m.worn ? '쓰고 있음' : '안 씀';
+    $('touch').textContent = m.touch || '—'; $('worn').textContent = m.worn ? '쓰고 있음' : '안 씀'; batt(m);
     resEl.querySelectorAll('button').forEach(b => b.classList.toggle('cur', +b.dataset.i === m.choice));
   }).catch(() => { $('conn').textContent = '★연결 끊김'; $('dConn').classList.remove('on'); }).finally(() => setTimeout(info, 1000));
 }

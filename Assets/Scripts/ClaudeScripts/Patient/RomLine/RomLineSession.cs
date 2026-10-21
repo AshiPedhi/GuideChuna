@@ -395,6 +395,7 @@ public class RomLineSession : MonoBehaviour
 
         if (dirty) Refresh();
         PumpMonitor();
+        if (Time.unscaledTime >= batteryNext) PollBattery();
         view.Tick(eye, tipShown, tipValid, tipPos, !home && (freeMode || (!confirmWait && !TabComplete(CurTab))));
         freeView.Tick(eye);
     }
@@ -1533,6 +1534,24 @@ public class RomLineSession : MonoBehaviour
     /// 모니터 화면이 보낸 명령을 처리하고, 보는 화면이 있을 때만 0.1초에 한 번 상태를 건넨다.
     /// 상태 = «바뀔 때만 만드는 부분»(monitorBody — Refresh가 만든다) + «늘 바뀌는 부분»(컨트롤러 끝·추적 여부).
     /// </summary>
+    // ── 배터리(10-21 사용자 지시: 벽면UI · 컨트롤러UI에 잔량을 보인다 · 잔량별 색) ── 2초마다 읽고, 바뀔 때만 글자를 만든다.
+    private float batteryNext;
+    private int batteryShown = int.MinValue;
+    private bool batteryChargingShown;
+
+    private void PollBattery()
+    {
+        batteryNext = Time.unscaledTime + 2f;
+        int pct = RomLineView.BatteryPercent();
+        bool charging = RomLineView.BatteryCharging();
+        if (pct == batteryShown && charging == batteryChargingShown) return;
+        if (RomLineView.BatteryBand(pct) != RomLineView.BatteryBand(batteryShown) || charging != batteryChargingShown)
+            Debug.Log($"[선실측] 배터리 — {(pct < 0 ? "읽을 수 없음(에디터 등)" : pct + "%")} · {(charging ? "충전 중" : "충전 안 함")}");
+        batteryShown = pct;
+        batteryChargingShown = charging;
+        view.SetBattery(pct, charging);
+    }
+
     private void PumpMonitor()
     {
         if (monitor.Port == 0) return;
