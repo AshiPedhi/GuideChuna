@@ -125,8 +125,43 @@ public class RomLineMirror : MonoBehaviour
         pca = go.AddComponent<PassthroughCameraAccess>();
         pca.CameraPosition = PassthroughCameraAccess.CameraPositionType.Left;
         pca.RequestedResolution = camResolution;
-        go.SetActive(true);
-        pcaState = "권한 · 첫 영상 기다리는 중";
+        // ★10-21 사용자 지시: 카메라는 보는 화면이 붙을 때 켠다(UpdateCameraPower) — 아무도 안 보면 미러링 부담이 거의 0이 되게.
+        pcaState = "꺼짐(보는 화면 없음)";
+    }
+
+    // ── 카메라 켜고 끄기(10-21) ── 영상 접속(videoClients) 또는 사진 요청(/cam.jpg)이 있으면 켜고,
+    //   아무도 안 보는 상태가 CamIdleOff초 이어지면 끈다(잠깐 끊겼다 다시 붙는 경우에 카메라를 껐다 켜지 않게).
+    //   켤 때는 StartCamera와 같은 길(OnEnable이 RequestedResolution으로 연다) · 첫 영상까지 약 1초(추정 · 기기에서 볼 것).
+    private const float CamIdleOff = 5f;
+    private float camIdleSince = -1f;
+
+    private void UpdateCameraPower(float now)
+    {
+        if (pca == null) return;
+        bool want = videoClients > 0 || monitor.ImageWatched("cam");
+        if (want) camIdleSince = -1f;
+        else if (camIdleSince < 0f) camIdleSince = now;
+        bool on = pca.gameObject.activeSelf;
+        if (want && !on)
+        {
+            pca.RequestedResolution = camResolution;
+            pca.gameObject.SetActive(true);
+            pcaShownRes = default;
+            pcaState = "켜는 중";
+            Debug.Log("[선실측] 미러링 — 현실 영상: 보는 화면이 붙어 카메라를 켠다");
+        }
+        else if (!want && on && now - camIdleSince >= CamIdleOff && !camBusy && !AnyVideoBusy())
+        {
+            pca.gameObject.SetActive(false);
+            pcaState = "꺼짐(보는 화면 없음)";
+            Debug.Log($"[선실측] 미러링 — 현실 영상: {CamIdleOff:F0}초 동안 보는 화면이 없어 카메라를 끈다");
+        }
+    }
+
+    private bool AnyVideoBusy()
+    {
+        for (int i = 0; i < VideoSlots; i++) if (vBusy[i]) return true;
+        return false;
     }
 
     /// <summary>현실 영상 해상도를 바꾼다(관제 화면 버튼 → /cmd?c=camN). 실제로 바꾸는 건 Update — 쓰던 버퍼를 인코딩 스레드가 아직 들고 있을 수 있다.</summary>
@@ -147,11 +182,10 @@ public class RomLineMirror : MonoBehaviour
             Debug.Log($"[선실측] 미러링 — 현실 영상 해상도 {camResolution.x}×{camResolution.y} → {pendingRes.x}×{pendingRes.y}(카메라를 다시 연다)");
             camResolution = pendingRes;
             pendingRes = default;
+            bool wasOn = pca.gameObject.activeSelf;
             pca.gameObject.SetActive(false);   // OnEnable이 RequestedResolution으로 다시 연다(StartCamera와 같은 길)
             pca.RequestedResolution = camResolution;
-            pca.gameObject.SetActive(true);
-            pcaShownRes = default;
-            pcaState = "해상도 바꾸는 중";
+            if (wasOn) { pca.gameObject.SetActive(true); pcaShownRes = default; pcaState = "해상도 바꾸는 중"; }   // 꺼져 있었으면 켤 때 새 해상도로 연다
         }
 
         if (pca != null && pca.IsPlaying)
@@ -176,6 +210,7 @@ public class RomLineMirror : MonoBehaviour
             }
         }
 
+        UpdateCameraPower(now);
         if (diagInterval > 0f && now >= diagNext) Diagnose(now);
     }
 
