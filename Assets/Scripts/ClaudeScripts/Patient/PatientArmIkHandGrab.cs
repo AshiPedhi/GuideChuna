@@ -74,7 +74,7 @@ public class PatientArmIkHandGrab : MonoBehaviour
             if (st.held != null)
             {
                 Debug.Log($"[팔IK잡기] {handName} 추적이 끊겼다 — {st.held.SideLabel}을 놓는다(자세 그대로)");
-                st.held = null;
+                Release(st);
             }
             st.wasClosed = false;
             return;
@@ -120,12 +120,13 @@ public class PatientArmIkHandGrab : MonoBehaviour
             st.posOffset = inv * (t.position - wrist.position);
             st.rotOffset = inv * t.rotation;
             st.held = nearest;
+            nearest.Traction = true;   // 사용자 선택 A — 잡는 동안 팔을 편 채(견인)
             Debug.Log($"[팔IK잡기] {handName}으로 {nearest.SideLabel}을 잡았다({(st.fist ? "주먹" : "핀치")} · 거리 {best * 100f:F1}cm)");
         }
         else if (st.held != null && !closed)
         {
             Debug.Log($"[팔IK잡기] {handName}을 폈다 — {st.held.SideLabel}을 놓는다(놓은 자세 그대로 · 사용자 선택 B)");
-            st.held = null;
+            Release(st);
         }
 
         if (st.held != null && st.held.Target != null)
@@ -133,6 +134,20 @@ public class PatientArmIkHandGrab : MonoBehaviour
             st.held.Target.SetPositionAndRotation(wrist.position + wrist.rotation * st.posOffset, wrist.rotation * st.rotOffset);
         }
         st.wasClosed = closed;
+    }
+
+    /// <summary>
+    /// 놓는다 — 견인을 끄고 목표를 지금 환자 손 자리로 옮긴다. 견인 중에는 목표(내 손)가 팔 길이보다 가까울 수 있어서,
+    /// 그대로 두면 견인을 끄는 순간 팔꿈치가 굽는다 — «놓은 자세 그대로»(B)를 지키려고 목표를 손에 맞춘다.
+    /// </summary>
+    private static void Release(HandState st)
+    {
+        if (st.held != null)
+        {
+            st.held.Traction = false;
+            if (st.held.Target != null && st.held.HandBone != null) st.held.Target.position = st.held.HandBone.position;
+        }
+        st.held = null;
     }
 
     /// <summary>내 손의 손목 · 엄지 · 검지 · 중지 끝 중 환자 손에 가장 가까운 거리.</summary>

@@ -27,6 +27,7 @@ public class PatientArmIkSim : MonoBehaviour
     private struct Pose
     {
         public Mode mode; public float abd, tilt, reach, twist, wrist;
+        public bool traction;   // 손으로 잡은 것처럼 견인(팔을 편 채 · 10-22)
         public static Pose D(float abd, float tilt, float reach = 1f, float twist = 0f, float wrist = 0f)
             => new Pose { mode = Mode.Dir, abd = abd, tilt = tilt, reach = reach, twist = twist, wrist = wrist };
     }
@@ -77,6 +78,15 @@ public class PatientArmIkSim : MonoBehaviour
         Add("몸통 안으로 밀기", 1.5f, 0.8f, new Pose { mode = Mode.Torso, reach = 1f }, "몸통 표면에서 막힘");
         Add("침대 속으로 누르기", 1.5f, 0.8f, new Pose { mode = Mode.BedPress, reach = 1f }, "침대 윗면에서 막힘");
         Add("빠르게 휘두르기 (0.5초에 옆 → 머리 위)", 0.5f, 0.8f, Pose.D(170, 0), "튐 없음");
+        // 10-22: 손으로 잡은 상태(견인) — 사용자 실기에서 내 손이 어깨에서 0.21~0.41m라 팔꿈치가 굽고 외회전이 안 됐다
+        Pose tA = Pose.D(90, -40, 0.6f); tA.traction = true;
+        Pose tB = Pose.D(90, -40, 0.6f, 80); tB.traction = true;
+        Pose tC = Pose.D(90, -40, 0.6f, -80); tC.traction = true;
+        Pose tD = Pose.D(90, -40, 0.6f, 0, 50); tD.traction = true;
+        Add("견인 — 손을 어깨 쪽(0.6배)에 둔 영상 자세", 2f, 0.8f, tA, "팔꿈치 편 채 · 어깨 뒤로 40°");
+        Add("견인 + 비틀기 +80°", 1.5f, 0.8f, tB, "팔 편 채 위팔 회전(외 · 내 중 하나)");
+        Add("견인 + 비틀기 −80°", 2f, 0.8f, tC, "반대 회전");
+        Add("견인 + 손목 +50°", 1.5f, 0.8f, tD, "손목 꺾임 · 팔 편 채");
         Add("원위치", 2f, 0.5f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로 돌아옴");
     }
 
@@ -87,6 +97,7 @@ public class PatientArmIkSim : MonoBehaviour
         if (!probe.TryBodyAxesWorld(out Vector3 F, out Vector3 U, out Vector3 L)) return;
 
         Phase ph = phases[phaseIdx];
+        probe.Traction = ph.to.traction;
         phaseT += Time.deltaTime;
         float k = ph.dur > 0f ? Mathf.Clamp01(phaseT / ph.dur) : 1f;
         k = k * k * (3f - 2f * k);

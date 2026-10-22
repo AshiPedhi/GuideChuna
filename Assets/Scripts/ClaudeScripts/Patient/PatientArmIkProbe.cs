@@ -177,6 +177,12 @@ public class PatientArmIkProbe : MonoBehaviour
 
     // ── 시뮬레이션(PatientArmIkSim)이 읽는 값 — 읽기 전용 ──
     public bool IsReady => ready;
+    /// <summary>
+    /// 견인 — 켜면 팔꿈치를 편 채로 두고 팔이 목표 쪽을 가리킨다(목표가 팔 길이보다 가까워도 굽히지 않는다).
+    /// ★10-22 사용자 선택 A: 손으로 잡고 있는 동안 켠다(PatientArmIkHandGrab). 제2늑골 영상처럼 팔을 편 채 당기는 시술.
+    ///   잡은 동안 내 손이 어깨에서 0.21~0.41m(팔 길이 0.58m)라 팔꿈치가 90~136° 굽었고, 그래서 비틀기(펴진 팔에서만)가 어깨 회전으로 안 갔다(로그 실측).
+    /// </summary>
+    public bool Traction { get; set; }
     public Transform Target => target;
     public Transform UpperBone => upper;
     public Transform LowerBone => lower;
@@ -531,7 +537,7 @@ public class PatientArmIkProbe : MonoBehaviour
             float inner = (180f - elbowFlexionMax) * Mathf.Deg2Rad;
             minReach = Mathf.Max(minReach, Mathf.Sqrt(l1 * l1 + l2 * l2 - 2f * l1 * l2 * Mathf.Cos(inner)));
         }
-        float d = Mathf.Clamp(dist, minReach, maxReach);
+        float d = Traction ? maxReach : Mathf.Clamp(dist, minReach, maxReach);
         Vector3 dir = dist > 1e-5f ? at / dist : (c - a).normalized;
 
         // 로그용(월드 m로 환산 — S의 스케일 크기만큼 곱한다)
