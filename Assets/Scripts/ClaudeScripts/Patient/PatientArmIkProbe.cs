@@ -113,6 +113,12 @@ public class PatientArmIkProbe : MonoBehaviour
 
     // 침대 크기 · 높이는 손잡이로 두지 않는다 — 시작 때 씬의 침대 메시를 직접 잰다(10-22 · MeasureBed). 기즈모 노란 선으로 확인한다.
 
+    [Header("움직임 속도")]
+    [Tooltip("관절(위팔 · 아래팔 · 손)이 한 프레임에 돌 수 있는 각속도 한계(°/초). 0이면 끈다. " +
+             "★10-22 시뮬: 목표가 몸을 뚫고 지나가거나 0.5초에 휘두르면 해가 한쪽에서 반대쪽으로 넘어가 160°/프레임 튀었다. " +
+             "값 360은 «시술자가 환자 팔을 옮기는 정도»를 잡은 추정이다(실측 아님).")]
+    [SerializeField] private float maxJointSpeed = 360f;
+
     [Tooltip("자동으로 만드는 구의 지름(m).")]
     [SerializeField] private float handleSize = 0.05f;
 
@@ -163,7 +169,8 @@ public class PatientArmIkProbe : MonoBehaviour
     private float bedS0, bedStep;
     private float[] bedTop, bedXMin, bedXMax;
     private bool bedReady, bedMeasured;
-    private float rotRest = float.NaN;        // 시작 자세의 위팔 회전(°) — 펴진 팔 비틀기의 0 기준(절대값으로 맞춘다)
+    private float rotRest = float.NaN;
+    private int lastClampSide;                // 회전 한계: 직전에 자른 쪽(−1 = 외 · +1 = 내 · 0 = 안 자름)        // 시작 자세의 위팔 회전(°) — 펴진 팔 비틀기의 0 기준(절대값으로 맞춘다)
     private int nRestored, nAnimWrote;
     private readonly bool[] touchedBuf = new bool[3];   // 막힘에 닿은 모양(매 프레임 새로 만들지 않는다)        // 기준 자세 되돌림 / 애니가 씀 — 비틀기 누적 원인 확인용 로그(10-22)
     private bool lastReachable;
@@ -468,6 +475,18 @@ public class PatientArmIkProbe : MonoBehaviour
 
         if (weight > 0f) Solve();
 
+        // 관절 속도 제한 — 직전 프레임에 우리가 낸 자세에서 이번 해까지 maxJointSpeed만큼만 간다(애니가 매 프레임 써도 출력 기준으로 잰다)
+        if (weight > 0f && maxJointSpeed > 0f && hasWritten)
+        {
+            float step = maxJointSpeed * Time.deltaTime;
+            upper.localRotation = Quaternion.RotateTowards(wroteUpper, upper.localRotation, step);
+            lower.localRotation = Quaternion.RotateTowards(wroteLower, lower.localRotation, step);
+            hand.localRotation = Quaternion.RotateTowards(wroteHand, hand.localRotation, step);
+            // ★10-22 시뮬 5회차: 속도를 자르자 튐은 사라졌지만, 느리게 따라가는 도중 팔이 몸통을 질러가 관통이 커졌다(최대 181mm).
+            //   자른 자세에서 한 번 더 막힘만 밀어낸다 — 지금 자리에서 조금씩 미니까 몸 표면을 따라 돌아간다.
+            if (applyCollision) CorrectCollisionInPlace();
+        }
+
         wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation;
         hasWritten = true;
 
@@ -557,7 +576,13 @@ public class PatientArmIkProbe : MonoBehaviour
 
         string hit = null;
         if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, t, ref elbowGoal, ref handGoal, ref hit);
-        if (applyCollision) ApplyCollision(a, ref elbowGoal, ref handGoal, ref hit);
+        if (applyCollision)
+        {
+            ApplyCollision(a, ref elbowGoal, ref handGoal, ref hit);
+            // ★10-22 시뮬 4회차: 막힘이 손을 밀어낸 뒤 아래팔이 경첩 면을 벗어나 옆으로 꺾였다(몸 앞 가로지르기 100프레임)
+            Vector3 uC = (elbowGoal - a).normalized, wC = handGoal - elbowGoal;
+            if (uC.sqrMagnitude > 0.5f && wC.sqrMagnitude > 1e-10f) handGoal = elbowGoal + HingeDir(a, uC, wC.normalized) * l2;
+        }
 
         // ① 위팔: 팔꿈치를 elbowGoal로
         Quaternion q1 = Quaternion.FromToRotation(b - a, elbowGoal - a);
@@ -580,7 +605,9 @@ public class PatientArmIkProbe : MonoBehaviour
                 Vector3 to = Vector3.ProjectOnPlane(handGoal - b1, axis);
                 // 아래팔이 거의 곧으면 굽힘면이 정의되지 않는다 — 비틀지 않는다
                 // ★10-22 시뮬: 팔이 거의 펴지면 굽힘면이 잡음뿐이라 여기서 위팔이 마구 돌았다(160°/프레임) — 목표 굽힘 10~25°에서 서서히 켠다.
-                float bendW = Mathf.InverseLerp(10f, 25f, Vector3.Angle(elbowGoal - a, handGoal - elbowGoal));
+                // ★10-22 시뮬 6회차: 팔꿈치 자리를 해부학 굴곡 반대쪽으로 정한 뒤로는 잡음 문제가 없어 2~6°에서 다 켠다
+                //   (10~25°로 두니 그 사이 굽힘에서 위팔이 덜 돌아 팔꿈치가 뒤로 꺾여 보였다).
+                float bendW = Mathf.InverseLerp(2f, 6f, Vector3.Angle(elbowGoal - a, handGoal - elbowGoal));
                 if (bendW > 0f && from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
                 {
                     float twist = Vector3.SignedAngle(from, to, axis) * bendW;
@@ -649,20 +676,8 @@ public class PatientArmIkProbe : MonoBehaviour
         // 위팔을 잘랐으면 아래팔은 새 팔꿈치에서 목표를 다시 겨눈다. 안 잘랐으면 2관절 풀이 그대로.
         Vector3 w = (hitBehind || hitMedial) ? (t - e) : (handGoal - elbowGoal);
         w = w.sqrMagnitude > 1e-10f ? w.normalized : u;
-        if ((hitBehind || hitMedial) && flexRefReady)
-        {
-            // ★10-22 시뮬 3회차: 어깨를 자른 뒤 아래팔이 목표를 «아무 쪽으로나» 겨눠 팔꿈치가 반대 · 옆으로 꺾였다(신전 한계 넘김 단계).
-            //   경첩 면(위팔 축 u + 해부학 굴곡 방향)의 굽는 쪽 반만 허용한다. 굴곡 방향은 지금 위팔에서 u로 옮긴 위팔에 붙여 옮긴다.
-            Vector3 uNow = (space.InverseTransformPoint(lower.position) - a).normalized;
-            Vector3 fS = Quaternion.FromToRotation(uNow, u) * space.InverseTransformVector(upper.TransformVector(flexRefInUpper));
-            fS -= Vector3.Dot(fS, u) * u;
-            if (fS.sqrMagnitude > 1e-10f)
-            {
-                fS.Normalize();
-                Vector3 h2 = u * Vector3.Dot(w, u) + fS * Mathf.Max(0f, Vector3.Dot(w, fS));
-                w = h2.sqrMagnitude > 1e-10f ? h2.normalized : u;
-            }
-        }
+        // ★10-22 시뮬 3회차: 어깨를 자른 뒤 아래팔이 목표를 «아무 쪽으로나» 겨눠 팔꿈치가 반대 · 옆으로 꺾였다(신전 한계 넘김 단계).
+        if (hitBehind || hitMedial) w = HingeDir(a, u, w);
 
         // ② 팔꿈치 굴곡: 아래팔과 위팔 연장선 사이 각 ≤ 한계  ⇔  w · (−u) ≤ cos(180 − 한계)
         bool hitElbow = ClampAlong(ref w, -u, Mathf.Cos((180f - elbowFlexionMax) * Mathf.Deg2Rad), F);
@@ -694,6 +709,41 @@ public class PatientArmIkProbe : MonoBehaviour
         handGoal = e + w.normalized * l2;
     }
 
+    /// <summary>지금 자세(속도 제한 뒤)의 팔꿈치 · 손이 막힘에 들어가 있으면 밀어내고 위치만 다시 맞춘다. 경첩 면은 지킨다.</summary>
+    private void CorrectCollisionInPlace()
+    {
+        Vector3 a = space.InverseTransformPoint(upper.position);
+        Vector3 b = space.InverseTransformPoint(lower.position);
+        Vector3 c = space.InverseTransformPoint(hand.position);
+        Vector3 e = b, h = c;
+        string dummy = null;
+        ApplyCollision(a, ref e, ref h, ref dummy);
+        if ((e - b).sqrMagnitude < 1e-10f && (h - c).sqrMagnitude < 1e-10f) return;
+        float l2 = (c - b).magnitude;
+        Vector3 uC = (e - a).normalized, wC = h - e;
+        if (wC.sqrMagnitude > 1e-10f) h = e + HingeDir(a, uC, wC.normalized) * l2;
+        RotateInS(upper, Quaternion.FromToRotation(b - a, e - a));
+        Vector3 b2 = space.InverseTransformPoint(lower.position);
+        Vector3 c2 = space.InverseTransformPoint(hand.position);
+        RotateInS(lower, Quaternion.FromToRotation(c2 - b2, h - b2));
+    }
+
+    /// <summary>
+    /// 아래팔 방향 w를 경첩 면(위팔 축 u + 해부학 굴곡 방향)의 «굽는 쪽 반»으로 옮긴다(S공간). 팔꿈치는 경첩이다.
+    /// 굴곡 방향은 지금 위팔에 붙은 것을 u로 옮긴 위팔에 붙여 옮긴다(위팔 ①이 하는 최소 회전과 같다).
+    /// </summary>
+    private Vector3 HingeDir(Vector3 aS, Vector3 u, Vector3 w)
+    {
+        if (!flexRefReady) return w;
+        Vector3 uNow = (space.InverseTransformPoint(lower.position) - aS).normalized;
+        Vector3 fS = Quaternion.FromToRotation(uNow, u) * space.InverseTransformVector(upper.TransformVector(flexRefInUpper));
+        fS -= Vector3.Dot(fS, u) * u;
+        if (fS.sqrMagnitude < 1e-10f) return w;
+        fS.Normalize();
+        Vector3 h2 = u * Vector3.Dot(w, u) + fS * Mathf.Max(0f, Vector3.Dot(w, fS));
+        return h2.sqrMagnitude > 1e-10f ? h2.normalized : u;
+    }
+
     /// <summary>
     /// 위팔 회전을 한계(−외 ~ +내) 안으로. 밖이면 «직전 프레임 값에 가까운 쪽» 한계로 자른다.
     /// ★10-22 시뮬 2회차: 아래팔이 뒤로 넘어가 회전이 ±180° 근처를 지날 때 +70 ↔ −90 사이를 오가 160°/프레임 튀었다.
@@ -701,9 +751,14 @@ public class PatientArmIkProbe : MonoBehaviour
     private float ClampRot(float rot)
     {
         float lo = -shoulderExternalRotMax, hi = shoulderInternalRotMax;
-        if (rot >= lo && rot <= hi) return rot;
-        float refRot = float.IsNaN(lastRotDeg) ? rot : lastRotDeg;
-        return Mathf.Abs(Mathf.DeltaAngle(refRot, lo)) <= Mathf.Abs(Mathf.DeltaAngle(refRot, hi)) ? lo : hi;
+        if (rot >= lo && rot <= hi) { lastClampSide = 0; return rot; }
+        // ★10-22 시뮬 6회차: «직전 값에 가까운 쪽»만 보면 −120°(외회전 30° 넘김)를 +70(내회전)으로 잘라 팔꿈치가 뒤로 꺾였다.
+        //   → 지금 값에 가까운 한계로 자르되, 두 한계의 한가운데(±180° 건너편) 근처 ±30°에서만 직전에 자른 쪽을 지킨다.
+        float dLo = Mathf.Abs(Mathf.DeltaAngle(rot, lo)), dHi = Mathf.Abs(Mathf.DeltaAngle(rot, hi));
+        int side = dLo <= dHi ? -1 : 1;
+        if (Mathf.Abs(dLo - dHi) < 60f && lastClampSide != 0) side = lastClampSide;
+        lastClampSide = side;
+        return side < 0 ? lo : hi;
     }
 
     /// <summary>몸 기준 축(앞 F · 위 U · 바깥 L)을 S공간 단위 벡터로. 외적을 쓰지 않고 직교화만 한다.</summary>
