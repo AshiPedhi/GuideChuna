@@ -27,8 +27,12 @@ using UnityEngine;
 ///   CervicalRomDriver.AxisOf에 «부호는 Play에서 눈으로 확인해 뒤집었다(08-24)»가 남아 있는 것이 그 흔적이다.
 ///   → 그래서 여기서는 월드가 아니라 <b>위팔의 부모 공간(S)</b>에서 푼다.
 ///     · 위치는 S.InverseTransformPoint로 옮긴다 — 행렬 전체(거울 포함)를 역으로 거치므로 정확하다.
-///     · 회전은 S 기준 상대 회전 rel = Inverse(S.rotation) * bone.rotation에 FromToRotation을 곱한다.
+///     · 회전은 <b>localRotation에만</b> 곱한다(<see cref="RotateInS"/>). 월드 회전(bone.rotation)은 읽지도 쓰지도 않는다.
 ///       S 아래(위팔·아래팔·손)에 음수 스케일이 없으면 이 공간에는 거울이 없다 — 시작 때 검사하고, 있으면 멈춘다.
+///   ★10-22 Play 실측으로 정정: 처음엔 rel = Inverse(S.rotation) * bone.rotation → bone.rotation = S.rotation * (q * rel)로
+///     «월드 회전을 거쳐» 넣었는데, 사용자가 «목표를 움직이는 것과 반대로 움직인다»고 했고 로그도 어긋났다
+///     (목표가 팔 길이 밖인데 팔꿈치 66~77° — 쭉 펴져 180°에 가까워야 한다). 거울 밑에서 월드 회전이
+///     위치(InverseTransformPoint)와 다른 규칙으로 계산되는 것으로 보고(추정), 위치와 같은 로컬 사슬만 쓰도록 바꿨다.
 ///   이렇게 하면 거울이 S 위 어디에 있든(몇 개든) 방향 부호를 추론할 필요가 없다.
 ///
 /// ★멱등성: 해는 «목표 위치로 가는 최소 회전»이라, Animator가 그 프레임에 팔을 덮어쓰지 않아도
@@ -69,6 +73,7 @@ public class PatientArmIkProbe : MonoBehaviour
 
     // 로그·기즈모용 마지막 값(매 프레임 float만 갱신한다 — 문자열은 로그 시점에만 만든다)
     private float lastTargetDistance, lastReach, lastElbowAngle;
+    private float lastHandErrMm;   // 풀고 난 뒤 실제 손 ↔ 풀이가 노린 손 자리(월드 mm). 맞게 돌면 0에 가깝다(10-22 실측 로그)
     private bool lastReachable;
 
     /// <summary>메뉴가 AddComponent 직후(Start 전에) 팔을 고를 때 쓴다.</summary>
@@ -112,6 +117,11 @@ public class PatientArmIkProbe : MonoBehaviour
 
         if (target == null) target = MakeHandle("[팔IK] 목표", hand.position, new Color(1f, 0.25f, 0.2f));
         if (hint == null) hint = MakeHandle("[팔IK] 힌트(팔꿈치)", DefaultHintPosition(), new Color(0.25f, 0.5f, 1f));
+
+        // 로컬 회전 변환(RotateInS)은 위팔 localScale이 균일하다고 본다 — 아니면 알린다(멈추지는 않는다)
+        Vector3 us = upper.localScale;
+        if (Mathf.Abs(us.x - us.y) > 1e-3f || Mathf.Abs(us.x - us.z) > 1e-3f)
+            Debug.LogWarning($"[팔IK] 위팔 localScale이 균일하지 않다 {us} — 아래팔 회전이 조금 어긋날 수 있다");
 
         Vector3 ls = upper.lossyScale;
         float det = ls.x * ls.y * ls.z;
@@ -158,18 +168,15 @@ public class PatientArmIkProbe : MonoBehaviour
         if (Time.unscaledTime >= nextLogTime)
         {
             nextLogTime = Time.unscaledTime + logInterval;
-            Debug.LogFormat("[팔IK] 목표 거리 {0:F3}m / 닿는 거리 {1:F3}m ({2}) · 팔꿈치 각 {3:F1}° · weight {4:F2}",
+            Debug.LogFormat("[팔IK] 목표 거리 {0:F3}m / 닿는 거리 {1:F3}m ({2}) · 팔꿈치 각 {3:F1}° · 손 오차 {5:F1}mm · weight {4:F2}",
                 lastTargetDistance, lastReach, lastReachable ? "닿음" : "못 닿음 — 뻗어서 가리킴",
-                lastElbowAngle, weight);
+                lastElbowAngle, weight, lastHandErrMm);
         }
     }
 
     private void Solve()
     {
         // ── 전부 S(위팔 부모) 로컬 공간에서 푼다. 위 클래스 주석 «음수 스케일 처리» 참고 ──
-        Quaternion sRot = space.rotation;
-        Quaternion sInv = Quaternion.Inverse(sRot);
-
         Vector3 a = space.InverseTransformPoint(upper.position);
         Vector3 b = space.InverseTransformPoint(lower.position);
         Vector3 c = space.InverseTransformPoint(hand.position);
@@ -208,7 +215,7 @@ public class PatientArmIkProbe : MonoBehaviour
 
         // ① 위팔: 팔꿈치를 elbowGoal로
         Quaternion q1 = Quaternion.FromToRotation(b - a, elbowGoal - a);
-        RotateInS(upper, q1, sRot, sInv);
+        RotateInS(upper, q1);
 
         // ② 위팔 비틀기: 위팔 축을 중심으로 돌려 아래팔이 굽힘면(a·elbowGoal·handGoal)에 들어오게
         if (alignElbowTwist)
@@ -225,7 +232,7 @@ public class PatientArmIkProbe : MonoBehaviour
                 if (from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
                 {
                     float twist = Vector3.SignedAngle(from, to, axis);
-                    RotateInS(upper, Quaternion.AngleAxis(twist, axis), sRot, sInv);
+                    RotateInS(upper, Quaternion.AngleAxis(twist, axis));
                 }
             }
         }
@@ -234,24 +241,26 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 b2 = space.InverseTransformPoint(lower.position);
         Vector3 c2 = space.InverseTransformPoint(hand.position);
         Quaternion q2 = Quaternion.FromToRotation(c2 - b2, handGoal - b2);
-        RotateInS(lower, q2, sRot, sInv);
+        RotateInS(lower, q2);
 
         // 로그·기즈모용 팔꿈치 각(180° = 쭉 폄)
         Vector3 b3 = space.InverseTransformPoint(lower.position);
         Vector3 c3 = space.InverseTransformPoint(hand.position);
         lastElbowAngle = Vector3.Angle(a - b3, c3 - b3);
+        lastHandErrMm = Vector3.Distance(hand.position, space.TransformPoint(handGoal)) * 1000f;
     }
 
     /// <summary>
-    /// S공간 회전 q를 뼈에 가중치만큼 얹는다.
-    /// rel = Inverse(S.rotation) * bone.rotation 은 S 아래 로컬 회전들의 곱이고, S 아래에 거울이 없으니
-    /// 이 공간에서 q를 왼쪽에 곱하면 화면에서도 정확히 q만큼 돈다. 되돌릴 때 S.rotation을 다시 곱한다.
+    /// S공간 회전 q를 뼈에 가중치만큼 얹는다 — localRotation만 쓴다(10-22 정정, 클래스 주석 참고).
+    /// S → bone.parent 사이 로컬 회전의 곱 R로 q를 뼈 부모 공간으로 옮긴다: qLocal = R⁻¹ · q · R.
+    /// InverseTransformPoint와 같은 로컬 사슬이므로 거울(음수 스케일)이 S 위 어디에 있든 상관없다.
     /// </summary>
-    private void RotateInS(Transform bone, Quaternion q, Quaternion sRot, Quaternion sInv)
+    private void RotateInS(Transform bone, Quaternion q)
     {
         if (weight < 1f) q = Quaternion.Slerp(Quaternion.identity, q, weight);
-        Quaternion rel = sInv * bone.rotation;
-        bone.rotation = sRot * (q * rel);
+        Quaternion r = Quaternion.identity;
+        for (Transform t = bone.parent; t != space; t = t.parent) r = t.localRotation * r;
+        bone.localRotation = (Quaternion.Inverse(r) * q * r) * bone.localRotation;
     }
 
     private static string NameOf(Transform t) => t != null ? t.name : "(없음)";
