@@ -68,65 +68,87 @@ public class PatientArmIkProbe : MonoBehaviour
     [Tooltip("관절 한계를 건다. 끄면 0단계처럼 손을 목표에 붙이기만 한다.")]
     [SerializeField] private bool applyLimits = true;
 
-    // ── 어깨 관절가동범위(10-22 사용자 지시: «어깨 관절 가동 범위만 조사해서 빠르게 적용») ──
-    //   AAOS: 굴곡 180 · 외전 180 · 신전 60 · 내전 30 · 외회전 90 · 내회전 70(팔 90° 외전에서 잰 값).
-    //   ★거상(팔을 든 각)에 따라 범위가 바뀐다 — 한 숫자로 두지 않는다:
-    //     · 뒤로(관상면 뒤) : 팔을 내렸을 때 신전 60 → 수평(90°)에서 수평 외전 45(Norkin & White 표 · ★원문 미확인)
-    //     · 안쪽(시상면 넘어): 팔을 내렸을 때 내전 30(몸통) → 수평에서 수평 내전 ≈ 몸 앞 40°(130° 수평 내전 · ★원문 미확인)
-    //     · 위팔 회전: 90° 위로 들수록 내회전 범위가 줄어 다 들었을 때 0(외전 + 외회전 = 어깨가 잠기는 자세 · ★추정)
-    //       옆으로 다 들려면 외회전이 필요하다 — 옆 면 최대 거상에서 외회전 27°(Inui 2009, Acta Orthop 80:451 · 앞 면은 3°)
-    [Tooltip("어깨 신전 — 팔을 내렸을 때 위팔이 관상면 뒤로 갈 수 있는 최대 각(°). AAOS 60.")]
+    // ── 어깨 복합체(10-22 해부학 조사 명세대로 · 사용자 선택 A) ──
+    //   근거 문서: D:/CoCoChuna_환자팔_해부학적움직임_명세_어깨_V0.1_20261022
+    //   ★한계는 «위팔–몸통» 각으로 건다(견갑골 몫 포함 — 견갑골 본이 없어 따로 돌리지 않는다). 보이는 쇄골은 실측만큼만 움직인다(A).
+    //   ★10-22 틀렸던 것(덧댐 6ee1c32): 쇄골 30° 거상(1944 2D 추정 — 3D 실측 6~10) · 앞 · 옆 최대 거상 같게(150) · 팔 내림에서 외회전 90 ·
+    //     Inui 27°를 «최소 외회전»으로 강제(실은 거상 중 최대값) — 전부 아래 값으로 바꿨다.
+    [Tooltip("앞으로 든 최대 거상(°, 수동). Inui 2009 표1 156(원문 확인) · CDC 20~44세 169~172.")]
+    [Range(90f, 180f)]
+    [SerializeField] private float shoulderFlexionMax = 156f;
+
+    [Tooltip("가장 높이 드는 방향의 최대 거상(°). 그 방향 = 견갑면보다 23° 앞(Browne 1990 사체 · 초록) ≈ 앞에서 37°. 값 158은 ★추정(앞 156 · 옆 146 사이 꼭대기).")]
+    [Range(90f, 180f)]
+    [SerializeField] private float shoulderPeakElevationMax = 158f;
+
+    [Tooltip("옆으로 든 최대 거상(°, 수동). Inui 2009 144~147(원문 확인) — 앞보다 낮다.")]
+    [Range(90f, 180f)]
+    [SerializeField] private float shoulderAbductionMax = 146f;
+
+    [Tooltip("어깨 신전 — 팔꿈치를 굽혔을 때 팔 내림에서 관상면 뒤로(°). AAOS 60(2차) · JOA 50(원표 확인).")]
     [Range(0f, 90f)]
     [SerializeField] private float shoulderExtensionMax = 60f;
 
-    [Tooltip("팔꿈치를 편 채 어깨 신전 최대(°) — 이두근 장두가 당겨 굽혔을 때(60)보다 줄어든다. 약 50(★추정).")]
+    [Tooltip("팔꿈치를 편 채 어깨 신전(°) — 이두근 장두가 당겨 줄어든다(원리만 확인 · 50은 ★추정).")]
     [Range(0f, 90f)]
     [SerializeField] private float shoulderExtensionStraightElbow = 50f;
 
-    [Tooltip("뒤-안쪽(손을 등 뒤 허리로) 방향 최대 거상(°). 약 40(★추정).")]
-    [Range(0f, 90f)]
-    [SerializeField] private float shoulderBehindMedialMax = 40f;
-
-    [Tooltip("수평 외전 — 팔을 수평(90°)으로 들었을 때 관상면 뒤로 갈 수 있는 최대 각(°). 약 45(★원문 미확인). 그 사이 거상은 신전과 직선으로 잇는다.")]
+    [Tooltip("수평(90°)에서 관상면 뒤로(수평 신전 · °). AAOS 45(학습 자료) · JOA 30(원표, 견갑대 포함). 제2늑골 영상 자세는 약 40(계산) = 끝범위라 45를 쓴다.")]
     [Range(0f, 90f)]
     [SerializeField] private float shoulderHorizontalAbductionMax = 45f;
 
-    [Tooltip("어깨 내전 — 팔을 내렸을 때 위팔이 시상면을 넘어 몸 안쪽으로 갈 수 있는 최대 각(°). AAOS 30.")]
+    [Tooltip("수평(90°)에서 정중면 넘어 몸 앞 안쪽으로(°). JOA 수평 굴곡 135 → 45(원표 확인).")]
+    [Range(0f, 90f)]
+    [SerializeField] private float shoulderHorizontalAdductionMax = 45f;
+
+    [Tooltip("팔 내림에서 안쪽(내전 · °). AAOS 30(2차) · JOA 0(몸통이 막음) — 몸통 막힘이 따로 있어 30.")]
     [Range(0f, 90f)]
     [SerializeField] private float shoulderAdductionMax = 30f;
 
-    [Tooltip("수평 내전 — 팔을 수평으로 들었을 때 시상면을 넘어 몸 앞 안쪽으로 갈 수 있는 최대 각(°). 약 40(수평 내전 130 − 90 · ★원문 미확인).")]
+    [Tooltip("뒤-안쪽(손을 등 뒤 허리로) 방향 최대 거상(°). 40은 ★추정(문헌 숫자 못 찾음).")]
     [Range(0f, 90f)]
-    [SerializeField] private float shoulderHorizontalAdductionMax = 40f;
+    [SerializeField] private float shoulderBehindMedialMax = 40f;
 
-    [Tooltip("어깨 관절(상완–관절와)만으로 팔을 들 수 있는 최대 각(°) — 팔 내림 0 기준, 굴곡 · 외전 모두. 약 120(Inman 1944 견갑상완 리듬 2:1 — 180 중 60은 견갑골). " +
-             "★10-22 사용자 지적: 옆으로 180°까지 올라가는 건 말이 안 된다 — 이 리그엔 견갑골 본이 없어 어깨 관절 하나가 180°를 다 돌았다.")]
-    [Range(60f, 180f)]
-    [SerializeField] private float glenohumeralElevationMax = 120f;
-
-    [Tooltip("견갑상완 리듬 — 팔을 30° 넘게 들면 그 1/3을 어깨 묶음(쇄골 본 · 견갑골 대신)이 맡는다(Inman 1944 2:1). " +
-             "★10-22: 이 리그엔 견갑골 본이 없어 쇄골 본으로 흉내 낸다 — 피부가 버티는지는 시험 중.")]
+    [Header("보이는 쇄골(견갑상완 리듬 · 사용자 선택 A — 실측만큼만)")]
+    [Tooltip("팔을 들 때 쇄골 본을 실측만큼 움직인다(거상 · 후인). 견갑골 상방 회전(39~50°)은 보이게 돌리지 않는다 — 한계에 이미 들어 있다.")]
     [SerializeField] private bool scapularRhythm = true;
 
-    [Tooltip("쇄골 본(어깨 묶음)이 들어 올릴 수 있는 최대 각(°). 30이면 어깨 관절 120 + 30 = 약 150°까지 든다(★추정 — 진짜 180은 견갑 60°가 필요).")]
-    [Range(0f, 60f)]
-    [SerializeField] private float girdleElevationMax = 30f;
+    [Tooltip("쇄골 거상 최대(°). Ludewig 2009 · McClure 2001 골핀 3D 6~10. 팔 거상 30° 뒤로 거상 90°마다 7°씩(θ120 → 7 · 합격 5~8).")]
+    [Range(0f, 30f)]
+    [SerializeField] private float girdleElevationMax = 10f;
 
-    [Tooltip("다 들었을 때(180°) 옆 면에서 필요한 최소 외회전(°). Inui 2009: 27(앞 면 3). 90° 위로 들수록 이만큼 외회전 쪽으로 밀린다.")]
-    [Range(0f, 60f)]
-    [SerializeField] private float overheadExternalRotNeeded = 27f;
+    [Tooltip("쇄골 후인 최대(°). Ludewig · McClure 16~21. 팔 거상 30° 뒤로 120°마다 20°.")]
+    [Range(0f, 30f)]
+    [SerializeField] private float girdleRetractionMax = 20f;
 
-    [Tooltip("어깨 내회전(위팔 비틀기, 아래팔이 배 쪽으로) 최대 각(°). 정상 70.")]
+    [Header("위팔 회전(거상에 따라)")]
+    [Tooltip("팔 내림 외회전(°). JOA 60(원표).")]
+    [Range(0f, 120f)]
+    [SerializeField] private float shoulderExternalRotAtSide = 60f;
+
+    [Tooltip("팔 내림 내회전(°). JOA 80(원표).")]
+    [Range(0f, 120f)]
+    [SerializeField] private float shoulderInternalRotAtSide = 80f;
+
+    [Tooltip("머리 위(최대 거상)에서 남는 내회전(°). ★추정 30 — Browne: 최대 거상엔 외회전 쪽(약 35)이 필요하다. 강제 최소 외회전은 두지 않는다(Inui 27은 «거상 중 최대»라 최소가 아니다).")]
+    [Range(0f, 90f)]
+    [SerializeField] private float shoulderInternalRotOverhead = 30f;
+
+    [Tooltip("90° 외전에서 내회전(°). AAOS 65~70(2차). 팔 내림 값에서 90°까지 직선으로 옮겨 간다.")]
     [Range(0f, 120f)]
     [SerializeField] private float shoulderInternalRotMax = 70f;
 
-    [Tooltip("어깨 외회전(위팔 비틀기, 아래팔이 바깥으로) 최대 각(°). 정상 90.")]
+    [Tooltip("90° 외전 이상에서 외회전(°). AAOS 90(2차).")]
     [Range(0f, 120f)]
     [SerializeField] private float shoulderExternalRotMax = 90f;
 
-    [Tooltip("팔꿈치 굴곡 최대 각(°). 정상 145. 과신전(뒤로 꺾임)은 늘 0이다.")]
+    [Tooltip("팔꿈치 굴곡 최대 각(°). 145 — JOA · CDC 범위 안(D:/CoCoChuna_환자팔_해부학적움직임_명세_팔꿈치손목_V0.1_20261022). 과신전은 0.")]
     [Range(0f, 170f)]
     [SerializeField] private float elbowFlexionMax = 145f;
+
+    [Tooltip("팔꿈치 운반각(°) — 편 팔에서 아래팔이 바깥으로 벌어진다. 평균 12.9(남 11 · 여 15, Paraskevas 2004). 굽힐수록 준다(Morrey & Chao 1976 — 줄어드는 모양은 ★직선 추정).")]
+    [Range(0f, 25f)]
+    [SerializeField] private float elbowCarryingAngle = 12.9f;
 
     // ── 10-22 사용자 지시(제2늑골 상방변위 영상): 팔은 펴진 채 침대 모서리 밖 아래로 · 손목을 잡아 젖혀 외회전 유도 ──
     [Header("팔꿈치 굽는 쪽")]
@@ -137,17 +159,24 @@ public class PatientArmIkProbe : MonoBehaviour
     [Tooltip("목표 구의 회전(잡은 뒤 바뀐 만큼)을 ① 팔이 펴졌을 때 위팔 비틀기(외·내회전) ② 손목 꺾기로 옮긴다.")]
     [SerializeField] private bool followTargetRotation = true;
 
-    [Tooltip("아래팔 회외(손바닥이 위로) 최대 각(°) — 시작 자세 기준. 정상 80. 손을 비튼 각은 아래팔이 먼저 받고 넘는 만큼 어깨로 간다.")]
+    [Tooltip("아래팔 회외 최대(°) — ★해부학 중립(엄지 위) 기준. CDC · JOA 85~91. 시작 자세의 회전은 아바타 근육값으로 재서 뺀다. 손을 비튼 각은 아래팔이 먼저 받고 넘는 만큼 어깨로(이 분담은 ★추정 — 직접 근거 없음).")]
     [Range(0f, 120f)]
-    [SerializeField] private float forearmSupinationMax = 80f;
+    [SerializeField] private float forearmSupinationMax = 90f;
 
-    [Tooltip("아래팔 회내(손바닥이 아래로) 최대 각(°) — 시작 자세 기준. 정상 80.")]
+    [Tooltip("아래팔 회내 최대(°) — 해부학 중립 기준. CDC · JOA 77~90.")]
     [Range(0f, 120f)]
-    [SerializeField] private float forearmPronationMax = 80f;
+    [SerializeField] private float forearmPronationMax = 85f;
 
-    [Tooltip("손목이 아래팔 축에서 꺾일 수 있는 최대 각(°). 배굴 정상 70.")]
-    [Range(0f, 90f)]
-    [SerializeField] private float wristBendMax = 70f;
+    [Header("손목(방향마다 다르다 — 사분면 타원)")]
+    [Tooltip("배굴(손등 쪽, °). JOA · AAOS 70.")]
+    [Range(0f, 90f)] [SerializeField] private float wristExtensionMax = 70f;
+    [Tooltip("장굴(손바닥 쪽, °). JOA · AAOS 80~90.")]
+    [Range(0f, 90f)] [SerializeField] private float wristFlexionMax = 85f;
+    [Tooltip("요측 편위(엄지 쪽, °). JOA 25 · AAOS 20.")]
+    [Range(0f, 60f)] [SerializeField] private float wristRadialMax = 20f;
+    [Tooltip("척측 편위(새끼 쪽, °). AAOS 30 · JOA 55 — 시뮬 합격 35.")]
+    [Range(0f, 60f)] [SerializeField] private float wristUlnarMax = 35f;
+    // 대각선 방향은 사분면 타원으로 잇는다(Li 2005 «달걀 모양» — 대각선 숫자는 ★미확보)
 
     [Header("막힘 (침대 · 몸통) — 물리 엔진이 아니라 IK 안에서 밀어낸다")]
     [Tooltip("팔꿈치 · 손이 침대 상자와 몸통 캡슐을 뚫지 못하게 밀어낸다.")]
@@ -210,7 +239,25 @@ public class PatientArmIkProbe : MonoBehaviour
     private float supWorldSign;               // 월드에서 «팔꿈치 → 손» 축 둘레 + 회전이 회외면 +1, 회내면 −1 (아바타 근육으로 잼). 0 = 못 잼
     private Transform foreTwist1, foreTwist2; // 비틀림 보조 본(CC_Base_*_ForearmTwist01/02) — 피부가 꼬이지 않게 회전을 나눠 준다
     private Quaternion foreTwist1Rest, foreTwist2Rest;
-    private float lastForeDeg;                // 이번 프레임 아래팔 회외(+) · 회내(−) 각
+    private float lastForeDeg;                // 이번 프레임 아래팔 회외(+) · 회내(−) 각 — 해부학 중립 기준
+    private float forearmRestSupDeg;          // 시작 자세의 아래팔 회외(+) — 근육값으로 잰다(10-22 명세)
+    private Vector3 wristNeutralInLower, wristRadialInLower;   // 손목 중립 손가락 방향 · 요측 — 아래팔 본 로컬
+    private bool wristAxesReady;
+    private Vector3 carryLateralInUpper;      // 운반각이 벌어지는 «바깥» — 위팔 본 로컬
+    private bool carryRefReady;
+    private float lastWristExt, lastWristDev;  // 배굴(+)/장굴(−) · 요측(+)/척측(−)
+    public float WristExtDeg => lastWristExt;
+    public float WristDevDeg => lastWristDev;
+    /// <summary>손목 해부학 축(월드): 중립 손가락 방향 · 손등 쪽 · 엄지 쪽. 시뮬레이션이 «순수 배굴 · 순수 편위»로 꺾게 연다.</summary>
+    public bool TryWristAxesWorld(out Vector3 neutral, out Vector3 dorsal, out Vector3 radial)
+    {
+        neutral = dorsal = radial = Vector3.zero;
+        if (!wristAxesReady || !dorsalReady) return false;
+        neutral = lower.TransformVector(wristNeutralInLower).normalized;
+        dorsal = lower.TransformVector(dorsalInLower); dorsal = (dorsal - Vector3.Dot(dorsal, neutral) * neutral).normalized;
+        radial = lower.TransformVector(wristRadialInLower); radial = (radial - Vector3.Dot(radial, neutral) * neutral - Vector3.Dot(radial, dorsal) * dorsal).normalized;
+        return true;
+    }
     private string sideLabel = "";
     private float lastTwistDeg, lastWristDeg;
 
@@ -254,7 +301,7 @@ public class PatientArmIkProbe : MonoBehaviour
     public float ArmRadius => armRadius;
     public float ShoulderExtensionMax => shoulderExtensionMax;
     public float ElbowFlexionMax => elbowFlexionMax;
-    public float WristBendMax => wristBendMax;
+    public float WristExtensionMax => wristExtensionMax;
 
     /// <summary>몸 기준 축(월드). 못 쟀으면 false.</summary>
     public bool TryBodyAxesWorld(out Vector3 front, out Vector3 up, out Vector3 lateral)
@@ -504,6 +551,37 @@ public class PatientArmIkProbe : MonoBehaviour
                 supWorldSign = Mathf.Abs(ang) > 5f ? Mathf.Sign(ang) : 0f;
                 Debug.Log($"[팔IK] {sideLabel} 아래팔 회외 방향(근육 Forearm Twist Out) — 팔꿈치→손 축 둘레 {ang:+0;-0}° · 부호 {supWorldSign:+0;-0;0}");
             }
+            // ★10-22 명세: 아래팔 회내 · 회외 · 손목 한계의 0은 «해부학 중립»이다 — 시작 자세가 아니다.
+            //   시작 자세의 아래팔 회전 = 근육 «Forearm Twist In-Out» 값을 도로 바꾼다(아바타 근육 한계는 Unity 기본값 — c9.fbx.meta 실측).
+            if (iTwist >= 0)
+            {
+                float m0 = keep[iTwist];
+                forearmRestSupDeg = m0 >= 0f ? m0 * HumanTrait.GetMuscleDefaultMax(iTwist) : -m0 * HumanTrait.GetMuscleDefaultMin(iTwist);
+            }
+            //   손목 중립 축 — 손 근육(Down-Up · In-Out)을 0으로 둔 자세에서 손가락 방향 · 엄지 쪽(요측)을 아래팔 본 로컬에 담는다
+            int iHandIO = System.Array.IndexOf(HumanTrait.MuscleName, side + " Hand In-Out");
+            if (finger != null && idx != null && lit != null)
+            {
+                pose.muscles = (float[])keep.Clone();
+                if (iHand >= 0) pose.muscles[iHand] = 0f;
+                if (iHandIO >= 0) pose.muscles[iHandIO] = 0f;
+                hph.SetHumanPose(ref pose);
+                Vector3 nW = (finger.position - hand.position).normalized;
+                Vector3 rW = Vector3.ProjectOnPlane(idx.position - lit.position, nW);   // 검지 뿌리 쪽 = 엄지 쪽(요측)
+                wristAxesReady = rW.sqrMagnitude > 1e-8f;
+                if (wristAxesReady) { wristNeutralInLower = lower.InverseTransformVector(nW); wristRadialInLower = lower.InverseTransformVector(rW.normalized); }
+                // 운반각의 «바깥» — 팔 내린 시작 자세에서 몸 바깥(L)을 위팔 축 · 굴곡 방향에 수직으로 남긴 것(외적을 쓰지 않는다)
+                if (frameReady && flexRefReady)
+                {
+                    Vector3 uAx = (lower.position - upper.position).normalized;
+                    Vector3 fx = upper.TransformVector(flexRefInUpper).normalized;
+                    Vector3 lat = chest.TransformVector(lateralInChest).normalized;
+                    lat -= Vector3.Dot(lat, uAx) * uAx; lat -= Vector3.Dot(lat, fx) * fx;
+                    carryRefReady = lat.sqrMagnitude > 1e-4f;
+                    if (carryRefReady) carryLateralInUpper = upper.InverseTransformVector(lat.normalized);
+                }
+            }
+            Debug.Log($"[팔IK] {sideLabel} 해부학 중립 — 시작 자세 아래팔 회외 {forearmRestSupDeg:+0;-0}°(근육값) · 손목 축 {(wristAxesReady ? "잼" : "★못 잼")} · 운반각 바깥 {(carryRefReady ? "잼" : "★못 잼")}");
             pose.muscles = keep;
             hph.Dispose();
 
@@ -576,8 +654,12 @@ public class PatientArmIkProbe : MonoBehaviour
             //   자른 자세에서 한 번 더 막힘만 밀어낸다 — 지금 자리에서 조금씩 미니까 몸 표면을 따라 돌아간다.
             if (applyCollision) CorrectCollisionInPlace();
         }
+        // ★10-22 명세 시뮬: 속도 제한 · 제자리 막힘 보정이 한계 «뒤에» 돌아 출력이 한계를 넘었다(머리 위에서 뒤로 θ 90 > 경계 84 · 팔꿈치 150 > 145).
+        //   → 그리는 자세에 마지막으로 어깨 방향별 경계 · 팔꿈치 굴곡 한계를 한 번 더 건다. 한계가 이긴다.
+        if (weight > 0f && applyLimits && frameReady) EnforceFinalLimits();
 
         wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation; wroteClav = space.localRotation;
+        prevUpperDirW = (lower.position - upper.position).normalized; hasPrevUpperDir = true;
         hasWritten = true;
 
         if (Time.unscaledTime >= nextLogTime)
@@ -593,7 +675,7 @@ public class PatientArmIkProbe : MonoBehaviour
                     lastLimitHit.Length > 0 ? lastLimitHit : "없음");
             if (followTargetRotation)
                 Debug.LogFormat("[팔IK] " + sideLabel + " 잡은 손 회전 — 팔 비틀기 {0:+0;-0}° · 손목 꺾임 {1:F0}°/{2:F0} · 막힘 {3}",
-                    lastTwistDeg, lastWristDeg, wristBendMax, applyCollision ? (bedReady ? (bedMeasured ? "침대(씬에서 잼) · 몸통 · 머리" : "침대(추정) · 몸통 · 머리") : "몸통 · 머리(침대 못 잼)") : "끔");
+                    lastTwistDeg, lastWristDeg, wristExtensionMax, applyCollision ? (bedReady ? (bedMeasured ? "침대(씬에서 잼) · 몸통 · 머리" : "침대(추정) · 몸통 · 머리") : "몸통 · 머리(침대 못 잼)") : "끔");
             Debug.LogFormat("[팔IK] {0} 프레임 — 애니가 팔을 씀 {1} · 기준 자세로 되돌림 {2}", sideLabel, nAnimWrote, nRestored);
             nAnimWrote = nRestored = 0;
         }
@@ -603,30 +685,42 @@ public class PatientArmIkProbe : MonoBehaviour
     public float GirdleDeg => lastGirdleDeg;
 
     /// <summary>
-    /// 견갑상완 리듬(쇄골 본으로) — 목표 쪽 거상이 30°를 넘으면 (거상 − 30)/3 만큼(최대 girdleElevationMax) 쇄골 바깥 끝을 머리 쪽으로 든다.
-    /// 쇄골은 S(풀이 공간) 자체라 풀기 «전에» 돌린다. 회전은 월드 벡터 둘로 짓고 쇄골 부모 공간에 옮긴다(거울 너머로 축 부호를 넘기지 않는다).
-    /// 애니가 매 프레임 쇄골을 쓰므로 쌓이지 않는다(★애니가 안 쓰는 클립이면 쌓인다 — 로그로 확인할 것).
+    /// 보이는 쇄골(사용자 선택 A — 실측만큼만): 위팔–몸통 거상 θ가 30°를 넘으면
+    ///   거상 = (θ − 30) × 7/90 (최대 girdleElevationMax · θ120 → 7) · 후인 = (θ − 30) × 20/120 (최대 girdleRetractionMax)
+    /// 만큼 쇄골 바깥 끝을 머리 쪽 · 뒤쪽으로 옮긴다(Ludewig 2009 · McClure 2001 골핀 3D: 거상 6~10 · 후인 16~21).
+    /// θ는 직전 프레임에 풀어 낸 «위팔 방향»으로 잰다(★10-22 명세: 어깨→목표 방향으로 재면 팔꿈치를 굽혔을 때 틀린다).
+    /// 쇄골은 S(풀이 공간) 자체라 풀기 «전에» 돌린다. 회전은 월드 벡터로 짓고 쇄골 부모 공간에 옮긴다(거울 너머로 축 부호를 넘기지 않는다).
     /// </summary>
     private void ApplyGirdle()
     {
         lastGirdleDeg = 0f;
-        if (!scapularRhythm || !frameReady || space.parent == null || target == null) return;
+        if (!scapularRhythm || !frameReady || space.parent == null || !hasPrevUpperDir) return;
         Vector3 Uw = chest.TransformVector(upInChest).normalized;
-        Vector3 toT = target.position - upper.position;
-        if (toT.sqrMagnitude < 1e-6f) return;
-        float elev = Vector3.Angle(toT, -Uw);
-        float g = Mathf.Clamp((elev - 30f) / 3f, 0f, girdleElevationMax);
-        if (g < 0.1f) return;
+        Vector3 Fw = chest.TransformVector(frontInChest).normalized;
+        float theta = Vector3.Angle(prevUpperDirW, -Uw);
+        float g = Mathf.Clamp((theta - 30f) * 7f / 90f, 0f, girdleElevationMax);
+        float r = Mathf.Clamp((theta - 30f) * 20f / 120f, 0f, girdleRetractionMax);
+        if (g < 0.1f && r < 0.1f) return;
         Vector3 v = upper.position - space.position;                 // 쇄골 안쪽 끝 → 어깨
         if (v.sqrMagnitude < 1e-6f) return;
-        Vector3 up = Uw - Vector3.Dot(Uw, v.normalized) * v.normalized;
+        Vector3 vn = v.normalized;
+        Vector3 up = Uw - Vector3.Dot(Uw, vn) * vn;
         if (up.sqrMagnitude < 1e-6f) return;
-        Vector3 v2 = v.normalized * Mathf.Cos(g * Mathf.Deg2Rad) + up.normalized * Mathf.Sin(g * Mathf.Deg2Rad);
+        Vector3 v2 = vn * Mathf.Cos(g * Mathf.Deg2Rad) + up.normalized * Mathf.Sin(g * Mathf.Deg2Rad);
+        Vector3 back = -Fw - Vector3.Dot(-Fw, v2) * v2;
+        if (back.sqrMagnitude > 1e-6f) v2 = (v2 * Mathf.Cos(r * Mathf.Deg2Rad) + back.normalized * Mathf.Sin(r * Mathf.Deg2Rad)).normalized;
         Transform par = space.parent;
         Quaternion q = Quaternion.FromToRotation(par.InverseTransformVector(v), par.InverseTransformVector(v2));
         space.localRotation = q * space.localRotation;
         lastGirdleDeg = g;
+        lastGirdleRetractDeg = r;
     }
+    private float lastGirdleRetractDeg;
+    public float GirdleRetractDeg => lastGirdleRetractDeg;
+    private float lastCarryDeg;
+    public float CarryDeg => lastCarryDeg;
+    private Vector3 prevUpperDirW;   // 직전 프레임 위팔 방향(월드) — 쇄골 리듬의 거상을 잰다
+    private bool hasPrevUpperDir;
 
     private void Solve()
     {
@@ -746,6 +840,26 @@ public class PatientArmIkProbe : MonoBehaviour
                         if (w2.sqrMagnitude > 1e-10f) handGoal = b1 + HingeDir(a, axis, w2.normalized) * l2;
                     }
                 }
+            }
+        }
+
+        // ②-2 운반각(10-22 명세) — 편 팔에서 아래팔이 바깥으로 elbowCarryingAngle(12.9°) 벌어지고, 굽힐수록 0으로(★직선 추정).
+        //   경첩 면을 맞춘 «뒤에» 얹는다(경첩 면 투영이 바깥 성분을 지우기 때문). «바깥»은 위팔에 붙은 실측 방향.
+        if (applyLimits && carryRefReady && elbowCarryingAngle > 0f)
+        {
+            Vector3 bC = space.InverseTransformPoint(lower.position);
+            Vector3 uC2 = (bC - a).normalized;
+            Vector3 wC2 = handGoal - bC;
+            if (wC2.sqrMagnitude > 1e-10f)
+            {
+                wC2.Normalize();
+                float flexC = Vector3.Angle(uC2, wC2);
+                float cAng = elbowCarryingAngle * Mathf.Clamp01(1f - flexC / Mathf.Max(1f, elbowFlexionMax));
+                Vector3 latS = space.InverseTransformVector(upper.TransformVector(carryLateralInUpper));
+                latS -= Vector3.Dot(latS, wC2) * wC2;
+                if (cAng > 0.01f && latS.sqrMagnitude > 1e-8f)
+                    handGoal = bC + (wC2 * Mathf.Cos(cAng * Mathf.Deg2Rad) + latS.normalized * Mathf.Sin(cAng * Mathf.Deg2Rad)).normalized * l2;
+                lastCarryDeg = cAng;
             }
         }
 
@@ -871,6 +985,35 @@ public class PatientArmIkProbe : MonoBehaviour
         handGoal = e + w.normalized * l2;
     }
 
+    /// <summary>그리는 자세(모든 보정 뒤)에 어깨 방향별 경계 · 팔꿈치 굴곡 한계를 건다 — 위치만 고친다(위팔 축 둘레 회전은 그대로).</summary>
+    private void EnforceFinalLimits()
+    {
+        BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
+        Vector3 a = space.InverseTransformPoint(upper.position);
+        Vector3 b = space.InverseTransformPoint(lower.position);
+        Vector3 c = space.InverseTransformPoint(hand.position);
+        Vector3 u = (b - a).normalized, w = (c - b).normalized;
+        float theta = Vector3.Angle(u, -U);
+        Vector3 hz = u - Vector3.Dot(u, U) * U;
+        Vector3 hdir = hz.sqrMagnitude > 1e-8f ? hz.normalized : F;
+        float phi = Mathf.Atan2(Vector3.Dot(hdir, L), Vector3.Dot(hdir, F)) * Mathf.Rad2Deg;
+        float thMax = ShoulderConeMax(phi, Vector3.Angle(u, w));
+        if (theta > thMax)
+        {
+            float rr = thMax * Mathf.Deg2Rad;
+            Vector3 u2 = (-U * Mathf.Cos(rr) + hdir * Mathf.Sin(rr)).normalized;
+            RotateInS(upper, Quaternion.FromToRotation(u, u2));
+            u = u2;
+            b = space.InverseTransformPoint(lower.position);
+            c = space.InverseTransformPoint(hand.position);
+            w = (c - b).normalized;
+        }
+        // 팔꿈치 굴곡 ≤ 한계 ⇔ w · (−u) ≤ cos(180 − 한계)
+        Vector3 w2 = w;
+        if (ClampAlong(ref w2, -u, Mathf.Cos((180f - elbowFlexionMax) * Mathf.Deg2Rad), F))
+            RotateInS(lower, Quaternion.FromToRotation(w, w2));
+    }
+
     /// <summary>지금 자세(속도 제한 뒤)의 팔꿈치 · 손이 막힘에 들어가 있으면 밀어내고 위치만 다시 맞춘다. 경첩 면은 지킨다.</summary>
     private void CorrectCollisionInPlace()
     {
@@ -925,12 +1068,12 @@ public class PatientArmIkProbe : MonoBehaviour
     }
 
     /// <summary>
-    /// 어깨 관절 가동 공간 — 팔 방향 φ(0 앞 · 90 옆 · ±180 뒤 · −90 안쪽)마다 들 수 있는 최대 거상 θ(팔 내림 0).
-    /// 칸 값: 앞 · 옆 = 어깨 관절 + 쇄골(견갑상완 리듬) / 옆-뒤 45°(φ 135) = 90(수평 외전 45) / 뒤(φ 180) = 신전 60, 팔꿈치를 펴면 50 /
-    /// 뒤-안(φ −135) = 40 / 안쪽(φ −90) = 내전 30 / 앞-안 40°(φ −40) = 90(수평 내전 130). 칸 사이는 직선.
-    /// ★칸 숫자 = AAOS · Norkin&White(수평 값은 원문 미확인) · 팔꿈치 편 신전 50 · 뒤-안 40은 추정. 경계 모양(칸 사이 직선)도 추정.
+    /// 어깨 가동 공간(위팔–몸통) — 팔 방향 φ(0 앞 · 90 옆 · ±180 뒤 · −90 안쪽)마다 들 수 있는 최대 거상 θ(팔 내림 0).
+    /// 칸(φ → θmax): −180 신전 · −135 뒤-안 40(★추정) · −90 내전 30 · −45 수평 굴곡(정중면 넘어 45) 90 · 0 앞 156 ·
+    ///   37 꼭대기 158(Browne: 견갑면보다 23° 앞 · 값 ★추정) · 90 옆 146 · 90+45 수평 신전 90 · 180 신전(팔꿈치 펴면 50 · 굽히면 60).
+    /// 칸 사이는 직선(★모양은 추정 — Engin & Chen 경계 숫자 원문 못 봄). 근거: 명세 문서 어깨 V0.1.
     /// </summary>
-    private readonly float[] conePhi = new float[8], coneTh = new float[8];
+    private readonly float[] conePhi = new float[9], coneTh = new float[9];
     private float lastConePhi, lastConeMax, lastConeTheta;
     public float ConePhi => lastConePhi;
     public float ConeMaxDeg => lastConeMax;
@@ -939,34 +1082,46 @@ public class PatientArmIkProbe : MonoBehaviour
 
     private float ShoulderConeMax(float phi, float elbowFlex)
     {
-        float top = Mathf.Min(179f, glenohumeralElevationMax + lastGirdleDeg);
         float ext = Mathf.Lerp(shoulderExtensionStraightElbow, shoulderExtensionMax, Mathf.Clamp01(elbowFlex / 90f));
-        // (φ, θmax) — φ 오름차순
         float[] ph = conePhi, th = coneTh;   // 매 프레임 새로 만들지 않는다
-        ph[0] = -180f; ph[1] = -135f; ph[2] = -90f; ph[3] = -shoulderHorizontalAdductionMax; ph[4] = 0f; ph[5] = 90f; ph[6] = 90f + shoulderHorizontalAbductionMax; ph[7] = 180f;
-        th[0] = ext; th[1] = shoulderBehindMedialMax; th[2] = shoulderAdductionMax; th[3] = 90f; th[4] = top; th[5] = top; th[6] = 90f; th[7] = ext;
+        ph[0] = -180f; th[0] = ext;
+        ph[1] = -135f; th[1] = shoulderBehindMedialMax;
+        ph[2] = -90f;  th[2] = shoulderAdductionMax;
+        ph[3] = -shoulderHorizontalAdductionMax; th[3] = 90f;
+        ph[4] = 0f;    th[4] = shoulderFlexionMax;
+        ph[5] = 37f;   th[5] = shoulderPeakElevationMax;
+        ph[6] = 90f;   th[6] = shoulderAbductionMax;
+        ph[7] = 90f + shoulderHorizontalAbductionMax; th[7] = 90f;
+        ph[8] = 180f;  th[8] = ext;
         for (int i = 0; i < ph.Length - 1; i++)
             if (phi <= ph[i + 1]) return Mathf.Lerp(th[i], th[i + 1], Mathf.InverseLerp(ph[i], ph[i + 1], phi));
         return ext;
     }
 
     /// <summary>
-    /// 위팔 방향 uS(S공간)에서의 회전 한계(−외 ~ +내). 90° 위로 들수록 내회전 끝이 0으로 줄고,
-    /// 옆 면일수록 다 들었을 때 외회전이 overheadExternalRotNeeded만큼 필요하다(위 필드 주석 · Inui 2009).
+    /// 위팔 회전 한계(−외 ~ +내) — 위팔–몸통 거상 θ에 따라:
+    ///   θ 0 → 90 : 외 60 → 90 · 내 80 → 70 (팔 내림 JOA 원표 · 90° 외전 AAOS 2차)
+    ///   θ 90 → 그 방향 최대 : 외 90 그대로 · 내 70 → 30(★추정 — 최대 거상엔 외회전 쪽이 필요, Browne)
+    /// ★10-22 명세: 종전엔 머리 위에서 «외회전 27 이상»을 강제했다(Inui 27은 거상 중 최대값 — 오독).
     /// </summary>
     private void RotLimits(Vector3 uS, out float lo, out float hi)
     {
-        lo = -shoulderExternalRotMax;
-        hi = shoulderInternalRotMax;
+        lo = -shoulderExternalRotAtSide;
+        hi = shoulderInternalRotAtSide;
         if (!frameReady || uS.sqrMagnitude < 1e-8f) return;
         BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
         Vector3 u = uS.normalized;
-        float over = Mathf.Clamp01((Vector3.Angle(u, -U) - 90f) / Mathf.Max(1f, glenohumeralElevationMax - 90f));   // 0 = 수평 이하 · 1 = 어깨 관절로 다 듦
-        if (over <= 0f) return;
-        Vector3 horiz = u - Vector3.Dot(u, U) * U;
-        float lateral = horiz.sqrMagnitude > 1e-6f ? Mathf.Abs(Vector3.Dot(horiz.normalized, L)) : 0f;   // 1 = 옆 면 · 0 = 앞 면
-        hi = Mathf.Lerp(shoulderInternalRotMax, 0f, over);
-        hi = Mathf.Min(hi, -overheadExternalRotNeeded * over * lateral);
+        float theta = Vector3.Angle(u, -U);
+        float t1 = Mathf.Clamp01(theta / 90f);
+        lo = -Mathf.Lerp(shoulderExternalRotAtSide, shoulderExternalRotMax, t1);
+        hi = Mathf.Lerp(shoulderInternalRotAtSide, shoulderInternalRotMax, t1);
+        if (theta > 90f)
+        {
+            Vector3 hz = u - Vector3.Dot(u, U) * U;
+            float phi = hz.sqrMagnitude > 1e-8f ? Mathf.Atan2(Vector3.Dot(hz.normalized, L), Vector3.Dot(hz.normalized, F)) * Mathf.Rad2Deg : 0f;
+            float top = Mathf.Max(91f, ShoulderConeMax(phi, 0f));
+            hi = Mathf.Lerp(shoulderInternalRotMax, shoulderInternalRotOverhead, Mathf.Clamp01((theta - 90f) / (top - 90f)));
+        }
         if (hi < lo + 5f) hi = lo + 5f;
     }
 
@@ -1209,7 +1364,7 @@ public class PatientArmIkProbe : MonoBehaviour
     // ── 잡은 손의 회전(10-22) ─────────────────────────────────────────────────────
     //   목표 구가 잡힌 뒤 돈 만큼(delta, 월드)을 둘로 나눈다.
     //   · 팔 축(어깨 → 손) 둘레 성분 = 비틀기 → 팔이 펴졌을 때만 위팔을 제 축으로 돌린다(굽어 있으면 위치가 회전을 정한다)
-    //   · 나머지(swing) = 손목 꺾기 → 손가락이 가리키는 쪽을 돌리고 아래팔 축 둘레 원뿔(wristBendMax) 안으로 자른다
+    //   · 나머지(swing) = 손목 꺾기 → 손가락이 가리키는 쪽을 돌리고 방향마다 다른 손목 한계(사분면 타원) 안으로 자른다
     //   회전은 월드에서 «벡터»로 만들어 S공간에 옮긴 뒤 FromToRotation으로 다시 짓는다 — 각 · 축 부호를 거울 너머로 넘기지 않는다.
     private void ApplyTargetRotation(Vector3 a, ref string hit)
     {
@@ -1253,11 +1408,12 @@ public class PatientArmIkProbe : MonoBehaviour
             if (foreTwist > 180f) foreTwist -= 360f;
             if (Vector3.Dot(foreAxis, fa) < 0f) foreTwist = -foreTwist;
 
-            float sup = supWorldSign * foreTwist;                                   // + 회외
-            float supCl = Mathf.Clamp(sup, -forearmPronationMax, forearmSupinationMax);
+            float sup = supWorldSign * foreTwist;                                   // + 회외(시작 자세에서 더한 만큼)
+            // 한계는 해부학 중립 기준(10-22 명세) — 시작 자세가 이미 forearmRestSupDeg만큼 돌아 있다
+            float supCl = applyLimits ? Mathf.Clamp(sup, -forearmPronationMax - forearmRestSupDeg, forearmSupinationMax - forearmRestSupDeg) : sup;
             if (applyLimits && !Mathf.Approximately(sup, supCl)) AddHit(ref hit, sup > 0f ? "아래팔 회외" : "아래팔 회내");
             foreWorld = supWorldSign * supCl;                                       // 월드에서 축 둘레로 돌릴 각
-            lastForeDeg = supCl;
+            lastForeDeg = forearmRestSupDeg + supCl;
 
             // 손을 팔꿈치 → 손 축 둘레로(벡터로 짓고 S공간에 옮긴다 — 거울 너머로 각 부호를 넘기지 않는다)
             Vector3 pW0 = Vector3.ProjectOnPlane(Mathf.Abs(fa.y) < 0.9f ? Vector3.up : Vector3.forward, fa).normalized;
@@ -1295,18 +1451,39 @@ public class PatientArmIkProbe : MonoBehaviour
             }
         }
 
-        // ② 손목 꺾기
+        // ② 손목 꺾기 — 방향마다 한계가 다르다(10-22 명세): 배굴 70 · 장굴 85 · 요측 20 · 척측 35, 사이는 사분면 타원(Li 2005 달걀 모양 · 대각 숫자 ★미확보)
+        //   축(중립 손가락 방향 · 손등 · 요측)은 아래팔 본에 붙여 두고, 이번 프레임 아래팔 회내 · 회외(foreWorld)만큼 같이 돌린다.
         if (finger == null) return;
         Vector3 foreW = hand.position - lower.position;
         Vector3 fingW = finger.position - hand.position;
         if (foreW.sqrMagnitude < 1e-8f || fingW.sqrMagnitude < 1e-8f) return;
         Vector3 wantW = swingQ * fingW.normalized;
         float bendDeg = Vector3.Angle(foreW, wantW);
-        if (bendDeg > wristBendMax)
+        if (wristAxesReady && dorsalReady)
         {
-            wantW = Vector3.Slerp(foreW.normalized, wantW, wristBendMax / bendDeg);
-            AddHit(ref hit, "손목");
-            bendDeg = wristBendMax;
+            Vector3 fa2 = foreW.normalized;
+            Quaternion proQ = Quaternion.AngleAxis(foreWorld, fa2);
+            Vector3 nW = (proQ * lower.TransformVector(wristNeutralInLower)).normalized;
+            Vector3 dW = proQ * lower.TransformVector(dorsalInLower); dW = (dW - Vector3.Dot(dW, nW) * nW).normalized;
+            Vector3 rW = proQ * lower.TransformVector(wristRadialInLower); rW = (rW - Vector3.Dot(rW, nW) * nW - Vector3.Dot(rW, dW) * dW).normalized;
+            // 굽힘은 경도(손등 ↔ 손바닥 둘레 각), 편위는 위도(그 면에서 벗어난 각)로 나눈다.
+            //   ★10-22 시뮬: 둘 다 atan2(·, z)로 재면 90° 넘게 꺾을 때(z < 0) 편위가 ±180 가까이 튀어 배굴 100°가 18°로 잘렸다.
+            float z = Vector3.Dot(wantW, nW);
+            float ext = Mathf.Atan2(Vector3.Dot(wantW, dW), z) * Mathf.Rad2Deg;
+            float dev = Mathf.Asin(Mathf.Clamp(Vector3.Dot(wantW, rW), -1f, 1f)) * Mathf.Rad2Deg;
+            float lx = ext >= 0f ? wristExtensionMax : wristFlexionMax;
+            float ly = dev >= 0f ? wristRadialMax : wristUlnarMax;
+            float e = (ext * ext) / Mathf.Max(1f, lx * lx) + (dev * dev) / Mathf.Max(1f, ly * ly);
+            if (applyLimits && e > 1f)
+            {
+                float k = 1f / Mathf.Sqrt(e);
+                ext *= k; dev *= k;
+                float ce = Mathf.Cos(dev * Mathf.Deg2Rad);
+                wantW = (nW * (ce * Mathf.Cos(ext * Mathf.Deg2Rad)) + dW * (ce * Mathf.Sin(ext * Mathf.Deg2Rad)) + rW * Mathf.Sin(dev * Mathf.Deg2Rad)).normalized;
+                AddHit(ref hit, "손목");
+            }
+            lastWristExt = ext; lastWristDev = dev;
+            bendDeg = Vector3.Angle(nW, wantW);
         }
         lastWristDeg = bendDeg;
         Vector3 fromS = space.InverseTransformVector(fingW);

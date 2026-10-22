@@ -35,6 +35,9 @@ public static class PatientArmIkProbeMenu
     {
         PatientArmIkProbe probe = Attach(side);
         if (probe == null) return;
+        // 같은 팔에 이미 도는 시뮬레이션이 있으면 새로 붙이지 않는다(★10-22: 메뉴를 거듭 누르면 두 개가 같은 목표 구를 움직여 예외가 났다)
+        foreach (PatientArmIkSim old in probe.GetComponents<PatientArmIkSim>())
+            if (old.Probe == probe) { Debug.Log($"[팔IK시뮬] 이미 돌고 있다 — {probe.SideLabel}. 새로 붙이지 않는다."); return; }
         PatientArmIkSim sim = probe.gameObject.AddComponent<PatientArmIkSim>();
         sim.Init(probe);
         Debug.Log($"[팔IK시뮬] {probe.gameObject.name}에 붙였다 — side={side}. 끝나면 «[팔IK시뮬] … 끝» 로그가 찍힌다.");
