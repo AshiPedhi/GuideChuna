@@ -87,6 +87,38 @@ public class PatientArmIkProbe : MonoBehaviour
     [Range(0f, 170f)]
     [SerializeField] private float elbowFlexionMax = 145f;
 
+    // ── 10-22 사용자 지시(제2늑골 상방변위 영상): 팔은 펴진 채 침대 모서리 밖 아래로 · 손목을 잡아 젖혀 외회전 유도 ──
+    [Header("팔꿈치 굽는 쪽")]
+    [Tooltip("켜면 팔꿈치가 직전 자리에서 이어서 굽는다 — 손목을 움직여도 팔꿈치가 휘돌지 않는다. 끄면 파란 힌트 구 쪽으로 굽는다(0단계 동작).")]
+    [SerializeField] private bool poleFromPreviousElbow = true;
+
+    [Header("잡은 손의 회전 (목표 구를 돌리면)")]
+    [Tooltip("목표 구의 회전(잡은 뒤 바뀐 만큼)을 ① 팔이 펴졌을 때 위팔 비틀기(외·내회전) ② 손목 꺾기로 옮긴다.")]
+    [SerializeField] private bool followTargetRotation = true;
+
+    [Tooltip("손목이 아래팔 축에서 꺾일 수 있는 최대 각(°). 배굴 정상 70.")]
+    [Range(0f, 90f)]
+    [SerializeField] private float wristBendMax = 70f;
+
+    [Header("막힘 (침대 · 몸통) — 물리 엔진이 아니라 IK 안에서 밀어낸다")]
+    [Tooltip("팔꿈치 · 손이 침대 상자와 몸통 캡슐을 뚫지 못하게 밀어낸다.")]
+    [SerializeField] private bool applyCollision = true;
+
+    [Tooltip("팔 굵기 반지름(m). 이만큼 떨어진 자리까지 밀어낸다.")]
+    [SerializeField] private float armRadius = 0.04f;
+
+    [Tooltip("몸통 캡슐 반지름 = 양 어깨 사이 절반 × 이 값. 기즈모 초록 캡슐이 몸통에 맞게 조절한다.")]
+    [SerializeField] private float torsoRadiusScale = 0.8f;
+
+    [Tooltip("침대 윗면 = 엉덩이 · 가슴 본 중 낮은 쪽에서 이만큼 아래(m). 기즈모 노란 상자 윗면이 등에 닿게 조절한다.")]
+    [SerializeField] private float bedTopBelowSpine = 0.10f;
+
+    [Tooltip("침대 폭(m). 몸 중심선 양쪽으로 절반씩.")]
+    [SerializeField] private float bedWidth = 0.65f;
+
+    [Tooltip("침대가 머리 본 너머로 더 나가는 길이(m).")]
+    [SerializeField] private float bedBeyondHead = 0.15f;
+
     [Tooltip("자동으로 만드는 구의 지름(m).")]
     [SerializeField] private float handleSize = 0.05f;
 
@@ -100,7 +132,7 @@ public class PatientArmIkProbe : MonoBehaviour
 
     // 로그·기즈모용 마지막 값(매 프레임 float만 갱신한다 — 문자열은 로그 시점에만 만든다)
     private float lastTargetDistance, lastReach, lastElbowAngle;
-    private float lastHandErrMm;
+    private float lastHandErrMm;   // 풀고 난 뒤 실제 손 ↔ 풀이가 노린 손 자리(월드 mm). 맞게 돌면 0에 가깝다(10-22 실측 로그)
 
     // 몸 기준 축 — 시작 때 뼈 위치로 재서 가슴 본 로컬(행렬 기준, 거울 포함)에 담아 두고 매 프레임 다시 꺼낸다
     private Transform chest;
@@ -108,7 +140,28 @@ public class PatientArmIkProbe : MonoBehaviour
     private bool frameReady;
     // 로그용 마지막 관절 각과 걸린 한계
     private float lastBehindDeg, lastMedialDeg, lastElbowFlexDeg, lastRotDeg;
-    private string lastLimitHit = "";   // 걸린 한계가 바뀔 때만 새 문자열(매 프레임 할당 없음)   // 풀고 난 뒤 실제 손 ↔ 풀이가 노린 손 자리(월드 mm). 맞게 돌면 0에 가깝다(10-22 실측 로그)
+    private string lastLimitHit = "";   // 걸린 한계가 바뀔 때만 새 문자열(매 프레임 할당 없음)
+
+    // 팔꿈치 이어 굽기 — 직전 프레임 팔꿈치(S공간)와 굽는 쪽
+    private Vector3 prevElbowS, prevPoleS;
+    private bool hasPrevElbow;
+
+    // 애니가 이 프레임 팔을 덮어썼는지 — 안 덮었으면 기준 자세로 되돌린 뒤 푼다(비틀기 · 손목은 누적되면 안 된다)
+    private Quaternion baseUpper, baseLower, baseHand, wroteUpper, wroteLower, wroteHand;
+    private bool hasWritten;
+
+    // 잡은 손의 회전
+    private Quaternion targetRot0;
+    private Transform finger;                 // 가운뎃손가락 첫 마디 — 손이 가리키는 쪽
+    private Vector3 flexRefInUpper;           // 팔꿈치가 굽는 쪽(해부학 굴곡 방향) — 위팔 본 로컬(행렬 기준). 팔이 펴져도 위팔 회전을 잴 수 있다
+    private bool flexRefReady;
+    private float lastTwistDeg, lastWristDeg;
+
+    // 막힘
+    private Transform hipsBone, neckBone, headBone, otherUpper, footL, footR;
+    private float lastTorsoR;
+    private Vector3 bedCenter, bedLong, bedSide; private float bedHalfL, bedHalfW, bedTopY;
+    private bool bedReady;
     private bool lastReachable;
 
     /// <summary>메뉴가 AddComponent 직후(Start 전에) 팔을 고를 때 쓴다.</summary>
@@ -154,6 +207,32 @@ public class PatientArmIkProbe : MonoBehaviour
 
         if (target == null) target = MakeHandle("[팔IK] 목표", hand.position, new Color(1f, 0.25f, 0.2f));
         if (hint == null) hint = MakeHandle("[팔IK] 힌트(팔꿈치)", DefaultHintPosition(), new Color(0.25f, 0.5f, 1f));
+
+        targetRot0 = target.rotation;
+        finger = animator.GetBoneTransform(right ? HumanBodyBones.RightMiddleProximal : HumanBodyBones.LeftMiddleProximal);
+        if (finger == null) Debug.LogWarning("[팔IK] 가운뎃손가락 본이 없다 — 손목 꺾기를 끈다.");
+
+        // 굴곡 방향 = (손 − 팔꿈치)에서 위팔 축 성분을 뺀 것. 팔꿈치가 거의 펴져 있으면 잴 수 없다.
+        {
+            Vector3 uW = lower.position - upper.position, fW = hand.position - lower.position;
+            Vector3 perp = fW - Vector3.Dot(fW, uW.normalized) * uW.normalized;
+            float bend = Vector3.Angle(uW, fW);
+            flexRefReady = bend > 8f;
+            if (flexRefReady) flexRefInUpper = upper.InverseTransformVector(perp.normalized);
+            Debug.Log($"[팔IK] 굴곡 기준 — 시작 자세 팔꿈치 굽힘 {bend:F1}° · " +
+                      (flexRefReady ? "위팔 회전(외·내)을 팔이 펴져도 잰다" : "★너무 펴져 있어 잴 수 없다 — 팔이 펴졌을 때 회전 한계를 끈다"));
+        }
+
+        // 막힘 기준 본
+        hipsBone = animator.GetBoneTransform(HumanBodyBones.Hips);
+        neckBone = animator.GetBoneTransform(HumanBodyBones.Neck);
+        if (neckBone == null) neckBone = animator.GetBoneTransform(HumanBodyBones.Head);
+        headBone = animator.GetBoneTransform(HumanBodyBones.Head);
+        otherUpper = animator.GetBoneTransform(right ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+        footL = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+        footR = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+        if (applyCollision && (hipsBone == null || neckBone == null || headBone == null || otherUpper == null || footL == null || footR == null || chest == null))
+            Debug.LogWarning("[팔IK] 막힘을 잴 본이 모자라다 — 막힘을 끈다.");
 
         // 로컬 회전 변환(RotateInS)은 위팔 localScale이 균일하다고 본다 — 아니면 알린다(멈추지는 않는다)
         Vector3 us = upper.localScale;
@@ -258,7 +337,21 @@ public class PatientArmIkProbe : MonoBehaviour
     private void LateUpdate()
     {
         if (!ready || target == null) return;
+
+        // 애니가 이번 프레임 팔을 썼으면 그게 기준 자세다. 안 썼으면(우리가 쓴 값이 그대로면) 기준 자세로 되돌린다.
+        if (hasWritten && upper.localRotation == wroteUpper && lower.localRotation == wroteLower && hand.localRotation == wroteHand)
+        {
+            upper.localRotation = baseUpper; lower.localRotation = baseLower; hand.localRotation = baseHand;
+        }
+        else
+        {
+            baseUpper = upper.localRotation; baseLower = lower.localRotation; baseHand = hand.localRotation;
+        }
+
         if (weight > 0f) Solve();
+
+        wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation;
+        hasWritten = true;
 
         if (Time.unscaledTime >= nextLogTime)
         {
@@ -271,6 +364,9 @@ public class PatientArmIkProbe : MonoBehaviour
                     lastBehindDeg, lastMedialDeg, lastRotDeg, lastElbowFlexDeg,
                     shoulderExtensionMax, shoulderAdductionMax, shoulderInternalRotMax, shoulderExternalRotMax, elbowFlexionMax,
                     lastLimitHit.Length > 0 ? lastLimitHit : "없음");
+            if (followTargetRotation)
+                Debug.LogFormat("[팔IK] 잡은 손 회전 — 팔 비틀기 {0:+0;-0}° · 손목 꺾임 {1:F0}°/{2:F0} · 막힘 {3}",
+                    lastTwistDeg, lastWristDeg, wristBendMax, applyCollision ? (bedReady ? "침대 · 몸통" : "몸통만(침대 못 잼)") : "끔");
         }
     }
 
@@ -305,9 +401,21 @@ public class PatientArmIkProbe : MonoBehaviour
         lastReach = (l1 + l2) * sScale;
         lastReachable = dist <= maxReach;
 
-        // 팔꿈치가 굽을 쪽(pole) = 힌트를 어깨-목표 축에 수직으로 투영한 방향
-        Vector3 pole = hint != null ? space.InverseTransformPoint(hint.position) - a : (b - a);
-        pole -= Vector3.Dot(pole, dir) * dir;
+        // 팔꿈치가 굽을 쪽(pole)
+        //   10-22: 기본 = 직전 프레임 팔꿈치 쪽(손목을 움직여도 팔꿈치가 휘돌지 않는다 — 고정 힌트를 쓰면 팔꿈치가 힌트로 끌려갔다)
+        //   팔이 쭉 펴져 직전 팔꿈치가 축 위에 있으면 직전 굽는 쪽을 그대로 쓴다.
+        Vector3 pole;
+        if (poleFromPreviousElbow && hasPrevElbow)
+        {
+            pole = prevElbowS - a;
+            pole -= Vector3.Dot(pole, dir) * dir;
+            if (pole.sqrMagnitude < 1e-6f * l1 * l1) pole = prevPoleS - Vector3.Dot(prevPoleS, dir) * dir;
+        }
+        else
+        {
+            pole = hint != null ? space.InverseTransformPoint(hint.position) - a : (b - a);
+            pole -= Vector3.Dot(pole, dir) * dir;
+        }
         if (pole.sqrMagnitude < 1e-8f) { pole = (b - a) - Vector3.Dot(b - a, dir) * dir; }
         if (pole.sqrMagnitude < 1e-8f) { pole = Vector3.Cross(dir, Vector3.up); }
         if (pole.sqrMagnitude < 1e-8f) { pole = Vector3.Cross(dir, Vector3.right); }
@@ -319,7 +427,9 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 elbowGoal = a + dir * (l1 * cosA) + pole * (l1 * sinA);
         Vector3 handGoal = a + dir * d;                   // 못 닿으면 목표 방향으로 뻗은 끝
 
-        if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, t, ref elbowGoal, ref handGoal);
+        string hit = null;
+        if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, t, ref elbowGoal, ref handGoal, ref hit);
+        if (applyCollision) ApplyCollision(l2, ref elbowGoal, ref handGoal, ref hit);
 
         // ① 위팔: 팔꿈치를 elbowGoal로
         Quaternion q1 = Quaternion.FromToRotation(b - a, elbowGoal - a);
@@ -351,11 +461,30 @@ public class PatientArmIkProbe : MonoBehaviour
         Quaternion q2 = Quaternion.FromToRotation(c2 - b2, handGoal - b2);
         RotateInS(lower, q2);
 
+        // ④ 잡은 손의 회전 — 팔이 펴졌을 때 위팔 비틀기(외·내회전) · 손목 꺾기
+        if (followTargetRotation) ApplyTargetRotation(a, ref hit);
+
         // 로그·기즈모용 팔꿈치 각(180° = 쭉 폄)
         Vector3 b3 = space.InverseTransformPoint(lower.position);
         Vector3 c3 = space.InverseTransformPoint(hand.position);
         lastElbowAngle = Vector3.Angle(a - b3, c3 - b3);
         lastHandErrMm = Vector3.Distance(hand.position, space.TransformPoint(handGoal)) * 1000f;
+
+        // 다음 프레임 굽는 쪽
+        Vector3 bend = b3 - a;
+        Vector3 ax = (c3 - a).sqrMagnitude > 1e-10f ? (c3 - a).normalized : dir;
+        Vector3 bendPerp = bend - Vector3.Dot(bend, ax) * ax;
+        if (bendPerp.sqrMagnitude > 1e-6f * l1 * l1) prevPoleS = bendPerp.normalized;
+        else if (!hasPrevElbow) prevPoleS = pole;
+        prevElbowS = b3;
+        hasPrevElbow = true;
+
+        string now = hit ?? "";
+        if (now != lastLimitHit)
+        {
+            lastLimitHit = now;
+            Debug.Log("[팔IK] 걸린 한계 → " + (now.Length > 0 ? now : "없음"));
+        }
     }
 
     /// <summary>
@@ -367,16 +496,9 @@ public class PatientArmIkProbe : MonoBehaviour
     ///      아래팔이 얼마나 안쪽(+내회전) · 바깥(−외회전)으로 돌았는지 → 한계로 자른다
     /// 한계에 걸리면 손은 목표에서 떨어진다(가장 가까운 허용 자세). 위팔을 잘랐으면 아래팔은 목표 쪽을 다시 겨눈다.
     /// </summary>
-    private void ApplyJointLimits(Vector3 a, float l1, float l2, Vector3 t, ref Vector3 elbowGoal, ref Vector3 handGoal)
+    private void ApplyJointLimits(Vector3 a, float l1, float l2, Vector3 t, ref Vector3 elbowGoal, ref Vector3 handGoal, ref string hit)
     {
-        Vector3 F = space.InverseTransformVector(chest.TransformVector(frontInChest)).normalized;
-        Vector3 U = space.InverseTransformVector(chest.TransformVector(upInChest)).normalized;
-        Vector3 L = space.InverseTransformVector(chest.TransformVector(lateralInChest)).normalized;
-        // 다시 직교화(가슴 본이 균일 스케일이면 이미 직교 — 수치 오차만 정리). 외적을 쓰지 않는다.
-        F = (F - Vector3.Dot(F, U) * U).normalized;
-        L = (L - Vector3.Dot(L, U) * U - Vector3.Dot(L, F) * F).normalized;
-
-        string hit = null;
+        BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
 
         // ① 위팔 방향
         Vector3 u = (elbowGoal - a).normalized;
@@ -421,13 +543,186 @@ public class PatientArmIkProbe : MonoBehaviour
 
         elbowGoal = e;
         handGoal = e + w.normalized * l2;
+    }
 
-        string now = hit ?? "";
-        if (now != lastLimitHit)
+    /// <summary>몸 기준 축(앞 F · 위 U · 바깥 L)을 S공간 단위 벡터로. 외적을 쓰지 않고 직교화만 한다.</summary>
+    private void BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L)
+    {
+        F = space.InverseTransformVector(chest.TransformVector(frontInChest)).normalized;
+        U = space.InverseTransformVector(chest.TransformVector(upInChest)).normalized;
+        L = space.InverseTransformVector(chest.TransformVector(lateralInChest)).normalized;
+        F = (F - Vector3.Dot(F, U) * U).normalized;
+        L = (L - Vector3.Dot(L, U) * U - Vector3.Dot(L, F) * F).normalized;
+    }
+
+    private static void AddHit(ref string hit, string what)
+    {
+        if (hit == null) hit = what;
+        else if (hit.IndexOf(what, System.StringComparison.Ordinal) < 0) hit += " · " + what;
+    }
+
+    // ── 막힘(10-22) ─────────────────────────────────────────────────────────────
+    //   월드에서 한다(월드는 거울이 없다). 침대 = 위가 월드 수직인 상자(윗면 아래로 바닥까지), 몸통 = 엉덩이 → 목 캡슐.
+    //   침대는 씬에 콜라이더가 없어(배경 patient9_2020_1은 메시만 — 10-22 브리지 조회) 환자 뼈 위치로 잡는다.
+    //   ★실측 아님: 윗면 높이 · 폭은 추정값이다 — 기즈모를 보고 인스펙터에서 맞춘다.
+
+    private void UpdateCollisionShapes()
+    {
+        lastTorsoR = 0.5f * Vector3.Distance(upper.position, otherUpper.position) * torsoRadiusScale;
+
+        Vector3 longW = Vector3.ProjectOnPlane(headBone.position - hipsBone.position, Vector3.up);
+        bedReady = longW.sqrMagnitude > 0.01f;   // 몸이 거의 서 있으면 «누운 침대»를 못 잡는다
+        if (!bedReady) return;
+        bedLong = longW.normalized;
+        bedSide = Vector3.Cross(Vector3.up, bedLong);   // 월드 외적 — 월드는 거울이 없다. 폭 방향이라 부호는 상관없다
+        Vector3 feet = (footL.position + footR.position) * 0.5f;
+        float sFeet = Vector3.Dot(feet - hipsBone.position, bedLong) - 0.1f;
+        float sHead = Vector3.Dot(headBone.position - hipsBone.position, bedLong) + bedBeyondHead;
+        bedHalfL = 0.5f * (sHead - sFeet);
+        bedHalfW = 0.5f * bedWidth;
+        bedTopY = Mathf.Min(hipsBone.position.y, chest.position.y) - bedTopBelowSpine;
+        Vector3 basePt = hipsBone.position + bedLong * (0.5f * (sHead + sFeet));
+        bedCenter = new Vector3(basePt.x, bedTopY, basePt.z);
+    }
+
+    /// <summary>점 p(월드)를 침대 상자 밖으로. 윗면 · 옆면 · 끝면 중 가장 얕게 들어간 쪽으로 밀어낸다(아래쪽은 바닥이라 없다).</summary>
+    private bool PushOutOfBed(ref Vector3 p, float r)
+    {
+        if (!bedReady) return false;
+        Vector3 d = p - bedCenter;
+        float x = Vector3.Dot(d, bedSide), z = Vector3.Dot(d, bedLong), y = p.y - bedTopY;
+        float penTop = r - y;
+        float penSide = bedHalfW + r - Mathf.Abs(x);
+        float penEnd = bedHalfL + r - Mathf.Abs(z);
+        if (penTop <= 0f || penSide <= 0f || penEnd <= 0f) return false;   // 밖이다
+        if (penTop <= penSide && penTop <= penEnd) p.y += penTop;
+        else if (penSide <= penEnd) p += bedSide * (Mathf.Sign(x == 0f ? 1f : x) * penSide);
+        else p += bedLong * (Mathf.Sign(z == 0f ? 1f : z) * penEnd);
+        return true;
+    }
+
+    private bool PushOutOfTorso(ref Vector3 p, float r)
+    {
+        Vector3 A = hipsBone.position, B = neckBone.position, ab = B - A;
+        float k = Mathf.Clamp01(Vector3.Dot(p - A, ab) / Mathf.Max(ab.sqrMagnitude, 1e-8f));
+        Vector3 q = A + ab * k, qp = p - q;
+        float R = lastTorsoR + r, dd = qp.magnitude;
+        if (dd >= R) return false;
+        Vector3 n = dd > 1e-6f ? qp / dd : (upper.position - q).normalized;
+        p = q + n * R;
+        return true;
+    }
+
+    /// <summary>팔꿈치 · 손 목표를 침대 · 몸통 밖으로. 팔꿈치를 먼저 밀고, 아래팔은 길이를 지키며 손 쪽을 다시 겨눈 뒤 손을 민다.</summary>
+    private void ApplyCollision(float l2, ref Vector3 elbowGoal, ref Vector3 handGoal, ref string hit)
+    {
+        if (hipsBone == null || neckBone == null || headBone == null || otherUpper == null || footL == null || footR == null || chest == null) return;
+        UpdateCollisionShapes();
+
+        Vector3 e = space.TransformPoint(elbowGoal), h = space.TransformPoint(handGoal);
+        float l2W = Vector3.Distance(e, h);
+        bool bedHit = false, torsoHit = false;
+
+        bedHit |= PushOutOfBed(ref e, armRadius);
+        torsoHit |= PushOutOfTorso(ref e, armRadius);
+        for (int i = 0; i < 2; i++)
         {
-            lastLimitHit = now;
-            Debug.Log("[팔IK] 걸린 한계 → " + (now.Length > 0 ? now : "없음"));
+            Vector3 eh = h - e;
+            h = e + (eh.sqrMagnitude > 1e-10f ? eh.normalized : Vector3.down) * l2W;
+            bool b1 = PushOutOfBed(ref h, armRadius), t1 = PushOutOfTorso(ref h, armRadius);
+            bedHit |= b1; torsoHit |= t1;
+            if (!b1 && !t1) break;
         }
+        Vector3 eh2 = h - e;
+        h = e + (eh2.sqrMagnitude > 1e-10f ? eh2.normalized : Vector3.down) * l2W;
+
+        if (bedHit) AddHit(ref hit, "침대");
+        if (torsoHit) AddHit(ref hit, "몸통");
+        if (bedHit || torsoHit)
+        {
+            elbowGoal = space.InverseTransformPoint(e);
+            handGoal = space.InverseTransformPoint(h);
+        }
+    }
+
+    // ── 잡은 손의 회전(10-22) ─────────────────────────────────────────────────────
+    //   목표 구가 잡힌 뒤 돈 만큼(delta, 월드)을 둘로 나눈다.
+    //   · 팔 축(어깨 → 손) 둘레 성분 = 비틀기 → 팔이 펴졌을 때만 위팔을 제 축으로 돌린다(굽어 있으면 위치가 회전을 정한다)
+    //   · 나머지(swing) = 손목 꺾기 → 손가락이 가리키는 쪽을 돌리고 아래팔 축 둘레 원뿔(wristBendMax) 안으로 자른다
+    //   회전은 월드에서 «벡터»로 만들어 S공간에 옮긴 뒤 FromToRotation으로 다시 짓는다 — 각 · 축 부호를 거울 너머로 넘기지 않는다.
+    private void ApplyTargetRotation(Vector3 a, ref string hit)
+    {
+        Quaternion delta = target.rotation * Quaternion.Inverse(targetRot0);
+        Vector3 armW = hand.position - upper.position;
+        if (armW.sqrMagnitude < 1e-8f) return;
+        Vector3 kW = armW.normalized;
+
+        // swing-twist 분해(팔 축 k)
+        Vector3 v = new Vector3(delta.x, delta.y, delta.z);
+        Vector3 pr = Vector3.Dot(v, kW) * kW;
+        Quaternion twistQ = new Quaternion(pr.x, pr.y, pr.z, delta.w);
+        float tm = Mathf.Sqrt(twistQ.x * twistQ.x + twistQ.y * twistQ.y + twistQ.z * twistQ.z + twistQ.w * twistQ.w);
+        twistQ = tm > 1e-6f ? new Quaternion(twistQ.x / tm, twistQ.y / tm, twistQ.z / tm, twistQ.w / tm) : Quaternion.identity;
+        Quaternion swingQ = delta * Quaternion.Inverse(twistQ);
+        twistQ.ToAngleAxis(out float twistDeg, out Vector3 twistAxis);
+        if (twistDeg > 180f) twistDeg -= 360f;
+        if (Vector3.Dot(twistAxis, kW) < 0f) twistDeg = -twistDeg;
+
+        // ① 비틀기 — 팔꿈치 굴곡 15° 이하에서 전부, 30° 이상에서 0
+        float flex = 180f - Vector3.Angle(upper.position - lower.position, hand.position - lower.position);
+        float straight = Mathf.InverseLerp(30f, 15f, flex);
+        lastTwistDeg = twistDeg * straight;
+        if (straight > 0f && Mathf.Abs(lastTwistDeg) > 0.01f)
+        {
+            Vector3 pW = Vector3.ProjectOnPlane(Mathf.Abs(kW.y) < 0.9f ? Vector3.up : Vector3.forward, kW).normalized;
+            Vector3 p2W = Quaternion.AngleAxis(lastTwistDeg, kW) * pW;
+            Vector3 axS = space.InverseTransformVector(kW).normalized;
+            Vector3 pS = Vector3.ProjectOnPlane(space.InverseTransformVector(pW), axS);
+            Vector3 p2S = Vector3.ProjectOnPlane(space.InverseTransformVector(p2W), axS);
+            RotateInS(upper, Quaternion.FromToRotation(pS, p2S));
+        }
+
+        // 위팔 회전 한계 — 팔이 펴져도 굴곡 기준 벡터로 잰다(굽은 팔은 ApplyJointLimits가 이미 잘랐다)
+        if (applyLimits && frameReady && flexRefReady && straight > 0f)
+        {
+            BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
+            Vector3 aS = space.InverseTransformPoint(upper.position);
+            Vector3 u = (space.InverseTransformPoint(lower.position) - aS).normalized;
+            Quaternion swing = Quaternion.FromToRotation(-U, u);
+            Vector3 n = swing * F, m = swing * -L;
+            Vector3 f = space.InverseTransformVector(upper.TransformVector(flexRefInUpper));
+            f -= Vector3.Dot(f, u) * u;
+            if (f.sqrMagnitude > 1e-8f)
+            {
+                float rot = Mathf.Atan2(Vector3.Dot(f, m), Vector3.Dot(f, n)) * Mathf.Rad2Deg;
+                float cl = Mathf.Clamp(rot, -shoulderExternalRotMax, shoulderInternalRotMax);
+                lastRotDeg = cl;
+                if (!Mathf.Approximately(rot, cl))
+                {
+                    float r = cl * Mathf.Deg2Rad;
+                    RotateInS(upper, Quaternion.FromToRotation(f, n * Mathf.Cos(r) + m * Mathf.Sin(r)));
+                    AddHit(ref hit, rot > 0f ? "어깨 내회전" : "어깨 외회전");
+                }
+            }
+        }
+
+        // ② 손목 꺾기
+        if (finger == null) return;
+        Vector3 foreW = hand.position - lower.position;
+        Vector3 fingW = finger.position - hand.position;
+        if (foreW.sqrMagnitude < 1e-8f || fingW.sqrMagnitude < 1e-8f) return;
+        Vector3 wantW = swingQ * fingW.normalized;
+        float bendDeg = Vector3.Angle(foreW, wantW);
+        if (bendDeg > wristBendMax)
+        {
+            wantW = Vector3.Slerp(foreW.normalized, wantW, wristBendMax / bendDeg);
+            AddHit(ref hit, "손목");
+            bendDeg = wristBendMax;
+        }
+        lastWristDeg = bendDeg;
+        Vector3 fromS = space.InverseTransformVector(fingW);
+        Vector3 toS = space.InverseTransformVector(wantW);
+        RotateInS(hand, Quaternion.FromToRotation(fromS, toS));
     }
 
     /// <summary>
@@ -465,6 +760,24 @@ public class PatientArmIkProbe : MonoBehaviour
         {
             Gizmos.color = Color.cyan;
             Gizmos.DrawLine(lower.position, hint.position);
+        }
+
+        // 막힘 모양 — 노란 상자 = 침대(윗면 아래 0.3m만 그린다) · 초록 선 = 몸통 캡슐 축과 반지름
+        if (applyCollision && bedReady)
+        {
+            Gizmos.color = new Color(1f, 0.9f, 0.1f);
+            Matrix4x4 keep = Gizmos.matrix;
+            Gizmos.matrix = Matrix4x4.TRS(bedCenter + Vector3.down * 0.15f, Quaternion.LookRotation(bedLong, Vector3.up), Vector3.one);
+            Gizmos.DrawWireCube(Vector3.zero, new Vector3(bedHalfW * 2f, 0.3f, bedHalfL * 2f));
+            Gizmos.matrix = keep;
+        }
+        if (applyCollision && hipsBone != null && neckBone != null && lastTorsoR > 0f)
+        {
+            Gizmos.color = new Color(0.2f, 0.9f, 0.4f);
+            Gizmos.DrawLine(hipsBone.position, neckBone.position);
+            Gizmos.DrawWireSphere(hipsBone.position, lastTorsoR);
+            Gizmos.DrawWireSphere(neckBone.position, lastTorsoR);
+            Gizmos.DrawWireSphere((hipsBone.position + neckBone.position) * 0.5f, lastTorsoR);
         }
 
         // 몸 기준 축(어깨에서 0.15m) — 초록 = 앞 · 파랑 = 위 · 주황 = 바깥. 환자 몸과 맞는지 눈으로 확인한다.
