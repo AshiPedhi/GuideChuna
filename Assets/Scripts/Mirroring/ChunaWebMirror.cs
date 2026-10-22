@@ -199,6 +199,8 @@ public class ChunaWebMirror : MonoBehaviour
     private GripPointTarget[] grips = Array.Empty<GripPointTarget>();
     private float stateNext, findNext;
     private object shownStep, shownScenario;
+    private string monitorUser = "";   // 관제 화면 우측 상단 사용자명(10-22)
+    private float nextUserRead;
     private float stepStart, scenarioStart;
     private int stepIndex = -1, stepTotal;
     private readonly StringBuilder state = new StringBuilder(1024);
@@ -227,9 +229,18 @@ public class ChunaWebMirror : MonoBehaviour
                     foreach (var s in ph.steps) { if (ReferenceEquals(s, st)) stepIndex = stepTotal; stepTotal++; }
         }
 
+        // 10-22 사용자 지시: 관제 화면 우측 상단에 지금 사용자명 — 기기에 남은 로그인 정보(LoginStateStore · PlayerPrefs). 2초마다만 다시 읽는다.
+        if (now >= nextUserRead)
+        {
+            nextUserRead = now + 2f;
+            var login = new LoginStateStore().LoadLoginInfo();
+            monitorUser = login.hasData && !string.IsNullOrEmpty(login.username) ? login.username : "";
+        }
+
         var ci = CultureInfo.InvariantCulture;
         state.Length = 0;
         state.Append("{\"title\":"); Json(state, sc != null ? sc.scenarioName : "");
+        state.Append(",\"user\":"); Json(state, monitorUser);
         state.Append(",\"scene\":"); Json(state, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         state.Append(",\"mode\":"); Json(state, sm != null ? sm.SelectedMode : "");
         state.Append(",\"phase\":"); Json(state, sm != null && sm.CurrentPhase != null ? sm.CurrentPhase.phaseName : "");
