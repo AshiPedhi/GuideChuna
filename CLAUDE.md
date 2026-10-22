@@ -236,6 +236,7 @@ CSV(`Assets/Resources/Scenarios/*.csv`) + `ScenarioConfig`(`Assets/Resources/Sce
 | `rom-frame-verify` | 경추ROM 실측 각도기 부호 검증 — 축이 뒤집혔다 싶으면 **여기부터** (읽기 전용) |
 | `chuna-scenario-wire` | CSV·Config·나레이션·클립·손녹화 정합 점검 (읽기 전용) |
 | `narration-gen` | CSV에서 나레이션 mp3 생성 (기본 dry-run) |
+| `visual-report` | ★**문서·자료·보고서·매뉴얼 요청** — 한 줄 결론 + 그림마다 «읽는 법» 양식, D 드라이브 PDF+HTML (10-15 사용자가 «완전 잘 읽힌다»고 한 비교 문서가 기준) |
 
 ## 작업 방식
 
