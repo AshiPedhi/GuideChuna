@@ -677,6 +677,9 @@ public class PatientArmIkProbe : MonoBehaviour
                 Debug.LogFormat("[팔IK] " + sideLabel + " 잡은 손 회전 — 팔 비틀기 {0:+0;-0}° · 손목 꺾임 {1:F0}°/{2:F0} · 막힘 {3}",
                     lastTwistDeg, lastWristDeg, wristExtensionMax, applyCollision ? (bedReady ? (bedMeasured ? "침대(씬에서 잼) · 몸통 · 머리" : "침대(추정) · 몸통 · 머리") : "몸통 · 머리(침대 못 잼)") : "끔");
             Debug.LogFormat("[팔IK] {0} 프레임 — 애니가 팔을 씀 {1} · 기준 자세로 되돌림 {2}", sideLabel, nAnimWrote, nRestored);
+            if (frameReady)
+                Debug.LogFormat("[팔IK] {0} 방향 진단 — φ 목표 {1:F0}° · 2관절 풀이 {2:F0}° · 한계 뒤 {3:F0}° · 그린 자세 {4:F0}° · 쇄골 거상 {5:F0}° 후인 {6:F0}°",
+                    sideLabel, dbgPhiTarget, dbgPhiRaw, dbgPhiLimited, PhiS(space.InverseTransformPoint(lower.position) - space.InverseTransformPoint(upper.position)), lastGirdleDeg, lastGirdleRetractDeg);
             nAnimWrote = nRestored = 0;
         }
     }
@@ -787,9 +790,14 @@ public class PatientArmIkProbe : MonoBehaviour
         float sinA = Mathf.Sqrt(1f - cosA * cosA);
         Vector3 elbowGoal = a + dir * (l1 * cosA) + pole * (l1 * sinA);
         Vector3 handGoal = a + dir * d;                   // 못 닿으면 목표 방향으로 뻗은 끝
+        // ★10-22 진단: 못 닿을 때 0.999배 여유로 팔꿈치가 2~3° 굽어 위팔이 목표에서 틀어졌다 — 머리 위(θ 170)에선 그게 φ 15°(90 → 105)로 커져
+        //   «옆 머리 위»가 관상면 뒤 경계(128°)에 걸렸다. 못 닿으면 위팔을 목표 방향 그대로 둔다(팔꿈치는 편 채).
+        if (dist >= maxReach) elbowGoal = a + dir * l1;
 
         string hit = null;
+        if (frameReady) { dbgPhiTarget = PhiS(t - a); dbgPhiRaw = PhiS(elbowGoal - a); }   // ★10-22 진단: 옆으로 머리 위가 φ104로 밀린다 — 어느 단계에서 도는지
         if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, t, ref elbowGoal, ref handGoal, ref hit);
+        if (frameReady) dbgPhiLimited = PhiS(elbowGoal - a);
         if (applyCollision)
         {
             ApplyCollision(a, ref elbowGoal, ref handGoal, ref hit);
@@ -986,6 +994,15 @@ public class PatientArmIkProbe : MonoBehaviour
     }
 
     /// <summary>그리는 자세(모든 보정 뒤)에 어깨 방향별 경계 · 팔꿈치 굴곡 한계를 건다 — 위치만 고친다(위팔 축 둘레 회전은 그대로).</summary>
+    private float dbgPhiTarget, dbgPhiRaw, dbgPhiLimited;
+    /// <summary>S공간 방향의 수평 방향각 φ(0 앞 · 90 옆 · ±180 뒤 · −90 안쪽) — 진단용.</summary>
+    private float PhiS(Vector3 v)
+    {
+        BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
+        Vector3 hz = v - Vector3.Dot(v, U) * U;
+        return hz.sqrMagnitude > 1e-10f ? Mathf.Atan2(Vector3.Dot(hz, L), Vector3.Dot(hz, F)) * Mathf.Rad2Deg : 0f;
+    }
+
     private void EnforceFinalLimits()
     {
         BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
