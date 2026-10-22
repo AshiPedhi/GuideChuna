@@ -585,10 +585,14 @@ public class PatientArmIkProbe : MonoBehaviour
         if (applyCollision)
         {
             ApplyCollision(a, ref elbowGoal, ref handGoal, ref hit);
-            // ★10-22 시뮬 4회차: 막힘이 손을 밀어낸 뒤 아래팔이 경첩 면을 벗어나 옆으로 꺾였다(몸 앞 가로지르기 100프레임)
-            Vector3 uC = (elbowGoal - a).normalized, wC = handGoal - elbowGoal;
-            if (uC.sqrMagnitude > 0.5f && wC.sqrMagnitude > 1e-10f) handGoal = elbowGoal + HingeDir(a, uC, wC.normalized) * l2;
+            // ★10-22 시뮬 7회차(사용자가 화면으로 지적 — 머리 위로 올릴 때 말도 안 되는 각도): 막힘이 밀어낸 뒤 한계가 깨졌다
+            //   (팔꿈치 굴곡 180° · 어깨 내전 40°). → 관절 한계를 한 번 더 건다. 둘이 부딪히면 한계가 이긴다(조금 파고드는 쪽을 택한다).
+            if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, handGoal, ref elbowGoal, ref handGoal, ref hit);
         }
+        // 아래팔은 늘 경첩 면의 굽는 쪽 반 안에(★10-22 시뮬 4회차: 막힘 뒤 옆으로 꺾임 100프레임)
+        Vector3 uG = (elbowGoal - a).normalized, wG = handGoal - elbowGoal;
+        if (wG.sqrMagnitude > 1e-10f) handGoal = elbowGoal + HingeDir(a, uG, wG.normalized) * l2;
+        Vector3 rawForearm = t - elbowGoal;   // ② 위팔 회전이 «천천히» 따라갈 방향(손을 어느 쪽으로 끄는지)
 
         // ① 위팔: 팔꿈치를 elbowGoal로
         Quaternion q1 = Quaternion.FromToRotation(b - a, elbowGoal - a);
@@ -608,16 +612,25 @@ public class PatientArmIkProbe : MonoBehaviour
                 Vector3 from = flexRefReady
                     ? Vector3.ProjectOnPlane(space.InverseTransformVector(upper.TransformVector(flexRefInUpper)), axis)
                     : Vector3.ProjectOnPlane(c1 - b1, axis);
-                Vector3 to = Vector3.ProjectOnPlane(handGoal - b1, axis);
+                Vector3 to = Vector3.ProjectOnPlane(flexRefReady ? rawForearm : handGoal - b1, axis);
                 // 아래팔이 거의 곧으면 굽힘면이 정의되지 않는다 — 비틀지 않는다
                 // ★10-22 시뮬: 팔이 거의 펴지면 굽힘면이 잡음뿐이라 여기서 위팔이 마구 돌았다(160°/프레임) — 목표 굽힘 10~25°에서 서서히 켠다.
                 // ★10-22 시뮬 6회차: 팔꿈치 자리를 해부학 굴곡 반대쪽으로 정한 뒤로는 잡음 문제가 없어 2~6°에서 다 켠다
                 //   (10~25°로 두니 그 사이 굽힘에서 위팔이 덜 돌아 팔꿈치가 뒤로 꺾여 보였다).
-                float bendW = Mathf.InverseLerp(2f, 6f, Vector3.Angle(elbowGoal - a, handGoal - elbowGoal));
+                float bendW = Mathf.InverseLerp(2f, 6f, Vector3.Angle(elbowGoal - a, (flexRefReady ? rawForearm : handGoal - elbowGoal)));
                 if (bendW > 0f && from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
                 {
                     float twist = Vector3.SignedAngle(from, to, axis) * bendW;
+                    // ★10-22 시뮬 7회차: 손이 어깨 가까이를 지날 때 굽힘면이 반대로 넘어가 위팔이 한계 끝에서 끝으로(+70 → −90) 돌았다.
+                    //   경첩은 손 자리(HingeDir)가 이미 지킨다 — 여기는 «사용자가 끄는 쪽으로 위팔 회전이 따라가는» 몫만, 초당 120°까지.
+                    if (flexRefReady) twist = Mathf.Clamp(twist, -120f * Time.deltaTime, 120f * Time.deltaTime);
                     RotateInS(upper, Quaternion.AngleAxis(twist, axis));
+                    if (flexRefReady)
+                    {
+                        // 위팔이 돈 만큼 경첩 면도 돌았다 — 손 자리를 새 경첩 면으로 다시 옮긴다
+                        Vector3 w2 = handGoal - b1;
+                        if (w2.sqrMagnitude > 1e-10f) handGoal = b1 + HingeDir(a, axis, w2.normalized) * l2;
+                    }
                 }
             }
         }
@@ -627,6 +640,23 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 c2 = space.InverseTransformPoint(hand.position);
         Quaternion q2 = Quaternion.FromToRotation(c2 - b2, handGoal - b2);
         RotateInS(lower, q2);
+
+        // ③-2 위팔 회전 한계를 자세에 직접 건다(★10-22 시뮬 7회차: 굽은 팔에서 회전이 한계 밖으로 나갔다)
+        if (applyLimits)
+        {
+            float rotNow = MeasureHumeralRot(out Vector3 fr, out Vector3 nr, out Vector3 mr);
+            if (!float.IsNaN(rotNow))
+            {
+                float cl = ClampRot(rotNow);
+                if (!Mathf.Approximately(cl, rotNow))
+                {
+                    float rr = cl * Mathf.Deg2Rad;
+                    RotateInS(upper, Quaternion.FromToRotation(fr, nr * Mathf.Cos(rr) + mr * Mathf.Sin(rr)));
+                    AddHit(ref hit, rotNow > 0f ? "어깨 내회전" : "어깨 외회전");
+                }
+                lastRotDeg = cl;
+            }
+        }
 
         // ④ 잡은 손의 회전 — 팔이 펴졌을 때 위팔 비틀기(외·내회전) · 손목 꺾기
         if (followTargetRotation) ApplyTargetRotation(a, ref hit);
@@ -726,6 +756,7 @@ public class PatientArmIkProbe : MonoBehaviour
         ApplyCollision(a, ref e, ref h, ref dummy);
         if ((e - b).sqrMagnitude < 1e-10f && (h - c).sqrMagnitude < 1e-10f) return;
         float l2 = (c - b).magnitude;
+        if (applyLimits && frameReady) ApplyJointLimits(a, (b - a).magnitude, l2, h, ref e, ref h, ref dummy);   // 한계가 이긴다(7회차)
         Vector3 uC = (e - a).normalized, wC = h - e;
         if (wC.sqrMagnitude > 1e-10f) h = e + HingeDir(a, uC, wC.normalized) * l2;
         RotateInS(upper, Quaternion.FromToRotation(b - a, e - a));

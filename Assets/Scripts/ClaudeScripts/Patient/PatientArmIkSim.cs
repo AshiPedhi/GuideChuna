@@ -42,7 +42,9 @@ public class PatientArmIkSim : MonoBehaviour
 
     // 단계 통계
     private float mHandTarget, mPen, mJump, mWrongElbow, mWristDors, mWristPalm;
-    private int nFrames, nWrong, nSideways, nJump, nPen;
+    private int nFrames, nWrong, nSideways, nJump, nPen, nOver;
+    private float mElbowFlex, mMedial, mBehind;
+    private string overWhat = "";
     private string mPenWhere = "";
     private readonly HashSet<string> hits = new HashSet<string>();
     private Quaternion pU, pL, pH; private bool hasPrev;
@@ -104,7 +106,16 @@ public class PatientArmIkSim : MonoBehaviour
 
         Vector3 S = probe.UpperBone.position;
         Vector3 toPos = PoseToPosition(ph.to, S, F, U, L);
-        Vector3 pos = Vector3.Lerp(fromPos, toPos, k);
+        // ★10-22: 사람이 팔을 옮기듯 어깨를 중심으로 «호»를 그린다(직선으로 옮기면 손이 어깨 · 몸을 질러가는 길이 되어 시험이 아니라 경로 탓에 이상해졌다).
+        //   몸통 · 침대로 누르는 단계(특수 자리)는 일부러 직선이다.
+        Vector3 pos;
+        if (ph.to.mode == Mode.Dir || ph.to.mode == Mode.Initial)
+        {
+            Vector3 a0 = fromPos - S, a1 = toPos - S;
+            Vector3 dir = Vector3.Slerp(a0.normalized, a1.normalized, k);
+            pos = S + dir * Mathf.Lerp(a0.magnitude, a1.magnitude, k);
+        }
+        else pos = Vector3.Lerp(fromPos, toPos, k);
         float twist = Mathf.Lerp(fromTwist, ph.to.twist, k);
         float wrist = Mathf.Lerp(fromWrist, ph.to.wrist, k);
 
@@ -155,7 +166,8 @@ public class PatientArmIkSim : MonoBehaviour
         fromPos = probe.Target.position;
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; }
         mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = 0f;
-        nFrames = nWrong = nSideways = nJump = nPen = 0;
+        nFrames = nWrong = nSideways = nJump = nPen = nOver = 0;
+        mElbowFlex = mMedial = mBehind = -999f; overWhat = "";
         mPenWhere = "";
         hits.Clear();
     }
@@ -173,6 +185,17 @@ public class PatientArmIkSim : MonoBehaviour
 
         Vector3 uW = lo.position - up.position, fW = ha.position - lo.position;
         float elbowFlex = Vector3.Angle(uW, fW);
+        // 한계 넘음(★10-22 7회차 신설 — 사용자가 화면으로 «말도 안 되는 각도»를 지적): 실제 자세에서 직접 잰다(probe 내부값 아님)
+        mElbowFlex = Mathf.Max(mElbowFlex, elbowFlex);
+        if (probe.TryBodyAxesWorld(out Vector3 bF, out Vector3 bU, out Vector3 bL))
+        {
+            Vector3 uN = uW.normalized;
+            float behind = Mathf.Asin(Mathf.Clamp(Vector3.Dot(uN, -bF), -1f, 1f)) * Mathf.Rad2Deg;
+            float medial = Mathf.Asin(Mathf.Clamp(Vector3.Dot(uN, -bL), -1f, 1f)) * Mathf.Rad2Deg;
+            mBehind = Mathf.Max(mBehind, behind); mMedial = Mathf.Max(mMedial, medial);
+            string ov = elbowFlex > probe.ElbowFlexionMax + 3f ? "팔꿈치" : behind > probe.ShoulderExtensionMax + 3f ? "신전" : medial > 33f ? "내전" : "";
+            if (ov.Length > 0) { nOver++; if (overWhat.IndexOf(ov, System.StringComparison.Ordinal) < 0) overWhat += (overWhat.Length > 0 ? "·" : "") + ov; }
+        }
         float hingeOff = 0f;
         if (elbowFlex > 10f && probe.TryFlexDirWorld(out Vector3 flexDir))
         {
@@ -239,7 +262,7 @@ public class PatientArmIkSim : MonoBehaviour
                 $"손목 {(wristSigned >= 0 ? "배굴" : "장굴")} {Mathf.Abs(wristSigned):F0}° | " +
                 $"손-목표 최대 {mHandTarget:F0}mm · 관통 최대 {mPen * 1000f:F0}mm{(mPen > 0f ? "(" + mPenWhere + ")" : "")} {nPen}프레임 · " +
                 $"팔꿈치 반대 꺾임 {nWrong} · 옆 꺾임 {nSideways}프레임(경첩 벗어남 최대 {mWrongElbow:F0}°) · " +
-                $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
+                $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 한계 넘음 {nOver}프레임{(nOver > 0 ? "(" + overWhat + ")" : "")} · 최대 팔꿈치 {mElbowFlex:F0}° · 신전 {mBehind:F0}° · 내전 {mMedial:F0}° · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
                 $"걸린 한계 {(hits.Count > 0 ? string.Join(" · ", hits) : "없음")} · {nFrames}프레임";
             Debug.Log(line);
             summary.Append(line).Append('\n');
