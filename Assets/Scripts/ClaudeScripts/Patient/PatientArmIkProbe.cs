@@ -155,6 +155,9 @@ public class PatientArmIkProbe : MonoBehaviour
     private Transform finger;                 // 가운뎃손가락 첫 마디 — 손이 가리키는 쪽
     private Vector3 flexRefInUpper;           // 팔꿈치가 굽는 쪽(해부학 굴곡 방향) — 위팔 본 로컬(행렬 기준). 팔이 펴져도 위팔 회전을 잴 수 있다
     private bool flexRefReady;
+    private Vector3 dorsalInLower;            // 손등 쪽(배굴 방향) — 아래팔 본 로컬(행렬 기준)
+    private bool dorsalReady;
+    private string sideLabel = "";
     private float lastTwistDeg, lastWristDeg;
 
     // 막힘
@@ -163,6 +166,74 @@ public class PatientArmIkProbe : MonoBehaviour
     private Vector3 bedCenter, bedLong, bedSide; private float bedHalfL, bedHalfW, bedTopY;
     private bool bedReady;
     private bool lastReachable;
+
+    // ── 시뮬레이션(PatientArmIkSim)이 읽는 값 — 읽기 전용 ──
+    public bool IsReady => ready;
+    public Transform Target => target;
+    public Transform UpperBone => upper;
+    public Transform LowerBone => lower;
+    public Transform HandBone => hand;
+    public Transform FingerBone => finger;
+    public string SideLabel => sideLabel;
+    public float HandErrMm => lastHandErrMm;
+    public float ShoulderBehindDeg => lastBehindDeg;
+    public float ShoulderMedialDeg => lastMedialDeg;
+    public float ShoulderRotDeg => lastRotDeg;
+    public float TwistDeg => lastTwistDeg;
+    public float WristDeg => lastWristDeg;
+    public string LimitHit => lastLimitHit;
+    public float ArmRadius => armRadius;
+    public float ShoulderExtensionMax => shoulderExtensionMax;
+    public float ElbowFlexionMax => elbowFlexionMax;
+    public float WristBendMax => wristBendMax;
+
+    /// <summary>몸 기준 축(월드). 못 쟀으면 false.</summary>
+    public bool TryBodyAxesWorld(out Vector3 front, out Vector3 up, out Vector3 lateral)
+    {
+        front = up = lateral = Vector3.zero;
+        if (!frameReady || chest == null) return false;
+        front = chest.TransformVector(frontInChest).normalized;
+        up = chest.TransformVector(upInChest).normalized;
+        lateral = chest.TransformVector(lateralInChest).normalized;
+        return true;
+    }
+
+    /// <summary>지금 위팔에 붙은 해부학 팔꿈치 굴곡 방향(월드). 못 쟀으면 false.</summary>
+    public bool TryFlexDirWorld(out Vector3 dir)
+    {
+        dir = flexRefReady ? upper.TransformVector(flexRefInUpper).normalized : Vector3.zero;
+        return flexRefReady;
+    }
+
+    /// <summary>지금 아래팔에 붙은 손등 쪽(배굴 방향, 월드). 못 쟀으면 false.</summary>
+    public bool TryDorsalDirWorld(out Vector3 dir)
+    {
+        dir = dorsalReady ? lower.TransformVector(dorsalInLower).normalized : Vector3.zero;
+        return dorsalReady;
+    }
+
+    /// <summary>점 p(월드, 반지름 r)가 침대 · 몸통에 들어간 깊이(m). 0이면 밖. 이번 프레임 막힘 모양 기준.</summary>
+    public float PenetrationDepth(Vector3 p, float r, out bool inBed, out bool inTorso)
+    {
+        inBed = inTorso = false;
+        if (!applyCollision || hipsBone == null || neckBone == null) return 0f;
+        float depth = 0f;
+        if (bedReady)
+        {
+            Vector3 d = p - bedCenter;
+            float x = Vector3.Dot(d, bedSide), z = Vector3.Dot(d, bedLong), y = p.y - bedTopY;
+            float pen = Mathf.Min(r - y, Mathf.Min(bedHalfW + r - Mathf.Abs(x), bedHalfL + r - Mathf.Abs(z)));
+            if (pen > 0f) { inBed = true; depth = Mathf.Max(depth, pen); }
+        }
+        Vector3 A = hipsBone.position, B = neckBone.position, ab = B - A;
+        float k = Mathf.Clamp01(Vector3.Dot(p - A, ab) / Mathf.Max(ab.sqrMagnitude, 1e-8f));
+        float tp = lastTorsoR + r - Vector3.Distance(p, A + ab * k);
+        if (tp > 0f) { inTorso = true; depth = Mathf.Max(depth, tp); }
+        return depth;
+    }
+
+    /// <summary>침대 윗면 높이(월드 y). 못 잡았으면 NaN.</summary>
+    public float BedTopY => bedReady ? bedTopY : float.NaN;
 
     /// <summary>메뉴가 AddComponent 직후(Start 전에) 팔을 고를 때 쓴다.</summary>
     public ArmSide Side { get => side; set { if (!ready) side = value; } }
@@ -212,16 +283,9 @@ public class PatientArmIkProbe : MonoBehaviour
         finger = animator.GetBoneTransform(right ? HumanBodyBones.RightMiddleProximal : HumanBodyBones.LeftMiddleProximal);
         if (finger == null) Debug.LogWarning("[팔IK] 가운뎃손가락 본이 없다 — 손목 꺾기를 끈다.");
 
-        // 굴곡 방향 = (손 − 팔꿈치)에서 위팔 축 성분을 뺀 것. 팔꿈치가 거의 펴져 있으면 잴 수 없다.
-        {
-            Vector3 uW = lower.position - upper.position, fW = hand.position - lower.position;
-            Vector3 perp = fW - Vector3.Dot(fW, uW.normalized) * uW.normalized;
-            float bend = Vector3.Angle(uW, fW);
-            flexRefReady = bend > 8f;
-            if (flexRefReady) flexRefInUpper = upper.InverseTransformVector(perp.normalized);
-            Debug.Log($"[팔IK] 굴곡 기준 — 시작 자세 팔꿈치 굽힘 {bend:F1}° · " +
-                      (flexRefReady ? "위팔 회전(외·내)을 팔이 펴져도 잰다" : "★너무 펴져 있어 잴 수 없다 — 팔이 펴졌을 때 회전 한계를 끈다"));
-        }
+        sideLabel = right ? "오른팔" : "왼팔";
+        // 해부학 기준 = 아바타 근육으로 잰다(10-22 시뮬 분석: 시작 자세가 3°만 굽어 «자세에서 재기»가 실패했다).
+        MeasureAnatomyRefs(right);
 
         // 막힘 기준 본
         hipsBone = animator.GetBoneTransform(HumanBodyBones.Hips);
@@ -309,6 +373,64 @@ public class PatientArmIkProbe : MonoBehaviour
         return true;
     }
 
+    /// <summary>
+    /// 아바타(Humanoid 근육)로 해부학 방향을 잰다 — 본 축 · 이름을 믿지 않고, 거울과도 무관하다.
+    ///   · 팔꿈치 굴곡 방향: «Forearm Stretch» 근육을 굽힌 자세로 바꿔 아래팔이 간 쪽(위팔 축 성분 제외) → 위팔 본 로컬
+    ///   · 손등 쪽(배굴 방향): «Hand Down-Up» 근육을 올린 자세에서 손가락이 간 쪽(아래팔 축 성분 제외) → 아래팔 본 로컬
+    /// 잰 뒤 모든 본을 원래 값으로 되돌린다. 앞(F)과의 내적을 로그로 남겨 눈으로 검산한다(팔을 내린 자세면 굴곡 방향 ≈ 앞).
+    /// </summary>
+    private void MeasureAnatomyRefs(bool right)
+    {
+        Transform[] all = animator.GetComponentsInChildren<Transform>(true);
+        var lp = new Vector3[all.Length]; var lr = new Quaternion[all.Length]; var lsc = new Vector3[all.Length];
+        for (int i = 0; i < all.Length; i++) { lp[i] = all[i].localPosition; lr[i] = all[i].localRotation; lsc[i] = all[i].localScale; }
+        try
+        {
+            var hph = new HumanPoseHandler(animator.avatar, animator.transform);
+            var pose = new HumanPose();
+            hph.GetHumanPose(ref pose);
+            string side = right ? "Right" : "Left";
+            int iFore = System.Array.IndexOf(HumanTrait.MuscleName, side + " Forearm Stretch");
+            int iHand = System.Array.IndexOf(HumanTrait.MuscleName, side + " Hand Down-Up");
+            if (iFore < 0) { Debug.LogWarning("[팔IK] 근육 «Forearm Stretch»를 못 찾았다 — 굴곡 기준 없음"); return; }
+
+            float[] keep = (float[])pose.muscles.Clone();
+            pose.muscles[iFore] = -0.6f;   // 굽힘(1 = 폄)
+            if (iHand >= 0) pose.muscles[iHand] = 0f;
+            hph.SetHumanPose(ref pose);
+            Vector3 uW = lower.position - upper.position, fW = hand.position - lower.position;
+            Vector3 perp = fW - Vector3.Dot(fW, uW.normalized) * uW.normalized;
+            flexRefReady = perp.sqrMagnitude > 1e-6f;
+            if (flexRefReady) flexRefInUpper = upper.InverseTransformVector(perp.normalized);
+            float bentDeg = Vector3.Angle(uW, fW);
+            Vector3 fingerA = finger != null ? finger.position - hand.position : Vector3.zero;
+
+            if (iHand >= 0 && finger != null)
+            {
+                pose.muscles[iHand] = 1f;   // 손등 쪽으로(배굴)
+                hph.SetHumanPose(ref pose);
+                Vector3 foreW = (hand.position - lower.position).normalized;
+                Vector3 fingerB = finger.position - hand.position;
+                Vector3 dors = fingerB - fingerA;
+                dors -= Vector3.Dot(dors, foreW) * foreW;
+                dorsalReady = dors.sqrMagnitude > 1e-8f;
+                if (dorsalReady) dorsalInLower = lower.InverseTransformVector(dors.normalized);
+            }
+            pose.muscles = keep;
+            hph.Dispose();
+
+            string chk = "";
+            if (frameReady && flexRefReady)
+                chk = $" · 검산: 굴곡 방향 · 앞 내적 {Vector3.Dot(perp.normalized, chest.TransformVector(frontInChest).normalized):+0.00;-0.00}(팔을 내린 자세면 +에 가까워야 한다)";
+            Debug.Log($"[팔IK] {sideLabel} 해부학 기준(아바타 근육으로 잼) — 팔꿈치 굴곡 방향 {(flexRefReady ? "잼" : "★못 잼")}(시험 굽힘 {bentDeg:F0}°) · " +
+                      $"손등 쪽 {(dorsalReady ? "잼" : "★못 잼")}{chk}");
+        }
+        finally
+        {
+            for (int i = 0; i < all.Length; i++) { all[i].localPosition = lp[i]; all[i].localRotation = lr[i]; all[i].localScale = lsc[i]; }
+        }
+    }
+
     private Transform MakeHandle(string handleName, Vector3 worldPos, Color color)
     {
         GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -356,16 +478,16 @@ public class PatientArmIkProbe : MonoBehaviour
         if (Time.unscaledTime >= nextLogTime)
         {
             nextLogTime = Time.unscaledTime + logInterval;
-            Debug.LogFormat("[팔IK] 목표 거리 {0:F3}m / 닿는 거리 {1:F3}m ({2}) · 팔꿈치 각 {3:F1}° · 손 오차 {5:F1}mm · weight {4:F2}",
+            Debug.LogFormat("[팔IK] " + sideLabel + " 목표 거리 {0:F3}m / 닿는 거리 {1:F3}m ({2}) · 팔꿈치 각 {3:F1}° · 손 오차 {5:F1}mm · weight {4:F2}",
                 lastTargetDistance, lastReach, lastReachable ? "닿음" : "못 닿음 — 뻗어서 가리킴",
                 lastElbowAngle, weight, lastHandErrMm);
             if (applyLimits && frameReady)
-                Debug.LogFormat("[팔IK] 관절 — 어깨 뒤로 {0:F0}°/{4:F0} · 안쪽 {1:F0}°/{5:F0} · 회전 {2:+0;-0}°(+내 {6:F0} / −외 {7:F0}) · 팔꿈치 굴곡 {3:F0}°/{8:F0} · 걸린 한계: {9}",
+                Debug.LogFormat("[팔IK] " + sideLabel + " 관절 — 어깨 뒤로 {0:F0}°/{4:F0} · 안쪽 {1:F0}°/{5:F0} · 회전 {2:+0;-0}°(+내 {6:F0} / −외 {7:F0}) · 팔꿈치 굴곡 {3:F0}°/{8:F0} · 걸린 한계: {9}",
                     lastBehindDeg, lastMedialDeg, lastRotDeg, lastElbowFlexDeg,
                     shoulderExtensionMax, shoulderAdductionMax, shoulderInternalRotMax, shoulderExternalRotMax, elbowFlexionMax,
                     lastLimitHit.Length > 0 ? lastLimitHit : "없음");
             if (followTargetRotation)
-                Debug.LogFormat("[팔IK] 잡은 손 회전 — 팔 비틀기 {0:+0;-0}° · 손목 꺾임 {1:F0}°/{2:F0} · 막힘 {3}",
+                Debug.LogFormat("[팔IK] " + sideLabel + " 잡은 손 회전 — 팔 비틀기 {0:+0;-0}° · 손목 꺾임 {1:F0}°/{2:F0} · 막힘 {3}",
                     lastTwistDeg, lastWristDeg, wristBendMax, applyCollision ? (bedReady ? "침대 · 몸통" : "몸통만(침대 못 잼)") : "끔");
         }
     }
@@ -444,7 +566,11 @@ public class PatientArmIkProbe : MonoBehaviour
             if (axis.sqrMagnitude > 1e-10f)
             {
                 axis.Normalize();
-                Vector3 from = Vector3.ProjectOnPlane(c1 - b1, axis);
+                // ★10-22: 팔꿈치는 경첩이다 — 위팔에 붙은 «해부학 굴곡 방향»을 굽힘면에 맞춘다(아바타 근육으로 잰 것).
+                //   종전엔 지금 아래팔 방향을 맞춰서, 팔꿈치가 옆이나 뒤로도 꺾일 수 있었다.
+                Vector3 from = flexRefReady
+                    ? Vector3.ProjectOnPlane(space.InverseTransformVector(upper.TransformVector(flexRefInUpper)), axis)
+                    : Vector3.ProjectOnPlane(c1 - b1, axis);
                 Vector3 to = Vector3.ProjectOnPlane(handGoal - b1, axis);
                 // 아래팔이 거의 곧으면 굽힘면이 정의되지 않는다 — 비틀지 않는다
                 if (from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
@@ -483,7 +609,7 @@ public class PatientArmIkProbe : MonoBehaviour
         if (now != lastLimitHit)
         {
             lastLimitHit = now;
-            Debug.Log("[팔IK] 걸린 한계 → " + (now.Length > 0 ? now : "없음"));
+            Debug.Log("[팔IK] " + sideLabel + " 걸린 한계 → " + (now.Length > 0 ? now : "없음"));
         }
     }
 
@@ -527,7 +653,8 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 m = swing * -L;     // 내회전 쪽
         float along = Vector3.Dot(w, u);
         Vector3 wp = w - along * u;
-        if (wp.sqrMagnitude > 1e-6f)   // 팔이 거의 펴지면 회전이 정의되지 않는다 — 자르지 않는다
+        // ★10-22 시뮬 분석: 팔꿈치 굴곡 5°에서도 잘라 «어깨 외회전 −90°»가 계속 찍혔다 — 15° 아래는 건너뛴다(펴진 팔은 ApplyTargetRotation이 굴곡 기준으로 잰다)
+        if (Vector3.Angle(u, w) >= 15f && wp.sqrMagnitude > 1e-6f)
         {
             float rot = Mathf.Atan2(Vector3.Dot(wp, m), Vector3.Dot(wp, n)) * Mathf.Rad2Deg;
             float clamped = Mathf.Clamp(rot, -shoulderExternalRotMax, shoulderInternalRotMax);
