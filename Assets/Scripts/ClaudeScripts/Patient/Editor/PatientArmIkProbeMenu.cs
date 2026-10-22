@@ -60,9 +60,12 @@ public static class PatientArmIkProbeMenu
             }
         }
 
+        // 10-22: 핸드 트래킹으로 잡기 — 환자 하나에 하나(양손 · 양팔을 함께 맡는다)
+        if (patient.GetComponent<PatientArmIkHandGrab>() == null) patient.gameObject.AddComponent<PatientArmIkHandGrab>();
+
         PatientArmIkProbe probe = patient.gameObject.AddComponent<PatientArmIkProbe>();
         probe.Side = side; // Start 전이라 여기서 정한다
-        Debug.Log($"[팔IK] {patient.name}에 런타임으로 붙였다 — side={side}. 목표 구 «[팔IK] 목표»를 씬 뷰에서 끌어 본다. (Play를 멈추면 사라진다)");
+        Debug.Log($"[팔IK] {patient.name}에 런타임으로 붙였다 — side={side}. 목표 구 «[팔IK] 목표»를 씬 뷰에서 끌거나, 핸드 트래킹으로 환자 손목을 주먹 · 핀치로 잡아 옮긴다. (Play를 멈추면 사라진다)");
         Selection.activeGameObject = patient.gameObject;
         return probe;
     }
