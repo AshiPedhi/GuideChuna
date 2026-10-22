@@ -1,0 +1,68 @@
+{
+    "prefab": "Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatient_c9.prefab",
+    "success": true,
+    "neutralMaximumErrorMetres": 7.252749014696747e-7,
+    "repeatedPoseErrorMetres": 0.0,
+    "expressionMaximumErrorMetres": 7.251816214193241e-7,
+    "expressionFramesChecked": 13,
+    "animationInputRadiusDegrees": 59.9999885559082,
+    "radiusRotationDegrees": 60.000003814697269,
+    "ulnaRotationDuringPronationDegrees": 0.0,
+    "independentScapulaRotationDegrees": 12.213648796081543,
+    "scapularMirrorErrorDegrees": 0.0,
+    "scapularSuperiorForwardComponent": -0.11807165294885636,
+    "neckEndpointErrorDegrees": 0.0,
+    "elbowBendMinimumForward": 0.9958482980728149,
+    "elbowMaximumAngleErrorDegrees": 0.000030517578125,
+    "forearmPresetMirrorErrorDegrees": 0.0,
+    "skinVerticesMoved": 8390,
+    "validSkinnedMeshes": 137,
+    "neutralByMesh": [
+        {
+            "mesh": "Boots",
+            "maximumMetres": 7.48774056091861e-8
+        },
+        {
+            "mesh": "CC_Base_Body",
+            "maximumMetres": 7.252749014696747e-7
+        },
+        {
+            "mesh": "CC_Base_Eye",
+            "maximumMetres": 4.76837158203125e-7
+        },
+        {
+            "mesh": "CC_Base_EyeOcclusion",
+            "maximumMetres": 2.384185791015625e-7
+        },
+        {
+            "mesh": "CC_Base_TearLine",
+            "maximumMetres": 2.384185791015625e-7
+        },
+        {
+            "mesh": "CC_Base_Teeth",
+            "maximumMetres": 3.7699126664847429e-7
+        },
+        {
+            "mesh": "CC_Base_Tongue",
+            "maximumMetres": 4.768953658640385e-7
+        },
+        {
+            "mesh": "Half_up",
+            "maximumMetres": 2.6656007889869218e-7
+        },
+        {
+            "mesh": "Jeans",
+            "maximumMetres": 3.772672698687529e-7
+        },
+        {
+            "mesh": "Shirt",
+            "maximumMetres": 6.080331331759226e-7
+        },
+        {
+            "mesh": "Undercut_fade",
+            "maximumMetres": 3.769728778024728e-7
+        }
+    ],
+    "failure": "",
+    "scope": "Editor evaluation and CPU skin bake using the runtime solver. Human Play, Quest, tissue/clinical validation remain unverified."
+}

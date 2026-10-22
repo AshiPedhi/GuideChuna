@@ -1,0 +1,12 @@
+Elbow100 side=0 savedRestBend=(0.011992, -0.077584, 0.996914) upper=(-0.573542, -0.819152, 0.006258) lower=(0.174997, 0.096943, 0.979785) bend=(0.076566, -0.046000, 0.996003) anterior=0.996003
+Elbow100 side=1 savedRestBend=(-0.011994, -0.077490, 0.996921) upper=(0.573542, -0.819152, 0.006261) lower=(-0.174923, 0.096998, 0.979793) bend=(-0.076491, -0.045944, 0.996011) anterior=0.996011
+Forearm80 side=0 savedRestBend=(0.011992, -0.077584, 0.996914) upper=(0.000000, -1.000000, 0.000000) lower=(0.091029, 0.000000, 0.995848) bend=(0.091029, 0.000000, 0.995848) anterior=0.995848
+Forearm80 side=1 savedRestBend=(-0.011994, -0.077490, 0.996921) upper=(0.000000, -1.000000, 0.000000) lower=(-0.090936, 0.000000, 0.995857) bend=(-0.090936, 0.000000, 0.995857) anterior=0.995857
+c9 Avatar Left Forearm Stretch input=-1 flexion=159.1401 bend=(0.013218, -0.158321, 0.987299) anterior=0.987299 authorPole=(0.012306, -0.101028, 0.994808)
+c9 Avatar Left Forearm Stretch input=-0.5 flexion=119.1478 bend=(0.012753, -0.135041, 0.990758) anterior=0.990758 authorPole=(0.011992, -0.077584, 0.996914)
+c9 Avatar Left Forearm Stretch input=0.5 flexion=39.1544 bend=(0.012344, -0.114866, 0.993304) anterior=0.993304 authorPole=(0.011716, -0.057293, 0.998289)
+c9 Avatar Left Forearm Stretch input=1 flexion=1.0717 bend=(-0.022203, 0.705758, -0.708105) anterior=-0.708105 authorPole=(-0.017694, 0.663745, -0.747750)
+c9 Avatar Right Forearm Stretch input=-1 flexion=159.1402 bend=(-0.013217, -0.158118, 0.987332) anterior=0.987332 authorPole=(-0.012307, -0.100905, 0.994820)
+c9 Avatar Right Forearm Stretch input=-0.5 flexion=119.1478 bend=(-0.012752, -0.134866, 0.990782) anterior=0.990782 authorPole=(-0.011994, -0.077490, 0.996921)
+c9 Avatar Right Forearm Stretch input=0.5 flexion=39.1545 bend=(-0.012345, -0.114714, 0.993322) anterior=0.993322 authorPole=(-0.011718, -0.057223, 0.998293)
+c9 Avatar Right Forearm Stretch input=1 flexion=1.0712 bend=(0.022182, 0.705241, -0.708621) anterior=-0.708621 authorPole=(0.017683, 0.663260, -0.748180)

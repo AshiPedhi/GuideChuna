@@ -1,0 +1,8 @@
+{
+    "prefab": "Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatient_c9.prefab",
+    "scene": "Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatientLab.unity",
+    "sourceCommit": "8c97b79 (pre-existing changes checkpoint; Play unverified)",
+    "anatomicalMeshes": 126,
+    "changedSkinVertices": 8159,
+    "limitations": "Kinematic approximation. Shoulder rhythm, soft-tissue weights, cervical angular shares and corrective shapes require expert and device validation. Original c9 Avatar is an animation input. No clinical accuracy or force simulation is claimed."
+}

@@ -1,0 +1,108 @@
+2026-10-22 change-impact 판독 — 해부학 환자 기능
+
+검사기: .agents/skills/change-impact/check.py 8c97b79
+아래 원문은 현재 작업 트리 전체를 포함한다. 다른 작업에서 변경 중인
+PatientArmIkProbe/PatientArmIkSim/ChunaAgentBridge.Scene/ChunaWebMirror도
+검사 목록에 들어갔으며 이 기능의 커밋에는 포함하지 않았다.
+
+이 기능에 대한 판독
+- 신규 runtime 컴포넌트는 AnatomicalPatientRig/Lab 두 개이다.
+  기존 TrainingScene/lobby의 인스턴스 수는 0개이며 기존 환자를 교체하지 않았다.
+  생성 프리팹에서 두 컴포넌트를 다시 로드하고 실제 Evaluate/SetSample,
+  137개 renderer 검증을 수행했으므로 이 복제본의 연결은 확인했다.
+- hand/position/rotation 경고는 신규 클래스의 중첩 데이터 필드 이름을
+  기존 씬 전체의 동명 문자열과 비교한 결과이다. 기존 씬의 MonoBehaviour
+  GUID를 연결해 찾는 검사가 아니며, 기존 직렬화 필드를 바꾼 것이 아니다.
+  신규 프리팹에 저장된 모든 참조/기준 값은 생성기가 명시적으로 설정했다.
+- 이벤트 수신자와 나레이션 경고는 전체 기존 시나리오에 대한 결과이다.
+  이 기능은 해당 코드/CSV/Config/나레이션 파일을 변경하지 않았다.
+  이번 기능에는 이벤트 송수신을 새로 만들지 않았다.
+- 생성된 씬/프리팹과 meta의 공백은 Unity가 기록한 그대로 두었다.
+  새 .cs 파일의 git diff --check에는 문제가 없었다.
+- 원본 c9/Anatomy FBX 및 TrainingScene/lobby는 기준 대비 디스크 diff가 없다.
+
+Play, Quest 성능, 기존 VR 파지 통합, 임상 적합성은 미검증이다.
+
+----- 검사기 원문 -----
+바뀐 파일 343개 (.cs 13개) · 기준 8c97b79
+    .claude/skills/unity-live/__pycache__/bridge.cpython-314.pyc
+    Assets/Editor/AnatomicalMeshBuilder.cs
+    Assets/Editor/AnatomicalMeshBuilder.cs.meta
+    Assets/Editor/AnatomicalPatientBuild.Elbow.cs
+    Assets/Editor/AnatomicalPatientBuild.Elbow.cs.meta
+    Assets/Editor/AnatomicalPatientBuild.Generate.cs
+    Assets/Editor/AnatomicalPatientBuild.Generate.cs.meta
+    Assets/Editor/AnatomicalPatientBuild.Validation.cs
+    Assets/Editor/AnatomicalPatientBuild.Validation.cs.meta
+    Assets/Editor/AnatomicalPatientBuild.cs
+    Assets/Editor/AnatomicalPatientBuild.cs.meta
+    Assets/Editor/AnatomicalPatientLabEditor.cs
+    Assets/Editor/AnatomicalPatientLabEditor.cs.meta
+    Assets/Editor/AnatomicalSkinBuilder.cs
+    Assets/Editor/AnatomicalSkinBuilder.cs.meta
+    Assets/Editor/ChunaAgentBridge.Scene.cs
+    Assets/Generated.meta
+    Assets/Generated/AnatomicalPatient.meta
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000.meta
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatientLab.unity
+    … 외 323개
+
+── ① 직렬화 충돌 (규칙 7) ──
+[위험] ★씬에 이미 직렬화된 필드를 건드렸다 — <b>코드 기본값이 안 먹는다</b>(규칙 7)
+        hand   (AnatomicalPatientRig.cs)
+        position   (AnatomicalPatientRig.cs)
+        rotation   (AnatomicalPatientRig.cs)
+        → 인스펙터에서 직접 바꾸거나, <b>신규 이름의 오버라이드 필드</b>를 판다.
+        → 되돌릴 여지가 있는 스위치는 기본값을 false로 두거나 런타임 플래그로 둔다.
+
+── ② 파급 범위 ──
+  AnatomicalMeshBuilder: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild.Elbow: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild.Generate: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild.Validation: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientLabEditor: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalSkinBuilder: 씬 인스턴스 0개 · 참조 0개
+  ChunaAgentBridge.Scene: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientLab: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientRig: 씬 인스턴스 0개 · 참조 1개  ★씬 인스턴스 0개인데 참조는 있다 — 죽은 배선일 수 있다
+  PatientArmIkProbe: 씬 인스턴스 0개 · 참조 3개  (런타임 AddComponent — 인스펙터엔 Play 중에만 보인다)
+  PatientArmIkSim: 씬 인스턴스 0개 · 참조 2개  (런타임 AddComponent — 인스펙터엔 Play 중에만 보인다)
+  ChunaWebMirror: 씬 인스턴스 0개 · 참조 0개  (런타임 AddComponent — 인스펙터엔 Play 중에만 보인다)
+
+── ③ 이벤트 수신자 ──
+[위험] ★이벤트 'OnProgressUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+[위험] ★이벤트 'OnUIUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+
+── ④ 나레이션 낡음 ──
+[확인] 견갑거근: 텍스트가 mp3보다 새로운 클립 6개 — <b>안내문과 음성이 어긋난다</b>
+        건측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가
+        → narration-gen 으로 재녹음: --only "건측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 경추ROM측정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        중립복귀
+        → narration-gen 으로 재녹음: --only "중립복귀..." --force --write
+[확인] 두개골OM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        견착
+        → narration-gen 으로 재녹음: --only "견착..." --force --write
+[확인] 두개골PJ교정: 텍스트가 mp3보다 새로운 클립 3개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 견착, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,견착,재평가..." --force --write
+[확인] 두개골PM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        교정
+        → narration-gen 으로 재녹음: --only "교정..." --force --write
+[확인] 사각근: 텍스트가 mp3보다 새로운 클립 8개 — <b>안내문과 음성이 어긋난다</b>
+        전부회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 중부회전, 후부회전
+        → narration-gen 으로 재녹음: --only "전부회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 상부승모근: 텍스트가 mp3보다 새로운 클립 7개 — <b>안내문과 음성이 어긋난다</b>
+        환측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 건측회전
+        → narration-gen 으로 재녹음: --only "환측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 제1늑골 교정기법: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,재평가..." --force --write
+[확인] 제2늑골_상방변위: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        파지2, 재평가
+        → narration-gen 으로 재녹음: --only "파지2,재평가..." --force --write
+
+위험 37건
