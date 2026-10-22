@@ -45,6 +45,7 @@ public static partial class ChunaAgentBridge
             case "gameview": ok = DoGameView(sb, a, out err); return true;
             case "resolve": ok = DoResolvePackages(sb, out err); return true;
             case "build-run": ok = DoBuildRun(sb, a, out err); return true;
+            case "menu": ok = DoMenu(sb, a, out err); return true;   // 메뉴 실행(10-22) — ★«GuideChuna/시험/»만 허용(파괴적 도구 차단 · 절대규칙 3)
             case "gfx-api": ok = DoGfxApi(sb, a, out err); return true;
             case "app-version": ok = DoAppVersion(sb, a, out err); return true;   // 앱 버전 조회·변경(10-08)
             case "romline-ctrl": sb.Append(RomLineVerify.ControllerFront()); return true;   // 컨트롤러 모형의 맨 앞 자리를 잰다(10-01)
@@ -570,6 +571,22 @@ public static partial class ChunaAgentBridge
         sb.Append("패키지를 다시 푼다(Client.Resolve).\n");
         sb.Append("★내려받기와 컴파일이 이어진다 — 끝날 때까지 기다렸다가 ping으로 확인해라.\n");
         return true;
+    }
+
+    private static bool DoMenu(StringBuilder sb, Dictionary<string, string> a, out string err)
+    {
+        err = null;
+        a.TryGetValue("path", out string path);
+        const string allowed = "GuideChuna/시험/";
+        if (string.IsNullOrEmpty(path) || !path.StartsWith(allowed, StringComparison.Ordinal))
+        {
+            err = $"--path=가 «{allowed}»로 시작해야 한다(다른 메뉴는 파괴적일 수 있어 막는다): '{path}'";
+            return false;
+        }
+        bool done = EditorApplication.ExecuteMenuItem(path);
+        sb.Append(done ? "메뉴를 실행했다: " : "★메뉴를 못 찾았거나 지금은 못 누른다(Play 중이어야 하는 메뉴 등): ").Append(path).Append('\n');
+        if (!done) err = "메뉴 실행 실패";
+        return done;
     }
 
     private static bool DoPlay(StringBuilder sb, bool on, out string err)
