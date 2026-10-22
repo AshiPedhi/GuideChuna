@@ -198,7 +198,8 @@ public class RomLineSession : MonoBehaviour
 
     // 탭 · 단계 멈춤(10-12 저녁 · 10-14 홈)
     private bool home = true;             // 홈 탭 — 처음은 여기서 시작하고, 네 탭(굴곡 · 신전 · 측굴 · 회전)을 다 재면 여기로 돌아온다(10-14)
-    private bool resetAsk;                // «전체 측정 결과를 지울까요?» 확인 창(홈에서 A)
+    private bool resetAsk;                // «측정값을 초기화할까요?» 확인 창(홈에서 A · 10-22 «리셋» → «측정값 초기화»)
+    private bool calibAsk;                // «촉 끝 맞추기를 시작할까요?» 확인 창(홈에서 B · 10-22) — 트리거를 눌러야 시작한다
     private bool confirmWait;             // 동작 하나(세 직선)를 다 찍었다 — A/X(확인)를 기다린다
     private readonly bool[] confirmed = new bool[6];   // 동작마다 확인까지 마쳤는가
     private bool axesAsk;                 // «축 다시 잡기»를 불렀다(스틱 누름) — 스틱을 밀면 잡는다
@@ -604,14 +605,27 @@ public class RomLineSession : MonoBehaviour
             stickReady = false;          // 누르면서 밀린 스틱이 그대로 «밀기»로 읽히지 않게 — 가운데로 돌아온 뒤에 듣는다
             return;
         }
-        // ── 끝점 보정(10-14 사용자 지시: 컨트롤러로 바로) — 홈에서 트리거 : 시작, 보정 중 트리거 : 끝(스틱 누르기로도 끝난다) ──
+        // ── 끝점 보정(화면 이름 «촉 끝 맞추기») — 보정 중 트리거 : 끝(스틱 누르기로도 끝난다) ──
+        //   ★10-22 사용자 지시: 홈에서 트리거를 실수로 누르는 일이 많다 → 트리거로 바로 시작하지 않는다.
+        //   홈에서 B → 확인 창 «촉 끝 맞추기를 시작할까요?» → 트리거 : 시작 · B : 취소(10-14~10-21에는 홈의 트리거가 바로 시작했다).
         if (calibrating)
         {
             if (triggerDown) EndCalibration("트리거");
             else SampleCalibration();
             return;
         }
-        if (home && triggerDown && !resetAsk) { BeginCalibration(); return; }
+        if (calibAsk)
+        {
+            if (triggerDown) { calibAsk = false; BeginCalibration(); return; }
+            if (undoTap || undoLong || aDown)
+            {
+                calibAsk = false;
+                Debug.Log("[선실측] 촉 끝 맞추기 확인 — 취소(" + (aDown ? "A/X" : "B/Y") + ")");
+                Play(sndUndo);
+                dirty = true;
+                return;
+            }
+        }
 
         // ── 축 다시 잡기를 불러 둔 동안 — 스틱을 밀면(어느 쪽이든) 잡는다. 다른 버튼 · 트리거는 그만두기(점은 찍지 않는다) ──
         if (axesAsk)
@@ -639,11 +653,11 @@ public class RomLineSession : MonoBehaviour
             else if (home)
             {
                 resetAsk = true;
-                Debug.Log("[선실측] 리셋 확인 창 — A : 지우기 · B : 취소");
+                Debug.Log("[선실측] 측정값 초기화 확인 창 — A : 초기화 · B : 취소");
                 Play(sndPress);
                 dirty = true;
             }
-            else Deny("A : 리셋은 홈에서만 — 스틱 좌우로 홈으로 가세요");
+            else Deny("A : 측정값 초기화는 홈에서만 — 스틱 좌우로 홈으로 가세요");
             return;
         }
 
@@ -653,11 +667,22 @@ public class RomLineSession : MonoBehaviour
             if (resetAsk)
             {
                 resetAsk = false;
-                Debug.Log("[선실측] 리셋 확인 — 취소(B/Y)");
+                Debug.Log("[선실측] 측정값 초기화 확인 — 취소(B/Y)");
                 Play(sndUndo);
                 dirty = true;
             }
-            else if (home) { if (FreeTabOn) SetFreeTab((freeTab + 1) % 3); }   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다) · 10-16: 자유 측정을 끄면 아무 일도 없다
+            else if (home)
+            {
+                if (FreeTabOn) SetFreeTab((freeTab + 1) % 3);   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다)
+                else
+                {
+                    // ★10-22 사용자 지시: 자유 측정을 끈 뒤 비어 있던 홈의 B를 촉 끝 맞추기 확인 창으로 쓴다
+                    calibAsk = true;
+                    Debug.Log("[선실측] 촉 끝 맞추기 확인 창 — 트리거 : 시작 · B : 취소");
+                    Play(sndPress);
+                    dirty = true;
+                }
+            }
             else if (undoLong)
             {
                 Debug.Log($"[선실측] B/Y 길게({ResetHoldSeconds:F1}초) — {(freeMode ? "이 방식의 점 지우기(자유 측정)" : "이 탭 지우기")}");
@@ -672,7 +697,7 @@ public class RomLineSession : MonoBehaviour
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            if (!resetAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");
+            if (!resetAsk && !calibAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");
             return;
         }
 
@@ -697,7 +722,7 @@ public class RomLineSession : MonoBehaviour
         calibRange = 0f;
         calibPos.Clear();
         calibRot.Clear();
-        noteText = "끝점 보정 — 끝을 한 점에 대고 여러 방향으로 돌리세요";
+        noteText = "촉 끝 맞추기 — 촉 끝을 한 점에 대고 여러 방향으로 돌리세요";
         Debug.Log($"[선실측] 끝점 보정 시작 — 지금 값 {tipOffset * 1000f:F1}mm · 끝을 움직이지 않는 한 점에 댄 채 컨트롤러를 여러 방향으로 돌린다(트리거 · 스틱 누르기 = 끝)");
         Play(sndPress);
         dirty = true;
@@ -714,7 +739,7 @@ public class RomLineSession : MonoBehaviour
         }
         if (Time.unscaledTime < calibNextText) return;
         calibNextText = Time.unscaledTime + 0.5f;   // 글자는 0.5초에 한 번만 바꾼다
-        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 : 끝";
+        noteText = $"촉 끝 맞추기 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 : 끝";
         dirty = true;
     }
 
@@ -724,12 +749,12 @@ public class RomLineSession : MonoBehaviour
         int n = calibPos.Count;
         if (n < CalibMinSamples || calibRange < CalibMinRange)
         {
-            Deny($"끝점 보정 — 모자라다(표본 {n} · 돌린 범위 {calibRange:F0}°). 더 크게, 여러 방향으로 돌려야 한다");
+            Deny($"촉 끝 맞추기 — 모자라다(표본 {n} · 돌린 범위 {calibRange:F0}°). 더 크게, 여러 방향으로 돌려야 한다");
             return;
         }
         if (!RomLineMath.PivotFit(calibPos, calibRot, out Vector3 fit, out Vector3 pivot, out float rms, out float max))
         {
-            Deny("끝점 보정 — 계산을 못 했다(한 방향으로만 돌렸다)");
+            Deny("촉 끝 맞추기 — 계산을 못 했다(한 방향으로만 돌렸다)");
             return;
         }
 
@@ -755,7 +780,7 @@ public class RomLineSession : MonoBehaviour
         }
         else
         {
-            noteText = $"끝점 보정 — 흔들림 {rms * 1000f:F1}mm로 커서 적용 안 함";
+            noteText = $"촉 끝 맞추기 — 흔들림 {rms * 1000f:F1}mm로 커서 적용 안 함";
             Play(sndDeny);
         }
         dirty = true;
@@ -792,13 +817,13 @@ public class RomLineSession : MonoBehaviour
     // ── 동작 ────────────────────────────────────────────────────────
     private void Mark(Vector3 pos, float shake)
     {
-        if (home) { Deny("홈 — 스틱 좌우로 잴 탭을 고르세요"); return; }
+        if (home) { Deny("홈 — 스틱 좌우로 잴 탭을 고르세요 · B : 촉 끝 맞추기"); return; }
         if (freeMode) { FreeMark(pos, shake); return; }
         // ★10-13 사용자 지시: 확인은 트리거다 — 안내에 뜬 각을 보고 한 번 더 당기면 그때 결과표에 기록된다.
         if (confirmWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) Confirm("트리거"); return; }
         if (TabComplete(CurTab))
         {
-            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 홈의 A(리셋)"
+            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 홈의 A(측정값 초기화)"
                       : $"{GuidedTabName[CurTab]} 탭은 다 쟀다 — 스틱으로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
             return;
         }
@@ -1064,6 +1089,7 @@ public class RomLineSession : MonoBehaviour
         if (top < 0 || top > LastTop) return false;   // 10-16: 자유 측정을 끄면 4는 없다
         if (TabLocked) { Deny(LockText()); return false; }
         resetAsk = false;
+        calibAsk = false;
         if (top == 0) { GoHome(why); return true; }
         home = false;
         if (top == 4) { SetFreeMode(true); return true; }
@@ -1704,6 +1730,7 @@ public class RomLineSession : MonoBehaviour
         }
         freeTab = keep;
         resetAsk = false;
+        calibAsk = false;
         confirmWait = false;
         SetFreeMode(false);
         home = true;    // 리셋은 홈에서 한다 — 홈에 머문다(10-14)
@@ -1781,21 +1808,27 @@ public class RomLineSession : MonoBehaviour
             // ★10-14 사용자 지시: 홈의 안내 = 버튼 둘. B로 바꾼 자유 측정의 방식은 탭 이름(맨 끝 탭)이 보여 준다.
             if (resetAsk)
             {
-                forMonitor = instruction = "전체 측정 결과를 지울까요? — A : 지우기 · B : 취소";
-                guide = "<color=#FF8C8C>전체 결과를 지울까요?</color>\n" + SubInfo + "A : 지우기   B : 취소</size>";
+                forMonitor = instruction = "측정값을 초기화할까요? — A : 초기화 · B : 취소";
+                guide = "<color=#FF8C8C>측정값을 초기화할까요?</color>\n" + SubInfo + "A : 초기화   B : 취소</size>";
+            }
+            else if (calibAsk)
+            {
+                forMonitor = instruction = "촉 끝 맞추기를 시작할까요? — 트리거 : 시작 · B : 취소";
+                guide = "<color=#FFF233>촉 끝 맞추기를 시작할까요?</color>\n" + SubInfo + "트리거 : 시작   B : 취소</size>";
             }
             else if (calibrating)
             {
-                forMonitor = instruction = "끝점 보정 중 — 트리거 : 끝";
-                guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
+                forMonitor = instruction = "촉 끝 맞추기 중 — 트리거 : 끝";
+                guide = "<color=#FFF233>촉 끝 맞추기 중</color>\n" + SubInfo + "트리거 : 끝</size>";
             }
             else
             {
                 // ★10-14 사용자 정정: 홈에는 조작 설명만 둔다(다 잰 뒤에도 — 기록은 각 탭에서 본다). 전부 같은 종류(조작)라 줄이지 않는다.
                 //   Meta 버튼 길게 = 메타 퀘스트 시스템의 «뷰 재설정»(추적 원점을 지금 자리로) — 벽면UI · 바닥 축이 그 원점에 맞춰 선다(PlaceFixed).
                 //   ★Meta 버튼은 로고 모양을 닮은 «∞»로 적는다(NotoSansKR-Bold에 있다 — 10-14 fontTools로 확인). 이 줄만 작게(사용자 지시).
-                forMonitor = instruction = "홈 — A : 리셋" + (FreeTabOn ? " · B : 자유측정 모드변경" : "") + " · 트리거 : 컨트롤러 끝점 보정 · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
-                guide = "A : 리셋\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + "트리거 : 컨트롤러 끝점 보정\n" + SubInfo + "∞ 버튼 길게 : 뷰 재설정</size>";
+                // ★10-22 사용자 지시: «리셋» → «측정값 초기화» · «트리거 : 컨트롤러 끝점 보정» → «B : 촉 끝 맞추기»(확인 창을 거친다)
+                forMonitor = instruction = "홈 — A : 측정값 초기화" + (FreeTabOn ? " · B : 자유측정 모드변경" : " · B : 촉 끝 맞추기") + " · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
+                guide = "A : 측정값 초기화\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "B : 촉 끝 맞추기\n") + SubInfo + "∞ 버튼 길게 : 뷰 재설정</size>";
             }
         }
         // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).
@@ -2013,7 +2046,8 @@ public class RomLineSession : MonoBehaviour
             string name = TopName(t);
             view.SetTab(t, t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name, t == cur, false);
         }
-        view.ShowResetAsk(resetAsk);
+        view.ShowAsk(resetAsk || calibAsk, resetAsk ? "측정값을 초기화할까요?" : "촉 끝 맞추기를 시작할까요?",
+                     resetAsk ? "A : 초기화          B : 취소" : "트리거 : 시작          B : 취소");
     }
 
     private static readonly List<Vector3> NoPoints = new List<Vector3>(0);

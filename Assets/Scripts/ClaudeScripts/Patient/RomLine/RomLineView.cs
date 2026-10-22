@@ -300,6 +300,7 @@ public class RomLineView
     private static readonly Color ResetColor = new Color(0.42f, 0.13f, 0.13f, 1f);
 
     private Transform resultArea, popup, rowNow, resetCard;
+    private TextMeshPro askTitle, askKeys;
     private Transform guide;                 // 안내 — 헤드셋이 보는 쪽을 따라온다
     private float guideDistance, guideDrop, guideRise;
     private bool guideSnapped;
@@ -446,13 +447,15 @@ public class RomLineView
             popupTabTexts[i] = Place(MakeText(popup, "", 0.23f, TextAlignmentOptions.Center, 3), c, w);
             popupTabTexts[i].rectTransform.sizeDelta = new Vector2(w, h);   // 두 줄(이름 · 진행)
         }
-        // 리셋 확인 — 탭 창 위에 덮어 뜬다
-        resetCard = new GameObject("리셋 확인").transform;
+        // 확인 창 — 탭 창 위에 덮어 뜬다. ★10-22: 측정값 초기화(홈 A)와 촉 끝 맞추기(홈 B)가 같이 쓴다 — 글은 ShowAsk가 넣는다
+        resetCard = new GameObject("확인 창").transform;
         resetCard.SetParent(popup, false);
         resetCard.localPosition = new Vector3(0f, -0.018f, 0f);   // 탭 줄보다 키가 커서 아래로 조금 내려 덮는다
         MakeQuad(resetCard, "바탕", Vector2.zero, new Vector2(0.56f, 0.116f), ResetColor, 4);
-        MakeText(resetCard, "전체 측정 결과를 지울까요?", 0.19f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, 0.026f, -0.008f);
-        MakeText(resetCard, "A : 지우기          B : 취소", 0.16f, TextAlignmentOptions.Center, 6).transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
+        askTitle = MakeText(resetCard, "", 0.19f, TextAlignmentOptions.Center, 6);
+        askTitle.transform.localPosition = new Vector3(0f, 0.026f, -0.008f);
+        askKeys = MakeText(resetCard, "", 0.16f, TextAlignmentOptions.Center, 6);
+        askKeys.transform.localPosition = new Vector3(0f, -0.028f, -0.008f);
         resetCard.gameObject.SetActive(false);
     }
 
@@ -508,9 +511,14 @@ public class RomLineView
         if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + NearTabH * 0.5f + 0.008f, -0.004f);
     }
 
-    /// <summary>리셋 확인 창(«전체 측정 결과를 지울까요?»)을 탭 창 위에 덮어 띄운다 / 내린다.</summary>
-    public void ShowResetAsk(bool on)
+    /// <summary>확인 창을 탭 창 위에 덮어 띄운다 / 내린다 — 측정값 초기화 · 촉 끝 맞추기(10-22). 글은 바뀔 때만 넣는다.</summary>
+    public void ShowAsk(bool on, string title, string keys)
     {
+        if (on)
+        {
+            if (askTitle.text != title) askTitle.text = title;
+            if (askKeys.text != keys) askKeys.text = keys;
+        }
         if (resetCard.gameObject.activeSelf != on) resetCard.gameObject.SetActive(on);
     }
 
