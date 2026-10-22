@@ -97,6 +97,14 @@ public class PatientArmIkProbe : MonoBehaviour
     [Tooltip("목표 구의 회전(잡은 뒤 바뀐 만큼)을 ① 팔이 펴졌을 때 위팔 비틀기(외·내회전) ② 손목 꺾기로 옮긴다.")]
     [SerializeField] private bool followTargetRotation = true;
 
+    [Tooltip("아래팔 회외(손바닥이 위로) 최대 각(°) — 시작 자세 기준. 정상 80. 손을 비튼 각은 아래팔이 먼저 받고 넘는 만큼 어깨로 간다.")]
+    [Range(0f, 120f)]
+    [SerializeField] private float forearmSupinationMax = 80f;
+
+    [Tooltip("아래팔 회내(손바닥이 아래로) 최대 각(°) — 시작 자세 기준. 정상 80.")]
+    [Range(0f, 120f)]
+    [SerializeField] private float forearmPronationMax = 80f;
+
     [Tooltip("손목이 아래팔 축에서 꺾일 수 있는 최대 각(°). 배굴 정상 70.")]
     [Range(0f, 90f)]
     [SerializeField] private float wristBendMax = 70f;
@@ -157,6 +165,11 @@ public class PatientArmIkProbe : MonoBehaviour
     private bool flexRefReady;
     private Vector3 dorsalInLower;            // 손등 쪽(배굴 방향) — 아래팔 본 로컬(행렬 기준)
     private bool dorsalReady;
+    // 아래팔 회내 · 회외(10-22 사용자 지적: 팔을 들고 손을 돌리면 어깨가 아니라 팔꿈치 아래(아래팔)가 돈다)
+    private float supWorldSign;               // 월드에서 «팔꿈치 → 손» 축 둘레 + 회전이 회외면 +1, 회내면 −1 (아바타 근육으로 잼). 0 = 못 잼
+    private Transform foreTwist1, foreTwist2; // 비틀림 보조 본(CC_Base_*_ForearmTwist01/02) — 피부가 꼬이지 않게 회전을 나눠 준다
+    private Quaternion foreTwist1Rest, foreTwist2Rest;
+    private float lastForeDeg;                // 이번 프레임 아래팔 회외(+) · 회내(−) 각
     private string sideLabel = "";
     private float lastTwistDeg, lastWristDeg;
 
@@ -195,6 +208,7 @@ public class PatientArmIkProbe : MonoBehaviour
     public float ShoulderRotDeg => lastRotDeg;
     public float TwistDeg => lastTwistDeg;
     public float WristDeg => lastWristDeg;
+    public float ForearmRotDeg => lastForeDeg;   // + 회외 · − 회내(시작 자세 기준)
     public string LimitHit => lastLimitHit;
     public float ArmRadius => armRadius;
     public float ShoulderExtensionMax => shoulderExtensionMax;
@@ -296,6 +310,12 @@ public class PatientArmIkProbe : MonoBehaviour
         otherUpper = animator.GetBoneTransform(right ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
         footL = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
         footR = animator.GetBoneTransform(HumanBodyBones.RightFoot);
+        foreTwist1 = FindChildContains(lower, "ForearmTwist01");
+        foreTwist2 = FindChildContains(lower, "ForearmTwist02");
+        if (foreTwist1 != null) foreTwist1Rest = foreTwist1.localRotation;
+        if (foreTwist2 != null) foreTwist2Rest = foreTwist2.localRotation;
+        Debug.Log($"[팔IK] {sideLabel} 아래팔 비틀림 보조 본 — {NameOf(foreTwist1)} · {NameOf(foreTwist2)}");
+
         eyeLBone = animator.GetBoneTransform(HumanBodyBones.LeftEye);
         eyeRBone = animator.GetBoneTransform(HumanBodyBones.RightEye);
         if (applyCollision && (hipsBone == null || neckBone == null || headBone == null || otherUpper == null || footL == null || footR == null || chest == null))
@@ -422,6 +442,26 @@ public class PatientArmIkProbe : MonoBehaviour
                 dors -= Vector3.Dot(dors, foreW) * foreW;
                 dorsalReady = dors.sqrMagnitude > 1e-8f;
                 if (dorsalReady) dorsalInLower = lower.InverseTransformVector(dors.normalized);
+            }
+            // 아래팔 회외 방향 — «Forearm Twist In-Out» 근육을 Out(+1)으로 바꿔 손바닥 가로 방향(검지 → 새끼 뿌리)이 팔꿈치 → 손 축 둘레로 어느 쪽으로 도는지 잰다
+            int iTwist = System.Array.IndexOf(HumanTrait.MuscleName, side + " Forearm Twist In-Out");
+            Transform idx = animator.GetBoneTransform(right ? HumanBodyBones.RightIndexProximal : HumanBodyBones.LeftIndexProximal);
+            Transform lit = animator.GetBoneTransform(right ? HumanBodyBones.RightLittleProximal : HumanBodyBones.LeftLittleProximal);
+            if (iTwist >= 0 && idx != null && lit != null)
+            {
+                pose.muscles = (float[])keep.Clone();
+                pose.muscles[iTwist] = 0f;
+                hph.SetHumanPose(ref pose);
+                Vector3 ax0 = (hand.position - lower.position).normalized;
+                Vector3 a0 = Vector3.ProjectOnPlane(idx.position - lit.position, ax0);
+                pose.muscles[iTwist] = 1f;   // Out
+                hph.SetHumanPose(ref pose);
+                Vector3 ax1 = (hand.position - lower.position).normalized;
+                Vector3 a1 = Vector3.ProjectOnPlane(idx.position - lit.position, ax1);
+                float ang = Vector3.SignedAngle(a0, a1, ax1);   // 월드 — 월드엔 거울이 없다
+                // Unity 근육 «Twist In-Out»의 Out(+) = 회외로 본다(근육 이름 규약 — ★확인은 화면으로: 손바닥이 위를 보면 회외)
+                supWorldSign = Mathf.Abs(ang) > 5f ? Mathf.Sign(ang) : 0f;
+                Debug.Log($"[팔IK] {sideLabel} 아래팔 회외 방향(근육 Forearm Twist Out) — 팔꿈치→손 축 둘레 {ang:+0;-0}° · 부호 {supWorldSign:+0;-0;0}");
             }
             pose.muscles = keep;
             hph.Dispose();
@@ -1063,6 +1103,43 @@ public class PatientArmIkProbe : MonoBehaviour
         float flex = 180f - Vector3.Angle(upper.position - lower.position, hand.position - lower.position);
         float straight = Mathf.InverseLerp(30f, 15f, flex);
         lastTwistDeg = twistDeg;
+
+        // ①-0 아래팔 회내 · 회외 — 손을 비튼 각을 아래팔이 먼저 받는다(★10-22 사용자: «팔을 들고 손을 돌리면 어깨가 아니라 팔꿈치(아래팔)가 돈다»)
+        //   잡은 손 회전을 «팔꿈치 → 손» 축 둘레로 다시 나눠 그만큼(한계 안) 손과 비틀림 보조 본을 돌린다. 넘는 만큼만 아래 ①이 어깨로 넘긴다.
+        float foreWorld = 0f;
+        lastForeDeg = 0f;
+        Vector3 faW = hand.position - lower.position;
+        if (supWorldSign != 0f && faW.sqrMagnitude > 1e-8f)
+        {
+            Vector3 fa = faW.normalized;
+            Vector3 vv = new Vector3(delta.x, delta.y, delta.z);
+            Vector3 pp = Vector3.Dot(vv, fa) * fa;
+            Quaternion tq = new Quaternion(pp.x, pp.y, pp.z, delta.w);
+            float tn = Mathf.Sqrt(tq.x * tq.x + tq.y * tq.y + tq.z * tq.z + tq.w * tq.w);
+            tq = tn > 1e-6f ? new Quaternion(tq.x / tn, tq.y / tn, tq.z / tn, tq.w / tn) : Quaternion.identity;
+            tq.ToAngleAxis(out float foreTwist, out Vector3 foreAxis);
+            if (foreTwist > 180f) foreTwist -= 360f;
+            if (Vector3.Dot(foreAxis, fa) < 0f) foreTwist = -foreTwist;
+
+            float sup = supWorldSign * foreTwist;                                   // + 회외
+            float supCl = Mathf.Clamp(sup, -forearmPronationMax, forearmSupinationMax);
+            if (applyLimits && !Mathf.Approximately(sup, supCl)) AddHit(ref hit, sup > 0f ? "아래팔 회외" : "아래팔 회내");
+            foreWorld = supWorldSign * supCl;                                       // 월드에서 축 둘레로 돌릴 각
+            lastForeDeg = supCl;
+
+            // 손을 팔꿈치 → 손 축 둘레로(벡터로 짓고 S공간에 옮긴다 — 거울 너머로 각 부호를 넘기지 않는다)
+            Vector3 pW0 = Vector3.ProjectOnPlane(Mathf.Abs(fa.y) < 0.9f ? Vector3.up : Vector3.forward, fa).normalized;
+            Vector3 pW1 = Quaternion.AngleAxis(foreWorld, fa) * pW0;
+            Vector3 aS = space.InverseTransformVector(fa).normalized;
+            Quaternion qFore = Quaternion.FromToRotation(Vector3.ProjectOnPlane(space.InverseTransformVector(pW0), aS),
+                                                         Vector3.ProjectOnPlane(space.InverseTransformVector(pW1), aS));
+            RotateInS(hand, qFore);
+            if (foreTwist1 != null) SetFromRest(foreTwist1, foreTwist1Rest, qFore, 0.25f);   // 팔꿈치 쪽 1/4
+            if (foreTwist2 != null) SetFromRest(foreTwist2, foreTwist2Rest, qFore, 0.5f);    // 01의 자식 — 합쳐서 3/4(손목 쪽)
+        }
+        // 어깨로 넘길 몫 = 비튼 각 − 아래팔이 받은 각(펴진 팔에서는 두 축이 거의 같다)
+        twistDeg -= foreWorld;
+
         if (straight > 0f && !float.IsNaN(rotRest))
         {
             float rotNow = MeasureHumeralRot(out Vector3 f, out Vector3 n, out Vector3 m);
@@ -1119,6 +1196,22 @@ public class PatientArmIkProbe : MonoBehaviour
     }
 
     private static string NameOf(Transform t) => t != null ? t.name : "(없음)";
+
+    private static Transform FindChildContains(Transform root, string part)
+    {
+        foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+            if (t != root && t.name.IndexOf(part, System.StringComparison.Ordinal) >= 0) return t;
+        return null;
+    }
+
+    /// <summary>S공간 회전 q의 frac만큼을 rest 로컬 회전에 얹어 bone에 쓴다(애니가 안 쓰는 보조 본 — 매 프레임 rest에서 새로 정하니 쌓이지 않는다).</summary>
+    private void SetFromRest(Transform bone, Quaternion rest, Quaternion q, float frac)
+    {
+        Quaternion qf = Quaternion.Slerp(Quaternion.identity, q, frac);
+        Quaternion r = Quaternion.identity;
+        for (Transform t = bone.parent; t != space; t = t.parent) r = t.localRotation * r;
+        bone.localRotation = (Quaternion.Inverse(r) * qf * r) * rest;
+    }
 
     private void OnDrawGizmos()
     {

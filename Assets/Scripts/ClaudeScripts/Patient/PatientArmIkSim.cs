@@ -89,6 +89,10 @@ public class PatientArmIkSim : MonoBehaviour
         Add("견인 + 비틀기 +80°", 1.5f, 0.8f, tB, "팔 편 채 위팔 회전(외 · 내 중 하나)");
         Add("견인 + 비틀기 −80°", 2f, 0.8f, tC, "반대 회전");
         Add("견인 + 손목 +50°", 1.5f, 0.8f, tD, "손목 꺾임 · 팔 편 채");
+        // 10-22 사용자 지적: 팔을 머리 위로 올리고 손을 돌리면 어깨가 아니라 아래팔이 돈다 — 아래팔 80°까지, 넘는 만큼 어깨
+        Add("머리 위 + 손 비틀기 +60°", 2f, 0.8f, Pose.D(170, 0, 1f, 60), "아래팔만 60° · 어깨 회전 그대로");
+        Add("머리 위 + 손 비틀기 +150°", 1.5f, 0.8f, Pose.D(170, 0, 1f, 150), "아래팔 80°에서 멈춤 · 넘는 70°가 어깨로");
+        Add("머리 위 + 손 비틀기 −60°", 2f, 0.8f, Pose.D(170, 0, 1f, -60), "아래팔 반대로 60°");
         Add("원위치", 2f, 0.5f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로 돌아옴");
     }
 
@@ -259,7 +263,7 @@ public class PatientArmIkSim : MonoBehaviour
         {
             string line = $"[팔IK시뮬] {probe.SideLabel} {phaseIdx:00} {ph.name} | 기대: {ph.expect} | " +
                 $"끝 자세: 어깨 뒤로 {probe.ShoulderBehindDeg:F0}° · 안쪽 {probe.ShoulderMedialDeg:F0}° · 회전 {probe.ShoulderRotDeg:+0;-0}° · 팔꿈치 굴곡 {elbowFlex:F0}° · " +
-                $"손목 {(wristSigned >= 0 ? "배굴" : "장굴")} {Mathf.Abs(wristSigned):F0}° | " +
+                $"손목 {(wristSigned >= 0 ? "배굴" : "장굴")} {Mathf.Abs(wristSigned):F0}° · 아래팔 {(probe.ForearmRotDeg >= 0 ? "회외" : "회내")} {Mathf.Abs(probe.ForearmRotDeg):F0}° | " +
                 $"손-목표 최대 {mHandTarget:F0}mm · 관통 최대 {mPen * 1000f:F0}mm{(mPen > 0f ? "(" + mPenWhere + ")" : "")} {nPen}프레임 · " +
                 $"팔꿈치 반대 꺾임 {nWrong} · 옆 꺾임 {nSideways}프레임(경첩 벗어남 최대 {mWrongElbow:F0}°) · " +
                 $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 한계 넘음 {nOver}프레임{(nOver > 0 ? "(" + overWhat + ")" : "")} · 최대 팔꿈치 {mElbowFlex:F0}° · 신전 {mBehind:F0}° · 내전 {mMedial:F0}° · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
