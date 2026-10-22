@@ -10,22 +10,43 @@ public static class PatientArmIkProbeMenu
     private const string MenuLeft = "GuideChuna/시험/환자 팔 IK 0단계 (왼팔 · Play 중)";
 
     [MenuItem(MenuRight)]
-    private static void AttachRight() => Attach(PatientArmIkProbe.ArmSide.Right);
+    private static void AttachRight() => Attach(PatientArmIkProbe.ArmSide.Right);   // 돌려받는 값은 버린다
 
     [MenuItem(MenuLeft)]
     private static void AttachLeft() => Attach(PatientArmIkProbe.ArmSide.Left);
 
+    // 10-22: 목표 구를 정해진 경로로 자동으로 움직이며 잰다(PatientArmIkSim) — 에이전트 브리지 «menu»로도 부른다
+    private const string SimRight = "GuideChuna/시험/환자 팔 IK 시뮬레이션 (오른팔 · Play 중)";
+    private const string SimLeft = "GuideChuna/시험/환자 팔 IK 시뮬레이션 (왼팔 · Play 중)";
+
+    [MenuItem(SimRight)]
+    private static void SimulateRight() => Simulate(PatientArmIkProbe.ArmSide.Right);
+
+    [MenuItem(SimLeft)]
+    private static void SimulateLeft() => Simulate(PatientArmIkProbe.ArmSide.Left);
+
     [MenuItem(MenuRight, true)]
     [MenuItem(MenuLeft, true)]
+    [MenuItem(SimRight, true)]
+    [MenuItem(SimLeft, true)]
     private static bool Validate() => EditorApplication.isPlaying;
 
-    private static void Attach(PatientArmIkProbe.ArmSide side)
+    private static void Simulate(PatientArmIkProbe.ArmSide side)
+    {
+        PatientArmIkProbe probe = Attach(side);
+        if (probe == null) return;
+        PatientArmIkSim sim = probe.gameObject.AddComponent<PatientArmIkSim>();
+        sim.Init(probe);
+        Debug.Log($"[팔IK시뮬] {probe.gameObject.name}에 붙였다 — side={side}. 끝나면 «[팔IK시뮬] … 끝» 로그가 찍힌다.");
+    }
+
+    private static PatientArmIkProbe Attach(PatientArmIkProbe.ArmSide side)
     {
         Animator patient = FindPatient();
         if (patient == null)
         {
             Debug.LogWarning("[팔IK] 환자 Animator를 못 찾았다 — 이름 c9이거나 팔 본이 CC_Base_로 시작하는 Humanoid가 없다.");
-            return;
+            return null;
         }
 
         // 같은 쪽 팔에 이미 붙어 있으면 새로 붙이지 않고 선택만 한다(두 개가 같은 뼈를 돌리면 결과가 겹친다).
@@ -35,7 +56,7 @@ public static class PatientArmIkProbeMenu
             {
                 Debug.Log($"[팔IK] 이미 붙어 있다 — {patient.name} side={side}. 선택만 한다.");
                 Selection.activeObject = existing;
-                return;
+                return existing;
             }
         }
 
@@ -43,6 +64,7 @@ public static class PatientArmIkProbeMenu
         probe.Side = side; // Start 전이라 여기서 정한다
         Debug.Log($"[팔IK] {patient.name}에 런타임으로 붙였다 — side={side}. 목표 구 «[팔IK] 목표»를 씬 뷰에서 끌어 본다. (Play를 멈추면 사라진다)");
         Selection.activeGameObject = patient.gameObject;
+        return probe;
     }
 
     /// <summary>이름이 c9인 Humanoid를 먼저, 없으면 팔 본이 CC_Base_로 시작하는 Humanoid를 찾는다.</summary>
