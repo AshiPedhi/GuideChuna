@@ -314,6 +314,11 @@ public class RomLineSession : MonoBehaviour
     {
         EnablePassthrough();
 
+        // ★10-22 사용자 지시: 관제 화면의 영상 녹화 파일 이름에 사용자명을 넣는다 — 결과 기록(TrainingResultTracker)과 같은 출처(PlayerPrefs)
+        var login = new LoginStateStore().LoadLoginInfo();
+        monitorUser = login.hasData && !string.IsNullOrEmpty(login.username) ? login.username : "";
+        Debug.Log($"[선실측] 관제 녹화 사용자명 — {(monitorUser.Length > 0 ? monitorUser : "없음(파일 이름에서 뺀다)")}");
+
         var rig = FindAnyObjectByType<OVRCameraRig>();
         if (rig != null) trackingSpace = rig.trackingSpace;
 
@@ -1579,6 +1584,7 @@ public class RomLineSession : MonoBehaviour
     }
 
     private const string MonitorTitle = "경추ROM진단";   // 관제 화면 타이틀 — 이 씬이 돌리는 실습
+    private string monitorUser = "";                     // 관제 화면 녹화 파일 이름의 사용자명(10-22) — 기기에 남은 로그인 정보(LoginStateStore), 없으면 빈 글자
 
     private void PumpMonitor()
     {
@@ -1593,6 +1599,8 @@ public class RomLineSession : MonoBehaviour
           .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false")
           // 10-21 관제 화면 아래 줄: 실행 중인 실습 이름(타이틀) · 좌우 컨트롤러 연결 · 찍는 쪽
           .Append(",\"title\":\"").Append(MonitorTitle).Append('"')
+          .Append(",\"user\":"); JsonStr(js, monitorUser);   // 10-22: 녹화 파일 이름(실습명_사용자명_날짜) — 없으면 브라우저가 뺀다
+        js
           .Append(",\"ctrlL\":").Append(OVRInput.IsControllerConnected(OVRInput.Controller.LTouch) ? "true" : "false")
           .Append(",\"ctrlR\":").Append(OVRInput.IsControllerConnected(OVRInput.Controller.RTouch) ? "true" : "false")
           .Append(",\"active\":\"").Append(UsingLeft ? 'L' : 'R').Append('"')

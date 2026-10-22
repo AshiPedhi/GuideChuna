@@ -28,7 +28,7 @@
   /* 본문 — 크기는 layout()이 잡는다(묶음 높이 = 영상 칸 높이) */
   #stage { flex:1; min-height:0; display:flex; justify-content:center; align-items:flex-start; }
   #grp { display:flex; gap:14px; height:100%; }
-  #left { width:420px; flex:none; display:flex; flex-direction:column; gap:12px; min-height:0; }
+  #left { width:420px; flex:none; /* 넓은 창에서는 layout()이 남는 폭을 다 준다(10-22) */ display:flex; flex-direction:column; gap:12px; min-height:0; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:12px; min-height:0; }
 
   /* 컨트롤러UI — 탭 줄(칸 바탕 · 지금 탭 = 파란 칸 + 노란 글자 · 다 잰 탭 = 초록 글자) + 반투명 테두리 안내 */
@@ -86,6 +86,9 @@
   #sent { font-size:12px; color:var(--dim); }
   select, button.b { background:#1d242e; color:var(--text); border:1px solid #34404f; border-radius:8px; padding:8px 12px; font-size:14px; font-family:inherit; cursor:pointer; white-space:nowrap; }
   button:active { transform:translateY(1px); }
+  button.b.recOn { background:#7a1d1d; border-color:#ff6b6b; color:#fff; font-weight:700; }
+  button.b.recOn::before { content:""; display:inline-block; width:9px; height:9px; border-radius:50%; background:#ff6b6b; margin-right:7px; vertical-align:middle; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
 
   /* 모바일(좁은 화면) — 한 줄로 쌓는다. 순서 = 컨트롤러UI → 미러링 → 기록 → 아래 줄 */
   @media (max-width: 900px) {
@@ -93,7 +96,7 @@
     body { padding:8px 10px 12px; }
     header img { height:28px; }
     header h1 { font-size:20px; }
-    #stage, #grp, #left { display:contents; }
+    #stage, #grp, #left { display:contents; width:auto !important; }
     body > * { flex:none; }
     #ctrl { order:1; flex:none; } #result { order:2; flex:none; } #mirror { order:3; }   /* 10-21: 컨트롤러UI · 기록은 묶음 — 영상은 그 아래 */
     #mirror { width:100% !important; height:auto !important; aspect-ratio:4 / 3; }
@@ -136,11 +139,12 @@
     <svg width="0" height="0" style="position:absolute"><symbol id="touchPlus" viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M11 8 Q11 3 17 3 L26 3 Q32 3 31 9 L30 15 Q29 20 24 20 L16 20 Q11 20 11 15 Z"/><path d="M15 20 L13 35 Q13 38.5 16.5 37.5 L22 20"/>
       <circle cx="18" cy="10" r="3.4"/><circle cx="25.5" cy="8.5" r="1.4" fill="currentColor"/><circle cx="24.5" cy="14" r="1.4" fill="currentColor"/></g></symbol></svg>
-    <div class="ctl" id="cL"><svg viewBox="0 0 40 40"><use href="#touchPlus"/></svg><span><b>L</b></span></div>
-    <div class="ctl" id="cR"><svg viewBox="0 0 40 40"><g transform="translate(40 0) scale(-1 1)"><use href="#touchPlus"/></g></svg><span><b>R</b></span></div>
+    <!-- 10-22 사용자 지시: L · R 글자를 뺐다 — 왼쪽 아이콘 = 왼손, 좌우 뒤집은 아이콘 = 오른손 -->
+    <div class="ctl" id="cL" title="왼쪽 컨트롤러"><svg viewBox="0 0 40 40"><use href="#touchPlus"/></svg></div>
+    <div class="ctl" id="cR" title="오른쪽 컨트롤러"><svg viewBox="0 0 40 40"><g transform="translate(40 0) scale(-1 1)"><use href="#touchPlus"/></g></svg></div>
     <div id="hmd" title="헤드셋 배터리">
       <svg viewBox="0 0 34 18"><rect x="1" y="1" width="28" height="16" rx="3" fill="none" stroke="#b8c2d1" stroke-width="2"/><rect x="30" y="6" width="3" height="6" rx="1" fill="#b8c2d1"/><rect id="bFill" x="4" y="4" width="0" height="10" rx="1" fill="#55606e"/></svg>
-      <span>헤드셋 <b id="batt">—</b></span>
+      <span><b id="batt">—</b></span>   <!-- 10-22: «헤드셋» 글자를 뺐다 — 아이콘 + 퍼센트 -->
     </div>
   </div>
   <div id="info">
@@ -153,7 +157,8 @@
   <div id="tools">
     <span id="sent"></span>
     <select id="res" title="미러링 해상도"></select>
-    <button class="b" onclick="location.href='/csv'">CSV 받기</button>
+    <button class="b" id="rec" title="미러링 영상을 이 PC에 녹화한다 — 한 번 더 누르면 저장">영상 녹화</button>
+    <button class="b" onclick="location.href='/csv'">측정값 저장</button>   <!-- 10-22: «CSV 받기» → «측정값 저장» -->
   </div>
 </footer>
 
@@ -182,17 +187,23 @@ const cells = MOTIONS.map(n => {
 });
 
 // ── 크기 — 영상 칸 = 영상 비율 + 고정 여백. 높이를 먼저 채우고, 폭이 모자라면 폭에 맞춘다. 왼쪽 묶음 높이는 영상 칸과 같다 ──
+//   ★10-22 사용자 지시: 창을 최대로 키우면 좌우 여백 · 스크롤이 없어야 한다 → 영상이 높이를 채우고 남는 폭은 왼쪽 묶음이 다 쓴다(최소 LEFT_MIN).
+//   종전(10-21)에는 왼쪽이 420px 고정이라 넓은 창에서 묶음 양옆이 비었다(2000px 창에서 좌우 약 245px씩).
+const LEFT_MIN = 420;
 const stage = $('stage'), grp = $('grp'), mir = $('mirror'), img = $('iCam'), left = $('left');
 let aspect = 4 / 3;
 function layout() {
-  if (window.matchMedia('(max-width: 900px)').matches) { grp.style.height = mir.style.width = mir.style.height = ''; return; }
+  if (window.matchMedia('(max-width: 900px)').matches) { grp.style.height = grp.style.width = mir.style.width = mir.style.height = left.style.width = ''; return; }
   mir.style.setProperty('--pad', PAD + 'px');
-  const W = stage.clientWidth, H = stage.clientHeight, L = left.offsetWidth;
+  const W = stage.clientWidth, H = stage.clientHeight;
   let h = H - 2 * PAD, w = h * aspect;
-  if (L + GAP + w + 2 * PAD > W) { w = Math.max(0, W - L - GAP - 2 * PAD); h = w / aspect; }
+  if (LEFT_MIN + GAP + w + 2 * PAD > W) { w = Math.max(0, W - LEFT_MIN - GAP - 2 * PAD); h = w / aspect; }
+  const L = Math.max(LEFT_MIN, W - GAP - (w + 2 * PAD));
+  left.style.width = L + 'px';
   mir.style.width = (w + 2 * PAD) + 'px';
   mir.style.height = (h + 2 * PAD) + 'px';
   grp.style.height = (h + 2 * PAD) + 'px';
+  grp.style.width = W + 'px';
 }
 window.addEventListener('resize', layout);
 layout();
@@ -223,6 +234,7 @@ function poll() {
     $('connBox').style.display = 'none';
     $('track').textContent = s.calib ? '보정 중' : (s.tracked ? '추적 중' : '★놓침');
     if (s.title && $('title').textContent !== s.title) { $('title').textContent = s.title; document.title = s.title; }
+    recUser = typeof s.user === 'string' ? s.user : '';
     // 컨트롤러 좌우 — 연결되면 초록 테두리(글자는 L · R만 · 10-21)
     $('cL').classList.toggle('on', !!s.ctrlL);
     $('cR').classList.toggle('on', !!s.ctrlR);
@@ -375,6 +387,56 @@ setInterval(() => {
   got = 0; gotMs = 0;
 }, 1000);
 mir.onclick = () => mir.classList.toggle('big');
+
+// ── 영상 녹화(10-22 사용자 지시) — 이 PC(브라우저 다운로드 폴더)에 저장한다. 헤드셋은 하는 일이 없다(배터리 · 발열 그대로).
+//   미러링 칸에 보이는 그대로(영상 · 사진 어느 방식이든)를 캔버스에 15장/s로 옮겨 MediaRecorder로 담는다 — 영상 방식이 사진으로 바뀌어도 이어진다.
+//   [영상 녹화] → [녹화중](빨강) → 한 번 더 누르면 끝내고 저장. 파일 이름 = 실습명_사용자명(없으면 뺌)_날짜_시각.
+const recBtn = $('rec');
+let rec = null, recChunks = [], recCanvas = null, recCtx = null, recTimer = 0, recUser = '', recStart = null, recType = '';
+function recSrc() {
+  if (vid.style.display !== 'none' && vid.videoWidth > 0) return { el: vid, w: vid.videoWidth, h: vid.videoHeight };
+  if (img.naturalWidth > 0) return { el: img, w: img.naturalWidth, h: img.naturalHeight };
+  return null;
+}
+function recName(ext) {
+  const d = recStart, p = n => String(n).padStart(2, '0');
+  const parts = [$('title').textContent || '미러링'];
+  if (recUser) parts.push(recUser);
+  parts.push(d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()));
+  return parts.map(x => x.replace(/[\\/:*?"<>|\s]+/g, '')).join('_') + '.' + ext;
+}
+function recBegin() {
+  const src = recSrc();
+  if (!src) { $('sent').textContent = '★녹화 못 함 — 미러링 영상이 아직 없다'; return; }
+  if (!window.MediaRecorder) { $('sent').textContent = '★녹화 못 함 — 이 브라우저는 녹화를 지원하지 않는다'; return; }
+  recCanvas = document.createElement('canvas');
+  recCanvas.width = src.w; recCanvas.height = src.h;   // 시작 때 크기로 고정 — 도중에 해상도를 바꾸면 그 크기로 늘여 그린다
+  recCtx = recCanvas.getContext('2d');
+  recType = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  rec = new MediaRecorder(recCanvas.captureStream(15), recType ? { mimeType: recType, videoBitsPerSecond: 4000000 } : { videoBitsPerSecond: 4000000 });
+  recChunks = [];
+  rec.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+  rec.onstop = recSave;
+  recStart = new Date();
+  recTimer = setInterval(() => { const s = recSrc(); if (s) recCtx.drawImage(s.el, 0, 0, recCanvas.width, recCanvas.height); }, 1000 / 15);
+  rec.start(1000);   // 1초마다 조각을 받아 둔다(끝에 한 번에 받으면 긴 녹화에서 멈칫한다)
+  recBtn.textContent = '녹화중'; recBtn.classList.add('recOn');
+  console.log('[관제] 녹화 시작 —', recType || '(기본 형식)', recCanvas.width + '×' + recCanvas.height);
+}
+function recSave() {
+  clearInterval(recTimer);
+  const ext = recType.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+  const blob = new Blob(recChunks, { type: recType || 'video/webm' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = recName(ext);
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  $('sent').textContent = '저장: ' + a.download + ' (' + (blob.size / 1048576).toFixed(1) + ' MB)';
+  console.log('[관제] 녹화 저장 —', a.download, blob.size, 'bytes');
+  rec = null; recChunks = []; recCanvas = recCtx = null;
+  recBtn.textContent = '영상 녹화'; recBtn.classList.remove('recOn');
+}
+recBtn.onclick = () => { if (rec) rec.stop(); else recBegin(); };
 
 // 헤드셋 배터리(10-21) — 구간 색은 헤드셋 RomLineView.BatteryBand와 같다: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강
 function batt(m) {
