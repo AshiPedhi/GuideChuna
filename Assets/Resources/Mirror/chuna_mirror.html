@@ -87,6 +87,10 @@
   select, button.b { background:#1d242e; color:var(--text); border:1px solid #34404f; border-radius:8px; padding:8px 12px; font-size:14px; font-family:inherit; cursor:pointer; white-space:nowrap; }
   button:active { transform:translateY(1px); }
 
+  /* ★10-22 사용자 지시: 추나 실습 관제는 컨트롤러UI(단계 · 지시문) · 결과UI(판정) 없이 미러링 영상만 — 위 줄(로고 · 타이틀)만 남긴다.
+     왼쪽 묶음과 아래 줄은 숨기기만 한다(값 갱신 코드는 그대로 돈다 — 되살리려면 이 두 줄만 지운다). ROM 관제(RomLine/mirror.html)는 그대로다. */
+  #left, footer { display:none !important; }
+
   /* 모바일(좁은 화면) — 한 줄로 쌓는다. 순서 = 단계 → 판정 → 미러링 → 아래 줄 */
   @media (max-width: 900px) {
     html, body { height:auto; }
@@ -186,7 +190,8 @@ function layout() {
   mir.style.setProperty('--pad', PAD + 'px');
   const W = stage.clientWidth, H = stage.clientHeight, L = left.offsetWidth;
   let h = H - 2 * PAD, w = h * aspect;
-  if (L + GAP + w + 2 * PAD > W) { w = Math.max(0, W - L - GAP - 2 * PAD); h = w / aspect; }
+  const gap = L > 0 ? GAP : 0;   // 10-22: 왼쪽 묶음을 숨기면 사이 간격도 없다 — 영상이 창을 채운다
+  if (L + gap + w + 2 * PAD > W) { w = Math.max(0, W - L - gap - 2 * PAD); h = w / aspect; }
   mir.style.width = (w + 2 * PAD) + 'px';
   mir.style.height = (h + 2 * PAD) + 'px';
   grp.style.height = (h + 2 * PAD) + 'px';
