@@ -75,7 +75,7 @@
   .ctl.on { color:var(--ok); }
   .ctl.on svg { filter:drop-shadow(0 0 4px rgba(60,207,122,0.85)); }
   .ctl b { font-weight:700; font-size:13px; }
-  #hmd { display:flex; align-items:center; gap:7px; margin-left:6px; font-size:14px; color:var(--dim); }
+  #hmd { display:flex; align-items:center; gap:7px; margin-right:6px; font-size:14px; color:var(--dim); }
   #hmd svg { width:34px; height:18px; display:block; }
   #hmd b { color:var(--text); font-weight:600; }
   #info { display:flex; flex-wrap:wrap; justify-content:center; gap:3px 16px; font-size:13px; color:var(--dim); text-align:center; }
@@ -139,13 +139,13 @@
     <svg width="0" height="0" style="position:absolute"><symbol id="touchPlus" viewBox="0 0 40 40"><g fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M11 8 Q11 3 17 3 L26 3 Q32 3 31 9 L30 15 Q29 20 24 20 L16 20 Q11 20 11 15 Z"/><path d="M15 20 L13 35 Q13 38.5 16.5 37.5 L22 20"/>
       <circle cx="18" cy="10" r="3.4"/><circle cx="25.5" cy="8.5" r="1.4" fill="currentColor"/><circle cx="24.5" cy="14" r="1.4" fill="currentColor"/></g></symbol></svg>
-    <!-- 10-22 사용자 지시: L · R 글자를 뺐다 — 왼쪽 아이콘 = 왼손, 좌우 뒤집은 아이콘 = 오른손 -->
-    <div class="ctl" id="cL" title="왼쪽 컨트롤러"><svg viewBox="0 0 40 40"><use href="#touchPlus"/></svg></div>
-    <div class="ctl" id="cR" title="오른쪽 컨트롤러"><svg viewBox="0 0 40 40"><g transform="translate(40 0) scale(-1 1)"><use href="#touchPlus"/></g></svg></div>
-    <div id="hmd" title="헤드셋 배터리">
+    <div id="hmd" title="헤드셋 배터리">   <!-- 10-22 사용자 지시: 순서 = 배터리 → 컨트롤러 좌 · 우 -->
       <svg viewBox="0 0 34 18"><rect x="1" y="1" width="28" height="16" rx="3" fill="none" stroke="#b8c2d1" stroke-width="2"/><rect x="30" y="6" width="3" height="6" rx="1" fill="#b8c2d1"/><rect id="bFill" x="4" y="4" width="0" height="10" rx="1" fill="#55606e"/></svg>
       <span><b id="batt">—</b></span>   <!-- 10-22: «헤드셋» 글자를 뺐다 — 아이콘 + 퍼센트 -->
     </div>
+    <!-- 10-22 사용자 지시: L · R 글자를 뺐다 — 왼쪽 아이콘 = 왼손, 좌우 뒤집은 아이콘 = 오른손 -->
+    <div class="ctl" id="cL" title="왼쪽 컨트롤러"><svg viewBox="0 0 40 40"><use href="#touchPlus"/></svg></div>
+    <div class="ctl" id="cR" title="오른쪽 컨트롤러"><svg viewBox="0 0 40 40"><g transform="translate(40 0) scale(-1 1)"><use href="#touchPlus"/></g></svg></div>
   </div>
   <div id="info">
     <span id="connBox"><b id="conn" style="color:var(--bad)">연결하는 중…</b></span>   <!-- 10-21: 연결됨 · 착용은 뺐다 — 끊겼을 때만 보인다 -->
