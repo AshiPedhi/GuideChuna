@@ -153,6 +153,8 @@ public static partial class ChunaAgentBridge
         if (string.IsNullOrEmpty(path)) path = EditorUserBuildSettings.GetBuildLocation(BuildTarget.Android);
         if (string.IsNullOrEmpty(path)) { err = "마지막 빌드 경로가 없다 — 에디터에서 한 번 Build 해 경로를 정한다."; return false; }
 
+        // --dev=0|1 — Development Build를 정해 두고 빌드한다(10-22: 스토어 RC는 끈다). 안 주면 지금 값 그대로.
+        if (a.TryGetValue("dev", out var devText) && devText.Length > 0) EditorUserBuildSettings.development = devText == "1";
         var opt = BuildOptions.AutoRunPlayer;
         if (EditorUserBuildSettings.development) opt |= BuildOptions.Development;
         try { File.Delete(BuildResultPath); } catch (Exception) { }
