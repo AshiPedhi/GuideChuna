@@ -60,6 +60,33 @@ public class PatientArmIkProbe : MonoBehaviour
     [Tooltip("위팔을 제 축으로 비틀어 팔꿈치 굽힘면을 힌트 쪽에 맞춘다. 끄면 아래팔이 경첩이 아닌 방향으로도 꺾일 수 있다.")]
     [SerializeField] private bool alignElbowTwist = true;
 
+    // ── 관절 한계(10-22 사용자 지시: «사람 실제 관절 부위별 한계» — 팔이 너무 뒤까지 돌아간다) ──
+    //   값 = 교과서 정상 관절가동범위(AAOS). 어깨 굴곡·외전 180°는 구(球) 전체라 따로 자르지 않는다.
+    //   방향(앞·위·바깥)은 본 이름이 아니라 뼈 위치로 잰다 — c8 음수 스케일 때문(CLAUDE.md 규칙 9). 기즈모 화살표로 확인한다.
+    [Header("관절 한계 (AAOS 정상 가동범위)")]
+    [Tooltip("관절 한계를 건다. 끄면 0단계처럼 손을 목표에 붙이기만 한다.")]
+    [SerializeField] private bool applyLimits = true;
+
+    [Tooltip("어깨 신전 — 위팔이 몸 관상면(앞뒤를 가르는 면) 뒤로 갈 수 있는 최대 각(°). 정상 50.")]
+    [Range(0f, 90f)]
+    [SerializeField] private float shoulderExtensionMax = 50f;
+
+    [Tooltip("어깨 내전 — 위팔이 어깨를 지나는 시상면(좌우를 가르는 면)을 넘어 몸 안쪽으로 갈 수 있는 최대 각(°). 정상 30.")]
+    [Range(0f, 90f)]
+    [SerializeField] private float shoulderAdductionMax = 30f;
+
+    [Tooltip("어깨 내회전(위팔 비틀기, 아래팔이 배 쪽으로) 최대 각(°). 정상 70.")]
+    [Range(0f, 120f)]
+    [SerializeField] private float shoulderInternalRotMax = 70f;
+
+    [Tooltip("어깨 외회전(위팔 비틀기, 아래팔이 바깥으로) 최대 각(°). 정상 90.")]
+    [Range(0f, 120f)]
+    [SerializeField] private float shoulderExternalRotMax = 90f;
+
+    [Tooltip("팔꿈치 굴곡 최대 각(°). 정상 145. 과신전(뒤로 꺾임)은 늘 0이다.")]
+    [Range(0f, 170f)]
+    [SerializeField] private float elbowFlexionMax = 145f;
+
     [Tooltip("자동으로 만드는 구의 지름(m).")]
     [SerializeField] private float handleSize = 0.05f;
 
@@ -73,7 +100,15 @@ public class PatientArmIkProbe : MonoBehaviour
 
     // 로그·기즈모용 마지막 값(매 프레임 float만 갱신한다 — 문자열은 로그 시점에만 만든다)
     private float lastTargetDistance, lastReach, lastElbowAngle;
-    private float lastHandErrMm;   // 풀고 난 뒤 실제 손 ↔ 풀이가 노린 손 자리(월드 mm). 맞게 돌면 0에 가깝다(10-22 실측 로그)
+    private float lastHandErrMm;
+
+    // 몸 기준 축 — 시작 때 뼈 위치로 재서 가슴 본 로컬(행렬 기준, 거울 포함)에 담아 두고 매 프레임 다시 꺼낸다
+    private Transform chest;
+    private Vector3 frontInChest, upInChest, lateralInChest;
+    private bool frameReady;
+    // 로그용 마지막 관절 각과 걸린 한계
+    private float lastBehindDeg, lastMedialDeg, lastElbowFlexDeg, lastRotDeg;
+    private string lastLimitHit = "";   // 걸린 한계가 바뀔 때만 새 문자열(매 프레임 할당 없음)   // 풀고 난 뒤 실제 손 ↔ 풀이가 노린 손 자리(월드 mm). 맞게 돌면 0에 가깝다(10-22 실측 로그)
     private bool lastReachable;
 
     /// <summary>메뉴가 AddComponent 직후(Start 전에) 팔을 고를 때 쓴다.</summary>
@@ -115,6 +150,8 @@ public class PatientArmIkProbe : MonoBehaviour
             }
         }
 
+        frameReady = MeasureBodyFrame(right);
+
         if (target == null) target = MakeHandle("[팔IK] 목표", hand.position, new Color(1f, 0.25f, 0.2f));
         if (hint == null) hint = MakeHandle("[팔IK] 힌트(팔꿈치)", DefaultHintPosition(), new Color(0.25f, 0.5f, 1f));
 
@@ -133,6 +170,64 @@ public class PatientArmIkProbe : MonoBehaviour
 
         ready = true;
         nextLogTime = Time.unscaledTime + logInterval;
+    }
+
+    /// <summary>
+    /// 몸 기준 축을 뼈 «위치»로 잰다(본 이름 · 본 축을 믿지 않는다 — c8 음수 스케일, measure-dont-guess-signs).
+    ///   위   = 엉덩이 → 목
+    ///   앞   = 머리 본 → 두 눈 중점 (위 성분을 뺀다)
+    ///   바깥 = 반대쪽 위팔 → 이쪽 위팔 (위 · 앞 성분을 뺀다)
+    /// 외적으로 서로 엮지 않는다(CLAUDE.md 규칙 9) — 셋 다 따로 잰다.
+    /// 가슴 본에 «행렬 기준»(InverseTransformVector)으로 붙여 두어 몸통이 돌면 같이 돈다.
+    /// </summary>
+    private bool MeasureBodyFrame(bool right)
+    {
+        Transform hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+        Transform neck = animator.GetBoneTransform(HumanBodyBones.Neck);
+        Transform head = animator.GetBoneTransform(HumanBodyBones.Head);
+        Transform eyeL = animator.GetBoneTransform(HumanBodyBones.LeftEye);
+        Transform eyeR = animator.GetBoneTransform(HumanBodyBones.RightEye);
+        Transform other = animator.GetBoneTransform(right ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
+        chest = animator.GetBoneTransform(HumanBodyBones.UpperChest);
+        if (chest == null) chest = animator.GetBoneTransform(HumanBodyBones.Chest);
+        if (chest == null) chest = animator.GetBoneTransform(HumanBodyBones.Spine);
+        if (neck == null) neck = head;
+
+        if (hips == null || neck == null || head == null || eyeL == null || eyeR == null || other == null || chest == null)
+        {
+            Debug.LogWarning($"[팔IK] 몸 기준 축을 잴 본이 없다 — 관절 한계를 끈다. hips={NameOf(hips)} neck={NameOf(neck)} head={NameOf(head)} " +
+                             $"eyeL={NameOf(eyeL)} eyeR={NameOf(eyeR)} 반대 위팔={NameOf(other)} 가슴={NameOf(chest)}");
+            return false;
+        }
+
+        Vector3 up = (neck.position - hips.position).normalized;
+        Vector3 front = Vector3.ProjectOnPlane((eyeL.position + eyeR.position) * 0.5f - head.position, up).normalized;
+        Vector3 lateral = upper.position - other.position;
+        lateral = (lateral - Vector3.Dot(lateral, up) * up - Vector3.Dot(lateral, front) * front).normalized;
+        if (up.sqrMagnitude < 0.5f || front.sqrMagnitude < 0.5f || lateral.sqrMagnitude < 0.5f)
+        {
+            Debug.LogWarning("[팔IK] 몸 기준 축 길이가 0이다 — 관절 한계를 끈다.");
+            return false;
+        }
+
+        upInChest = chest.InverseTransformVector(up);
+        frontInChest = chest.InverseTransformVector(front);
+        lateralInChest = chest.InverseTransformVector(lateral);
+        Debug.Log($"[팔IK] 몸 기준 축(월드) — 앞 {front:F2} · 위 {up:F2} · 바깥 {lateral:F2} · 가슴 본={chest.name} · " +
+                  $"재는 본: 엉덩이 {hips.name} · 목 {neck.name} · 머리 {head.name} · 눈 {eyeL.name}/{eyeR.name} · 반대 위팔 {other.name}. " +
+                  "기즈모 화살표(초록 = 앞 · 파랑 = 위 · 주황 = 바깥)가 환자 몸과 맞는지 눈으로 확인할 것");
+        return true;
+    }
+
+    /// <summary>방향 v의 k 성분이 maxDot을 넘으면 k 성분을 maxDot으로 줄이고 나머지 방향은 그대로 둔다(단위 벡터 유지).</summary>
+    private static bool ClampAlong(ref Vector3 v, Vector3 k, float maxDot, Vector3 fallbackPerp)
+    {
+        float dot = Vector3.Dot(v, k);
+        if (dot <= maxDot) return false;
+        Vector3 perp = v - dot * k;
+        if (perp.sqrMagnitude < 1e-10f) perp = fallbackPerp - Vector3.Dot(fallbackPerp, k) * k;
+        v = perp.normalized * Mathf.Sqrt(Mathf.Max(0f, 1f - maxDot * maxDot)) + k * maxDot;
+        return true;
     }
 
     private Transform MakeHandle(string handleName, Vector3 worldPos, Color color)
@@ -171,6 +266,11 @@ public class PatientArmIkProbe : MonoBehaviour
             Debug.LogFormat("[팔IK] 목표 거리 {0:F3}m / 닿는 거리 {1:F3}m ({2}) · 팔꿈치 각 {3:F1}° · 손 오차 {5:F1}mm · weight {4:F2}",
                 lastTargetDistance, lastReach, lastReachable ? "닿음" : "못 닿음 — 뻗어서 가리킴",
                 lastElbowAngle, weight, lastHandErrMm);
+            if (applyLimits && frameReady)
+                Debug.LogFormat("[팔IK] 관절 — 어깨 뒤로 {0:F0}°/{4:F0} · 안쪽 {1:F0}°/{5:F0} · 회전 {2:+0;-0}°(+내 {6:F0} / −외 {7:F0}) · 팔꿈치 굴곡 {3:F0}°/{8:F0} · 걸린 한계: {9}",
+                    lastBehindDeg, lastMedialDeg, lastRotDeg, lastElbowFlexDeg,
+                    shoulderExtensionMax, shoulderAdductionMax, shoulderInternalRotMax, shoulderExternalRotMax, elbowFlexionMax,
+                    lastLimitHit.Length > 0 ? lastLimitHit : "없음");
         }
     }
 
@@ -190,6 +290,12 @@ public class PatientArmIkProbe : MonoBehaviour
         float dist = at.magnitude;
         float maxReach = (l1 + l2) * 0.999f;              // 완전히 펴면 acos가 NaN 경계라 살짝 덜 편다
         float minReach = Mathf.Abs(l1 - l2) * 1.001f + 1e-4f;
+        if (applyLimits)
+        {
+            // 팔꿈치 굴곡 한계 → 어깨-손 최소 거리(코사인 법칙). 안쪽 각 = 180 − 굴곡
+            float inner = (180f - elbowFlexionMax) * Mathf.Deg2Rad;
+            minReach = Mathf.Max(minReach, Mathf.Sqrt(l1 * l1 + l2 * l2 - 2f * l1 * l2 * Mathf.Cos(inner)));
+        }
         float d = Mathf.Clamp(dist, minReach, maxReach);
         Vector3 dir = dist > 1e-5f ? at / dist : (c - a).normalized;
 
@@ -212,6 +318,8 @@ public class PatientArmIkProbe : MonoBehaviour
         float sinA = Mathf.Sqrt(1f - cosA * cosA);
         Vector3 elbowGoal = a + dir * (l1 * cosA) + pole * (l1 * sinA);
         Vector3 handGoal = a + dir * d;                   // 못 닿으면 목표 방향으로 뻗은 끝
+
+        if (applyLimits && frameReady) ApplyJointLimits(a, l1, l2, t, ref elbowGoal, ref handGoal);
 
         // ① 위팔: 팔꿈치를 elbowGoal로
         Quaternion q1 = Quaternion.FromToRotation(b - a, elbowGoal - a);
@@ -251,6 +359,78 @@ public class PatientArmIkProbe : MonoBehaviour
     }
 
     /// <summary>
+    /// 팔꿈치 · 손 목표 자리를 관절 한계 안으로 옮긴다(S공간). 전부 내적만 쓴다 — S공간은 월드에 대해 거울일 수 있어
+    /// 외적 · SignedAngle의 부호가 뒤집히기 때문이다(내적은 거울에서도 그대로다).
+    ///   ① 위팔 방향: 관상면 뒤로 ≤ 신전 한계, 시상면 안쪽으로 ≤ 내전 한계
+    ///   ② 아래팔 방향: 위팔에 대한 굴곡 ≤ 팔꿈치 한계(과신전 없음은 2관절 풀이가 이미 보장)
+    ///   ③ 위팔 회전(비틀기): 팔을 내린 자세에서 아래팔이 앞을 볼 때를 0으로, 같은 최소 회전으로 옮긴 «앞» · «안쪽»에 대해
+    ///      아래팔이 얼마나 안쪽(+내회전) · 바깥(−외회전)으로 돌았는지 → 한계로 자른다
+    /// 한계에 걸리면 손은 목표에서 떨어진다(가장 가까운 허용 자세). 위팔을 잘랐으면 아래팔은 목표 쪽을 다시 겨눈다.
+    /// </summary>
+    private void ApplyJointLimits(Vector3 a, float l1, float l2, Vector3 t, ref Vector3 elbowGoal, ref Vector3 handGoal)
+    {
+        Vector3 F = space.InverseTransformVector(chest.TransformVector(frontInChest)).normalized;
+        Vector3 U = space.InverseTransformVector(chest.TransformVector(upInChest)).normalized;
+        Vector3 L = space.InverseTransformVector(chest.TransformVector(lateralInChest)).normalized;
+        // 다시 직교화(가슴 본이 균일 스케일이면 이미 직교 — 수치 오차만 정리). 외적을 쓰지 않는다.
+        F = (F - Vector3.Dot(F, U) * U).normalized;
+        L = (L - Vector3.Dot(L, U) * U - Vector3.Dot(L, F) * F).normalized;
+
+        string hit = null;
+
+        // ① 위팔 방향
+        Vector3 u = (elbowGoal - a).normalized;
+        float sinExt = Mathf.Sin(shoulderExtensionMax * Mathf.Deg2Rad);
+        bool hitBehind = ClampAlong(ref u, -F, sinExt, -U);
+        bool hitMedial = ClampAlong(ref u, -L, Mathf.Sin(shoulderAdductionMax * Mathf.Deg2Rad), -U);
+        if (hitMedial) hitBehind |= ClampAlong(ref u, -F, sinExt, -U);   // 둘째가 첫째를 다시 넘겼을 때
+        lastBehindDeg = Mathf.Asin(Mathf.Clamp(Vector3.Dot(u, -F), -1f, 1f)) * Mathf.Rad2Deg;
+        lastMedialDeg = Mathf.Asin(Mathf.Clamp(Vector3.Dot(u, -L), -1f, 1f)) * Mathf.Rad2Deg;
+        if (hitBehind) hit = "어깨 신전";
+        if (hitMedial) hit = hit == null ? "어깨 내전" : hit + " · 어깨 내전";
+
+        Vector3 e = a + u * l1;
+        // 위팔을 잘랐으면 아래팔은 새 팔꿈치에서 목표를 다시 겨눈다. 안 잘랐으면 2관절 풀이 그대로.
+        Vector3 w = (hitBehind || hitMedial) ? (t - e) : (handGoal - elbowGoal);
+        w = w.sqrMagnitude > 1e-10f ? w.normalized : u;
+
+        // ② 팔꿈치 굴곡: 아래팔과 위팔 연장선 사이 각 ≤ 한계  ⇔  w · (−u) ≤ cos(180 − 한계)
+        bool hitElbow = ClampAlong(ref w, -u, Mathf.Cos((180f - elbowFlexionMax) * Mathf.Deg2Rad), F);
+        lastElbowFlexDeg = Vector3.Angle(u, w);
+        if (hitElbow) hit = hit == null ? "팔꿈치 굴곡" : hit + " · 팔꿈치 굴곡";
+
+        // ③ 위팔 회전: 내린 팔(−U)에서 u까지 최소 회전으로 «앞» · «안쪽»을 옮겨 0 기준을 만든다
+        Quaternion swing = Quaternion.FromToRotation(-U, u);
+        Vector3 n = swing * F;      // 회전 0일 때 아래팔이 향하는 쪽
+        Vector3 m = swing * -L;     // 내회전 쪽
+        float along = Vector3.Dot(w, u);
+        Vector3 wp = w - along * u;
+        if (wp.sqrMagnitude > 1e-6f)   // 팔이 거의 펴지면 회전이 정의되지 않는다 — 자르지 않는다
+        {
+            float rot = Mathf.Atan2(Vector3.Dot(wp, m), Vector3.Dot(wp, n)) * Mathf.Rad2Deg;
+            float clamped = Mathf.Clamp(rot, -shoulderExternalRotMax, shoulderInternalRotMax);
+            if (!Mathf.Approximately(rot, clamped))
+            {
+                float r = clamped * Mathf.Deg2Rad;
+                w = u * along + (n * Mathf.Cos(r) + m * Mathf.Sin(r)) * wp.magnitude;
+                string rotName = rot > 0f ? "어깨 내회전" : "어깨 외회전";
+                hit = hit == null ? rotName : hit + " · " + rotName;
+            }
+            lastRotDeg = clamped;
+        }
+
+        elbowGoal = e;
+        handGoal = e + w.normalized * l2;
+
+        string now = hit ?? "";
+        if (now != lastLimitHit)
+        {
+            lastLimitHit = now;
+            Debug.Log("[팔IK] 걸린 한계 → " + (now.Length > 0 ? now : "없음"));
+        }
+    }
+
+    /// <summary>
     /// S공간 회전 q를 뼈에 가중치만큼 얹는다 — localRotation만 쓴다(10-22 정정, 클래스 주석 참고).
     /// S → bone.parent 사이 로컬 회전의 곱 R로 q를 뼈 부모 공간으로 옮긴다: qLocal = R⁻¹ · q · R.
     /// InverseTransformPoint와 같은 로컬 사슬이므로 거울(음수 스케일)이 S 위 어디에 있든 상관없다.
@@ -285,6 +465,23 @@ public class PatientArmIkProbe : MonoBehaviour
         {
             Gizmos.color = Color.cyan;
             Gizmos.DrawLine(lower.position, hint.position);
+        }
+
+        // 몸 기준 축(어깨에서 0.15m) — 초록 = 앞 · 파랑 = 위 · 주황 = 바깥. 환자 몸과 맞는지 눈으로 확인한다.
+        if (frameReady && chest != null)
+        {
+            Vector3 o = upper.position;
+            Vector3 fw = chest.TransformVector(frontInChest).normalized;
+            Vector3 uw = chest.TransformVector(upInChest).normalized;
+            Vector3 lw = chest.TransformVector(lateralInChest).normalized;
+            Gizmos.color = Color.green; Gizmos.DrawLine(o, o + fw * 0.15f);
+            Gizmos.color = Color.blue; Gizmos.DrawLine(o, o + uw * 0.15f);
+            Gizmos.color = new Color(1f, 0.55f, 0f); Gizmos.DrawLine(o, o + lw * 0.15f);
+#if UNITY_EDITOR
+            UnityEditor.Handles.Label(o + fw * 0.16f, "앞");
+            UnityEditor.Handles.Label(o + uw * 0.16f, "위");
+            UnityEditor.Handles.Label(o + lw * 0.16f, "바깥");
+#endif
         }
 
 #if UNITY_EDITOR
