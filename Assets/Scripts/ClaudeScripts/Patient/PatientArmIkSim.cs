@@ -186,13 +186,18 @@ public class PatientArmIkSim : MonoBehaviour
 
         float pen = 0f; string where = "";
         float r = probe.ArmRadius * 0.75f;   // 겉면 여유 — 팔 굵기 절반 이상 들어가면 «뚫음»으로 센다
+        // 위팔은 어깨 관절 쪽 1/4을 뺀다 — 관절 자리는 원래 몸통에 붙어 있다(10-22 1회차에서 오탐)
+        for (int i = 1; i <= 4; i++)
+        {
+            float s = i / 4f;
+            float d1 = probe.PenetrationDepth(Vector3.Lerp(up.position, lo.position, s), r, out string w1);
+            if (d1 > pen) { pen = d1; where = "위팔·" + w1; }
+        }
         for (int i = 0; i <= 4; i++)
         {
             float s = i / 4f;
-            float d1 = probe.PenetrationDepth(Vector3.Lerp(up.position, lo.position, s), r, out bool b1, out bool t1);
-            if (d1 > pen) { pen = d1; where = "위팔" + (b1 ? "·침대" : "") + (t1 ? "·몸통" : ""); }
-            float d2 = probe.PenetrationDepth(Vector3.Lerp(lo.position, ha.position, s), r, out bool b2, out bool t2);
-            if (d2 > pen) { pen = d2; where = "아래팔" + (b2 ? "·침대" : "") + (t2 ? "·몸통" : ""); }
+            float d2 = probe.PenetrationDepth(Vector3.Lerp(lo.position, ha.position, s), r, out string w2);
+            if (d2 > pen) { pen = d2; where = "아래팔·" + w2; }
         }
         if (pen > 0.005f) nPen++;
         if (pen > mPen) { mPen = pen; mPenWhere = where; }
