@@ -43,7 +43,7 @@ public class PatientArmIkSim : MonoBehaviour
     // 단계 통계
     private float mHandTarget, mPen, mJump, mWrongElbow, mWristDors, mWristPalm;
     private int nFrames, nWrong, nSideways, nJump, nPen, nOver;
-    private float mElbowFlex, mMedial, mBehind;
+    private float mElbowFlex, mMedial, mBehind, mElev;
     private string overWhat = "";
     private string mPenWhere = "";
     private readonly HashSet<string> hits = new HashSet<string>();
@@ -74,7 +74,7 @@ public class PatientArmIkSim : MonoBehaviour
         Add("손목 +100° (한계 넘김)", 1.5f, 0.8f, Pose.D(90, -40, 1.0f, 0, 100), "손목 70°에서 멈춤");
         Add("아래로 80° (신전 한계 넘김)", 1.5f, 0.8f, Pose.D(90, -80), "신전 50°에서 멈춤");
         Add("앞으로 90° (천장)", 2f, 0.8f, Pose.D(0, 90), "굴곡 90 · 한계 없음");
-        Add("머리 위로 170°", 2f, 0.8f, Pose.D(170, 0), "외전 170 · 한계 없음");
+        Add("머리 위로 170°", 2f, 0.8f, Pose.D(170, 0), "어깨 관절 120° + 쇄골 30° ≈ 150°에서 멈춤");
         Add("몸 앞을 가로질러 (내전)", 2f, 0.8f, Pose.D(-45, 60), "내전 30° 근처에서 멈춤 · 몸통 안 뚫음");
         Add("팔꿈치 굽힘 (손을 어깨 쪽으로)", 1.5f, 0.8f, Pose.D(90, 30, 0.45f), "팔꿈치가 경첩 방향으로만 굽음");
         Add("몸통 안으로 밀기", 1.5f, 0.8f, new Pose { mode = Mode.Torso, reach = 1f }, "몸통 표면에서 막힘");
@@ -90,7 +90,7 @@ public class PatientArmIkSim : MonoBehaviour
         Add("견인 + 비틀기 −80°", 2f, 0.8f, tC, "반대 회전");
         Add("견인 + 손목 +50°", 1.5f, 0.8f, tD, "손목 꺾임 · 팔 편 채");
         // 10-22 사용자 지적: 팔을 머리 위로 올리고 손을 돌리면 어깨가 아니라 아래팔이 돈다 — 아래팔 80°까지, 넘는 만큼 어깨
-        Add("머리 위 + 손 비틀기 +60°", 2f, 0.8f, Pose.D(170, 0, 1f, 60), "아래팔만 60° · 어깨 회전 그대로");
+        Add("머리 위 + 손 비틀기 +60°", 2f, 0.8f, Pose.D(170, 0, 1f, 60), "(120°에서) 아래팔만 60°");
         Add("머리 위 + 손 비틀기 +150°", 1.5f, 0.8f, Pose.D(170, 0, 1f, 150), "아래팔 80°에서 멈춤 · 넘는 70°가 어깨로");
         Add("머리 위 + 손 비틀기 −60°", 2f, 0.8f, Pose.D(170, 0, 1f, -60), "아래팔 반대로 60°");
         Add("원위치", 2f, 0.5f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로 돌아옴");
@@ -168,10 +168,12 @@ public class PatientArmIkSim : MonoBehaviour
         if (phaseIdx >= phases.Count) { Finish(); return; }
         phaseT = 0f;
         fromPos = probe.Target.position;
+        // 견인을 끄는 단계면 손을 놓을 때(PatientArmIkHandGrab.Release)처럼 목표를 지금 환자 손 자리로 — 남은 목표가 팔 길이보다 가까워 팔꿈치가 접히지 않게
+        if (phaseIdx > 0 && phases[phaseIdx - 1].to.traction && !phases[phaseIdx].to.traction) { probe.Target.position = probe.HandBone.position; fromPos = probe.HandBone.position; }
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; }
         mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = 0f;
         nFrames = nWrong = nSideways = nJump = nPen = nOver = 0;
-        mElbowFlex = mMedial = mBehind = -999f; overWhat = "";
+        mElbowFlex = mMedial = mBehind = mElev = -999f; overWhat = "";
         mPenWhere = "";
         hits.Clear();
     }
@@ -196,8 +198,11 @@ public class PatientArmIkSim : MonoBehaviour
             Vector3 uN = uW.normalized;
             float behind = Mathf.Asin(Mathf.Clamp(Vector3.Dot(uN, -bF), -1f, 1f)) * Mathf.Rad2Deg;
             float medial = Mathf.Asin(Mathf.Clamp(Vector3.Dot(uN, -bL), -1f, 1f)) * Mathf.Rad2Deg;
-            mBehind = Mathf.Max(mBehind, behind); mMedial = Mathf.Max(mMedial, medial);
-            string ov = elbowFlex > probe.ElbowFlexionMax + 3f ? "팔꿈치" : behind > probe.ShoulderExtensionMax + 3f ? "신전" : medial > 33f ? "내전" : "";
+            mBehind = Mathf.Max(mBehind, behind); mMedial = Mathf.Max(mMedial, medial); mElev = Mathf.Max(mElev, Vector3.Angle(uN, -bU));
+            Vector3 hzN = uN - Vector3.Dot(uN, bU) * bU;
+            float phiN = hzN.sqrMagnitude > 1e-8f ? Mathf.Atan2(Vector3.Dot(hzN.normalized, bL), Vector3.Dot(hzN.normalized, bF)) * Mathf.Rad2Deg : 0f;
+            float coneN = probe.ConeMaxAt(phiN, elbowFlex);
+            string ov = Vector3.Angle(uN, -bU) > coneN + 3f ? "어깨" : elbowFlex > probe.ElbowFlexionMax + 3f ? "팔꿈치" : behind > probe.ShoulderExtensionMax + 3f ? "신전" : medial > 33f ? "내전" : "";
             if (ov.Length > 0) { nOver++; if (overWhat.IndexOf(ov, System.StringComparison.Ordinal) < 0) overWhat += (overWhat.Length > 0 ? "·" : "") + ov; }
         }
         float hingeOff = 0f;
@@ -266,7 +271,7 @@ public class PatientArmIkSim : MonoBehaviour
                 $"손목 {(wristSigned >= 0 ? "배굴" : "장굴")} {Mathf.Abs(wristSigned):F0}° · 아래팔 {(probe.ForearmRotDeg >= 0 ? "회외" : "회내")} {Mathf.Abs(probe.ForearmRotDeg):F0}° | " +
                 $"손-목표 최대 {mHandTarget:F0}mm · 관통 최대 {mPen * 1000f:F0}mm{(mPen > 0f ? "(" + mPenWhere + ")" : "")} {nPen}프레임 · " +
                 $"팔꿈치 반대 꺾임 {nWrong} · 옆 꺾임 {nSideways}프레임(경첩 벗어남 최대 {mWrongElbow:F0}°) · " +
-                $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 한계 넘음 {nOver}프레임{(nOver > 0 ? "(" + overWhat + ")" : "")} · 최대 팔꿈치 {mElbowFlex:F0}° · 신전 {mBehind:F0}° · 내전 {mMedial:F0}° · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
+                $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 한계 넘음 {nOver}프레임{(nOver > 0 ? "(" + overWhat + ")" : "")} · 최대 팔꿈치 {mElbowFlex:F0}° · 신전 {mBehind:F0}° · 내전 {mMedial:F0}° · 거상 {mElev:F0}°(쇄골 {probe.GirdleDeg:F0}° · 방향 φ {probe.ConePhi:F0}° 경계 {probe.ConeMaxDeg:F0}°) · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
                 $"걸린 한계 {(hits.Count > 0 ? string.Join(" · ", hits) : "없음")} · {nFrames}프레임";
             Debug.Log(line);
             summary.Append(line).Append('\n');
