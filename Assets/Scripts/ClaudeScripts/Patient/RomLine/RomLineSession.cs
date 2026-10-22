@@ -354,7 +354,7 @@ public class RomLineSession : MonoBehaviour
             if (monitor.Start(monitorPort, pageAsset != null ? pageAsset.text : ""))
             {
                 // ★10-14 사용자 지시: 메인 화면의 모니터 주소 줄을 뺐다(모니터는 기기에서 확인된 적이 없다). 서버는 그대로 열리고 주소는 로그에 남는다.
-                monitor.SetCsv(CsvHeader + "\n");
+                monitor.SetCsv(ResultCsv());   // ★10-22: 관제 «측정값 저장» = 결과표 값만(상세 기록은 기기 파일에만)
                 if (mirror == null)
                 {
                     // ★런타임에 붙이면 인스펙터 튜닝이 저장되지 않는다 — 튜닝하려면 씬의 이 오브젝트에 RomLineMirror를 올린다.
@@ -1685,7 +1685,7 @@ public class RomLineSession : MonoBehaviour
           .Append((tipOffset.z * 1000f).ToString("F1", CultureInfo.InvariantCulture));
         string rowText = sb.ToString();
         csvRows.Add(rowText);
-        monitor.SetCsv(CsvHeader + "\n" + string.Join("\n", csvRows) + "\n");
+        // ★10-22 사용자 지시: 관제 «측정값 저장»은 결과표 값만 준다(ResultCsv) — 이 상세 기록은 기기 파일(개발용)에만 남긴다.
         if (csvPath == null) return;
         try { System.IO.File.AppendAllText(csvPath, rowText + "\n", new UTF8Encoding(false)); }
         catch (System.Exception e)
@@ -1789,6 +1789,27 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>차이 = 압박 − 능동(능동에서 압박으로 얼마나 더 갔나) — «+4.6°». 둘 중 하나라도 없으면 «—». ★10-15 사용자 지시(부호 붙임).</summary>
+    /// <summary>
+    /// 관제 «측정값 저장» 파일(10-22 사용자 지시) — 결과표에 보이는 것만: 측정 명칭 · 능동 · 압박 · 차이(압박 − 능동).
+    /// 결과표와 같은 규칙으로 채운다 — 확인(트리거)한 동작만, 나머지는 빈 칸. 단위(°)는 머리글에만 둔다(엑셀에서 숫자로 읽히게).
+    /// </summary>
+    private string ResultCsv()
+    {
+        resultCsv.Length = 0;
+        resultCsv.Append("측정 명칭,능동(°),압박(°),차이(°)\n");
+        for (int m = 0; m < 6; m++)
+        {
+            RomLineResult a = results[m * 2], pr = results[m * 2 + 1];
+            bool aOn = a.valid && confirmed[m], pOn = pr.valid && confirmed[m];
+            resultCsv.Append(MotionName[m]).Append(',')
+                     .Append(aOn ? a.angle.ToString("F1") : "").Append(',')
+                     .Append(pOn ? pr.angle.ToString("F1") : "").Append(',')
+                     .Append(aOn && pOn ? (pr.angle - a.angle).ToString("+0.0;-0.0;0.0") : "").Append('\n');
+        }
+        return resultCsv.ToString();
+    }
+    private readonly StringBuilder resultCsv = new StringBuilder(256);
+
     private string DiffText(int m)
     {
         if (!results[m * 2].valid || !results[m * 2 + 1].valid) return "—";
@@ -1889,6 +1910,7 @@ public class RomLineSession : MonoBehaviour
             view.SetDiff(m, aOn && pOn ? DiffText(m) : "—", current >= 0 && current / 2 == m);   // ★10-15: 차이 칸(압박 − 능동)
             view.SetGauge(m, aOn, a.angle, aOpp, pOn, pr.angle, pOpp);
         }
+        monitor.SetCsv(ResultCsv());   // 결과표가 바뀔 때마다(Refresh는 dirty일 때만 돈다)
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.
         int motion = group == 0 || home ? -1 : MotionOf(Mathf.Min(group, GroupCount - 1));   // 홈에서는 공간에 아무것도 그리지 않는다(10-14)
@@ -2105,7 +2127,7 @@ public class RomLineSession : MonoBehaviour
           .Append((tipOffset.z * 1000f).ToString("F1", CultureInfo.InvariantCulture));
         string rowText = sb.ToString();
         csvRows.Add(rowText);
-        monitor.SetCsv(CsvHeader + "\n" + string.Join("\n", csvRows) + "\n");
+        // ★10-22 사용자 지시: 관제 «측정값 저장»은 결과표 값만 준다(ResultCsv) — 이 상세 기록은 기기 파일(개발용)에만 남긴다.
         if (csvPath == null) return;
         try { System.IO.File.AppendAllText(csvPath, rowText + "\n", new UTF8Encoding(false)); }
         catch (System.Exception e)
