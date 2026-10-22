@@ -1,0 +1,95 @@
+2026-10-22 손바닥 골격 정렬 교정 — 기준 a2e52cf (Play 미검증)
+
+수정 범위는 실험 환자 생성/검증 Editor 코드 3개와 그 도구가 만든 메시이다.
+새 런타임 직렬화 필드와 기존 TrainingScene 컴포넌트 변경은 없다.
+원본 c9/Anatomy FBX, 원본 피부 메시, 시나리오 CSV/Config/나레이션은 바꾸지 않았다.
+
+같은 작업 트리에서 별도로 변경 중인 PatientArmIk 계열과 사용자가 저장한
+AnatomicalPatientLab.unity 변경은 아래 검사 원문에는 포함되지만 이 교정
+커밋에는 포함하지 않았다. 씬과 프리팹 파일은 자동 저장하지 않았다.
+
+기존 출력과 동일한 정점 수·본 팔레트 순서·bindpose를 전부 확인한 뒤
+생성된 anatomy Mesh 126개만 갱신했다. 피부 Mesh는 교정 대상에서 제외했다.
+새 손 정렬이 피부와 일치하는지 저장 전에도 검사한다.
+
+실측: 골격/피부 손바닥 약94.925도·엄지축 약95.869도 오차가 교정 후
+Rest/Elbow100/Forearm80/Elbow90중립에서 계측상0도가 되었다.
+저장한 프리팹을 새로 로드한 검사에서도 통과했다.
+이는 두 모델의 정렬 검증이며 임상 정확성 전체를 보장하는 수치가 아니다.
+
+Runtime/Editor 비증분 컴파일 오류0개, 변경 파일 경고0개.
+change-impact 직렬화 충돌 없음. 이벤트/나레이션 전역 경고는 해당 파일에
+이번 변경이 없으며 이 실험 메시 정렬과 연결되지 않는다.
+수정 후 사람의 Play 확인, Quest 및 임상 검증은 남아 있다.
+
+----- change-impact 원문 -----
+바뀐 파일 115개 (.cs 6개) · 기준 a2e52cf
+    .claude/skills/unity-live/__pycache__/bridge.cpython-314.pyc
+    Assets/Editor/AnatomicalMeshBuilder.cs
+    Assets/Editor/AnatomicalPatientBuild.Palm.cs
+    Assets/Editor/AnatomicalPatientBuild.Palm.cs.meta
+    Assets/Editor/AnatomicalPatientBuild.Validation.cs
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatientLab.unity
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_anconeus_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_bicep_brachii_long_head_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_bicep_brachii_short_head_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_bicipital_aponeurosis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_brachialis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_brachioradialis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_deltoit_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_carpi_radialis_brevis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_carpi_radialis_longus_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_carpi_ulnaris_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_digitorum_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_indicis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_pollicis_brevis_Anatomical.asset
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/Meshes/L_extensor_pollicis_longus_Anatomical.asset
+    … 외 95개
+
+── ① 직렬화 충돌 (규칙 7) ──
+  없음
+
+── ② 파급 범위 ──
+  AnatomicalMeshBuilder: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild.Palm: 씬 인스턴스 0개 · 참조 0개
+  AnatomicalPatientBuild.Validation: 씬 인스턴스 0개 · 참조 0개
+  PatientArmIkProbeMenu: 씬 인스턴스 0개 · 참조 3개  ★씬 인스턴스 0개인데 참조는 있다 — 죽은 배선일 수 있다
+  PatientArmIkProbe: 씬 인스턴스 0개 · 참조 3개  (런타임 AddComponent — 인스펙터엔 Play 중에만 보인다)
+  PatientArmIkSim: 씬 인스턴스 0개 · 참조 2개  (런타임 AddComponent — 인스펙터엔 Play 중에만 보인다)
+
+── ③ 이벤트 수신자 ──
+[위험] ★이벤트 'OnProgressUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+[위험] ★이벤트 'OnUIUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+
+── ④ 나레이션 낡음 ──
+[확인] 견갑거근: 텍스트가 mp3보다 새로운 클립 6개 — <b>안내문과 음성이 어긋난다</b>
+        건측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가
+        → narration-gen 으로 재녹음: --only "건측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 경추ROM측정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        중립복귀
+        → narration-gen 으로 재녹음: --only "중립복귀..." --force --write
+[확인] 두개골OM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        견착
+        → narration-gen 으로 재녹음: --only "견착..." --force --write
+[확인] 두개골PJ교정: 텍스트가 mp3보다 새로운 클립 3개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 견착, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,견착,재평가..." --force --write
+[확인] 두개골PM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        교정
+        → narration-gen 으로 재녹음: --only "교정..." --force --write
+[확인] 사각근: 텍스트가 mp3보다 새로운 클립 8개 — <b>안내문과 음성이 어긋난다</b>
+        전부회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 중부회전, 후부회전
+        → narration-gen 으로 재녹음: --only "전부회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 상부승모근: 텍스트가 mp3보다 새로운 클립 7개 — <b>안내문과 음성이 어긋난다</b>
+        환측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 건측회전
+        → narration-gen 으로 재녹음: --only "환측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 제1늑골 교정기법: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,재평가..." --force --write
+[확인] 제2늑골_상방변위: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        파지2, 재평가
+        → narration-gen 으로 재녹음: --only "파지2,재평가..." --force --write
+
+위험 34건

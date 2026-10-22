@@ -1,9 +1,9 @@
 {
     "prefab": "Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatient_c9.prefab",
     "success": true,
-    "neutralMaximumErrorMetres": 7.252749014696747e-7,
+    "neutralMaximumErrorMetres": 0.0000024520929855498254,
     "repeatedPoseErrorMetres": 0.0,
-    "expressionMaximumErrorMetres": 7.251816214193241e-7,
+    "expressionMaximumErrorMetres": 0.000002411595460216631,
     "expressionFramesChecked": 13,
     "animationInputRadiusDegrees": 59.9999885559082,
     "radiusRotationDegrees": 60.000003814697269,
@@ -15,52 +15,54 @@
     "elbowBendMinimumForward": 0.9958482980728149,
     "elbowMaximumAngleErrorDegrees": 0.000030517578125,
     "forearmPresetMirrorErrorDegrees": 0.0,
-    "skinVerticesMoved": 8390,
+    "skinAnatomyPalmMaximumErrorDegrees": 0.0,
+    "skinAnatomyRadialMaximumErrorDegrees": 0.0,
+    "skinVerticesMoved": 8382,
     "validSkinnedMeshes": 137,
     "neutralByMesh": [
         {
             "mesh": "Boots",
-            "maximumMetres": 7.48774056091861e-8
+            "maximumMetres": 1.9894585534530052e-7
         },
         {
             "mesh": "CC_Base_Body",
-            "maximumMetres": 7.252749014696747e-7
+            "maximumMetres": 0.0000024520929855498254
         },
         {
             "mesh": "CC_Base_Eye",
-            "maximumMetres": 4.76837158203125e-7
+            "maximumMetres": 0.0000011921162013095455
         },
         {
             "mesh": "CC_Base_EyeOcclusion",
-            "maximumMetres": 2.384185791015625e-7
+            "maximumMetres": 2.3946401483954107e-7
         },
         {
             "mesh": "CC_Base_TearLine",
-            "maximumMetres": 2.384185791015625e-7
+            "maximumMetres": 2.3946401483954107e-7
         },
         {
             "mesh": "CC_Base_Teeth",
-            "maximumMetres": 3.7699126664847429e-7
+            "maximumMetres": 0.0000013625399333250244
         },
         {
             "mesh": "CC_Base_Tongue",
-            "maximumMetres": 4.768953658640385e-7
+            "maximumMetres": 7.378462782980932e-7
         },
         {
             "mesh": "Half_up",
-            "maximumMetres": 2.6656007889869218e-7
+            "maximumMetres": 2.425733214295178e-7
         },
         {
             "mesh": "Jeans",
-            "maximumMetres": 3.772672698687529e-7
+            "maximumMetres": 3.842650926344504e-7
         },
         {
             "mesh": "Shirt",
-            "maximumMetres": 6.080331331759226e-7
+            "maximumMetres": 0.000001944758423633175
         },
         {
             "mesh": "Undercut_fade",
-            "maximumMetres": 3.769728778024728e-7
+            "maximumMetres": 7.156345986913948e-7
         }
     ],
     "failure": "",

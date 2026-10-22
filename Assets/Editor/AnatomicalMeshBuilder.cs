@@ -37,6 +37,8 @@ public static class AnatomicalMeshBuilder
         public Vector3 clavicle, shoulder, elbow, wrist, scapula;
         public float transverseScale;
         public float handReach;
+        public Quaternion upperRotation, forearmRotation, radiusRotation;
+        public Matrix4x4 handLinear;
     }
 
     private sealed class Context
@@ -124,6 +126,7 @@ public static class AnatomicalMeshBuilder
             try { c.arms[i].scapula = Average(scapula); }
             finally { UnityEngine.Object.DestroyImmediate(temporary); }
             c.arms[i].transverseScale = c.torsoWidth;
+            MeasureArmFrames(c.arms[i], source, patient, rigSpace, renderers);
             Vector3 center = ScapulaMap(c, c.arms[i], c.arms[i].scapula);
             c.arms[i].output.scapulaCenter = center;
             c.arms[i].output.scapula.position = rigSpace.TransformPoint(center);
@@ -176,7 +179,7 @@ public static class AnatomicalMeshBuilder
             try
             {
                 foreach (Vector3 p in handPoints)
-                    arm.handReach = Mathf.Max(arm.handReach, Vector3.Distance(ForearmMap(arm, p), arm.output.wrist));
+                    arm.handReach = Mathf.Max(arm.handReach, Vector3.Distance(HandMap(arm, p), arm.output.wrist));
             }
             finally { UnityEngine.Object.DestroyImmediate(temporary); }
         }
@@ -291,8 +294,8 @@ public static class AnatomicalMeshBuilder
             case Region.Scapula: weight = Single(bones, limb.scapula); return ScapulaMap(c, arm, p);
             case Region.UpperArm: weight = Single(bones, limb.humerus); return UpperMap(arm, p);
             case Region.Ulna: weight = Single(bones, limb.ulna); return ForearmMap(arm, p);
-            case Region.Radius: weight = Single(bones, limb.radius); return ForearmMap(arm, p);
-            case Region.Hand: weight = Single(bones, limb.hand); return ForearmMap(arm, p);
+            case Region.Radius: weight = Single(bones, limb.radius); return RadiusMap(arm, p);
+            case Region.Hand: weight = Single(bones, limb.hand); return HandMap(arm, p);
             case Region.ChestHumerus:
                 return Blend(p, (c.arms[0].clavicle + c.arms[1].clavicle) * .5f, arm.shoulder,
                     TorsoMap(c, p), UpperMap(arm, p), c.chest, limb.humerus, bones, out weight);
@@ -313,9 +316,10 @@ public static class AnatomicalMeshBuilder
                     UpperMap(arm, p), ForearmMap(arm, p), limb.humerus, limb.ulna, bones, out weight);
             case Region.ForearmHand:
                 return Blend(p, arm.elbow, arm.wrist,
-                    ForearmMap(arm, p), ForearmMap(arm, p), limb.radius, limb.hand, bones, out weight);
+                    RadiusMap(arm, p), HandMap(arm, p), limb.radius, limb.hand, bones, out weight);
             case Region.ForearmTwist:
-                weight = Pair(bones, limb.ulna, limb.radius, .5f); return ForearmMap(arm, p);
+                weight = Pair(bones, limb.ulna, limb.radius, .5f);
+                return Vector3.LerpUnclamped(ForearmMap(arm, p), RadiusMap(arm, p), .5f);
             case Region.ChestNeck:
                 return Blend(p, Vector3.Lerp(c.sourceHip, c.sourceNeck, .8f), Vector3.Lerp(c.sourceNeck, c.sourceHead, .6f),
                     TorsoMap(c, p), NeckMap(c, p), c.chest, c.neck.segments[4], bones, out weight);
@@ -326,14 +330,14 @@ public static class AnatomicalMeshBuilder
                 return Triple(p, Vector3.Lerp(c.sourceHip, c.sourceNeck, .6f), c.sourceHead, arm.scapula,
                     TorsoMap(c, p), HeadMap(c, p), ScapulaMap(c, arm, p), c.chest, c.neck.head, limb.scapula, bones, out weight);
             case Region.ScapulaRadius:
-                return Blend(p, arm.shoulder, arm.elbow, UpperMap(arm, p), ForearmMap(arm, p),
+                return Blend(p, arm.shoulder, arm.elbow, UpperMap(arm, p), RadiusMap(arm, p),
                     limb.scapula, limb.radius, bones, out weight);
             case Region.ScapulaUlna:
                 return Blend(p, arm.shoulder, arm.elbow, UpperMap(arm, p), ForearmMap(arm, p),
                     limb.scapula, limb.ulna, bones, out weight);
             case Region.UpperRadius:
                 return Blend(p, Vector3.Lerp(arm.shoulder, arm.elbow, .7f), Vector3.Lerp(arm.elbow, arm.wrist, .9f),
-                    UpperMap(arm, p), ForearmMap(arm, p), limb.humerus, limb.radius, bones, out weight);
+                    UpperMap(arm, p), RadiusMap(arm, p), limb.humerus, limb.radius, bones, out weight);
             default: throw new InvalidOperationException("Unmapped anatomical region: " + region);
         }
     }
@@ -382,9 +386,135 @@ public static class AnatomicalMeshBuilder
     private static Vector3 NeckMap(Context c, Vector3 p) => Segment(p, c.sourceNeck, c.sourceHead, c.targetNeck, c.targetHead, 1f);
     private static Vector3 HeadMap(Context c, Vector3 p) => c.targetHead + c.headRotation * (p - c.sourceHead) * c.headScale;
     private static Vector3 ClavicleMap(Context c, Arm a, Vector3 p) => Segment(p, a.clavicle, a.shoulder, a.output.clavicleMedial, a.output.shoulder, a.transverseScale);
-    private static Vector3 UpperMap(Arm a, Vector3 p) => Segment(p, a.shoulder, a.elbow, a.output.shoulder, a.output.elbow, a.transverseScale);
-    private static Vector3 ForearmMap(Arm a, Vector3 p) => Segment(p, a.elbow, a.wrist, a.output.elbow, a.output.wrist, a.transverseScale);
+    private static Vector3 UpperMap(Arm a, Vector3 p) => FramedSegment(p, a.shoulder, a.elbow, a.output.shoulder, a.output.elbow, a.upperRotation, a.transverseScale);
+    private static Vector3 ForearmMap(Arm a, Vector3 p) => FramedSegment(p, a.elbow, a.wrist, a.output.elbow, a.output.wrist, a.forearmRotation, a.transverseScale);
+    private static Vector3 RadiusMap(Arm a, Vector3 p) => FramedSegment(p, a.elbow, a.wrist, a.output.elbow, a.output.wrist, a.radiusRotation, a.transverseScale);
+    private static Vector3 HandMap(Arm a, Vector3 p) => a.output.wrist + a.handLinear.MultiplyVector(p - a.wrist);
     private static Vector3 ScapulaMap(Context c, Arm a, Vector3 p) => TorsoMap(c, p) + a.output.shoulder - TorsoMap(c, a.shoulder);
+
+    private static void MeasureArmFrames(Arm arm, Transform anatomy, Animator patient, Transform space,
+        SkinnedMeshRenderer[] renderers)
+    {
+        string side = arm.output.left ? "L" : "R";
+        string handPath = Bip + "/Bip001 " + side + " Clavicle/Bip001 " + side +
+            " UpperArm/Bip001 " + side + " Forearm/Bip001 " + side + " Hand";
+        Vector3 sourceUpper = (arm.elbow - arm.shoulder).normalized;
+        Vector3 sourceLower = (arm.wrist - arm.elbow).normalized;
+        // Removed: upper-axis component, so only the source's observed elbow bend
+        // selects its hinge. Unlike c9's nearly straight author pose, this source is flexed.
+        Vector3 sourceBend = sourceLower - sourceUpper * Vector3.Dot(sourceLower, sourceUpper);
+        if (sourceBend.sqrMagnitude < .0001f)
+            throw new InvalidOperationException("Anatomy elbow is too straight to measure its flexion plane: " + side);
+        sourceBend.Normalize();
+        Vector3 targetUpper = (arm.output.elbow - arm.output.shoulder).normalized;
+        Vector3 targetLower = (arm.output.wrist - arm.output.elbow).normalized;
+        // The target pole was measured from c9 Humanoid flexion before this builder runs.
+        Vector3 targetBend = arm.output.restBendDirection - targetUpper * Vector3.Dot(arm.output.restBendDirection, targetUpper);
+        if (targetBend.sqrMagnitude < .0001f)
+            throw new InvalidOperationException("Measured c9 elbow pole is required before anatomy fitting: " + side);
+        targetBend.Normalize();
+        Vector3 sourceHinge = Vector3.Cross(sourceUpper, sourceBend).normalized;
+        Vector3 targetHinge = Vector3.Cross(targetUpper, targetBend).normalized;
+        arm.upperRotation = MeasuredFrame(targetUpper, targetBend, side + " target humerus") *
+            Quaternion.Inverse(MeasuredFrame(sourceUpper, sourceBend, side + " source humerus"));
+        arm.forearmRotation = MeasuredFrame(targetLower, targetHinge, side + " target ulna") *
+            Quaternion.Inverse(MeasuredFrame(sourceLower, sourceHinge, side + " source ulna"));
+
+        Vector3[] metacarpal = BakePoints(FindRenderer(renderers, side + "_metacarpal_bones"), space, out Mesh temporary);
+        Vector3 sourceIndex, sourceMiddle, sourceLittle;
+        try
+        {
+            int index = NearestVertex(metacarpal, Point(space, Require(anatomy, handPath + "/Bip001 " + side + " Finger1")));
+            int middle = NearestVertex(metacarpal, Point(space, Require(anatomy, handPath + "/Bip001 " + side + " Finger2")));
+            int little = NearestVertex(metacarpal, Point(space, Require(anatomy, handPath + "/Bip001 " + side + " Finger4")));
+            if (index == middle || middle == little || index == little)
+                throw new InvalidOperationException("Anatomy metacarpal anchors did not select distinct baked vertices: " + side);
+            sourceIndex = metacarpal[index]; sourceMiddle = metacarpal[middle]; sourceLittle = metacarpal[little];
+            Debug.Log("[AnatomicalMeshBuilder] " + side + " baked metacarpal anchor vertices index/middle/little=" + index + "/" + middle + "/" + little);
+        }
+        finally { UnityEngine.Object.DestroyImmediate(temporary); }
+        Vector3 targetIndex = Point(space, RequiredHumanBone(patient, arm.output.left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal));
+        Vector3 targetMiddle = Point(space, RequiredHumanBone(patient, arm.output.left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal));
+        Vector3 targetLittle = Point(space, RequiredHumanBone(patient, arm.output.left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal));
+        Vector3 sourceRadial = sourceIndex - sourceLittle, targetRadial = targetIndex - targetLittle;
+        Vector3 sourceLong = sourceMiddle - arm.wrist, targetLong = targetMiddle - arm.output.wrist;
+
+        // Ulna orientation follows the measured elbow hinge. The remaining distal
+        // roll belongs to radius/hand; do not roll the ulna to match the palm.
+        Vector3 mappedRadial = arm.forearmRotation * sourceRadial;
+        Vector3 oldRadial = mappedRadial - targetLower * Vector3.Dot(mappedRadial, targetLower);
+        Vector3 desiredRadial = targetRadial - targetLower * Vector3.Dot(targetRadial, targetLower);
+        RequireLength(oldRadial.magnitude, side + " mapped radial direction");
+        RequireLength(desiredRadial.magnitude, side + " c9 radial direction");
+        float radialRoll = Vector3.SignedAngle(oldRadial, desiredRadial, targetLower);
+        arm.radiusRotation = Quaternion.AngleAxis(radialRoll, targetLower) * arm.forearmRotation;
+
+        // Use the actual baked landmarks, not Bip proxies, for this nonorthogonal
+        // rest fit. Radial and longitudinal directions map exactly; the third column
+        // retains hand thickness. Both bases have positive determinant, so no reflection.
+        Matrix4x4 sourceBasis = HandBasis(sourceLong, sourceRadial, 1f, side + " source hand");
+        Matrix4x4 targetBasis = HandBasis(targetLong, targetRadial, arm.transverseScale, side + " c9 hand");
+        arm.handLinear = targetBasis * sourceBasis.inverse;
+        if (arm.handLinear.determinant <= 0f || float.IsNaN(arm.handLinear.determinant) || float.IsInfinity(arm.handLinear.determinant))
+            throw new InvalidOperationException("Anatomy hand fit is singular/reflected: " + side);
+        Debug.Log("[AnatomicalMeshBuilder] " + side + " source elbow flexion=" + Vector3.Angle(sourceUpper, sourceLower) +
+            "; radius rest roll=" + radialRoll + "; hand affine determinant=" + arm.handLinear.determinant +
+            ". Elbow hinge fixes ulna; actual baked palm landmarks fix radius/hand. Radius axis and muscle fitting remain geometric approximations.");
+    }
+
+    private static Quaternion MeasuredFrame(Vector3 longitudinal, Vector3 reference, string label)
+    {
+        Vector3 forward = longitudinal.normalized;
+        Vector3 up = reference - forward * Vector3.Dot(reference, forward);
+        RequireLength(up.magnitude, label + " reference perpendicular to longitudinal axis");
+        return Quaternion.LookRotation(forward, up.normalized);
+    }
+
+    private static Matrix4x4 HandBasis(Vector3 longitudinal, Vector3 radial, float thicknessScale, string label)
+    {
+        RequireLength(longitudinal.magnitude, label + " longitudinal");
+        RequireLength(radial.magnitude, label + " radial");
+        Vector3 normal = Vector3.Cross(longitudinal, radial);
+        RequireLength(normal.magnitude, label + " cross section");
+        Matrix4x4 basis = Matrix4x4.identity;
+        basis.SetColumn(0, new Vector4(longitudinal.x, longitudinal.y, longitudinal.z, 0f));
+        basis.SetColumn(1, new Vector4(radial.x, radial.y, radial.z, 0f));
+        normal = normal.normalized * thicknessScale;
+        basis.SetColumn(2, new Vector4(normal.x, normal.y, normal.z, 0f));
+        if (basis.determinant < .00000001f) throw new InvalidOperationException("Degenerate measured hand basis: " + label);
+        return basis;
+    }
+
+    private static int NearestVertex(Vector3[] points, Vector3 landmark)
+    {
+        if (points.Length == 0) throw new InvalidOperationException("Empty baked metacarpal mesh.");
+        int best = 0; float distance = float.PositiveInfinity;
+        for (int i = 0; i < points.Length; i++)
+        {
+            float candidate = (points[i] - landmark).sqrMagnitude;
+            if (candidate < distance) { best = i; distance = candidate; }
+        }
+        return best;
+    }
+
+    private static Transform RequiredHumanBone(Animator patient, HumanBodyBones bone)
+    {
+        Transform found = patient.GetBoneTransform(bone);
+        if (found == null) throw new InvalidOperationException("Missing c9 hand landmark: " + bone);
+        return found;
+    }
+
+    private static Vector3 FramedSegment(Vector3 p, Vector3 sourceA, Vector3 sourceB, Vector3 targetA, Vector3 targetB,
+        Quaternion rotation, float radialScale)
+    {
+        Vector3 source = sourceB - sourceA, target = targetB - targetA;
+        float sourceLength = RequireLength(source.magnitude, "source framed segment");
+        float targetLength = RequireLength(target.magnitude, "target framed segment");
+        Vector3 axis = source / sourceLength;
+        float along = Vector3.Dot(p - sourceA, axis);
+        Vector3 radial = p - sourceA - axis * along;
+        return targetA + target / targetLength * (along * targetLength / sourceLength) + rotation * radial * radialScale;
+    }
 
     private static Vector3 Segment(Vector3 p, Vector3 sourceA, Vector3 sourceB, Vector3 targetA, Vector3 targetB, float radialScale)
     {

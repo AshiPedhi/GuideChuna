@@ -100,6 +100,8 @@ public static partial class AnatomicalPatientBuild
         public float elbowBendMinimumForward = 1f;
         public float elbowMaximumAngleErrorDegrees;
         public float forearmPresetMirrorErrorDegrees;
+        public float skinAnatomyPalmMaximumErrorDegrees;
+        public float skinAnatomyRadialMaximumErrorDegrees;
         public int skinVerticesMoved;
         public int validSkinnedMeshes;
         public List<MeshError> neutralByMesh = new List<MeshError>();
@@ -117,7 +119,7 @@ public static partial class AnatomicalPatientBuild
         var receipt = JsonUtility.FromJson<BuildReceipt>(File.ReadAllText(receiptPath));
         var report = new Verification { prefab = receipt.prefab };
         var preview = new PreviewRenderUtility();
-        GameObject original = null;
+        GameObject original = null, anatomyOriginal = null;
         UnityEngine.SceneManagement.Scene sourceScene = EditorSceneManager.NewPreviewScene();
         try
         {
@@ -277,6 +279,19 @@ public static partial class AnatomicalPatientBuild
                     Vector3.Angle(leftRoll * reflectedAxis, new Vector3(-rightResult.x, rightResult.y, rightResult.z)));
             }
             Require(report.forearmPresetMirrorErrorDegrees < .1f, "Forearm preset rotates the two sides in opposing anatomical directions.");
+            anatomyOriginal = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(AnatomyPath));
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(anatomyOriginal, sourceScene);
+            foreach (var sample in new[] { AnatomicalPatientLab.Sample.Rest, AnatomicalPatientLab.Sample.Elbow100, AnatomicalPatientLab.Sample.Forearm80 })
+            {
+                lab.SetSample(sample);
+                foreach (var palm in MeasurePalmGeometry(root, anatomyOriginal, sample.ToString()))
+                {
+                    report.skinAnatomyPalmMaximumErrorDegrees = Mathf.Max(report.skinAnatomyPalmMaximumErrorDegrees, palm.palmErrorDegrees);
+                    report.skinAnatomyRadialMaximumErrorDegrees = Mathf.Max(report.skinAnatomyRadialMaximumErrorDegrees, palm.radialErrorDegrees);
+                }
+            }
+            Require(report.skinAnatomyPalmMaximumErrorDegrees < 1f, "Anatomy palm faces a different direction from the c9 skin palm.");
+            Require(report.skinAnatomyRadialMaximumErrorDegrees < 1f, "Anatomy thumb-side axis disagrees with the c9 skin hand.");
             string imageFolder = "Temp/model-audit/previews";
             Directory.CreateDirectory(imageFolder);
             preview.camera.clearFlags = CameraClearFlags.SolidColor;
@@ -302,6 +317,11 @@ public static partial class AnatomicalPatientBuild
                 CapturePreview(preview, root, imageFolder + "/" + sample + "_BareSkin.png", new Vector3(1.4f, 1.65f, 2.2f), new Vector3(0f, 1.35f, 0f));
                 CapturePreview(preview, root, imageFolder + "/" + sample + "_BackSkin.png", new Vector3(-.5f, 1.6f, -1.8f), new Vector3(0f, 1.42f, 0f));
                 lab.SetUpperClothingVisible(true);
+                if (sample == AnatomicalPatientLab.Sample.Forearm80)
+                {
+                    lab.SetView(AnatomicalPatientLab.View.SkeletonAndMuscles);
+                    CapturePreview(preview, root, imageFolder + "/Forearm80_HandAlignment.png", new Vector3(.85f, 1.5f, 1.6f), new Vector3(0f, 1.13f, .15f));
+                }
             }
             report.success = true;
         }
@@ -310,6 +330,7 @@ public static partial class AnatomicalPatientBuild
         {
             preview.Cleanup();
             if (original != null) UnityEngine.Object.DestroyImmediate(original);
+            if (anatomyOriginal != null) UnityEngine.Object.DestroyImmediate(anatomyOriginal);
             EditorSceneManager.ClosePreviewScene(sourceScene);
             File.WriteAllText("Temp/model-audit/verification.json", JsonUtility.ToJson(report, true));
         }
