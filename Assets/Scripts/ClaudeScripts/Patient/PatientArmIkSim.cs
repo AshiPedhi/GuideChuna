@@ -74,23 +74,23 @@ public class PatientArmIkSim : MonoBehaviour
 
         if (demo)
         {
-            // 제2늑골 상방변위 교정 — 전문가 영상(3인칭 40~64초 · 바디캠 18:53:43~18:54:15)을 눈으로 보고 잡은 순서 · 각(★추정):
-            //   앙와위 → 팔을 펴서 옆으로 → 침대 모서리 밖 아래로 → 악수하듯 잡고 당김(견인) → 손목 배굴 → 외회전 → 유지 → 풀기 → 원위치.
-            //   다른 손으로 쇄골 아래 제2늑골을 누르는 것은 시술자 쪽이라 여기엔 없다. 외회전 부호: 오른팔은 비틀기 +가 외회전(10-22 시뮬 실측 — +80 → 외회전 −75).
-            //   ★10-23 1차 시연: 비틀기 +70이 아래팔 회외 81°로 가고 어깨는 +1° → 사용자 지시로 «어깨 먼저»(probe.TwistShoulderFirst)를 켠다.
+            // 제2늑골 상방변위 교정 — ★10-23 3차: 사용자 «제2늑골 시술 동작으로 해보라니까?» → 전문가 영상(3인칭 «제2늑골 교정기법.MOV» 38~70초)을
+            //   프레임으로 직접 보고 다시 짰다. 1 · 2차는 10-22 메모(«손목 배굴 → 외회전»)로 짐작해 실제 동작과 달랐다.
+            //   영상: 악수하듯 손을 잡고 팔을 편 채 옆으로 약 90° · 다른 손은 쇄골 아래 제2늑골 → 호흡에 맞춰 팔을 천장 쪽으로 올렸다(54 · 60 · 67초)
+            //   바닥 쪽(침대 모서리 아래)으로 내리기(45 · 58 · 66초) 3회 → 놓고 팔을 몸 옆으로. 앱 시나리오(제2늑골_상방변위.csv «팔 외전» → «올리고 내리기 3회»)와 같다.
+            //   각은 영상을 눈으로 본 ★추정(올림 앞 25° · 내림 뒤 40°). 쇄골 아래를 누르는 손은 시술자 쪽이라 여기엔 없다.
             Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
-            Add("2 팔을 펴서 옆으로 벌림", 2.5f, 0.8f, Pose.D(90, 0), "팔 펴짐 · 침대 높이");
-            Add("3 침대 모서리 밖 아래로", 2.0f, 0.8f, Pose.D(90, -40), "어깨 신전 40° 안팎");
-            Pose g1 = Pose.D(90, -40, 1.05f); g1.traction = true;
-            Add("4 악수하듯 잡고 당김(견인)", 1.5f, 1.0f, g1, "팔 쭉 폄");
-            Pose g2 = Pose.D(90, -40, 1.05f, 0, 50); g2.traction = true;
-            Add("5 손목 배굴", 2.0f, 1.0f, g2, "손목 손등 쪽으로");
-            Pose g3 = Pose.D(90, -40, 1.05f, 70, 50); g3.traction = true;
-            Add("6 어깨 외회전 (유지)", 2.5f, 3.0f, g3, "위팔 외회전 · 아래팔은 어깨 한계를 넘는 만큼만");
-            Pose g4 = Pose.D(90, -40, 1.05f, 0, 0); g4.traction = true;
-            Add("7 풀기 - 회전 · 손목 되돌림", 2.0f, 0.8f, g4, "중립으로");
-            Add("8 팔을 침대 위로", 2.0f, 0.8f, Pose.D(90, 0), "침대 높이");
-            Add("9 원위치", 2.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
+            Pose ab = Pose.D(90, 0); ab.traction = true;
+            Add("2 손을 악수하듯 잡고 팔 외전", 2.5f, 1.0f, ab, "팔 편 채 옆으로 90° · 침대 높이");
+            Pose up = Pose.D(95, 25); up.traction = true;
+            Pose dn = Pose.D(85, -40); dn.traction = true;
+            for (int i = 1; i <= 3; i++)
+            {
+                Add($"{2 * i + 1} 들숨 - 팔 올리기 ({i}/3)", 2.5f, 0.5f, up, "천장 쪽으로 · 중심선 안 넘음");
+                Add($"{2 * i + 2} 날숨 - 팔 내리기 ({i}/3)", 2.5f, 0.5f, dn, "침대 모서리 아래로");
+            }
+            Add("9 침대 높이로", 2.0f, 0.5f, ab, "옆으로 90°");
+            Add("10 놓고 원위치", 2.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
             return;
         }
 
@@ -214,7 +214,7 @@ public class PatientArmIkSim : MonoBehaviour
         if (capture || demo) SetupCamera();
         if (demo)
         {
-            probe.TwistShoulderFirst = true;   // ★10-23 사용자 지시: 제2늑골의 외회전은 어깨(위팔)가 받는다
+            probe.TwistShoulderFirst = true;   // ★10-23 사용자 지시: 제2늑골에서 손을 돌리면 어깨(위팔)가 받는다(3차 시연은 비틀기 없음)
             Time.captureFramerate = 30;
             vrt = new RenderTexture(VideoW, VideoH, 24);
             vtex = new Texture2D(VideoW, VideoH, TextureFormat.RGB24, false);
