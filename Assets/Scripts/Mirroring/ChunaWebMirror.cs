@@ -20,7 +20,9 @@ using UnityEngine.XR;
 ///   :8090 GET /cmd?c=res0~2  출력 가로 640 · 800 · 1280(세로는 눈 화면 비율 · 16의 배수)
 /// ★현실 모드(패스스루)에서는 눈 화면의 비워 둔 자리가 복사본에 검게 남는다 → 셰이더가 회색으로 채운다(10-21 사용자 선택 1안 —
 ///   카메라를 켜거나 장면을 다시 그리지 않는다. 실제 방은 안 보인다).
-/// ★시험 전용 — 기기 속성으로만 켠다: adb shell setprop debug.coco.webmirror 1 (앱을 다시 시작해야 먹는다 · 재부팅하면 지워진다).
+/// ★10-23 사용자 지시: 늘 켜 둔다(종전 10-20 시험판은 속성 1일 때만 켜서 재부팅하면 꺼졌다 — 헤드셋에서 켤 길이 없었다).
+///   끄기만 속성으로: adb shell setprop debug.coco.webmirror 0. 선 실측 씬(RomLineScene)으로 뜬 판은 켜지 않는다 — 그 씬의 모니터가 같은 8090을 쓴다.
+///   보는 화면이 없으면 복사 · 압축은 안 돈다(서버만 대기) — 켠 채 대기 부담은 기기에서 아직 안 쟀다.
 /// ★포트 8090은 선 실측(RomLineSession)의 모니터와 같다 — 같은 빌드에 둘이 같이 켜지면 늦게 연 쪽이 못 연다(10-21 ROM 판에서 실제로 부딪혔다).
 /// ★인증이 없다. 같은 망의 누구나 열 수 있다.
 /// </summary>
@@ -36,7 +38,8 @@ public class ChunaWebMirror : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Boot()
     {
-        if (Prop("debug.coco.webmirror", "0") != "1") return;
+        if (Prop("debug.coco.webmirror", "1") == "0") return;
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "RomLineScene") return;   // ROM 판 — 포트 8090을 RomLineSession이 쓴다
         var go = new GameObject("[ChunaWebMirror]");
         DontDestroyOnLoad(go);
         go.AddComponent<ChunaWebMirror>();
