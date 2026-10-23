@@ -59,6 +59,7 @@ public class PatientArmIkSim : MonoBehaviour
     //   Time.captureFramerate = 30으로 고정해 프레임 = 1/30초(영상 속도가 실제와 같다). 끝나면 v_*.jpg를 ffmpeg로 묶는다(phases.txt = 단계 시작 프레임).
     private bool demo;
     private int videoFrame;
+    private Vector3 cachedWristAxis, cachedDevAxis; private bool hasWristCache;   // 비틀기 0일 때 잰 손목 축(10-23)
     private RenderTexture vrt; private Texture2D vtex;
     private readonly StringBuilder phaseLog = new StringBuilder();
     private const int VideoW = 1280, VideoH = 720;
@@ -76,6 +77,7 @@ public class PatientArmIkSim : MonoBehaviour
             // 제2늑골 상방변위 교정 — 전문가 영상(3인칭 40~64초 · 바디캠 18:53:43~18:54:15)을 눈으로 보고 잡은 순서 · 각(★추정):
             //   앙와위 → 팔을 펴서 옆으로 → 침대 모서리 밖 아래로 → 악수하듯 잡고 당김(견인) → 손목 배굴 → 외회전 → 유지 → 풀기 → 원위치.
             //   다른 손으로 쇄골 아래 제2늑골을 누르는 것은 시술자 쪽이라 여기엔 없다. 외회전 부호: 오른팔은 비틀기 +가 외회전(10-22 시뮬 실측 — +80 → 외회전 −75).
+            //   ★10-23 1차 시연: 비틀기 +70이 아래팔 회외 81°로 가고 어깨는 +1° → 사용자 지시로 «어깨 먼저»(probe.TwistShoulderFirst)를 켠다.
             Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
             Add("2 팔을 펴서 옆으로 벌림", 2.5f, 0.8f, Pose.D(90, 0), "팔 펴짐 · 침대 높이");
             Add("3 침대 모서리 밖 아래로", 2.0f, 0.8f, Pose.D(90, -40), "어깨 신전 40° 안팎");
@@ -84,7 +86,7 @@ public class PatientArmIkSim : MonoBehaviour
             Pose g2 = Pose.D(90, -40, 1.05f, 0, 50); g2.traction = true;
             Add("5 손목 배굴", 2.0f, 1.0f, g2, "손목 손등 쪽으로");
             Pose g3 = Pose.D(90, -40, 1.05f, 70, 50); g3.traction = true;
-            Add("6 외회전 (유지)", 2.5f, 3.0f, g3, "위팔 외회전 · 팔 편 채");
+            Add("6 어깨 외회전 (유지)", 2.5f, 3.0f, g3, "위팔 외회전 · 아래팔은 어깨 한계를 넘는 만큼만");
             Pose g4 = Pose.D(90, -40, 1.05f, 0, 0); g4.traction = true;
             Add("7 풀기 - 회전 · 손목 되돌림", 2.0f, 0.8f, g4, "중립으로");
             Add("8 팔을 침대 위로", 2.0f, 0.8f, Pose.D(90, 0), "침대 높이");
@@ -171,11 +173,15 @@ public class PatientArmIkSim : MonoBehaviour
         if (devAxis.sqrMagnitude < 1e-6f) devAxis = Vector3.ProjectOnPlane(U, armDir);
         // ★10-22: 손목은 해부학 축 그대로 꺾는다 — 손가락(중립)을 손등 쪽(+wrist = 배굴) · 엄지 쪽(+dev = 요측)으로 미는 회전(월드 외적 — 월드엔 거울이 없다)
         //   (종전엔 팔 방향 · 몸 축으로 꺾어 배굴만 시켜도 편위가 섞여 손목 한계를 시험하지 못했다)
-        if (probe.TryWristAxesWorld(out Vector3 wn, out Vector3 wd, out Vector3 wr))
+        // ★10-23 시연 2차: 어깨 먼저(TwistShoulderFirst)면 위팔이 돌며 손목 축(아래팔에 붙음)도 같이 돈다 — 돈 축으로 꺾고 비틀기를 또 얹으면
+        //   비틀기가 두 번 들어가 배굴 50이 «배굴 19 · 척측 34»가 됐다. → 비틀기가 0일 때 잰 축을 쓴다(팔 방향이 그대로인 단계 안에서).
+        if (Mathf.Abs(twist) < 0.5f && probe.TryWristAxesWorld(out Vector3 wn, out Vector3 wd, out Vector3 wr))
         {
             wristAxis = Vector3.Cross(wn, wd);
             devAxis = Vector3.Cross(wn, wr);
+            cachedWristAxis = wristAxis; cachedDevAxis = devAxis; hasWristCache = true;
         }
+        else if (hasWristCache) { wristAxis = cachedWristAxis; devAxis = cachedDevAxis; }
         t.rotation = Quaternion.AngleAxis(twist, armDir) * Quaternion.AngleAxis(wrist, wristAxis.normalized) * Quaternion.AngleAxis(dev, devAxis.normalized) * rot0;
     }
 
@@ -208,6 +214,7 @@ public class PatientArmIkSim : MonoBehaviour
         if (capture || demo) SetupCamera();
         if (demo)
         {
+            probe.TwistShoulderFirst = true;   // ★10-23 사용자 지시: 제2늑골의 외회전은 어깨(위팔)가 받는다
             Time.captureFramerate = 30;
             vrt = new RenderTexture(VideoW, VideoH, 24);
             vtex = new Texture2D(VideoW, VideoH, TextureFormat.RGB24, false);

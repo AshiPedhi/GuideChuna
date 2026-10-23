@@ -297,6 +297,11 @@ public class PatientArmIkProbe : MonoBehaviour
     public float TwistDeg => lastTwistDeg;
     public float WristDeg => lastWristDeg;
     public float ForearmRotDeg => lastForeDeg;   // + 회외 · − 회내(시작 자세 기준)
+    /// <summary>
+    /// ★10-23 사용자 지시(제2늑골 시연 — «어깨 외회전으로 바꿔서»): 손을 비튼 각을 어깨(위팔 회전)가 먼저 받고, 어깨 한계를 넘는 만큼만 아래팔로.
+    /// 기본 false = 10-22 규칙(아래팔 먼저 · 머리 위에서 손을 돌리면 아래팔이 돈다). 술기가 런타임에 켠다 — 직렬화하지 않는다(씬에 굳지 않게).
+    /// </summary>
+    public bool TwistShoulderFirst { get; set; }
     public string LimitHit => lastLimitHit;
     public float ArmRadius => armRadius;
     public float ShoulderExtensionMax => shoulderExtensionMax;
@@ -1158,6 +1163,24 @@ public class PatientArmIkProbe : MonoBehaviour
         else if (hit.IndexOf(what, System.StringComparison.Ordinal) < 0) hit += " · " + what;
     }
 
+    /// <summary>
+    /// 지금 위팔 회전(rotNow)과, 팔 축(kW) 둘레 +1°가 해부학 회전을 어느 쪽으로 바꾸는지(sgn)를 잰다(거울 · 좌우 팔 부호를 추론하지 않는다).
+    /// ★10-23: 비틀기 ①과 «어깨 먼저» 몫 계산이 같은 잼을 타도록 뽑았다(CLAUDE.md 규칙 9).
+    /// </summary>
+    private bool MeasureRotSign(Vector3 kW, out float rotNow, out float sgn, out Vector3 uS)
+    {
+        sgn = 1f;
+        uS = (space.InverseTransformPoint(lower.position) - space.InverseTransformPoint(upper.position)).normalized;
+        rotNow = MeasureHumeralRot(out Vector3 f, out Vector3 n, out Vector3 m);
+        if (float.IsNaN(rotNow)) return false;
+        Vector3 fW = upper.TransformVector(flexRefInUpper);
+        Vector3 f2 = space.InverseTransformVector(Quaternion.AngleAxis(1f, kW) * fW);
+        f2 -= Vector3.Dot(f2, uS) * uS;
+        float rot2 = Mathf.Atan2(Vector3.Dot(f2, m), Vector3.Dot(f2, n)) * Mathf.Rad2Deg;
+        sgn = Mathf.DeltaAngle(rotNow, rot2) >= 0f ? 1f : -1f;
+        return true;
+    }
+
     // ── 막힘(10-22) ─────────────────────────────────────────────────────────────
     //   월드에서 한다(월드는 거울이 없다). 모양 셋:
     //   · 침대 = 시작 때 씬의 침대 메시를 레이로 훑어 잰 «조각별 윗면 · 좌우 모서리»(임시 MeshCollider를 붙였다 뗀다)
@@ -1412,6 +1435,14 @@ public class PatientArmIkProbe : MonoBehaviour
         //   잡은 손 회전을 «팔꿈치 → 손» 축 둘레로 다시 나눠 그만큼(한계 안) 손과 비틀림 보조 본을 돌린다. 넘는 만큼만 아래 ①이 어깨로 넘긴다.
         float foreWorld = 0f;
         lastForeDeg = 0f;
+        // ★10-23 어깨 먼저(TwistShoulderFirst): 어깨가 한계 안에서 받을 몫을 먼저 정하고(아래 ①과 같은 잼 · 같은 한계), 아래팔은 나머지만 받는다.
+        float shoulderShare = 0f;
+        if (TwistShoulderFirst && straight > 0f && !float.IsNaN(rotRest) && MeasureRotSign(kW, out float rotNow0, out float sgn0, out Vector3 uS0))
+        {
+            float want0 = rotRest + sgn0 * twistDeg;
+            float cl0 = applyLimits ? ClampRot(want0, uS0) : want0;
+            shoulderShare = sgn0 * (cl0 - rotRest) * straight;   // 팔 축 둘레 월드 각(펴진 팔에서는 아래팔 축과 거의 같다)
+        }
         Vector3 faW = hand.position - lower.position;
         if (supWorldSign != 0f && faW.sqrMagnitude > 1e-8f)
         {
@@ -1424,6 +1455,7 @@ public class PatientArmIkProbe : MonoBehaviour
             tq.ToAngleAxis(out float foreTwist, out Vector3 foreAxis);
             if (foreTwist > 180f) foreTwist -= 360f;
             if (Vector3.Dot(foreAxis, fa) < 0f) foreTwist = -foreTwist;
+            foreTwist -= shoulderShare;
 
             float sup = supWorldSign * foreTwist;                                   // + 회외(시작 자세에서 더한 만큼)
             // 한계는 해부학 중립 기준(10-22 명세) — 시작 자세가 이미 forearmRestSupDeg만큼 돌아 있다
@@ -1448,16 +1480,8 @@ public class PatientArmIkProbe : MonoBehaviour
         if (straight > 0f && !float.IsNaN(rotRest))
         {
             float rotNow = MeasureHumeralRot(out Vector3 f, out Vector3 n, out Vector3 m);
-            if (!float.IsNaN(rotNow))
+            if (!float.IsNaN(rotNow) && MeasureRotSign(kW, out _, out float sgn, out Vector3 uS))
             {
-                // 물리적으로 팔 축(kW) 둘레 +1°가 해부학 회전을 어느 쪽으로 바꾸는지 잰다(거울 · 좌우 팔 부호를 추론하지 않는다)
-                Vector3 fW = upper.TransformVector(flexRefInUpper);
-                Vector3 f2 = space.InverseTransformVector(Quaternion.AngleAxis(1f, kW) * fW);
-                Vector3 uS = (space.InverseTransformPoint(lower.position) - space.InverseTransformPoint(upper.position)).normalized;
-                f2 -= Vector3.Dot(f2, uS) * uS;
-                float rot2 = Mathf.Atan2(Vector3.Dot(f2, m), Vector3.Dot(f2, n)) * Mathf.Rad2Deg;
-                float sgn = Mathf.DeltaAngle(rotNow, rot2) >= 0f ? 1f : -1f;
-
                 float want = rotRest + sgn * twistDeg;
                 float cl = applyLimits ? ClampRot(want, uS) : want;
                 if (applyLimits && !Mathf.Approximately(want, cl)) AddHit(ref hit, want > 0f ? "어깨 내회전" : "어깨 외회전");
