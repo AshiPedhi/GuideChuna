@@ -41,7 +41,7 @@ public class RomLineMirror : MonoBehaviour
 
     [Header("=== 현실 영상 (Passthrough Camera Access) ===")]
     [Tooltip("보내는 영상 크기(관제 화면 해상도 선택). 앱 화면은 이 크기로 그리고, 현실 영상은 카메라가 낼 수 있는 4:3 크기로 받아 늘이거나 줄여 맞춘다.")]
-    [SerializeField] private Vector2Int camResolution = new Vector2Int(1200, 900);   // 10-23 사용자 지시: 기본 1200×900(런타임 AddComponent라 코드 기본값이 먹는다)
+    [SerializeField] private Vector2Int camResolution = new Vector2Int(1024, 768);   // 10-23 사용자 지시: 기본 = 가운데 1024×768(종전 1200×900 · 런타임 AddComponent라 코드 기본값이 먹는다)
     private Vector2Int camRequest;   // 카메라에 실제로 요청하는 크기 — CameraSizeFor(camResolution)
     [Tooltip("현실 영상을 보내는 간격(초). 10-21 사용자 지시: 상한을 낮춰 배터리 · 발열을 줄인다 — 1/15초(최대 15장/s · 종전 0.05 = 20장/s). 런타임 AddComponent라 코드 기본값이 먹는다.")]
     [SerializeField] private float camInterval = 1f / 15f;
@@ -89,8 +89,10 @@ public class RomLineMirror : MonoBehaviour
     /// <summary>관제 화면의 해상도 버튼(10-20 사용자 지시 · 우측 상단 셋). 전부 4:3 — 화면 칸의 비율이 안 바뀐다. 지원 목록은 기기 로그로 확인(320×240 ~ 1280×1280).
     /// ★10-23 사용자 지시: 800×600 · 1200×900 · 1600×1200(종전 640×480 · 800×600 · 1280×960). 
     /// ★10-23 기기 실측: 카메라는 1200×900 · 1600×1200을 못 낸다(1200×900 → 800×600으로 열림 · 1600×1200 → 1280×1080) → 사용자 지시로
-    ///   «앱 화면은 고른 크기로 그리고 현실 영상만 카메라 크기로 받아 합성»한다(영상 경로). 카메라 크기는 CameraSizeFor가 지원 목록에서 고른다.</summary>
-    public static readonly Vector2Int[] CamChoices = { new Vector2Int(800, 600), new Vector2Int(1200, 900), new Vector2Int(1600, 1200) };
+    ///   «앱 화면은 고른 크기로 그리고 현실 영상만 카메라 크기로 받아 합성»한다(영상 경로). 카메라 크기는 CameraSizeFor가 지원 목록에서 고른다.
+    /// ★10-23 오후 사용자 지시: 800×600 · 1024×768 · 1280×960 — 현실 영상의 상한이 1280×960이라(앱이 받는 카메라 · 화면 녹화는 매번 동의 창이라 제외) 그 위는 뺐다.
+    ///   카메라의 4:3 크기는 800×600 다음이 1280×960뿐이라 1024×768은 카메라를 1280×960으로 받아 줄여 보낸다.</summary>
+    public static readonly Vector2Int[] CamChoices = { new Vector2Int(800, 600), new Vector2Int(1024, 768), new Vector2Int(1280, 960) };
     private Vector2Int pendingRes;   // 바꿀 해상도 — 인코딩 중인 장이 끝난 뒤(camBusy 아님)에 카메라를 다시 연다
     private readonly StringBuilder info = new StringBuilder(512);
 
@@ -181,7 +183,7 @@ public class RomLineMirror : MonoBehaviour
     private Vector2Int[] supportedRes;
 
     /// <summary>보내는 크기에 쓸 카메라 크기 — 지원 목록 중 같은 비율(4:3)에서 가로가 보내는 크기 이상인 가장 작은 것, 없으면 그 비율의 가장 큰 것.
-    /// 10-23 Quest 3S 실측 목록: 800×600 → 800×600 · 1200×900 → 1280×960 · 1600×1200 → 1280×960. 목록이 없으면 그대로 요청한다.</summary>
+    /// 10-23 Quest 3S 실측 목록: 800×600 → 800×600 · 1200×900 → 1280×960 · 1600×1200 → 1280×960(지금 고르는 1024×768 · 1280×960 → 1280×960). 목록이 없으면 그대로 요청한다.</summary>
     private Vector2Int CameraSizeFor(Vector2Int outRes)
     {
         if (supportedRes == null || supportedRes.Length == 0) return outRes;
