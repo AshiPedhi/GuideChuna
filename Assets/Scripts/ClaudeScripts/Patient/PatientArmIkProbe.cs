@@ -303,6 +303,8 @@ public class PatientArmIkProbe : MonoBehaviour
     /// 기본 false = 10-22 규칙(아래팔 먼저 · 머리 위에서 손을 돌리면 아래팔이 돈다). 술기가 런타임에 켠다 — 직렬화하지 않는다(씬에 굳지 않게).
     /// </summary>
     public bool TwistShoulderFirst { get; set; }
+    /// <summary>잡은 손의 회전(비틀기 · 손목)을 따를지. 끄면 펴진 팔의 위팔 회전은 직전 그대로 남는다(10-23 · 시연 전용으로 끈다).</summary>
+    public bool FollowTargetRotation { get => followTargetRotation; set => followTargetRotation = value; }
     public string LimitHit => lastLimitHit;
     public float ArmRadius => armRadius;
     public float ShoulderExtensionMax => shoulderExtensionMax;
@@ -670,6 +672,7 @@ public class PatientArmIkProbe : MonoBehaviour
         }
 
         wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation; wroteClav = space.localRotation;
+        if (flexRefReady) { prevFlexW = upper.TransformVector(flexRefInUpper); hasPrevFlex = true; }
         prevUpperDirW = (lower.position - upper.position).normalized; hasPrevUpperDir = true;
         hasWritten = true;
 
@@ -695,6 +698,8 @@ public class PatientArmIkProbe : MonoBehaviour
         }
     }
 
+    private Vector3 chosenPoleS; private bool hasChosenPole;   // 직전에 고른 팔꿈치 쪽(S공간) — 고르기 흔들림 막기(10-23)
+    private Vector3 prevFlexW; private bool hasPrevFlex;   // 직전 프레임에 그린 위팔의 굽힘 방향(월드) — 위팔 회전 따라가기 속도 기준(10-23)
     private float lastGirdleDeg;   // 이번 프레임 쇄골 본을 들어 올린 각(로그용)
     public float GirdleDeg => lastGirdleDeg;
 
@@ -799,6 +804,10 @@ public class PatientArmIkProbe : MonoBehaviour
         // 코사인 법칙 — 어깨각
         float cosA = Mathf.Clamp((l1 * l1 + d * d - l2 * l2) / (2f * l1 * d), -1f, 1f);
         float sinA = Mathf.Sqrt(1f - cosA * cosA);
+        // ★10-23: 팔꿈치 자리를 «지금 굽는 쪽의 반대»로만 두면, 위팔을 크게 돌려야 닿는 자세(제2늑골 바이셉스 포즈 — 외회전 ~90°)에서
+        //   팔꿈치가 바닥 쪽으로 가 어깨 경계에 걸리고 팔이 끝까지 접혔다(손 425~627mm 못 닿음 · 시연 4차). → 팔꿈치가 도는 원 위에서 한계를 지키는 자리를 고른다.
+        if (applyLimits && frameReady && flexRefReady && dist < maxReach && sinA > 0.05f)
+            pole = ChooseSwivelPole(a, dir, d, l1, cosA, sinA, pole);
         Vector3 elbowGoal = a + dir * (l1 * cosA) + pole * (l1 * sinA);
         Vector3 handGoal = a + dir * d;                   // 못 닿으면 목표 방향으로 뻗은 끝
         // ★10-22 진단: 못 닿을 때 0.999배 여유로 팔꿈치가 2~3° 굽어 위팔이 목표에서 틀어졌다 — 머리 위(θ 170)에선 그게 φ 15°(90 → 105)로 커져
@@ -845,12 +854,34 @@ public class PatientArmIkProbe : MonoBehaviour
                 // ★10-22 시뮬 6회차: 팔꿈치 자리를 해부학 굴곡 반대쪽으로 정한 뒤로는 잡음 문제가 없어 2~6°에서 다 켠다
                 //   (10~25°로 두니 그 사이 굽힘에서 위팔이 덜 돌아 팔꿈치가 뒤로 꺾여 보였다).
                 float bendW = Mathf.InverseLerp(2f, 6f, Vector3.Angle(elbowGoal - a, (flexRefReady ? rawForearm : handGoal - elbowGoal)));
-                if (bendW > 0f && from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
+                bool keepRot = !followTargetRotation && flexRefReady && hasPrevFlex;   // ★10-23: 손 비틀기 입력이 없으면 펴진 팔도 위팔 회전을 그대로 둔다
+                if ((bendW > 0f || keepRot) && from.sqrMagnitude > 1e-8f && to.sqrMagnitude > 1e-8f)
                 {
-                    float twist = Vector3.SignedAngle(from, to, axis) * bendW;
                     // ★10-22 시뮬 7회차: 손이 어깨 가까이를 지날 때 굽힘면이 반대로 넘어가 위팔이 한계 끝에서 끝으로(+70 → −90) 돌았다.
                     //   경첩은 손 자리(HingeDir)가 이미 지킨다 — 여기는 «사용자가 끄는 쪽으로 위팔 회전이 따라가는» 몫만, 초당 120°까지.
-                    if (flexRefReady) twist = Mathf.Clamp(twist, -120f * Time.deltaTime, 120f * Time.deltaTime);
+                    // ★10-23: 그 «초당 120°»를 이번 프레임 기준 자세(애니가 매 프레임 다시 씀)에서 쟀다 → 위팔 회전이 프레임마다 2°만 가고 되돌아가
+                    //   쌓이지 않았다(제2늑골 바이셉스 포즈에서 회전 −13° 고정 · 손 324mm 못 닿음). → 직전 프레임에 «그린» 굽힘 방향에서 잰다.
+                    Vector3 toLim = to;
+                    if (flexRefReady && hasPrevFlex)
+                    {
+                        Vector3 pf = Vector3.ProjectOnPlane(space.InverseTransformVector(prevFlexW), axis);
+                        if (pf.sqrMagnitude > 1e-8f)
+                        {
+                            float dAng = Vector3.SignedAngle(pf, to, axis);
+                            float lim = 120f * Time.deltaTime;
+                            if (Mathf.Abs(dAng) > lim) toLim = Quaternion.AngleAxis(Mathf.Sign(dAng) * lim, axis) * pf;
+                        }
+                    }
+                    // ★10-23 시연 5차: 팔이 펴지면 bendW가 0으로 가 위팔 회전이 애니(쉰 자리)로 돌아갔다 — 실제 몸은 돌린 그대로 둔다.
+                    //   손 비틀기 입력을 안 쓸 때(followTargetRotation 끔)는 «직전에 그린 회전 ↔ 굽힘면 쪽»을 bendW로 섞은 쪽으로 간다.
+                    Vector3 goalDir = toLim;
+                    float twW = bendW;
+                    if (keepRot)
+                    {
+                        Vector3 prv = Vector3.ProjectOnPlane(space.InverseTransformVector(prevFlexW), axis);
+                        if (prv.sqrMagnitude > 1e-8f) { goalDir = Quaternion.AngleAxis(Vector3.SignedAngle(prv, toLim, axis) * bendW, axis) * prv; twW = 1f; }
+                    }
+                    float twist = Vector3.SignedAngle(from, goalDir, axis) * twW;
                     RotateInS(upper, Quaternion.AngleAxis(twist, axis));
                     if (flexRefReady)
                     {
@@ -1049,6 +1080,47 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 b2 = space.InverseTransformPoint(lower.position);
         Vector3 c2 = space.InverseTransformPoint(hand.position);
         RotateInS(lower, Quaternion.FromToRotation(c2 - b2, h - b2));
+    }
+
+    /// <summary>
+    /// 팔꿈치가 도는 원(어깨 → 손 축 둘레) 위 36자리 중 비용이 가장 작은 쪽을 고른다(S공간).
+    /// 비용 = 어깨 방향별 경계 넘침 ×4 + 위팔 회전 한계 넘침 ×4 + 지금 굽는 쪽에서 돈 각 ×0.05 + 직전에 고른 쪽에서 돈 각 ×0.02.
+    /// 한계를 다 지키면 지금 쪽(0°)이 이긴다 — 종전 동작 그대로. 회전은 MeasureHumeralRot과 같은 정의로 잰다(규칙 9 · 따로 계산하지 않는다).
+    /// </summary>
+    private Vector3 ChooseSwivelPole(Vector3 a, Vector3 dir, float d, float l1, float cosA, float sinA, Vector3 pole)
+    {
+        BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
+        Vector3 q = Vector3.Cross(dir, pole);   // 원을 도는 데만 쓴다(해부학 축이 아니다)
+        if (q.sqrMagnitude < 1e-10f) return pole;
+        q.Normalize();
+        Vector3 h = a + dir * d;
+        float best = float.MaxValue; Vector3 bestPole = pole;
+        for (int i = 0; i < 36; i++)
+        {
+            float ang = i * 10f;
+            float r = ang * Mathf.Deg2Rad;
+            Vector3 pc = pole * Mathf.Cos(r) + q * Mathf.Sin(r);
+            Vector3 e = a + dir * (l1 * cosA) + pc * (l1 * sinA);
+            Vector3 u = (e - a).normalized;
+            Vector3 w = h - e;
+            float flex = Vector3.Angle(u, w);
+            float coneViol = Mathf.Max(0f, Vector3.Angle(u, -U) - ShoulderConeMax(PhiS(u), flex));
+            float rotViol = 0f;
+            Vector3 f = w - Vector3.Dot(w, u) * u;
+            if (f.sqrMagnitude > 1e-8f)
+            {
+                Quaternion swing = Quaternion.FromToRotation(-U, u);
+                float rot = Mathf.Atan2(Vector3.Dot(f, swing * -L), Vector3.Dot(f, swing * F)) * Mathf.Rad2Deg;
+                RotLimits(u, out float lo, out float hi);
+                rotViol = rot < lo ? lo - rot : rot > hi ? rot - hi : 0f;
+            }
+            float cost = 4f * coneViol + 4f * rotViol + 0.05f * (ang > 180f ? 360f - ang : ang);
+            // ★10-23 시연 5차: 팔이 펴지며 원이 작아질 때 10° 칸 사이를 오가 위팔 회전이 −61 ↔ −75로 흔들렸다 → 직전에 고른 쪽에서 멀어지는 만큼 비용
+            if (hasChosenPole) cost += 0.02f * Vector3.Angle(pc, chosenPoleS - Vector3.Dot(chosenPoleS, dir) * dir);
+            if (cost < best) { best = cost; bestPole = pc; }
+        }
+        chosenPoleS = bestPole; hasChosenPole = true;
+        return bestPole;
     }
 
     /// <summary>

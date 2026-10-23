@@ -23,10 +23,11 @@ public class PatientArmIkSim : MonoBehaviour
 
     // 목표 자세 — 몸 축 기준. abd = 팔을 내린 자리(−위)에서 바깥(L)으로 벌린 각(음수 = 몸 안쪽),
     // tilt = 그 방향에서 앞(F, 누운 환자는 천장)으로 든 각(음수 = 바닥 쪽 = 신전), reach = 팔 길이 배수.
-    private enum Mode { Dir, Torso, BedPress, Initial }
+    private enum Mode { Dir, Torso, BedPress, Initial, Joint }   // Joint(10-23) = 어깨 벌림 abd · 팔꿈치 굽힘 flex로 손 자리를 정한다(침대 면 = 몸의 −위 · 바깥 면)
     private struct Pose
     {
-        public Mode mode; public float abd, tilt, reach, twist, wrist, dev;   // dev = 손목 옆 꺾기(요측 · 척측 시험 · 10-22 명세)
+        public Mode mode; public float abd, tilt, reach, twist, wrist, dev, flex;   // dev = 손목 옆 꺾기(요측 · 척측 시험 · 10-22 명세)
+        public static Pose J(float abd, float flex) => new Pose { mode = Mode.Joint, abd = abd, flex = flex, reach = 1f };
         public static Pose D(float abd, float tilt, float reach = 1f, float twist = 0f, float wrist = 0f)
             => new Pose { mode = Mode.Dir, abd = abd, tilt = tilt, reach = reach, twist = twist, wrist = wrist };
     }
@@ -73,24 +74,21 @@ public class PatientArmIkSim : MonoBehaviour
 
         if (demo)
         {
-            // 제2늑골 상방변위 교정 — ★10-23 3차: 사용자 «제2늑골 시술 동작으로 해보라니까?» → 전문가 영상(3인칭 «제2늑골 교정기법.MOV» 38~70초)을
-            //   프레임으로 직접 보고 다시 짰다. 1 · 2차는 10-22 메모(«손목 배굴 → 외회전»)로 짐작해 실제 동작과 달랐다.
-            //   영상: 악수하듯 손을 잡고 팔을 편 채 옆으로 약 90° · 다른 손은 쇄골 아래 제2늑골 → 호흡에 맞춰 팔을 천장 쪽으로 올렸다(54 · 60 · 67초)
-            //   바닥 쪽(침대 모서리 아래)으로 내리기(45 · 58 · 66초) 3회 → 놓고 팔을 몸 옆으로. 앱 시나리오(제2늑골_상방변위.csv «팔 외전» → «올리고 내리기 3회»)와 같다.
-            //   각은 영상을 눈으로 본 ★추정(올림 앞 25° · 내림 뒤 40°). 쇄골 아래를 누르는 손은 시술자 쪽이라 여기엔 없다.
-            //   ★10-23: 견인(팔꿈치 고정) 없이 — 손 잡기에서 견인을 뺐으므로 시연도 해부학 IK 그대로.
+            // 제2늑골 상방변위 교정 — ★10-23 4차: 사용자 «바이셉스 포즈한 상태로 오버헤드 프레스 같은 동작이 나와야지» ·
+            //   «1인칭 영상 줬잖아»(D:/전문가 영상 촬영본/1인칭 시점(바디캠)/제2늑골 교정기법.mp4). 그 영상 35~67초를 똑바로 돌려 1초 간격으로 보고 짰다.
+            //   ★틀렸던 것: 1 · 2차는 10-22 메모로 짐작(«배굴 → 외회전»), 3차는 3인칭 영상만 보고 «팔 편 채 위아래»로 읽었다 — 바디캠을 안 열었다.
+            //   영상: 위팔은 침대 면을 따라 옆으로 ~90° · 팔꿈치 ~90° · 아래팔은 머리 쪽(바이셉스 포즈) → 손을 머리 위로 밀어 올리며 팔꿈치가 펴지고
+            //   어깨가 더 벌어진다(+22~23초) → 바이셉스 포즈로 돌아온다 · 반복. 각(올린 끝 어깨 150° · 팔꿈치 30°)은 영상을 눈으로 본 ★추정.
             Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
-            Pose ab = Pose.D(90, 0);
-            Add("2 손을 악수하듯 잡고 팔 외전", 2.5f, 1.0f, ab, "팔 편 채 옆으로 90° · 침대 높이");
-            Pose up = Pose.D(95, 25);
-            Pose dn = Pose.D(85, -40);
+            Pose bic = Pose.J(90f, 90f);
+            Pose top = Pose.J(150f, 30f);
+            Add("2 손을 잡고 바이셉스 포즈", 3.0f, 1.0f, bic, "위팔 옆 90° · 팔꿈치 90° · 아래팔 머리 쪽");
             for (int i = 1; i <= 3; i++)
             {
-                Add($"{2 * i + 1} 들숨 - 팔 올리기 ({i}/3)", 2.5f, 0.5f, up, "천장 쪽으로 · 중심선 안 넘음");
-                Add($"{2 * i + 2} 날숨 - 팔 내리기 ({i}/3)", 2.5f, 0.5f, dn, "침대 모서리 아래로");
+                Add($"{2 * i + 1} 들숨 - 머리 위로 밀어 올리기 ({i}/3)", 3.0f, 0.5f, top, "어깨 더 벌어짐 · 팔꿈치 펴짐");
+                Add($"{2 * i + 2} 날숨 - 바이셉스 포즈로 ({i}/3)", 3.0f, 0.5f, bic, "팔꿈치 90°로 돌아옴");
             }
-            Add("9 침대 높이로", 2.0f, 0.5f, ab, "옆으로 90°");
-            Add("10 놓고 원위치", 2.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
+            Add("9 놓고 원위치", 3.0f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
             return;
         }
 
@@ -150,10 +148,17 @@ public class PatientArmIkSim : MonoBehaviour
 
         Vector3 S = probe.UpperBone.position;
         Vector3 toPos = PoseToPosition(ph.to, S, F, U, L);
+        // ★10-23: 관절 각 자세끼리는 각을 보간한다(손 자리를 직선 · 호로 옮기면 팔꿈치가 중간에 펴졌다 굽는다)
+        bool jointPath = ph.to.mode == Mode.Joint && phaseIdx > 0 && phases[phaseIdx - 1].to.mode == Mode.Joint;
         // ★10-22: 사람이 팔을 옮기듯 어깨를 중심으로 «호»를 그린다(직선으로 옮기면 손이 어깨 · 몸을 질러가는 길이 되어 시험이 아니라 경로 탓에 이상해졌다).
         //   몸통 · 침대로 누르는 단계(특수 자리)는 일부러 직선이다.
         Vector3 pos;
-        if (ph.to.mode == Mode.Dir || ph.to.mode == Mode.Initial)
+        if (jointPath)
+        {
+            Pose a = phases[phaseIdx - 1].to;
+            pos = PoseToPosition(Pose.J(Mathf.Lerp(a.abd, ph.to.abd, k), Mathf.Lerp(a.flex, ph.to.flex, k)), S, F, U, L);
+        }
+        else if (ph.to.mode == Mode.Dir || ph.to.mode == Mode.Initial || ph.to.mode == Mode.Joint)
         {
             Vector3 a0 = fromPos - S, a1 = toPos - S;
             Vector3 dir = Vector3.Slerp(a0.normalized, a1.normalized, k);
@@ -183,6 +188,7 @@ public class PatientArmIkSim : MonoBehaviour
         }
         else if (hasWristCache) { wristAxis = cachedWristAxis; devAxis = cachedDevAxis; }
         t.rotation = Quaternion.AngleAxis(twist, armDir) * Quaternion.AngleAxis(wrist, wristAxis.normalized) * Quaternion.AngleAxis(dev, devAxis.normalized) * rot0;
+
     }
 
     private Vector3 PoseToPosition(Pose p, Vector3 S, Vector3 F, Vector3 U, Vector3 L)
@@ -192,6 +198,17 @@ public class PatientArmIkSim : MonoBehaviour
         switch (p.mode)
         {
             case Mode.Initial: return initPos;
+            case Mode.Joint:
+            {
+                // 위팔 = 내린 자리(−위)에서 바깥으로 abd · 아래팔 = 위팔에서 같은 면(침대 면) 안 머리 쪽으로 flex
+                float l1 = Vector3.Distance(probe.UpperBone.position, probe.LowerBone.position);
+                float l2 = Vector3.Distance(probe.LowerBone.position, probe.HandBone.position);
+                float aJ = p.abd * Mathf.Deg2Rad, fJ = p.flex * Mathf.Deg2Rad;
+                Vector3 uJ = (-U * Mathf.Cos(aJ) + L * Mathf.Sin(aJ)).normalized;
+                Vector3 perp = U - Vector3.Dot(U, uJ) * uJ;
+                perp = perp.sqrMagnitude > 1e-8f ? perp.normalized : L;
+                return S + uJ * l1 + (uJ * Mathf.Cos(fJ) + perp * Mathf.Sin(fJ)) * l2;
+            }
             case Mode.Torso: return S - L * 0.25f + F * 0.02f - U * 0.15f;   // 가슴 안쪽(어깨에서 몸 중심 쪽)
             case Mode.BedPress: return S + L * 0.15f - F * 0.30f - U * 0.35f; // 몸 옆 침대 속
         }
@@ -214,7 +231,9 @@ public class PatientArmIkSim : MonoBehaviour
         if (capture || demo) SetupCamera();
         if (demo)
         {
-            probe.TwistShoulderFirst = true;   // ★10-23 사용자 지시: 제2늑골에서 손을 돌리면 어깨(위팔)가 받는다(3차 시연은 비틀기 없음)
+            probe.TwistShoulderFirst = true;
+            // ★10-23 시연 5차: 목표 회전을 환자 손에 붙였더니(따라 돌기) 서로 쫓아 100프레임 넘게 흔들렸다 → 되돌리고, 시연엔 비틀기 입력이 없으니 손 회전 따르기를 끈다
+            probe.FollowTargetRotation = false;   // ★10-23 사용자 지시: 제2늑골에서 손을 돌리면 어깨(위팔)가 받는다(3차 시연은 비틀기 없음)
             Time.captureFramerate = 30;
             vrt = new RenderTexture(VideoW, VideoH, 24);
             vtex = new Texture2D(VideoW, VideoH, TextureFormat.RGB24, false);
@@ -380,7 +399,7 @@ public class PatientArmIkSim : MonoBehaviour
         }
     }
 
-    /// <summary>시연 — 왼쪽 = 발쪽에서, 오른쪽 = 환자 옆에서 본 장면을 한 장(1280×720)에 그려 jpg로 남긴다.</summary>
+    /// <summary>시연 — 왼쪽 = 발쪽에서, 오른쪽 = 천장에서 본 장면을 한 장(1280×720)에 그려 jpg로 남긴다.</summary>
     private void CaptureVideoFrame()
     {
         if (cam == null || vrt == null || !probe.TryBodyAxesWorld(out Vector3 F, out Vector3 U, out Vector3 L)) return;
@@ -392,8 +411,9 @@ public class PatientArmIkSim : MonoBehaviour
         cam.transform.SetPositionAndRotation(p1, Quaternion.LookRotation(l1 - p1, F));
         cam.Render();
         cam.rect = new Rect(0.5f, 0f, 0.5f, 1f);
-        Vector3 p2 = S + L * 1.7f - F * 0.05f - U * 0.1f, l2 = S + L * 0.35f - F * 0.15f;
-        cam.transform.SetPositionAndRotation(p2, Quaternion.LookRotation(l2 - p2, F));
+        // ★10-23: 오른쪽 = 천장에서 내려다본 장면(바이셉스 포즈 → 머리 위로 미는 동작이 침대 면 안에서 일어난다 · 머리가 화면 위)
+        Vector3 p2 = S + F * 1.7f + L * 0.35f + U * 0.15f, l2 = S + L * 0.35f + U * 0.15f;
+        cam.transform.SetPositionAndRotation(p2, Quaternion.LookRotation(l2 - p2, U));
         cam.Render();
         cam.rect = new Rect(0f, 0f, 1f, 1f);
         cam.targetTexture = keep;
