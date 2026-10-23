@@ -50,7 +50,9 @@ public sealed class AnatomicalPatientRig : MonoBehaviour
         public float elbowFlexion;
         [Tooltip("Signed rotation about the measured proximal-to-distal forearm axis, relative to author rest.")]
         public float forearmRotation;
+        [Tooltip("Positive bends the measured finger direction toward the palm; negative extends toward the dorsum. Applied after forearm rotation.")]
         public float wristFlexion;
+        [Tooltip("Positive bends toward the measured index/little radial direction (thumb side). Applied about the hand axis after wrist flexion.")]
         public float wristDeviation;
         [Tooltip("Additional clavicular elevation in degrees; independent of humeral elevation.")]
         public float shrug;
@@ -111,6 +113,9 @@ public sealed class AnatomicalPatientRig : MonoBehaviour
         [HideInInspector] public Vector3 restBendDirection;
         [NonSerialized] internal int[] bindingRegions;
         [NonSerialized] internal float[] bindingTwistFractions;
+        [NonSerialized] internal bool wristFrameReady;
+        [NonSerialized] internal Vector3 wristFlexionAxis;
+        [NonSerialized] internal Vector3 wristDeviationAxis;
     }
 
     [Serializable]
@@ -445,10 +450,17 @@ public sealed class AnatomicalPatientRig : MonoBehaviour
             elbow = shoulder + upperDirection * Vector3.Distance(limb.shoulder, limb.elbow);
             wrist = elbow + lowerDirection * Vector3.Distance(limb.elbow, limb.wrist);
             Quaternion forearmTwist = Quaternion.AngleAxis(requested.forearmRotation, lowerDirection);
-            Vector3 palmBendAxis = ulnaDelta * Vector3.Cross(restLower, limb.restBendDirection).normalized;
-            Vector3 deviationAxis = ulnaDelta * limb.restBendDirection;
-            handDelta = Quaternion.AngleAxis(requested.wristDeviation, deviationAxis) *
-                Quaternion.AngleAxis(requested.wristFlexion, palmBendAxis) * forearmTwist * ulnaDelta;
+            Quaternion wristNeutral = forearmTwist * ulnaDelta;
+            // Measured c9 palm frame, on each side: +flexion moves the finger
+            // longitudinal direction toward the palm; +deviation moves it toward
+            // the index/little radial direction. Both axes follow forearm roll.
+            Quaternion wristFlexion = Quaternion.AngleAxis(requested.wristFlexion,
+                wristNeutral * limb.wristFlexionAxis);
+            // Intrinsic order: flexion first, then deviation around the axis that
+            // flexion carried with the hand. No world/elbow-pole wrist fallback.
+            Quaternion wristDeviation = Quaternion.AngleAxis(requested.wristDeviation,
+                wristFlexion * (wristNeutral * limb.wristDeviationAxis));
+            handDelta = wristDeviation * wristFlexion * wristNeutral;
         }
 
         // Approximate independent scapular orientation. The changing elevation plane also affects tilt/rotation.
@@ -656,6 +668,7 @@ public sealed class AnatomicalPatientRig : MonoBehaviour
             Limb limb = limbs[i];
             if (limb.sourceRest == null || limb.sourceRest.Length != 4 || limb.outputRest == null || limb.outputRest.Length != 6)
                 return Fail("Limb author rest is missing.");
+            if (!MeasureWristFrame(limb)) return false;
             limb.bindingRegions = new int[bodyBindings.Length];
             limb.bindingTwistFractions = new float[bodyBindings.Length];
             Vector3 forearm = limb.wrist - limb.elbow;
@@ -706,10 +719,63 @@ public sealed class AnatomicalPatientRig : MonoBehaviour
         {
             Limb limb = limbs[i];
             if (limb == null || limb.bindingRegions == null || limb.bindingRegions.Length != bodyBindings.Length ||
-                limb.bindingTwistFractions == null || limb.bindingTwistFractions.Length != bodyBindings.Length)
+                limb.bindingTwistFractions == null || limb.bindingTwistFractions.Length != bodyBindings.Length ||
+                !limb.wristFrameReady)
                 return false;
         }
         return true;
+    }
+
+    private bool MeasureWristFrame(Limb limb)
+    {
+        limb.wristFrameReady = false;
+        Animator animator = limb.sourceHand.GetComponentInParent<Animator>();
+        if (animator == null || !animator.isHuman)
+            return Fail("Manual wrist frame requires the source c9 Humanoid Animator.");
+        HumanBodyBones handId = limb.left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+        HumanBodyBones indexId = limb.left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal;
+        HumanBodyBones middleId = limb.left ? HumanBodyBones.LeftMiddleProximal : HumanBodyBones.RightMiddleProximal;
+        HumanBodyBones littleId = limb.left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal;
+        if (animator.GetBoneTransform(handId) != limb.sourceHand)
+            return Fail("Manual wrist frame source hand does not match its explicit Humanoid side.");
+        if (!TryBindingRestPosition(limb.sourceHand, out Vector3 wrist) ||
+            !TryBindingRestPosition(animator.GetBoneTransform(indexId), out Vector3 index) ||
+            !TryBindingRestPosition(animator.GetBoneTransform(middleId), out Vector3 middle) ||
+            !TryBindingRestPosition(animator.GetBoneTransform(littleId), out Vector3 little))
+            return Fail("Manual wrist frame is missing a stored c9 hand/index/middle/little output binding.");
+        Vector3 longitudinal = middle - wrist;
+        if (!Finite(longitudinal) || longitudinal.sqrMagnitude < Epsilon)
+            return Fail("Measured c9 wrist/middle landmarks are coincident or invalid.");
+        longitudinal.Normalize();
+        Vector3 radial = index - little;
+        // Removed: longitudinal component, measuring only the hand's transverse
+        // index-to-little direction rather than treating knuckle stagger as roll.
+        radial -= longitudinal * Vector3.Dot(radial, longitudinal);
+        if (!Finite(radial) || radial.sqrMagnitude < Epsilon)
+            return Fail("Measured c9 index/little landmarks cannot define a radial wrist direction.");
+        radial.Normalize();
+        // Side selects the palmar side of the measured finger plane, using the
+        // same c9 landmark convention as the skin/anatomy palm alignment audit.
+        Vector3 palmar = (limb.left ? Vector3.Cross(radial, longitudinal) :
+            Vector3.Cross(longitudinal, radial)).normalized;
+        limb.wristFlexionAxis = Vector3.Cross(longitudinal, palmar).normalized;
+        limb.wristDeviationAxis = Vector3.Cross(longitudinal, radial).normalized;
+        limb.wristFrameReady = true;
+        ChunaLogger.Log($"[AnatomicalRig] Manual wrist frame {(limb.left ? "L" : "R")}: finger={longitudinal:F5}, palm={palmar:F5}, radial={radial:F5}; positive flexion=palm, positive deviation=radial; flexion then intrinsic deviation.");
+        return true;
+    }
+
+    private bool TryBindingRestPosition(Transform source, out Vector3 position)
+    {
+        if (source != null)
+            for (int i = 0; i < bodyBindings.Length; i++)
+                if (bodyBindings[i].source == source)
+                {
+                    position = bodyBindings[i].outputRest.position;
+                    return Finite(position);
+                }
+        position = Vector3.zero;
+        return false;
     }
 
     private bool ValidateReferences()
