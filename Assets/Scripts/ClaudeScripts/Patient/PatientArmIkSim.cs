@@ -79,11 +79,12 @@ public class PatientArmIkSim : MonoBehaviour
             //   영상: 악수하듯 손을 잡고 팔을 편 채 옆으로 약 90° · 다른 손은 쇄골 아래 제2늑골 → 호흡에 맞춰 팔을 천장 쪽으로 올렸다(54 · 60 · 67초)
             //   바닥 쪽(침대 모서리 아래)으로 내리기(45 · 58 · 66초) 3회 → 놓고 팔을 몸 옆으로. 앱 시나리오(제2늑골_상방변위.csv «팔 외전» → «올리고 내리기 3회»)와 같다.
             //   각은 영상을 눈으로 본 ★추정(올림 앞 25° · 내림 뒤 40°). 쇄골 아래를 누르는 손은 시술자 쪽이라 여기엔 없다.
+            //   ★10-23: 견인(팔꿈치 고정) 없이 — 손 잡기에서 견인을 뺐으므로 시연도 해부학 IK 그대로.
             Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
-            Pose ab = Pose.D(90, 0); ab.traction = true;
+            Pose ab = Pose.D(90, 0);
             Add("2 손을 악수하듯 잡고 팔 외전", 2.5f, 1.0f, ab, "팔 편 채 옆으로 90° · 침대 높이");
-            Pose up = Pose.D(95, 25); up.traction = true;
-            Pose dn = Pose.D(85, -40); dn.traction = true;
+            Pose up = Pose.D(95, 25);
+            Pose dn = Pose.D(85, -40);
             for (int i = 1; i <= 3; i++)
             {
                 Add($"{2 * i + 1} 들숨 - 팔 올리기 ({i}/3)", 2.5f, 0.5f, up, "천장 쪽으로 · 중심선 안 넘음");

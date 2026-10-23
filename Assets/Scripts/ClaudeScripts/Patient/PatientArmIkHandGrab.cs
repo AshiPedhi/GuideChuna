@@ -120,7 +120,9 @@ public class PatientArmIkHandGrab : MonoBehaviour
             st.posOffset = inv * (t.position - wrist.position);
             st.rotOffset = inv * t.rotation;
             st.held = nearest;
-            nearest.Traction = true;   // 사용자 선택 A — 잡는 동안 팔을 편 채(견인)
+            // ★10-23 사용자 지적(«해부학적 실제 신체 움직임을 적용하라고 했는데 왜 마음대로 고정시켜놓은건데»): 10-22의 견인(잡는 동안 팔꿈치를 편 채 · Traction)을
+            //   해부학 명세를 넣을 때 다시 보지 않고 남겨 둬, 손을 어깨 23cm까지 당겨도 팔꿈치가 166°로 펴져 있었다(Link 로그).
+            //   → 견인을 켜지 않는다. 팔꿈치는 잡은 손 자리대로 굽는다(굴곡 한계 145 안).
             Debug.Log($"[팔IK잡기] {handName}으로 {nearest.SideLabel}을 잡았다({(st.fist ? "주먹" : "핀치")} · 거리 {best * 100f:F1}cm)");
         }
         else if (st.held != null && !closed)
