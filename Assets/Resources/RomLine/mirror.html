@@ -173,9 +173,9 @@ const PAD = 14, GAP = 14;   // 영상 둘레 여백 · 묶음과 영상 사이(p
 const $ = id => document.getElementById(id);
 const tabsEl = $('tabs');
 TABS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });
-// 미러링 해상도 — 앱 RomLineMirror.CamChoices와 같은 순서(cam0 · cam1 · cam2)
+// 미러링 해상도 — 앱 RomLineMirror.CamChoices와 같은 순서(cam0 · cam1 · 10-23 저녁: 둘만)
 const resEl = $('res');
-['800x600', '1024x768', '1280x960'].forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r.replace('x', ' × '); o.dataset.r = r; resEl.appendChild(o); });
+['800x600', '1280x960'].forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r.replace('x', ' × '); o.dataset.r = r; resEl.appendChild(o); });
 let resPicked = 0;   // 고른 직후 몇 초는 앱이 아직 옛 해상도를 알려 오므로 덮어쓰지 않는다
 resEl.onchange = () => { cmd('cam' + resEl.value); resPicked = Date.now(); };
 const rowsEl = $('rows');
