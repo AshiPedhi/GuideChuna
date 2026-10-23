@@ -196,6 +196,10 @@ public class PatientArmIkProbe : MonoBehaviour
              "값 360은 «시술자가 환자 팔을 옮기는 정도»를 잡은 추정이다(실측 아님).")]
     [SerializeField] private float maxJointSpeed = 360f;
 
+    [Tooltip("놓았을 때 팔이 쉬는 자세(애니)로 떨어져 내려오는 시간(초). IK 비중을 1 → 0으로 «처음 천천히 · 갈수록 빠르게»(중력처럼) 내린다. " +
+             "★10-23 사용자 지시(«놓으면 내려오게») · 값 0.8은 추정 — 근긴장 조사 명세가 나오면 맞춘다.")]
+    [SerializeField] private float releaseDropSeconds = 0.8f;
+
     [Tooltip("자동으로 만드는 구의 지름(m).")]
     [SerializeField] private float handleSize = 0.05f;
 
@@ -303,6 +307,13 @@ public class PatientArmIkProbe : MonoBehaviour
     /// 기본 false = 10-22 규칙(아래팔 먼저 · 머리 위에서 손을 돌리면 아래팔이 돈다). 술기가 런타임에 켠다 — 직렬화하지 않는다(씬에 굳지 않게).
     /// </summary>
     public bool TwistShoulderFirst { get; set; }
+
+    private float releaseT = -1f;
+    /// <summary>놓는다 — 팔이 releaseDropSeconds 동안 쉬는 자세(애니)로 떨어져 내려온다(10-23).</summary>
+    public void BeginRelease() { releaseT = 0f; }
+    /// <summary>다시 잡는다 — 내려오던 중이어도 IK를 곧바로 다시 붙인다.</summary>
+    public void CancelRelease() { releaseT = -1f; weight = 1f; }
+    public bool IsReleasing => releaseT >= 0f;
     /// <summary>잡은 손의 회전(비틀기 · 손목)을 따를지. 끄면 펴진 팔의 위팔 회전은 직전 그대로 남는다(10-23 · 시연 전용으로 끈다).</summary>
     public bool FollowTargetRotation { get => followTargetRotation; set => followTargetRotation = value; }
     public string LimitHit => lastLimitHit;
@@ -648,6 +659,15 @@ public class PatientArmIkProbe : MonoBehaviour
 
         // 쇄골(견갑상완 리듬)도 같은 규칙 — 애니가 안 썼으면 기준으로 되돌린다(쌓이지 않게)
         if (hasWritten && space.localRotation == wroteClav) space.localRotation = baseClav; else baseClav = space.localRotation;
+
+        // ★10-23 사용자 지시: 놓으면 내려온다(종전 10-22 B안 «놓은 자세 그대로»를 바꿈) — IK 비중을 1 − x²로 내려 애니(쉬는 자세)로 떨어진다
+        if (releaseT >= 0f)
+        {
+            releaseT += Time.deltaTime;
+            float x = Mathf.Clamp01(releaseT / Mathf.Max(0.05f, releaseDropSeconds));
+            weight = 1f - x * x;
+            if (x >= 1f) { releaseT = -1f; weight = 0f; Debug.Log($"[팔IK] {sideLabel} 놓음 — 쉬는 자세로 내려옴({releaseDropSeconds:F1}초)"); }
+        }
 
         if (weight > 0f) Solve();
 

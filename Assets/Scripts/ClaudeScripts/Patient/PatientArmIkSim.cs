@@ -26,7 +26,8 @@ public class PatientArmIkSim : MonoBehaviour
     private enum Mode { Dir, Torso, BedPress, Initial, Joint }   // Joint(10-23) = 어깨 벌림 abd · 팔꿈치 굽힘 flex로 손 자리를 정한다(침대 면 = 몸의 −위 · 바깥 면)
     private struct Pose
     {
-        public Mode mode; public float abd, tilt, reach, twist, wrist, dev, flex;   // dev = 손목 옆 꺾기(요측 · 척측 시험 · 10-22 명세)
+        public Mode mode; public float abd, tilt, reach, twist, wrist, dev, flex;
+        public bool release;   // 이 단계 시작에 손을 놓는다 — 목표를 더 옮기지 않고 팔이 스스로 내려온다(10-23)   // dev = 손목 옆 꺾기(요측 · 척측 시험 · 10-22 명세)
         public static Pose J(float abd, float flex) => new Pose { mode = Mode.Joint, abd = abd, flex = flex, reach = 1f };
         public static Pose D(float abd, float tilt, float reach = 1f, float twist = 0f, float wrist = 0f)
             => new Pose { mode = Mode.Dir, abd = abd, tilt = tilt, reach = reach, twist = twist, wrist = wrist };
@@ -80,15 +81,19 @@ public class PatientArmIkSim : MonoBehaviour
             //   영상: 위팔은 침대 면을 따라 옆으로 ~90° · 팔꿈치 ~90° · 아래팔은 머리 쪽(바이셉스 포즈) → 손을 머리 위로 밀어 올리며 팔꿈치가 펴지고
             //   어깨가 더 벌어진다(+22~23초) → 바이셉스 포즈로 돌아온다 · 반복. 각(올린 끝 어깨 150° · 팔꿈치 30°)은 영상을 눈으로 본 ★추정.
             Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
-            Pose bic = Pose.J(90f, 90f);
-            Pose top = Pose.J(150f, 30f);
+            // ★10-23 5차: 사용자 «왜 팔을 위로 올릴 때 팔꿈치가 펴지냐» · ChatGPT 영상 분석(원노트 RISE 10월 그림 2장 · 2D 투영값 ±15px):
+            //   3인칭 — 올렸을 때 팔꿈치 굴곡 ~37~61°(60.25 · 62.25 · 64.75 · 66.25초) · 내렸을 때 ~138~142°(63.25 · 67초)
+            //   바디캠 — 위팔 / 몸통 아래 방향 축 ~135°(올림 58.25초) · ~42°(내림 60.75초)
+            //   → 내림 = 위팔 42° · 팔꿈치 140°(손이 어깨 쪽) · 올림 = 위팔 135° · 팔꿈치 50°(굽은 채로 머리 위). 종전 «올린 끝 150° · 팔꿈치 30°»는 어깨 경계를 넘어 IK가 팔을 폈다.
+            Pose bic = Pose.J(42f, 140f);
+            Pose top = Pose.J(135f, 50f);
             Add("2 손을 잡고 바이셉스 포즈", 3.0f, 1.0f, bic, "위팔 옆 90° · 팔꿈치 90° · 아래팔 머리 쪽");
             for (int i = 1; i <= 3; i++)
             {
                 Add($"{2 * i + 1} 들숨 - 머리 위로 밀어 올리기 ({i}/3)", 3.0f, 0.5f, top, "어깨 더 벌어짐 · 팔꿈치 펴짐");
                 Add($"{2 * i + 2} 날숨 - 바이셉스 포즈로 ({i}/3)", 3.0f, 0.5f, bic, "팔꿈치 90°로 돌아옴");
             }
-            Add("9 놓고 원위치", 3.0f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
+            Add("9 손을 놓음 - 팔이 내려옴", 1.5f, 1.5f, new Pose { mode = Mode.Initial, reach = 1f, release = true }, "쉬는 자세로 떨어져 내려옴(10-23)");
             return;
         }
 
@@ -142,6 +147,7 @@ public class PatientArmIkSim : MonoBehaviour
 
         if (phaseIdx < 0 || phaseIdx >= phases.Count) return;   // ★10-22: 단계 밖에서 매 프레임 예외가 났다(실행기가 두 번 붙었을 때)
         Phase ph = phases[phaseIdx];
+        if (ph.to.release) { phaseT += Time.deltaTime; return; }   // 놓은 뒤엔 목표를 움직이지 않는다 — 팔이 스스로 내려온다
         phaseT += Time.deltaTime;
         float k = ph.dur > 0f ? Mathf.Clamp01(phaseT / ph.dur) : 1f;
         k = k * k * (3f - 2f * k);
@@ -248,6 +254,8 @@ public class PatientArmIkSim : MonoBehaviour
         if (phaseIdx >= phases.Count) { Finish(); return; }
         phaseT = 0f;
         fromPos = probe.Target.position;
+        if (phases[phaseIdx].to.release) { probe.Target.position = probe.HandBone.position; probe.BeginRelease(); }
+        else if (probe.IsReleasing || phaseIdx > 0 && phases[phaseIdx - 1].to.release) probe.CancelRelease();
         if (demo) phaseLog.Append(videoFrame).Append('\t').Append(phases[phaseIdx].name).Append('\n');
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; fromDev = phases[phaseIdx - 1].to.dev; }
         mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = 0f;

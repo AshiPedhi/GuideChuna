@@ -120,6 +120,7 @@ public class PatientArmIkHandGrab : MonoBehaviour
             st.posOffset = inv * (t.position - wrist.position);
             st.rotOffset = inv * t.rotation;
             st.held = nearest;
+            nearest.CancelRelease();   // 내려오던 중이면 다시 붙잡는다(10-23)
             // ★10-23 사용자 지적(«해부학적 실제 신체 움직임을 적용하라고 했는데 왜 마음대로 고정시켜놓은건데»): 10-22의 견인(잡는 동안 팔꿈치를 편 채 · Traction)을
             //   해부학 명세를 넣을 때 다시 보지 않고 남겨 둬, 손을 어깨 23cm까지 당겨도 팔꿈치가 166°로 펴져 있었다(Link 로그).
             //   → 견인을 켜지 않는다. 팔꿈치는 잡은 손 자리대로 굽는다(굴곡 한계 145 안).
@@ -127,7 +128,7 @@ public class PatientArmIkHandGrab : MonoBehaviour
         }
         else if (st.held != null && !closed)
         {
-            Debug.Log($"[팔IK잡기] {handName}을 폈다 — {st.held.SideLabel}을 놓는다(놓은 자세 그대로 · 사용자 선택 B)");
+            Debug.Log($"[팔IK잡기] {handName}을 폈다 — {st.held.SideLabel}을 놓는다(쉬는 자세로 내려옴 · 10-23)");
             Release(st);
         }
 
@@ -139,8 +140,8 @@ public class PatientArmIkHandGrab : MonoBehaviour
     }
 
     /// <summary>
-    /// 놓는다 — 견인을 끄고 목표를 지금 환자 손 자리로 옮긴다. 견인 중에는 목표(내 손)가 팔 길이보다 가까울 수 있어서,
-    /// 그대로 두면 견인을 끄는 순간 팔꿈치가 굽는다 — «놓은 자세 그대로»(B)를 지키려고 목표를 손에 맞춘다.
+    /// 놓는다 — 목표를 지금 환자 손 자리로 옮기고, 팔이 쉬는 자세로 떨어져 내려오게 한다.
+    /// ★10-23 사용자 지시: «놓으면 내려오게» — 종전 10-22 B안(놓은 자세 그대로)을 바꿨다. 내려오는 시간은 probe.releaseDropSeconds.
     /// </summary>
     private static void Release(HandState st)
     {
@@ -148,6 +149,7 @@ public class PatientArmIkHandGrab : MonoBehaviour
         {
             st.held.Traction = false;
             if (st.held.Target != null && st.held.HandBone != null) st.held.Target.position = st.held.HandBone.position;
+            st.held.BeginRelease();
         }
         st.held = null;
     }
