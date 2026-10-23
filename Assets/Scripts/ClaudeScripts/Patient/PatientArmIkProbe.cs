@@ -718,7 +718,10 @@ public class PatientArmIkProbe : MonoBehaviour
         }
     }
 
-    private Vector3 chosenPoleS; private bool hasChosenPole;   // 직전에 고른 팔꿈치 쪽(S공간) — 고르기 흔들림 막기(10-23)
+    private Vector3 chosenPoleS; private bool hasChosenPole;
+    // ★10-23 진단(log-first): 팔꿈치 자리 고르기의 후보별 값 — 시뮬이 단계 끝에 한 번 켠다
+    private bool swivelDiag; private readonly System.Text.StringBuilder swivelLog = new System.Text.StringBuilder(4096);
+    public void RequestSwivelDiag() { swivelDiag = true; }   // 직전에 고른 팔꿈치 쪽(S공간) — 고르기 흔들림 막기(10-23)
     private Vector3 prevFlexW; private bool hasPrevFlex;   // 직전 프레임에 그린 위팔의 굽힘 방향(월드) — 위팔 회전 따라가기 속도 기준(10-23)
     private float lastGirdleDeg;   // 이번 프레임 쇄골 본을 들어 올린 각(로그용)
     public float GirdleDeg => lastGirdleDeg;
@@ -847,7 +850,7 @@ public class PatientArmIkProbe : MonoBehaviour
         }
         // 아래팔은 늘 경첩 면의 굽는 쪽 반 안에(★10-22 시뮬 4회차: 막힘 뒤 옆으로 꺾임 100프레임)
         Vector3 uG = (elbowGoal - a).normalized, wG = handGoal - elbowGoal;
-        if (wG.sqrMagnitude > 1e-10f) handGoal = elbowGoal + HingeDir(a, uG, wG.normalized) * l2;
+        if (wG.sqrMagnitude > 1e-10f) handGoal = elbowGoal + HingeDir(a, uG, wG.normalized, true) * l2;
         Vector3 rawForearm = t - elbowGoal;   // ② 위팔 회전이 «천천히» 따라갈 방향(손을 어느 쪽으로 끄는지)
 
         // ① 위팔: 팔꿈치를 elbowGoal로
@@ -1134,11 +1137,33 @@ public class PatientArmIkProbe : MonoBehaviour
                 RotLimits(u, out float lo, out float hi);
                 rotViol = rot < lo ? lo - rot : rot > hi ? rot - hi : 0f;
             }
-            float cost = 4f * coneViol + 4f * rotViol + 0.05f * (ang > 180f ? 360f - ang : ang);
+            // ★10-23 근긴장 명세 §4 · §9-3: 외회전 끝은 벽이 아니라 지수형(굳는 폭 12°) — 끝 20° 안쪽부터 비용이 붙어 «미리 버틴다».
+            //   팔꿈치 높이: 정상 이완 팔은 침대 높이 · 침대 밖이어도 −10°까지(§9-2) — 그보다 떨어지면 비용.
+            float erSoft = 0f;
+            if (f.sqrMagnitude > 1e-8f)
+            {
+                Quaternion swS = Quaternion.FromToRotation(-U, u);
+                float rotS = Mathf.Atan2(Vector3.Dot(f, swS * -L), Vector3.Dot(f, swS * F)) * Mathf.Rad2Deg;
+                RotLimits(u, out float loS, out float _);
+                erSoft = 12f * Mathf.Exp(Mathf.Clamp((loS - rotS) / 12f, -10f, 5f));
+            }
+            float dBedC = Mathf.Asin(Mathf.Clamp(Vector3.Dot(u, F), -1f, 1f)) * Mathf.Rad2Deg;
+            float dropCost = dBedC < -10f ? 2f * (-dBedC - 10f) : 0f;
+            float cost = 4f * coneViol + 4f * rotViol + erSoft + dropCost + 0.05f * (ang > 180f ? 360f - ang : ang);
             // ★10-23 시연 5차: 팔이 펴지며 원이 작아질 때 10° 칸 사이를 오가 위팔 회전이 −61 ↔ −75로 흔들렸다 → 직전에 고른 쪽에서 멀어지는 만큼 비용
             if (hasChosenPole) cost += 0.02f * Vector3.Angle(pc, chosenPoleS - Vector3.Dot(chosenPoleS, dir) * dir);
             if (cost < best) { best = cost; bestPole = pc; }
+            if (swivelDiag)
+            {
+                float dBed = Mathf.Asin(Mathf.Clamp(Vector3.Dot(u, F), -1f, 1f)) * Mathf.Rad2Deg;
+                float rSw = 0f;
+                if (f.sqrMagnitude > 1e-8f) { Quaternion sq = Quaternion.FromToRotation(-U, u); rSw = Mathf.Atan2(Vector3.Dot(f, sq * -L), Vector3.Dot(f, sq * F)) * Mathf.Rad2Deg; }
+                swivelLog.Append("\n  ψ").Append(ang.ToString("0")).Append(" 침대면대비 ").Append(dBed.ToString("+0;-0")).Append("° θ").Append(Vector3.Angle(u, -U).ToString("0"))
+                         .Append(" φ").Append(PhiS(u).ToString("0")).Append(" 굴곡").Append(flex.ToString("0")).Append(" 회전(swing)").Append(rSw.ToString("0"))
+                         .Append(" 경계넘침").Append(coneViol.ToString("0")).Append(" 회전넘침").Append(rotViol.ToString("0")).Append(" 비용").Append(cost.ToString("0.0"));
+            }
         }
+        if (swivelDiag) { Debug.Log($"[팔IK] {sideLabel} 팔꿈치 자리 진단 — 고른 쪽 비용 {best:0.0}" + swivelLog); swivelLog.Clear(); swivelDiag = false; }
         chosenPoleS = bestPole; hasChosenPole = true;
         return bestPole;
     }
@@ -1168,11 +1193,20 @@ public class PatientArmIkProbe : MonoBehaviour
     /// 아래팔 방향 w를 경첩 면(위팔 축 u + 해부학 굴곡 방향)의 «굽는 쪽 반»으로 옮긴다(S공간). 팔꿈치는 경첩이다.
     /// 굴곡 방향은 지금 위팔에 붙은 것을 u로 옮긴 위팔에 붙여 옮긴다(위팔 ①이 하는 최소 회전과 같다).
     /// </summary>
-    private Vector3 HingeDir(Vector3 aS, Vector3 u, Vector3 w)
+    private Vector3 HingeDir(Vector3 aS, Vector3 u, Vector3 w, bool fromPrevOutput = false)
     {
         if (!flexRefReady) return w;
         Vector3 uNow = (space.InverseTransformPoint(lower.position) - aS).normalized;
-        Vector3 fS = Quaternion.FromToRotation(uNow, u) * space.InverseTransformVector(upper.TransformVector(flexRefInUpper));
+        Vector3 fNow = space.InverseTransformVector(upper.TransformVector(flexRefInUpper));
+        // ★10-23 진단: 풀이 첫머리(위팔을 아직 안 돌린 때)엔 위팔이 애니가 되돌린 쉰 자세(회전 +5°)라, 그 경첩 면에 아래팔을 맞추면
+        //   외회전 −90°로 굽어야 할 팔이 «반대쪽»으로 읽혀 펴졌다(제2늑골 밀어 올리기 — 팔꿈치 자리는 맞게 골랐는데 출력이 13°).
+        //   → 그 자리에선 직전 프레임에 «그린» 위팔 축 · 굽힘 방향을 쓴다.
+        if (fromPrevOutput && hasPrevFlex && hasPrevUpperDir)
+        {
+            uNow = space.InverseTransformVector(prevUpperDirW).normalized;
+            fNow = space.InverseTransformVector(prevFlexW);
+        }
+        Vector3 fS = Quaternion.FromToRotation(uNow, u) * fNow;
         fS -= Vector3.Dot(fS, u) * u;
         if (fS.sqrMagnitude < 1e-10f) return w;
         fS.Normalize();
@@ -1234,6 +1268,22 @@ public class PatientArmIkProbe : MonoBehaviour
     ///   θ 90 → 그 방향 최대 : 외 90 그대로 · 내 70 → 30(★추정 — 최대 거상엔 외회전 쪽이 필요, Browne)
     /// ★10-22 명세: 종전엔 머리 위에서 «외회전 27 이상»을 강제했다(Inui 27은 거상 중 최대값 — 오독).
     /// </summary>
+    /// <summary>
+    /// 외회전 끝값(°) — 위팔 거상 θ의 함수 + 견갑 후인 보탬.
+    /// ★10-23 근긴장 명세 §8(D:/CoCoChuna_환자팔_근긴장_수동장력_명세_V0.1_20261023): 0° 77.5(70~85 ✕) · 90° 110(Gold 2007 111 ○ · Beardsley 2010 119 ◎) ·
+    ///   120° 105 · 135° 102.5 · 150°+ 95(✕ 추정) · 견갑 후인을 다 쓰면 +12.5(Aliaj 2022 10~15 ○ · 크기 옮김 ✕).
+    /// ★종전(10-22): 60 → 90 직선이라 거상 42°에서 74° — 바이셉스 포즈(침대 면 · 외회전 90 필요)가 «넘침 16»으로 판정돼
+    ///   팔꿈치 자리 고르기가 팔꿈치를 침대 아래로 54° 떨어뜨려 거상을 키우는(한계가 느슨해지는) 쪽으로 빠졌다(10-23 진단 로그).
+    /// </summary>
+    private float ExternalRotEnd(float theta)
+    {
+        float er = theta <= 90f ? Mathf.Lerp(77.5f, 110f, theta / 90f)
+                 : theta <= 120f ? Mathf.Lerp(110f, 105f, (theta - 90f) / 30f)
+                 : theta <= 135f ? Mathf.Lerp(105f, 102.5f, (theta - 120f) / 15f)
+                 : Mathf.Lerp(102.5f, 95f, Mathf.Clamp01((theta - 135f) / 15f));
+        return er + 12.5f * Mathf.Clamp01(lastGirdleRetractDeg / Mathf.Max(1f, girdleRetractionMax));
+    }
+
     private void RotLimits(Vector3 uS, out float lo, out float hi)
     {
         lo = -shoulderExternalRotAtSide;
@@ -1243,7 +1293,7 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 u = uS.normalized;
         float theta = Vector3.Angle(u, -U);
         float t1 = Mathf.Clamp01(theta / 90f);
-        lo = -Mathf.Lerp(shoulderExternalRotAtSide, shoulderExternalRotMax, t1);
+        lo = -ExternalRotEnd(theta);
         hi = Mathf.Lerp(shoulderInternalRotAtSide, shoulderInternalRotMax, t1);
         if (theta > 90f)
         {

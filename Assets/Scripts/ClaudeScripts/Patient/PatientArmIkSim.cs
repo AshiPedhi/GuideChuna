@@ -365,6 +365,7 @@ public class PatientArmIkSim : MonoBehaviour
            .Append((pen * 1000f).ToString("F0")).Append(',').Append(jump.ToString("F1")).Append(',')
            .Append(hingeOff.ToString("F0")).Append(',').Append(lim.Replace(',', ' ')).Append('\n');
         if (demo) CaptureVideoFrame();
+        // (10-23 진단 끝 — 다시 볼 때: if (demo && phaseIdx == 2 && videoFrame % 10 == 0) probe.RequestSwivelDiag();)
 
         // ── 단계 끝 ──
         if (phaseT >= ph.dur + ph.hold)
@@ -379,6 +380,7 @@ public class PatientArmIkSim : MonoBehaviour
                 $"걸린 한계 {(hits.Count > 0 ? string.Join(" · ", hits) : "없음")} · {nFrames}프레임";
             Debug.Log(line);
             summary.Append(line).Append('\n');
+            // (10-23 진단: 단계 끝마다 → 밀어 올리기 중 10프레임마다로 옮김)
             if (capture) CaptureViews(phaseIdx);
             NextPhase();
         }
