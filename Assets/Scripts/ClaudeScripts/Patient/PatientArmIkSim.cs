@@ -27,7 +27,6 @@ public class PatientArmIkSim : MonoBehaviour
     private struct Pose
     {
         public Mode mode; public float abd, tilt, reach, twist, wrist, dev;   // dev = 손목 옆 꺾기(요측 · 척측 시험 · 10-22 명세)
-        public bool traction;   // 손으로 잡은 것처럼 견인(팔을 편 채 · 10-22)
         public static Pose D(float abd, float tilt, float reach = 1f, float twist = 0f, float wrist = 0f)
             => new Pose { mode = Mode.Dir, abd = abd, tilt = tilt, reach = reach, twist = twist, wrist = wrist };
     }
@@ -121,14 +120,15 @@ public class PatientArmIkSim : MonoBehaviour
         Add("침대 속으로 누르기", 1.5f, 0.8f, new Pose { mode = Mode.BedPress, reach = 1f }, "침대 윗면에서 막힘");
         Add("빠르게 휘두르기 (0.5초에 옆 → 머리 위)", 0.5f, 0.8f, Pose.D(170, 0), "튐 없음");
         // 10-22: 손으로 잡은 상태(견인) — 사용자 실기에서 내 손이 어깨에서 0.21~0.41m라 팔꿈치가 굽고 외회전이 안 됐다
-        Pose tA = Pose.D(90, -40, 0.6f); tA.traction = true;
-        Pose tB = Pose.D(90, -40, 0.6f, 80); tB.traction = true;
-        Pose tC = Pose.D(90, -40, 0.6f, -80); tC.traction = true;
-        Pose tD = Pose.D(90, -40, 0.6f, 0, 50); tD.traction = true;
-        Add("견인 — 손을 어깨 쪽(0.6배)에 둔 영상 자세", 2f, 0.8f, tA, "팔꿈치 편 채 · 어깨 뒤로 40°");
-        Add("견인 + 비틀기 +80°", 1.5f, 0.8f, tB, "팔 편 채 위팔 회전(외 · 내 중 하나)");
-        Add("견인 + 비틀기 −80°", 2f, 0.8f, tC, "반대 회전");
-        Add("견인 + 손목 +50°", 1.5f, 0.8f, tD, "손목 꺾임 · 팔 편 채");
+        // ★10-23: 손 잡기에서 견인(팔꿈치 고정)을 뺐다(사용자 — 해부학대로) → 같은 자리에서 «팔꿈치가 굽은 채» 비틀기 · 손목을 잰다
+        Pose tA = Pose.D(90, -40, 0.6f);
+        Pose tB = Pose.D(90, -40, 0.6f, 80);
+        Pose tC = Pose.D(90, -40, 0.6f, -80);
+        Pose tD = Pose.D(90, -40, 0.6f, 0, 50);
+        Add("손을 어깨 쪽(0.6배)으로 — 팔꿈치 굽힘", 2f, 0.8f, tA, "팔꿈치가 경첩 방향으로 굽음 · 한계 145 안");
+        Add("굽힌 팔 + 비틀기 +80°", 1.5f, 0.8f, tB, "아래팔 회내 · 회외가 먼저 · 넘는 만큼 어깨");
+        Add("굽힌 팔 + 비틀기 −80°", 2f, 0.8f, tC, "반대 회전");
+        Add("굽힌 팔 + 손목 +50°", 1.5f, 0.8f, tD, "손목 꺾임");
         // 10-22 사용자 지적: 팔을 머리 위로 올리고 손을 돌리면 어깨가 아니라 아래팔이 돈다 — 아래팔 80°까지, 넘는 만큼 어깨
         Add("머리 위 + 손 비틀기 +60°", 2f, 0.8f, Pose.D(170, 0, 1f, 60), "아래팔만 60° · 어깨 회전 그대로");
         Add("머리 위 + 손 비틀기 +150°", 1.5f, 0.8f, Pose.D(170, 0, 1f, 150), "아래팔이 중립 기준 한계(회외 90 · 회내 85)에서 멈추고 넘는 만큼 어깨로 · 어깨는 그 거상의 한계 ±5");
@@ -144,7 +144,6 @@ public class PatientArmIkSim : MonoBehaviour
 
         if (phaseIdx < 0 || phaseIdx >= phases.Count) return;   // ★10-22: 단계 밖에서 매 프레임 예외가 났다(실행기가 두 번 붙었을 때)
         Phase ph = phases[phaseIdx];
-        probe.Traction = ph.to.traction;
         phaseT += Time.deltaTime;
         float k = ph.dur > 0f ? Mathf.Clamp01(phaseT / ph.dur) : 1f;
         k = k * k * (3f - 2f * k);
@@ -231,8 +230,6 @@ public class PatientArmIkSim : MonoBehaviour
         phaseT = 0f;
         fromPos = probe.Target.position;
         if (demo) phaseLog.Append(videoFrame).Append('\t').Append(phases[phaseIdx].name).Append('\n');
-        // 견인을 끄는 단계면 손을 놓을 때(PatientArmIkHandGrab.Release)처럼 목표를 지금 환자 손 자리로 — 남은 목표가 팔 길이보다 가까워 팔꿈치가 접히지 않게
-        if (phaseIdx > 0 && phases[phaseIdx - 1].to.traction && !phases[phaseIdx].to.traction) { probe.Target.position = probe.HandBone.position; fromPos = probe.HandBone.position; }
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; fromDev = phases[phaseIdx - 1].to.dev; }
         mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = 0f;
         nFrames = nWrong = nSideways = nJump = nPen = nOver = 0;
@@ -327,7 +324,8 @@ public class PatientArmIkSim : MonoBehaviour
             jump = Mathf.Max(Quaternion.Angle(pU, up.localRotation), Mathf.Max(Quaternion.Angle(pL, lo.localRotation), Quaternion.Angle(pH, ha.localRotation)));
         pU = up.localRotation; pL = lo.localRotation; pH = ha.localRotation; hasPrev = true;
         float expected = 360f * Time.deltaTime;   // 초당 360°보다 빠르면 «튐»(사람 팔이 그렇게 돌지 않는다)
-        if (jump > Mathf.Max(8f, expected)) nJump++;
+        // ★10-23: 속도 제한 뒤 막힘 보정 · 한계가 조금 더 돌려 긴 프레임(캡처 직후 0.08초)에서 374°/초로 «튐»에 걸렸다 → 10% 여유
+        if (jump > Mathf.Max(8f, expected * 1.1f)) nJump++;
         mJump = Mathf.Max(mJump, jump);
 
         string lim = probe.LimitHit;

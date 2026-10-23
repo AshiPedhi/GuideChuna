@@ -662,7 +662,12 @@ public class PatientArmIkProbe : MonoBehaviour
         }
         // ★10-22 명세 시뮬: 속도 제한 · 제자리 막힘 보정이 한계 «뒤에» 돌아 출력이 한계를 넘었다(머리 위에서 뒤로 θ 90 > 경계 84 · 팔꿈치 150 > 145).
         //   → 그리는 자세에 마지막으로 어깨 방향별 경계 · 팔꿈치 굴곡 한계를 한 번 더 건다. 한계가 이긴다.
-        if (weight > 0f && applyLimits && frameReady) EnforceFinalLimits();
+        if (weight > 0f && applyLimits && frameReady)
+        {
+            EnforceFinalLimits();
+            // ★10-23 시뮬: 한계가 막힘을 이긴 뒤 몸통 · 침대 안으로 미는 단계에서 아래팔이 16~37mm 남았다 → 막힘 보정 · 한계를 한 번 더(그래도 한계가 마지막)
+            if (applyCollision) { CorrectCollisionInPlace(); EnforceFinalLimits(); }
+        }
 
         wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation; wroteClav = space.localRotation;
         prevUpperDirW = (lower.position - upper.position).normalized; hasPrevUpperDir = true;
@@ -859,22 +864,9 @@ public class PatientArmIkProbe : MonoBehaviour
 
         // ②-2 운반각(10-22 명세) — 편 팔에서 아래팔이 바깥으로 elbowCarryingAngle(12.9°) 벌어지고, 굽힐수록 0으로(★직선 추정).
         //   경첩 면을 맞춘 «뒤에» 얹는다(경첩 면 투영이 바깥 성분을 지우기 때문). «바깥»은 위팔에 붙은 실측 방향.
-        if (applyLimits && carryRefReady && elbowCarryingAngle > 0f)
         {
             Vector3 bC = space.InverseTransformPoint(lower.position);
-            Vector3 uC2 = (bC - a).normalized;
-            Vector3 wC2 = handGoal - bC;
-            if (wC2.sqrMagnitude > 1e-10f)
-            {
-                wC2.Normalize();
-                float flexC = Vector3.Angle(uC2, wC2);
-                float cAng = elbowCarryingAngle * Mathf.Clamp01(1f - flexC / Mathf.Max(1f, elbowFlexionMax));
-                Vector3 latS = space.InverseTransformVector(upper.TransformVector(carryLateralInUpper));
-                latS -= Vector3.Dot(latS, wC2) * wC2;
-                if (cAng > 0.01f && latS.sqrMagnitude > 1e-8f)
-                    handGoal = bC + (wC2 * Mathf.Cos(cAng * Mathf.Deg2Rad) + latS.normalized * Mathf.Sin(cAng * Mathf.Deg2Rad)).normalized * l2;
-                lastCarryDeg = cAng;
-            }
+            handGoal = WithCarry(bC, (bC - a).normalized, handGoal, l2, Quaternion.identity);
         }
 
         // ③ 아래팔: 손을 handGoal로
@@ -1051,10 +1043,33 @@ public class PatientArmIkProbe : MonoBehaviour
         if (applyLimits && frameReady) ApplyJointLimits(a, (b - a).magnitude, l2, h, ref e, ref h, ref dummy);   // 한계가 이긴다(7회차)
         Vector3 uC = (e - a).normalized, wC = h - e;
         if (wC.sqrMagnitude > 1e-10f) h = e + HingeDir(a, uC, wC.normalized) * l2;
+        // ★10-23 시뮬: 경첩 면 투영이 운반각을 지워, 막힘에 닿는 프레임마다 아래팔이 12.9°(= 운반각) 튀었다 → 투영 뒤에 운반각을 다시 얹는다
+        h = WithCarry(e, uC, h, l2, Quaternion.FromToRotation(b - a, e - a));
         RotateInS(upper, Quaternion.FromToRotation(b - a, e - a));
         Vector3 b2 = space.InverseTransformPoint(lower.position);
         Vector3 c2 = space.InverseTransformPoint(hand.position);
         RotateInS(lower, Quaternion.FromToRotation(c2 - b2, h - b2));
+    }
+
+    /// <summary>
+    /// 운반각(10-22 명세) — 경첩 면 안의 손 자리(handGoal)에 «바깥»(위팔에 붙은 실측 방향) 성분을 얹는다. 편 팔 elbowCarryingAngle(12.9°) · 굽힐수록 0(★직선 추정).
+    /// upperDelta = 이 자리를 쓰기 전에 위팔이 더 돌 회전(S공간) — 바깥 방향도 같이 돌린다.
+    /// ★10-23: 풀이와 제자리 막힘 보정이 같은 함수를 탄다(따로 두니 보정 쪽에서 운반각이 빠져 12.9° 튀었다).
+    /// </summary>
+    private Vector3 WithCarry(Vector3 elbowS, Vector3 uS, Vector3 handGoal, float l2, Quaternion upperDelta)
+    {
+        if (!(applyLimits && carryRefReady && elbowCarryingAngle > 0f)) return handGoal;
+        Vector3 w = handGoal - elbowS;
+        if (w.sqrMagnitude < 1e-10f) return handGoal;
+        w.Normalize();
+        float flex = Vector3.Angle(uS, w);
+        float cAng = elbowCarryingAngle * Mathf.Clamp01(1f - flex / Mathf.Max(1f, elbowFlexionMax));
+        Vector3 lat = upperDelta * space.InverseTransformVector(upper.TransformVector(carryLateralInUpper));
+        lat -= Vector3.Dot(lat, w) * w;
+        if (cAng > 0.01f && lat.sqrMagnitude > 1e-8f)
+            handGoal = elbowS + (w * Mathf.Cos(cAng * Mathf.Deg2Rad) + lat.normalized * Mathf.Sin(cAng * Mathf.Deg2Rad)).normalized * l2;
+        lastCarryDeg = cAng;
+        return handGoal;
     }
 
     /// <summary>
