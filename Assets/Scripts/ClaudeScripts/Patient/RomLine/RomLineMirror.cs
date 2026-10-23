@@ -41,7 +41,7 @@ public class RomLineMirror : MonoBehaviour
 
     [Header("=== 현실 영상 (Passthrough Camera Access) ===")]
     [Tooltip("요청할 카메라 해상도. 지원 목록에 없으면 바로 아래 해상도가 골라진다.")]
-    [SerializeField] private Vector2Int camResolution = new Vector2Int(640, 480);
+    [SerializeField] private Vector2Int camResolution = new Vector2Int(1200, 900);   // 10-23 사용자 지시: 기본 1200×900(런타임 AddComponent라 코드 기본값이 먹는다)
     [Tooltip("현실 영상을 보내는 간격(초). 10-21 사용자 지시: 상한을 낮춰 배터리 · 발열을 줄인다 — 1/15초(최대 15장/s · 종전 0.05 = 20장/s). 런타임 AddComponent라 코드 기본값이 먹는다.")]
     [SerializeField] private float camInterval = 1f / 15f;
     [Tooltip("현실 영상 위에 앱 화면(끝점 · 선 · 각도기 · 벽면UI)을 겹친다. 끄면 카메라 영상만 보낸다.")]
@@ -85,8 +85,9 @@ public class RomLineMirror : MonoBehaviour
 
     private float diagNext, diagFrom;
 
-    /// <summary>관제 화면의 해상도 버튼(10-20 사용자 지시 · 우측 상단 셋). 전부 4:3 — 화면 칸의 비율이 안 바뀐다. 지원 목록은 기기 로그로 확인(320×240 ~ 1280×1280).</summary>
-    public static readonly Vector2Int[] CamChoices = { new Vector2Int(640, 480), new Vector2Int(800, 600), new Vector2Int(1280, 960) };
+    /// <summary>관제 화면의 해상도 버튼(10-20 사용자 지시 · 우측 상단 셋). 전부 4:3 — 화면 칸의 비율이 안 바뀐다. 지원 목록은 기기 로그로 확인(320×240 ~ 1280×1280).
+    /// ★10-23 사용자 지시: 800×600 · 1200×900 · 1600×1200(종전 640×480 · 800×600 · 1280×960). 1600×1200이 지원 목록 밖이면 카메라가 바로 아래로 연다 — 실제 크기는 «첫 영상» 로그로 본다.</summary>
+    public static readonly Vector2Int[] CamChoices = { new Vector2Int(800, 600), new Vector2Int(1200, 900), new Vector2Int(1600, 1200) };
     private Vector2Int pendingRes;   // 바꿀 해상도 — 인코딩 중인 장이 끝난 뒤(camBusy 아님)에 카메라를 다시 연다
     private readonly StringBuilder info = new StringBuilder(512);
 
@@ -194,7 +195,7 @@ public class RomLineMirror : MonoBehaviour
             {
                 pcaShownRes = pca.CurrentResolution;
                 pcaState = $"받는 중 {pcaShownRes.x}×{pcaShownRes.y}";
-                Debug.Log("[선실측] 미러링 — 현실 영상: 첫 영상 · " + pcaState);
+                Debug.Log($"[선실측] 미러링 — 현실 영상: 첫 영상 · {pcaState}(요청 {camResolution.x}×{camResolution.y})");
             }
         }
 

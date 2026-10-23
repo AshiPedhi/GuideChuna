@@ -175,7 +175,7 @@ const tabsEl = $('tabs');
 TABS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });
 // 미러링 해상도 — 앱 RomLineMirror.CamChoices와 같은 순서(cam0 · cam1 · cam2)
 const resEl = $('res');
-['640x480', '800x600', '1280x960'].forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r.replace('x', ' × '); o.dataset.r = r; resEl.appendChild(o); });
+['800x600', '1200x900', '1600x1200'].forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r.replace('x', ' × '); o.dataset.r = r; resEl.appendChild(o); });
 let resPicked = 0;   // 고른 직후 몇 초는 앱이 아직 옛 해상도를 알려 오므로 덮어쓰지 않는다
 resEl.onchange = () => { cmd('cam' + resEl.value); resPicked = Date.now(); };
 const rowsEl = $('rows');
