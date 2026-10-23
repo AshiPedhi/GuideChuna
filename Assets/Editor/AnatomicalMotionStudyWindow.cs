@@ -9,10 +9,10 @@ using UnityEngine;
 /// <summary>Body-relative motion inspection on a disposable generated patient, outside the user's scenes.</summary>
 public sealed class AnatomicalMotionStudyWindow : EditorWindow
 {
-    internal enum CameraView { FrontOblique, Front, Side, Back }
+    internal enum CameraView { FrontOblique, Front, Side, Back, SupineOblique, SupineTop }
     private AnatomicalMotionSequence.Motion motion = AnatomicalMotionSequence.Motion.Rib2Study;
     private AnatomicalPatientLab.View view;
-    private CameraView cameraView;
+    private CameraView cameraView = CameraView.SupineOblique;
     private bool left = true;
     private bool showShirt;
     private bool running;
@@ -360,8 +360,17 @@ public sealed class AnatomicalMotionStudyWindow : EditorWindow
             Lab.SetUpperClothingVisible(shirt);
             Lab.SetView(requestedView);
             bool began = false;
+            Vector3 rootPosition = Root.transform.position;
+            Quaternion rootRotation = Root.transform.rotation;
             try
             {
+                bool supine = direction == CameraView.SupineOblique || direction == CameraView.SupineTop;
+                if (supine)
+                {
+                    // Rotate only the disposable presentation, never its joint
+                    // data. c9 +Y (cranial) becomes -Z, +Z (anterior) becomes +Y.
+                    Root.transform.SetPositionAndRotation(new Vector3(0f, 0f, 1.3f), Quaternion.Euler(-90f, 0f, 0f));
+                }
                 foreach (var snapshot in snapshots) snapshot.SourceWasEnabled = snapshot.Source.enabled;
                 foreach (var snapshot in snapshots)
                 {
@@ -379,8 +388,10 @@ public sealed class AnatomicalMotionStudyWindow : EditorWindow
                 if (direction == CameraView.Front) position = new Vector3(0f, 1.55f, 4f);
                 else if (direction == CameraView.Side) position = new Vector3(isLeft ? -4f : 4f, 1.55f, 0f);
                 else if (direction == CameraView.Back) position = new Vector3(0f, 1.55f, -4f);
+                else if (direction == CameraView.SupineOblique) { target = Vector3.zero; position = new Vector3(1.8f, 2.1f, 2.4f); }
+                else if (direction == CameraView.SupineTop) { target = Vector3.zero; position = new Vector3(0f, 3.2f, 0f); }
                 preview.camera.transform.position = target + (position - target) / magnification;
-                preview.camera.transform.LookAt(target);
+                preview.camera.transform.LookAt(target, direction == CameraView.SupineTop ? Vector3.back : Vector3.up);
                 preview.BeginPreview(new Rect(0f, 0f, width, height), GUIStyle.none);
                 began = true;
                 preview.Render();
@@ -398,6 +409,7 @@ public sealed class AnatomicalMotionStudyWindow : EditorWindow
                         snapshot.Source.enabled = snapshot.SourceWasEnabled;
                         snapshot.Renderer.enabled = false;
                     }
+                    Root.transform.SetPositionAndRotation(rootPosition, rootRotation);
                 }
             }
         }
@@ -512,7 +524,7 @@ internal static class AnatomicalMotionStudyExport
 
         private void ReadPanel(AnatomicalPatientLab.View view, int offset)
         {
-            Texture rendered = session.Render(512, 512, view, false, AnatomicalMotionStudyWindow.CameraView.FrontOblique, 1.1f, false);
+            Texture rendered = session.Render(512, 512, view, false, AnatomicalMotionStudyWindow.CameraView.SupineOblique, 1.1f, false);
             RenderTexture buffer = RenderTexture.GetTemporary(512, 512, 0, RenderTextureFormat.ARGB32);
             RenderTexture previous = RenderTexture.active;
             try

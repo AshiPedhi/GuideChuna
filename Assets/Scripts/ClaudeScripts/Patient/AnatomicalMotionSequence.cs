@@ -4,8 +4,9 @@ using UnityEngine;
 /// Reproducible joint-space studies for the independent patient rig. The editor
 /// preview and exported studies call this same sampler and Rig.Evaluate(Pose).
 /// These are presentation trajectories, not clinical ROM limits or recovered
-/// motion capture. In particular Rib2Study preserves the observed bent elbow
-/// and neutral wrist; its angles and timing are explicitly authoring estimates.
+/// motion capture. Rib2Study follows three observed projected poses, using an
+/// assumed camera/depth branch and slow inspection timing. Its 3D angles are
+/// authoring estimates; its wrist remains neutral to the forearm.
 /// </summary>
 public static class AnatomicalMotionSequence
 {
@@ -34,7 +35,7 @@ public static class AnatomicalMotionSequence
             case Motion.NeckSidebend: return "목 좌우 측굴";
             case Motion.NeckRotation: return "목 좌우 회전";
             case Motion.CompositeNeck: return "목 복합 움직임";
-            case Motion.Rib2Study: return "제2늑골 영상 참고 동작 (각도 근사)";
+            case Motion.Rib2Study: return "제2늑골 영상 참고 동작 (느린 확인·3D 근사)";
             default: return motion.ToString();
         }
     }
@@ -44,12 +45,14 @@ public static class AnatomicalMotionSequence
         if (motion == Motion.Rib2Study)
         {
             if (seconds < 2f) return "준비";
-            if (seconds < 6f) return "파지·팔을 옆으로 이동";
+            if (seconds < 6f) return "파지·팔을 굽혀 준비";
             if (seconds < 30f)
             {
                 int repetition = Mathf.Min(3, 1 + (int)((seconds - 6f) / 8f));
-                bool outward = (seconds - 6f) % 8f < 4f;
-                return "반복 " + repetition + "/3 · " + (outward ? "벌린 팔 이동" : "굽힌 자세로 복귀");
+                float cycle = (seconds - 6f) % 8f;
+                string phase = cycle < 3.2f ? "팔을 크게 펴서 머리 쪽으로" :
+                    cycle < 6.4f ? "편 팔을 발 쪽으로 이동" : "팔꿈치를 굽혀 복귀";
+                return "느린 반복 " + repetition + "/3 · " + phase;
             }
             return "파지 해제·원위치";
         }
@@ -138,28 +141,45 @@ public static class AnatomicalMotionSequence
     private static AnatomicalPatientRig.ArmPose Rib2Arm(float time, float sign)
     {
         var neutral = RelaxedArm();
-        // Two views show an abducted, persistently bent arm. They do not justify
-        // the earlier 150-degree overhead/30-degree elbow endpoint. This study
-        // uses a small excursion while keeping the wrist neutral to the forearm.
-        // Raw humeral roll is checked against the measured elbow pole by the
-        // output-bone verification; it is not an Euler guess about c9 bone axes.
-        var held = new AnatomicalPatientRig.ArmPose
+        // Correction 2026-10-23: coarse 4-second sampling missed the wide and
+        // lowered phases. The old 80..100 / 100..85 small excursion was not a
+        // source measurement. Dense third-person samples at 60.25, 62.25 and
+        // 63.25 s show Wide -> Lowered -> Folded. VideoRange.cs fits one 3D
+        // branch to those 2D landmarks using saved segment lengths, an assumed
+        // orthographic camera/scale and selected depth signs. These are NOT
+        // uniquely recovered clinical angles. The independent projection menu
+        // measures this sampler's actual runtime output under those assumptions.
+        bool left = sign > 0f;
+        var folded = new AnatomicalPatientRig.ArmPose
         {
-            shoulderElevation = 80f, elevationPlane = 90f,
-            elbowFlexion = 100f, humeralRotation = sign * 85f
+            shoulderElevation = 45.613373f, elevationPlane = 84.944122f,
+            elbowFlexion = 143.727676f,
+            humeralRotation = left ? 93.753456f : -93.747841f
+        };
+        var wide = new AnatomicalPatientRig.ArmPose
+        {
+            shoulderElevation = 147.997910f, elevationPlane = 153.417053f,
+            elbowFlexion = 31.016958f,
+            humeralRotation = left ? 102.148697f : -102.142319f
+        };
+        var lowered = new AnatomicalPatientRig.ArmPose
+        {
+            shoulderElevation = 71.198639f, elevationPlane = 100.330460f,
+            elbowFlexion = 53.643074f,
+            humeralRotation = left ? 73.620827f : -73.615242f
         };
         if (time <= 2f) return neutral;
-        if (time < 6f) return Lerp(neutral, held, Smooth((time - 2f) / 4f));
+        if (time < 6f) return Lerp(neutral, folded, Smooth((time - 2f) / 4f));
         if (time < 30f)
         {
+            // Eight-second cycles slow the source for inspection. These times
+            // are authored; they are not synchronized video/respiration timing.
             float cycle = (time - 6f) % 8f;
-            float reach = cycle <= 4f ? Smooth(cycle / 4f) : 1f - Smooth((cycle - 4f) / 4f);
-            var extended = held;
-            extended.shoulderElevation = 100f;
-            extended.elbowFlexion = 85f;
-            return Lerp(held, extended, reach);
+            if (cycle < 3.2f) return Lerp(folded, wide, Smooth(cycle / 3.2f));
+            if (cycle < 6.4f) return Lerp(wide, lowered, Smooth((cycle - 3.2f) / 3.2f));
+            return Lerp(lowered, folded, Smooth((cycle - 6.4f) / 1.6f));
         }
-        return Lerp(held, neutral, Smooth((time - 30f) / 4f));
+        return Lerp(folded, neutral, Smooth((time - 30f) / 4f));
     }
 
     private static AnatomicalPatientRig.ArmPose Lerp(AnatomicalPatientRig.ArmPose a,

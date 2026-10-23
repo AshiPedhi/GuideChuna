@@ -5,7 +5,7 @@
 //   ★잰 값은 전부 출력 뼈 위치에서 잰다(풀이기에 넣은 각도를 결과로 쓰지 않는다). 몸 축은 빌더가 잰 anatomicalBasis.
 //   ★이 리그에는 침대 · 몸통 막힘과 방향별 어깨 한계가 없다(ChatGPT 보고) — 관통은 재지 않는다. 풀이기 범위는 «탐색 범위»이지 임상 한계가 아니다.
 //   편집 모드 미리보기 장면에서만 돈다 — 열린 씬 · 프리팹을 고치지 않고 Play도 걸지 않는다.
-//   결과: Temp/anat_sim/<시각>_<팔>/summary.txt · frames.csv · 캡처. 시연은 30Hz 수치 + 최대 12개 시점의 피부/골격 정지화면만 남긴다.
+//   결과: Temp/anat_sim/<시각>_<팔>/summary.txt · frames.csv · 캡처. 시연은 30Hz 수치 + 최대 15개 시점의 피부/골격 정지화면만 남긴다.
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -74,7 +74,7 @@ public static partial class AnatomicalPatientBuild
         var preview = new PreviewRenderUtility();
         try
         {
-            GameObject root = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(receipt.prefab));
+            GameObject root = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(receipt.prefab), preview.camera.gameObject.scene);
             preview.AddSingleGO(root);
             var rig = root.GetComponent<AnatomicalPatientRig>();
             var lab = root.GetComponent<AnatomicalPatientLab>();
@@ -308,7 +308,7 @@ public static partial class AnatomicalPatientBuild
                 report.sequenceSha256 = BitConverter.ToString(sha.ComputeHash(File.ReadAllBytes(path))).Replace("-", "").ToLowerInvariant();
             break;
         }
-        Debug.Log($"[해부학리그시험] {label} 제2늑골 공유 관절 경로 시작 — {duration:F2}초, 30Hz, 피부/골격 정지화면 최대 12시점 · 손 방향 월드 고정 없음 · {outDir}");
+        Debug.Log($"[해부학리그시험] {label} 제2늑골 공유 관절 경로 시작 — {duration:F2}초, 30Hz, 피부/골격 정지화면 최대 15시점 · 손 방향 월드 고정 없음 · {outDir}");
         var csv = new StringBuilder("sample,t_seconds,phase,input_mode,req_elev,req_plane,req_humrot,req_elbow,req_forearm,req_wflex,req_wdev,actual_elev,actual_elbow,elbow_error_deg,elevation_error_deg,neutral_wrist_error_deg,frame_jump_deg,forearm_headward_dot");
         foreach (string boneName in new[] { "clavicle", "scapula", "humerus", "ulna", "radius", "hand" })
             csv.Append(',').Append(boneName).Append("_x,").Append(boneName).Append("_y,").Append(boneName).Append("_z,")
@@ -320,7 +320,7 @@ public static partial class AnatomicalPatientBuild
         bool hasPrevious = false;
         int nextStill = 0;
         // Diagnostic checkpoints for the current 34s shared sequence; each pose is still sampled through its public API.
-        float[] stillTimes = { 0f, 2f, 4f, 6f, 10f, 14f, 18f, 22f, 26f, 30f, 32f, duration };
+        float[] stillTimes = { 0f, 2f, 4f, 6f, 9.2f, 12.4f, 14f, 17.2f, 20.4f, 22f, 25.2f, 28.4f, 30f, 32f, duration };
         try
         {
             for (int frame = 0; frame <= lastFrame; frame++)

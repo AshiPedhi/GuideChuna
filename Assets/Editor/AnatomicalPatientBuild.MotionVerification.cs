@@ -121,8 +121,7 @@ public static partial class AnatomicalPatientBuild
             var asset = AssetDatabase.LoadAssetAtPath<GameObject>(receipt.prefab);
             if (asset == null) throw new InvalidOperationException("Saved generated prefab is missing: " + receipt.prefab);
             scene = EditorSceneManager.NewPreviewScene();
-            copy = UnityEngine.Object.Instantiate(asset);
-            SceneManager.MoveGameObjectToScene(copy, scene);
+            copy = (GameObject)PrefabUtility.InstantiatePrefab(asset, scene);
             var rig = copy.GetComponent<AnatomicalPatientRig>();
             if (rig == null) throw new InvalidOperationException("Saved prefab has no AnatomicalPatientRig.");
             rig.SetAutomaticEvaluation(false);
@@ -218,8 +217,7 @@ public static partial class AnatomicalPatientBuild
                 Vector3 cranial = serialized.FindProperty("anatomicalBasis").FindPropertyRelative("up").vector3Value.normalized;
                 MotionVerifyRib2(rig, limbs, cranial, outputs, head, cervical, csv, report);
             }
-            anatomy = UnityEngine.Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>(AnatomyPath));
-            SceneManager.MoveGameObjectToScene(anatomy, scene);
+            anatomy = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(AnatomyPath), scene);
             foreach (AnatomicalMotionSequence.Motion motion in new[] { AnatomicalMotionSequence.Motion.Forearm, AnatomicalMotionSequence.Motion.CoupledWrist, AnatomicalMotionSequence.Motion.Rib2Study })
             {
                 // A few actual CPU-baked hand meshes cover motion combinations;
