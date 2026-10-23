@@ -40,8 +40,9 @@ public class RomLineMirror : MonoBehaviour
     [SerializeField] private Color wallBackground = new Color(0.04f, 0.05f, 0.07f, 1f);
 
     [Header("=== 현실 영상 (Passthrough Camera Access) ===")]
-    [Tooltip("요청할 카메라 해상도. 지원 목록에 없으면 바로 아래 해상도가 골라진다.")]
+    [Tooltip("보내는 영상 크기(관제 화면 해상도 선택). 앱 화면은 이 크기로 그리고, 현실 영상은 카메라가 낼 수 있는 4:3 크기로 받아 늘이거나 줄여 맞춘다.")]
     [SerializeField] private Vector2Int camResolution = new Vector2Int(1200, 900);   // 10-23 사용자 지시: 기본 1200×900(런타임 AddComponent라 코드 기본값이 먹는다)
+    private Vector2Int camRequest;   // 카메라에 실제로 요청하는 크기 — CameraSizeFor(camResolution)
     [Tooltip("현실 영상을 보내는 간격(초). 10-21 사용자 지시: 상한을 낮춰 배터리 · 발열을 줄인다 — 1/15초(최대 15장/s · 종전 0.05 = 20장/s). 런타임 AddComponent라 코드 기본값이 먹는다.")]
     [SerializeField] private float camInterval = 1f / 15f;
     [Tooltip("현실 영상 위에 앱 화면(끝점 · 선 · 각도기 · 벽면UI)을 겹친다. 끄면 카메라 영상만 보낸다.")]
@@ -86,7 +87,9 @@ public class RomLineMirror : MonoBehaviour
     private float diagNext, diagFrom;
 
     /// <summary>관제 화면의 해상도 버튼(10-20 사용자 지시 · 우측 상단 셋). 전부 4:3 — 화면 칸의 비율이 안 바뀐다. 지원 목록은 기기 로그로 확인(320×240 ~ 1280×1280).
-    /// ★10-23 사용자 지시: 800×600 · 1200×900 · 1600×1200(종전 640×480 · 800×600 · 1280×960). 1600×1200이 지원 목록 밖이면 카메라가 바로 아래로 연다 — 실제 크기는 «첫 영상» 로그로 본다.</summary>
+    /// ★10-23 사용자 지시: 800×600 · 1200×900 · 1600×1200(종전 640×480 · 800×600 · 1280×960). 
+    /// ★10-23 기기 실측: 카메라는 1200×900 · 1600×1200을 못 낸다(1200×900 → 800×600으로 열림 · 1600×1200 → 1280×1080) → 사용자 지시로
+    ///   «앱 화면은 고른 크기로 그리고 현실 영상만 카메라 크기로 받아 합성»한다(영상 경로). 카메라 크기는 CameraSizeFor가 지원 목록에서 고른다.</summary>
     public static readonly Vector2Int[] CamChoices = { new Vector2Int(800, 600), new Vector2Int(1200, 900), new Vector2Int(1600, 1200) };
     private Vector2Int pendingRes;   // 바꿀 해상도 — 인코딩 중인 장이 끝난 뒤(camBusy 아님)에 카메라를 다시 연다
     private readonly StringBuilder info = new StringBuilder(512);
@@ -125,7 +128,9 @@ public class RomLineMirror : MonoBehaviour
         go.transform.SetParent(transform, false);
         pca = go.AddComponent<PassthroughCameraAccess>();
         pca.CameraPosition = PassthroughCameraAccess.CameraPositionType.Left;
-        pca.RequestedResolution = camResolution;
+        supportedRes = res;
+        camRequest = CameraSizeFor(camResolution);
+        pca.RequestedResolution = camRequest;
         // ★10-21 사용자 지시: 카메라는 보는 화면이 붙을 때 켠다(UpdateCameraPower) — 아무도 안 보면 미러링 부담이 거의 0이 되게.
         pcaState = "꺼짐(보는 화면 없음)";
     }
@@ -145,7 +150,7 @@ public class RomLineMirror : MonoBehaviour
         bool on = pca.gameObject.activeSelf;
         if (want && !on)
         {
-            pca.RequestedResolution = camResolution;
+            pca.RequestedResolution = camRequest;
             pca.gameObject.SetActive(true);
             pcaShownRes = default;
             pcaState = "켜는 중";
@@ -173,6 +178,24 @@ public class RomLineMirror : MonoBehaviour
         pendingRes = CamChoices[choice];
     }
 
+    private Vector2Int[] supportedRes;
+
+    /// <summary>보내는 크기에 쓸 카메라 크기 — 지원 목록 중 같은 비율(4:3)에서 가로가 보내는 크기 이상인 가장 작은 것, 없으면 그 비율의 가장 큰 것.
+    /// 10-23 Quest 3S 실측 목록: 800×600 → 800×600 · 1200×900 → 1280×960 · 1600×1200 → 1280×960. 목록이 없으면 그대로 요청한다.</summary>
+    private Vector2Int CameraSizeFor(Vector2Int outRes)
+    {
+        if (supportedRes == null || supportedRes.Length == 0) return outRes;
+        Vector2Int best = default, largest = default;
+        foreach (var s in supportedRes)
+        {
+            if (s.x * outRes.y != s.y * outRes.x) continue;   // 비율이 다르면 겹치기 화각이 어긋난다
+            if (s.x > largest.x) largest = s;
+            if (s.x >= outRes.x && (best.x == 0 || s.x < best.x)) best = s;
+        }
+        if (best.x > 0) return best;
+        return largest.x > 0 ? largest : outRes;
+    }
+
     private void Update()
     {
         if (monitor == null || monitor.Port == 0) return;
@@ -180,13 +203,18 @@ public class RomLineMirror : MonoBehaviour
 
         if (pendingRes != default && pca != null && !camBusy)
         {
-            Debug.Log($"[선실측] 미러링 — 현실 영상 해상도 {camResolution.x}×{camResolution.y} → {pendingRes.x}×{pendingRes.y}(카메라를 다시 연다)");
+            Vector2Int req = CameraSizeFor(pendingRes);
+            Debug.Log($"[선실측] 미러링 — 보내는 크기 {camResolution.x}×{camResolution.y} → {pendingRes.x}×{pendingRes.y} · 카메라 요청 {camRequest.x}×{camRequest.y} → {req.x}×{req.y}");
             camResolution = pendingRes;
             pendingRes = default;
-            bool wasOn = pca.gameObject.activeSelf;
-            pca.gameObject.SetActive(false);   // OnEnable이 RequestedResolution으로 다시 연다(StartCamera와 같은 길)
-            pca.RequestedResolution = camResolution;
-            if (wasOn) { pca.gameObject.SetActive(true); pcaShownRes = default; pcaState = "해상도 바꾸는 중"; }   // 꺼져 있었으면 켤 때 새 해상도로 연다
+            if (req != camRequest)   // 카메라 크기가 같으면 다시 열지 않는다(영상 크기만 바뀐다)
+            {
+                camRequest = req;
+                bool wasOn = pca.gameObject.activeSelf;
+                pca.gameObject.SetActive(false);   // OnEnable이 RequestedResolution으로 다시 연다(StartCamera와 같은 길)
+                pca.RequestedResolution = camRequest;
+                if (wasOn) { pca.gameObject.SetActive(true); pcaShownRes = default; pcaState = "해상도 바꾸는 중"; }   // 꺼져 있었으면 켤 때 새 해상도로 연다
+            }
         }
 
         if (pca != null && pca.IsPlaying)
@@ -195,7 +223,7 @@ public class RomLineMirror : MonoBehaviour
             {
                 pcaShownRes = pca.CurrentResolution;
                 pcaState = $"받는 중 {pcaShownRes.x}×{pcaShownRes.y}";
-                Debug.Log($"[선실측] 미러링 — 현실 영상: 첫 영상 · {pcaState}(요청 {camResolution.x}×{camResolution.y})");
+                Debug.Log($"[선실측] 미러링 — 현실 영상: 첫 영상 · {pcaState}(카메라 요청 {camRequest.x}×{camRequest.y} · 보내는 크기 {camResolution.x}×{camResolution.y})");
             }
         }
 
@@ -363,8 +391,10 @@ public class RomLineMirror : MonoBehaviour
 
     private void CaptureVideo(float now)
     {
-        Vector2Int r = pca.CurrentResolution;
-        if (r.x <= 0 || !EnsureVideo(r)) return;
+        // ★10-23: 보내는 크기 = 고른 해상도(camResolution) — 앱 화면은 이 크기로 그리고, 현실 영상은 셰이더가 uv로 읽어 늘이거나 줄인다.
+        if (pca.CurrentResolution.x <= 0) return;
+        Vector2Int r = camResolution;
+        if (!EnsureVideo(r)) return;
         int slot = -1;
         for (int i = 0; i < VideoSlots; i++) if (!vBusy[i]) { slot = i; break; }
         if (slot < 0) return;
