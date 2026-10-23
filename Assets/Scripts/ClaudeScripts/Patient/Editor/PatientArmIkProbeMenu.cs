@@ -25,13 +25,20 @@ public static class PatientArmIkProbeMenu
     [MenuItem(SimLeft)]
     private static void SimulateLeft() => Simulate(PatientArmIkProbe.ArmSide.Left);
 
+    // 10-23 사용자 지시(«제2늑골 동작 과정대로 시연해봐»): 전문가 영상 순서대로 움직이며 두 방향 영상을 남긴다(Temp/ik_sim/<시각>_오른팔_제2늑골시연/v_*.jpg)
+    private const string DemoRib2 = "GuideChuna/시험/제2늑골 시연 (오른팔 · Play 중)";
+
+    [MenuItem(DemoRib2)]
+    private static void DemoSecondRib() => Simulate(PatientArmIkProbe.ArmSide.Right, true);
+
     [MenuItem(MenuRight, true)]
     [MenuItem(MenuLeft, true)]
     [MenuItem(SimRight, true)]
     [MenuItem(SimLeft, true)]
+    [MenuItem(DemoRib2, true)]
     private static bool Validate() => EditorApplication.isPlaying;
 
-    private static void Simulate(PatientArmIkProbe.ArmSide side)
+    private static void Simulate(PatientArmIkProbe.ArmSide side, bool demo = false)
     {
         PatientArmIkProbe probe = Attach(side);
         if (probe == null) return;
@@ -39,7 +46,7 @@ public static class PatientArmIkProbeMenu
         foreach (PatientArmIkSim old in probe.GetComponents<PatientArmIkSim>())
             if (old.Probe == probe) { Debug.Log($"[팔IK시뮬] 이미 돌고 있다 — {probe.SideLabel}. 새로 붙이지 않는다."); return; }
         PatientArmIkSim sim = probe.gameObject.AddComponent<PatientArmIkSim>();
-        sim.Init(probe);
+        sim.Init(probe, demo);
         Debug.Log($"[팔IK시뮬] {probe.gameObject.name}에 붙였다 — side={side}. 끝나면 «[팔IK시뮬] … 끝» 로그가 찍힌다.");
     }
 

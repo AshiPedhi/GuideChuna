@@ -55,13 +55,42 @@ public class PatientArmIkSim : MonoBehaviour
     private readonly StringBuilder summary = new StringBuilder();
     private Camera cam; private RenderTexture rt; private Texture2D tex;
 
-    public void Init(PatientArmIkProbe p) { probe = p; }
+    // ★10-23 사용자 지시(«제2늑골 동작 과정대로 시연해봐»): 시연 모드 — 전문가 영상 순서대로 움직이고 두 방향(발쪽 · 옆)을 매 프레임 찍는다.
+    //   Time.captureFramerate = 30으로 고정해 프레임 = 1/30초(영상 속도가 실제와 같다). 끝나면 v_*.jpg를 ffmpeg로 묶는다(phases.txt = 단계 시작 프레임).
+    private bool demo;
+    private int videoFrame;
+    private RenderTexture vrt; private Texture2D vtex;
+    private readonly StringBuilder phaseLog = new StringBuilder();
+    private const int VideoW = 1280, VideoH = 720;
+
+    public void Init(PatientArmIkProbe p, bool demoMode = false) { probe = p; demo = demoMode; }
     public PatientArmIkProbe Probe => probe;
 
     private void BuildPhases()
     {
         void Add(string name, float dur, float hold, Pose to, string expect)
             => phases.Add(new Phase { name = name, dur = dur, hold = hold, to = to, expect = expect });
+
+        if (demo)
+        {
+            // 제2늑골 상방변위 교정 — 전문가 영상(3인칭 40~64초 · 바디캠 18:53:43~18:54:15)을 눈으로 보고 잡은 순서 · 각(★추정):
+            //   앙와위 → 팔을 펴서 옆으로 → 침대 모서리 밖 아래로 → 악수하듯 잡고 당김(견인) → 손목 배굴 → 외회전 → 유지 → 풀기 → 원위치.
+            //   다른 손으로 쇄골 아래 제2늑골을 누르는 것은 시술자 쪽이라 여기엔 없다. 외회전 부호: 오른팔은 비틀기 +가 외회전(10-22 시뮬 실측 — +80 → 외회전 −75).
+            Add("1 시작 - 앙와위, 팔 옆에", 0.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
+            Add("2 팔을 펴서 옆으로 벌림", 2.5f, 0.8f, Pose.D(90, 0), "팔 펴짐 · 침대 높이");
+            Add("3 침대 모서리 밖 아래로", 2.0f, 0.8f, Pose.D(90, -40), "어깨 신전 40° 안팎");
+            Pose g1 = Pose.D(90, -40, 1.05f); g1.traction = true;
+            Add("4 악수하듯 잡고 당김(견인)", 1.5f, 1.0f, g1, "팔 쭉 폄");
+            Pose g2 = Pose.D(90, -40, 1.05f, 0, 50); g2.traction = true;
+            Add("5 손목 배굴", 2.0f, 1.0f, g2, "손목 손등 쪽으로");
+            Pose g3 = Pose.D(90, -40, 1.05f, 70, 50); g3.traction = true;
+            Add("6 외회전 (유지)", 2.5f, 3.0f, g3, "위팔 외회전 · 팔 편 채");
+            Pose g4 = Pose.D(90, -40, 1.05f, 0, 0); g4.traction = true;
+            Add("7 풀기 - 회전 · 손목 되돌림", 2.0f, 0.8f, g4, "중립으로");
+            Add("8 팔을 침대 위로", 2.0f, 0.8f, Pose.D(90, 0), "침대 높이");
+            Add("9 원위치", 2.5f, 1.0f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세로");
+            return;
+        }
 
         Add("시작 자세", 0.3f, 0.5f, new Pose { mode = Mode.Initial, reach = 1f }, "애니 자세 그대로");
         Add("옆으로 90° (침대 높이)", 2f, 0.8f, Pose.D(90, 0), "팔 펴짐 · 한계 없음");
@@ -173,10 +202,16 @@ public class PatientArmIkSim : MonoBehaviour
         rot0 = probe.Target.rotation;
         initPos = probe.Target.position;
         string stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", "ik_sim", stamp + "_" + probe.SideLabel));
+        outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Temp", "ik_sim", stamp + "_" + probe.SideLabel + (demo ? "_제2늑골시연" : "")));
         Directory.CreateDirectory(outDir);
         csv.Append("phase,t,hand_target_mm,elbow_flex,sh_behind,sh_medial,sh_rot,twist,wrist_signed,pen_mm,jump_deg,hinge_off_deg,limits\n");
-        if (capture) SetupCamera();
+        if (capture || demo) SetupCamera();
+        if (demo)
+        {
+            Time.captureFramerate = 30;
+            vrt = new RenderTexture(VideoW, VideoH, 24);
+            vtex = new Texture2D(VideoW, VideoH, TextureFormat.RGB24, false);
+        }
         Debug.Log($"[팔IK시뮬] {probe.SideLabel} 시작 — 단계 {phases.Count}개 · 결과 폴더 {outDir}");
         NextPhase();
     }
@@ -187,6 +222,7 @@ public class PatientArmIkSim : MonoBehaviour
         if (phaseIdx >= phases.Count) { Finish(); return; }
         phaseT = 0f;
         fromPos = probe.Target.position;
+        if (demo) phaseLog.Append(videoFrame).Append('\t').Append(phases[phaseIdx].name).Append('\n');
         // 견인을 끄는 단계면 손을 놓을 때(PatientArmIkHandGrab.Release)처럼 목표를 지금 환자 손 자리로 — 남은 목표가 팔 길이보다 가까워 팔꿈치가 접히지 않게
         if (phaseIdx > 0 && phases[phaseIdx - 1].to.traction && !phases[phaseIdx].to.traction) { probe.Target.position = probe.HandBone.position; fromPos = probe.HandBone.position; }
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; fromDev = phases[phaseIdx - 1].to.dev; }
@@ -225,14 +261,27 @@ public class PatientArmIkSim : MonoBehaviour
             string ov = Vector3.Angle(uN, -bU) > coneN + 3f ? "어깨" : elbowFlex > probe.ElbowFlexionMax + 3f ? "팔꿈치" : behind > probe.ShoulderExtensionMax + 3f ? "신전" : medial > 33f ? "내전" : "";
             if (ov.Length > 0) { nOver++; if (overWhat.IndexOf(ov, System.StringComparison.Ordinal) < 0) overWhat += (overWhat.Length > 0 ? "·" : "") + ov; }
         }
+        // ★10-23: 운반각(10-22 명세 · 편 팔에서 아래팔이 바깥으로 12.9°)을 «옆 꺾임 90° · 반대 꺾임»으로 세고 있었다
+        //   (편 팔은 굴곡 ≈ 운반각 13°라 «굴곡 > 10»을 넘고, 벌어진 방향이 경첩 면에 수직이라 90° 근처로 나왔다 — 62단계 거의 전부 ★).
+        //   → 아래팔을 경첩 면 안(굴곡 · 음수 = 과신전)과 면 밖(옆)으로 나눠, 면 밖은 지금 운반각을 뺀 넘침만 센다.
         float hingeOff = 0f;
-        if (elbowFlex > 10f && probe.TryFlexDirWorld(out Vector3 flexDir))
+        if (probe.TryFlexDirWorld(out Vector3 flexDir))
         {
-            Vector3 perp = fW - Vector3.Dot(fW, uW.normalized) * uW.normalized;
-            hingeOff = Vector3.Angle(perp, flexDir - Vector3.Dot(flexDir, uW.normalized) * uW.normalized);
-            if (hingeOff > 90f) nWrong++;          // 팔꿈치가 반대로(과신전 쪽) 꺾임
-            else if (hingeOff > 30f) nSideways++;  // 경첩 면을 벗어나 옆으로 꺾임
-            mWrongElbow = Mathf.Max(mWrongElbow, hingeOff);
+            Vector3 uN0 = uW.normalized;
+            Vector3 fd = flexDir - Vector3.Dot(flexDir, uN0) * uN0;
+            if (fd.sqrMagnitude > 1e-8f)
+            {
+                fd.Normalize();
+                float ca = Vector3.Dot(fW, uN0), cb = Vector3.Dot(fW, fd);
+                float cc = (fW - ca * uN0 - cb * fd).magnitude;
+                float flexIn = Mathf.Atan2(cb, ca) * Mathf.Rad2Deg;                          // 경첩 면 안 굴곡(음수 = 과신전 쪽)
+                float latDeg = Mathf.Atan2(cc, Mathf.Sqrt(ca * ca + cb * cb)) * Mathf.Rad2Deg; // 경첩 면 밖
+                float latExcess = Mathf.Max(0f, latDeg - probe.CarryDeg);
+                if (flexIn < -5f) nWrong++;              // 팔꿈치가 반대로(과신전 쪽) 꺾임
+                else if (latExcess > 10f) nSideways++;   // 운반각보다 10° 넘게 옆으로 꺾임
+                hingeOff = Mathf.Max(latExcess, -flexIn);
+                mWrongElbow = Mathf.Max(mWrongElbow, hingeOff);
+            }
         }
 
         float wristSigned = 0f;
@@ -282,6 +331,7 @@ public class PatientArmIkSim : MonoBehaviour
            .Append(probe.TwistDeg.ToString("F0")).Append(',').Append(wristSigned.ToString("F0")).Append(',')
            .Append((pen * 1000f).ToString("F0")).Append(',').Append(jump.ToString("F1")).Append(',')
            .Append(hingeOff.ToString("F0")).Append(',').Append(lim.Replace(',', ' ')).Append('\n');
+        if (demo) CaptureVideoFrame();
 
         // ── 단계 끝 ──
         if (phaseT >= ph.dur + ph.hold)
@@ -308,12 +358,47 @@ public class PatientArmIkSim : MonoBehaviour
         {
             File.WriteAllText(Path.Combine(outDir, "frames.csv"), csv.ToString(), new UTF8Encoding(true));
             File.WriteAllText(Path.Combine(outDir, "summary.txt"), summary.ToString(), new UTF8Encoding(false));
+            if (demo) File.WriteAllText(Path.Combine(outDir, "phases.txt"), phaseLog.ToString(), new UTF8Encoding(false));
         }
         catch (System.Exception e) { Debug.LogWarning("[팔IK시뮬] 결과 파일을 못 썼다 — " + e.Message); }
         Debug.Log($"[팔IK시뮬] {probe.SideLabel} 끝 — {outDir}");
         if (cam != null) Destroy(cam.gameObject);
         if (rt != null) { rt.Release(); Destroy(rt); }
         if (tex != null) Destroy(tex);
+        if (demo)
+        {
+            Time.captureFramerate = 0;
+            if (vrt != null) { vrt.Release(); Destroy(vrt); }
+            if (vtex != null) Destroy(vtex);
+            Debug.Log($"[팔IK시뮬] 시연 영상 프레임 {videoFrame}장(30fps) — {outDir}");
+        }
+    }
+
+    /// <summary>시연 — 왼쪽 = 발쪽에서, 오른쪽 = 환자 옆에서 본 장면을 한 장(1280×720)에 그려 jpg로 남긴다.</summary>
+    private void CaptureVideoFrame()
+    {
+        if (cam == null || vrt == null || !probe.TryBodyAxesWorld(out Vector3 F, out Vector3 U, out Vector3 L)) return;
+        Vector3 S = probe.UpperBone.position;
+        RenderTexture keep = cam.targetTexture;
+        cam.targetTexture = vrt;
+        cam.rect = new Rect(0f, 0f, 0.5f, 1f);
+        Vector3 p1 = S - U * 1.6f + F * 0.55f + L * 0.4f, l1 = S + L * 0.35f - F * 0.1f;
+        cam.transform.SetPositionAndRotation(p1, Quaternion.LookRotation(l1 - p1, F));
+        cam.Render();
+        cam.rect = new Rect(0.5f, 0f, 0.5f, 1f);
+        Vector3 p2 = S + L * 1.7f - F * 0.05f - U * 0.1f, l2 = S + L * 0.35f - F * 0.15f;
+        cam.transform.SetPositionAndRotation(p2, Quaternion.LookRotation(l2 - p2, F));
+        cam.Render();
+        cam.rect = new Rect(0f, 0f, 1f, 1f);
+        cam.targetTexture = keep;
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = vrt;
+        vtex.ReadPixels(new Rect(0, 0, VideoW, VideoH), 0, 0);
+        vtex.Apply();
+        RenderTexture.active = prev;
+        try { File.WriteAllBytes(Path.Combine(outDir, $"v_{videoFrame:00000}.jpg"), vtex.EncodeToJPG(85)); }
+        catch (System.Exception e) { Debug.LogWarning("[팔IK시뮬] 시연 프레임을 못 썼다 — " + e.Message); }
+        videoFrame++;
     }
 
     // ── 캡처: 시험용 카메라 하나를 세 자리로 옮겨 가며 RenderTexture에 그린다(헤드셋 · 게임 카메라와 무관) ──
