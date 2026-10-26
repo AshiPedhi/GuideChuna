@@ -1,0 +1,193 @@
+{
+  "date": "2026-10-26",
+  "tracking_input_used": false,
+  "previous_draft_pose_or_trajectory_used": false,
+  "motion_generator_file_open_audit": "generator_input_audit.json",
+  "originals_unchanged": true,
+  "protected_originals": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1 역재생.csv",
+      "before_sha256": "da849403b603c6cc97e61e6db0867eb9d7e2a483d7d9df4a9d48821e1bc1c0fc",
+      "after_sha256": "da849403b603c6cc97e61e6db0867eb9d7e2a483d7d9df4a9d48821e1bc1c0fc",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1.csv",
+      "before_sha256": "e08413c0dc1c1a9b12708684b669cf970f22663299f85e77d185002e52a0469c",
+      "after_sha256": "e08413c0dc1c1a9b12708684b669cf970f22663299f85e77d185002e52a0469c",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 두상골.csv",
+      "before_sha256": "971340a473bde57a7fafe02a89b57900a61db11f4318c07b4d695d8267ae4bd6",
+      "after_sha256": "971340a473bde57a7fafe02a89b57900a61db11f4318c07b4d695d8267ae4bd6",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 진단.csv",
+      "before_sha256": "5761d3a67e51ec0a93130036ac343e08b1bc141799aedef997081e297b148412",
+      "after_sha256": "5761d3a67e51ec0a93130036ac343e08b1bc141799aedef997081e297b148412",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Scenarios\\제2늑골_상방변위.csv",
+      "before_sha256": "756c33abf875cf56f9e0957ebd974d66fbb35c553592b8ed8a64e5f008bbd63f",
+      "after_sha256": "756c33abf875cf56f9e0957ebd974d66fbb35c553592b8ed8a64e5f008bbd63f",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\ScenarioConfigs\\제2늑골_상방변위.asset",
+      "before_sha256": "12eeaaa3ae902d583add44047db25a367641597e9c923ad0d85f594b374b3c8f",
+      "after_sha256": "12eeaaa3ae902d583add44047db25a367641597e9c923ad0d85f594b374b3c8f",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\TrainingScene.unity",
+      "before_sha256": "cd9a3576aa1ae62d6e8c0ce916d46b461c6c807e5063860202a45650e787538e",
+      "after_sha256": "cd9a3576aa1ae62d6e8c0ce916d46b461c6c807e5063860202a45650e787538e",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\lobby.unity",
+      "before_sha256": "77dda9a8aa28c78038f8955baf03a4e12d62a976377908c75b59b0138419bba0",
+      "after_sha256": "77dda9a8aa28c78038f8955baf03a4e12d62a976377908c75b59b0138419bba0",
+      "unchanged": true
+    }
+  ],
+  "caveat": "Existing HandPose files were read as opaque SHA bytes for preservation only, never as animation data. External expert tracking and earlier draft poses are blocked in motion generation.",
+  "input_allowlist": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\source_annotations.json",
+      "sha256": "2117163502ee23c9a437d68ee96066d6165e8f3405c02c97da0cd12d8b93dab2"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\rig_bind_geometry.json",
+      "sha256": "1696791c5c0cdbb5a7de682ca509705a7df94f2cf23bf9868a376aa3031f0364"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\text_evidence.json",
+      "sha256": "caa7154c75fb1ad03efc2660b58e634b49bdcf9cbc837beb33453518a0b54855"
+    }
+  ],
+  "outputs": [
+    {
+      "file": "video_text_start.csv",
+      "frames": 61,
+      "rows": 3172,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "local_positions_equal_generic_bind_geometry": true,
+      "authored_local_grip_fixed": true,
+      "wrist_depth_fixed_at_zero": true,
+      "normalized_quaternions": true,
+      "sha256": "5fd58036570b531ecd943a4b24e2d4804e38e5803bdf85140f62a945731feb1c"
+    },
+    {
+      "file": "video_text_cycle.csv",
+      "frames": 136,
+      "rows": 7072,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "local_positions_equal_generic_bind_geometry": true,
+      "authored_local_grip_fixed": true,
+      "wrist_depth_fixed_at_zero": true,
+      "normalized_quaternions": true,
+      "sha256": "0eae023d414ec2d6792cc6191450ae041fa41bd556e528153f951c9de9bb304b"
+    },
+    {
+      "file": "video_text_demo.csv",
+      "frames": 248,
+      "rows": 12896,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "local_positions_equal_generic_bind_geometry": true,
+      "authored_local_grip_fixed": true,
+      "wrist_depth_fixed_at_zero": true,
+      "normalized_quaternions": true,
+      "sha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23"
+    }
+  ],
+  "coordinate_roundtrip_to_annotations": [
+    {
+      "source_s": 56.5,
+      "hand": "Left",
+      "pixel_roundtrip_error": 3.5355334950627033e-07
+    },
+    {
+      "source_s": 56.5,
+      "hand": "Right",
+      "pixel_roundtrip_error": 0.0
+    },
+    {
+      "source_s": 58.0,
+      "hand": "Left",
+      "pixel_roundtrip_error": 2.5495094382179763e-07
+    },
+    {
+      "source_s": 58.0,
+      "hand": "Right",
+      "pixel_roundtrip_error": 1.9999998812636477e-07
+    },
+    {
+      "source_s": 59.0,
+      "hand": "Left",
+      "pixel_roundtrip_error": 3.201562705422505e-07
+    },
+    {
+      "source_s": 59.0,
+      "hand": "Right",
+      "pixel_roundtrip_error": 2.692582745102547e-07
+    },
+    {
+      "source_s": 61.0,
+      "hand": "Left",
+      "pixel_roundtrip_error": 2.8284265548839894e-07
+    },
+    {
+      "source_s": 61.0,
+      "hand": "Right",
+      "pixel_roundtrip_error": 1.4142138803574845e-07
+    },
+    {
+      "source_s": 64.0,
+      "hand": "Left",
+      "pixel_roundtrip_error": 2.061553069548604e-07
+    },
+    {
+      "source_s": 64.0,
+      "hand": "Right",
+      "pixel_roundtrip_error": 1.4142138803574845e-07
+    }
+  ],
+  "coordinate_roundtrip_scope": "Checks arithmetic agreement with manual annotations only; not annotation accuracy or measured 3D reconstruction.",
+  "isolated_mesh_render": {
+    "frames": 248,
+    "joints_each_hand": 26,
+    "actual_input": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_demo.csv",
+    "meshes": [
+      "Left:LeftHand:1360",
+      "Right:RightHand:1360"
+    ],
+    "scene_saved": false,
+    "play_started": false
+  },
+  "comparison_video": {
+    "width": 1920,
+    "height": 900,
+    "fps": 30,
+    "frames": 248,
+    "duration_s": 8.266667,
+    "sha256": "9e888dab04267d38db4cf3161f09f701e0ed62684cc765e3f8b238157f9ac7a4"
+  },
+  "compile": "Assembly-CSharp-Editor and referenced runtime project: 0 errors, 15 pre-existing warnings, no warning in the edited preview file.",
+  "clinical_or_runtime_validation_performed": false,
+  "unverified": [
+    "Manual annotation accuracy",
+    "Camera depth and metric scale",
+    "Occluded finger articulation",
+    "Exact rib contact and pressure",
+    "Clinical suitability",
+    "Actual patient registration",
+    "Quest Play"
+  ]
+}

@@ -38,7 +38,7 @@ public static class Rib2GuideDraftPreview
         public string error = "";
         public string csvPath;
         public string outputDir;
-        public string coordinateSpace = "Recorded CSV root coordinates, unchanged; no patient registration.";
+        public string coordinateSpace = "Input CSV root coordinates, unchanged; no patient registration. See the draft's provenance for recorded versus authored input.";
         public string poseApplication = "HandTransformMapper.SetRootWorldPose / SetJointLocalPose; original OpenXR 26-joint prefab mapping.";
         public string visualNote = "Original Meta hand mesh; private opaque preview materials, left cyan / right orange.";
         public string leftPrefab;
@@ -131,7 +131,7 @@ public static class Rib2GuideDraftPreview
             left = CreateHand("70d02a90551f23042a882cdceeaf8e3a", true, new Color(.12f, .77f, .94f));
             right = CreateHand("34a22dd67c1e5344591237fdd61e78ec", false, new Color(1f, .59f, .25f));
             ConfigureCamera();
-            Debug.Log("[Rib2GuideDraft] Prepared " + frames.Count + " frames; roots and 26 local joints remain in recorded coordinates; " +
+            Debug.Log("[Rib2GuideDraft] Prepared " + frames.Count + " frames; roots and 26 local joints remain in input CSV coordinates; " +
                       "camera=" + receipt.cameraPosition + ", bounds=" + receipt.boundsSize + ", output=" + output);
         }
 

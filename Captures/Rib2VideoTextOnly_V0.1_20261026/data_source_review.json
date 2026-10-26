@@ -1,0 +1,147 @@
+{
+  "review_created_utc": "2026-10-26T05:20:28.6376194Z",
+  "scope": "Independent static source and metadata review. No clinical or Quest Play validation.",
+  "generator_path": "dev/rib2_video_text_only/build_video_text_pose.py",
+  "generator_sha256": "befc8918a42cb8131902656dfe16859ed7be4fbce6529de6a30ea3017308e779",
+  "reviewed_manifest_sha256": "fc887567d5ead882a6ec06b74b5139fbd0b2434556a4aa9808d5e468e1d6d7a3",
+  "findings": [
+    "The generator animation input allowlist contains only source_annotations.json, rig_bind_geometry.json and text_evidence.json.",
+    "All input paths are within the isolated demonstration output folder. No external recorded tracking CSV, existing HandPoseData pose values or earlier draft pose/trajectory is an animation input.",
+    "Generic SDK bind geometry supplies hand model structure, not expert motion.",
+    "Observed video keys are manual image-plane wrist/palm annotations; depth is explicitly fixed at z=0.",
+    "550 pixels per model unit is an authored view scale, not physical calibration.",
+    "Finger flexion, thumb flexion, twist and between-key easing are authored display choices.",
+    "Text evidence supplies contact and support descriptions; no numeric clinical pass angle is derived.",
+    "The generator writes only its named files in the separate Captures folder. It has no existing Resources, scene, config or assessment write target.",
+    "Existing protected files were additionally read as opaque SHA256 streams for preservation checks; this is not zero filesystem access to those files."
+  ],
+  "recommendations": [],
+  "input_checks": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\source_annotations.json",
+      "expected_sha256": "2117163502ee23c9a437d68ee96066d6165e8f3405c02c97da0cd12d8b93dab2",
+      "actual_sha256": "2117163502ee23c9a437d68ee96066d6165e8f3405c02c97da0cd12d8b93dab2",
+      "matches": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\rig_bind_geometry.json",
+      "expected_sha256": "1696791c5c0cdbb5a7de682ca509705a7df94f2cf23bf9868a376aa3031f0364",
+      "actual_sha256": "1696791c5c0cdbb5a7de682ca509705a7df94f2cf23bf9868a376aa3031f0364",
+      "matches": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\text_evidence.json",
+      "expected_sha256": "caa7154c75fb1ad03efc2660b58e634b49bdcf9cbc837beb33453518a0b54855",
+      "actual_sha256": "caa7154c75fb1ad03efc2660b58e634b49bdcf9cbc837beb33453518a0b54855",
+      "matches": true
+    }
+  ],
+  "output_checks": [
+    {
+      "file": "video_text_demo.csv",
+      "expected_sha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23",
+      "actual_sha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23",
+      "matches": true,
+      "declared_frames": 248
+    },
+    {
+      "file": "video_text_start.csv",
+      "expected_sha256": "5fd58036570b531ecd943a4b24e2d4804e38e5803bdf85140f62a945731feb1c",
+      "actual_sha256": "5fd58036570b531ecd943a4b24e2d4804e38e5803bdf85140f62a945731feb1c",
+      "matches": true,
+      "declared_frames": 61
+    },
+    {
+      "file": "video_text_cycle.csv",
+      "expected_sha256": "0eae023d414ec2d6792cc6191450ae041fa41bd556e528153f951c9de9bb304b",
+      "actual_sha256": "0eae023d414ec2d6792cc6191450ae041fa41bd556e528153f951c9de9bb304b",
+      "matches": true,
+      "declared_frames": 136
+    },
+    {
+      "file": "video_text_keypose_probe.csv",
+      "expected_sha256": "9d8ed34147e29a34f1c9d50748f736dea4ce45e344e08a3aa845fe954f62fa25",
+      "actual_sha256": "9d8ed34147e29a34f1c9d50748f736dea4ce45e344e08a3aa845fe954f62fa25",
+      "matches": true,
+      "declared_frames": 5
+    }
+  ],
+  "preservation_checks": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1 역재생.csv",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1.csv",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 두상골.csv",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 진단.csv",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Scenarios\\제2늑골_상방변위.csv",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\ScenarioConfigs\\제2늑골_상방변위.asset",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\TrainingScene.unity",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\lobby.unity",
+      "matches": true,
+      "comparison": "Opaque SHA256 integrity check only; not parsed as pose, scenario or condition input"
+    }
+  ],
+  "all_input_hashes_match": true,
+  "all_output_hashes_match": true,
+  "all_protected_files_unchanged": true,
+  "not_validated": [
+    "Original anatomical contact point",
+    "Actual metric scale and depth",
+    "Clinical correctness of authored hand pose",
+    "Real patient registration",
+    "Quest Play"
+  ],
+  "resolved_recommendations": [
+    "Manifest now states: Manual annotation uncertainty estimated at ~10–20 pixels; not independently measured."
+  ],
+  "reviewed_limitations": [
+    "Manual annotation uncertainty estimated at ~10–20 pixels; not independently measured",
+    "Depth and hidden joints are authored assumptions",
+    "View scale is not a metric calibration",
+    "Clinical pose correctness and actual patient alignment unverified",
+    "Quest Play unverified"
+  ],
+  "artifact_metadata_checks": {
+    "render_success": true,
+    "render_input_is_this_draft": true,
+    "render_frames": 248,
+    "render_joint_counts": [
+      26,
+      26
+    ],
+    "render_camera_is_new_image_plane_view": true,
+    "presentation_input_description": "This draft video_text_demo.csv generated from manual original-video annotations, text evidence and generic SDK bind geometry only.",
+    "comparison_sha256": "9e888dab04267d38db4cf3161f09f701e0ed62684cc765e3f8b238157f9ac7a4",
+    "comparison_receipt_sha256_matches": true,
+    "presentation_gray_arm_scope": "2D explanatory line from manually observed patient shoulder/elbow/wrist, linear between keyframes; not a 3D patient model or joint-angle result.",
+    "presentation_duration_s": 8.266666666666667,
+    "note": "Receipt and presentation metadata reviewed; this check does not certify clinical correctness or Quest Play."
+  }
+}

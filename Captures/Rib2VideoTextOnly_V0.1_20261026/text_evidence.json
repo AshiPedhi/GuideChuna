@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-26T05:14:11.5217059Z",
+  "project_root": "C:\\UnityProjects\\GuideChuna",
+  "purpose": "Video and text only demonstration: source text evidence, not measured kinematics",
+  "extraction_policy": {
+    "scenario_columns_used": [
+      "textInstruction",
+      "voiceInstruction"
+    ],
+    "condition_columns_used": false,
+    "tracking_csv_read": false,
+    "existing_hand_pose_data_read": false,
+    "previous_draft_pose_or_trajectory_read": false,
+    "source_files_modified": false,
+    "hashes_are_whole_file_integrity_checks": true
+  },
+  "source_limitations": [
+    "확인된 텍스트는 현재 앱 시나리오 문구와 내부 개발 문서다. 외부 교과서 원문은 확인하지 못했다.",
+    "텍스트는 시술사의 좌우 손, 수치 각도, 반경, 속도, 손가락별 자세를 지정하지 않는다.",
+    "좌우 손 및 가시 동작은 영상 관찰에 따르고, 영상에서 보이지 않는 깊이와 관절 회전은 제작 가정으로 구분해야 한다.",
+    "시연 데이터는 임상 기준 각도 또는 통과 조건의 근거로 사용하지 않는다."
+  ],
+  "external_document_search": {
+    "root": "D:/전문가 영상 촬영본",
+    "patterns": [
+      "*.pdf",
+      "*.docx",
+      "*.pptx",
+      "*.txt",
+      "*.md"
+    ],
+    "matches": [],
+    "note": "파일 목록 검색에서 문서 자료가 발견되지 않았다. 영상과 트래킹 데이터 폴더가 존재하지만 트래킹 데이터는 읽지 않았다."
+  },
+  "sources": [
+    {
+      "path": "Assets/Resources/Scenarios/제2늑골_상방변위.csv",
+      "sha256": "756c33abf875cf56f9e0957ebd974d66fbb35c553592b8ed8a64e5f008bbd63f",
+      "kind": "current_application_scenario_text",
+      "selected_columns": [
+        "textInstruction",
+        "voiceInstruction"
+      ],
+      "excerpts": [
+        {
+          "line": 7,
+          "textInstruction": "제2늑골 부위에 두상골을 접촉하세요.",
+          "voiceInstruction": "파지2"
+        },
+        {
+          "line": 8,
+          "textInstruction": "다른 손으로 환자의 팔을 잡아 외전시키세요.",
+          "voiceInstruction": "파지3"
+        },
+        {
+          "line": 10,
+          "textInstruction": "두상골은 늑골에, 반대 손은 팔에 댄 파지를 유지하세요.",
+          "voiceInstruction": ""
+        },
+        {
+          "line": 11,
+          "textInstruction": "늑골에 댄 손은 계속 족방으로 지지하세요.",
+          "voiceInstruction": "교정1"
+        },
+        {
+          "line": 12,
+          "textInstruction": "제2늑골을 족방으로 누른 상태를 유지하세요.",
+          "voiceInstruction": ""
+        },
+        {
+          "line": 13,
+          "textInstruction": "팔이 중심선을 넘지 않게 잡고, 호흡에 맞춰 올리고 내리세요.",
+          "voiceInstruction": "교정2"
+        },
+        {
+          "line": 14,
+          "textInstruction": "총 3회 반복하세요.",
+          "voiceInstruction": "교정3"
+        },
+        {
+          "line": 15,
+          "textInstruction": "가이드손을 따라 팔을 천천히 올려 보세요.",
+          "voiceInstruction": ""
+        },
+        {
+          "line": 16,
+          "textInstruction": "이어서 팔을 천천히 내려 보세요.",
+          "voiceInstruction": ""
+        }
+      ]
+    },
+    {
+      "path": "Docs/개발사양서_복잡추나_2026-07.md",
+      "sha256": "03583787827d476754172b31764131dc945a601946616423f699af287dbfe44d",
+      "kind": "internal_development_document",
+      "excerpts": [
+        {
+          "line": 291,
+          "text": "- 술기: 고개 회전 → 델토펙토랄 부위 두상골 접촉 → 반대손으로 팔 외전 → 3회 반복"
+        },
+        {
+          "line": 292,
+          "text": "- 필요: 쇄골 하부 접촉점 1 + 팔 파지점 1, 환자 고개회전·팔외전 애니메이션"
+        }
+      ]
+    },
+    {
+      "path": "Docs/구현일정_복잡추나_2026-07_08.md",
+      "sha256": "c7211c4701e0bf5bf673dd0758912f8d207df3c1681421e1d4c9e2b5eaab71ad",
+      "kind": "internal_development_document",
+      "excerpts": [
+        {
+          "line": 191,
+          "text": "| 10.4 | 파지 — 두상골 접촉 + 팔 파지 | 신규 | 배선 | 0.3 |"
+        },
+        {
+          "line": 192,
+          "text": "| 10.5 | 교정 — 족방 지지 + 팔 외전 유도 | 신규 | 배선 | 0.2 |"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,315 @@
+{
+  "label": "영상·텍스트만으로 수작업 재구성한 가이드핸드 초안",
+  "tracking_input_used": false,
+  "previous_draft_pose_or_trajectory_used": false,
+  "input_allowlist": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\source_annotations.json",
+      "sha256": "2117163502ee23c9a437d68ee96066d6165e8f3405c02c97da0cd12d8b93dab2"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\rig_bind_geometry.json",
+      "sha256": "1696791c5c0cdbb5a7de682ca509705a7df94f2cf23bf9868a376aa3031f0364"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\text_evidence.json",
+      "sha256": "caa7154c75fb1ad03efc2660b58e634b49bdcf9cbc837beb33453518a0b54855"
+    }
+  ],
+  "source_observation": "Manual video wrist/palm annotations; no automatic motion/hand model was run.",
+  "text_role": "Scenario instruction text and internal specification describe contact/support roles, not numeric joints or assessment thresholds.",
+  "static_model_role": "SDK hand prefab rest/bind geometry is a generic model, not an expert recording.",
+  "reference_pixel": [
+    450.0,
+    318.0
+  ],
+  "pixels_per_model_unit": 550.0,
+  "view_space": "Image-plane x right / y up. All wrist roots z=0. Hands have 3D model geometry and authored finger flexion/twist. No measured depth or patient registration.",
+  "authored_finger_flexion_deg": {
+    "Left": {
+      "Index": [
+        30,
+        65,
+        35
+      ],
+      "Middle": [
+        40,
+        70,
+        40
+      ],
+      "Ring": [
+        45,
+        75,
+        40
+      ],
+      "Little": [
+        50,
+        75,
+        45
+      ]
+    },
+    "Right": {
+      "Index": [
+        12,
+        15,
+        5
+      ],
+      "Middle": [
+        15,
+        20,
+        8
+      ],
+      "Ring": [
+        20,
+        25,
+        10
+      ],
+      "Little": [
+        22,
+        28,
+        12
+      ]
+    }
+  },
+  "authored_thumb_flexion_deg": {
+    "Left": [
+      18,
+      28,
+      20
+    ],
+    "Right": [
+      3,
+      5,
+      5
+    ]
+  },
+  "authored_dorsal_twist_deg": {
+    "Left": [
+      30,
+      30,
+      35,
+      45,
+      40,
+      30,
+      10,
+      30,
+      45
+    ],
+    "Right": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "trajectory_interpolation": "Shape-preserving cubic Hermite/PCHIP on observed image-plane wrist keys; endpoints eased to zero velocity. Wrist rotation shortest-path SLERP.",
+  "finger_animation": "Each hand keeps one separately authored static grip shape during the movement. No occluded articulation reconstruction claimed.",
+  "cycle": "Original video 60.25–64.75 s. Both endpoint observations retained; no forced closure/infinite loop.",
+  "clinical_angles": "No clinical pass angle, pressure, contact collider, or existing assessment condition was generated or changed.",
+  "fps": 30,
+  "source_start_s": 56.5,
+  "source_end_s": 64.75,
+  "key_times_s": [
+    0.0,
+    1.5,
+    2.5,
+    3.75,
+    4.5,
+    5.75,
+    6.75,
+    7.5,
+    8.25
+  ],
+  "selected_observations": {
+    "Left": {
+      "wrist": [
+        [
+          695.0,
+          354.0
+        ],
+        [
+          695.0,
+          345.0
+        ],
+        [
+          722.0,
+          342.0
+        ],
+        [
+          727.0,
+          254.0
+        ],
+        [
+          712.0,
+          320.0
+        ],
+        [
+          662.0,
+          444.0
+        ],
+        [
+          622.0,
+          371.0
+        ],
+        [
+          665.0,
+          463.0
+        ],
+        [
+          732.0,
+          277.0
+        ]
+      ],
+      "palm": [
+        [
+          689.0,
+          390.0
+        ],
+        [
+          682.0,
+          386.0
+        ],
+        [
+          702.0,
+          382.0
+        ],
+        [
+          725.0,
+          292.0
+        ],
+        [
+          703.0,
+          359.0
+        ],
+        [
+          668.0,
+          486.0
+        ],
+        [
+          601.0,
+          406.0
+        ],
+        [
+          660.0,
+          506.0
+        ],
+        [
+          732.0,
+          315.0
+        ]
+      ]
+    },
+    "Right": {
+      "wrist": [
+        [
+          450.0,
+          318.0
+        ],
+        [
+          450.0,
+          316.0
+        ],
+        [
+          451.0,
+          315.0
+        ],
+        [
+          453.0,
+          308.0
+        ],
+        [
+          460.0,
+          308.0
+        ],
+        [
+          457.0,
+          316.0
+        ],
+        [
+          442.0,
+          318.0
+        ],
+        [
+          451.0,
+          319.0
+        ],
+        [
+          450.0,
+          318.0
+        ]
+      ],
+      "palm": [
+        [
+          416.0,
+          306.0
+        ],
+        [
+          416.0,
+          305.0
+        ],
+        [
+          418.0,
+          304.0
+        ],
+        [
+          416.0,
+          301.0
+        ],
+        [
+          422.0,
+          300.0
+        ],
+        [
+          419.0,
+          309.0
+        ],
+        [
+          401.0,
+          309.0
+        ],
+        [
+          416.0,
+          309.0
+        ],
+        [
+          417.0,
+          309.0
+        ]
+      ]
+    }
+  },
+  "limitations": [
+    "Manual annotation uncertainty estimated at ~10–20 pixels; not independently measured",
+    "Depth and hidden joints are authored assumptions",
+    "View scale is not a metric calibration",
+    "Clinical pose correctness and actual patient alignment unverified",
+    "Quest Play unverified"
+  ],
+  "outputs": [
+    {
+      "file": "video_text_demo.csv",
+      "frames": 248,
+      "sha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23"
+    },
+    {
+      "file": "video_text_start.csv",
+      "frames": 61,
+      "sha256": "5fd58036570b531ecd943a4b24e2d4804e38e5803bdf85140f62a945731feb1c"
+    },
+    {
+      "file": "video_text_cycle.csv",
+      "frames": 136,
+      "sha256": "0eae023d414ec2d6792cc6191450ae041fa41bd556e528153f951c9de9bb304b"
+    }
+  ],
+  "probe": {
+    "file": "video_text_keypose_probe.csv",
+    "frames": 5,
+    "sha256": "9d8ed34147e29a34f1c9d50748f736dea4ce45e344e08a3aa845fe954f62fa25"
+  }
+}

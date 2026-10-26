@@ -1,0 +1,19 @@
+{
+  "source": "D:\\전문가 영상 촬영본\\3인칭 시점 카메라\\제2늑골 교정기법.MOV",
+  "sha256": "799f4aa6d7e5965d5a1d3ed43929873cd9342388cfc77dbeb759238981607023",
+  "start_s": 56.5,
+  "end_s": 64.75,
+  "observation_frames_s": [
+    56.5,
+    58,
+    59,
+    60.25,
+    61,
+    62.25,
+    63.25,
+    64,
+    64.75
+  ],
+  "method": "Manual observation of source pixels. No recorded tracking CSV or earlier draft pose/trajectory is read.",
+  "protected_data_hashes": "preservation_before.json: opaque integrity hashing only, never an animation input."
+}

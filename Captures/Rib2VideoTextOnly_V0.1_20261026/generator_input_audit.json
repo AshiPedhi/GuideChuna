@@ -1,0 +1,71 @@
+{
+  "generator_completed_with_forbidden_file_opens_blocked": true,
+  "forbidden_path_patterns": [
+    "/트래킹 데이터/",
+    "/assets/resources/handposedata/",
+    "/captures/rib2guidedraft_v0.1_20261026/"
+  ],
+  "file_open_events": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\source_annotations.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\rig_bind_geometry.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\text_evidence.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\source_annotations.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\rig_bind_geometry.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\text_evidence.json",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_demo.csv",
+      "mode": "w"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_demo.csv",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_start.csv",
+      "mode": "w"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_start.csv",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_cycle.csv",
+      "mode": "w"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_cycle.csv",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_keypose_probe.csv",
+      "mode": "w"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_keypose_probe.csv",
+      "mode": "r"
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\reconstruction_manifest.json",
+      "mode": "w"
+    }
+  ],
+  "scope": "Python motion-generator open events only; original-preservation SHA hashing is separate and is not an animation input."
+}

@@ -1,0 +1,126 @@
+{
+  "reviewedAt": "2026-10-26T05:21:53.546Z",
+  "method": "Headless Chrome; actual local video playback and UI interaction.",
+  "scope": "Playback, half speed, start-pose seek, one-cycle seek and stop, image decoding, local links, desktop and 390 px layout. No claim of clinical or patient alignment accuracy.",
+  "checks": {
+    "javascript": true,
+    "mediaMetadata": true,
+    "halfSpeed": true,
+    "startButton": true,
+    "cycleStart": true,
+    "cycleEnd": true,
+    "normalSpeed": true,
+    "images": true,
+    "localLinks": true,
+    "desktopLayout": true,
+    "mobile390Layout": true,
+    "dataUnchanged": true
+  },
+  "pass": true,
+  "javascriptErrors": [],
+  "media": {
+    "width": 1920,
+    "height": 900,
+    "duration": 8.266667,
+    "readyState": 4
+  },
+  "halfSpeed": {
+    "rate": 0.5,
+    "time": 0.207473,
+    "paused": false
+  },
+  "startButton": {
+    "time": 0,
+    "paused": true
+  },
+  "cycleInitial": {
+    "time": 3.75,
+    "paused": false,
+    "rate": 0.5
+  },
+  "cycleEnd": {
+    "time": 8.25,
+    "paused": true,
+    "ended": false
+  },
+  "normalRate": 1,
+  "images": [
+    {
+      "src": "start_compare.jpg",
+      "complete": true,
+      "width": 1920,
+      "height": 900
+    },
+    {
+      "src": "keypose_compare.jpg",
+      "complete": true,
+      "width": 1280,
+      "height": 2000
+    }
+  ],
+  "links": [
+    {
+      "ref": "comparison.mp4",
+      "exists": true
+    },
+    {
+      "ref": "video_text_start.csv",
+      "exists": true
+    },
+    {
+      "ref": "video_text_cycle.csv",
+      "exists": true
+    },
+    {
+      "ref": "video_text_demo.csv",
+      "exists": true
+    },
+    {
+      "ref": "start_compare.jpg",
+      "exists": true
+    },
+    {
+      "ref": "keypose_compare.jpg",
+      "exists": true
+    },
+    {
+      "ref": "README.md",
+      "exists": true
+    },
+    {
+      "ref": "visual_observation_review.md",
+      "exists": true
+    },
+    {
+      "ref": "text_evidence.json",
+      "exists": true
+    },
+    {
+      "ref": "source_annotations.json",
+      "exists": true
+    },
+    {
+      "ref": "reconstruction_manifest.json",
+      "exists": true
+    },
+    {
+      "ref": "validation_report.json",
+      "exists": true
+    }
+  ],
+  "desktop": {
+    "width": 1440,
+    "documentWidth": 1440,
+    "hasHorizontalOverflow": false
+  },
+  "mobile": {
+    "width": 390,
+    "documentWidth": 390,
+    "hasHorizontalOverflow": false
+  },
+  "changedData": [],
+  "screenshots": [
+    "Temp/rib2-video-text-review-final-desktop.png",
+    "Temp/rib2-video-text-review-final-mobile.png"
+  ]
+}

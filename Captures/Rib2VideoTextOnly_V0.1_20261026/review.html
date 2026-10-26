@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>제2늑골 · 영상과 텍스트로 만든 가이드핸드 초안</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101824;--panel:#192535;--text:#f4f7fb;--muted:#bdcbdc;--line:#34475e;--cyan:#55dbea;--orange:#ffb465}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;line-height:1.65}main{max-width:1600px;margin:0 auto;padding:26px 30px 48px}h1{font-size:clamp(21px,2.1vw,32px);line-height:1.35;margin:0 0 8px}.intro{margin:0 0 18px;color:var(--muted);font-size:15px}.tag{display:inline-block;color:#abf4f4;background:#17444d;border:1px solid #32727a;border-radius:7px;padding:3px 9px;font-size:13px;margin-bottom:11px}.viewer{background:#050a10;border:1px solid var(--line);border-radius:12px;overflow:hidden}video{display:block;width:100%;aspect-ratio:16/7.5;object-fit:contain;background:#050a10}.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:15px 17px;background:var(--panel);border-top:1px solid var(--line)}button{font:inherit;font-weight:700;font-size:14px;cursor:pointer;border-radius:8px;padding:10px 16px;color:#f4f7fb;background:#2d425b;border:1px solid #5b7795}button:hover{background:#3a5675}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #8bf0f4;outline-offset:3px}button[aria-pressed="true"]{background:#16616c;border-color:#59dce6}#status{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}.legend{display:flex;gap:24px;flex-wrap:wrap;margin:15px 0 8px;font-size:14px}.dot{display:inline-block;width:12px;height:12px;margin-right:7px;border-radius:50%}.cyan{background:var(--cyan)}.orange{background:var(--orange)}.note{margin:7px 0 21px;color:var(--muted);font-size:14px}.still-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px;align-items:start}figure{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}figure img{display:block;width:100%;height:auto}figcaption{padding:10px 14px;font-size:14px;color:var(--muted)}details{margin-top:22px;border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:14px 17px}summary{cursor:pointer;font-weight:700}.evidence{display:grid;grid-template-columns:1fr 1fr;gap:22px}.evidence p{font-size:14px;color:var(--muted);margin:12px 0 0}.evidence strong{color:var(--text)}.links{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:15px}a{color:#8ee5ef;text-decoration:underline;text-underline-offset:3px}.links a{font-size:14px}footer{font-size:13px;color:var(--muted);margin-top:21px}#media-warning{display:none;padding:16px;color:#ffcf9c;background:#352a20} @media(max-width:760px){main{padding:20px 14px 32px}.still-grid,.evidence{grid-template-columns:1fr}#status{width:100%;margin:0}video{aspect-ratio:16/9}.tools{padding:12px}button{padding:9px 11px}}
+  </style>
+</head>
+<body>
+<main>
+  <span class="tag">별도 시연용 · 영상과 텍스트만 사용</span>
+  <h1>제2늑골 시작 파지와 팔 한 주기</h1>
+  <p class="intro">왼쪽 원본 영상과 오른쪽 가이드핸드를 함께 보며 시작 파지와 움직임을 비교하세요.</p>
+  <section class="viewer" aria-label="원본 영상과 가이드핸드 비교">
+    <video id="comparison" controls playsinline preload="metadata" poster="start_compare.jpg" aria-label="제2늑골 원본 영상과 영상·텍스트로 재구성한 가이드핸드 비교">
+      <source src="comparison.mp4" type="video/mp4">
+      이 브라우저에서는 영상을 재생할 수 없습니다. 아래 영상 파일 링크를 사용하세요.
+    </video>
+    <div id="media-warning" role="alert">영상을 읽지 못했습니다. comparison.mp4와 이 HTML을 같은 폴더에 두고 다시 열어 주세요.</div>
+    <div class="tools">
+      <button id="start-pose" type="button">시작 파지 보기</button>
+      <button id="one-cycle" type="button">팔 한 주기 재생</button>
+      <button id="half-speed" type="button" aria-pressed="false">0.5배 재생</button>
+      <span id="status" role="status" aria-live="polite">시작 파지 · 원본 56.50초</span>
+    </div>
+  </section>
+  <div class="legend" aria-label="손 색상 안내">
+    <span><i class="dot cyan" aria-hidden="true"></i>청록: 시술자 왼손 · 팔 이동</span>
+    <span><i class="dot orange" aria-hidden="true"></i>주황: 시술자 오른손 · 흉곽 지지</span>
+    <span>회색 선: 환자 팔의 화면 기준선(2D)</span>
+  </div>
+  <p class="note">트래킹 데이터 없이 영상에 보이는 손 위치와 텍스트 설명을 바탕으로 재구성했습니다. 한 시점의 화면을 직접 관찰한 2.5D 초안입니다. 깊이는 같은 평면(z=0)에 두었고, 가려진 손가락·손의 비틀림·절대 길이는 제작 가정입니다.</p>
+  <div class="links">
+    <a href="comparison.mp4" download>비교 영상 저장</a>
+    <a href="video_text_start.csv" download>시작 파지 데이터</a>
+    <a href="video_text_cycle.csv" download>팔 한 주기 데이터</a>
+    <a href="video_text_demo.csv" download>전체 시연 데이터</a>
+  </div>
+  <div class="still-grid">
+    <figure><a href="start_compare.jpg"><img src="start_compare.jpg" alt="제2늑골 시작 파지의 원본 영상과 가이드핸드 비교" loading="lazy"></a><figcaption>시작 파지: 흉곽 지지 손과 환자 손목을 감싸는 손을 비교합니다.</figcaption></figure>
+    <figure><a href="keypose_compare.jpg"><img src="keypose_compare.jpg" alt="팔 한 주기의 주요 자세별 원본 영상과 가이드핸드 비교" loading="lazy"></a><figcaption>팔 한 주기: 펼침 → 내림 → 굽힘 → 다시 펼침의 주요 자세를 비교합니다.</figcaption></figure>
+  </div>
+  <details>
+    <summary>무엇을 보고 만들었는지</summary>
+    <div class="evidence">
+      <p><strong>사용한 자료</strong><br>제2늑골 원본 3인칭 영상 56.50~64.75초, 기존 시나리오의 텍스트 안내와 내부 사양 문구, Meta 손 모델의 기본 형태를 사용했습니다. 화면 좌표를 직접 관찰하고 손 모델의 기본 자세에서 손가락 굽힘과 손바닥 방향을 재구성했습니다. 자동 자세 추정기는 실행하지 않았습니다.</p>
+      <p><strong>초안의 범위</strong><br>26개 관절을 가진 3D 손 메시를 사용하지만, 이번 궤적은 영상의 화면 경로를 중심으로 만든 2.5D 재구성입니다. 회색 팔 선은 수동 관찰한 환자의 어깨·팔꿈치·손목 화면 좌표를 연결한 2D 기준선입니다. 환자 실측 정렬과 임상적 정확성은 아직 검증하지 않았습니다. 기존 시나리오와 통과 조건은 그대로 보존합니다.</p>
+    </div>
+    <p class="note">이번 재구성에는 트래킹 CSV와 이전 시연의 포즈·궤적을 입력하지 않았습니다.</p>
+    <div class="links">
+      <a href="README.md">설명 문서</a>
+      <a href="visual_observation_review.md">영상 관찰 기록</a>
+      <a href="text_evidence.json">텍스트 근거</a>
+      <a href="source_annotations.json">화면 좌표 기록</a>
+      <a href="reconstruction_manifest.json">재구성 기록</a>
+      <a href="validation_report.json">검증 기록</a>
+    </div>
+  </details>
+  <footer>이 초안은 가이드 표시를 검토하기 위한 별도 자료입니다. 환자에게 적용할 위치와 통과 여부를 판정하지 않습니다.</footer>
+</main>
+<script>
+  (() => {
+    const video = document.getElementById('comparison');
+    const status = document.getElementById('status');
+    const speedButton = document.getElementById('half-speed');
+    const cycleStart = 3.75;
+    const cycleEnd = 8.25;
+    let stopAtCycleEnd = false;
+    let lastStatus = '';
+    function displayStatus(label) {
+      if (label !== lastStatus) { status.textContent = label; lastStatus = label; }
+    }
+    function updateTime() {
+      if (stopAtCycleEnd && video.currentTime >= cycleEnd) {
+        stopAtCycleEnd = false;
+        video.pause();
+        video.currentTime = cycleEnd;
+        displayStatus('팔 한 주기 끝 · 원본 64.75초');
+        return;
+      }
+      if (!video.paused) displayStatus('원본 ' + (56.5 + video.currentTime).toFixed(2) + '초 · ' + video.playbackRate + '배');
+    }
+    document.getElementById('start-pose').addEventListener('click', () => {
+      stopAtCycleEnd = false;
+      video.pause();
+      video.currentTime = 0;
+      displayStatus('시작 파지 · 원본 56.50초');
+    });
+    document.getElementById('one-cycle').addEventListener('click', () => {
+      stopAtCycleEnd = true;
+      video.currentTime = cycleStart;
+      displayStatus('팔 한 주기 재생 · 원본 60.25~64.75초');
+      video.play().catch(() => displayStatus('영상의 재생 버튼을 눌러 주세요.'));
+    });
+    speedButton.addEventListener('click', () => {
+      const useHalfSpeed = video.playbackRate !== 0.5;
+      video.playbackRate = useHalfSpeed ? 0.5 : 1;
+      speedButton.setAttribute('aria-pressed', String(useHalfSpeed));
+      speedButton.textContent = useHalfSpeed ? '1배로 돌아가기' : '0.5배 재생';
+      displayStatus('재생 속도 ' + video.playbackRate + '배');
+    });
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('ended', () => { stopAtCycleEnd = false; displayStatus('시연 끝 · 원본 64.75초'); });
+    video.addEventListener('error', () => { document.getElementById('media-warning').style.display = 'block'; });
+    window.rib2DemoReview = { cycleStart, cycleEnd, sourceStart: 56.5 };
+  })();
+</script>
+</body>
+</html>

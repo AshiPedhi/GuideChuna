@@ -1,0 +1,22 @@
+{
+  "source": "D:/전문가 영상 촬영본/3인칭 시점 카메라/제2늑골 교정기법.MOV",
+  "method": "Manual visual annotation of the original video only. Approximate visible glove wrist and palm locations, not anatomical measurements or automated landmark inference.",
+  "pixel_space": {"width": 960, "height": 540, "origin": "top-left", "y": "down", "estimated_manual_error_px": "10–20"},
+  "source_start_s": 56.5,
+  "cycle_start_source_s": 60.25,
+  "source_end_s": 64.75,
+  "hand_roles": {"Left": "시술사 왼손 · 환자의 손목/손 기저부를 감싸 팔을 움직임", "Right": "시술사 오른손 · 흉곽 쪽 지지"},
+  "keys": [
+    {"video_s":56.5,"event":"시작 파지","left_wrist":[695,354],"left_palm":[689,390],"right_wrist":[450,318],"right_palm":[416,306],"patient_shoulder":[454,353],"patient_elbow":[517,470],"patient_wrist":[665,402]},
+    {"video_s":58.0,"event":"파지 유지","left_wrist":[695,345],"left_palm":[682,386],"right_wrist":[450,316],"right_palm":[416,305],"patient_shoulder":[454,350],"patient_elbow":[517,470],"patient_wrist":[658,395]},
+    {"video_s":59.0,"event":"팔 펴기 전환","left_wrist":[722,342],"left_palm":[702,382],"right_wrist":[451,315],"right_palm":[418,304],"patient_shoulder":[454,347],"patient_elbow":[548,450],"patient_wrist":[690,387]},
+    {"video_s":60.25,"event":"팔 펼침","left_wrist":[727,254],"left_palm":[725,292],"right_wrist":[453,308],"right_palm":[416,301],"patient_shoulder":[455,335],"patient_elbow":[562,371],"patient_wrist":[704,320]},
+    {"video_s":61.0,"event":"내려가는 중","left_wrist":[712,320],"left_palm":[703,359],"right_wrist":[460,308],"right_palm":[422,300],"patient_shoulder":[457,344],"patient_elbow":[559,401],"patient_wrist":[686,378]},
+    {"video_s":62.25,"event":"아래쪽 이동","left_wrist":[662,444],"left_palm":[668,486],"right_wrist":[457,316],"right_palm":[419,309],"patient_shoulder":[456,348],"patient_elbow":[492,493],"patient_wrist":[658,509]},
+    {"video_s":63.25,"event":"몸통 쪽으로 굽힘","left_wrist":[622,371],"left_palm":[601,406],"right_wrist":[442,318],"right_palm":[401,309],"patient_shoulder":[438,348],"patient_elbow":[422,455],"patient_wrist":[552,398]},
+    {"video_s":64.0,"event":"아래쪽을 지나 복귀","left_wrist":[665,463],"left_palm":[660,506],"right_wrist":[451,319],"right_palm":[416,309],"patient_shoulder":[452,352],"patient_elbow":[500,489],"patient_wrist":[640,516]},
+    {"video_s":64.75,"event":"다시 펼침","left_wrist":[732,277],"left_palm":[732,315],"right_wrist":[450,318],"right_palm":[417,309],"patient_shoulder":[457,344],"patient_elbow":[591,394],"patient_wrist":[714,338]}
+  ],
+  "interpretation": "Event names describe the visible video sequence; they are not new clinical scenario steps. Source endpoints are preserved as observed and are not forced to be identical.",
+  "unobserved": ["camera depth", "absolute metric scale", "occluded finger articulation", "exact rib contact point", "pressure"]
+}

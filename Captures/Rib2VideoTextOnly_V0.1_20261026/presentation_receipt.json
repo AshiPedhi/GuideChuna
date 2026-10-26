@@ -1,0 +1,17 @@
+{
+  "source_video": "D:/전문가 영상 촬영본/3인칭 시점 카메라/제2늑골 교정기법.MOV",
+  "source_start_s": 56.5,
+  "requested_end_s": 64.75,
+  "actual_duration_s": 8.266666666666667,
+  "fps": 30,
+  "frames": 248,
+  "comparison_resolution": [
+    1920,
+    900
+  ],
+  "animation_input": "This draft video_text_demo.csv generated from manual original-video annotations, text evidence and generic SDK bind geometry only.",
+  "gray_arm_line": "2D explanatory line from manually observed patient shoulder/elbow/wrist, linear between keyframes; not a 3D patient model or joint-angle result.",
+  "trajectory": "View-only path projected from the newly authored wrist positions using the same orthographic camera.",
+  "original_video": "Trimmed, scaled and padded; original audio retained. No landmark overlay in the comparison source panel.",
+  "output_sha256": "9e888dab04267d38db4cf3161f09f701e0ed62684cc765e3f8b238157f9ac7a4"
+}
