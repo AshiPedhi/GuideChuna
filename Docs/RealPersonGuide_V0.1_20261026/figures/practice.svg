@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">기존 실습 가이드에 다시 맞추기 조작을 더한 개념 화면</title>
+  <desc id="desc">기존 가이드 패널과 단계 진행률을 유지한다. 등록된 시작과 목표 손 자세 사이의 진행률을 보여 주며 실제 관절각을 나타내지 않는다. 사람 뒷모습과 고정 보조수, 움직이는 주동수는 배치 예시이다.</desc>
+  <defs>
+    <style>text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}.muted{fill:#587081}.small{font-size:20px}.bold{font-weight:700}.title{font-size:30px;font-weight:700}.white{fill:#fff}</style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10" fill="none" stroke="#2f83c3" stroke-width="2"/></marker>
+    <g id="hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+    </g>
+    <g id="ghost"><path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#eef6fc" fill-opacity=".7" stroke="#6baddd" stroke-width="3" stroke-dasharray="7 5"/></g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">기존 가이드로 동작 이어가기</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="365" height="492" rx="20" fill="#f8fbfd" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="49" y="114" class="small muted">기존 단계 가이드 재사용</text>
+  <text x="49" y="162" style="font-size:34px" class="bold">동작 수행</text>
+  <text x="49" y="203">등록한 목표를 향해</text>
+  <text x="49" y="235">천천히 움직이세요</text>
+  <text x="49" y="276" class="small muted">예시 문구</text>
+  <text x="49" y="335" style="font-size:43px;fill:#247ac3" class="bold">72%</text>
+  <text x="165" y="333" class="small muted">등록 목표까지</text>
+  <rect x="49" y="350" width="315" height="12" rx="6" fill="#deEaf3"/>
+  <rect x="49" y="350" width="227" height="12" rx="6" fill="#2c8ace"/>
+  <circle cx="91" cy="425" r="32" fill="none" stroke="#d9e7ed" stroke-width="9"/>
+  <path d="M91 393A32 32 0 0 1 121 414" fill="none" stroke="#8fb4c6" stroke-width="9" stroke-linecap="round"/>
+  <text x="145" y="419" class="bold">현재 유지 대기</text>
+  <text x="145" y="450" class="small muted">기존 유지 게이지</text>
+  <rect x="49" y="493" width="315" height="50" rx="12" fill="#fff" stroke="#93bbd7" stroke-width="2"/>
+  <text x="206" y="526" text-anchor="middle" class="bold" fill="#2e78ae">↻ 다시 맞추기</text>
+
+  <rect x="411" y="76" width="765" height="492" rx="20" fill="#eef5f8" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="435" y="114" class="small muted">움직임 배치 예시 · 시작 / 현재 / 등록 목표</text>
+  <path d="M755 258 755 295 820 295 820 258" fill="#e6b999"/>
+  <ellipse cx="787" cy="216" rx="51" ry="64" fill="#e4b695"/>
+  <path d="M737 213Q728 142 787 145Q847 142 838 213Q825 172 787 175Q752 174 737 213" fill="#626c75"/>
+  <path d="M739 285Q787 302 836 285L890 310Q928 331 938 390L952 506 900 513 879 405 877 532 697 532 695 405 674 513 622 506 636 390Q646 331 684 310Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+  <path d="M739 285Q787 313 836 285M787 308 787 530" fill="none" stroke="#bfced7" stroke-width="2"/>
+  <use href="#hand" transform="translate(642 331) rotate(-22 42 64) scale(.85)"/>
+  <text x="440" y="278" class="bold">고정 보조수</text>
+  <path d="M554 288 633 332" fill="none" stroke="#5b7a8d" stroke-width="2"/>
+
+  <use href="#ghost" transform="translate(944 409) scale(-.68 .68) rotate(-26 42 64)"/>
+  <text x="984" y="486" class="small muted">시작</text>
+  <use href="#ghost" transform="translate(1020 211) scale(-.68 .68) rotate(-26 42 64)"/>
+  <text x="1045" y="245" class="small" fill="#2e78ae">등록 목표</text>
+  <path d="M1138 429Q1170 360 1138 295" fill="none" stroke="#2f83c3" stroke-width="3" stroke-dasharray="8 7" marker-end="url(#arrow)"/>
+  <use href="#hand" transform="translate(997 315) scale(-.85 .85) rotate(-26 42 64)"/>
+  <text x="1044" y="379" class="bold">주동수</text>
+  <text x="1044" y="408" class="small muted">현재</text>
+  <rect x="722" y="530" width="430" height="29" rx="10" fill="#fff"/>
+  <text x="937" y="552" text-anchor="middle" class="small muted">손 움직임 기준 · 실제 관절각 아님</text>
+
+  <text x="32" y="606" class="bold">기존 화면과 단계 진행을 재사용하고, 맞추기 조작을 작게 추가합니다.</text>
+  <text x="32" y="641" class="small muted">목표 자세를 별도로 등록한 경우의 예시입니다. 실제 처치 방법을 설명하는 그림이 아닙니다.</text>
+</svg>

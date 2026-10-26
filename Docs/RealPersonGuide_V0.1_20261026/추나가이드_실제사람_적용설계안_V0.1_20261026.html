@@ -1,0 +1,213 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>추나 가이드 실제 사람 적용 설계안 V0.1</title><style>
+@page { size:A4; margin:0; }
+* { box-sizing:border-box; }
+body { margin:0; color:#203247; background:#e8edf2; font-family:'Malgun Gothic',sans-serif; font-size:10pt; line-height:1.6; }
+.page { width:210mm; height:297mm; margin:8mm auto; padding:14mm 14mm 16mm; background:#fff; position:relative; box-shadow:0 3px 18px #172c3f18; break-after:page; }
+.page:last-child { break-after:auto; }
+.eyebrow { font-size:8.5pt; letter-spacing:1px; color:#59738d; font-weight:bold; margin:0 0 3mm; }
+h1 { font-size:23pt; line-height:1.35; letter-spacing:-.8px; margin:0 0 2.5mm; color:#193956; }
+h2 { font-size:17pt; line-height:1.4; margin:0 0 3mm; color:#193956; }
+h3 { font-size:11pt; margin:4mm 0 1.5mm; }
+p { margin:2.3mm 0; }
+.by { font-size:8.5pt; color:#62758a; margin:0 0 3mm; }
+.key { padding:3mm 4mm; border-left:4px solid #2f6fd6; background:#eff5fd; margin:3mm 0; font-size:10.5pt; line-height:1.65; }
+.how { padding:2.3mm 3mm; background:#f2f5f7; border-left:3px solid #a6b6c5; font-size:9pt; margin:3mm 0 1.5mm; }
+figure { margin:2mm 0; break-inside:avoid; }
+figure svg { width:100%; height:auto; display:block; }
+figcaption { font-size:8pt; color:#6e7e8f; text-align:left; margin:1mm 0 2mm; }
+table { width:100%; border-collapse:collapse; font-size:9pt; line-height:1.5; margin:2.5mm 0; table-layout:fixed; }
+th,td { text-align:left; vertical-align:top; padding:2.3mm 2.7mm; border:1px solid #dbe3eb; overflow-wrap:anywhere; }
+th { background:#edf3f8; color:#234766; }
+.narrow td:first-child,.narrow th:first-child { width:27%; }
+.wide td:first-child,.wide th:first-child { width:23%; }
+.cards { display:flex; gap:2.5mm; margin:3mm 0; }
+.cards>div { flex:1; border:1px solid #dbe5ef; background:#f7faff; border-radius:2mm; padding:3mm; font-size:9pt; }
+.cards b { color:#255fa8; }
+.cols { display:flex; gap:4mm; }
+.cols>div { flex:1; }
+.box { border:1px solid #dce5ee; border-radius:2mm; padding:3mm 3.5mm; margin:2.5mm 0; background:#fbfcfd; }
+.note { border-left:3px solid #dba43b; background:#fff8e9; padding:2.5mm 3.5mm; margin:3mm 0; font-size:9pt; }
+.good { border-left:3px solid #1e8449; background:#eef8f2; padding:2.5mm 3.5mm; margin:3mm 0; font-size:9pt; }
+.muted { color:#687c8f; }
+.small { font-size:8.5pt; }
+.tag { display:inline-block; border-radius:20px; background:#eaf2fb; color:#2f6fd6; padding:1mm 3mm; margin:0 1.3mm 1mm 0; font-size:8.5pt; font-weight:bold; }
+.footer { position:absolute; left:14mm; right:14mm; bottom:7mm; display:flex; justify-content:space-between; border-top:1px solid #dfe6ed; padding-top:2mm; font-size:7.5pt; color:#718194; }
+.refs { font-size:7.7pt; line-height:1.55; color:#5d7184; }
+.refs p { margin:1mm 0; }
+a { color:#285fa4; text-decoration:none; }
+.legend { font-size:8.5pt; color:#60788e; }
+.sep { height:1px; background:#e3e9ef; margin:3mm 0; }
+@media print { body { background:white; } .page { margin:0; box-shadow:none; } }
+</style></head><body><section class="page" id="p1"><div class="eyebrow">CONCEPT / 추가 장비 없음</div><main><h1>실제 사람에게 쓰는<br>추나 가이드, 어떻게 맞출까</h1><p class='by'>2026-10-26 · GuideChuna · 코드 정적 확인에 근거한 구현 제안</p><div class='key'><b>한 줄 결론</b> — 기존 화면과 자동 진행을 활용하되, <b>시작 파지를 등록하고 개인별 자동 진행에는 목표도 등록</b>하는 방식이다.</div><p><span class="tag">추가 장비 없음</span><span class="tag">기존 흐름 재사용</span><span class="tag">시작 전 조작에 집중</span></p><div class='how'><b>읽는 법</b> — 파란 점은 등록할 손 자리다. 오른쪽 창만 시작 전에 추가하는 개념이다. 사람과 손은 설명용으로 단순화했다.</div><figure><svg id="figure-setup" xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="figure-setup--title figure-setup--desc">
+  <title id="figure-setup--title">실제 사람에게 시작 파지를 맞추는 준비 화면 개념</title>
+  <desc id="figure-setup--desc">사람에게 맞추기 버튼을 누르고 올바른 시작 파지를 잠깐 유지하면 손 위치와 방향을 저장하는 개념이다. 신체 전체 정렬이나 목표 범위 설정을 한 번에 수행하는 그림이 아니다.</desc>
+  <defs>
+    <style>#figure-setup text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}#figure-setup .muted{fill:#587081}#figure-setup .small{font-size:20px}#figure-setup .bold{font-weight:700}#figure-setup .title{font-size:30px;font-weight:700}#figure-setup .step{font-size:23px;font-weight:700}#figure-setup .white{fill:#fff}
+    </style>
+    <linearGradient id="figure-setup--room" x2="0" y2="1"><stop stop-color="#edf5fa"/><stop offset="1" stop-color="#f8fbfd"/></linearGradient>
+    <marker id="figure-setup--arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="none" stroke="#2f7dbe" stroke-width="2"/></marker>
+    <g id="figure-setup--hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+      <path d="M28 61Q37 54 45 56M50 48 49 70M63 48 59 69" fill="none" stroke="#c19175" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">실제 사람에게 시작 파지 맞추기</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="742" height="492" rx="20" fill="url(#figure-setup--room)" stroke="#d8e5ec" stroke-width="2"/>
+  <path d="M25 437 395 370 765 437M395 370 395 568" fill="none" stroke="#dfE9ee" stroke-width="2"/>
+  <rect x="44" y="96" width="203" height="38" rx="19" fill="#fff"/>
+  <text x="145" y="122" text-anchor="middle" class="small muted">접촉 위치 배치 예시</text>
+  <path d="M367 247 367 292 432 292 432 247" fill="#e6b999"/>
+  <ellipse cx="400" cy="207" rx="54" ry="66" fill="#e4b695"/>
+  <path d="M347 203Q338 128 400 132Q463 129 455 203Q440 163 400 164Q365 163 347 203" fill="#626c75"/>
+  <path d="M349 282Q400 300 451 282L508 309Q547 331 558 392L573 522 518 529 496 408 493 542 306 542 303 408 281 529 226 522 241 392Q252 331 291 309Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+  <path d="M349 282Q400 313 451 282M399 308 399 540" fill="none" stroke="#bfced7" stroke-width="2"/>
+  <circle cx="318" cy="327" r="41" fill="#42a3dd" fill-opacity=".10" stroke="#368aca" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="482" cy="327" r="41" fill="#42a3dd" fill-opacity=".10" stroke="#368aca" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="318" cy="327" r="7" fill="#237dc2"/>
+  <circle cx="482" cy="327" r="7" fill="#237dc2"/>
+  <use href="#figure-setup--hand" transform="translate(278 264) scale(.91) rotate(-25 42 64)"/>
+  <use href="#figure-setup--hand" transform="translate(522 264) scale(-.91 .91) rotate(-25 42 64)"/>
+  <rect x="451" y="155" width="280" height="69" rx="14" fill="#fff" stroke="#b5d7ee" stroke-width="2"/>
+  <text x="591" y="184" text-anchor="middle" class="bold">시작 파지 확인 영역</text>
+  <text x="591" y="211" text-anchor="middle" class="small muted">등록한 손 자리에 배치</text>
+  <path d="M552 224Q526 260 491 284" fill="none" stroke="#2f7dbe" stroke-width="2" marker-end="url(#figure-setup--arrow)"/>
+  <rect x="45" y="492" width="220" height="50" rx="13" fill="#fff"/>
+  <text x="155" y="523" text-anchor="middle" class="small muted">얼굴 없는 뒤쪽 시점</text>
+
+  <rect x="790" y="76" width="386" height="492" rx="20" fill="#fff" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="815" y="116" class="small muted">준비 · 사용자 조작</text>
+  <circle cx="833" cy="157" r="17" fill="#e7f1fb"/><text x="833" y="165" text-anchor="middle" class="small bold">1</text>
+  <text x="860" y="165" class="step">먼저 버튼 누르기</text>
+  <rect x="815" y="184" width="336" height="58" rx="13" fill="#247ac3"/>
+  <text x="983" y="221" text-anchor="middle" class="bold white">사람에게 맞추기</text>
+  <circle cx="833" cy="285" r="17" fill="#e7f1fb"/><text x="833" y="293" text-anchor="middle" class="small bold">2</text>
+  <text x="860" y="293" class="step">올바른 시작 파지</text>
+  <text x="860" y="328" class="muted">손을 얹고 잠깐 유지</text>
+  <circle cx="833" cy="374" r="17" fill="#def3ed"/><text x="833" y="382" text-anchor="middle" class="small bold">3</text>
+  <text x="860" y="382" class="step">저장 확인</text>
+  <rect x="815" y="400" width="336" height="58" rx="13" fill="#e0f4ee" stroke="#a6d8c8"/>
+  <text x="983" y="437" text-anchor="middle" class="bold" fill="#176f5b">✓ 시작 기준 저장됨</text>
+  <rect x="815" y="482" width="336" height="62" rx="12" fill="#fff5de"/>
+  <text x="983" y="508" text-anchor="middle" class="small">올바른 파지는 사람이 확인</text>
+  <text x="983" y="534" text-anchor="middle" class="small muted">신체 자동 인식이 아닙니다</text>
+
+  <text x="32" y="606" class="bold">등록하는 것: 손 위치 · 방향 · 손 사이 간격</text>
+  <text x="32" y="641" class="small muted">신체 전체 정렬과 목표 범위 등록은 별도입니다. 실제 처치 방법을 설명하는 그림이 아닙니다.</text>
+</svg>
+<figcaption>그림 1. 원리·개념 화면(실측 아님). 실제 앱 캡처와 실제 처치 자세가 아니다.</figcaption></figure><table class='narrow'><tr><th>구분</th><th>이 제안에서 뜻하는 것</th></tr><tr><td>보정</td><td>맞다고 확인한 시작 파지와 손 움직임 기준을 저장한다.</td></tr><tr><td>유지</td><td>기존 단계·UI 틀·진행률·유지 후 자동 전환을 재사용한다.</td></tr><tr><td>한계</td><td>손 추적만으로 환자 표면·관절각·안전 범위를 직접 알지는 못한다.</td></tr></table><div class="note"><b>범위:</b> 보정 한 번으로 모든 술기가 그대로 동작한다는 제안은 아니다. 손에서 판단 가능한 술기부터 적용한다.</div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>1 / 6</span></div></section><section class="page" id="p2"><div class="eyebrow">사용자는 무엇을 누르나</div><main><h2>시작 전 작은 준비창 하나로 모은다</h2><div class='how'><b>읽는 법</b> — 왼쪽에서 오른쪽으로 읽는다. 노란 목표 등록은 개인별 통과 목표가 필요한 동작에만 추가한다.</div><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 270" font-family="Malgun Gothic,sans-serif"><rect x="12" y="24" width="277" height="146" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="30" y="59" font-size="22" fill="#2f6fd6" font-weight="700" text-anchor="start">01</text><text x="30" y="99" font-size="23" fill="#203247" font-weight="700" text-anchor="start">시작 준비</text><text x="30" y="137" font-size="18" fill="#203247" font-weight="400" text-anchor="start">술기·시작 자세 선택</text><text x="299" y="106" font-size="27" fill="#8fa2b3" font-weight="700" text-anchor="middle">→</text><rect x="309" y="24" width="277" height="146" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="327" y="59" font-size="22" fill="#2f6fd6" font-weight="700" text-anchor="start">02</text><text x="327" y="99" font-size="23" fill="#203247" font-weight="700" text-anchor="start">시작 파지 등록</text><text x="327" y="137" font-size="18" fill="#203247" font-weight="400" text-anchor="start">맞추기 → 손 얹고 유지</text><text x="596" y="106" font-size="27" fill="#8fa2b3" font-weight="700" text-anchor="middle">→</text><rect x="606" y="24" width="277" height="146" fill="#fff8e9" stroke="#dce5ef" rx="12"/><text x="624" y="59" font-size="22" fill="#c08a2f" font-weight="700" text-anchor="start">03</text><text x="624" y="99" font-size="23" fill="#203247" font-weight="700" text-anchor="start">목표 등록</text><text x="624" y="137" font-size="18" fill="#203247" font-weight="400" text-anchor="start">개인화 자동 진행 시</text><text x="893" y="106" font-size="27" fill="#8fa2b3" font-weight="700" text-anchor="middle">→</text><rect x="903" y="24" width="277" height="146" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="921" y="59" font-size="22" fill="#2f6fd6" font-weight="700" text-anchor="start">04</text><text x="921" y="99" font-size="23" fill="#203247" font-weight="700" text-anchor="start">기존 실습 진행</text><text x="921" y="137" font-size="18" fill="#203247" font-weight="400" text-anchor="start">진행률·유지·자동 전환</text><text x="600" y="211" font-size="20" fill="#203247" font-weight="400" text-anchor="middle">목표 등록은 같은 사람·같은 동작에서 재사용한다.</text><text x="600" y="244" font-size="19" fill="#6c7b8a" font-weight="400" text-anchor="middle">사람·자세·파지가 바뀌면 이전 기준을 그대로 쓰지 않는다.</text></svg><figcaption>그림 2. 개념 순서도(실측 아님). 안정 유지 시간과 저장 알림은 기기 사용성 확인 후 정한다.</figcaption></figure><h3>시작 파지는 이렇게 등록한다</h3><div class='cards'><div><b>1. 먼저 준비</b><br>손이 자유로울 때 [사람에게 맞추기]를 누른다.</div><div><b>2. 올바른 자리</b><br>실제 사람에게 필요한 파지를 한다. 시작 위치는 지도자가 확인한다.</div><div><b>3. 손을 잠깐 유지</b><br>준비된 상태에서 안정된 손 자세를 모으고 소리·표시로 저장을 알린다.</div></div><p>손을 얹은 뒤 버튼을 누르기 위해 다시 떼게 하지 않는다. 설명을 듣다가 손을 멈췄다는 이유로 임의 저장하지도 않는다.</p><h3>목표 등록은 누구에게 필요한가</h3><table class='narrow'><tr><th>사용 상황</th><th>필요한 준비</th></tr><tr><td>시작 파지 위치만 보정</td><td>시작 등록으로 위치 차이를 줄인다. 개인별 목표 범위는 얻지 못한다.</td></tr><tr><td>개인별 목표로 자동 진행</td><td>지도자가 정한 목표 손 자세를 추가 저장한다. 같은 사람·동작에서는 재사용한다.</td></tr><tr><td>사람·자세·파지 변경</td><td>이전 기준을 무효로 하고 다시 등록한다. 임의 자동 추종으로 해결하지 않는다.</td></tr></table><div class="note"><b>목표를 정하는 주체:</b> 앱이 개인의 가능한 최대 범위를 찾아 주는 기능이 아니다. 지도자가 정한 목표를 앱에 기록한다.</div><div class="good"><b>조작 초안:</b> 일상 화면은 기존대로 두고, 준비창의 [시작 맞추기]·[목표 등록]과 실습 중 [다시 맞추기]만 추가 후보로 둔다. 명칭과 배치는 논의 대상이다.</div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>2 / 6</span></div></section><section class="page" id="p3"><div class="eyebrow">거리와 충돌체를 어떻게 바꾸나</div><main><h2>몸 전체 대신 필요한 시작 접촉 영역을 맞춘다</h2><div class='how'><b>읽는 법</b> — 회색은 기존 가상환자 기준, 초록은 등록한 시작 파지 기준이다. 위치 차이의 원리를 보여 주며 실제 오차 크기나 축척은 나타내지 않는다.</div><figure><svg id="figure-contact" xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="figure-contact--title figure-contact--desc">
+  <title id="figure-contact--title">기존 가상환자 접촉 영역과 실제 사람의 시작 파지 등록 비교</title>
+  <desc id="figure-contact--desc">왼쪽은 숨은 가상환자 기준의 접촉 영역이 실제 손 위치와 어긋난 개념이다. 오른쪽은 같은 사람과 손 위치에 시작 파지 확인 영역을 등록한다. 실제 신체 형태를 자동 측정하거나 동작 중 피부 접촉을 직접 검출하는 그림이 아니다.</desc>
+  <defs>
+    <style>#figure-contact text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}#figure-contact .muted{fill:#587081}#figure-contact .small{font-size:20px}#figure-contact .bold{font-weight:700}#figure-contact .title{font-size:30px;font-weight:700}</style>
+    <g id="figure-contact--person">
+      <path d="M-29-30-29 6 29 6 29-30" fill="#e6b999"/>
+      <ellipse cx="0" cy="-71" rx="43" ry="54" fill="#e4b695"/>
+      <path d="M-43-74Q-49-135 0-130Q49-135 43-74Q31-106 0-105Q-31-106-43-74" fill="#626c75"/>
+      <path d="M-40-2Q0 13 40-2L91 19Q121 38 131 92L142 189 99 195 81 103 78 216-78 216-81 103-99 195-142 189-131 92Q-121 38-91 19Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+      <path d="M-40-2Q0 23 40-2M0 19 0 214" fill="none" stroke="#bfced7" stroke-width="2"/>
+    </g>
+    <g id="figure-contact--hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+    </g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">접촉 영역의 위치를 실제 손 자리에 맞춘다</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="564" height="492" rx="20" fill="#f7f9fb" stroke="#dce5eb" stroke-width="2"/>
+  <rect x="612" y="76" width="564" height="492" rx="20" fill="#f1faf7" stroke="#c6e5da" stroke-width="2"/>
+  <text x="49" y="117" style="font-size:27px" class="bold">맞추기 전</text>
+  <text x="637" y="117" style="font-size:27px" class="bold">시작 파지 등록 후</text>
+  <text x="49" y="152" class="small muted">숨은 가상환자 기준이 남아 있음</text>
+  <text x="637" y="152" class="small muted">실제 사람과 손 위치는 왼쪽과 같음</text>
+
+  <use href="#figure-contact--person" transform="translate(306 295)"/>
+  <path d="M266 293Q306 265 346 293L374 311Q388 339 386 376M246 311Q232 339 234 376" fill="none" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="9 7"/>
+  <circle cx="253" cy="314" r="29" fill="#aeb8c0" fill-opacity=".16" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="359" cy="314" r="29" fill="#aeb8c0" fill-opacity=".16" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="7 5"/>
+  <use href="#figure-contact--hand" transform="translate(165 339) scale(.76) rotate(-23 42 64)"/>
+  <use href="#figure-contact--hand" transform="translate(447 339) scale(-.76 .76) rotate(-23 42 64)"/>
+  <rect x="49" y="452" width="514" height="91" rx="13" fill="#fff"/>
+  <circle cx="72" cy="480" r="8" fill="#aeb8c0"/><text x="91" y="488" class="small">회색 점선: 기존 가상 접촉 영역</text>
+  <text x="72" y="521" class="small muted">실제 손과 영역의 자리가 다를 수 있음</text>
+
+  <use href="#figure-contact--person" transform="translate(894 295)"/>
+  <circle cx="787" cy="392" r="32" fill="#47b68e" fill-opacity=".12" stroke="#319a77" stroke-width="3"/>
+  <circle cx="1001" cy="392" r="32" fill="#47b68e" fill-opacity=".12" stroke="#319a77" stroke-width="3"/>
+  <use href="#figure-contact--hand" transform="translate(753 339) scale(.76) rotate(-23 42 64)"/>
+  <use href="#figure-contact--hand" transform="translate(1035 339) scale(-.76 .76) rotate(-23 42 64)"/>
+  <rect x="637" y="452" width="514" height="91" rx="13" fill="#fff"/>
+  <circle cx="660" cy="480" r="8" fill="#319a77"/><text x="679" y="488" class="small">위치는 손 자리로 등록</text>
+  <text x="660" y="521" class="small muted">범위는 술기별 기본값을 사용</text>
+
+  <text x="32" y="605" class="bold">시작 파지 확인 영역이며, 신체 형태·크기를 자동 측정한 것이 아닙니다.</text>
+  <text x="32" y="640" class="small muted">동작 중 피부 접촉을 직접 검출하는 그림이 아님</text>
+  <text x="1168" y="640" text-anchor="end" class="small muted">확대 비교도 · 축척 없음</text>
+</svg>
+<figcaption>그림 3. 원리 그림(실측 아님). 초록 영역은 실제 신체 형상을 스캔한 결과가 아니다.</figcaption></figure><table class='narrow'><tr><th>보정 항목</th><th>구체적인 처리</th></tr><tr><td>위치·간격</td><td>등록 순간의 각 손 기준점으로 중심을 정한다. 손 사이 간격은 그 사람의 파지 간격을 반영한다.</td></tr><tr><td>영역 크기</td><td>손가락·손바닥 접촉 방식에 맞는 술기별 기본값을 쓴다. 손 사이가 넓다고 영역까지 크게 늘리지 않는다.</td></tr><tr><td>허용 여유</td><td>접촉 허용 폭과 추적 흔들림 여유를 분리한다. 흔들린다는 이유로 계속 자동 확대하지 않는다.</td></tr><tr><td>사용자 조절</td><td>평소에는 숨긴다. 필요할 때만 [좁게 / 보통 / 넓게]로 조절하는 안을 검토한다.</td></tr></table><div class="note"><b>동작 중에는 별도 판단이 필요하다.</b> 시작 영역은 시작 파지 확인용이다. 움직이는 손에 영역을 계속 붙여 “접촉”으로 인정하면 손이 언제나 자기 영역 안에 있게 된다. 피부 접촉의 지속 여부는 손 위치만으로 확정할 수 없다.</div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>3 / 6</span></div></section><section class="page" id="p4"><div class="eyebrow">조건 통과 각도를 어떻게 보정하나</div><main><h2>고정 각도 대신 등록 목표까지의 손 진행률을 쓴다</h2><div class='how'><b>읽는 법</b> — 세 손 표시는 같은 동작의 출발·수행·목표를 뜻한다. 관절 위치나 실제 관절각을 나타내는 그림이 아니다.</div><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 390" font-family="Malgun Gothic,sans-serif"><rect x="0" y="0" width="1200" height="390" fill="#f8fafc" stroke="#dce5ef" rx="12"/><line x1="170" y1="175" x2="1030" y2="175" stroke="#bbcad8" stroke-width="9"/><line x1="170" y1="175" x2="600" y2="175" stroke="#2f6fd6" stroke-width="9"/><circle cx="150" cy="175" r="19" fill="#8eacc9" stroke="white" stroke-width="5"/><text x="150" y="63" font-size="25" fill="#8eacc9" font-weight="700" text-anchor="middle">시작 파지</text><text x="150" y="99" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">출발 손 자세 저장</text><rect x="97" y="230" width="106" height="66" fill="#fff" stroke="#8eacc9" rx="12"/><path d="M 119 270 q 2 -27 17 -23 l 21 1 q 16 1 24 20 l -7 15 l -43 -1 Z" fill="#e9c6ab" stroke="#b8947c" stroke-width="2"/><circle cx="600" cy="175" r="19" fill="#2f6fd6" stroke="white" stroke-width="5"/><text x="600" y="63" font-size="25" fill="#2f6fd6" font-weight="700" text-anchor="middle">수행 중</text><text x="600" y="99" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">손 신호의 진행 정도</text><rect x="547" y="230" width="106" height="66" fill="#fff" stroke="#2f6fd6" rx="12"/><path d="M 569 270 q 2 -27 17 -23 l 21 1 q 16 1 24 20 l -7 15 l -43 -1 Z" fill="#e9c6ab" stroke="#b8947c" stroke-width="2"/><circle cx="1050" cy="175" r="19" fill="#1e8449" stroke="white" stroke-width="5"/><text x="1050" y="63" font-size="25" fill="#1e8449" font-weight="700" text-anchor="middle">목표 파지</text><text x="1050" y="99" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">지도자가 정한 자세 저장</text><rect x="997" y="230" width="106" height="66" fill="#fff" stroke="#1e8449" rx="12"/><path d="M 1019 270 q 2 -27 17 -23 l 21 1 q 16 1 24 20 l -7 15 l -43 -1 Z" fill="#e9c6ab" stroke="#b8947c" stroke-width="2"/><text x="600" y="340" font-size="23" fill="#203247" font-weight="700" text-anchor="middle">진행률 = 시작에서 목표까지의 손 움직임을 기준으로 계산</text><text x="600" y="372" font-size="19" fill="#6c7b8a" font-weight="400" text-anchor="middle">실제 관절각·안전 범위·피부 접촉을 자동으로 측정하는 식은 아니다.</text></svg><figcaption>그림 4. 원리 그림(실측 아님). 진행률 계산에 쓸 손 신호는 술기별로 선택·검증한다.</figcaption></figure><div class="cols"><div class="box"><b>시작 등록이 정하는 것</b><p>출발 손 위치·방향과 상대 움직임의 원점을 정한다.</p><p class="small muted">이 정보만으로 개인별 통과 목표는 알 수 없다.</p></div><div class="box"><b>목표 등록이 정하는 것</b><p>지도자가 지정한 목표 손 자세를 저장해 자동 통과의 기준으로 쓴다.</p><p class="small muted">안전 범위나 올바른 술기를 앱이 발견한 결과가 아니다.</p></div></div><table class='narrow'><tr><th>기존 요소</th><th>실제 사람 적용안</th></tr><tr><td>진행률</td><td>선택한 손 신호를 시작에서 목표까지의 진행 정도로 바꿔 기존 흐름에 공급한다.</td></tr><tr><td>방향·유지</td><td>방향 검사와 유지 조건은 관찰 가능한 항목을 골라 연결한다. 목표점에 닿았다는 이유만으로 전체 동작을 정답으로 보지는 않는다.</td></tr><tr><td>각도 표기</td><td>손에서 구한 값을 실제 관절각으로 표시하지 않는다. 해당 항목은 [등록 목표 대비 진행률] 등으로 바꿔야 한다.</td></tr><tr><td>보조수 기준</td><td>고정 역할을 하는 술기에서만 주동수의 상대 움직임 기준으로 검토한다. 양손이 함께 움직이는 동작에 일괄 적용하지 않는다.</td></tr></table><div class="note"><b>간단함의 대가:</b> 최초 목표 등록이 추가된다. 학습자가 혼자 한 동작을 자동으로 정답으로 삼는 방식은 기본안에서 제외한다.</div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>4 / 6</span></div></section><section class="page" id="p5"><div class="eyebrow">실습 중 화면은 얼마나 달라지나</div><main><h2>익숙한 진행 화면에 상태와 재보정만 더한다</h2><div class='how'><b>읽는 법</b> — 진행 패널·유지 게이지·단계 전환 구조를 재사용하는 개념이다. 버튼 배치와 문구는 현재 화면을 그대로 복제한 것이 아니다.</div><figure><svg id="figure-practice" xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="figure-practice--title figure-practice--desc">
+  <title id="figure-practice--title">기존 실습 가이드에 다시 맞추기 조작을 더한 개념 화면</title>
+  <desc id="figure-practice--desc">기존 가이드 패널과 단계 진행률을 유지한다. 등록된 시작과 목표 손 자세 사이의 진행률을 보여 주며 실제 관절각을 나타내지 않는다. 사람 뒷모습과 고정 보조수, 움직이는 주동수는 배치 예시이다.</desc>
+  <defs>
+    <style>#figure-practice text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}#figure-practice .muted{fill:#587081}#figure-practice .small{font-size:20px}#figure-practice .bold{font-weight:700}#figure-practice .title{font-size:30px;font-weight:700}#figure-practice .white{fill:#fff}</style>
+    <marker id="figure-practice--arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10" fill="none" stroke="#2f83c3" stroke-width="2"/></marker>
+    <g id="figure-practice--hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+    </g>
+    <g id="figure-practice--ghost"><path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#eef6fc" fill-opacity=".7" stroke="#6baddd" stroke-width="3" stroke-dasharray="7 5"/></g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">기존 가이드로 동작 이어가기</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="365" height="492" rx="20" fill="#f8fbfd" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="49" y="114" class="small muted">기존 단계 가이드 재사용</text>
+  <text x="49" y="162" style="font-size:34px" class="bold">동작 수행</text>
+  <text x="49" y="203">등록한 목표를 향해</text>
+  <text x="49" y="235">천천히 움직이세요</text>
+  <text x="49" y="276" class="small muted">예시 문구</text>
+  <text x="49" y="335" style="font-size:43px;fill:#247ac3" class="bold">72%</text>
+  <text x="165" y="333" class="small muted">등록 목표까지</text>
+  <rect x="49" y="350" width="315" height="12" rx="6" fill="#deEaf3"/>
+  <rect x="49" y="350" width="227" height="12" rx="6" fill="#2c8ace"/>
+  <circle cx="91" cy="425" r="32" fill="none" stroke="#d9e7ed" stroke-width="9"/>
+  <path d="M91 393A32 32 0 0 1 121 414" fill="none" stroke="#8fb4c6" stroke-width="9" stroke-linecap="round"/>
+  <text x="145" y="419" class="bold">현재 유지 대기</text>
+  <text x="145" y="450" class="small muted">기존 유지 게이지</text>
+  <rect x="49" y="493" width="315" height="50" rx="12" fill="#fff" stroke="#93bbd7" stroke-width="2"/>
+  <text x="206" y="526" text-anchor="middle" class="bold" fill="#2e78ae">↻ 다시 맞추기</text>
+
+  <rect x="411" y="76" width="765" height="492" rx="20" fill="#eef5f8" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="435" y="114" class="small muted">움직임 배치 예시 · 시작 / 현재 / 등록 목표</text>
+  <path d="M755 258 755 295 820 295 820 258" fill="#e6b999"/>
+  <ellipse cx="787" cy="216" rx="51" ry="64" fill="#e4b695"/>
+  <path d="M737 213Q728 142 787 145Q847 142 838 213Q825 172 787 175Q752 174 737 213" fill="#626c75"/>
+  <path d="M739 285Q787 302 836 285L890 310Q928 331 938 390L952 506 900 513 879 405 877 532 697 532 695 405 674 513 622 506 636 390Q646 331 684 310Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+  <path d="M739 285Q787 313 836 285M787 308 787 530" fill="none" stroke="#bfced7" stroke-width="2"/>
+  <use href="#figure-practice--hand" transform="translate(642 331) rotate(-22 42 64) scale(.85)"/>
+  <text x="440" y="278" class="bold">고정 보조수</text>
+  <path d="M554 288 633 332" fill="none" stroke="#5b7a8d" stroke-width="2"/>
+
+  <use href="#figure-practice--ghost" transform="translate(944 409) scale(-.68 .68) rotate(-26 42 64)"/>
+  <text x="984" y="486" class="small muted">시작</text>
+  <use href="#figure-practice--ghost" transform="translate(1020 211) scale(-.68 .68) rotate(-26 42 64)"/>
+  <text x="1045" y="245" class="small" fill="#2e78ae">등록 목표</text>
+  <path d="M1138 429Q1170 360 1138 295" fill="none" stroke="#2f83c3" stroke-width="3" stroke-dasharray="8 7" marker-end="url(#figure-practice--arrow)"/>
+  <use href="#figure-practice--hand" transform="translate(997 315) scale(-.85 .85) rotate(-26 42 64)"/>
+  <text x="1044" y="379" class="bold">주동수</text>
+  <text x="1044" y="408" class="small muted">현재</text>
+  <rect x="722" y="530" width="430" height="29" rx="10" fill="#fff"/>
+  <text x="937" y="552" text-anchor="middle" class="small muted">손 움직임 기준 · 실제 관절각 아님</text>
+
+  <text x="32" y="606" class="bold">기존 화면과 단계 진행을 재사용하고, 맞추기 조작을 작게 추가합니다.</text>
+  <text x="32" y="641" class="small muted">목표 자세를 별도로 등록한 경우의 예시입니다. 실제 처치 방법을 설명하는 그림이 아닙니다.</text>
+</svg>
+<figcaption>그림 5. 개념 화면(실제 캡처 아님). 표시된 진행률은 설명용 예시다.</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 145" font-family="Malgun Gothic,sans-serif"><rect x="10" y="15" width="275" height="112" fill="#f3f7fc" stroke="#dce5ef" rx="12"/><text x="147" y="57" font-size="24" fill="#255a88" font-weight="700" text-anchor="middle">추적 유효</text><text x="147" y="94" font-size="18" fill="#203247" font-weight="400" text-anchor="middle">손 신호가 살아 있음</text><text x="298" y="76" font-size="25" fill="#8296a8" font-weight="700" text-anchor="middle">→</text><rect x="310" y="15" width="275" height="112" fill="#f3f7fc" stroke="#dce5ef" rx="12"/><text x="447" y="57" font-size="24" fill="#255a88" font-weight="700" text-anchor="middle">수행 조건</text><text x="447" y="94" font-size="18" fill="#203247" font-weight="400" text-anchor="middle">방향·목표 구간 충족</text><text x="598" y="76" font-size="25" fill="#8296a8" font-weight="700" text-anchor="middle">→</text><rect x="610" y="15" width="275" height="112" fill="#f3f7fc" stroke="#dce5ef" rx="12"/><text x="747" y="57" font-size="24" fill="#255a88" font-weight="700" text-anchor="middle">유지 조건</text><text x="747" y="94" font-size="18" fill="#203247" font-weight="400" text-anchor="middle">기존 유지 로직 적용</text><text x="898" y="76" font-size="25" fill="#8296a8" font-weight="700" text-anchor="middle">→</text><rect x="910" y="15" width="275" height="112" fill="#eef8f2" stroke="#dce5ef" rx="12"/><text x="1047" y="57" font-size="24" fill="#1e8449" font-weight="700" text-anchor="middle">다음 단계</text><text x="1047" y="94" font-size="18" fill="#203247" font-weight="400" text-anchor="middle">조건 충족 시 자동 전환</text></svg><figcaption>그림 6. 원리 그림(실측 아님). 실제 조건 조합은 선택한 술기의 기존 코드에 맞춰 확인한다.</figcaption></figure><table class='narrow'><tr><th>상황</th><th>화면과 진행 처리 제안</th></tr><tr><td>손 추적이 끊김</td><td>상태를 알리고 판정을 잠시 멈춘다. 누적 유지시간의 처리 방식은 기존 로직을 확인해 정한다.</td></tr><tr><td>환자 자세·파지 변경</td><td>[다시 맞추기]로 해당 동작의 준비 상태로 돌아간다. 기준이 바뀐 채로 진행률을 이어 붙이지 않는다.</td></tr><tr><td>목표가 등록되지 않음</td><td>개인화 자동 통과 준비가 안 됐음을 표시한다. 임의 기본 각도로 조용히 대체하지 않는다.</td></tr></table><div class="good"><b>기본안은 자동 진행이다.</b> [완료]를 매 동작 누르는 흐름은 기본에 넣지 않는다. 손으로 판단할 수 없는 조건의 수동 처리 여부는 해당 술기 검토 후 별도로 결정한다.</div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>5 / 6</span></div></section><section class="page" id="p6"><div class="eyebrow">구현 범위와 다음 논의</div><main><h2>기존 시스템에 대상별 보정 입력을 연결한다</h2><div class='how'><b>읽는 법</b> — 초록 상자가 새로 필요한 부분이다. 기존 자동 조건의 의미가 달라지는 항목은 연결 전에 분리해 확인한다.</div><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 290" font-family="Malgun Gothic,sans-serif"><rect x="0" y="0" width="1200" height="290" fill="#fbfcfe" stroke="#dce5ef" rx="12"/><rect x="20" y="30" width="300" height="90" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="170" y="64" font-size="24" fill="#203247" font-weight="700" text-anchor="middle">가상환자 입력</text><text x="170" y="96" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">현재 경로</text><rect x="20" y="162" width="300" height="100" fill="#eef8f2" stroke="#a4d2b4" rx="12"/><text x="170" y="197" font-size="24" fill="#1e8449" font-weight="700" text-anchor="middle">실제 사람 보정 입력</text><text x="170" y="231" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">시작·목표·손 추적 유효성</text><line x1="320" y1="75" x2="390" y2="75" stroke="#9db1c4" stroke-width="3"/><line x1="390" y1="75" x2="390" y2="145" stroke="#9db1c4" stroke-width="3"/><line x1="320" y1="212" x2="390" y2="212" stroke="#9db1c4" stroke-width="3"/><line x1="390" y1="212" x2="390" y2="145" stroke="#9db1c4" stroke-width="3"/><line x1="390" y1="145" x2="470" y2="145" stroke="#9db1c4" stroke-width="3"/><rect x="470" y="87" width="285" height="116" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="612" y="127" font-size="24" fill="#203247" font-weight="700" text-anchor="middle">기존 진행·유지 판단</text><text x="612" y="166" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">대상별 입력을 연결</text><line x1="755" y1="145" x2="840" y2="145" stroke="#9db1c4" stroke-width="3"/><rect x="840" y="87" width="337" height="116" fill="#f1f6fb" stroke="#dce5ef" rx="12"/><text x="1008" y="127" font-size="24" fill="#203247" font-weight="700" text-anchor="middle">기존 UI·다음 단계</text><text x="1008" y="166" font-size="19" fill="#203247" font-weight="400" text-anchor="middle">표시 틀과 흐름 재사용</text></svg><figcaption>그림 7. 원리도(실측 아님). 클래스 분리나 API 이름을 확정한 설계는 아니다.</figcaption></figure><table class='narrow'><tr><th>요소</th><th>판단</th></tr><tr><td>단계·UI·나레이션</td><td>대부분 재사용 후보이다. 고정 각도·가상환자 전용 문구는 변경과 나레이션 재생성이 필요할 수 있다.</td></tr><tr><td>접촉·진행·점수</td><td>보정 입력 연결이 필요하다. 시작 근접과 피부 접촉을 같은 것으로 채점하지 않는다. 기존 점수의 의미도 재검토한다.</td></tr><tr><td>가이드 손의 정확한 겹침</td><td>시작 손 두 점만으로 전체 신체 좌표계·궤적 정렬을 보장할 수 없다. 별도 검증 항목으로 둔다.</td></tr><tr><td>첫 적용 대상</td><td>보조수가 고정되고 주동수가 움직이는 동작을 후보로 좁힌다. 특정 술기는 아직 확정하지 않았다.</td></tr></table><div class="box small"><b>첫 구현 전에 함께 정할 것</b><br>① 처음 적용할 동작 ② 지도자가 목표를 등록하는 방식 ③ 기존 화면 중 반드시 유지할 표시<br><b>파일럿 확인:</b> 시작 등록 반복성, 바른 동작·틀린 방향의 구별, 재보정 후 상태 초기화, 다른 공유 술기의 기존 동작을 확인한다.</div><div class="sep"></div><div class="refs"><b>부록 · 코드 근거</b><p>아래 경로의 공통 접두는 Assets/Scripts/ClaudeScripts/ 이다.</p><p><b>UI/PracticeSettingsController.cs:721</b> — 환자 숨김은 렌더러를 제어하는 경로이다.</p><p><b>ChunaData/Helpers/HandCollisionDetector.cs:65</b> — 기존 접촉은 손과 환자 충돌체 범위의 근사 계산이다.</p><p><b>ChunaData/ChunaPathEvaluator.cs:1394</b> — 피벗에서 손으로 향하는 방향과 목표값으로 진행률을 계산한다.</p><p><b>PoseData/HandPoseComparator.cs:286</b> — 녹화 손의 기준 변환은 위치·회전으로 구성된다.</p><p><b>Patient/CervicalRomRealityMeasure.cs:2168</b> — 기존 실측의 어깨 기준 등록은 재사용 검토 대상이다.</p><p><b>ChunaData/ChunaPathEvaluator.cs:1146</b> — AutoPlay 외부 접촉입력 연결점이 있다. 공용 전체 경로에 그대로 적용되는 것은 아니다.</p></div><div class="refs"><p><b>분석 기준:</b> 2026-10-26 현재 작업 트리 · HEAD 1efce97(기준·Play 미검증). 이 문서는 제안이며 코드·씬을 수정하지 않았다.</p><p><b>수치와 미검증:</b> 실제 사람 측정 데이터는 없다. 손 안정 시간·영역 폭·목표 허용 폭은 미정이다. 개념 그림은 실측·실제 화면이 아니다. 실제 사람 정렬 오차, 목표 진행률의 타당성, 기기 성능·사용성, 임상적 유효성은 확인하지 않았다.</p></div></main><div class="footer"><span>GuideChuna · 실제 사람 적용 설계안 · V0.1 · 논의용</span><span>6 / 6</span></div></section></body></html>
