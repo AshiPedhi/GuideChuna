@@ -1,0 +1,1 @@
+Compared 331710 baked world-space vertices across 5 poses before/after saving and reopening only the new scene. Maximum distance=0m. Play unverified.

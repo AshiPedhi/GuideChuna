@@ -1,0 +1,98 @@
+{
+    "scenePath": "Assets/Demos/Rib2VideoTextScene/V01/Rib2VideoTextDemo.unity",
+    "sourceCsv": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2VideoTextOnly_V0.1_20261026\\video_text_demo.csv",
+    "sourceCsvSha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23",
+    "importedCsv": "Assets/Demos/Rib2VideoTextScene/V01/Data/video_text_demo.csv",
+    "patientAsset": "Assets/MedicXR CPX PhysicalExamination's PatientModel v20221111/Character/c9/c9.fbx",
+    "leftHandAsset": "Packages/com.meta.xr.sdk.interaction/Runtime/Prefabs/Hands/OVRLeftHandVisual.prefab",
+    "rightHandAsset": "Packages/com.meta.xr.sdk.interaction/Runtime/Prefabs/Hands/OVRRightHandVisual.prefab",
+    "untouched": "Existing scenes, source meshes/materials, Resources CSVs, scenarios and pass conditions were not saved or modified.",
+    "limitations": "Presentation draft. Metric scale, depth, rib contact and patient registration are authored approximations; no tracking input, clinical angle or scoring is applied.",
+    "elbowHintMethod": "Original video manual patient_elbow pixels: local x=(pixelX-450)/550, y=(318-pixelY)/550, z=0; times=video_s-56.5. This is an authored projection, not measured depth.",
+    "gripAnchorMethod": "Temporary local offset (0.02,-0.025,0.085) under the cloned left guide wrist; inspect and refine on this separate scene only.",
+    "leftJointCount": 26,
+    "rightJointCount": 26,
+    "elbowHintCount": 9,
+    "duration": 8.233333587646485,
+    "patientPosition": {
+        "x": 10.0,
+        "y": 1.0499999523162842,
+        "z": 0.0
+    },
+    "patientRotation": {
+        "x": -0.7071068286895752,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.7071068286895752
+    },
+    "shoulderWorld": {
+        "x": 10.185327529907227,
+        "y": 0.9563443660736084,
+        "z": -1.4989347457885743
+    },
+    "elbowWorld": {
+        "x": 10.454268455505371,
+        "y": 0.9592800140380859,
+        "z": -1.4950761795043946
+    },
+    "wristWorld": {
+        "x": 10.711105346679688,
+        "y": 0.958354115486145,
+        "z": -1.4910192489624024
+    },
+    "upperArmLength": 0.2689846158027649,
+    "forearmLength": 0.2568705976009369,
+    "motionFramePosition": {
+        "x": 10.105327606201172,
+        "y": 1.1128554344177247,
+        "z": -1.4289345741271973
+    },
+    "motionFrameRotation": {
+        "x": -0.7071068286895752,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.7071068286895752
+    },
+    "motionFrameScale": {
+        "x": 1.0,
+        "y": 1.000000238418579,
+        "z": 1.000000238418579
+    },
+    "motionFrameDeterminant": 1.000000238418579,
+    "contactSurfaceMethod": "Downward ray against temporary MeshColliders of the cloned body's and shirt's baked skins. X/Z are authored upper-chest estimates; surface height is measured on this model, not an anatomical rib landmark.",
+    "measuredContactSurface": {
+        "x": 10.105327606201172,
+        "y": 1.1008554697036744,
+        "z": -1.4289345741271973
+    },
+    "contactSurfaceRenderer": "Shirt",
+    "leftRetargetEuler": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 180.0
+    },
+    "rightRetargetEuler": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 180.0
+    },
+    "rightPalmDownWorld": {
+        "x": -2.9096067777345526e-8,
+        "y": -1.0,
+        "z": 8.243884508374322e-8
+    },
+    "rightPalmDownDot": 1.0,
+    "skinRenderers": [
+        "Boots:Boots:2602",
+        "CC_Base_Body:CC_Base_Body:12877",
+        "CC_Base_Eye:CC_Base_Eye:724",
+        "CC_Base_EyeOcclusion:CC_Base_EyeOcclusion:194",
+        "CC_Base_TearLine:CC_Base_TearLine:312",
+        "CC_Base_Teeth:CC_Base_Teeth:3348",
+        "CC_Base_Tongue:CC_Base_Tongue:352",
+        "Half_up:Half_up:7910",
+        "Jeans:Jeans:7989",
+        "Shirt:Shirt:4588",
+        "Undercut_fade:Undercut_fade:20006"
+    ]
+}

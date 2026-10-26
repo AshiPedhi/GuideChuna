@@ -1,0 +1,10 @@
+{
+    "scene": "Assets/Demos/Rib2VideoTextScene/V01/Rib2VideoTextDemo.unity",
+    "samples": 248,
+    "maximumReachCorrection": 0.030867721885442735,
+    "maximumWristError": 0.000001244581540049694,
+    "maximumBoneLengthChange": 7.748603820800781e-7,
+    "rightPalmDownDot": 1.0,
+    "frameDeterminant": 1.000000238418579,
+    "validation": "Editor samples use the exact runtime player and arm solver. This is not a Play or device test."
+}

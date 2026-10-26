@@ -1,0 +1,4 @@
+Title before: rect=(x:0.00, y:-42.00, width:1040.00, height:42.00); font=32; preferredHeight=46.34; chars=0; firstVisible=False
+Title after: rect=(x:0.00, y:-60.00, width:1040.00, height:60.00); font=30; preferredHeight=43.44; chars=15; firstVisible=True
+Subtitle before: rect=(x:0.00, y:-30.00, width:960.00, height:30.00); font=22; preferredHeight=31.86; chars=0; firstVisible=False
+Subtitle after: rect=(x:0.00, y:-40.00, width:960.00, height:40.00); font=20; preferredHeight=28.96; chars=15; firstVisible=True
