@@ -1,0 +1,17 @@
+{
+  "render_receipt": "render_receipt.json",
+  "source_segment_start_s": 56.5,
+  "source_segment_requested_end_s": 64.75,
+  "frame_count": 248,
+  "fps": 30,
+  "encoded_duration_s": 8.266666666666667,
+  "guide_crop_in_original_960x720": [
+    262,
+    203,
+    728,
+    553
+  ],
+  "trajectory": "Projected from unchanged Left wrist roots with the same Unity camera, view-only. No patient registration.",
+  "original_video_audio": "Preserved where present; original clip trimmed and scaled only.",
+  "timing": "Authored event correspondence, not measured camera/tracker synchronization."
+}

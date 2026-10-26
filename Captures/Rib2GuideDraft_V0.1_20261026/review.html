@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>제2늑골 · 원본과 가이드핸드 초안</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; background: #10151e; color: #edf2f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: min(100% - 48px, 1824px); margin: 28px auto 40px; }
+    header { display: flex; justify-content: space-between; align-items: baseline; gap: 20px; margin-bottom: 14px; }
+    h1 { font-size: clamp(21px, 2vw, 29px); font-weight: 700; margin: 0; letter-spacing: -.04em; }
+    .version { font-size: 13px; color: #a4afbf; white-space: nowrap; }
+    .intro { margin: 0 0 18px; color: #b6c2d2; font-size: 15px; line-height: 1.7; }
+    .video-wrap { background: #080c12; border: 1px solid #2d3949; border-radius: 12px; overflow: hidden; }
+    video { display: block; width: 100%; height: auto; aspect-ratio: 1920 / 900; object-fit: contain; }
+    .tools { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 15px 0 10px; }
+    button, select { font: inherit; font-size: 14px; color: #edf2f8; border: 1px solid #43556d; background: #243247; border-radius: 8px; padding: 10px 15px; min-height: 43px; cursor: pointer; }
+    button:hover, select:hover { background: #30435e; }
+    button:focus-visible, select:focus-visible, a:focus-visible, summary:focus-visible { outline: 3px solid #82cfff; outline-offset: 3px; }
+    .primary { background: #2d4863; border-color: #5e8fb8; }
+    .rate { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #b6c2d2; font-size: 13px; }
+    select { padding: 9px 11px; min-width: 88px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px 24px; font-size: 14px; color: #c6d1df; }
+    .dot { display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; }
+    .left { background: #35d6e4; }
+    .right { background: #ffa447; }
+    .note { margin: 14px 0 24px; font-size: 13px; line-height: 1.7; color: #9eafc3; }
+    .links { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 14px; }
+    a { color: #a4d4ff; text-underline-offset: 4px; }
+    details { border-top: 1px solid #2a3545; padding: 18px 0 0; margin-top: 24px; }
+    summary { width: fit-content; color: #c6d1df; font-size: 14px; cursor: pointer; }
+    .stills { display: grid; grid-template-columns: 1fr; gap: 22px; margin-top: 18px; }
+    figure { margin: 0; }
+    figure img { width: 100%; display: block; border: 1px solid #2d3949; border-radius: 8px; }
+    figcaption { font-size: 13px; color: #aebdce; line-height: 1.65; margin-top: 8px; }
+    .status { min-height: 20px; margin: 0 0 10px; font-size: 13px; color: #b6c2d2; }
+    footer { margin-top: 26px; font-size: 12px; line-height: 1.7; color: #8292a7; }
+    @media (max-width: 680px) {
+      main { width: calc(100% - 24px); margin-top: 20px; }
+      header { align-items: flex-start; flex-direction: column; gap: 7px; }
+      .rate { margin-left: 0; }
+      .tools { gap: 8px; }
+      button { padding: 9px 12px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>제2늑골 · 원본과 가이드핸드 초안</h1>
+    <span class="version">별도 시연 V0.1 · 2026.10.26</span>
+  </header>
+  <p class="intro">왼쪽 원본 영상과 오른쪽 가이드핸드의 시작 파지, 손 방향, 이동 흐름을 비교하세요.</p>
+
+  <div class="video-wrap">
+    <video id="comparison" controls playsinline preload="metadata" poster="start_compare.jpg" aria-label="제2늑골 원본 영상과 가이드핸드 나란히 비교">
+      <source src="comparison.mp4" type="video/mp4">
+      이 브라우저에서는 영상을 재생할 수 없습니다. <a href="comparison.mp4">비교 영상 열기</a>
+    </video>
+  </div>
+  <div class="tools" aria-label="장면 이동">
+    <button id="start" type="button">시작 파지 보기</button>
+    <button id="cycle" type="button" class="primary">팔 한 주기 재생</button>
+    <label class="rate" for="speed">재생 속도
+      <select id="speed">
+        <option value="1">1배</option>
+        <option value="0.5">0.5배</option>
+      </select>
+    </label>
+  </div>
+  <p id="status" class="status" aria-live="polite">시작 파지 0~1.5초 · 팔 한 주기 3.75~8.25초</p>
+  <div class="legend">
+    <span><span class="dot left" aria-hidden="true"></span>청록: 팔을 움직이는 왼손</span>
+    <span><span class="dot right" aria-hidden="true"></span>주황: 흉곽을 지지하는 오른손</span>
+  </div>
+  <p class="note">원본 트래킹의 키자세를 영상 흐름에 맞춰 보간한 제작 초안입니다. 영상과 트래킹의 정밀 동기화 및 실제 환자 정렬은 미검증입니다.</p>
+
+  <nav class="links" aria-label="시연 자료">
+    <a href="guide_start_draft.csv" download>시작 파지 CSV</a>
+    <a href="guide_cycle_draft.csv" download>한 주기 CSV</a>
+    <a href="guide_demo_draft.csv" download>전체 시연 CSV</a>
+    <a href="DATA_PROVENANCE.md">제작 근거</a>
+    <a href="draft_manifest.json">키자세·수치 기록</a>
+    <a href="README.md">자료 안내</a>
+  </nav>
+
+  <details>
+    <summary>정지 장면으로 비교</summary>
+    <div class="stills">
+      <figure>
+        <img src="start_compare.jpg" alt="원본 영상과 가이드핸드 시작 파지 비교" loading="lazy">
+        <figcaption>시작 파지 — 손가락 모양과 양손의 상대 위치를 비교하는 장면입니다.</figcaption>
+      </figure>
+      <figure>
+        <img src="keypose_compare.jpg" alt="시작 파지와 팔 움직임 주요 자세의 원본 및 가이드핸드 비교" loading="lazy">
+        <figcaption>주요 자세 — 원본에서 고른 장면에 트래킹 키자세를 대응했습니다. 중간 움직임과 복귀 끝 자세에는 제작 보정이 들어갔습니다.</figcaption>
+      </figure>
+    </div>
+  </details>
+  <footer>기존 앱 데이터·시나리오·통과 조건과 분리된 시연입니다. 오른손과 손가락 모양은 고정하고 왼손 손목의 위치·회전만 보간했습니다. 임상 검수와 Quest Play 검증은 아직 수행하지 않았습니다.</footer>
+</main>
+<script>
+  const video = document.getElementById('comparison');
+  const status = document.getElementById('status');
+  const cycleStart = 3.75;
+  const cycleEnd = 8.25;
+  let cycleOnly = false;
+
+  function seekTo(seconds) {
+    const apply = () => { video.currentTime = seconds; };
+    if (video.readyState >= 1) apply();
+    else video.addEventListener('loadedmetadata', apply, { once: true });
+  }
+
+  document.getElementById('start').addEventListener('click', () => {
+    cycleOnly = false;
+    video.pause();
+    seekTo(0);
+    status.textContent = '시작 파지 · 재생 버튼을 누르면 전체 흐름을 볼 수 있습니다.';
+  });
+
+  document.getElementById('cycle').addEventListener('click', async () => {
+    cycleOnly = true;
+    seekTo(cycleStart);
+    status.textContent = '팔 한 주기 · 펴기 → 낮추기 → 굽히기 → 다시 펴기';
+    try { await video.play(); }
+    catch { status.textContent = '영상의 재생 버튼을 눌러 주세요.'; }
+  });
+
+  document.getElementById('speed').addEventListener('change', (event) => {
+    video.playbackRate = Number(event.target.value);
+  });
+
+  video.addEventListener('timeupdate', () => {
+    if (cycleOnly && video.currentTime >= cycleEnd) {
+      video.pause();
+      cycleOnly = false;
+      status.textContent = '한 주기 끝 · 다시 보려면 팔 한 주기 재생을 누르세요.';
+    }
+  });
+
+  video.addEventListener('error', () => {
+    status.textContent = 'comparison.mp4를 같은 폴더에 둔 뒤 다시 열어 주세요.';
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+{
+  "method": "Camera-only weak-perspective fit to approximate manually observed wrist positions; authored framing, not measured source-camera calibration.",
+  "observation_frame_size": [
+    960,
+    540
+  ],
+  "manual_left_minus_right_wrist_pixels": [
+    [
+      225.0,
+      52.0
+    ],
+    [
+      275.0,
+      -45.0
+    ],
+    [
+      205.0,
+      135.0
+    ],
+    [
+      170.0,
+      70.0
+    ]
+  ],
+  "selected_video_times_s": [
+    56.5,
+    60.25,
+    62.25,
+    63.25
+  ],
+  "selected_source_times_s": [
+    61.806,
+    64.598,
+    65.806,
+    66.764
+  ],
+  "camera": {
+    "cameraYaw": -97.7,
+    "cameraPitch": 131.8,
+    "cameraRoll": -174.9
+  },
+  "fit_rms_pixels": 12.6836900608232,
+  "fitted_pixels_per_source_unit": 558.3390301538392,
+  "projected_relative_pixels": [
+    [
+      236.97423575832798,
+      35.99492705752196
+    ],
+    [
+      272.82765469012946,
+      -25.813148515203213
+    ],
+    [
+      207.09314784506358,
+      117.85638126605951
+    ],
+    [
+      165.40643199623852,
+      83.9722265346645
+    ]
+  ],
+  "warning": "Approximate 2D fit only. Camera roll/yaw/pitch do not modify CSV poses. No patient registration, metric scale validation, or depth validation."
+}

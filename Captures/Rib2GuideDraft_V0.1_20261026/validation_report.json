@@ -1,0 +1,146 @@
+{
+  "date": "2026-10-26",
+  "scope": "Separate review-only demonstration; no runtime scenario integration.",
+  "original_files": [
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1 역재생.csv",
+      "before_sha256": "da849403b603c6cc97e61e6db0867eb9d7e2a483d7d9df4a9d48821e1bc1c0fc",
+      "after_sha256": "da849403b603c6cc97e61e6db0867eb9d7e2a483d7d9df4a9d48821e1bc1c0fc",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 교정1.csv",
+      "before_sha256": "e08413c0dc1c1a9b12708684b669cf970f22663299f85e77d185002e52a0469c",
+      "after_sha256": "e08413c0dc1c1a9b12708684b669cf970f22663299f85e77d185002e52a0469c",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 두상골.csv",
+      "before_sha256": "971340a473bde57a7fafe02a89b57900a61db11f4318c07b4d695d8267ae4bd6",
+      "after_sha256": "971340a473bde57a7fafe02a89b57900a61db11f4318c07b4d695d8267ae4bd6",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\HandPoseData\\제2늑골 진단.csv",
+      "before_sha256": "5761d3a67e51ec0a93130036ac343e08b1bc141799aedef997081e297b148412",
+      "after_sha256": "5761d3a67e51ec0a93130036ac343e08b1bc141799aedef997081e297b148412",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Scenarios\\제2늑골_상방변위.csv",
+      "before_sha256": "756c33abf875cf56f9e0957ebd974d66fbb35c553592b8ed8a64e5f008bbd63f",
+      "after_sha256": "756c33abf875cf56f9e0957ebd974d66fbb35c553592b8ed8a64e5f008bbd63f",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\ScenarioConfigs\\제2늑골_상방변위.asset",
+      "before_sha256": "12eeaaa3ae902d583add44047db25a367641597e9c923ad0d85f594b374b3c8f",
+      "after_sha256": "12eeaaa3ae902d583add44047db25a367641597e9c923ad0d85f594b374b3c8f",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\TrainingScene.unity",
+      "before_sha256": "cd9a3576aa1ae62d6e8c0ce916d46b461c6c807e5063860202a45650e787538e",
+      "after_sha256": "cd9a3576aa1ae62d6e8c0ce916d46b461c6c807e5063860202a45650e787538e",
+      "unchanged": true
+    },
+    {
+      "path": "C:\\UnityProjects\\GuideChuna\\Assets\\Scenes\\lobby.unity",
+      "before_sha256": "77dda9a8aa28c78038f8955baf03a4e12d62a976377908c75b59b0138419bba0",
+      "after_sha256": "77dda9a8aa28c78038f8955baf03a4e12d62a976377908c75b59b0138419bba0",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\전문가 영상 촬영본\\3인칭 시점 카메라\\제2늑골 교정기법.MOV",
+      "before_sha256": "799f4aa6d7e5965d5a1d3ed43929873cd9342388cfc77dbeb759238981607023",
+      "after_sha256": "799f4aa6d7e5965d5a1d3ed43929873cd9342388cfc77dbeb759238981607023",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\전문가 영상 촬영본\\1인칭 시점(바디캠)\\제2늑골 교정기법.mp4",
+      "before_sha256": "6c4ed987189082f6bceb355a14acfcef4eeb2384fe54ace17b89309790634701",
+      "after_sha256": "6c4ed987189082f6bceb355a14acfcef4eeb2384fe54ace17b89309790634701",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\전문가 영상 촬영본\\트래킹 데이터\\6. 제2늑골 교정기법.csv",
+      "before_sha256": "e5dca382a143c5856a1e10c9ad0953df10b6fabab35d76b4ac5400fa4255aa5f",
+      "after_sha256": "e5dca382a143c5856a1e10c9ad0953df10b6fabab35d76b4ac5400fa4255aa5f",
+      "unchanged": true
+    },
+    {
+      "path": "D:\\전문가 영상 촬영본\\트래킹 데이터\\7. 제2늑골 상방변위(교과서).csv",
+      "before_sha256": "90997005077886460625bbed866a8ab1619e0386e07b4e7d4d9c721fa30852f3",
+      "after_sha256": "90997005077886460625bbed866a8ab1619e0386e07b4e7d4d9c721fa30852f3",
+      "unchanged": true
+    }
+  ],
+  "originals_unchanged": true,
+  "draft_csvs": [
+    {
+      "file": "guide_start_draft.csv",
+      "frames": 61,
+      "rows": 3172,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "finite_values": true,
+      "right_pose_fixed": true,
+      "local_joint_poses_fixed": true,
+      "sha256": "1cf70997b27fb067d897ecddf17e1b893b5a9d41e34c82f5c0414b2085935625"
+    },
+    {
+      "file": "guide_cycle_draft.csv",
+      "frames": 136,
+      "rows": 7072,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "finite_values": true,
+      "right_pose_fixed": true,
+      "local_joint_poses_fixed": true,
+      "sha256": "fe480f2ef6dc606bf5cfc5b8d6df38ec258df874ab1272f5cf1e33d948c5783b",
+      "first_last_poses_identical": true
+    },
+    {
+      "file": "guide_demo_draft.csv",
+      "frames": 248,
+      "rows": 12896,
+      "fps": 30,
+      "joints_per_hand": 26,
+      "finite_values": true,
+      "right_pose_fixed": true,
+      "local_joint_poses_fixed": true,
+      "sha256": "b52ddb0faad8b9b252a7c42accbb3e817a818d46a770420089c4d3bb716add30"
+    }
+  ],
+  "video": {
+    "file": "comparison.mp4",
+    "width": 1920,
+    "height": 900,
+    "frames": 248,
+    "frame_rate": "30/1",
+    "duration_s": 8.266667,
+    "audio_present": true,
+    "sha256": "16ca10bb98086ef32b6a2444d825fe3e947e97a152f2d45a358beb80fb102eef"
+  },
+  "isolated_unity_capture": {
+    "success": true,
+    "left_joints": 26,
+    "right_joints": 26,
+    "frames": 248,
+    "meshes": [
+      "Left:LeftHand:1360",
+      "Right:RightHand:1360"
+    ]
+  },
+  "compilation": {
+    "runtime": "Assembly-CSharp: 0 errors, 14 pre-existing warnings.",
+    "editor": "Assembly-CSharp-Editor: 0 errors, 15 pre-existing warnings; no warning in Rib2GuideDraftPreview.cs."
+  },
+  "unverified": [
+    "Precise video/tracking synchronization",
+    "Actual patient registration and metric/depth accuracy",
+    "Clinical suitability of tracked poses",
+    "Dynamic finger pose reconstruction",
+    "Quest Play and runtime integration"
+  ]
+}

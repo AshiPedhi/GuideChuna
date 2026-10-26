@@ -1,0 +1,403 @@
+{
+  "version": "0.1",
+  "created_date": "2026-10-26",
+  "label": "원본 키자세 + 영상 대응 제작/추정",
+  "scope": "별도 시연용 초안. 기존 데이터·시나리오·통과 조건은 수정하지 않음.",
+  "source_tracking_path": "D:\\전문가 영상 촬영본\\트래킹 데이터\\6. 제2늑골 교정기법.csv",
+  "source_tracking_sha256": "e5dca382a143c5856a1e10c9ad0953df10b6fabab35d76b4ac5400fa4255aa5f",
+  "source_tracking_frame_count": 2201,
+  "source_video_path": "D:/전문가 영상 촬영본/3인칭 시점 카메라/제2늑골 교정기법.MOV",
+  "reference_video_start_s": 56.5,
+  "reference_video_requested_end_s": 64.75,
+  "reference_video_requested_duration_s": 8.25,
+  "video_tracking_sync_status": "미확정. 이벤트를 눈으로 대응시킨 제작용 키 타이밍이며 정밀 동기화 계측이 아님.",
+  "selected_keys": [
+    {
+      "demo_s": 0.0,
+      "raw_target_s": 61.8,
+      "event": "시작 파지 정지",
+      "source_frame": 1482,
+      "source_actual_s": 61.806,
+      "video_s": 56.5,
+      "left_root_position": [
+        -0.3954,
+        0.0309,
+        -0.8056
+      ],
+      "left_root_rotation": [
+        0.5523626256473605,
+        0.4495695809034274,
+        0.5149651560615327,
+        0.4770677203047714
+      ],
+      "preceding_step_m": 0.001802775637732022,
+      "following_step_m": 0.00024494897427829507,
+      "preceding_rotation_deg": 0.335604409333649,
+      "following_rotation_deg": 0.5763157654833457
+    },
+    {
+      "demo_s": 1.5,
+      "raw_target_s": 61.8,
+      "event": "시작 파지 정지 끝",
+      "source_frame": 1482,
+      "source_actual_s": 61.806,
+      "video_s": 58.0,
+      "left_root_position": [
+        -0.3954,
+        0.0309,
+        -0.8056
+      ],
+      "left_root_rotation": [
+        0.5523626256473605,
+        0.4495695809034274,
+        0.5149651560615327,
+        0.4770677203047714
+      ],
+      "preceding_step_m": 0.001802775637732022,
+      "following_step_m": 0.00024494897427829507,
+      "preceding_rotation_deg": 0.335604409333649,
+      "following_rotation_deg": 0.5763157654833457
+    },
+    {
+      "demo_s": 3.75,
+      "raw_target_s": 64.598,
+      "event": "팔 크게 펴기",
+      "source_frame": 1549,
+      "source_actual_s": 64.598,
+      "video_s": 60.25,
+      "left_root_position": [
+        -0.1468,
+        -0.0675,
+        -0.8266
+      ],
+      "left_root_rotation": [
+        0.6445993360630258,
+        0.06799992996010822,
+        0.24529974734139037,
+        0.7208992574741472
+      ],
+      "preceding_step_m": 0.008430895563343208,
+      "following_step_m": 0.013597426227047514,
+      "preceding_rotation_deg": 2.2367746295826714,
+      "following_rotation_deg": 2.0939092225507334
+    },
+    {
+      "demo_s": 5.75,
+      "raw_target_s": 65.8,
+      "event": "발쪽으로 낮추기",
+      "source_frame": 1578,
+      "source_actual_s": 65.806,
+      "video_s": 62.25,
+      "left_root_position": [
+        -0.4127,
+        -0.1819,
+        -0.7673
+      ],
+      "left_root_rotation": [
+        0.7088754910535878,
+        0.039898620529042396,
+        0.4511844005690208,
+        0.5406813062669981
+      ],
+      "preceding_step_m": 0.005657738063926251,
+      "following_step_m": 0.01215277746031746,
+      "preceding_rotation_deg": 1.6089374398412342,
+      "following_rotation_deg": 1.6333958487113451
+    },
+    {
+      "demo_s": 6.75,
+      "raw_target_s": 66.75,
+      "event": "팔 깊게 굽히기",
+      "source_frame": 1601,
+      "source_actual_s": 66.764,
+      "video_s": 63.25,
+      "left_root_position": [
+        -0.5731,
+        0.0678,
+        -0.7085
+      ],
+      "left_root_rotation": [
+        0.4073135250701536,
+        0.6234207010280721,
+        0.5843194026479027,
+        0.32251070914589874
+      ],
+      "preceding_step_m": 0.018822592807581005,
+      "following_step_m": 0.023298283198553472,
+      "preceding_rotation_deg": 3.7635146274354097,
+      "following_rotation_deg": 5.996986276864824
+    },
+    {
+      "demo_s": 8.25,
+      "raw_target_s": 64.598,
+      "event": "다시 펴기 (제작상 루프 닫기)",
+      "source_frame": 1549,
+      "source_actual_s": 64.598,
+      "video_s": 64.75,
+      "left_root_position": [
+        -0.1468,
+        -0.0675,
+        -0.8266
+      ],
+      "left_root_rotation": [
+        0.6445993360630258,
+        0.06799992996010822,
+        0.24529974734139037,
+        0.7208992574741472
+      ],
+      "preceding_step_m": 0.008430895563343208,
+      "following_step_m": 0.013597426227047514,
+      "preceding_rotation_deg": 2.2367746295826714,
+      "following_rotation_deg": 2.0939092225507334
+    }
+  ],
+  "source_key_change": {
+    "rejected_target_s": 64.25,
+    "selected_source_s": 64.598,
+    "reason": "64.223→64.264초에117.9mm/56.2도점프. 64.598초앞뒤는8.4/13.6mm,2.24/2.09도로연속적이어서제작포즈후보로선택. 추적정확도확정의의미는아님."
+  },
+  "fixed_right_hand": {
+    "source_frame": 1482,
+    "source_s": 61.806,
+    "reason": "흉곽을지지하는손. 영상에서정지한모습을기준으로전체시연에같은원본포즈를고정한제작초안."
+  },
+  "fixed_left_finger_pose": {
+    "source_frame": 1482,
+    "source_s": 61.806,
+    "reason": "왼손26관절의로컬포즈는시작파지모양을유지. 손목root위치와회전만키사이보간. 영상의손가락변화를복원했다고주장하지않음."
+  },
+  "interpolation": "Root위치선형보간,root회전정규화최단경로QuaternionSLERP. 양손로컬관절은시작포즈고정.",
+  "coordinate_system": "원본CSV root좌표계그대로. 환자기준변환·평행이동·회전·스케일수정없음. 원본patientReference는미확인.",
+  "conventions": {
+    "hand_labels": "CSV Left=팔을움직이는손, CSV Right=흉곽지지손. 영상에대응한초안으로최종임상검수필요.",
+    "columns": [
+      "FrameIndex",
+      "HandType",
+      "JointID",
+      "LocalPosX",
+      "LocalPosY",
+      "LocalPosZ",
+      "LocalRotX",
+      "LocalRotY",
+      "LocalRotZ",
+      "LocalRotW",
+      "Timestamp",
+      "WorldPosX",
+      "WorldPosY",
+      "WorldPosZ",
+      "WorldRotX",
+      "WorldRotY",
+      "WorldRotZ",
+      "WorldRotW"
+    ],
+    "root_joint_id": 1,
+    "palm_joint_id": 0,
+    "world_columns_only_on_joint": 1,
+    "openxr_parent_indices": [
+      1,
+      -1,
+      1,
+      2,
+      3,
+      4,
+      1,
+      6,
+      7,
+      8,
+      9,
+      1,
+      11,
+      12,
+      13,
+      14,
+      1,
+      16,
+      17,
+      18,
+      19,
+      1,
+      21,
+      22,
+      23,
+      24
+    ]
+  },
+  "sampling_note": "30Hz일정간격.8.25초는247.5간격이므로전체248프레임의마지막Timestamp는8.233333초.앱고정재생버퍼길이는8.266667초.키끝8.25초는수학적보간종점으로유지.",
+  "cycle_note": "cycle은 전체 시연 3.75→8.25초를 잘라 Timestamp를 0으로 재설정. 0초와 4.5초 끝 샘플을 모두 포함한 136프레임이며 두 경계 포즈가 동일함.",
+  "authored_loop_closure": {
+    "label": "영상 대응을 위해 복귀 endpoint를 시작 wide pose로 설정한 authored loop closure이며 측정값 아님",
+    "reason": "원본 영상 60.25초와 64.75초를 팔을 편 같은 주기 경계로 보고, 시연 8.25초의 복귀 포즈를 시연 3.75초와 동일한 원본 64.598초 포즈로 제작상 설정함.",
+    "demo_start_key_s": 3.75,
+    "demo_end_key_s": 8.25,
+    "source_pose_s": 64.598,
+    "source_pose_frame": 1549,
+    "replaced_candidate_source_s": 67.89,
+    "replaced_candidate_source_frame": 1628,
+    "original_tracking_untouched": true,
+    "note": "이전 후보 67.890초 포즈를 정확한 복귀 계측으로 확정하지 않고, 영상의 반복 경계에 맞춘 별도 제작 보정을 적용함. 경계의 위치와 회전은 연속이지만 속도까지 연속으로 맞춘 곡선은 아님."
+  },
+  "limitations": [
+    "영상-트래킹정밀동기화미검증",
+    "3D키포즈의실제환자정렬미검증",
+    "고정한손가락모양의동작중적합성미검증",
+    "압박력·환자해부각·접촉판정·통과조건미추정",
+    "원본추적의점프를그대로재생하지않는제작용보간초안",
+    "전문가의정확한연속계측복원으로사용하지않음"
+  ],
+  "validation": {
+    "guide_demo_draft.csv": {
+      "frame_count": 248,
+      "row_count": 12896,
+      "fps": 30,
+      "first_timestamp_s": 0.0,
+      "last_timestamp_s": 8.233333333,
+      "app_fixed_30hz_buffer_duration_s": 8.266666666666667,
+      "timestamp_step_sec_min": 0.033333332999999854,
+      "timestamp_step_sec_max": 0.03333333400000016,
+      "hands": {
+        "Left": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.570426667,
+            -0.180946667,
+            -0.826444444
+          ],
+          "root_position_max": [
+            -0.148641481,
+            0.066296667,
+            -0.70948
+          ],
+          "maximum_frame_step_m": 0.010279679424434314,
+          "maximum_root_speed_m_s": 0.30839038273302943,
+          "maximum_frame_rotation_deg": 2.751276081741468,
+          "maximum_root_angular_speed_deg_s": 82.53828245224405,
+          "start_end_root_distance_m": 0.26314615304076755,
+          "start_end_root_rotation_deg": 61.02401518927492
+        },
+        "Right": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "root_position_max": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "maximum_frame_step_m": 0.0,
+          "maximum_root_speed_m_s": 0.0,
+          "maximum_frame_rotation_deg": 0.0,
+          "maximum_root_angular_speed_deg_s": 0.0,
+          "start_end_root_distance_m": 0.0,
+          "start_end_root_rotation_deg": 0.0
+        }
+      },
+      "sha256": "b52ddb0faad8b9b252a7c42accbb3e817a818d46a770420089c4d3bb716add30"
+    },
+    "guide_start_draft.csv": {
+      "frame_count": 61,
+      "row_count": 3172,
+      "fps": 30,
+      "first_timestamp_s": 0.0,
+      "last_timestamp_s": 2.0,
+      "app_fixed_30hz_buffer_duration_s": 2.033333333333333,
+      "timestamp_step_sec_min": 0.033333332999999854,
+      "timestamp_step_sec_max": 0.03333333400000016,
+      "hands": {
+        "Left": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.3954,
+            0.0309,
+            -0.8056
+          ],
+          "root_position_max": [
+            -0.3954,
+            0.0309,
+            -0.8056
+          ],
+          "maximum_frame_step_m": 0.0,
+          "maximum_root_speed_m_s": 0.0,
+          "maximum_frame_rotation_deg": 0.0,
+          "maximum_root_angular_speed_deg_s": 0.0,
+          "start_end_root_distance_m": 0.0,
+          "start_end_root_rotation_deg": 0.0
+        },
+        "Right": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "root_position_max": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "maximum_frame_step_m": 0.0,
+          "maximum_root_speed_m_s": 0.0,
+          "maximum_frame_rotation_deg": 0.0,
+          "maximum_root_angular_speed_deg_s": 0.0,
+          "start_end_root_distance_m": 0.0,
+          "start_end_root_rotation_deg": 0.0
+        }
+      },
+      "sha256": "1cf70997b27fb067d897ecddf17e1b893b5a9d41e34c82f5c0414b2085935625"
+    },
+    "guide_cycle_draft.csv": {
+      "frame_count": 136,
+      "row_count": 7072,
+      "fps": 30,
+      "first_timestamp_s": 0.0,
+      "last_timestamp_s": 4.5,
+      "app_fixed_30hz_buffer_duration_s": 4.533333333333333,
+      "timestamp_step_sec_min": 0.033333332999999854,
+      "timestamp_step_sec_max": 0.03333333400000016,
+      "hands": {
+        "Left": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.5731,
+            -0.1819,
+            -0.8266
+          ],
+          "root_position_max": [
+            -0.1468,
+            0.0678,
+            -0.7085
+          ],
+          "maximum_frame_step_m": 0.010279679424434264,
+          "maximum_root_speed_m_s": 0.30839038273302793,
+          "maximum_frame_rotation_deg": 2.751276086254399,
+          "maximum_root_angular_speed_deg_s": 82.53828258763197,
+          "start_end_root_distance_m": 0.0,
+          "start_end_root_rotation_deg": 0.0
+        },
+        "Right": {
+          "joints_per_frame": 26,
+          "root_position_min": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "root_position_max": [
+            -0.4433,
+            0.0599,
+            -0.3797
+          ],
+          "maximum_frame_step_m": 0.0,
+          "maximum_root_speed_m_s": 0.0,
+          "maximum_frame_rotation_deg": 0.0,
+          "maximum_root_angular_speed_deg_s": 0.0,
+          "start_end_root_distance_m": 0.0,
+          "start_end_root_rotation_deg": 0.0
+        }
+      },
+      "sha256": "fe480f2ef6dc606bf5cfc5b8d6df38ec258df874ab1272f5cf1e33d948c5783b"
+    }
+  },
+  "source_unchanged_after_export": true
+}
