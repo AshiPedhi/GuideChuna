@@ -178,6 +178,28 @@ public class PatientArmIkProbe : MonoBehaviour
     [Range(0f, 60f)] [SerializeField] private float wristUlnarMax = 35f;
     // 대각선 방향은 사분면 타원으로 잇는다(Li 2005 «달걀 모양» — 대각선 숫자는 ★미확보)
 
+    // ── 능동 · 수동 한계(10-26 사용자 지시: «능동적 한계가 있는 상태에서 외부 힘을 더 가했을 때 한계 가동까지») ──
+    //   위의 한계 값 = 수동(구조) 한계. 능동 한계 = 수동 − 틈. 능동 한계까지는 그냥 따라오고,
+    //   그 너머는 «능동 한계를 넘겨 끈 각 Δ»(= 외력 대신)만큼 틈 안으로 다가간다: 능동 + 틈 × (1 − e^(−Δ / pushSoftDeg)). 수동 한계는 넘지 않는다.
+    //   ★틈이 0이면 종전과 같다(한 벽). 끄는 손을 풀면 Δ가 줄어 능동 범위로 되돌아온다.
+    [Header("능동 · 수동 한계 (틈 = 수동 − 능동, °)")]
+    [Tooltip("어깨 방향별 거상 경계의 틈(°).")]
+    [SerializeField] private float shoulderConeGap = 0f;
+    [Tooltip("어깨 외회전 끝의 틈(°).")]
+    [SerializeField] private float shoulderErGap = 0f;
+    [Tooltip("어깨 내회전 끝의 틈(°).")]
+    [SerializeField] private float shoulderIrGap = 0f;
+    [Tooltip("팔꿈치 굴곡 끝의 틈(°).")]
+    [SerializeField] private float elbowFlexGap = 0f;
+    [Tooltip("아래팔 회내 · 회외 끝의 틈(°).")]
+    [SerializeField] private float forearmGap = 0f;
+    [Tooltip("손목 경계(타원)의 틈(°).")]
+    [SerializeField] private float wristGap = 0f;
+    [Tooltip("능동 한계를 이만큼(°) 넘겨 끌면 틈의 63%까지 간다. 클수록 뻑뻑하다. ★추정 15 — 조사 명세가 오면 맞춘다.")]
+    [SerializeField] private float pushSoftDeg = 15f;
+    [Tooltip("틈 안 몫이 이 값(0~1) 이상이면 «부상 위험 — 구조 한계 가까움»을 낸다. 표시만 하고 막지 않는다 — 수동 한계는 넘지 않는다(락). ★0.8은 정한 값(근거 없음).")]
+    [Range(0f, 1f)] [SerializeField] private float riskWarnFrac = 0.8f;
+
     [Header("막힘 (침대 · 몸통) — 물리 엔진이 아니라 IK 안에서 밀어낸다")]
     [Tooltip("팔꿈치 · 손이 침대 상자와 몸통 캡슐을 뚫지 못하게 밀어낸다.")]
     [SerializeField] private bool applyCollision = true;
@@ -691,6 +713,9 @@ public class PatientArmIkProbe : MonoBehaviour
             if (applyCollision) { CorrectCollisionInPlace(); EnforceFinalLimits(); }
         }
 
+        if (weight <= 0f) pushCone = pushEr = pushIr = pushElbow = pushForearm = pushWrist = 0f;   // 놓으면 끄는 힘이 없다
+        UpdateInjuryRisk();
+
         wroteUpper = upper.localRotation; wroteLower = lower.localRotation; wroteHand = hand.localRotation; wroteClav = space.localRotation;
         if (flexRefReady) { prevFlexW = upper.TransformVector(flexRefInUpper); hasPrevFlex = true; }
         prevUpperDirW = (lower.position - upper.position).normalized; hasPrevUpperDir = true;
@@ -766,6 +791,7 @@ public class PatientArmIkProbe : MonoBehaviour
 
     private void Solve()
     {
+        pushCone = pushEr = pushIr = pushElbow = pushForearm = pushWrist = 0f;   // 팔꿈치 자리 고르기는 능동 한계로 본다(10-26)
         ApplyGirdle();
         // ── 전부 S(위팔 부모) 로컬 공간에서 푼다. 위 클래스 주석 «음수 스케일 처리» 참고 ──
         Vector3 a = space.InverseTransformPoint(upper.position);
@@ -836,6 +862,7 @@ public class PatientArmIkProbe : MonoBehaviour
         // ★10-22 진단: 못 닿을 때 0.999배 여유로 팔꿈치가 2~3° 굽어 위팔이 목표에서 틀어졌다 — 머리 위(θ 170)에선 그게 φ 15°(90 → 105)로 커져
         //   «옆 머리 위»가 관상면 뒤 경계(128°)에 걸렸다. 못 닿으면 위팔을 목표 방향 그대로 둔다(팔꿈치는 편 채).
         if (dist >= maxReach) elbowGoal = a + dir * l1;
+        if (applyLimits && frameReady) MeasurePush(a, l1, l2, dist, elbowGoal, handGoal);   // 10-26: 손을 끈 요청으로 틈 안 몫을 정한다
 
         string hit = null;
         if (frameReady) { dbgPhiTarget = PhiS(t - a); dbgPhiRaw = PhiS(elbowGoal - a); }   // ★10-22 진단: 옆으로 머리 위가 φ104로 밀린다 — 어느 단계에서 도는지
@@ -981,6 +1008,94 @@ public class PatientArmIkProbe : MonoBehaviour
     ///      아래팔이 얼마나 안쪽(+내회전) · 바깥(−외회전)으로 돌았는지 → 한계로 자른다
     /// 한계에 걸리면 손은 목표에서 떨어진다(가장 가까운 허용 자세). 위팔을 잘랐으면 아래팔은 목표 쪽을 다시 겨눈다.
     /// </summary>
+    // ── 능동 · 수동(10-26) ── 이번 프레임 «틈 안으로 간 몫»(0 = 능동 한계 · 1 = 수동 한계). 풀이 첫머리에 0으로 두고(팔꿈치 자리 고르기는 능동 한계로 본다)
+    //   손을 끈 요청(풀이 전 자세)으로 한 번 정한 뒤, 이 프레임의 모든 한계 걸기가 같은 값을 쓴다 — 여러 번 걸어도 결과가 같다(멱등).
+    private float pushCone, pushEr, pushIr, pushElbow, pushForearm, pushWrist;
+    public float PushCone => pushCone;
+    public float PushEr => pushEr;
+    public float PushIr => pushIr;
+    public float PushElbow => pushElbow;
+    public float PushForearm => pushForearm;
+    public float PushWrist => pushWrist;
+
+    // ── 부상 위험(10-26 사용자 지시: «부상 위험은 알려주되 진짜로 빠지면 진행이 막히니 빠지면 안 된다 — 락이 있어야») ──
+    //   락 = 수동 한계. 몫은 1 − e^(−Δ/k)라 1에 닿지 않고, 마지막 하드 자르기(EnforceFinalLimits · ClampRot · Clamp)가 수동 끝에서 한 번 더 막는다.
+    //   경고 = 어느 관절이든 몫이 riskWarnFrac 이상이면 InjuryRisk 2. 표시만 하고 진행은 막지 않는다(화면 연결은 아직 없다).
+    public enum Risk { None = 0, InGap = 1, NearLimit = 2 }
+    private Risk injuryRisk;
+    public Risk InjuryRisk => injuryRisk;
+    public float PushMax => Mathf.Max(Mathf.Max(Mathf.Max(pushCone, pushEr), Mathf.Max(pushIr, pushElbow)), Mathf.Max(pushForearm, pushWrist));
+
+    private void UpdateInjuryRisk()
+    {
+        float pm = PushMax;
+        Risk r = pm >= riskWarnFrac ? Risk.NearLimit : pm > 0.01f ? Risk.InGap : Risk.None;
+        if (r != injuryRisk)
+        {
+            injuryRisk = r;
+            Debug.Log($"[팔IK] {sideLabel} 부상 위험 → {(r == Risk.NearLimit ? "경고(구조 한계 가까움)" : r == Risk.InGap ? "능동 한계 넘김" : "없음")} · " +
+                      $"몫 어깨 {pushCone:F2} · 외회전 {pushEr:F2} · 내회전 {pushIr:F2} · 팔꿈치 {pushElbow:F2} · 아래팔 {pushForearm:F2} · 손목 {pushWrist:F2}");
+        }
+    }
+
+    /// <summary>손 비틀기 요청(want)이 능동 회전 끝을 넘은 만큼 이번 프레임 몫을 올린다(풀이 위치로 잰 몫보다 작으면 그대로).</summary>
+    private void RaiseRotPush(float want, Vector3 uS)
+    {
+        if (shoulderErGap <= 0f && shoulderIrGap <= 0f) return;
+        float e0 = pushEr, i0 = pushIr;
+        pushEr = pushIr = 0f;
+        RotLimits(uS, out float loA, out float hiA);
+        pushEr = e0; pushIr = i0;
+        float oEr = Mathf.DeltaAngle(want, loA), oIr = Mathf.DeltaAngle(hiA, want);
+        if (oEr > 0f && (oIr <= 0f || oEr <= oIr)) pushEr = Mathf.Max(pushEr, PushFrac(oEr));
+        else if (oIr > 0f) pushIr = Mathf.Max(pushIr, PushFrac(oIr));
+    }
+
+    private float PushFrac(float overDeg) => overDeg <= 0f ? 0f : 1f - Mathf.Exp(-overDeg / Mathf.Max(0.1f, pushSoftDeg));
+
+    /// <summary>수동 한계 + 틈 + 그 방향 몫 → 이번 프레임 한계. 몫 0 = 능동 한계.</summary>
+    private static float EffLimit(float passive, float gap, float push) => passive - gap * (1f - push);
+
+    private float ConeLimit(float phi, float elbowFlex) => EffLimit(ShoulderConeMax(phi, elbowFlex), shoulderConeGap, pushCone);
+    private float ElbowLimit() => EffLimit(elbowFlexionMax, elbowFlexGap, pushElbow);
+
+    /// <summary>한 번만 거는 자리(아래팔 · 손목)용 — 능동 범위 [loA, hiA] 밖은 틈 안으로 지수 접근한다.</summary>
+    private float SoftRange(float x, float loA, float hiA, float gap)
+    {
+        if (x > hiA) return hiA + gap * PushFrac(x - hiA);
+        if (x < loA) return loA - gap * PushFrac(loA - x);
+        return x;
+    }
+
+    /// <summary>
+    /// 손을 끈 요청(한계를 걸기 전 팔꿈치 · 손 자리)이 능동 한계를 얼마나 넘었는지 재서 이번 프레임 몫을 정한다(S공간).
+    /// 팔꿈치 굴곡은 굴곡 한계로 잘리기 전의 «어깨–목표 거리»로 잰다(잘린 뒤로 재면 수동 끝까지 못 간다).
+    /// </summary>
+    private void MeasurePush(Vector3 a, float l1, float l2, float dist, Vector3 elbowGoal, Vector3 handGoal)
+    {
+        pushCone = pushEr = pushIr = pushElbow = 0f;
+        BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
+        Vector3 u = elbowGoal - a;
+        if (u.sqrMagnitude < 1e-10f) return;
+        u.Normalize();
+        float cIn = Mathf.Clamp((l1 * l1 + l2 * l2 - dist * dist) / (2f * l1 * l2), -1f, 1f);
+        float flexReq = 180f - Mathf.Acos(cIn) * Mathf.Rad2Deg;
+        if (elbowFlexGap > 0f) pushElbow = PushFrac(flexReq - (elbowFlexionMax - elbowFlexGap));
+        if (shoulderConeGap > 0f)
+            pushCone = PushFrac(Vector3.Angle(u, -U) - (ShoulderConeMax(PhiS(u), flexReq) - shoulderConeGap));
+        Vector3 w = handGoal - elbowGoal;
+        Vector3 wp = w - Vector3.Dot(w, u) * u;
+        if ((shoulderErGap > 0f || shoulderIrGap > 0f) && Vector3.Angle(u, w) >= 15f && wp.sqrMagnitude > 1e-8f)
+        {
+            Quaternion swing = Quaternion.FromToRotation(-U, u);
+            float rot = Mathf.Atan2(Vector3.Dot(wp, swing * -L), Vector3.Dot(wp, swing * F)) * Mathf.Rad2Deg;
+            RotLimits(u, out float loA, out float hiA);   // 몫이 0이라 능동 한계다
+            float oEr = Mathf.DeltaAngle(rot, loA), oIr = Mathf.DeltaAngle(hiA, rot);   // 양수면 그쪽으로 넘음(±180 건너편은 작은 쪽만)
+            if (oEr > 0f && (oIr <= 0f || oEr <= oIr)) pushEr = PushFrac(oEr);
+            else if (oIr > 0f) pushIr = PushFrac(oIr);
+        }
+    }
+
     private void ApplyJointLimits(Vector3 a, float l1, float l2, Vector3 t, ref Vector3 elbowGoal, ref Vector3 handGoal, ref string hit)
     {
         BodyAxesS(out Vector3 F, out Vector3 U, out Vector3 L);
@@ -995,7 +1110,7 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 hdir = hz.sqrMagnitude > 1e-8f ? hz.normalized : F;
         float phi = Mathf.Atan2(Vector3.Dot(hdir, L), Vector3.Dot(hdir, F)) * Mathf.Rad2Deg;
         float elbowFlexNow = Vector3.Angle(u, handGoal - elbowGoal);
-        float thMax = ShoulderConeMax(phi, elbowFlexNow);
+        float thMax = ConeLimit(phi, elbowFlexNow);
         bool hitCone = theta > thMax;
         if (hitCone)
         {
@@ -1016,7 +1131,7 @@ public class PatientArmIkProbe : MonoBehaviour
         if (hitBehind || hitMedial) w = HingeDir(a, u, w);
 
         // ② 팔꿈치 굴곡: 아래팔과 위팔 연장선 사이 각 ≤ 한계  ⇔  w · (−u) ≤ cos(180 − 한계)
-        bool hitElbow = ClampAlong(ref w, -u, Mathf.Cos((180f - elbowFlexionMax) * Mathf.Deg2Rad), F);
+        bool hitElbow = ClampAlong(ref w, -u, Mathf.Cos((180f - ElbowLimit()) * Mathf.Deg2Rad), F);
         lastElbowFlexDeg = Vector3.Angle(u, w);
         if (hitElbow) hit = hit == null ? "팔꿈치 굴곡" : hit + " · 팔꿈치 굴곡";
 
@@ -1066,7 +1181,7 @@ public class PatientArmIkProbe : MonoBehaviour
         Vector3 hz = u - Vector3.Dot(u, U) * U;
         Vector3 hdir = hz.sqrMagnitude > 1e-8f ? hz.normalized : F;
         float phi = Mathf.Atan2(Vector3.Dot(hdir, L), Vector3.Dot(hdir, F)) * Mathf.Rad2Deg;
-        float thMax = ShoulderConeMax(phi, Vector3.Angle(u, w));
+        float thMax = ConeLimit(phi, Vector3.Angle(u, w));
         if (theta > thMax)
         {
             float rr = thMax * Mathf.Deg2Rad;
@@ -1079,7 +1194,7 @@ public class PatientArmIkProbe : MonoBehaviour
         }
         // 팔꿈치 굴곡 ≤ 한계 ⇔ w · (−u) ≤ cos(180 − 한계)
         Vector3 w2 = w;
-        if (ClampAlong(ref w2, -u, Mathf.Cos((180f - elbowFlexionMax) * Mathf.Deg2Rad), F))
+        if (ClampAlong(ref w2, -u, Mathf.Cos((180f - ElbowLimit()) * Mathf.Deg2Rad), F))
             RotateInS(lower, Quaternion.FromToRotation(w, w2));
     }
 
@@ -1127,7 +1242,7 @@ public class PatientArmIkProbe : MonoBehaviour
             Vector3 u = (e - a).normalized;
             Vector3 w = h - e;
             float flex = Vector3.Angle(u, w);
-            float coneViol = Mathf.Max(0f, Vector3.Angle(u, -U) - ShoulderConeMax(PhiS(u), flex));
+            float coneViol = Mathf.Max(0f, Vector3.Angle(u, -U) - ConeLimit(PhiS(u), flex));
             float rotViol = 0f;
             Vector3 f = w - Vector3.Dot(w, u) * u;
             if (f.sqrMagnitude > 1e-8f)
@@ -1242,7 +1357,7 @@ public class PatientArmIkProbe : MonoBehaviour
     public float ConePhi => lastConePhi;
     public float ConeMaxDeg => lastConeMax;
     /// <summary>시뮬레이션이 실제 자세를 같은 경계로 재게 연다(따로 계산하지 않는다 — CLAUDE.md 규칙 9).</summary>
-    public float ConeMaxAt(float phi, float elbowFlex) => ShoulderConeMax(phi, elbowFlex);
+    public float ConeMaxAt(float phi, float elbowFlex) => ConeLimit(phi, elbowFlex);
 
     private float ShoulderConeMax(float phi, float elbowFlex)
     {
@@ -1302,6 +1417,9 @@ public class PatientArmIkProbe : MonoBehaviour
             float top = Mathf.Max(91f, ShoulderConeMax(phi, 0f));
             hi = Mathf.Lerp(shoulderInternalRotMax, shoulderInternalRotOverhead, Mathf.Clamp01((theta - 90f) / (top - 90f)));
         }
+        // 10-26: 위 값은 수동 끝 — 이번 프레임 몫만큼만 연다(몫 0 = 능동 끝)
+        lo = -EffLimit(-lo, shoulderErGap, pushEr);
+        hi = EffLimit(hi, shoulderIrGap, pushIr);
         if (hi < lo + 5f) hi = lo + 5f;
     }
 
@@ -1598,6 +1716,7 @@ public class PatientArmIkProbe : MonoBehaviour
         if (TwistShoulderFirst && straight > 0f && !float.IsNaN(rotRest) && MeasureRotSign(kW, out float rotNow0, out float sgn0, out Vector3 uS0))
         {
             float want0 = rotRest + sgn0 * twistDeg;
+            if (applyLimits) RaiseRotPush(want0, uS0);
             float cl0 = applyLimits ? ClampRot(want0, uS0) : want0;
             shoulderShare = sgn0 * (cl0 - rotRest) * straight;   // 팔 축 둘레 월드 각(펴진 팔에서는 아래팔 축과 거의 같다)
         }
@@ -1617,7 +1736,10 @@ public class PatientArmIkProbe : MonoBehaviour
 
             float sup = supWorldSign * foreTwist;                                   // + 회외(시작 자세에서 더한 만큼)
             // 한계는 해부학 중립 기준(10-22 명세) — 시작 자세가 이미 forearmRestSupDeg만큼 돌아 있다
-            float supCl = applyLimits ? Mathf.Clamp(sup, -forearmPronationMax - forearmRestSupDeg, forearmSupinationMax - forearmRestSupDeg) : sup;
+            // 10-26: 능동 범위(수동 − 틈) 밖은 틈 안으로 지수 접근 · 수동 끝은 넘지 않는다(한 번만 거는 자리)
+            float supLoP = -forearmPronationMax - forearmRestSupDeg, supHiP = forearmSupinationMax - forearmRestSupDeg;
+            float supCl = applyLimits ? Mathf.Clamp(SoftRange(sup, supLoP + forearmGap, supHiP - forearmGap, forearmGap), supLoP, supHiP) : sup;
+            if (applyLimits && forearmGap > 0f) pushForearm = Mathf.Max(PushFrac(sup - (supHiP - forearmGap)), PushFrac(supLoP + forearmGap - sup));
             if (applyLimits && !Mathf.Approximately(sup, supCl)) AddHit(ref hit, sup > 0f ? "아래팔 회외" : "아래팔 회내");
             foreWorld = supWorldSign * supCl;                                       // 월드에서 축 둘레로 돌릴 각
             lastForeDeg = forearmRestSupDeg + supCl;
@@ -1641,6 +1763,7 @@ public class PatientArmIkProbe : MonoBehaviour
             if (!float.IsNaN(rotNow) && MeasureRotSign(kW, out _, out float sgn, out Vector3 uS))
             {
                 float want = rotRest + sgn * twistDeg;
+                if (applyLimits) RaiseRotPush(want, uS);
                 float cl = applyLimits ? ClampRot(want, uS) : want;
                 if (applyLimits && !Mathf.Approximately(want, cl)) AddHit(ref hit, want > 0f ? "어깨 내회전" : "어깨 외회전");
                 float goal = rotNow + Mathf.DeltaAngle(rotNow, cl) * straight;
@@ -1673,6 +1796,25 @@ public class PatientArmIkProbe : MonoBehaviour
             float lx = ext >= 0f ? wristExtensionMax : wristFlexionMax;
             float ly = dev >= 0f ? wristRadialMax : wristUlnarMax;
             float e = (ext * ext) / Mathf.Max(1f, lx * lx) + (dev * dev) / Mathf.Max(1f, ly * ly);
+            // 10-26: 능동 타원(수동 − 틈) 밖은 그 방향 반지름을 따라 수동 타원 쪽으로 지수 접근한다
+            float lxA = Mathf.Max(1f, lx - wristGap), lyA = Mathf.Max(1f, ly - wristGap);
+            float eA = (ext * ext) / (lxA * lxA) + (dev * dev) / (lyA * lyA);
+            if (applyLimits && wristGap > 0f && eA > 1f)
+            {
+                float mag = Mathf.Sqrt(ext * ext + dev * dev);
+                float rA = mag / Mathf.Sqrt(eA), rP = mag / Mathf.Sqrt(Mathf.Max(1e-6f, e));   // 이 방향 능동 · 수동 경계까지의 각
+                pushWrist = PushFrac(mag - rA);
+                float m2 = Mathf.Min(rA + (rP - rA) * pushWrist, rP, mag);   // 수동 경계는 넘지 않는다(락)
+                float s2 = m2 / Mathf.Max(1e-4f, mag);
+                e *= s2 * s2;   // 줄인 각으로 다시 잰 수동 타원 값(≤ 1) — 아래 자르기는 수동 끝에서만 걸린다
+                if (s2 < 1f)
+                {
+                    ext *= s2; dev *= s2;
+                    float cs = Mathf.Cos(dev * Mathf.Deg2Rad);
+                    wantW = (nW * (cs * Mathf.Cos(ext * Mathf.Deg2Rad)) + dW * (cs * Mathf.Sin(ext * Mathf.Deg2Rad)) + rW * Mathf.Sin(dev * Mathf.Deg2Rad)).normalized;
+                    AddHit(ref hit, "손목(능동 넘김)");
+                }
+            }
             if (applyLimits && e > 1f)
             {
                 float k = 1f / Mathf.Sqrt(e);

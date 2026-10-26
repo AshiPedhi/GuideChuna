@@ -45,7 +45,7 @@ public class PatientArmIkSim : MonoBehaviour
     private bool started, finished;
 
     // 단계 통계
-    private float mHandTarget, mPen, mJump, mWrongElbow, mWristDors, mWristPalm;
+    private float mHandTarget, mPen, mJump, mWrongElbow, mWristDors, mWristPalm, mPush;   // mPush = 능동 한계 넘김 몫 최대(10-26)
     private int nFrames, nWrong, nSideways, nJump, nPen, nOver;
     private float mElbowFlex, mMedial, mBehind, mElev;
     private float lastTheta, lastPhi, lastCone;   // 이 프레임 실제 위팔 거상 · 방향 · 그 방향 경계
@@ -296,7 +296,7 @@ public class PatientArmIkSim : MonoBehaviour
         else if (probe.IsReleasing || phaseIdx > 0 && phases[phaseIdx - 1].to.release) probe.CancelRelease();
         if (demo) phaseLog.Append(videoFrame).Append('\t').Append(phases[phaseIdx].name).Append('\n');
         if (phaseIdx > 0) { fromTwist = phases[phaseIdx - 1].to.twist; fromWrist = phases[phaseIdx - 1].to.wrist; fromDev = phases[phaseIdx - 1].to.dev; }
-        mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = 0f;
+        mHandTarget = mPen = mJump = mWrongElbow = mWristDors = mWristPalm = mPush = 0f;
         nFrames = nWrong = nSideways = nJump = nPen = nOver = 0;
         mElbowFlex = mMedial = mBehind = mElev = -999f; overWhat = "";
         mPenWhere = "";
@@ -313,6 +313,7 @@ public class PatientArmIkSim : MonoBehaviour
         nFrames++;
         float handTarget = Vector3.Distance(ha.position, probe.Target.position) * 1000f;
         mHandTarget = Mathf.Max(mHandTarget, handTarget);
+        mPush = Mathf.Max(mPush, probe.PushMax);
 
         Vector3 uW = lo.position - up.position, fW = ha.position - lo.position;
         float elbowFlex = Vector3.Angle(uW, fW);
@@ -415,7 +416,7 @@ public class PatientArmIkSim : MonoBehaviour
                 $"손-목표 최대 {mHandTarget:F0}mm · 관통 최대 {mPen * 1000f:F0}mm{(mPen > 0f ? "(" + mPenWhere + ")" : "")} {nPen}프레임 · " +
                 $"팔꿈치 반대 꺾임 {nWrong} · 옆 꺾임 {nSideways}프레임(경첩 벗어남 최대 {mWrongElbow:F0}°) · " +
                 $"튐 {nJump}프레임(최대 {mJump:F1}°/프레임) · 한계 넘음 {nOver}프레임{(nOver > 0 ? "(" + overWhat + ")" : "")} · 최대 팔꿈치 {mElbowFlex:F0}° · 신전 {mBehind:F0}° · 내전 {mMedial:F0}° · 거상 {mElev:F0}°(쇄골 {probe.GirdleDeg:F0}° · 방향 φ {probe.ConePhi:F0}° 경계 {probe.ConeMaxDeg:F0}°) · 손목 범위 배굴 {mWristDors:F0}° ~ 장굴 {-mWristPalm:F0}° · " +
-                $"걸린 한계 {(hits.Count > 0 ? string.Join(" · ", hits) : "없음")} · {nFrames}프레임";
+                $"걸린 한계 {(hits.Count > 0 ? string.Join(" · ", hits) : "없음")} · 능동 넘김 몫 최대 {mPush:F2}(끝 위험 {probe.InjuryRisk}) · {nFrames}프레임";
             Debug.Log(line);
             summary.Append(line).Append('\n');
             // (10-23 진단: 단계 끝마다 → 밀어 올리기 중 10프레임마다로 옮김)
