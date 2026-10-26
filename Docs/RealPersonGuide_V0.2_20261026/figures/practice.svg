@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">기존 시나리오와 통과 조건을 재사용하는 실습 화면 개념</title>
+  <desc id="desc">기존 지시문, 동작 진행 표시, 유지 게이지와 조건 충족 시 자동 전환을 재사용한다. 추가 조작은 작은 다시 맞추기 버튼이다. 사람 뒷모습, 고정 보조수와 움직이는 주동수 및 화살표는 움직임 배치 예시이며 실제 앱 캡처나 처치 방법 설명이 아니다.</desc>
+  <defs>
+    <style>text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}.muted{fill:#587081}.small{font-size:20px}.bold{font-weight:700}.title{font-size:30px;font-weight:700}.white{fill:#fff}</style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10" fill="none" stroke="#2f83c3" stroke-width="2"/></marker>
+    <g id="hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+    </g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">맞추기 후, 기존 시나리오로 실습 진행</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="365" height="492" rx="20" fill="#f8fbfd" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="49" y="114" class="small muted">기존 시나리오 진행</text>
+  <text x="49" y="162" style="font-size:34px" class="bold">동작 수행</text>
+  <text x="49" y="203">기존 지시문 표시</text>
+  <text x="49" y="235" class="small muted">시나리오의 안내를 따릅니다</text>
+  <text x="49" y="283" class="small muted">동작 진행</text>
+  <text x="49" y="335" style="font-size:43px;fill:#247ac3" class="bold">72%</text>
+  <text x="165" y="333" class="small muted">예시</text>
+  <rect x="49" y="350" width="315" height="12" rx="6" fill="#deeaf3"/>
+  <rect x="49" y="350" width="227" height="12" rx="6" fill="#2c8ace"/>
+  <circle cx="91" cy="421" r="32" fill="none" stroke="#d9e7ed" stroke-width="9"/>
+  <path d="M91 389A32 32 0 0 1 121 410" fill="none" stroke="#8fb4c6" stroke-width="9" stroke-linecap="round"/>
+  <text x="145" y="415" class="bold">기존 유지 게이지</text>
+  <text x="145" y="446" style="font-size:18px" class="muted">조건 충족 시 자동 전환</text>
+  <rect x="171" y="501" width="193" height="42" rx="10" fill="#fff" stroke="#93bbd7" stroke-width="2"/>
+  <text x="267" y="529" text-anchor="middle" class="small bold">↻ 다시 맞추기</text>
+
+  <rect x="411" y="76" width="765" height="492" rx="20" fill="#eef5f8" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="435" y="114" class="small muted">실제 사람 위에 기존 가이드 표시 · 움직임 배치 예시</text>
+  <path d="M755 258 755 295 820 295 820 258" fill="#e6b999"/>
+  <ellipse cx="787" cy="216" rx="51" ry="64" fill="#e4b695"/>
+  <path d="M737 213Q728 142 787 145Q847 142 838 213Q825 172 787 175Q752 174 737 213" fill="#626c75"/>
+  <path d="M739 285Q787 302 836 285L890 310Q928 331 938 390L952 506 900 513 879 405 877 532 697 532 695 405 674 513 622 506 636 390Q646 331 684 310Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+  <path d="M739 285Q787 313 836 285M787 308 787 530" fill="none" stroke="#bfced7" stroke-width="2"/>
+  <circle cx="674" cy="388" r="41" fill="#42a3dd" fill-opacity=".08" stroke="#368aca" stroke-width="2" stroke-dasharray="7 5"/>
+  <circle cx="951" cy="388" r="41" fill="#42a3dd" fill-opacity=".08" stroke="#368aca" stroke-width="2" stroke-dasharray="7 5"/>
+  <use href="#hand" transform="translate(642 331) rotate(-22 42 64) scale(.85)"/>
+  <text x="440" y="278" class="bold">보조수</text>
+  <path d="M514 288 633 332" fill="none" stroke="#5b7a8d" stroke-width="2"/>
+
+  <path d="M1080 439Q1125 357 1080 274" fill="none" stroke="#2f83c3" stroke-width="3" stroke-dasharray="8 7" marker-end="url(#arrow)"/>
+  <text x="1034" y="232" class="small muted">동작 방향 예시</text>
+  <use href="#hand" transform="translate(997 315) scale(-.85 .85) rotate(-26 42 64)"/>
+  <text x="1030" y="486" class="bold">주동수</text>
+  <rect x="716" y="530" width="436" height="29" rx="10" fill="#fff"/>
+  <text x="934" y="552" text-anchor="middle" class="small muted">기존 판정 기준 사용 · 예시 화면</text>
+
+  <text x="32" y="606" class="bold">기존 지시문·진행 표시·유지 게이지·자동 전환을 재사용합니다.</text>
+  <text x="32" y="641" class="small muted">추가 조작은 필요할 때의 [다시 맞추기]입니다. 실제 처치 방법을 설명하는 그림이 아닙니다.</text>
+</svg>

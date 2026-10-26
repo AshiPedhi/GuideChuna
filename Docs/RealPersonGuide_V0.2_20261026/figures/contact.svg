@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">기존 접촉 조건을 유지하면서 실제 사람의 손 자리에 접촉 영역 배치</title>
+  <desc id="desc">왼쪽은 숨은 가상환자 기준의 접촉 영역이 실제 손 위치와 어긋난 개념이다. 오른쪽은 동일한 사람과 손 위치에서 기존 충돌체 형태와 접촉 조건을 유지한 채 접촉 영역의 위치를 맞춘다. 위치 등록 후 범위를 확인하며 필요한 경우만 좁게, 보통, 넓게 조절한다. 실제 신체 형태를 자동 측정하거나 피부 접촉을 직접 검출하는 그림이 아니다.</desc>
+  <defs>
+    <style>text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px}.muted{fill:#587081}.small{font-size:20px}.bold{font-weight:700}.title{font-size:30px;font-weight:700}</style>
+    <g id="person">
+      <path d="M-29-30-29 6 29 6 29-30" fill="#e6b999"/>
+      <ellipse cx="0" cy="-71" rx="43" ry="54" fill="#e4b695"/>
+      <path d="M-43-74Q-49-135 0-130Q49-135 43-74Q31-106 0-105Q-31-106-43-74" fill="#626c75"/>
+      <path d="M-40-2Q0 13 40-2L91 19Q121 38 131 92L142 189 99 195 81 103 78 216-78 216-81 103-99 195-142 189-131 92Q-121 38-91 19Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+      <path d="M-40-2Q0 23 40-2M0 19 0 214" fill="none" stroke="#bfced7" stroke-width="2"/>
+    </g>
+    <g id="hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+    </g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">접촉 영역의 위치를 실제 손 자리에 맞춘다</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="564" height="492" rx="20" fill="#f7f9fb" stroke="#dce5eb" stroke-width="2"/>
+  <rect x="612" y="76" width="564" height="492" rx="20" fill="#f1faf7" stroke="#c6e5da" stroke-width="2"/>
+  <text x="49" y="117" style="font-size:27px" class="bold">맞추기 전</text>
+  <text x="637" y="117" style="font-size:27px" class="bold">시작 파지 등록 후</text>
+  <text x="49" y="152" class="small muted">숨은 가상환자 기준이 남아 있음</text>
+  <text x="637" y="152" class="small muted">실제 사람과 손 위치는 왼쪽과 같음</text>
+
+  <use href="#person" transform="translate(306 295)"/>
+  <path d="M266 293Q306 265 346 293L374 311Q388 339 386 376M246 311Q232 339 234 376" fill="none" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="9 7"/>
+  <circle cx="253" cy="314" r="29" fill="#aeb8c0" fill-opacity=".16" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="359" cy="314" r="29" fill="#aeb8c0" fill-opacity=".16" stroke="#8d9ca9" stroke-width="3" stroke-dasharray="7 5"/>
+  <use href="#hand" transform="translate(165 339) scale(.76) rotate(-23 42 64)"/>
+  <use href="#hand" transform="translate(447 339) scale(-.76 .76) rotate(-23 42 64)"/>
+  <rect x="49" y="452" width="514" height="91" rx="13" fill="#fff"/>
+  <circle cx="72" cy="480" r="8" fill="#aeb8c0"/><text x="91" y="488" class="small">회색 점선: 기존 가상 접촉 영역</text>
+  <text x="72" y="521" class="small muted">실제 손과 영역의 자리가 다를 수 있음</text>
+
+  <use href="#person" transform="translate(894 295)"/>
+  <circle cx="787" cy="392" r="29" fill="#47b68e" fill-opacity=".12" stroke="#319a77" stroke-width="3"/>
+  <circle cx="1001" cy="392" r="29" fill="#47b68e" fill-opacity=".12" stroke="#319a77" stroke-width="3"/>
+  <use href="#hand" transform="translate(753 339) scale(.76) rotate(-23 42 64)"/>
+  <use href="#hand" transform="translate(1035 339) scale(-.76 .76) rotate(-23 42 64)"/>
+  <rect x="637" y="452" width="514" height="91" rx="13" fill="#fff"/>
+  <circle cx="660" cy="475" r="8" fill="#319a77"/><text x="679" y="483" class="small">위치: 등록한 손 자리</text>
+  <text x="660" y="525" class="small muted">필요할 때만</text>
+  <rect x="791" y="500" width="101" height="34" rx="9" fill="#f4f7f9" stroke="#cad8df"/>
+  <text x="841" y="524" text-anchor="middle" class="small">좁게</text>
+  <rect x="903" y="500" width="101" height="34" rx="9" fill="#e1f3ec" stroke="#319a77"/>
+  <text x="953" y="524" text-anchor="middle" class="small bold">보통</text>
+  <rect x="1015" y="500" width="101" height="34" rx="9" fill="#f4f7f9" stroke="#cad8df"/>
+  <text x="1065" y="524" text-anchor="middle" class="small">넓게</text>
+
+  <text x="32" y="605" class="bold">기존 충돌체 형태·접촉 조건을 유지하고, 위치를 맞춘 뒤 크기를 확인합니다.</text>
+  <text x="32" y="640" class="small muted">실제 피부를 직접 감지하거나 신체 크기를 자동 측정하는 방식이 아닙니다.</text>
+  <text x="1168" y="640" text-anchor="end" class="small muted">확대 비교도 · 축척 없음</text>
+</svg>

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">실제 사람에게 시작 기준과 접촉 영역 위치를 맞추는 준비 화면 개념</title>
+  <desc id="desc">사람에게 맞추기 버튼을 누르고 사람이 확인한 올바른 시작 파지를 잠깐 유지하면 손 위치와 방향을 등록한다. 이번 술기의 시작 기준과 접촉 영역 위치를 맞추는 그림이며, 손 두 점으로 전신이나 모든 관절 피벗을 자동 정렬하는 기능을 뜻하지 않는다. 기존 시나리오와 통과 조건은 그대로 사용한다.</desc>
+  <defs>
+    <style>
+      text{font-family:'Malgun Gothic','맑은 고딕',sans-serif;fill:#163146;font-size:22px} .muted{fill:#587081}.small{font-size:20px}.bold{font-weight:700}.title{font-size:30px;font-weight:700}.step{font-size:23px;font-weight:700}.white{fill:#fff}
+    </style>
+    <linearGradient id="room" x2="0" y2="1"><stop stop-color="#edf5fa"/><stop offset="1" stop-color="#f8fbfd"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="none" stroke="#2f7dbe" stroke-width="2"/></marker>
+    <g id="hand">
+      <path d="M18 105 15 78 3 55Q-1 46 7 43Q12 41 18 50L22 56 22 16Q22 7 29 7Q36 7 36 16L36 42 39 6Q40-2 47 0Q53 1 53 9L52 42 57 11Q58 4 65 6Q71 7 70 15L66 47 72 25Q74 18 80 21Q86 23 83 31L75 66Q70 87 60 105Z" fill="#edc1a2" stroke="#b88265" stroke-width="2"/>
+      <path d="M16 100 62 100 65 126 13 126Z" fill="#78b7c7" stroke="#4a8f9f" stroke-width="2"/>
+      <path d="M28 61Q37 54 45 56M50 48 49 70M63 48 59 69" fill="none" stroke="#c19175" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <rect width="1200" height="660" fill="#fff"/>
+  <text x="28" y="43" class="title">실제 사람에게 시작 파지 맞추기</text>
+  <rect x="850" y="16" width="322" height="38" rx="19" fill="#eef3f6"/>
+  <text x="1011" y="42" text-anchor="middle" class="small muted">개념 화면 · 실제 캡처 아님</text>
+
+  <rect x="24" y="76" width="742" height="492" rx="20" fill="url(#room)" stroke="#d8e5ec" stroke-width="2"/>
+  <path d="M25 437 395 370 765 437M395 370 395 568" fill="none" stroke="#dfe9ee" stroke-width="2"/>
+  <rect x="44" y="96" width="203" height="38" rx="19" fill="#fff"/>
+  <text x="145" y="122" text-anchor="middle" class="small muted">접촉 위치 배치 예시</text>
+  <path d="M367 247 367 292 432 292 432 247" fill="#e6b999"/>
+  <ellipse cx="400" cy="207" rx="54" ry="66" fill="#e4b695"/>
+  <path d="M347 203Q338 128 400 132Q463 129 455 203Q440 163 400 164Q365 163 347 203" fill="#626c75"/>
+  <path d="M349 282Q400 300 451 282L508 309Q547 331 558 392L573 522 518 529 496 408 493 542 306 542 303 408 281 529 226 522 241 392Q252 331 291 309Z" fill="#dce4e9" stroke="#b8c7d1" stroke-width="3"/>
+  <path d="M349 282Q400 313 451 282M399 308 399 540" fill="none" stroke="#bfced7" stroke-width="2"/>
+  <circle cx="318" cy="327" r="41" fill="#42a3dd" fill-opacity=".10" stroke="#368aca" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="482" cy="327" r="41" fill="#42a3dd" fill-opacity=".10" stroke="#368aca" stroke-width="3" stroke-dasharray="7 5"/>
+  <circle cx="318" cy="327" r="7" fill="#237dc2"/>
+  <circle cx="482" cy="327" r="7" fill="#237dc2"/>
+  <use href="#hand" transform="translate(278 264) scale(.91) rotate(-25 42 64)"/>
+  <use href="#hand" transform="translate(522 264) scale(-.91 .91) rotate(-25 42 64)"/>
+  <rect x="451" y="155" width="280" height="69" rx="14" fill="#fff" stroke="#b5d7ee" stroke-width="2"/>
+  <text x="591" y="184" text-anchor="middle" class="bold">등록할 접촉 영역</text>
+  <text x="591" y="211" text-anchor="middle" class="small muted">올바른 손 자리에 배치</text>
+  <path d="M552 224Q526 260 491 284" fill="none" stroke="#2f7dbe" stroke-width="2" marker-end="url(#arrow)"/>
+  <rect x="45" y="492" width="220" height="50" rx="13" fill="#fff"/>
+  <text x="155" y="523" text-anchor="middle" class="small muted">얼굴 없는 뒤쪽 시점</text>
+
+  <rect x="790" y="76" width="386" height="492" rx="20" fill="#fff" stroke="#d8e5ec" stroke-width="2"/>
+  <text x="815" y="116" class="small muted">준비 · 사용자 조작</text>
+  <circle cx="833" cy="157" r="17" fill="#e7f1fb"/><text x="833" y="165" text-anchor="middle" class="small bold">1</text>
+  <text x="860" y="165" class="step">먼저 버튼 누르기</text>
+  <rect x="815" y="184" width="336" height="58" rx="13" fill="#247ac3"/>
+  <text x="983" y="221" text-anchor="middle" class="bold white">사람에게 맞추기</text>
+  <circle cx="833" cy="285" r="17" fill="#e7f1fb"/><text x="833" y="293" text-anchor="middle" class="small bold">2</text>
+  <text x="860" y="293" class="step">올바른 시작 파지</text>
+  <text x="860" y="328" class="muted">손을 얹고 잠깐 유지</text>
+  <circle cx="833" cy="374" r="17" fill="#def3ed"/><text x="833" y="382" text-anchor="middle" class="small bold">3</text>
+  <text x="860" y="382" class="step">저장 확인</text>
+  <rect x="815" y="400" width="336" height="58" rx="13" fill="#e0f4ee" stroke="#a6d8c8"/>
+  <text x="983" y="437" text-anchor="middle" class="bold">✓ 시작 기준 저장됨</text>
+  <rect x="815" y="482" width="336" height="62" rx="12" fill="#fff5de"/>
+  <text x="983" y="508" text-anchor="middle" class="small">올바른 파지는 사람이 확인</text>
+  <text x="983" y="534" text-anchor="middle" class="small muted">신체 자동 인식이 아닙니다</text>
+
+  <text x="32" y="606" class="bold">등록 범위: 이번 술기의 시작 기준과 접촉 영역 위치</text>
+  <text x="32" y="641" class="small muted">기존 시나리오·통과 조건은 그대로 사용합니다.</text>
+  <text x="1168" y="641" text-anchor="end" class="small muted">전신 자동 정렬 아님</text>
+</svg>
