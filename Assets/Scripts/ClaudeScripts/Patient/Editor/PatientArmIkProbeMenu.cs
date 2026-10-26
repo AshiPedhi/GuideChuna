@@ -29,16 +29,23 @@ public static class PatientArmIkProbeMenu
     private const string DemoRib2 = "GuideChuna/시험/제2늑골 시연 (오른팔 · Play 중)";
 
     [MenuItem(DemoRib2)]
-    private static void DemoSecondRib() => Simulate(PatientArmIkProbe.ArmSide.Right, true);
+    private static void DemoSecondRib() => Simulate(PatientArmIkProbe.ArmSide.Right, PatientArmIkSim.DemoKind.Rib2);
+
+    // 10-26 사용자 지시(«어깨를 수평 외전 · 외회전하는 동작을 모델로 보여줘»): 팔 옆 90° · 팔꿈치 90°에서 외회전 → 수평 외전
+    private const string DemoShoulderEr = "GuideChuna/시험/어깨 외회전 · 수평 외전 시연 (오른팔 · Play 중)";
+
+    [MenuItem(DemoShoulderEr)]
+    private static void DemoShoulderExternalRotation() => Simulate(PatientArmIkProbe.ArmSide.Right, PatientArmIkSim.DemoKind.ShoulderEr);
 
     [MenuItem(MenuRight, true)]
     [MenuItem(MenuLeft, true)]
     [MenuItem(SimRight, true)]
     [MenuItem(SimLeft, true)]
     [MenuItem(DemoRib2, true)]
+    [MenuItem(DemoShoulderEr, true)]
     private static bool Validate() => EditorApplication.isPlaying;
 
-    private static void Simulate(PatientArmIkProbe.ArmSide side, bool demo = false)
+    private static void Simulate(PatientArmIkProbe.ArmSide side, PatientArmIkSim.DemoKind demo = PatientArmIkSim.DemoKind.None)
     {
         PatientArmIkProbe probe = Attach(side);
         if (probe == null) return;
