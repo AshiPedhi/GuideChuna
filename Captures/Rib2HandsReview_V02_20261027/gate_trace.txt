@@ -1,0 +1,3 @@
+Editor-only input supplied in-memory; original trace.py unchanged.
+  visible                  3항  Rib2HandsVideoReviewWindow.cs:347  Render()
+visible = snapshot.sourceEnabled AND source.gameObject.activeInHierarchy AND NOT source.forceRenderingOff. The first is captured from each clone renderer before drawing and restored in finally. Scene Canvas objects alone are disabled; patient/guide branches stay active. forceRenderingOff is read from the clone. These govern private CPU snapshots only; no scenario/grip gate is referenced.

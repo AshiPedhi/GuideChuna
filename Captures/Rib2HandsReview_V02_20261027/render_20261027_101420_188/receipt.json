@@ -1,0 +1,69 @@
+{
+    "success": true,
+    "error": "",
+    "utc": "2026-10-27T01:14:20.0460095+00:00",
+    "outputFolder": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2HandsReview_V02_20261027\\render_20261027_101420_188",
+    "csvSha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23",
+    "manifestSha256": "eb7e5b3c70a3b555235a30de39e546c8d1d45dc219a79777d1ad6e4b3470bbd3",
+    "sourceSceneSha256": "8914a0c8f20316179904bcc16f170e01c362168773f5937394feb03bb920b804",
+    "implementationSha256": "7efd4102b9f491dca6d3cce6a515cbe8f688183cf45d0b662b85a22af7f3bda4",
+    "sourceScene": "Assets/Demos/Rib2VideoTextScene/V01/Rib2VideoTextDemo.unity",
+    "scope": "Private preview only. Same Rib2VideoTextScenePlayer.Seek and Rib2DemoPatientArm.Evaluate as the separate V01 demonstration. Source-authored depth/fingers; not measured mocap, force, clinical or Play validation.",
+    "framesWritten": 248,
+    "expectedFrames": 248,
+    "sourceFrameCount": 248,
+    "jointsPerHand": 26,
+    "activeSceneBefore": -1272,
+    "activeSceneAfter": -1272,
+    "fps": 30.0,
+    "durationSeconds": 8.233333587646485,
+    "maximumPatientWristTargetResidualMetres": 1.1920928955078126e-7,
+    "maximumReachRetargetMetres": 0.030867721885442735,
+    "minimumHandViewportMargin": 0.16355401277542115,
+    "leftMinimum": {
+        "x": 10.418094635009766,
+        "y": 1.104805827140808,
+        "z": -1.5452154874801636
+    },
+    "leftMaximum": {
+        "x": 10.61792278289795,
+        "y": 1.1128559112548829,
+        "z": -1.1821107864379883
+    },
+    "rightMinimum": {
+        "x": 10.090802192687989,
+        "y": 1.1128554344177247,
+        "z": -1.4471163749694825
+    },
+    "rightMaximum": {
+        "x": 10.123509407043457,
+        "y": 1.1128554344177247,
+        "z": -1.4271163940429688
+    },
+    "posesFinite": true,
+    "originalSceneStateUnchanged": true,
+    "before": [
+        {
+            "handle": -1272,
+            "path": "Assets/Scenes/TrainingScene.unity",
+            "dirty": false
+        },
+        {
+            "handle": -1274,
+            "path": "Assets/Demos/Rib2VideoTextScene/V01/Rib2VideoTextDemo.unity",
+            "dirty": false
+        }
+    ],
+    "after": [
+        {
+            "handle": -1272,
+            "path": "Assets/Scenes/TrainingScene.unity",
+            "dirty": false
+        },
+        {
+            "handle": -1274,
+            "path": "Assets/Demos/Rib2VideoTextScene/V01/Rib2VideoTextDemo.unity",
+            "dirty": false
+        }
+    ]
+}

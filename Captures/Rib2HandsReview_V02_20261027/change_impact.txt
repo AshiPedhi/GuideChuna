@@ -1,0 +1,61 @@
+바뀐 파일 17개 (.cs 1개) · 기준 a1d96c1
+    .claude/skills/unity-live/__pycache__/bridge.cpython-314.pyc
+    Assets/Editor/Rib2HandsVideoReviewWindow.cs
+    Assets/Editor/Rib2HandsVideoReviewWindow.cs.meta
+    Assets/Generated/AnatomicalPatient/Build_20261022_174000/AnatomicalPatientLab.unity
+    Assets/Scenes/Scenario_1/LightingData.asset
+    Assets/Scenes/Scenario_1/LightingData.asset.meta
+    Assets/Scenes/Scenario_1/Lightmap-0_comp_dir.png
+    Assets/Scenes/Scenario_1/Lightmap-0_comp_dir.png.meta
+    Assets/Scenes/Scenario_1/Lightmap-0_comp_light.exr
+    Assets/Scenes/Scenario_1/Lightmap-0_comp_light.exr.meta
+    Assets/Scenes/Scenario_1/ReflectionProbe-0.exr
+    Assets/Scenes/Scenario_1/ReflectionProbe-0.exr.meta
+    Assets/Scenes/Scenario_1/ReflectionProbe-1.exr
+    Assets/Scenes/Scenario_1/ReflectionProbe-1.exr.meta
+    Assets/Scenes/TrainingScene.unity
+    ProjectSettings/EditorBuildSettings.asset
+    ProjectSettings/ProjectSettings.asset
+
+── ① 직렬화 충돌 (규칙 7) ──
+  없음
+
+── ② 파급 범위 ──
+  Rib2HandsVideoReviewWindow: 씬 인스턴스 0개 · 참조 0개
+
+── ③ 이벤트 수신자 ──
+[위험] ★이벤트 'OnProgressUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+[위험] ★이벤트 'OnUIUpdateRequested' 구독자가 <b>씬에 하나도 없다</b> → 보내도 아무 일이 안 일어난다
+        구독 코드: ScenarioUIController(씬 0개)
+
+── ④ 나레이션 낡음 ──
+[확인] 견갑거근: 텍스트가 mp3보다 새로운 클립 6개 — <b>안내문과 음성이 어긋난다</b>
+        건측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가
+        → narration-gen 으로 재녹음: --only "건측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 경추ROM측정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        중립복귀
+        → narration-gen 으로 재녹음: --only "중립복귀..." --force --write
+[확인] 두개골OM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        견착
+        → narration-gen 으로 재녹음: --only "견착..." --force --write
+[확인] 두개골PJ교정: 텍스트가 mp3보다 새로운 클립 3개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 견착, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,견착,재평가..." --force --write
+[확인] 두개골PM교정: 텍스트가 mp3보다 새로운 클립 1개 — <b>안내문과 음성이 어긋난다</b>
+        교정
+        → narration-gen 으로 재녹음: --only "교정..." --force --write
+[확인] 사각근: 텍스트가 mp3보다 새로운 클립 8개 — <b>안내문과 음성이 어긋난다</b>
+        전부회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 중부회전, 후부회전
+        → narration-gen 으로 재녹음: --only "전부회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 상부승모근: 텍스트가 mp3보다 새로운 클립 7개 — <b>안내문과 음성이 어긋난다</b>
+        환측회전, 측굴, 중립, 등척성운동, 스트레칭, 재평가, 건측회전
+        → narration-gen 으로 재녹음: --only "환측회전,측굴,중립,등척성운동,스트레칭,재평가..." --force --write
+[확인] 제1늑골 교정기법: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        진단1, 재평가
+        → narration-gen 으로 재녹음: --only "진단1,재평가..." --force --write
+[확인] 제2늑골_상방변위: 텍스트가 mp3보다 새로운 클립 2개 — <b>안내문과 음성이 어긋난다</b>
+        파지2, 재평가
+        → narration-gen 으로 재녹음: --only "파지2,재평가..." --force --write
+
+위험 33건

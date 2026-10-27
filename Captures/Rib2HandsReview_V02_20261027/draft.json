@@ -1,0 +1,40 @@
+{
+  "label": "제2늑골 양손 영상 가이드 — 독립 검토 V02",
+  "csvPath": "Captures/Rib2HandsReview_V02_20261027/data.csv",
+  "sourceFramesDirectory": "Captures/Rib2HandsReview_V02_20261027/source_frames",
+  "sourceStartSeconds": 56.5,
+  "fps": 30,
+  "frameCount": 248,
+  "cycleStartSeconds": 3.75,
+  "sourceVideo": "D:/전문가 영상 촬영본/3인칭 시점 카메라/제2늑골 교정기법.MOV",
+  "provenance": "Read-only reuse of eaeb1c3 video/text-only authored poses; no expert tracking input. Original third-person/bodycam roles rechecked 2026-10-27. New private review window and outputs; existing V01 untouched.",
+  "reusedCsv": "Captures/Rib2VideoTextOnly_V0.1_20261026/video_text_demo.csv",
+  "csvSha256": "d2167e63529562f52688ca4865112ad21162b8f65d672b11094d0ee4324e7f23",
+  "sourceOnlyManifest": "Captures/Rib2VideoTextOnly_V0.1_20261026/reconstruction_manifest.json",
+  "sourceOnlyManifestSha256": "fc887567d5ead882a6ec06b74b5139fbd0b2434556a4aa9808d5e468e1d6d7a3",
+  "roles": {
+    "Left": "청록: 시술자 왼손, 환자 오른손/손목 유도",
+    "Right": "주황: 시술자 오른손, 상흉곽 지지"
+  },
+  "observed": [
+    "양손의 역할",
+    "영상에서 보이는 손목과 손바닥 화면 위치",
+    "시작 파지와 팔 한 주기의 순서"
+  ],
+  "assumed": [
+    "깊이와 절대 배율",
+    "가려진 손가락과 손 비틀림",
+    "흉곽 접촉의 정확한 해부학 위치",
+    "손가락은 손별 고정 파지 초안"
+  ],
+  "scope": "Settled starting grip plus one arm cycle, not approach/release or a full procedure. The cloned c9 arm uses presentation two-bone IK, not the anatomical force rig.",
+  "limitations": "No motion capture, clinical contact/pressure validation, force model, live free-joint following, grading integration or Quest performance claim.",
+  "baselineCommitPlayUnverified": "a1d96c1",
+  "validation": {
+    "frames": 248,
+    "jointsPerHand": 26,
+    "fps": 30,
+    "durationSeconds": 8.233333333333333,
+    "finiteNormalizedPoses": true
+  }
+}

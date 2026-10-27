@@ -1,0 +1,10 @@
+{
+  "renderDirectory": "C:\\UnityProjects\\GuideChuna\\Captures\\Rib2HandsReview_V02_20261027\\render_20261027_101420_188",
+  "renderedFrames": 248,
+  "fps": 30,
+  "videoDurationSeconds": 8.266666666666667,
+  "guideVideo": "guide.mp4",
+  "comparisonVideo": "comparison.mp4",
+  "sourceToDraftTimeOffsetSeconds": 56.5,
+  "clinicalAccuracyClaim": false
+}

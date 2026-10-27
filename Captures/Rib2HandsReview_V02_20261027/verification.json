@@ -1,0 +1,14 @@
+{
+  "success": true,
+  "capturedFrames": 248,
+  "sourceFrames": 248,
+  "jointsPerHand": 26,
+  "mainSceneStateUnchanged": true,
+  "protectedFilesUnchanged": 52,
+  "renderReceipt": "render_20261027_101420_188/receipt.json",
+  "captureImplementationHashMatches": true,
+  "newScriptWarnings": 0,
+  "clinicalOrPlayValidation": false,
+  "htmlLocalLinksValid": 4,
+  "minimumHandJointViewportMargin": 0.16355401277542114
+}
