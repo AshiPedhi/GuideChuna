@@ -202,6 +202,19 @@ public class GuideHandPlaybackController
                    HasHandData(frames, true), HasHandData(frames, false));
     }
 
+    /// <summary>11-03 pathProgress — 비율(0~1) 자리의 프레임 하나를 얹는다(재생이 아니라 매 프레임 «사용자보다 조금 앞» 자세를 보여 준다).</summary>
+    public void ApplyFrameAt(
+        List<PoseFrame> frames, float ratio,
+        HandTransformMapper leftGuideHand, HandTransformMapper rightGuideHand,
+        bool hasLeftData, bool hasRightData)
+    {
+        if (frames == null || frames.Count == 0) return;
+        currentGuideFrameIndex = Mathf.Clamp(Mathf.RoundToInt(Mathf.Clamp01(ratio) * (frames.Count - 1)), 0, frames.Count - 1);
+        ApplyFrame(frames[currentGuideFrameIndex], leftGuideHand, rightGuideHand, hasLeftData, hasRightData);
+    }
+
+    public static bool FramesHaveHand(List<PoseFrame> frames, bool left) => HasHandData(frames, left);
+
     /// <summary>붙여 둔 가이드 손을 뗀다. 손은 마지막 자리에 남는다.</summary>
     public static void DetachFromHead(HandTransformMapper leftGuideHand, HandTransformMapper rightGuideHand)
     {
