@@ -65,7 +65,10 @@ public class UserSelectionHandler
             return;
         }
 
-        foreach (var user in users)
+        // 2026-10-27: 가나다순 정렬(종전엔 서버 순서 그대로) — LoginListLayout
+        var sorted = new List<UserData>(users);
+        sorted.Sort((x, y) => LoginListLayout.CompareName(x.username, y.username));
+        foreach (var user in sorted)
         {
             GameObject buttonObj = UnityEngine.Object.Instantiate(buttonPrefab, contentContainer);
 
@@ -89,6 +92,10 @@ public class UserSelectionHandler
             if (textComponent != null)
             {
                 textComponent.text = user.username;
+                // 10-27 V0.9 타일: «Initial» 글자가 있으면 이름 첫 글자를 넣는다
+                var initial = buttonObj.transform.Find("Initial")?.GetComponent<TextMeshProUGUI>();
+                if (initial != null) initial.text = string.IsNullOrEmpty(user.username) ? "" : user.username.Substring(0, 1);
+                LoginListLayout.ApplyLabel(textComponent);   // ★긴 이름도 말줄임 없이 다 보인다
                 textComponent.color = Color.white;
                 ChunaLogger.Log($"[UserSelect] 사용자 버튼 텍스트 설정: {user.username}");
             }
@@ -126,26 +133,5 @@ public class UserSelectionHandler
     }
 
     private void AdjustContentSize(Transform content, int buttonCount)
-    {
-        if (content == null) return;
-
-        var rectTransform = content.GetComponent<RectTransform>();
-        if (rectTransform != null)
-        {
-            float totalHeight = (60 + 10) * buttonCount;
-            rectTransform.sizeDelta = new Vector2(rectTransform.sizeDelta.x, totalHeight);
-            ChunaLogger.Log($"[UserSelect] Content 크기 조정: {totalHeight}");
-        }
-
-        var layout = content.GetComponent<VerticalLayoutGroup>();
-        if (layout == null)
-        {
-            layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.childForceExpandHeight = false;
-            layout.childForceExpandWidth = true;
-            layout.spacing = 10;
-            layout.padding = new RectOffset(10, 10, 10, 10);
-            ChunaLogger.Log("[UserSelect] VerticalLayoutGroup 추가됨");
-        }
-    }
+        => LoginListLayout.AdjustContent(content, buttonCount, "UserSelect");
 }

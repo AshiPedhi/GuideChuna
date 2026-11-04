@@ -111,7 +111,7 @@ public class ScenarioBootstrapper : MonoBehaviour
         if (infoPanelController != null)
         {
             infoPanelController.SetDefaultPositionPreset(config.patientPositionPreset);
-            infoPanelController.SetScenarioTitle(config.scenarioName);
+            infoPanelController.SetScenarioTitle(ScenarioDisplayNames.Full(config.scenarioName));   // 10-27: 화면 이름 표 한 곳(ScenarioDisplayNames)
             if (showDebugLog)
                 ChunaLogger.Log("[ScenarioBootstrapper] InfoPanelController에 위치 프리셋 + 시나리오 타이틀 주입 완료");
         }

@@ -71,8 +71,14 @@ public class LobbyBrowser : MonoBehaviour
              "★되돌리려면 목록에서 빼기만 하면 된다 — 카드는 씬에 그대로 남아 있다.")]
     [SerializeField] private GameObject[] alwaysHiddenCards;
 
+    // ★10-28 테스트용(사용자 «테스트할 거니까 모든 카드 다 활성화») — 숨김 목록은 그대로 두고 무시만 한다.
+    //   내보내기 전에 끈다. 기본값 false(켜진 채 씬이 저장돼도 끄면 바로 원래대로).
+    [Tooltip("★테스트 전용 — 켜면 위 «항상 숨길 카드» 목록을 무시하고 전부 보인다. 배포 전에 끌 것")]
+    [SerializeField] private bool showHiddenCardsForTest = false;
+
     private bool filterIsAll = true;
     private LobbyCategory activeCategory = LobbyCategory.Simple;
+    private bool startedOnce;   // 처음 켜질 때만 '전체'로 맞춘다(OnEnable)
     private string searchLower = string.Empty;
 
     private void Awake()
@@ -95,6 +101,22 @@ public class LobbyBrowser : MonoBehaviour
     private void OnEnable()
     {
         SyncSearch();
+
+        // ★처음 켜질 때는 항상 '전체'(10-29 사용자 «처음 켜질 때 전체 탭 활성화»).
+        //   씬에 ROM진단 탭이 isOn=true로 저장돼 있어(10-29 실측) 그 탭으로 시작했다 — 저장 값과 상관없이 시작은 전체로 맞춘다.
+        //   두 번째부터(팝업 뒤 다시 켜질 때 등)는 고른 탭을 그대로 둔다.
+        if (!startedOnce)
+        {
+            startedOnce = true;
+            CategoryTab first = FindAllTab();
+            if (first != null && first.toggle != null)
+            {
+                if (first.toggle.isOn) { ApplyFilter(first); Refresh(); }
+                else first.toggle.isOn = true;   // onValueChanged → OnTabSelected → Refresh (ToggleGroup이 나머지를 끈다)
+                Debug.Log($"[LobbyBrowser] 시작 탭 = 전체 ({name})");
+                return;
+            }
+        }
 
         // 현재 켜져있는 탭을 반영. 없으면 '전체' 탭을 켠다(리스너가 필터 적용).
         CategoryTab current = null;
@@ -156,7 +178,7 @@ public class LobbyBrowser : MonoBehaviour
     /// <summary>이 카드는 필터와 무관하게 늘 숨기는가.</summary>
     private bool IsAlwaysHidden(GameObject card)
     {
-        if (alwaysHiddenCards == null || card == null) return false;
+        if (showHiddenCardsForTest || alwaysHiddenCards == null || card == null) return false;
 
         for (int i = 0; i < alwaysHiddenCards.Length; i++)
             if (alwaysHiddenCards[i] == card) return true;

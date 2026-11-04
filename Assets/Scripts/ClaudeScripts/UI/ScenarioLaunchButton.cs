@@ -63,6 +63,22 @@ public class ScenarioLaunchButton : MonoBehaviour
         // 모멘터리 복구: 로그인 팝업 등으로 씬 전환이 없을 수 있으니 눌린 상태를 즉시 되돌린다.
         toggle.SetIsOnWithoutNotify(false);
 
+        // 2026-10-27: 로그인돼 있고 TrainingScene으로 가는 카드면 모드 팝업(VR/XR × 실습/평가)을 먼저 띄운다.
+        //   씬을 따로 지정한 카드(실측 기록 씬 등)는 모드가 의미 없어 종전대로 바로 간다.
+        //   팝업이 씬에 없으면 종전대로 — 실습 씬에서 모드를 고른다.
+        if (lobbyAuthUI != null && lobbyAuthUI.IsLoggedIn && string.IsNullOrWhiteSpace(sceneOverride))
+        {
+            var popup = LobbyModePopup.Instance;
+            if (popup != null)
+            {
+                var card = GetComponent<LobbyItemCard>();
+                var photo = transform.Find("Content/Background/사진")?.GetComponent<UnityEngine.UI.Image>();   // 카드 사진 칸(10-27 분리)
+                var sub = transform.Find("Content/Background/Elements/Label (1)")?.GetComponent<TMPro.TMP_Text>();   // 카드 부제 = 기법명
+                popup.Show(scenarioIndex, card != null ? card.DisplayName : name, lobbyAuthUI, photo != null ? photo.sprite : null, sub != null ? sub.text : null);
+                return;
+            }
+        }
+
         if (lobbyAuthUI != null)
             lobbyAuthUI.OnScenarioCardClicked(scenarioIndex, sceneOverride);   // 로그인 체크·팝업·인덱스저장·씬로드 = 브레인이 처리
         else

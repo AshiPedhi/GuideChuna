@@ -608,12 +608,8 @@ public class DynamicResultTableUI : BaseUIPanel
     public static string DisplayScenarioName(string internalName)
     {
         if (string.IsNullOrEmpty(internalName)) return internalName;
-        switch (internalName)
-        {
-            // 2026-09-07 사용자 지시: 표기는 "경추ROM진단"이다(이전 표기 "ROM진단"에서 바꿈).
-            case "경추ROM측정": return "경추ROM진단";
-            default:            return internalName;
-        }
+        // 2026-10-27: 화면 이름은 ScenarioDisplayNames 한 곳에서 정한다(«경추ROM측정 → 경추ROM진단» 09-07 지시도 그 표에 있다)
+        return ScenarioDisplayNames.Full(internalName);
     }
 
     /// <summary>
