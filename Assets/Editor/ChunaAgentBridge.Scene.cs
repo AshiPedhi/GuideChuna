@@ -155,11 +155,13 @@ public static partial class ChunaAgentBridge
 
         // --dev=0|1 — Development Build를 정해 두고 빌드한다(10-22: 스토어 RC는 끈다). 안 주면 지금 값 그대로.
         if (a.TryGetValue("dev", out var devText) && devText.Length > 0) EditorUserBuildSettings.development = devText == "1";
-        var opt = BuildOptions.AutoRunPlayer;
+        // --run=0 — APK만 만들고 기기에 설치 · 실행하지 않는다(10-28 사용자 «앱은 빌드만»). 안 주면 종전대로 설치 · 실행.
+        bool run = Get(a, "run", "1") != "0";
+        var opt = run ? BuildOptions.AutoRunPlayer : BuildOptions.None;
         if (EditorUserBuildSettings.development) opt |= BuildOptions.Development;
         try { File.Delete(BuildResultPath); } catch (Exception) { }
 
-        sb.Append("빌드를 시작한다(끝나면 기기에서 실행) — ").Append(path).Append('\n');
+        sb.Append(run ? "빌드를 시작한다(끝나면 기기에서 실행) — " : "빌드만 한다(설치 · 실행 안 함) — ").Append(path).Append('\n');
         sb.Append("  씬 ").Append(scenes.Length).Append("개: ").Append(string.Join(", ", scenes)).Append('\n');
         sb.Append("  Development ").Append(EditorUserBuildSettings.development ? "켬" : "끔").Append('\n');
         sb.Append("  결과는 Temp/chuna-bridge/build-result.txt 와 Editor.log «[에이전트브리지] 빌드 끝»\n");

@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "PYTHONIOENCODING=utf-8 \"C:/Users/USER/AppData/Local/Python/pythoncore-3.14-64/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/tools/change-guard.py\" 2>/dev/null || true",
+            "timeout": 20,
+            "statusMessage": "검증 게이트 확인 중"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -110,6 +110,14 @@ public static partial class ChunaAgentBridge
                 case "set": ok = DoSet(sb, args, items, out err); break;
                 case "refresh": DoRefresh(sb, args); break;
                 case "missing": DoMissing(sb, args); break;
+                case "menu":
+                    // 2026-10-27: 프로젝트 도구 메뉴만 실행한다(★GuideChuna/ 아래로 제한 — 엔진 메뉴는 못 부른다)
+                    string menuPath = Get(args, "path", "");
+                    if (!menuPath.StartsWith("GuideChuna/")) { ok = false; err = "GuideChuna/ 아래 메뉴만 실행한다: " + menuPath; break; }
+                    ok = EditorApplication.ExecuteMenuItem(menuPath);
+                    if (!ok) err = "메뉴를 못 찾았거나 실행이 거부됐다: " + menuPath;
+                    else sb.Append("실행: ").Append(menuPath);
+                    break;
                 default:
                     // ★씬 편집·캡처·재생 명령은 ChunaAgentBridge.Scene.cs에 있다(2026-09-18).
                     if (!TrySceneCommand(cmd, sb, args, out ok, out err))

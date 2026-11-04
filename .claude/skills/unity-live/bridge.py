@@ -55,12 +55,13 @@ USAGE = """쓰는 법 — 조회
   bridge.py add-comp --path=Root/Obj --type=컴포넌트이름
   bridge.py scene-save [--path=Assets/Scenes/새씬.unity]
   bridge.py build-add --path=Assets/Scenes/새씬.unity
+  bridge.py menu --path="GuideChuna/…"                      # 프로젝트 도구 메뉴 실행(GuideChuna/ 아래만 · 2026-10-27)
 
 쓰는 법 — 캡처·재생
   bridge.py capture [--view=scene|game] [--label=이름] [--frame=Root/Obj] [--w=1600 --h=900]
                                                                # → <프로젝트>/Captures/날짜/시각_이름.png
   bridge.py play  /  bridge.py stop
-  bridge.py build-run      # Build And Run(켜진 씬·마지막 경로·Development 그대로). 즉시 «시작» 응답,
+  bridge.py build-run [--run=0]  # --run=0 = APK만(설치·실행 안 함) · 기본 Build And Run(켜진 씬·마지막 경로·Development 그대로). 즉시 «시작» 응답,
                            # 결과는 Temp/chuna-bridge/build-result.txt · Editor.log «[에이전트브리지] 빌드 끝» (2026-09-29)
 
 옵션

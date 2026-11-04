@@ -49,6 +49,26 @@ HEARTBEAT_STALE = 120   # 초. ★브리지가 컴파일 중이면 ping 하나�
 NOWIN = 0x08000000 if os.name == "nt" else 0          # CREATE_NO_WINDOW
 
 DEFAULT_OUT = r"D:\추나녹화"
+# ★11-03 로그 시각표: Editor.log 줄에는 시각이 없다. 녹화하는 동안 확인할 때마다 Editor.log 크기(바이트)를 적어 두면
+#   «로그 몇 바이트째 = 영상 몇 초»가 된다 → analyze.py가 로그 사건을 영상 시각에 붙인다. 앱 코드는 안 건드린다.
+EDITOR_LOG = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "Unity", "Editor", "Editor.log")
+
+
+def log_size():
+    try:
+        return os.path.getsize(EDITOR_LOG)
+    except OSError:
+        return -1
+
+
+def save_logmap(path, samples):
+    if not path or not samples:
+        return
+    try:
+        with open(path + ".logmap.json", "w", encoding="utf-8") as f:
+            json.dump({"editor_log": EDITOR_LOG, "samples": samples}, f)
+    except OSError as e:
+        log("[녹화] ★로그 시각표를 못 썼다 — %s" % e)
 FFMPEG = r"C:\Users\USER\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.2-full_build\bin\ffmpeg.exe"
 
 
@@ -324,6 +344,7 @@ def cmd_watch(a):
     proc = None
     path = None
     started = 0.0
+    logmap = []
     warned_bridge = False
 
     try:
@@ -360,18 +381,26 @@ def cmd_watch(a):
                 path = out_path(a.out, a.label)
                 proc = start_ffmpeg(title, path, a.fps, a.crop, region)
                 started = time.time()
+                logmap = [[0.0, log_size()]]
                 save_state({"path": path, "title": title, "started": started})
                 log("[녹화] 시작 — %s" % path)
                 log("        창 '%s'" % title)
+            elif playing and proc is not None:
+                logmap.append([round(time.time() - started, 2), log_size()])
             elif not playing and proc is not None:
+                logmap.append([round(time.time() - started, 2), log_size()])
                 stop_ffmpeg(proc)
                 secs = time.time() - started
+                save_logmap(path, logmap)
+                logmap = []
                 log("[녹화] Play가 끝났다 — %.0f초 기록" % secs)
                 proc = None
                 # ★잘못 눌렀다가 곧 끈 판은 스스로 지운다(09-21 사용자 지시) — 묻지 않는다.
                 if secs < a.min_seconds:
                     if path and os.path.exists(path):
                         os.remove(path)
+                        if os.path.exists(path + ".logmap.json"):
+                            os.remove(path + ".logmap.json")
                         log("[녹화] %.0f초짜리라 지웠다(%d초 미만은 잘못 누른 것으로 본다)"
                             % (secs, a.min_seconds))
                     path = None
@@ -381,7 +410,9 @@ def cmd_watch(a):
             time.sleep(a.poll)
     finally:
         if proc is not None:
+            logmap.append([round(time.time() - started, 2), log_size()])
             stop_ffmpeg(proc)
+            save_logmap(path, logmap)
 
     if path and os.path.exists(path):
         mb = os.path.getsize(path) / 1048576.0
@@ -558,6 +589,8 @@ def cmd_rm(a):
         log("★지울 것이 없다 — %s" % src)
         return 1
     os.remove(src)
+    if os.path.exists(src + ".logmap.json"):
+        os.remove(src + ".logmap.json")
     log("[녹화] 지웠다 — %s" % src)
     return 0
 
