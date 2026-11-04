@@ -261,7 +261,8 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
             status = "LOGOFF",
             runUser = runUser,
             runContents = runContents,
-            deviceInfo = string.Empty
+            // ★11-04 명세 «IP주소 · 배터리 잔량» — 종전엔 빈 글자라 로그오프로는 IP가 안 올라갔다(사용자: 로그오프 1회로 미러링 IP를 올린다)
+            deviceInfo = GetLogoffDeviceInfo()
         };
 
         string url = BuildUrl("/device/logoff");
@@ -270,8 +271,10 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
         try
         {
             LogDebug($"로그오프 시작: {runUser}");
+            Debug.Log($"[AuthService] 로그오프 보냄 · {url} · {json}");   // ★릴리스에서도 남긴다(ChunaLogger는 릴리스에서 잘린다)
 
             string result = await PostAsyncRaw(url, json);
+            Debug.Log($"[AuthService] 로그오프 응답 · {result}");
 
             AuthEvents.TriggerLogoutCompleted(runUser);
             LogDebug($"로그오프 완료: {runUser}");
@@ -365,19 +368,36 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
         return urlBuilder.ToString();
     }
 
+    /// <summary>
+    /// 로그온 deviceInfo — 명세 예시 «IP: 168.120.10.10 / 140»(IP · 시리얼 뒤 3자리).
+    /// ★11-04: IP를 미러링 서버와 같은 함수(<see cref="RomLineMonitor.LocalIp"/>)로 구한다.
+    ///   종전 Dns.GetHostEntry(GetHostName())는 Android에서 루프백 · «Unknown»이 나오기 쉽다. 종전엔 «IP: » 머리말도 없었다.
+    /// </summary>
     private string GetDeviceInfo(string deviceSN)
     {
-        var localIPs = Dns.GetHostEntry(Dns.GetHostName()).AddressList;
-        string localIP = localIPs.FirstOrDefault(ip =>
-            ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)?.ToString() ?? "Unknown";
-
         string snShort = deviceSN.Length >= 3
             ? deviceSN.Substring(deviceSN.Length - 3)
             : deviceSN;
 
         urlBuilder.Clear();
-        urlBuilder.Append(localIP).Append(" / ").Append(snShort);
+        urlBuilder.Append("IP: ").Append(DeviceIp()).Append(" / ").Append(snShort);
         return urlBuilder.ToString();
+    }
+
+    /// <summary>로그오프 deviceInfo — 명세 예시 «IP: 168.120.10.10 / Battery: 00%». 배터리를 모르면 «--».</summary>
+    private string GetLogoffDeviceInfo()
+    {
+        float b = SystemInfo.batteryLevel;   // 0~1 · 모르면 −1
+        urlBuilder.Clear();
+        urlBuilder.Append("IP: ").Append(DeviceIp()).Append(" / Battery: ");
+        if (b >= 0f) urlBuilder.Append(Mathf.RoundToInt(b * 100f).ToString("00")).Append('%'); else urlBuilder.Append("--%");
+        return urlBuilder.ToString();
+    }
+
+    private static string DeviceIp()
+    {
+        string ip = RomLineMonitor.LocalIp();
+        return string.IsNullOrEmpty(ip) ? "Unknown" : ip;
     }
 
     private async UniTask<T> PostAsync<T>(string url, string json)

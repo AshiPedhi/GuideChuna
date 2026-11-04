@@ -176,8 +176,9 @@ public class RomLineMonitor
         st.Flush();
     }
 
-    /// <summary>이 기기가 망에서 쓰는 주소(IPv4). 못 찾으면 빈 글자.</summary>
-    private static string LocalIp()
+    /// <summary>이 기기가 망에서 쓰는 주소(IPv4). 못 찾으면 빈 글자.
+    /// ★11-04 서버 로그오프(deviceInfo의 IP)도 이 함수를 쓴다 — 미러링 서버 주소와 서버에 올리는 주소가 같아야 한다.</summary>
+    public static string LocalIp()
     {
         // 바깥 주소로 «연결»만 해 보면(UDP라 실제로 보내는 것은 없다) 그쪽으로 나가는 내 주소가 나온다.
         try

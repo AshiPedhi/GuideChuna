@@ -101,6 +101,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     private int currentUserID;
     private string currentUsername;
     private string savedDeviceSN;
+
+    /// <summary>로그인돼 있는가 — 로비 모드 팝업이 팝업을 띄울지(로그인 됨) 로그인 안내로 넘길지 가른다(2026-10-27).</summary>
+    public bool IsLoggedIn => !string.IsNullOrEmpty(currentUsername);
+
+    /// <summary>로그인한 사람 이름(없으면 null/빈 값) — 로비 우측 상단 이름 표시가 읽는다(2026-10-27).</summary>
+    public string CurrentUsername => currentUsername;
     #endregion
 
     #region User Data
@@ -498,6 +504,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     #endregion
 
     #region Authentication Flow
+    /// <summary>앱 실행당 한 번만 — 로비로 돌아올 때마다 다시 올리지 않는다(static · 씬이 바뀌어도 남는다).</summary>
+    private static bool deviceIpUploaded;
+
     private async UniTaskVoid AuthenticateDevice()
     {
         try
@@ -515,6 +524,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             {
                 ShowLicenseError();
                 return;
+            }
+
+            // ★11-04 사용자 «최초에 디바이스에서 앱 실행하고 인증한 뒤에 로그오프 1회 호출해서 디바이스 IP 업로드»
+            //   (OneNote 사업화 11월 «Meta Quest Logon/Logoff API · deviceinfo에 IP주소 Update → 미러링 IP주소로 사용»).
+            //   앱 실행당 한 번 · runUser = none(명세 «사용자 이름 Reset») · 실패해도 진행은 막지 않는다(PerformLogout이 삼킨다).
+            if (!deviceIpUploaded)
+            {
+                deviceIpUploaded = true;
+                Debug.Log($"[LobbyUI] 기기 인증 뒤 로그오프 1회 — 기기 IP 올림 · SN {currentDeviceSN}");
+                authFlowManager.PerformLogout(currentDeviceSN, "none").Forget();
             }
 
             allUsers = await authFlowManager.LoadUserList(currentOrgID);
@@ -549,8 +568,9 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         // 로그인 체크
         if (string.IsNullOrEmpty(currentUsername))
         {
-            ChunaLogger.LogWarning("[LobbyUI] ⚠️ 로그인이 필요합니다!");
-            popupHandler.ShowLoginRequiredPopup();
+            // 10-28 사용자 «로그인하라는 안내가 굳이 필요 없다» — 안내 팝업 없이 로그인 판을 바로 띄운다(안내 팝업 코드는 남긴다)
+            ChunaLogger.LogWarning("[LobbyUI] ⚠️ 로그인 전 — 로그인 판을 바로 띄운다");
+            ShowLoginPanel();
             return;
         }
 
@@ -577,7 +597,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
         {
             // 로그인 안 되어 있으면 조 선택 패널 표시
             ChunaLogger.Log("[LobbyUI] ➡️ 로그인 안 되어 있음 - 조 선택 패널 표시");
-            gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
+            ShowLoginPanel();
         }
         else
         {
@@ -585,6 +605,16 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             ChunaLogger.Log($"[LobbyUI] ➡️ 로그인되어 있음 ({currentUsername}) - 로그아웃 확인 팝업 표시");
             popupHandler.ShowLogoutConfirmPopup();
         }
+    }
+
+    /// <summary>로그인 안내 팝업의 [닫기](10-27 V0.9 대화상자) — 팝업만 닫는다.</summary>
+    public void CloseLoginRequiredPopup() => popupHandler.HideLoginRequiredPopup();
+
+    /// <summary>조 · 이름 판의 ✕(10-27 V0.9) — 두 판을 다 닫는다(로그인 그만두기).</summary>
+    public void CloseSelectionPanels()
+    {
+        gradeSelectionHandler.Hide();
+        userSelectionHandler.Hide();
     }
 
     private void OnGradeBackButtonClicked()
@@ -597,7 +627,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         ChunaLogger.Log("[LobbyUI] 사용자 선택 뒤로가기 클릭");
         userSelectionHandler.Hide();
-        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
+        ShowLoginPanel();
     }
 
     private void OnExitButtonClicked()
@@ -710,12 +740,28 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     #endregion
 
     #region Grade/User Selection
+    // ★10-28 로그인 한 판(시안 V1.4): 조 판과 이름 판에 <b>같은 오브젝트</b>가 물려 있으면 한 판이다 —
+    //   왼쪽 조 목록은 그대로 두고 오른쪽 이름 격자만 바꾼다 · 열 때 첫 조(또는 직전 조)를 골라 둔다.
+    //   두 판이 다르면 종전 두 단계(조 → 이름) 그대로.
+    private bool IsOnePanelLogin => gradeSelectionPanel != null && gradeSelectionPanel == userSelectionPanel;
+
+    private void ShowLoginPanel()
+    {
+        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
+        if (!IsOnePanelLogin || usersByGrade == null || usersByGrade.Count == 0) return;
+        string first = null;
+        foreach (var g in usersByGrade.Keys)
+            if (first == null || LoginListLayout.CompareGrade(g, first) < 0) first = g;
+        OnGradeSelected(!string.IsNullOrEmpty(selectedGrade) && usersByGrade.ContainsKey(selectedGrade) ? selectedGrade : first);
+    }
+
     private void OnGradeSelected(string grade)
     {
         selectedGrade = grade;
-        ChunaLogger.Log($"[LobbyUI] 조 선택: {grade}");
+        ChunaLogger.Log($"[LobbyUI] 조 선택: {grade} (한 판={IsOnePanelLogin})");
 
-        gradeSelectionHandler.Hide();
+        if (IsOnePanelLogin) gradeSelectionHandler.MarkSelected(grade);
+        else gradeSelectionHandler.Hide();
 
         if (usersByGrade.ContainsKey(selectedGrade))
         {
@@ -749,6 +795,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
             ChunaLogger.Log($"[LobbyUI] 로그인 정보 저장 완료 - currentUsername: '{currentUsername}', currentUserID: {currentUserID}");
 
             userSelectionHandler.Hide();
+            if (IsOnePanelLogin) gradeSelectionHandler.Hide();   // 한 판이면 왼쪽 조 목록도 같이 치운다
             UpdateUserInfoPanel();
 
             // 시나리오 카드 활성화
@@ -900,7 +947,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     {
         ChunaLogger.Log("[LobbyUI] 로그인 팝업 - 유저 목록으로 이동");
         popupHandler.HideLoginRequiredPopup();
-        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
+        ShowLoginPanel();
     }
 
     /// <summary>
@@ -1171,7 +1218,7 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     [ContextMenu("Test - Show Grade Selection")]
     private void Debug_ShowGradeSelection()
     {
-        gradeSelectionHandler.ShowPanel(usersByGrade, OnGradeSelected);
+        ShowLoginPanel();
     }
 
     [ContextMenu("Test - Hide All Panels")]
