@@ -108,7 +108,8 @@ public class ChunaWebMirror : MonoBehaviour
 
         cb = new CommandBuffer { name = "WebMirrorCapture" };
         cb.Blit(BuiltinRenderTextureType.CurrentActive, eyeCopy);
-        SetChoice(0);
+        SetChoice(2);   // ★11-04 사용자 «미러링 디폴트 1280으로 하라니까» — 기본 가로 1280(종전 0 = 640 · ROM 관제는 10-23부터 1280). 관제 화면 고르기는 그대로
+
         ready = true;
         Debug.Log($"[웹미러] 시작 — {server.Url} · 영상 포트 {video.Port} · 눈 화면 {eye.width}×{eye.height} {eye.dimension} {eye.graphicsFormat} · " +
                   $"출력 {outW}×{outH} · 뒤집기 {flip} · 빈 자리 회색 {BgGray} · 그래픽 {SystemInfo.graphicsDeviceType}");

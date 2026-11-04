@@ -260,7 +260,8 @@ poll();
 // 미러링 — 받자마자 다음 장을 묻는다. 헤드셋이 만드는 속도만큼만 오고 쌓이지 않는다.
 // ★10-21: 브라우저가 실제로 받은 장수와 한 장 받는 시간(요청 → 다 받음)을 잰다 — 헤드셋이 만든 장수와 차이가 나면 와이파이 쪽이다.
 let got = 0, gotMs = 0, gotBytes = 0;
-let mode = 'jpeg';   // 'jpeg' = 사진을 한 장씩(/cam.jpg) · 'video' = 영상(H.264, 헤드셋 :videoPort/video)
+// ★11-04: 처음엔 'wait' — 영상을 먼저 시도하고, 영상이 안 될 때만 사진으로 간다(종전엔 늘 사진으로 시작해 헤드셋이 앱 시작 직후부터 JPEG를 만들었다).
+let mode = 'wait';   // 'wait' = 영상 시도 중(아무것도 안 부름) · 'jpeg' = 사진을 한 장씩(/cam.jpg) · 'video' = 영상(H.264, 헤드셋 :videoPort/video)
 const jpegLoop = (function stream() {
   const empty = $('eCam');
   let url = null, running = false;
@@ -287,13 +288,28 @@ const jpegLoop = (function stream() {
   return { resume() { if (!running) load(); } };
 })();
 
+// 영상이 안 될 때만 사진으로 — 이유를 콘솔에 남긴다
+function goJpeg(why) {
+  if (mode === 'jpeg') return;
+  mode = 'jpeg'; vid.style.display = 'none'; img.style.display = '';
+  $('mmode').textContent = '사진';
+  console.log('[미러링] 사진으로 — ' + why);
+  jpegLoop.resume();
+}
+// 4초 안에 영상 포트를 못 알아내면(옛 헤드셋 앱 · 영상 없음) 사진으로
+setTimeout(() => { if (mode === 'wait' && !videoTry) goJpeg('4초 안에 영상 포트 없음'); }, 4000);
+
 // ── 영상(H.264) — 10-21 사용자 지시: 배터리 · 발열을 줄이려 JPEG 대신 헤드셋 하드웨어 압축 ──
 //   헤드셋(RomVideoEncoder)이 :videoPort/video로 Annex-B 스트림을 흘린다 → 접근 단위(한 장)로 잘라 jmuxer가 MSE(<video>)에 넣는다.
 //   첫 장이 5초 안에 안 오거나 끊기면 사진(JPEG)으로 돌아간다. 장이 한 번도 안 온 실패가 3번 이어지면 다시 시도하지 않는다.
 const vid = $('vCam');
 let videoPort = 0, videoTry = null, videoFails = 0;
 function startVideo() {
-  if (videoTry || !videoPort || videoFails >= 3 || !window.MediaSource || typeof JMuxer === 'undefined') return;
+  if (videoTry || !videoPort) return;
+  if (videoFails >= 3 || !window.MediaSource || typeof JMuxer === 'undefined') {
+    goJpeg(videoFails >= 3 ? '영상 실패 3번' : '이 브라우저는 영상(MSE) 재생 불가');
+    return;
+  }
   const jm = new JMuxer({ node: vid, mode: 'video', flushingTime: 0, fps: 15, clearBuffer: true, debug: false, onError: () => {} });
   const ctrl = new AbortController();
   let frames = 0, last = 0, ended = false;
@@ -307,9 +323,9 @@ function startVideo() {
     try { jm.destroy(); } catch (e) { }
     if (!frames) videoFails++; else videoFails = 0;
     videoTry = null;
-    if (mode === 'video') { mode = 'jpeg'; vid.style.display = 'none'; img.style.display = ''; jpegLoop.resume(); }
-    $('mmode').textContent = '사진';
     console.log('[미러링] 영상 멈춤 — ' + why + ' · 받은 장 ' + frames);
+    // 다시 붙는 동안 화면이 비지 않게 사진으로(영상이 다시 오면 첫 장에서 영상으로 돌아간다)
+    goJpeg('영상 멈춤(' + why + ')');
     setTimeout(startVideo, 1500);   // 해상도를 바꾸면 헤드셋이 끊는다 — 새 크기로 다시 붙는다
   }
   // 헤드셋은 한 장(Annex-B 접근 단위)마다 앞에 길이 4바이트(빅엔디언)를 붙여 보낸다(10-21) — 다 받는 즉시 튼다.

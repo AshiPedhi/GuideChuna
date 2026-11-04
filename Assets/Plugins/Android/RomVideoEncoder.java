@@ -91,8 +91,12 @@ public class RomVideoEncoder {
     /** 압축기를 (다시) 만든다. 크기가 바뀌면 붙어 있던 화면을 끊는다 — 브라우저가 새 SPS로 다시 붙는다. 이름 또는 «실패: …». */
     public synchronized String configure(int w, int h, int fps, int bitrate) {
         if (codec != null && w == width && h == height) return codec.getName();
+        // ★11-04 기기 실측: 앱을 켜자마자 붙은 영상 화면이 첫 장도 못 받고 끊겼다 3/3(«보는 화면 1 → 0» = 압축기를 «처음» 만든 순간).
+        //   크기가 실제로 바뀔 때만(앞선 압축기가 있을 때) 끊는다 — 처음 만들 때는 붙은 화면을 그대로 두고 첫 키프레임(SPS 포함)부터 보낸다(waitKey).
+        boolean resized = codec != null;
         stopCodec();
-        for (Client c : clients) c.close();
+        if (resized) for (Client c : clients) c.close();
+        else for (Client c : clients) c.waitKey = true;
         width = w; height = h; this.fps = fps; this.bitrate = bitrate;
         try {
             MediaFormat f = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h);
