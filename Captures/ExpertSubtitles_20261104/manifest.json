@@ -1,0 +1,204 @@
+{
+  "date": "2026-11-04",
+  "status": "음성 인식 대조 및 문장 정리 초안. 사람의 청취 검수와 Unity Play 검증 전.",
+  "video_count": 7,
+  "total_cues": 203,
+  "review_points": 20,
+  "human_audio_review": false,
+  "unity_play_verified": false,
+  "timing": "ASR word timestamps; edited phrases interpolate within their original speech intervals.",
+  "files": [
+    {
+      "name": "제2늑골_상방변위",
+      "cues": 23,
+      "sha256": "f692de57601e410eddb86969d3d3a24bccaab59422075ba2195a20698f161cfd",
+      "source_video": "Assets\\Resources\\Videos\\제2늑골_상방변위.mp4",
+      "source_size": 9411450,
+      "source_mtime_ns": 1793686298567315900,
+      "duration": 89.0666875,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\제2늑골_상방변위.raw.json"
+    },
+    {
+      "name": "제1늑골 교정기법",
+      "cues": 27,
+      "sha256": "a325eaa4d3d48868f6f8995d269e6233f70d00f8da1f72c5414d382d3a429756",
+      "source_video": "Assets\\Resources\\Videos\\제1늑골 교정기법.mp4",
+      "source_size": 10187532,
+      "source_mtime_ns": 1793686374669386600,
+      "duration": 100.7786875,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\제1늑골 교정기법.raw.json"
+    },
+    {
+      "name": "앙와위_흉추_신전변위",
+      "cues": 18,
+      "sha256": "e7f6bc1fdc10f3def1eab03b36dd6db42134d2635bf184e5bb5dbfde52e4bf30",
+      "source_video": "Assets\\Resources\\Videos\\앙와위_흉추_신전변위.mp4",
+      "source_size": 5574498,
+      "source_mtime_ns": 1793686331305350000,
+      "duration": 68.5653125,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\앙와위_흉추_신전변위.raw.json"
+    },
+    {
+      "name": "복와위_하부흉추_굴곡변위",
+      "cues": 23,
+      "sha256": "576814be8b005da6451bbc944dcd06e4eedb0c3d8859933a58bc7996403443c1",
+      "source_video": "Assets\\Resources\\Videos\\복와위_하부흉추_굴곡변위.mp4",
+      "source_size": 6915004,
+      "source_mtime_ns": 1793686341552534600,
+      "duration": 91.0506875,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\복와위_하부흉추_굴곡변위.raw.json"
+    },
+    {
+      "name": "두개골OM교정",
+      "cues": 35,
+      "sha256": "119f7d6c1b4bb8eb65cf244af9d25428c9b631b77837f40ab139272359ecbca3",
+      "source_video": "Assets\\Resources\\Videos\\두개골OM교정.mp4",
+      "source_size": 12537213,
+      "source_mtime_ns": 1793686163695912500,
+      "duration": 130.0053125,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\두개골OM교정.raw.json"
+    },
+    {
+      "name": "두개골PM교정",
+      "cues": 28,
+      "sha256": "20d6a4d5ee70e6d04b375ba018620e1d2358598dd823b27e8009c1d67226194c",
+      "source_video": "Assets\\Resources\\Videos\\두개골PM교정.mp4",
+      "source_size": 10763877,
+      "source_mtime_ns": 1793686206336676900,
+      "duration": 107.0506875,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\두개골PM교정.raw.json"
+    },
+    {
+      "name": "두개골PJ교정",
+      "cues": 49,
+      "sha256": "563e1b852089802311543196d6acdd780c5f592f45553ca1d6c27e473b60d856",
+      "source_video": "Assets\\Resources\\Videos\\두개골PJ교정.mp4",
+      "source_size": 17689020,
+      "source_mtime_ns": 1793686190371385300,
+      "duration": 183.6373125,
+      "raw_transcript": "Captures\\ExpertSubtitles_20261104\\large_v3\\두개골PJ교정.raw.json"
+    }
+  ],
+  "needs_review": [
+    {
+      "video": "두개골OM교정",
+      "start": 74.39,
+      "end": 79.809,
+      "reason": "오른손은 하방으로, [손가락·힘 방향 청취 확인 필요]"
+    },
+    {
+      "video": "두개골OM교정",
+      "start": 89.95,
+      "end": 95.15,
+      "reason": "굴곡과 외회전, [힘 방향 청취 확인 필요] 힘을 강하게 하고요."
+    },
+    {
+      "video": "두개골OM교정",
+      "start": 109.75,
+      "end": 113.499,
+      "reason": "[호흡 횟수 청취 확인 필요] 호흡을 이용해서 교정하고"
+    },
+    {
+      "video": "두개골PJ교정",
+      "start": 0.0,
+      "end": 2.08,
+      "reason": "첫 소개 구절은 medium에서만 인식됨. 별도 도입 자막으로 복원하며 타이밍 수동 확인 필요."
+    },
+    {
+      "video": "두개골PJ교정",
+      "start": 60.44,
+      "end": 65.739,
+      "reason": "자이고매틱 아치와 유양돌기를 잡은 손은 약간 하방으로, [힘 방향 청취 확인 필요] 힘을"
+    },
+    {
+      "video": "두개골PJ교정",
+      "start": 89.71,
+      "end": 92.709,
+      "reason": "잡은 손은 굴곡으로, 템포럴 본을 잡은 손은 약간 하방으로 [힘 방향 청취 확인 필요] 힘을"
+    },
+    {
+      "video": "두개골PJ교정",
+      "start": 132.41,
+      "end": 137.159,
+      "reason": "신전하고 오른손으로 잡은 손도 최대한 [내·외회전 방향 청취 확인 필요] 가하게 됩니다."
+    },
+    {
+      "video": "두개골PJ교정",
+      "start": 161.86,
+      "end": 167.09,
+      "reason": "리듬 관련 불명확한 영어 동사를 '바꿀 수 있는'으로 뜻 정리. 영문 원어 청취 확인 필요."
+    },
+    {
+      "video": "두개골PM교정",
+      "start": 69.35,
+      "end": 75.35,
+      "reason": "족방→두방은 두 인식 결과의 유사 발음 및 기존 용어를 대조한 교정. 방향 최종 청취 확인 필요."
+    },
+    {
+      "video": "복와위_하부흉추_굴곡변위",
+      "start": 9.61,
+      "end": 14.07,
+      "reason": "[거리·위치 표현 청취 확인 필요] 횡돌기를 잡아서"
+    },
+    {
+      "video": "복와위_하부흉추_굴곡변위",
+      "start": 44.5,
+      "end": 48.019,
+      "reason": "주의할 점은 중앙에서 [거리 수치 청취 확인 필요] 벗어나게 되면"
+    },
+    {
+      "video": "복와위_하부흉추_굴곡변위",
+      "start": 51.62,
+      "end": 56.94,
+      "reason": "벗어나지 않게 중앙에서 [거리 수치 청취 확인 필요] 이내에 양쪽 두상골로 손을 잡습니다."
+    },
+    {
+      "video": "복와위_하부흉추_굴곡변위",
+      "start": 61.06,
+      "end": 66.696,
+      "reason": "후방에서 전방으로 [동작 구절 청취 확인 필요] 가벼운 바디드롭으로"
+    },
+    {
+      "video": "앙와위_흉추_신전변위",
+      "start": 54.07,
+      "end": 57.769,
+      "reason": "[지지손 관련 구절 청취 확인 필요] 체중으로 바디드롭을 가볍게 가하면"
+    },
+    {
+      "video": "제1늑골 교정기법",
+      "start": 36.44,
+      "end": 41.16,
+      "reason": "그 부위에 정확하게 손을 대셔서 [접촉 부위 명칭 청취 확인 필요] 이용해서"
+    },
+    {
+      "video": "제1늑골 교정기법",
+      "start": 41.76,
+      "end": 46.9,
+      "reason": "[힘 방향 청취 확인 필요] 안쪽으로 지지합니다."
+    },
+    {
+      "video": "제1늑골 교정기법",
+      "start": 84.61,
+      "end": 88.22,
+      "reason": "[반복 횟수 청취 확인 필요] 반복하고 돌아와서"
+    },
+    {
+      "video": "제2늑골_상방변위",
+      "start": 8.24,
+      "end": 10.72,
+      "reason": "델토이드 파트 영문 용어 표기 최종 청취 확인. 세 인식 결과가 유사하게 전사했으며 해부학 이론으로 대체하지 않음."
+    },
+    {
+      "video": "제2늑골_상방변위",
+      "start": 29.1,
+      "end": 35.4,
+      "reason": "피시폼(pisiform) 표기는 유사 발음과 두상골 용어를 대조한 교정. 최종 청취 확인 필요."
+    },
+    {
+      "video": "제2늑골_상방변위",
+      "start": 47.13,
+      "end": 52.429,
+      "reason": "내 손은 아래쪽으로 충분히 밀어서 [상방변위 관련 구절 청취 확인 필요] 지지하시고요."
+    }
+  ]
+}

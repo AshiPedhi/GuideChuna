@@ -1,0 +1,97 @@
+{
+  "root": "C:\\UnityProjects\\GuideChuna",
+  "delivery": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104",
+  "expected_files": 7,
+  "total_cues": 203,
+  "error_count": 0,
+  "warning_count": 0,
+  "unity_play_verified": false,
+  "human_audio_review": false,
+  "files": [
+    {
+      "name": "두개골OM교정",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골OM교정_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\두개골OM교정.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골OM교정.mp4",
+      "duration_seconds": 130.004,
+      "cue_count": 35,
+      "unity_cue_count": 35,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "두개골PM교정",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골PM교정_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\두개골PM교정.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골PM교정.mp4",
+      "duration_seconds": 107.049,
+      "cue_count": 28,
+      "unity_cue_count": 28,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "두개골PJ교정",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골PJ교정_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\두개골PJ교정.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\두개골PJ교정.mp4",
+      "duration_seconds": 183.636,
+      "cue_count": 49,
+      "unity_cue_count": 49,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "앙와위_흉추_신전변위",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\앙와위_흉추_신전변위_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\앙와위_흉추_신전변위.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\앙와위_흉추_신전변위.mp4",
+      "duration_seconds": 68.566667,
+      "cue_count": 18,
+      "unity_cue_count": 18,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "복와위_하부흉추_굴곡변위",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\복와위_하부흉추_굴곡변위_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\복와위_하부흉추_굴곡변위.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\복와위_하부흉추_굴곡변위.mp4",
+      "duration_seconds": 91.049,
+      "cue_count": 23,
+      "unity_cue_count": 23,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "제1늑골 교정기법",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\제1늑골 교정기법_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\제1늑골 교정기법.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\제1늑골 교정기법.mp4",
+      "duration_seconds": 100.777,
+      "cue_count": 27,
+      "unity_cue_count": 27,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "제2늑골_상방변위",
+      "asset": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\제2늑골_상방변위_자막.txt",
+      "srt": "C:\\UnityProjects\\GuideChuna\\Captures\\ExpertSubtitles_20261104\\제2늑골_상방변위.srt",
+      "video": "C:\\UnityProjects\\GuideChuna\\Assets\\Resources\\Videos\\제2늑골_상방변위.mp4",
+      "duration_seconds": 89.066667,
+      "cue_count": 23,
+      "unity_cue_count": 23,
+      "identical_delivery_copy": true,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "passed": true
+}
