@@ -173,8 +173,19 @@ public class SceneLoader : MonoBehaviour
     #endregion
 
     #region Coroutines
+    // ★10-30 사용자 «생성될 때 딜레이 — 이런 거 다 잡으라고 로딩창 해 놓은 것» — 로딩 가림막을 씬 밖에 두고
+    //   목표 씬이 자리를 다 잡을 때까지(SceneReadyGate · 상한 ReadyTimeout) 걷지 않는다. 진행 막대 = 씬 읽기 0~70% · 자리 잡기 70~100%
+    private const float ReadyTimeout = 5f;
+    private LoadingOverlay overlay;
+
+    private LoadingOverlay Overlay => overlay != null ? overlay : overlay = LoadingOverlay.Create(transform);
+
+    private static string TitleFor(string scene) => scene == "TrainingScene" ? "실습 준비 중" : scene == "lobby" ? "로비로 이동 중" : "불러오는 중";
+
     private IEnumerator LoadSceneWithLoadingCoroutine(string targetSceneName)
     {
+        Overlay.Show(TitleFor(targetSceneName), "장면을 불러오고 있습니다");
+
         // 1. 로딩씬 로드
         SceneManager.LoadScene("LoadingScene");
 
@@ -189,8 +200,10 @@ public class SceneLoader : MonoBehaviour
         while (asyncLoad.progress < 0.9f)
         {
             // 로딩 진행률: asyncLoad.progress (0.0 ~ 0.9)
+            Overlay.SetProgress(asyncLoad.progress / 0.9f * 0.7f);
             yield return null;
         }
+        Overlay.SetProgress(0.7f);
 
         // 5. 리소스 정리 (Quest 최적화: 씬 활성화 전에 정리)
         Resources.UnloadUnusedAssets();
@@ -198,6 +211,7 @@ public class SceneLoader : MonoBehaviour
 
         // 6. 한 프레임 대기 후 씬 활성화
         yield return null;
+        SceneReadyGate.Begin();
         asyncLoad.allowSceneActivation = true;
 
         // 7. 완전히 활성화될 때까지 대기
@@ -208,6 +222,23 @@ public class SceneLoader : MonoBehaviour
 
         // 8. Camera X 복원
         RestoreCameraX();
+
+        // 9. 자리 잡을 때까지 덮어 둔다 — 머리 추적 안정 + 그 씬이 요구하는 표시(실습 = 자동 맞춤 · 상단 메뉴)
+        Overlay.SetDetail("자리를 맞추고 있습니다");
+        float start = Time.unscaledTime;
+        while (Time.unscaledTime - start < ReadyTimeout)
+        {
+            bool tracked = TrackingReady.Ready();
+            bool ready = tracked && SceneReadyGate.IsSatisfied(targetSceneName);
+            Overlay.SetProgress(0.7f + (tracked ? 0.15f : 0f) + (ready ? 0.15f : 0f));
+            if (ready) break;
+            yield return null;
+        }
+        float took = Time.unscaledTime - start;
+        if (!SceneReadyGate.IsSatisfied(targetSceneName))
+            Debug.LogWarning($"[SceneLoader] '{targetSceneName}' 자리 잡기 {ReadyTimeout}초 넘김 — 못 받은 표시: {SceneReadyGate.Missing(targetSceneName)} · 그대로 연다");
+        Debug.Log($"[SceneLoader] '{targetSceneName}' 준비 끝 — 씬 켠 뒤 {took:F2}초 · 가림막 걷음");
+        Overlay.Hide();
 
         ChunaLogger.Log($"[SceneLoader] '{targetSceneName}' 씬 로드 완료");
     }

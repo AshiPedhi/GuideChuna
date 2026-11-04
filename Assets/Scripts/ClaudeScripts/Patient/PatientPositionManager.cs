@@ -343,6 +343,9 @@ public class PatientPositionManager : MonoBehaviour
                 ChunaLogger.Log($"[PatientPositionManager] 골격 모델 위치 적용: pos={preset.skeletonModelPosition}, rot={preset.skeletonModelRotation}");
         }
 
+        // ★11-04 근골격 카메라를 모델에 묶는다 — 모델은 환자 이동 홀더 안이라 리모컨으로 옮겨지는데 카메라는 안 따라가 빈 화면이 됐다
+        SkeletonCameraFollow.Capture(cameraRoot, skeletonModelRoot);
+
         currentPresetName = preset.presetName;
         ChunaLogger.Log($"[PatientPositionManager] 프리셋 적용 완료: {preset.presetName}");
         return true;

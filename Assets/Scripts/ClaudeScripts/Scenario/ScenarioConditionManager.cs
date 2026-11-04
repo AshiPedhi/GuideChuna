@@ -612,6 +612,19 @@ public class ScenarioConditionManager : MonoBehaviour
         ChunaLogger.Log($"<color=cyan>[ConditionManager] 나레이션 + PassiveStretch: 나레이션 먼저 ({clip.length:F1}초)</color>");
     }
 
+    /// <summary>
+    /// 로딩 가림막(<see cref="LoadingOverlay"/>)이 덮고 있으면 다 걷힐 때까지 기다린다 (2026-10-30 사용자 «로딩 창 사라지기 전부터 음성 안내가 시작된다»).
+    /// 시나리오는 씬이 켜지자마자 시작하고, 가림막은 자동 맞춤(시나리오 시작 뒤에 돈다)을 기다리므로 시나리오 시작을 늦출 수는 없다 — 소리만 늦춘다.
+    /// 나레이션이 끝나야 다음으로 가는 구조라 진행도 같이 밀린다. 가림막이 없으면(로비 첫 실행 · 에디터 직접 Play) 바로 지나간다.
+    /// </summary>
+    private static IEnumerator WaitWhileLoadingCovers()
+    {
+        if (!LoadingOverlay.Covering) yield break;
+        float t0 = Time.realtimeSinceStartup;
+        while (LoadingOverlay.Covering) yield return null;
+        Debug.Log($"[ConditionManager] 나레이션 — 로딩 가림막 걷힐 때까지 {Time.realtimeSinceStartup - t0:F2}초 기다림");
+    }
+
     private IEnumerator PlayNarrationThenPassiveStretch(AudioClip clip, string clipName, SubStepData subStep)
     {
         currentNarrationClip = clip;
@@ -624,6 +637,7 @@ public class ScenarioConditionManager : MonoBehaviour
             yield break;
         }
 
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.clip = clip;
         targetSource.Play();
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
@@ -721,6 +735,7 @@ public class ScenarioConditionManager : MonoBehaviour
             yield break;
         }
 
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.Stop();
         targetSource.clip = clip;
         targetSource.Play();
@@ -801,6 +816,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         // 나레이션 재생
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.clip = clip;
         targetSource.Play();
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
@@ -842,6 +858,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         // 나레이션 재생
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.clip = clip;
         targetSource.Play();
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
@@ -876,6 +893,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         // 나레이션 재생
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.clip = clip;
         targetSource.Play();
         ChunaLogger.Log($"<color=green>[ConditionManager] 나레이션 재생 중: {clipName}</color>");
@@ -1115,6 +1133,7 @@ public class ScenarioConditionManager : MonoBehaviour
         }
 
         // 나레이션 재생
+        yield return WaitWhileLoadingCovers();   // 10-30 로딩 가림막이 다 걷힌 뒤에 말한다
         targetSource.clip = clip;
         targetSource.Play();
 

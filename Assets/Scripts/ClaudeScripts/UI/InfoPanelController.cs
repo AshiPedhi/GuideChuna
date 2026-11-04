@@ -105,6 +105,10 @@ public class InfoPanelController : MonoBehaviour
     [Tooltip("시나리오 진행 UI (가이드패널)")]
     [SerializeField] private GameObject scenarioProgressUI;
 
+    [Tooltip("정보 디스플레이 펼침(2026-10-27). 비우면 종전대로 한 번에 한 페이지만 보인다(배타). " +
+             "채우면 골격 · 영상 · 결과를 동시에 띄우고, 최근 것이 정면에 온다 — 페이지 켜고 끄는 규칙은 그대로 여기서 쥔다.")]
+    [SerializeField] private InfoWindowArranger windowArranger;
+
     [Tooltip("환자 위치 프리셋 관리자 (없으면 자동 검색)")]
     [SerializeField] private PatientPositionManager patientPositionManager;
 
@@ -208,6 +212,48 @@ public class InfoPanelController : MonoBehaviour
         SetupToggleListeners();
         SetupModeSelectionListeners();
         UpdateAllToggleColors();
+
+        // 2026-10-27: 로비 모드 팝업에서 이미 골랐으면 모드 선택 페이지를 건너뛴다(없으면 종전대로)
+        if (!startInSettingsMode && LobbyModeChoice.TryConsume(out var lobbyMode, out var lobbyDifficulty))
+            StartCoroutine(ApplyLobbyModeChoice(lobbyMode, lobbyDifficulty));
+    }
+
+    /// <summary>
+    /// 로비에서 고른 모드로 바로 시작한다 — 사람이 모드 페이지에서 누른 것과 <b>같은 함수</b>(OnModeToggleChanged)를 탄다.
+    /// ★ScenarioConfig가 물린 뒤에 불러야 실측 여부 판단이 맞다(ScenarioSupportsMeasurement) — 최대 3초 기다린다.
+    /// </summary>
+    private System.Collections.IEnumerator ApplyLobbyModeChoice(ModeType mode, DifficultyLevel difficulty)
+    {
+        float until = Time.realtimeSinceStartup + 3f;
+        while (Time.realtimeSinceStartup < until)
+        {
+            if (scenarioManager == null) scenarioManager = FindFirstObjectByType<ScenarioManager>();
+            if (scenarioManager != null && scenarioManager.CurrentConfig != null) break;
+            yield return null;
+        }
+        if (scenarioManager == null || scenarioManager.CurrentConfig == null)
+            ChunaLogger.LogWarning("[InfoPanel] 로비 모드 적용 — 3초 안에 ScenarioConfig가 안 물렸다. 그대로 진행한다(실측 판단이 틀릴 수 있음)");
+
+        // ★11-04: 펼침(창 3개) 구성이면 바로 시작하지 않고 개요 화면에서 [시작]을 기다린다 — 창 배치기가 준비될 때까지 최대 3초 더 본다
+        float untilWin = Time.realtimeSinceStartup + 3f;
+        while (!MultiWindow && windowArranger != null && Time.realtimeSinceStartup < untilWin) yield return null;
+        bool overview = MultiWindow;
+
+        ChunaLogger.Log($"[InfoPanel] 로비에서 고른 모드로 {(overview ? "개요 화면 → [시작] 대기" : "바로 시작(펼침 아님)")}: {mode} · {difficulty}");
+        if (mode == ModeType.Practice) SetDifficultyForPractice(difficulty);
+        SetToggleWithoutNotify(practiceToggle, mode == ModeType.Practice);
+        SetToggleWithoutNotify(evaluationToggle, mode == ModeType.Evaluation);
+        OnModeToggleChanged(mode, autoStart: !overview);
+        if (overview) EnterOverview();
+
+        // ★10-30 사용자 «환자 위치가 원래 최초에 자동 맞춤 되게 되어 있었는데, 모드 선택이 로비로 가면서 없어졌다»
+        //   종전엔 실습 안 모드 페이지 → 시나리오 시작 → InitializeUIPositionOnStart가 '맞춤 설정'을 1회 불렀다.
+        //   로비 경로에서도 한 번 부른다(이미 불렸으면 customPositioningApplied가 막는다).
+        //   추적 전 머리 값으로 맞추지 않게 씬 로드 1.5초 뒤에 부른다(10-29 «추적 전 머리» 사고와 같은 이유)
+        while (!TrackingReady.Ready()) yield return null;
+        bool before = customPositioningApplied;
+        ApplyCustomPositioningOnce();
+        Debug.Log($"[InfoPanel] 로비 경로 자동 맞춤 — {(before ? "이미 불렸음(건너뜀)" : customPositioningApplied ? "1회 부름" : "못 부름(PracticeSettingsController 없음)")} · {Time.timeSinceLevelLoad:F1}s");
     }
 
     void OnEnable()
@@ -484,7 +530,7 @@ public class InfoPanelController : MonoBehaviour
     #endregion
 
     #region 모드 선택 핸들러
-    private void OnModeToggleChanged(ModeType mode)
+    private void OnModeToggleChanged(ModeType mode, bool autoStart = true)
     {
         selectedMode = mode;
         ChunaLogger.Log($"[InfoPanel] 모드 선택: {mode}");
@@ -532,9 +578,99 @@ public class InfoPanelController : MonoBehaviour
         UpdateModeSelectionColors();
         OnModeSelected?.Invoke(selectedMode, selectedDifficulty);
 
-        // 모드 선택 시 자동으로 시나리오 시작
-        StartSimulation();
+        // 모드 선택 시 자동으로 시나리오 시작 — ★11-04 로비 경로 + 펼침이면 개요 화면의 [시작]이 부른다(BeginFromOverview)
+        if (autoStart) StartSimulation();
     }
+
+    #region 실습 개요 → [시작] (2026-11-04)
+    // 사용자 피드백 «실습 시작 버튼 전 개요화면 필요» · «시작(누르면 실습 수행 시간 타이머로 바뀜)» · «실습씬 진입시 최초에 골격 현황 영상 패널 전부 on».
+    // ★펼침(MultiWindow) + 로비 경로에서만 탄다. 옛 단일 패널 · 실습 안 모드 페이지 경로는 종전 그대로(모드를 누르면 바로 시작).
+    // ★타이머는 따로 세지 않는다 — StartSimulation → ScenarioManager.StartScenario → TrainingResultTracker.StartTracking이 시간의 출처다.
+    private bool awaitingStart, positionedAtOverview;
+    private PracticeOverviewPanel overviewPanel;
+
+    /// <summary>개요 화면이 떠 있고 [시작]을 기다리는 중인가. 상단 [시작] 버튼이 본다.</summary>
+    public bool IsAwaitingStart => awaitingStart;
+
+    private void EnterOverview()
+    {
+        awaitingStart = true;
+
+        // ★위치 초기화(UI 배치 → 환자 프리셋 → 맞춤 설정)는 종전엔 시나리오 시작 때 돌았다. 개요에서 사용자가 위치를 고친 뒤
+        //   [시작]에서 다시 돌면 그 조정이 날아간다 → 같은 함수를 지금(개요 진입) 한 번 돌리고, 시작 때는 건너뛴다.
+        InitializeUIPositionOnStart();
+        positionedAtOverview = true;
+
+        // 창 3개를 모두 연다 — 여는 순서 = 자리(정면 → 왼쪽 → 오른쪽 · InfoWindowArranger 고정 칸) = 상단 버튼 순서(근골격 · 진행 현황 · 전문가 영상)의 가운데 · 왼쪽 · 오른쪽
+        OpenAllContentPages();
+
+        // [시작] 전에도 설정(환자 위치 등)은 쓸 수 있어야 한다 — 종전엔 모드를 고르면 곧바로 시작해서 이 상태가 없었다
+        if (settingsToggle != null) settingsToggle.interactable = true;
+
+        ScenarioData preview = scenarioManager != null ? scenarioManager.LoadFilteredScenario() : null;
+
+        // 전문가 영상 — 시나리오 시작 전에는 GuideVideoController가 영상을 안 건다(OnScenarioStarted에서 건다). 개요 화면에서도 보이게 먼저 건다.
+        if (guideVideoController != null && preview != null)
+        {
+            bool loaded = guideVideoController.LoadVideoByName(preview.scenarioName);
+            if (loaded) PlayExpertVideo();
+            ChunaLogger.Log($"[InfoPanel] 개요 — 전문가 영상 '{preview.scenarioName}' {(loaded ? "걸고 전체 재생" : "★없음")}");
+        }
+
+        if (overviewPanel == null) overviewPanel = gameObject.AddComponent<PracticeOverviewPanel>();
+        overviewPanel.Show(resultPage, preview, scenarioManager != null ? scenarioManager.CurrentConfig : null);
+
+        UpdateAllToggleColors();
+        Debug.Log($"[InfoPanel] 개요 화면 · [시작] 대기 · 단계 {(preview != null ? preview.phases.Count : -1)}개 · 창 근골격 {Active(skeletonPage)} · 진행 {Active(resultPage)} · 영상 {Active(expertVideoPage)}");
+    }
+
+    /// <summary>상단 [시작]. 개요를 걷고 시나리오를 시작한다(시간 기록도 여기서 시작된다).</summary>
+    public void BeginFromOverview()
+    {
+        if (!awaitingStart) return;
+        awaitingStart = false;
+        if (overviewPanel != null) overviewPanel.Hide();
+        Debug.Log("[InfoPanel] [시작] — 개요를 걷고 시나리오 시작");
+        StartSimulation();
+        StartCoroutine(SkipOpeningGuideStep());
+    }
+
+    /// <summary>
+    /// ★11-04 사용자 «애초에 시작을 누르기 전 개요에서 설정에 관한 것까지 같이 하고 넘어갈 거야 · 시작 두 번은 필요 없어».
+    ///   CSV 첫 단계(«시작/가이드» — «필요시 [설정]으로 환자 위치를 맞추고 [시작]을 누르세요»)는 개요가 대신했다 → 상단 [시작]이 그 단계를 바로 넘긴다.
+    ///   넘기는 길 = 정면 시작 토글을 켜는 것(사람이 누른 것과 같은 경로 · 규칙 9). CSV는 그대로 둔다(13개 술기 공용 · 개요 없는 경로는 종전대로).
+    ///   ★첫 phase의 첫 단계가 가이드 단계일 때만 — 아니면 손대지 않는다.
+    /// </summary>
+    private System.Collections.IEnumerator SkipOpeningGuideStep()
+    {
+        yield return null;   // 시작 이벤트(단계 · 토글 초기화)가 다 돈 뒤
+        var sm = scenarioManager;
+        var guideUI = FindFirstObjectByType<ScenarioGuideUIController>();
+        var scen = sm != null ? sm.CurrentScenario : null;
+        bool opening = scen != null && scen.phases.Count > 0 && sm.CurrentPhase == scen.phases[0]
+                       && sm.CurrentStep != null && sm.CurrentStep.IsGuideStep() && sm.CurrentStep == scen.phases[0].steps[0];
+        if (!opening || guideUI == null || guideUI.NextToggle == null)
+        {
+            Debug.Log($"[InfoPanel] [시작] 첫 안내 단계 건너뛰기 안 함 — 첫 단계가 가이드 아님 또는 토글 없음(가이드 {(sm?.CurrentStep != null && sm.CurrentStep.IsGuideStep())} · 토글 {(guideUI?.NextToggle != null)})");
+            yield break;
+        }
+        Debug.Log($"[InfoPanel] [시작] 첫 안내 단계 '{sm.CurrentStep.stepName}' 건너뜀(개요가 대신함) → 정면 시작 토글 켬");
+        guideUI.NextToggle.isOn = true;
+    }
+
+    /// <summary>펼침에서 창 3개를 모두 연다(이미 열려 있으면 그대로).</summary>
+    private void OpenAllContentPages()
+    {
+        if (!MultiWindow) return;
+        if (modeSelectionPage != null) modeSelectionPage.SetActive(false);
+        foreach (var p in new[] { resultPage, skeletonPage, expertVideoPage })
+            if (p != null && !p.activeSelf) SetMultiPage(p, true);
+        SyncContentTogglesToPages();
+    }
+
+    // ★activeSelf로 잰다 — 판(창)은 InfoWindowArranger가 다음 프레임에 켜서, activeInHierarchy로 재면 켰는데도 «끔»으로 찍혔다(11-04 Editor.log 실측 · 영상엔 셋 다 보임)
+    private static string Active(GameObject g) => g == null ? "없음" : g.activeSelf ? "켬" : "끔";
+    #endregion
 
     /// <summary>
     /// 지금 로드된 술기가 실측 진행을 지원하는가. <c>ScenarioConfig.measurementPhases</c>가 근거다.
@@ -660,6 +796,8 @@ public class InfoPanelController : MonoBehaviour
     private void OnSkeletonToggleChanged(bool isOn)
     {
         ChunaLogger.Log($"[InfoPanel] 근골격 토글: {(isOn ? "ON" : "OFF")}");
+        // ★11-04 사용자 «패널은 상시 on · 상단 메뉴로 on/off 토글 x» — 펼침에서는 끄라는 신호를 무시하고 창을 그대로 둔다
+        if (MultiWindow) { if (isOn) SetMultiPage(skeletonPage, true); SyncContentTogglesToPages(); return; }
 
         if (isOn)
         {
@@ -675,6 +813,13 @@ public class InfoPanelController : MonoBehaviour
     private void OnExpertVideoToggleChanged(bool isOn)
     {
         ChunaLogger.Log($"[InfoPanel] 전문가 영상 토글: {(isOn ? "ON" : "OFF")}, 시나리오시작:{isScenarioStarted}, 현재페이지:{currentContentPage}");
+        if (MultiWindow)
+        {
+            // ★11-04 창은 늘 켜져 있다 — 끄라는 신호로 창을 닫거나 영상을 멈추지 않는다(미디어 메뉴 켜기/끄기는 ExpertVideoControlBar)
+            if (isOn) { SetMultiPage(expertVideoPage, true); PlayExpertVideo(); }
+            SyncContentTogglesToPages();
+            return;
+        }
 
         if (isOn)
         {
@@ -717,6 +862,13 @@ public class InfoPanelController : MonoBehaviour
     private void OnResultToggleChanged(bool isOn)
     {
         ChunaLogger.Log($"[InfoPanel] 수행결과 토글: {(isOn ? "ON" : "OFF")}");
+        if (MultiWindow)
+        {
+            // ★11-04 창은 늘 켜져 있다
+            if (isOn) { SetMultiPage(resultPage, true); RefreshResultUI(); }
+            SyncContentTogglesToPages();
+            return;
+        }
 
         if (isOn)
         {
@@ -831,6 +983,17 @@ public class InfoPanelController : MonoBehaviour
     {
         currentContentPage = page;
 
+        if (MultiWindow && page != ContentPage.ModeSelection && page != ContentPage.None)
+        {
+            if (modeSelectionPage != null) modeSelectionPage.SetActive(false);
+            GameObject target = page == ContentPage.Skeleton ? skeletonPage : page == ContentPage.ExpertVideo ? expertVideoPage : resultPage;
+            SetMultiPage(target, true);
+            // ★부르는 쪽이 다른 콘텐츠 토글을 꺼 두었어도 판은 열려 있다 — 토글을 판 상태에 다시 맞춘다
+            SyncContentTogglesToPages();
+            ChunaLogger.Log($"[InfoPanel] 페이지 표시(펼침): {page}");
+            return;
+        }
+
         // 모든 페이지 숨김
         if (modeSelectionPage != null) modeSelectionPage.SetActive(false);
         if (skeletonPage != null) skeletonPage.SetActive(false);
@@ -873,6 +1036,9 @@ public class InfoPanelController : MonoBehaviour
     ///   13개 술기가 같이 쓰는 패널이라, 표시물을 더하는 일은 부르는 쪽에서 한다.
     /// </summary>
     public GameObject SkeletonPageObject => skeletonPage;
+
+    /// <summary>전문가 영상 페이지. <see cref="ExpertVideoSubtitle"/>가 이 안의 영상 칸 아래에 자막을 얹는다(11-04).</summary>
+    public GameObject ExpertVideoPageObject => expertVideoPage;
 
     /// <summary>
     /// 결과 페이지를 띄운다. ROM 실측에서는 이 페이지가 <b>'현재 진행'</b> 노릇을 한다.
@@ -962,13 +1128,26 @@ public class InfoPanelController : MonoBehaviour
         // ★<b>실측일 때만</b> 갈린다. 나머지 12개 술기는 종전대로 근골격 페이지다.
         //   바로 아래 ShowProgressBar와 같은 DifficultyManager를 본다 — 새 배선이 없다.
         //   ★실측 모드는 경추ROM에만 있다(measurementPhases를 가진 시나리오가 그것 하나다).
+        // ★★10-29 사용자 지시로 <b>13개 술기 모두</b> 결과 페이지(= «진행 현황», 진행 가이드가 그 창 위에 겹쳐 그려진다 — ProgressGuideDock)로 시작한다.
+        //   «처음에 켜지는 화면은 수행결과를 진행 현황으로 바꿔서 켜지게». 종전(09-04 ~ 10-28) = 실측만 결과 · 나머지는 근골격.
+        //   ★펼침(MultiWindow)이 아니면 종전 그대로 둔다 — 옛 단일 패널에선 진행 가이드가 따로 떠 있다.
         bool measurement = ChunaTraining.DifficultyManager.Instance != null
                            && ChunaTraining.DifficultyManager.Instance.IsMeasurementMode;
+        bool startWithProgress = measurement || MultiWindow;
 
-        SetToggleWithoutNotify(skeletonToggle, !measurement);
+        SetToggleWithoutNotify(skeletonToggle, !startWithProgress);
         SetToggleWithoutNotify(expertVideoToggle, false);
-        SetToggleWithoutNotify(resultToggle, measurement);
-        ShowContentPage(measurement ? ContentPage.Result : ContentPage.Skeleton);
+        SetToggleWithoutNotify(resultToggle, startWithProgress);
+        ShowContentPage(startWithProgress ? ContentPage.Result : ContentPage.Skeleton);
+
+        // ★11-04 펼침이면 창 3개가 늘 켜져 있다(개요를 거치지 않은 경로 — 실습 안 모드 페이지 · 다시하기 — 도 같게) · 영상도 켠 채로 둔다
+        if (MultiWindow)
+        {
+            awaitingStart = false;
+            if (overviewPanel != null) overviewPanel.Hide();
+            OpenAllContentPages();
+            PlayExpertVideo();
+        }
 
         // 시나리오 진행 UI 표시 (난이도 설정에 따라)
         if (scenarioProgressUI != null)
@@ -979,7 +1158,10 @@ public class InfoPanelController : MonoBehaviour
         }
 
         // ★ UI 위치를 헤드셋 기준으로 초기화
-        InitializeUIPositionOnStart();
+        // ★11-04 사용자 «시작 누를 때 위치 초기화돼서 내가 설정한 게 날아간다» — 실측(Editor.log): [시작] 뒤 프리셋 lying_2가
+        //   환자 · 침대 · 카메라를 다시 놓았다. 개요 경로에서는 이 초기화를 개요에 들어갈 때 이미 돌렸으니 여기서 다시 돌리지 않는다.
+        if (positionedAtOverview) { positionedAtOverview = false; Debug.Log("[InfoPanel] 시작 — 위치 초기화 건너뜀(개요에서 이미 함 · 사용자 조정 유지)"); }
+        else InitializeUIPositionOnStart();
 
         UpdateAllToggleColors();
 
@@ -1021,6 +1203,16 @@ public class InfoPanelController : MonoBehaviour
         ApplyCustomPositioningOnce();
     }
 
+    private bool fitDeferred;
+
+    private System.Collections.IEnumerator DeferredCustomPositioning()
+    {
+        while (!TrackingReady.Ready()) yield return null;   // 10-30 «너무 오래 걸린다» — 고정 1.5초 대신 추적이 들어오면 바로(상한 1.5초)
+        fitDeferred = false;
+        ApplyCustomPositioningOnce();
+        Debug.Log($"[InfoPanel] 시작 자동 맞춤 — 추적 안정 뒤 {(customPositioningApplied ? "1회 부름" : "못 부름")} · {Time.timeSinceLevelLoad:F1}s");
+    }
+
     /// <summary>
     /// 설정의 '맞춤 설정'을 시나리오당 <b>한 번만</b> 부른다.
     /// ★두 번 부르면 <see cref="PracticeSettingsController"/>가 authored 로컬 포즈를 복원한 뒤
@@ -1029,6 +1221,13 @@ public class InfoPanelController : MonoBehaviour
     private void ApplyCustomPositioningOnce()
     {
         if (customPositioningApplied) return;
+        // ★10-30 기기 로그 실측: 시나리오 시작(≈0.1초)에 불려 추적 전 머리 값으로 맞췄다 → 환자 목이 y −0.29(바닥 아래).
+        //   추적이 안정될 때(씬 로드 1.5초)까지 미룬다. 미룬 동안 다른 경로(로비 경로 코루틴)가 불러도 한 번만 돈다
+        if (!TrackingReady.Ready())
+        {
+            if (!fitDeferred) { fitDeferred = true; StartCoroutine(DeferredCustomPositioning()); }
+            return;
+        }
 
         var settings = FindFirstObjectByType<PracticeSettingsController>(FindObjectsInactive.Include);
         if (settings == null)
@@ -1040,6 +1239,7 @@ public class InfoPanelController : MonoBehaviour
 
         settings.ApplyCustomPositioningOnce();
         customPositioningApplied = true;
+        SceneReadyGate.Mark("fit");   // 10-30 로딩 가림막이 이걸 기다린다
         if (showDebugLogs)
             ChunaLogger.Log("<color=cyan>[InfoPanel] 시나리오 시작 — 설정의 '맞춤 설정'을 1회 불렀다.</color>");
     }
@@ -1089,6 +1289,22 @@ public class InfoPanelController : MonoBehaviour
         UpdateAllToggleColors();
 
         ChunaLogger.Log("[InfoPanel] 시나리오 완료 - 결과 페이지로 전환");
+        StartCoroutine(LogResultVisibility());
+    }
+
+    /// <summary>★11-04 진단 — «결과창이 안 보인다». 완료 1초 뒤 진행 현황 창 안 무엇이 켜져 있고 무엇이 위에 덮였는지 남긴다.</summary>
+    private System.Collections.IEnumerator LogResultVisibility()
+    {
+        yield return new WaitForSecondsRealtime(1f);
+        if (resultPage == null) { Debug.LogWarning("[InfoPanel] 결과 확인 — resultPage 없음"); yield break; }
+        var sb = new System.Text.StringBuilder($"[InfoPanel] 완료 1초 뒤 진행 현황 창: 페이지 켜짐 {resultPage.activeInHierarchy} · 펼침 {MultiWindow}\n");
+        foreach (Transform c in resultPage.transform)
+        {
+            var g = c.GetComponent<Graphic>();
+            var tmp = c.GetComponent<TMPro.TMP_Text>();
+            sb.Append($"   [{c.GetSiblingIndex()}] {(c.gameObject.activeInHierarchy ? "켬" : "끔")} '{c.name}'{(g != null ? $" α {g.color.a:F2}" : "")}{(tmp != null ? $" 글자 {tmp.text?.Length ?? 0}자" : "")}\n");
+        }
+        Debug.Log(sb.ToString());
     }
     #endregion
 
@@ -1412,6 +1628,25 @@ public class InfoPanelController : MonoBehaviour
     #endregion
 
     #region 유틸리티
+    private bool MultiWindow => windowArranger != null && windowArranger.isActiveAndEnabled && windowArranger.IsReady;
+
+    /// <summary>펼침 모드에서 페이지 하나를 열고 닫는다. 열면 정면으로 가져온다. 판(창)은 InfoWindowArranger가 페이지를 보고 따라 켠다.</summary>
+    private void SetMultiPage(GameObject page, bool open)
+    {
+        if (page == null) return;
+        if (open && modeSelectionPage != null) modeSelectionPage.SetActive(false);
+        page.SetActive(open);
+        if (open) windowArranger.BringToFront(page);
+    }
+
+    private void SyncContentTogglesToPages()
+    {
+        SetToggleWithoutNotify(skeletonToggle, skeletonPage != null && skeletonPage.activeSelf);
+        SetToggleWithoutNotify(expertVideoToggle, expertVideoPage != null && expertVideoPage.activeSelf);
+        SetToggleWithoutNotify(resultToggle, resultPage != null && resultPage.activeSelf);
+        UpdateAllToggleColors();
+    }
+
     private void SetToggleWithoutNotify(Toggle toggle, bool value)
     {
         if (toggle == null) return;

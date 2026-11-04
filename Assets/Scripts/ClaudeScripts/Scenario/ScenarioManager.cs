@@ -336,6 +336,19 @@ public class ScenarioManager : MonoBehaviour
     /// </summary>
     private void LoadFromCSV()
     {
+        ScenarioData scenario = LoadFilteredScenario();
+        if (scenario == null) return;
+        StartScenario(scenario);
+    }
+
+    /// <summary>
+    /// 시작하지 않고 <b>시작할 때와 같은</b> 시나리오(CSV 로드 + 모드 · 평가 phase 거르기)를 돌려준다.
+    /// ★11-04 실습 개요 화면이 단계 목록을 보여 주려고 쓴다. 실제 시작(<see cref="LoadFromCSV"/>)과 같은 함수를 탄다 —
+    ///   따로 거르면 개요와 실제 진행이 다른 단계를 말한다(규칙 9 «미리보기는 실제와 같은 함수»).
+    /// ★모드 · 난이도(DifficultyManager)가 정해진 <b>뒤에</b> 불러야 거르기가 맞다.
+    /// </summary>
+    public ScenarioData LoadFilteredScenario()
+    {
         ScenarioCSVLoader loader = GetComponent<ScenarioCSVLoader>();
         if (loader == null)
             loader = gameObject.AddComponent<ScenarioCSVLoader>();
@@ -345,13 +358,13 @@ public class ScenarioManager : MonoBehaviour
         if (collection == null || collection.scenarios.Count == 0)
         {
             LogError($"CSV 로드 실패: Resources/Scenarios/{csvFileName}.csv");
-            return;
+            return null;
         }
 
         ScenarioData scenario = collection.scenarios[0];
         ApplyModePhaseFilter(scenario);        // 교육/실측 — 난이도와 별개 축이라 먼저 가른다
         ApplyEvaluationPhaseFilter(scenario);  // 그 안에서 평가모드 부분 진행
-        StartScenario(scenario);
+        return scenario;
     }
 
     /// <summary>
@@ -1838,6 +1851,7 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
         if (string.IsNullOrEmpty(handDataName))
         {
             angleDisplay?.Hide();
+            ChunaRomGaugeSource.End();
             if (showDebugLog)
                 ChunaLogger.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김: 핸드 데이터 없음</color>");
             return;
@@ -1845,12 +1859,27 @@ window.addEventListener('scroll',function(){window.scrollTo(0,0);},{passive:fals
 
         // 핸드 데이터 이름과 동일한 프리셋을 찾아 적용 (시나리오 접두사 우선 매칭)
         string scenarioName = currentConfig != null ? currentConfig.scenarioName : "";
+
+        // ★10-30 ROM 각도기 양식(시안 · ScenarioConfig.romStyleAngleGauge) — 종전 표시가 뜨던 단계(프리셋 있음)에서만 그 자리를 ROM 각도기로 바꾼다
+        if (currentConfig != null && currentConfig.romStyleAngleGauge)
+        {
+            bool hasPreset = angleDisplay != null &&
+                             (angleDisplay.FindPreset($"{scenarioName}_{handDataName}") != null || angleDisplay.FindPreset(handDataName) != null);
+            angleDisplay?.Hide();
+            if (hasPreset) ChunaRomGaugeSource.Begin(handDataName, currentConfig); else ChunaRomGaugeSource.End();
+            Debug.Log($"[AngleDisplay] ROM 양식 각도기 {(hasPreset ? "켬" : "끔(프리셋 없음)")} · '{handDataName}' · substep {subStep.subStepNo} · {Time.timeSinceLevelLoad:F2}s");
+            return;
+        }
+        ChunaRomGaugeSource.End();
         if (angleDisplay != null && angleDisplay.ApplyPreset(scenarioName, handDataName))
         {
             ChunaLogger.Log($"<color=green>[ScenarioManager] 각도 표시 UI 프리셋 적용: {handDataName} (시나리오: {scenarioName})</color>");
+            // 10-30 «첫 단계만 각도 가이드가 안 나온다» 추적 — 릴리스에도 남는 한 줄(ChunaLogger는 릴리스에서 잘린다)
+            Debug.Log($"[AngleDisplay] 프리셋 '{handDataName}' 적용 · substep {subStep.subStepNo} · 켜짐 {angleDisplay.gameObject.activeInHierarchy} · {Time.timeSinceLevelLoad:F2}s");
         }
         else
         {
+            Debug.Log($"[AngleDisplay] '{handDataName}' 프리셋 없음 → 숨김 · substep {subStep?.subStepNo} · {Time.timeSinceLevelLoad:F2}s");
             angleDisplay?.Hide();
             if (showDebugLog)
                 ChunaLogger.Log($"<color=orange>[ScenarioManager] 각도 표시 UI 숨김: '{handDataName}' 프리셋 없음</color>");

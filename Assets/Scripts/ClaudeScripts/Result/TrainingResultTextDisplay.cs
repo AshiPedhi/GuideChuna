@@ -113,7 +113,12 @@ public class TrainingResultTextDisplay : MonoBehaviour
     private void SetText(string text)
     {
         if (resultText != null)
+        {
             resultText.text = text;
+            // ★11-04 사용자 «결과창이 안 보여» — 저장 · 업로드는 됐는데 화면에 없다. 글자가 들어갔는지 · 그 순간 켜져 있는지를 남긴다
+            var c = resultText.canvas;
+            Debug.Log($"[ResultTextDisplay] 결과 글자 {text?.Length ?? 0}자 · 글자 켜짐 {resultText.isActiveAndEnabled} · 패널 '{(resultPanel != null ? resultPanel.name : "없음")}' {(resultPanel != null && resultPanel.activeInHierarchy)} · 캔버스 {(c != null && c.isActiveAndEnabled)}");
+        }
         else
             ChunaLogger.LogWarning("[ResultTextDisplay] resultText가 할당되지 않았습니다.");
     }
