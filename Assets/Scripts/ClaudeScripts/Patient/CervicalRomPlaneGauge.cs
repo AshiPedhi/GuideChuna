@@ -244,6 +244,30 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     [Tooltip("부족각 구간을 처음부터 보여줄지. 끄면 압박이 끝난 뒤에 드러난다.")]
     [SerializeField] private bool showDeficitFromStart = true;
 
+    // ── 다른 추나 술기용 구간 (2026-10-30 사용자 «ROM 각도기 양식으로 다른 추나도 각도 · 제한 영역 표시 · 상부승모근 시안») ──
+    // ★ROM 뜻(능동 → 압박 → 부족각)과 다르다: 접근(0 → 적정 시작) → 적정 범위(유지 구간) → 한계 초과(적정 끝 → 최대각).
+    //   출처(ChunaRomGaugeSource)가 ActiveTargetAngle = 적정 시작 · PassiveLimitAngle = 적정 끝으로 준다. ROM 경로는 한 줄도 안 바뀐다.
+    [Header("=== 추나 술기 구간 (ChunaRomGaugeSource가 켤 때만) ===")]
+    [Tooltip("접근 구간 — 0에서 적정 범위 시작까지 지금 간 만큼")]
+    [SerializeField] private Color chunaApproachColor = new Color(0.29f, 0.56f, 0.89f, 0.55f);
+    [Tooltip("적정 범위 — 처음부터 보인다 · 지침이 안에 들어오면 진해진다")]
+    [SerializeField] private Color chunaTargetColor = new Color(0.20f, 0.80f, 0.35f, 0.35f);
+    [SerializeField] private Color chunaTargetInColor = new Color(0.20f, 0.85f, 0.35f, 0.70f);
+    [Tooltip("한계 초과 — 적정 범위 끝에서 최대각까지 · 처음부터 보인다")]
+    [SerializeField] private Color chunaOverColor = new Color(0.90f, 0.22f, 0.18f, 0.35f);
+    [Tooltip("구간 띠의 안쪽 반지름 — 채움 반지름에 대한 비율(0이면 부채꼴)")]
+    [SerializeField, Range(0f, 0.95f)] private float chunaBandInner = 0.6f;
+
+    private bool chunaZones;
+
+    /// <summary>추나 구간으로 그린다(켠 쪽이 끈다 — ChunaRomGaugeSource).</summary>
+    public void SetChunaZones(bool on)
+    {
+        if (chunaZones == on) return;
+        chunaZones = on;
+        lastDrawnAngle = float.NaN;   // 다음 프레임에 다시 그린다
+    }
+
     [Header("=== 지침 ===")]
     [Tooltip("현재 각도를 가리키는 바늘 색")]
     [SerializeField] private Color needleColor = new Color(0.10f, 0.10f, 0.12f, 0.95f);
@@ -1066,6 +1090,21 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     {
         verts.Clear(); colors.Clear(); tris.Clear();
 
+        if (chunaZones)
+        {
+            // 추나: 적정 범위 · 한계 초과는 처음부터 깔고, 접근은 지금 간 만큼만.
+            // ★showFill(실습 씬 = 0 · ROM이 정한 값)과 상관없이 그린다 — 이 구간이 표시의 뜻이다(10-30 «괜찮은 영역 · 안 괜찮은 영역 표시가 없다»).
+            //   부채꼴 대신 눈금 안쪽 띠로 — 환자 얼굴을 덜 가린다
+            float rOut = CurFillRadius, rIn = CurFillRadius * chunaBandInner;
+            AddBand(0f, Mathf.Min(angle, activeLimit), rIn, rOut, chunaApproachColor);
+            bool inTarget = angle >= activeLimit && angle <= passiveLimit;
+            AddBand(activeLimit, passiveLimit, rIn, rOut, inTarget ? chunaTargetInColor : chunaTargetColor);
+            AddBand(passiveLimit, maxAngle, rIn, rOut, chunaOverColor);
+            AddTick(angle, CurScaleRadius, needleWidth, NeedleColorOf(builtDirection), fromCenter: true);
+            Upload(dynamicMesh, dynamicFilter);
+            return;
+        }
+
         // 채움은 겹치지 않게 구간을 나눠 그린다. 안쪽부터 바깥으로 읽힌다.
         // ★실측에서는 통째로 끈다 — 실제 환자를 가린다(2026-09-01).
         if (showFill)
@@ -1319,6 +1358,27 @@ public class CervicalRomPlaneGauge : MonoBehaviour
     }
 
     /// <summary>부채꼴. 1도마다 한 조각씩 이어 붙인다.</summary>
+    /// <summary>고리 조각(안 반지름 ~ 바깥 반지름). 10-30 추나 구간용 — 가운데를 비워 환자를 덜 가린다.</summary>
+    private void AddBand(float fromDeg, float toDeg, float rIn, float rOut, Color color)
+    {
+        if (toDeg - fromDeg < 0.05f) return;
+        int steps = Mathf.Max(1, Mathf.CeilToInt(toDeg - fromDeg));
+        float span = (toDeg - fromDeg) / steps;
+        int start = verts.Count;
+        for (int i = 0; i <= steps; i++)
+        {
+            Vector3 d = Dir(fromDeg + span * i);
+            verts.Add(d * rIn); colors.Add(color);
+            verts.Add(d * rOut); colors.Add(color);
+        }
+        for (int i = 0; i < steps; i++)
+        {
+            int a = start + i * 2;
+            tris.Add(a); tris.Add(a + 1); tris.Add(a + 3);
+            tris.Add(a); tris.Add(a + 3); tris.Add(a + 2);
+        }
+    }
+
     private void AddSector(float fromDeg, float toDeg, float radius, Color color)
     {
         if (toDeg - fromDeg < 0.05f) return;

@@ -154,6 +154,19 @@ public class CervicalRomPracticeReadout : MonoBehaviour
     //   각도·게이지가 그대로인 프레임에 손만 떨어지면 다시 그리지 않아 체크가 안 바뀐다
     //   (바로 위 shownBacking이 같은 이유로 들어가 있다).
     private int shownGrip = int.MinValue;
+    private int shownZone = int.MinValue;   // 10-30 추나 술기: 0 접근 · 1 적정 · 2 초과
+    private CervicalRomDriver.Direction fixedForDirection = CervicalRomDriver.Direction.None;   // 10-30 추나 술기: 이 방향일 때 놓은 자리에 고정
+
+    /// <summary>
+    /// ★10-30 다른 추나 술기(ROM 양식 각도기 시안 · 사용자 «각도랑 유지시간 같은 걸 환자 머리 쪽 디스플레이로»).
+    /// <see cref="ChunaRomGaugeSource"/>가 켜 둔 동안 ROM 브리지 대신 이 출처의 방향 · 각도를 읽고, 각도 줄에 적정 · 초과를 붙인다.
+    /// 파지 체크 · 방향 목록 · 되돌림 경고는 ROM 전용이라 끈다. ★켠 쪽(ChunaRomGaugeSource)이 끈다.
+    /// </summary>
+    public static ICervicalRomGaugeSource ExternalSource { get; set; }
+
+    private CervicalRomDriver.Direction SrcDirection =>
+        ExternalSource != null ? ExternalSource.CurrentDirection
+        : driver != null ? driver.CurrentDirection : CervicalRomDriver.Direction.None;
 
     // ── 안 뜰 때 <b>스스로 이유를 말한다</b> (2026-09-07) ──────────────────
     // ★"안 나온다"를 추측으로 고치면 왕복한다. 막은 게이트를 그 자리에서 이름으로 찍는다.
@@ -244,14 +257,14 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         //   ★이 가드가 꼭 있어야 한다 — 동반 컴포넌트는 브리지 Awake에서 무조건 붙어
         //     13개 술기 어디서나 살아 있다(그래서 종전 가드가 조용히 그 역할을 겸하고 있었다).
         if (bridge == null) bridge = FindFirstObjectByType<CervicalRomScenarioBridge>(FindObjectsInactive.Include);
-        if (bridge == null || !bridge.RomScenarioActive)
+        if (ExternalSource == null && (bridge == null || !bridge.RomScenarioActive))
         {
             ReportSilent(bridge == null ? "ROM 브리지가 씬에 없다" : "경추ROM 시나리오가 아니다");
             Teardown();
             return;
         }
 
-        CervicalRomDriver.Direction dir = driver.CurrentDirection;
+        CervicalRomDriver.Direction dir = SrcDirection;
         bool hasGauge = guideUI != null && guideUI.ProgressVisible;
 
         if (root == null) Build();
@@ -298,7 +311,7 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         //     (규칙 9 — 한 값이 두 곳에 쓰이면 손잡이를 나누지 말고 하나로 모은다).
         //   → 그리고 <b>자리가 바뀌면 자세도 다시 잡는다.</b> 면이 안 바뀌어도 사용자가 반대편으로
         //     돌아가면 판은 따라 넘어가므로, 그때 자세를 안 고치면 곧바로 뒷면을 보게 된다.
-        int planeNow = PlaneOf(driver.CurrentDirection);
+        int planeNow = PlaneOf(dir);
         if (cam != null && readoutOutwardWorld.sqrMagnitude > 1e-8f
             && (planeNow != aimedPlane || readoutSideSign != aimedSideSign))
         {
@@ -323,25 +336,30 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         if (hasGauge && guideUI.ProgressCompleted) gaugeStep = 10;
 
         int remain = hasGauge ? Mathf.CeilToInt(guideUI.ProgressRemaining) : -1;
-        int angle = Mathf.RoundToInt(driver.CurrentAngle);
-        int mask = DoneMask();
+        var ext = ExternalSource;
+        float angleF = ext != null ? ext.CurrentAngle : driver.CurrentAngle;
+        int angle = Mathf.RoundToInt(angleF);
+        int mask = ext != null ? 0 : DoneMask();
 
         // ★압박 중 손을 중립 쪽으로 되돌리고 있는가(2026-09-14). 밀면 꺼진다.
-        bool backing = bridge != null && bridge.OverpressureBacking;
+        bool backing = ext == null && bridge != null && bridge.OverpressureBacking;
 
         // ★파지 체크(2026-09-15). 쌍이 정해진 단계에서만 뜬다 — 자세정렬처럼 잡을 것이 없는
         //   단계에서는 grip이 -1이라 줄 자체가 없다.
-        int grip = GripState();
+        int grip = ext != null ? -1 : GripState();
+
+        // 10-30 추나 술기: 적정 범위 안인가 넘었나(각도기가 칠하는 구간과 같은 값)
+        int zone = ext == null ? -1 : angleF > ext.PassiveLimitAngle ? 2 : angleF >= ext.ActiveTargetAngle ? 1 : 0;
 
         // ★★변경 감지 키에 <b>경고 상태도</b> 넣는다. 안 넣으면 각도·게이지가 그대로인 프레임에
         //   경고가 켜져도 <b>다시 그리지 않아</b> 화면에 안 뜨다.
         if ((int)dir == shownDirection && angle == shownAngle && gaugeStep == shownGauge
             && remain == shownRemain && mask == shownMask && backing == shownBacking
-            && grip == shownGrip) return;
+            && grip == shownGrip && zone == shownZone) return;
 
         shownDirection = (int)dir; shownAngle = angle;
         shownGauge = gaugeStep; shownRemain = remain; shownMask = mask; shownBacking = backing;
-        shownGrip = grip;
+        shownGrip = grip; shownZone = zone;
 
         sb.Clear();
 
@@ -363,6 +381,8 @@ public class CervicalRomPracticeReadout : MonoBehaviour
             sb.Append("  ");
             sb.Append(angle);
             sb.Append('도');
+            if (zone == 1) sb.Append("  <color=#5fd16f>적정</color>");
+            else if (zone == 2) sb.Append("  <color=#ff5a4a>초과</color>");
         }
 
         if (gaugeStep >= 0)
@@ -444,6 +464,22 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         }
 
         Transform h = EnsureHolder(head);
+
+        // ★10-30 사용자 «머리 쪽 디스플레이는 환자 움직임 따라가지 말고» — 추나 술기(외부 출처)에서는 방향이 정해질 때 한 번만
+        //   머리 옆에 놓고 월드에 그대로 둔다(머리가 돌아도 판은 안 움직인다). 경추ROM은 종전대로 머리를 따라간다(09-07 결정).
+        if (ExternalSource != null)
+        {
+            var d = ExternalSource.CurrentDirection;
+            if (root.parent == null && fixedForDirection == d) return true;
+            root.SetParent(h, false);
+            root.localPosition = ReadoutLocalOffset(h);
+            root.localScale = Vector3.one;
+            root.SetParent(null, true);
+            fixedForDirection = d;
+            return true;
+        }
+        fixedForDirection = CervicalRomDriver.Direction.None;
+
         if (root.parent != h) root.SetParent(h, false);
 
         // 홀더 로컬에서 <b>위쪽으로 headRise</b>. 머리가 기울면 이 점이 같이 넘어간다.
@@ -480,7 +516,7 @@ public class CervicalRomPracticeReadout : MonoBehaviour
         if (gripJudge != null && gripJudge.CurrentPair != CervicalGripJudge.GripPair.None)
             back = gripJudge.CurrentPair == CervicalGripJudge.GripPair.Lateral;
         else
-            back = PlaneOf(driver != null ? driver.CurrentDirection : CervicalRomDriver.Direction.None) >= 2;
+            back = PlaneOf(SrcDirection) >= 2;
 
         // 머리 본 로컬 실측: 전후 = z(+가 얼굴) · 좌우 = x.
         Vector3 axis = back ? Vector3.forward : Vector3.right;

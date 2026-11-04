@@ -199,8 +199,13 @@ public class AngleDisplayController : BaseUIPanel
             displayTarget = gameObject;
 
         // 시작 시 숨김
+        // ★10-30 사용자 «처음 단계에서만 각도 제한 가이드가 안 나온다 · 다음 과정부턴 나온다» — 프리셋 적용(Show)이 Start보다 먼저 오면
+        //   여기서 방금 켠 표시를 끈다(처음 켜질 때 한 번만 도는 Start라 첫 단계만 걸린다). 이미 누가 켰으면 숨기지 않는다
         if (hideOnStart)
-            Hide();
+        {
+            if (IsVisible) Debug.Log($"[AngleDisplay] {name} Start — 이미 켜져 있어 숨기지 않음(프리셋 '{currentPresetName}' 적용이 Start보다 먼저 옴) · {Time.timeSinceLevelLoad:F2}s");
+            else Hide();
+        }
 
         Initialize();
     }

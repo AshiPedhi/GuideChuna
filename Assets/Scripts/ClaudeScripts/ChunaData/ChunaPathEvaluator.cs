@@ -381,6 +381,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     // 사용자 손 위치 기반 프레임
     private int userHandFrameIndex = 0;
     private float userHandFrameRatio = 0f;  // 0~1
+    private float lastFiredUserRatio = 0f;  // OnUserFrameChanged를 마지막으로 보낸 비율(10-30)
 
     // ★ 상대 이동 감지 데이터 (시작-끝 프레임 간 이동량 기준)
     private Vector3 handDataMovementVector;     // 핸드데이터 시작→끝 이동 벡터
@@ -391,6 +392,20 @@ public class ChunaPathEvaluator : MonoBehaviour
     private Vector3 userHoldReferencePosition;  // 사용자 시작 홀드 위치 (기준점)
     private Quaternion userHoldReferenceRotation; // 사용자 시작 홀드 회전 (기준점)
     private Vector3 movementAxis;               // 주요 이동 축 (정규화)
+
+    // ★11-03 경로 진행률(conditionParams «pathProgress») — 위치 기반 진행률을 «시작→끝 직선 투영» 대신
+    //   «녹화된 주동수 손목 경로 위 가장 가까운 점의 프레임 순번 비율»로 잰다. 토큰이 없으면 종전 직선 그대로(13개 술기 공용).
+    //   이유(실측 11-03): 제2늑골 V03 팔 경로는 직선 0.62m · 실제 1.15m로 휘어 있어, 경로를 따라가도 진행률이 70%에서
+    //   되돌아가(65→40→25→4%) 단계가 안 끝났다. 경로가 접혀 있어 한 번에 먼 곳으로 튀지 않게 지금 비율 근처 창 안에서만 찾는다.
+    private bool pathProgressMode;
+    private Vector3[] pathLocal;                // 첫 프레임 대비 손목 위치(referenceTransform 로컬)
+    private List<PoseFrame> pathBuiltFor;
+    private const float PathWindowBack = 0.15f, PathWindowForward = 0.25f;
+    // ★11-03 pathProgress + guideOnly: 가이드 손 1회 재생(08-03 사용자 지시 «무조건 1회»)이 끝나면 끝 자세에 세워 두지 않고
+    //   «사용자 진행률 + 이만큼» 자리의 자세를 매 프레임 보여 준다. 실측 11-03: 재생이 끝난 가이드 손이 어깨 옆(깊게 굽힌 끝)에
+    //   멈춰 있고 환자 팔은 시작 자세라, 사용자가 어디로 움직일지 몰랐다.
+    private const float GuideFollowLead = 0.12f;
+    private bool pathHasLeft, pathHasRight;
     private string specifiedMovementType;       // CSV에서 지정한 이동 타입 (position/rotation)
     private bool startHoldOnly;                 // true면 StartHold만 완료하면 다음으로 (등척성운동용)
     /// <summary>CSV conditionParams의 "palmSupport" — 손바닥으로 받치기만 하는 술기.
@@ -452,6 +467,8 @@ public class ChunaPathEvaluator : MonoBehaviour
     //   touch=6이 (공짜)·올림·내림·올림·내림·올림 으로 끝나 <b>마지막 내리기가 빠진 채</b> 넘어갔다
     //   (제2늑골 3-7 "올렸다 내리기 3회" — 사용자 지적).
     private bool touchSeeded;
+    private float touchDoneWait;        // doneWait=N (초) · 0이면 채우는 순간 완료
+    private float touchDoneAt = -1f;
 
     internal bool TouchCountMode => touchTarget > 0;
 
@@ -459,6 +476,19 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// 목표 횟수를 채우면 true(= 이 단계 완료).</summary>
     internal bool CountZoneTouch(float progress)
     {
+        // ★11-04 doneWait=N — 목표를 채운 뒤 N초 자세를 유지한 다음 완료(사용자 «3회 반복 끝나고 바로 팔 정자세로 돌리지 말고 조금 기다렸다가»).
+        //   기본 0 = 종전 그대로(채우는 순간 완료).
+        if (touchTarget > 0 && touchCount >= touchTarget)
+        {
+            if (touchDoneWait <= 0f) return true;
+            if (touchDoneAt < 0f)
+            {
+                touchDoneAt = Time.time;
+                ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 구간 터치 목표 {touchTarget}회 채움 — {touchDoneWait:F1}초 자세 유지 뒤 완료(doneWait)</color>");
+            }
+            return Time.time - touchDoneAt >= touchDoneWait;
+        }
+
         int zone = progress <= touchZone ? 1
                  : progress >= 1f - touchZone ? 2
                  : 0;
@@ -480,14 +510,29 @@ public class ChunaPathEvaluator : MonoBehaviour
         touchCount++;
         ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 구간 터치 {touchCount}/{touchTarget} " +
                         $"({(zone == 1 ? "시작" : "끝")} 구간, 진행률 {progress:P0})</color>");
-        return touchCount >= touchTarget;
+        if (touchCount < touchTarget) return false;
+        return CountZoneTouch(progress);   // 채웠다 — doneWait이 있으면 위에서 기다린다
     }
 
     private float currentMidHoldStart => reachOverride >= 0f ? reachOverride :
+                                         HasHoldRangeOverride ? holdOverrideStartAbs - HoldOverrideOffset :
                                          isStretchingMode ? (stretchingHoldStart - stretchingStart) :
                                          (isExtendedLimitMode && !isRotationStep ? extendedMidHoldStartRatio : midHoldStartRatio);
-    private float currentMidHoldEnd => isStretchingMode ? (stretchingEnd - stretchingStart) :
+    private float currentMidHoldEnd => HasHoldRangeOverride ? holdOverrideEndAbs - HoldOverrideOffset :
+                                       isStretchingMode ? (stretchingEnd - stretchingStart) :
                                        (isExtendedLimitMode && !isRotationStep ? extendedMidHoldEndRatio : midHoldEndRatio);
+
+    // ── 적정 범위를 «본 각도»로 (2026-10-30 사용자 A안) ──
+    // ★종전 적정 범위는 «클립 시간 비율»이라 실제 본 각도와 어긋났다(예: 비율 0.5 = 표시 45° · 실제 본 측굴 36.8°).
+    //   ChunaRomGaugeSource가 설정의 도(°) 값을 «본이 그 각도가 되는 클립 시점»으로 재서 여기 넣는다.
+    //   값은 클립 절대 시점이다 — 판정(진행률)은 스트레칭이면 시작 오프셋을 뺀 상대값이라 HoldOverrideOffset을 뺀다.
+    //   ★단계 설정(ApplySubStep…)에서 지운다 — 다음 단계로 새지 않게. 지우면 출처가 다시 재서 넣는다.
+    private float holdOverrideStartAbs = -1f, holdOverrideEndAbs = -1f;
+    private bool HasHoldRangeOverride => holdOverrideEndAbs >= 0f;
+    private float HoldOverrideOffset => isStretchingMode ? stretchingStart : 0f;
+    public void SetHoldRangeOverride(float startAbs, float endAbs) { holdOverrideStartAbs = startAbs; holdOverrideEndAbs = Mathf.Max(startAbs, endAbs); }
+    public void ClearHoldRangeOverride() { holdOverrideStartAbs = holdOverrideEndAbs = -1f; }
+    public bool IsRotationStep => isRotationStep;
 
     // ★ 가이드 핸드 재생 범위 (런타임)
     private float runtimeGuideStartRatio = 0f;
@@ -545,7 +590,7 @@ public class ChunaPathEvaluator : MonoBehaviour
     {
         int startFrameIdx = Mathf.RoundToInt(startRatio * (frameCount - 1));
         userHandFrameIndex = Mathf.Clamp(startFrameIdx, 0, frameCount - 1);
-        userHandFrameRatio = startRatio;
+        userHandFrameRatio = startRatio; lastFiredUserRatio = startRatio;
 
         if (showDebugLogs)
             ChunaLogger.Log($"<color=green>[ChunaPathEvaluator] 프레임 인덱스 초기화 (Moving 단계 시작, 시작비율: {startRatio:P0})</color>");
@@ -1185,6 +1230,12 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 사용자 손 위치 기반 프레임 업데이트
         UpdateUserHandFrame();
 
+        // ★11-03 pathProgress + guideOnly: 1회 재생이 끝난 뒤엔 가이드 손이 사용자보다 조금 앞 자세를 따라간다(위 필드 주석)
+        if (pathProgressMode && guideOnlyMode && currentPhase == EvaluationPhase.Moving && guideHandCoroutine == null
+            && showGuideHands && !guideSuppressedForStep && EnsurePath())
+            guidePlaybackController.ApplyFrameAt(loadedFrames, userHandFrameRatio + GuideFollowLead,
+                                                 leftGuideHand, rightGuideHand, pathHasLeft, pathHasRight);
+
         // 새로운 평가 흐름 업데이트 (via helper)
         {
             Vector3 leftPos = playerLeftHand != null ? playerLeftHand.transform.position : Vector3.zero;
@@ -1241,6 +1292,52 @@ public class ChunaPathEvaluator : MonoBehaviour
     public float GetCurrentProgress()
     {
         return userHandFrameRatio;
+    }
+
+    /// <summary>11-03 pathProgress — 녹화 주동수 손목 경로(첫 프레임 대비 · 기준 로컬)를 한 번 만든다.</summary>
+    private bool EnsurePath()
+    {
+        if (loadedFrames == null || loadedFrames.Count < 2) return false;
+        if (pathBuiltFor == loadedFrames && pathLocal != null && pathLocal.Length == loadedFrames.Count) return true;
+        int n = loadedFrames.Count;
+        pathLocal = new Vector3[n];
+        Vector3 p0 = isLeftHandDominant ? loadedFrames[0].leftRootPosition : loadedFrames[0].rightRootPosition;
+        float total = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            pathLocal[i] = (isLeftHandDominant ? loadedFrames[i].leftRootPosition : loadedFrames[i].rightRootPosition) - p0;
+            if (i > 0) total += Vector3.Distance(pathLocal[i], pathLocal[i - 1]);
+        }
+        if (total < 1e-4f) { pathLocal = null; return false; }
+        pathHasLeft = GuideHandPlaybackController.FramesHaveHand(loadedFrames, true);
+        pathHasRight = GuideHandPlaybackController.FramesHaveHand(loadedFrames, false);
+        pathBuiltFor = loadedFrames;
+        ChunaLogger.Log($"<color=cyan>[Path Move] 경로 {n}프레임 · 호 길이 {total:F3}m · 직선 {pathLocal[n - 1].magnitude:F3}m · {(isLeftHandDominant ? "왼손" : "오른손")} 기준</color>");
+        return true;
+    }
+
+    /// <summary>사용자 이동(월드)을 기준 로컬로 돌려, 지금 비율 근처 창 안에서 경로 위 가장 가까운 점의 호 비율을 낸다.</summary>
+    private float PathRatio(Vector3 worldDisplacement, float current, out float offPath)
+    {
+        Quaternion refRot = referenceTransform != null ? referenceTransform.rotation : Quaternion.identity;
+        Vector3 d = Quaternion.Inverse(refRot) * worldDisplacement;
+        float lo = current - PathWindowBack, hi = current + PathWindowForward;
+        float best = current, bestDist = float.MaxValue;
+        // ★비율 = 프레임 순번 비율(i / (n−1)). 환자 애니(Animation Lerp)와 가이드가 진행률을 프레임 순번으로 읽으므로
+        //   호 길이 비율을 돌려주면 손 자리와 팔 자세가 어긋난다(11-03 계산: 프레임 70 = 순번 70% · 호 50%).
+        float inv = 1f / (pathLocal.Length - 1);
+        for (int i = 0; i < pathLocal.Length - 1; i++)
+        {
+            float a0 = i * inv, a1 = (i + 1) * inv;
+            if (a1 < lo || a0 > hi) continue;
+            Vector3 s = pathLocal[i + 1] - pathLocal[i];
+            float len2 = s.sqrMagnitude;
+            float t = len2 > 1e-10f ? Mathf.Clamp01(Vector3.Dot(d - pathLocal[i], s) / len2) : 0f;
+            float dist = (pathLocal[i] + s * t - d).sqrMagnitude;
+            if (dist < bestDist) { bestDist = dist; best = Mathf.Lerp(a0, a1, t); }
+        }
+        offPath = bestDist < float.MaxValue ? Mathf.Sqrt(bestDist) : 0f;
+        return Mathf.Clamp01(best);
     }
 
     /// <summary>
@@ -1320,7 +1417,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         if (currentPhase != EvaluationPhase.Moving && currentPhase != EvaluationPhase.MidHold)
         {
             userHandFrameIndex = 0;
-            userHandFrameRatio = 0f;
+            userHandFrameRatio = 0f; lastFiredUserRatio = 0f;
             return;
         }
 
@@ -1384,7 +1481,6 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 회전은 손목 본에서 가져옴 (더 정확한 손목 회전 감지)
         Quaternion rightHandRot = activeWristBone != null ? activeWristBone.rotation : activeHand.transform.rotation;
 
-        float prevRatio = userHandFrameRatio;
         float newRatio = 0f;
 
         // ★ 상대 이동 모드: 시작 홀드 위치 기준으로 진행률 계산
@@ -1441,6 +1537,15 @@ public class ChunaPathEvaluator : MonoBehaviour
                 // 핸드데이터 총 이동 거리로 나눠서 0~1 비율 계산
                 newRatio = Mathf.Clamp01(effectiveDistance / targetDistance);
 
+                // ★11-03 pathProgress: 휜 경로는 경로 위 가장 가까운 점으로 다시 잰다(위 직선 값은 로그 비교용으로만 남는다)
+                if (pathProgressMode && EnsurePath())
+                {
+                    float straight = newRatio;
+                    newRatio = PathRatio(displacement, userHandFrameRatio, out float offPath);
+                    if (showDebugLogs && Time.frameCount % 30 == 0)
+                        ChunaLogger.Log($"<color=yellow>[Path Move] 경로 {newRatio:P0} (직선이면 {straight:P0}) · 경로에서 벗어남 {offPath * 100f:F1}cm</color>");
+                }
+
                 if (showDebugLogs && Time.frameCount % 30 == 0)
                 {
                     string posSource = rightHandCollider != null ? "[콜라이더]" : "[transform]";
@@ -1493,8 +1598,11 @@ public class ChunaPathEvaluator : MonoBehaviour
         userHandFrameIndex = Mathf.RoundToInt(newRatio * (loadedFrames.Count - 1));
 
         // 변화 시 이벤트 발생
-        if (Mathf.Abs(prevRatio - userHandFrameRatio) > 0.01f)
+        // ★10-30 사용자 «경고음이 어떨 땐 안 빨라지고, 경계를 넘었다 돌아오면 빨라진다» — 종전엔 «직전 프레임 대비» 1%라
+        //   손을 천천히 돌리면(프레임당 1% 미만) 영영 안 나가 비프 간격 · 각도가 멈춰 있었다. «마지막으로 보낸 값» 대비 1%로 센다
+        if (Mathf.Abs(lastFiredUserRatio - userHandFrameRatio) > 0.01f)
         {
+            lastFiredUserRatio = userHandFrameRatio;
             OnUserFrameChanged?.Invoke(userHandFrameIndex, loadedFrames.Count, userHandFrameRatio);
 
             if (showDebugLogs && Time.frameCount % 15 == 0)
@@ -2293,11 +2401,20 @@ public class ChunaPathEvaluator : MonoBehaviour
         lastZone = 0;
         touchSeeded = false;
         touchZone = Mathf.Clamp(ParseNamedFloat(subStep, "zone=", 0.15f), 0.02f, 0.45f);
+        touchDoneWait = Mathf.Max(0f, ParseNamedFloat(subStep, "doneWait=", 0f));   // 11-04
+        touchDoneAt = -1f;
         if (touchTarget > 0)
             ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 구간 터치 카운트 모드 — 목표 {touchTarget}회, " +
-                            $"구간 폭 {touchZone:P0} (홀드·임계 완료 없음)</color>");
+                            $"구간 폭 {touchZone:P0} · 채운 뒤 유지 {touchDoneWait:F1}초 (홀드·임계 완료 없음)</color>");
+
+        pathProgressMode = subStep != null && !string.IsNullOrEmpty(subStep.conditionParams) &&
+            subStep.conditionParams.ToLower().Contains("pathprogress");
+        pathBuiltFor = null;
+        if (pathProgressMode)
+            ChunaLogger.Log("<color=yellow>[ChunaPathEvaluator] 경로 진행률 모드 — 녹화 손목 경로 위 가장 가까운 점으로 진행률을 잰다(직선 투영 아님)</color>");
 
         reachOverride = ParseNamedFloat(subStep, "reach=", -1f);
+        ClearHoldRangeOverride();   // 10-30 본 각도 적정 범위는 단계마다 다시 잰다
         if (reachOverride >= 0f)
             ChunaLogger.Log($"<color=yellow>[ChunaPathEvaluator] 도달 임계점 재정의: 진행률 {reachOverride:P0}까지 가야 완료</color>");
 
@@ -2499,6 +2616,12 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// </summary>
     public bool IsGuideOnlyMode => guideOnlyMode;
 
+    // ★11-03 환자 옆 안내(PatientSideGuideReadout)가 읽는다 — 값을 새로 세지 않고 판정이 쓰는 그 값을 그린다
+    public int TouchTarget => touchTarget;
+    public int TouchCount => touchCount;
+    public int RepsRequired => repsRequired;
+    public int RepsDone => repsDone;
+
     /// <summary>
     /// 현재 SkipMidHold 모드인지 확인 (대흉근/흉쇄유돌근 등 홀드 판정 없는 직선 가동범위)
     /// </summary>
@@ -2528,13 +2651,15 @@ public class ChunaPathEvaluator : MonoBehaviour
     /// <summary>
     /// 디스플레이용 홀드 시작 비율 (스트레칭도 절대값 — 재평가와 동일 좌표계)
     /// </summary>
-    public float DisplayMidHoldStart => isStretchingMode ? stretchingHoldStart :
+    public float DisplayMidHoldStart => HasHoldRangeOverride ? holdOverrideStartAbs :
+                                        isStretchingMode ? stretchingHoldStart :
                                         (isExtendedLimitMode && !isRotationStep ? extendedMidHoldStartRatio : midHoldStartRatio);
 
     /// <summary>
     /// 디스플레이용 홀드 종료 비율 (스트레칭도 절대값 — 재평가와 동일 좌표계)
     /// </summary>
-    public float DisplayMidHoldEnd => isStretchingMode ? stretchingEnd :
+    public float DisplayMidHoldEnd => HasHoldRangeOverride ? holdOverrideEndAbs :
+                                      isStretchingMode ? stretchingEnd :
                                       (isExtendedLimitMode && !isRotationStep ? extendedMidHoldEndRatio : midHoldEndRatio);
 
     /// <summary>
@@ -2896,7 +3021,7 @@ public class ChunaPathEvaluator : MonoBehaviour
         // 프레임/애니메이션 상태 초기화
         // ★ 스트레칭/재평가 모드에서는 30%부터 시작
         userHandFrameIndex = 0;
-        userHandFrameRatio = currentStartRatio;
+        userHandFrameRatio = currentStartRatio; lastFiredUserRatio = userHandFrameRatio;
         currentAnimationRatio = currentStartRatio;
         targetAnimationRatio = currentStartRatio;
 

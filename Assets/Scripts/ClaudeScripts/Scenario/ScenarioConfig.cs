@@ -96,6 +96,20 @@ public class ScenarioConfig : ScriptableObject
              "예: 경추ROM실측은 [실측, 종료]. 가상환자 경추ROM(경추ROM측정)은 비워 둔다.")]
     public string[] measurementPhases;
 
+    [Tooltip("각도 표시를 ROM 각도기 양식(머리를 관통하는 면 · 눈금 · 지침 · 숫자 · 적정 범위 · 한계 초과)으로 띄운다 — 2026-10-30 시안(상부승모근).\n" +
+             "끄면 종전 2D 원호 각도 표시. ★목을 움직이는 술기(c9 환자 · ROM 드라이버 축)에서만 의미가 있다.")]
+    public bool romStyleAngleGauge;
+
+    [Tooltip("★적정 범위를 <b>본 각도(°)</b>로 정한다 — 2026-10-30 사용자 A안. 켜면 아래 도 값을 «환자 본이 그 각도가 되는 클립 시점»으로 재서 판정 · 경고음 · 각도기에 쓴다.\n" +
+             "끄면 종전대로 클립 시간 비율(midHoldStart 등)이다. ★romStyleAngleGauge가 켜져 있어야 잰다(같은 측정기를 쓴다).")]
+    public bool holdRangeInDegrees;
+    [Tooltip("진단 · 제한장벽확인 · 회전 재평가 — 적정 범위 시작 · 끝(°). 끝을 넘으면 한계 초과 경고")]
+    public float midHoldStartDeg = 27f, midHoldEndDeg = 45f;
+    [Tooltip("재평가(측굴 · 위치 단계) — 적정 범위 시작 · 끝(°)")]
+    public float extendedHoldStartDeg = 45f, extendedHoldEndDeg = 63f;
+    [Tooltip("스트레칭 — 적정 범위 시작 · 끝(°)")]
+    public float stretchingHoldStartDeg = 45f, stretchingHoldEndDeg = 63f;
+
     /// <summary>실측 전용 시나리오인가. ★2026-09-11부터 채워져 있으면 모드 버튼과 무관하게 실측이다.</summary>
     public bool SupportsMeasurementMode => measurementPhases != null && measurementPhases.Length > 0;
 
