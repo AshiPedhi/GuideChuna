@@ -147,8 +147,10 @@ public class ChunaWebMirror : MonoBehaviour
             if (cam != null) cam.RemoveCommandBuffer(CamEvent, cb);
             cam = target;
             if (cam != null) cam.AddCommandBuffer(CamEvent, cb);
-            Debug.Log(cam != null ? $"[웹미러] 눈 화면 잡기 시작 — '{cam.name}' · 씬 {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}"
+            Debug.Log(cam != null ? $"[웹미러] 눈 화면 잡기 시작 — '{cam.name}' · 씬 {UnityEngine.SceneManagement.SceneManager.GetActiveScene().name} · ★1단계(복사만 {StageGap}초) — 이 뒤에 죽으면 눈 화면 복사가 원인"
                                   : "[웹미러] 눈 화면 잡기 멈춤 — 보는 화면 없음");
+            stage2At = Time.unscaledTime + StageGap;
+            stage2Logged = firstVideoLogged = firstShotLogged = false;
         }
 
         if (pendingChoice >= 0 && !busy)
@@ -161,28 +163,58 @@ public class ChunaWebMirror : MonoBehaviour
         if (now >= diagNext) Diagnose(now);
         if (cam == null) return;
 
+        // ★11-04 진단: 기기(3S · GLES3)에서 잡기 시작 25~30ms 뒤 렌더 스레드 충돌 4/4
+        //   (심볼: GfxDeviceGLES::UpdateComputeConstantBuffers → ClearBufferSubData → memset 널). 복사와 출력 · 읽기를 시간으로 떼어 어느 쪽인지 가른다.
+        if (now < stage2At) return;
+        if (!stage2Logged) { stage2Logged = true; Debug.Log("[웹미러] ★2단계 — 복사는 살아남았다 · 이제 출력 셰이더 · 읽기 시작(이 뒤에 죽으면 출력 · 읽기가 원인)"); }
+
         // 영상 — 보는 화면이 붙어 있을 때만(간격을 쌓아 간다 — now + 간격이면 72fps에서 한 장씩 걸러진다)
         if (video.Clients > 0 && now >= nextVideo)
         {
             nextVideo = Mathf.Max(nextVideo + Interval, now - Interval);
+            if (!firstVideoLogged) { firstVideoLogged = true; Debug.Log("[웹미러] 첫 영상 — NV12 셰이더(패스 0) + 비동기 읽기"); }
             video.Send(eyeCopy, mat, 0, outW, outH, Mathf.RoundToInt(1f / Interval));
         }
 
-        // 사진 — 브라우저가 영상을 못 받아 /cam.jpg를 물어 갈 때만
+        // 사진 — 브라우저가 영상을 못 받아 /cam.jpg를 물어 갈 때만.
+        // ★11-04: 영상이 붙어 있으면 사진은 만들지 않는다(같은 프레임에 둘이 시작된 판에서도 죽었다 · 영상이 보이면 사진은 안 쓰인다).
+        if (video.Clients > 0) return;
         if (busy || now < nextShot || !server.ImageWatched("cam")) return;
-        nextShot = now + Interval;
+        nextShot = now + PhotoInterval;
         busy = true;
+        if (!firstShotLogged) { firstShotLogged = true; Debug.Log("[웹미러] 첫 사진 — 출력 셰이더(패스 1) + 동기 읽기(ReadPixels)"); }
         Graphics.Blit(eyeCopy, outRt, mat, 1);
-        AsyncGPUReadback.Request(outRt, 0, TextureFormat.RGBA32, OnRead);
-    }
-
-    private void OnRead(AsyncGPUReadbackRequest r)
-    {
-        if (r.hasError) { busy = false; return; }
-        var data = r.GetData<byte>();
-        int w = r.width, h = r.height;
+        // ★★11-04 기기 실측(3S · GLES3): 사진 경로의 비동기 GPU 읽기(AsyncGPUReadback.Request)를 건 지 40ms 뒤 렌더 스레드 충돌 6/6
+        //   (GfxDeviceGLES::UpdateComputeConstantBuffers → ClearBufferSubData → memset 널 — 프로젝트 빌드 심볼로 풀었다).
+        //   ① 형식 지정을 빼 봤다(16:26) → 앱을 켜고 40초 뒤 시작한 시험은 멀쩡했지만, 켜자마자 시작한 두 판은 또 죽었다 = 원인을 못 없앴다.
+        //   ② 영상 경로(RequestIntoNativeArray · R8)는 1280×1344로 몇 분 멀쩡 → 사진 경로에서만 비동기 읽기를 뺀다.
+        //   → 동기 읽기(ReadPixels = glReadPixels)로 바꾼다. 한 장마다 GPU를 기다리므로 초당 장수를 8장으로 줄인다(사진은 영상을 못 받는 브라우저용 예비 경로).
+        //   ★왜 비동기 읽기가 컴퓨트 경로를 타는지는 못 밝혔다 — 이것은 원인 제거가 아니라 그 경로를 안 타게 하는 회피다.
+        if (shotTex == null || shotTex.width != outW || shotTex.height != outH)
+        {
+            if (shotTex != null) Destroy(shotTex);
+            shotTex = new Texture2D(outW, outH, TextureFormat.RGBA32, false, true) { name = "WebMirrorShot" };
+        }
+        var prev = RenderTexture.active;
+        RenderTexture.active = outRt;
+        shotTex.ReadPixels(new Rect(0, 0, outW, outH), 0, 0, false);
+        RenderTexture.active = prev;
+        var data = shotTex.GetRawTextureData<byte>();
         if (rgba == null || rgba.Length != data.Length) rgba = new byte[data.Length];
         data.CopyTo(rgba);
+        EncodeAsync(outW, outH);
+    }
+
+    private const float PhotoInterval = 1f / 8f;
+    private Texture2D shotTex;
+
+    private const float StageGap = 1.5f;
+    private float stage2At;
+    private bool stage2Logged, firstVideoLogged, firstShotLogged;
+
+    /// <summary>rgba(사진 한 장)를 작업 스레드에서 JPEG로 — 다 되면 busy를 푼다.</summary>
+    private void EncodeAsync(int w, int h)
+    {
         ThreadPool.QueueUserWorkItem(_ =>
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -242,7 +274,7 @@ public class ChunaWebMirror : MonoBehaviour
 
         var ci = CultureInfo.InvariantCulture;
         state.Length = 0;
-        state.Append("{\"title\":"); Json(state, sc != null ? sc.scenarioName : "");
+        state.Append("{\"title\":"); Json(state, sc != null ? ScenarioDisplayNames.Full(sc.scenarioName) : "");   // 10-27: 화면 이름 표
         state.Append(",\"user\":"); Json(state, monitorUser);
         state.Append(",\"scene\":"); Json(state, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         state.Append(",\"mode\":"); Json(state, sm != null ? sm.SelectedMode : "");
