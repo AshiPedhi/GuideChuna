@@ -161,7 +161,8 @@ public class GuideVideoController : MonoBehaviour
                 }
                 else
                 {
-                    StopSegment();
+                    // ★11-03: 반복을 끄면 구간 끝에서 멈춘다(구간은 유지 — 조작 막대가 구간을 계속 쓴다). 예전엔 StopSegment로 구간을 지웠다.
+                    videoPlayer.Pause();
                 }
             }
         }
@@ -562,10 +563,17 @@ public class GuideVideoController : MonoBehaviour
             string videoPath = $"{videoFolderPath}/{scenarioName}";
             VideoClip clip = Resources.Load<VideoClip>(videoPath);
 
+            // ★11-04 1인칭 영상(같은 폴더 «{이름}_1인칭») — 있으면 전환 버튼이 뜬다. 1인칭을 고른 채면 그쪽을 건다.
+            firstPersonClip = Resources.Load<VideoClip>(videoPath + FirstPersonSuffix);
+            thirdPersonClip = clip;
+            if (useFirstPerson && firstPersonClip != null) clip = firstPersonClip;
+
             if (clip != null)
             {
                 videoPlayer.clip = clip;
                 currentVideoName = scenarioName;
+                ApplyMute();
+                LoadSubtitles();
 
                 // ★ 로드 후 자동 재생 방지 - 토글 활성화 전까지 재생 안 함
                 videoPlayer.Stop();
@@ -609,6 +617,194 @@ public class GuideVideoController : MonoBehaviour
 
         if (showDebugLog)
             ChunaLogger.Log($"[GuideVideo] URL 영상 설정: {url}");
+    }
+
+    #endregion
+
+    #region 재생 조작 (11-03 · ExpertVideoControlBar)
+
+    /// <summary>정면 전문가 영상 탭 조작 막대가 쓴다.</summary>
+    public VideoPlayer Player => videoPlayer;
+    public bool LoopEnabled => loopSegment;
+    public bool IsActive => isGuideEnabled && (isPlayingSegment || isPlayingFullVideo);
+
+    /// <summary>지금 재생 범위 — 구간 재생이면 그 구간, 전체 재생이면 0 ~ 길이.</summary>
+    public bool TryGetRange(out float start, out float end)
+    {
+        start = 0f; end = 0f;
+        if (videoPlayer == null || !IsActive) return false;
+        if (isPlayingSegment) { start = currentStartTime; end = currentEndTime; return end > start; }
+        end = videoPlayer.length > 0 ? (float)videoPlayer.length : (videoPlayer.clip != null ? (float)videoPlayer.clip.length : 0f);
+        return end > 0f;
+    }
+
+    /// <summary>범위 안으로만 옮긴다. 반복 대기 중이면 대기를 끊는다.</summary>
+    public void SeekTo(float seconds)
+    {
+        if (!TryGetRange(out float s, out float e)) return;
+        if (loopDelayCoroutine != null) { StopCoroutine(loopDelayCoroutine); loopDelayCoroutine = null; }
+        isWaitingForLoop = false;
+        videoPlayer.time = Mathf.Clamp(seconds, s, Mathf.Max(s, e - 0.1f));
+        if (showDebugLog) ChunaLogger.Log($"[GuideVideo] 이동 → {FormatTime((float)videoPlayer.time)}");
+    }
+
+    /// <summary>재생 중이면 멈추고, 멈춰 있으면(구간 끝 포함) 다시 튼다.</summary>
+    public void TogglePause()
+    {
+        if (videoPlayer == null || !IsActive) return;
+        if (videoPlayer.isPlaying || isWaitingForLoop)
+        {
+            if (loopDelayCoroutine != null) { StopCoroutine(loopDelayCoroutine); loopDelayCoroutine = null; }
+            isWaitingForLoop = false;
+            videoPlayer.Pause();
+        }
+        else
+        {
+            if (TryGetRange(out float s, out float e) && videoPlayer.time >= e - timeBuffer - 0.05f) videoPlayer.time = s;
+            videoPlayer.Play();
+        }
+    }
+
+    /// <summary>구간 반복 · 전체 영상 반복을 같이 켜고 끈다.</summary>
+    public void SetLoopAll(bool loop)
+    {
+        loopSegment = loop;
+        if (isPlayingFullVideo && videoPlayer != null) videoPlayer.isLooping = loop;
+    }
+
+    // ── 1인칭 · 3인칭 (11-04 사용자 «1인칭 3인칭 스위치 버튼») ──
+    // ★CSV 구간(videoStartTime · videoEndTime)은 <b>한 벌</b>이다 — 두 영상이 같은 시간축이라고 본다(같은 순간을 동시에 찍은 영상).
+    //   시간축이 다르면 바꿀 때 구간이 엉뚱한 동작을 가리킨다 → 그때는 영상을 맞춰 자르거나 구간을 두 벌로 나눠야 한다.
+    private const string FirstPersonSuffix = "_1인칭";
+    private VideoClip firstPersonClip, thirdPersonClip;
+    private bool useFirstPerson;
+    private Coroutine swapCoroutine;
+
+    /// <summary>지금 영상에 1인칭 판이 있는가(없으면 전환 버튼을 숨긴다).</summary>
+    public bool HasFirstPerson => firstPersonClip != null && thirdPersonClip != null;
+    public bool IsFirstPerson => useFirstPerson && HasFirstPerson;
+
+    /// <summary>1인칭 ↔ 3인칭. 재생 자리 · 구간 · 재생 중 여부는 그대로 잇는다.</summary>
+    public void SetFirstPerson(bool on)
+    {
+        if (videoPlayer == null || !HasFirstPerson || useFirstPerson == on) return;
+        useFirstPerson = on;
+        var next = on ? firstPersonClip : thirdPersonClip;
+        if (videoPlayer.clip == next) return;
+        double t = videoPlayer.time;
+        bool wasPlaying = videoPlayer.isPlaying || isWaitingForLoop;
+        if (swapCoroutine != null) StopCoroutine(swapCoroutine);
+        swapCoroutine = StartCoroutine(SwapClip(next, t, wasPlaying));
+    }
+
+    private IEnumerator SwapClip(VideoClip next, double t, bool resume)
+    {
+        bool looping = videoPlayer.isLooping;
+        videoPlayer.clip = next;
+        videoPlayer.isLooping = looping;
+        videoPlayer.Prepare();
+        float until = Time.unscaledTime + 3f;
+        while (!videoPlayer.isPrepared && Time.unscaledTime < until) yield return null;
+        if (!videoPlayer.isPrepared) ChunaLogger.LogWarning($"[GuideVideo] ★{(useFirstPerson ? "1인칭" : "3인칭")} 영상 준비가 3초 안에 안 끝났다");
+        videoPlayer.time = Math.Min(t, Math.Max(0.0, next.length - 0.1));
+        ApplyMute();
+        LoadSubtitles();   // 1인칭 판은 자막도 따로(«{이름}_1인칭_자막») — 없으면 3인칭 자막을 쓴다
+        if (resume) videoPlayer.Play(); else videoPlayer.Pause();
+        swapCoroutine = null;
+        if (showDebugLog) ChunaLogger.Log($"[GuideVideo] 시점 전환 → {(useFirstPerson ? "1인칭" : "3인칭")} · {FormatTime((float)t)} · 재생 {resume}");
+    }
+
+    // ── 음소거 · 자막 (11-04 사용자 «전문가 영상은 기본 음소거 상태에서 자막으로 내용 대체» · 자막 A안 = 시간 맞춘 자막 파일) ──
+    // ★자막 파일 = Resources/Videos/{이름}_자막.txt (SRT 형식 그대로 — Unity는 .srt를 TextAsset으로 안 읽는다). 1인칭은 {이름}_1인칭_자막.txt.
+    // ★파일이 없으면 자막 없이 돈다(경고 한 번).
+    private bool muted = true;
+    private float[] subStart = new float[0], subEnd = new float[0];
+    private string[] subText = new string[0];
+    private string subLoadedFor;
+
+    public bool Muted => muted;
+    public bool HasSubtitles => subText.Length > 0;
+
+    public void SetMuted(bool m) { muted = m; ApplyMute(); }
+
+    private void ApplyMute()
+    {
+        if (videoPlayer == null) return;
+        for (ushort i = 0; i < videoPlayer.audioTrackCount; i++)
+        {
+            videoPlayer.SetDirectAudioMute(i, muted);
+            var src = videoPlayer.GetTargetAudioSource(i); if (src != null) src.mute = muted;
+        }
+        // 트랙 수는 준비가 끝나야 나온다 — 0이면 출력 자체를 끈다(Direct · AudioSource 모두)
+        if (videoPlayer.audioTrackCount == 0 && muted) videoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+        else if (!muted && videoPlayer.audioOutputMode == VideoAudioOutputMode.None) videoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
+    }
+
+    private void LoadSubtitles()
+    {
+        string baseName = string.IsNullOrEmpty(currentVideoName) ? "" : $"{videoFolderPath}/{currentVideoName}";
+        string key = baseName + (IsFirstPerson ? FirstPersonSuffix : "");
+        if (key == subLoadedFor) return;
+        subLoadedFor = key;
+        var ta = string.IsNullOrEmpty(baseName) ? null : Resources.Load<TextAsset>(key + "_자막");
+        if (ta == null && IsFirstPerson) ta = Resources.Load<TextAsset>(baseName + "_자막");
+        ParseSrt(ta != null ? ta.text : null);
+        ChunaLogger.Log($"[GuideVideo] 자막 {(ta != null ? $"'{ta.name}' {subText.Length}줄" : $"★없음(Resources/{key}_자막.txt) — 자막 없이 재생")} · 소리 {(muted ? "끔" : "켬")}");
+    }
+
+    /// <summary>지금 재생 시각의 자막(없으면 빈 문자열). ★할당 없음 — 읽어 둔 문자열을 그대로 돌려준다.</summary>
+    public string CurrentSubtitle
+    {
+        get
+        {
+            if (subText.Length == 0 || videoPlayer == null) return "";
+            float t = (float)videoPlayer.time;
+            int lo = 0, hi = subStart.Length - 1, found = -1;
+            while (lo <= hi) { int mid = (lo + hi) >> 1; if (subStart[mid] <= t) { found = mid; lo = mid + 1; } else hi = mid - 1; }
+            return found >= 0 && t <= subEnd[found] ? subText[found] : "";
+        }
+    }
+
+    private void ParseSrt(string text)
+    {
+        var s = new System.Collections.Generic.List<float>(); var e = new System.Collections.Generic.List<float>(); var x = new System.Collections.Generic.List<string>();
+        if (!string.IsNullOrEmpty(text))
+        {
+            var blocks = text.Replace("\r", "").Split(new[] { "\n\n" }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var blk in blocks)
+            {
+                var lines = blk.Trim('\n').Split('\n');
+                int ti = lines.Length > 1 && lines[0].IndexOf("-->", StringComparison.Ordinal) < 0 ? 1 : 0;   // 번호 줄은 있어도 없어도
+                if (ti >= lines.Length) continue;
+                var parts = lines[ti].Split(new[] { "-->" }, StringSplitOptions.None);
+                if (parts.Length != 2 || !TryTime(parts[0], out float a) || !TryTime(parts[1], out float b)) continue;
+                var body = new System.Text.StringBuilder();
+                for (int i = ti + 1; i < lines.Length; i++) { if (body.Length > 0) body.Append('\n'); body.Append(lines[i].Trim()); }
+                s.Add(a); e.Add(b); x.Add(body.ToString());
+            }
+        }
+        // 시작 시각 순으로 셋을 같이 정렬한다(찾기가 이진 탐색이라)
+        var idx = new int[s.Count];
+        for (int i = 0; i < idx.Length; i++) idx[i] = i;
+        Array.Sort(idx, (p, q) => s[p].CompareTo(s[q]));
+        subStart = new float[idx.Length]; subEnd = new float[idx.Length]; subText = new string[idx.Length];
+        for (int i = 0; i < idx.Length; i++) { subStart[i] = s[idx[i]]; subEnd[i] = e[idx[i]]; subText[i] = x[idx[i]]; }
+    }
+
+    /// <summary>«00:01:02,345» · «01:02.3» · «62.3» 모두 받는다.</summary>
+    private static bool TryTime(string str, out float sec)
+    {
+        sec = 0f;
+        str = str.Trim().Replace(',', '.');
+        var p = str.Split(':');
+        float acc = 0f;
+        for (int i = 0; i < p.Length; i++)
+        {
+            if (!float.TryParse(p[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v)) return false;
+            acc = acc * 60f + v;
+        }
+        sec = acc;
+        return true;
     }
 
     #endregion
