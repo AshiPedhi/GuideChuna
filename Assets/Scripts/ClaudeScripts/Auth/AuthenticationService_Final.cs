@@ -409,7 +409,18 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
         request.SetRequestHeader("Content-Type", "application/json");
         request.timeout = requestTimeout;
 
-        await request.SendWebRequest().WithCancellation(requestCts.Token);
+        try
+        {
+            await request.SendWebRequest().WithCancellation(requestCts.Token);
+        }
+        catch (UnityWebRequestException we)
+        {
+            // ★11-05: UniTask가 실패 응답을 여기서 던져 아래 result 검사에 닿지 않는다 — 그래서 로그엔 «HTTP/1.1 404 Not Found»만 남고
+            //   서버가 준 본문은 안 보였다. 본문만 로그로 남기고, 던지는 예외(메시지)는 그대로 둔다(호출부가 메시지 문자열로 분기한다).
+            //   ChunaLogger.Log는 릴리스에서 잘리므로 Debug.LogWarning.
+            Debug.LogWarning($"[AuthService] 응답 실패 {url} — HTTP {we.ResponseCode} · 본문: {(string.IsNullOrEmpty(we.Text) ? "(없음)" : we.Text)}");
+            throw;
+        }
 
         if (request.result != UnityWebRequest.Result.Success)
         {

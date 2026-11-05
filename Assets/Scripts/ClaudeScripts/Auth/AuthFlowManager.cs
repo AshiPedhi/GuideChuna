@@ -23,7 +23,11 @@ public class AuthFlowManager
     public async UniTask<(string deviceSN, string orgID, bool licenseValid)> AuthenticateDeviceWithRetry(
         string savedDeviceSN, int maxRetries = 2)
     {
-        return await AuthenticateDeviceInternal(savedDeviceSN, null, 0, maxRetries);
+        // ★11-05: 저장된 SN이 있으면 첫 요청부터 그 SN으로 보낸다.
+        //   예전엔 첫 요청을 늘 빈 SN(null → "")으로 보내 서버가 매번 404를 주고, 1초 뒤 저장된 SN으로 다시 보내 통과했다
+        //   (11-04 기기 로그 10/10 «시도 1/3: 404» → 성공). 저장된 SN이 없을 때(첫 설치 · 앱 데이터 삭제)만 빈 SN으로 시작한다.
+        string first = string.IsNullOrEmpty(savedDeviceSN) ? null : savedDeviceSN;
+        return await AuthenticateDeviceInternal(savedDeviceSN, first, 0, maxRetries);
     }
 
     private async UniTask<(string deviceSN, string orgID, bool licenseValid)> AuthenticateDeviceInternal(
@@ -61,7 +65,11 @@ public class AuthFlowManager
             if (retryCount < maxRetries)
             {
                 await UniTask.Delay(1000);
-                return await AuthenticateDeviceInternal(savedDeviceSN, savedDeviceSN, retryCount + 1, maxRetries);
+                // ★11-05: 저장된 SN으로 실패했으면 다음엔 예전 첫 요청(빈 SN)을 한 번 해 본다 — 저장된 SN ↔ 빈 SN을 번갈아.
+                //   저장된 SN이 없으면 예전처럼 매번 빈 SN이다.
+                bool triedSaved = !string.IsNullOrEmpty(savedDeviceSN) && deviceSN == savedDeviceSN;
+                string nextSN = triedSaved ? null : (string.IsNullOrEmpty(savedDeviceSN) ? null : savedDeviceSN);
+                return await AuthenticateDeviceInternal(savedDeviceSN, nextSN, retryCount + 1, maxRetries);
             }
 
             throw;
