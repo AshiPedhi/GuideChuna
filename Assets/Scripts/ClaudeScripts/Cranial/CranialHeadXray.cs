@@ -216,6 +216,7 @@ public class CranialHeadXray : MonoBehaviour
 
     private void HandleSubStepStarted(SubStepData subStep)
     {
+        nextProximityScan = 0f;   // 11-13 단계가 바뀌면 파지점을 바로 다시 모은다
         if (subStep == null) return;
 
         // 이 단계가 xray를 쓰는 단계인가. (목록이 비면 '항상 허용' = 예전 동작)
@@ -424,7 +425,7 @@ public class CranialHeadXray : MonoBehaviour
             for (int t = 0; t < proximityPoints.Count; t++)
             {
                 Transform tp = proximityPoints[t];
-                if (tp == null) continue;
+                if (tp == null || !tp.gameObject.activeInHierarchy) continue;   // 11-13 모은 뒤 꺼진 파지점(0.5초 안)
                 float d2 = (h.position - tp.position).sqrMagnitude;
                 if (d2 < nearest) nearest = d2;
                 if (d2 <= sqr) near = true;
@@ -445,8 +446,14 @@ public class CranialHeadXray : MonoBehaviour
     private readonly List<Transform> proximityPoints = new List<Transform>();
 
     /// <summary>근접 판정 기준점을 모은다 — 머리 본 + 현재 활성화된 파지점 전부.</summary>
+    // 11-13 최적화: 종전엔 매 프레임 씬 전체에서 파지점을 찾았다(FindObjectsByType — 손 근접을 기다리는 동안 계속).
+    //   → 단계가 바뀔 때 + 0.5초마다만 다시 모은다. 그 사이에 꺼진 파지점은 IsHandNear에서 건너뛴다(활성 확인).
+    private float nextProximityScan;
+
     private void CollectProximityPoints()
     {
+        if (Time.time < nextProximityScan) return;
+        nextProximityScan = Time.time + 0.5f;
         proximityPoints.Clear();
 
         Transform head = ResolveProximityTarget();

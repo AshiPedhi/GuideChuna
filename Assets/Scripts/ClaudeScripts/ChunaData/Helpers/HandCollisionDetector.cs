@@ -87,8 +87,8 @@ public class HandCollisionDetector
     public bool CheckBoxCollision(Vector3 boxCenter, Vector3 boxSize, Quaternion boxRotation, Bounds patientBounds)
     {
         Vector3 halfSize = boxSize * 0.5f;
-        Vector3[] corners = new Vector3[8];
-        int idx = 0;
+        // Check if any corner is inside patient bounds
+        // 11-13 최적화: 꼭짓점 8개를 배열(new Vector3[8] — 판정마다 할당 · GC)에 모았다가 보던 것을 만들자마자 본다. 결과는 같다(어느 하나라도 안이면 true).
         for (int x = -1; x <= 1; x += 2)
         {
             for (int y = -1; y <= 1; y += 2)
@@ -96,16 +96,10 @@ public class HandCollisionDetector
                 for (int z = -1; z <= 1; z += 2)
                 {
                     Vector3 localCorner = new Vector3(halfSize.x * x, halfSize.y * y, halfSize.z * z);
-                    corners[idx++] = boxCenter + boxRotation * localCorner;
+                    if (patientBounds.Contains(boxCenter + boxRotation * localCorner))
+                        return true;
                 }
             }
-        }
-
-        // Check if any corner is inside patient bounds
-        foreach (var corner in corners)
-        {
-            if (patientBounds.Contains(corner))
-                return true;
         }
 
         // Reverse check: patient center inside hand box

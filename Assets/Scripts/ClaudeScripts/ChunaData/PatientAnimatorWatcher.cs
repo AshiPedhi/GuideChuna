@@ -17,7 +17,8 @@ using UnityEngine;
 public class PatientAnimatorWatcher : MonoBehaviour
 {
     /// <summary>false면 감시기를 아예 만들지 않는다.</summary>
-    public static bool Enabled = true;
+    // 11-13 최적화: true → false. 진단용(상태 · 되감김 · substep 로그)이라 평소엔 끈다 — 다시 볼 땐 true로.
+    public static bool Enabled = false;
 
     private Animator target;
     private int lastStateHash;
