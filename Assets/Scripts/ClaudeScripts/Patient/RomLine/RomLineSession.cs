@@ -319,6 +319,17 @@ public class RomLineSession : MonoBehaviour
         monitorUser = login.hasData && !string.IsNullOrEmpty(login.username) ? login.username : "";
         Debug.Log($"[선실측] 관제 녹화 사용자명 — {(monitorUser.Length > 0 ? monitorUser : "없음(파일 이름에서 뺀다)")}");
 
+        // ★11-13 실습 / 평가(재현성) — 로비 모드 팝업이 고른 값. 고른 게 없으면(별도 판 · 에디터 직접 Play) 실습.
+        evalMode = LobbyModeChoice.TryConsume(out InfoPanelController.ModeType chosen, out _) && chosen == InfoPanelController.ModeType.Evaluation;
+        monitorTitle = MonitorTitle + (evalMode ? " 평가" : " 실습");
+        if (evalMode)
+        {
+            hasBase = RomLineRepeatScore.TryLoadBaseline(monitorUser, baseVals, out baseWhen);
+            Debug.Log(hasBase ? $"[선실측] 평가 모드 — 비교할 실습값 있음({baseWhen} · {RomLineRepeatScore.BaselinePath(monitorUser)}) · 측정 중에는 안 보인다"
+                              : $"[선실측] ★평가 모드 — 이 사용자({monitorUser})의 실습값이 없다 — 점수를 못 낸다(실습 먼저)");
+        }
+        else Debug.Log($"[선실측] 실습 모드 — 확인할 때마다 실습값을 저장한다({RomLineRepeatScore.BaselinePath(monitorUser)})");
+
         var rig = FindAnyObjectByType<OVRCameraRig>();
         if (rig != null) trackingSpace = rig.trackingSpace;
 
@@ -351,6 +362,9 @@ public class RomLineSession : MonoBehaviour
         {
             // ★10-16 사용자 지시: 화면은 관제 미러링(mirror.html)이다 — 종전 monitor.html · webrtc 미러링은 쓰지 않는다.
             var pageAsset = Resources.Load<TextAsset>("RomLine/mirror");
+            // ★11-13 A안(추나 앱에 합침): 로비에서 들어오면 추나 웹 미러링이 8090 · 8092를 쥐고 있다 → 비켜 달라고 하고, OnDestroy에서 되돌린다
+            ChunaWebMirror.Suspend("선 실측");
+            suspendedChunaMirror = true;
             if (monitor.Start(monitorPort, pageAsset != null ? pageAsset.text : ""))
             {
                 // ★10-14 사용자 지시: 메인 화면의 모니터 주소 줄을 뺐다(모니터는 기기에서 확인된 적이 없다). 서버는 그대로 열리고 주소는 로그에 남는다.
@@ -411,7 +425,9 @@ public class RomLineSession : MonoBehaviour
         if (hapticOff > 0f) OVRInput.SetControllerVibration(0f, 0f, active);
         if (simultaneousOn) OVRInput.DisableSimultaneousHandsAndControllers();   // 우리가 켠 것만 되돌린다
         monitor.Stop();
+        if (suspendedChunaMirror) { suspendedChunaMirror = false; ChunaWebMirror.Resume("선 실측"); }   // 우리가 비키게 한 것만 되돌린다
     }
+    private bool suspendedChunaMirror;
 
     // ── 손 ──────────────────────────────────────────────────────────
     private void ReadHands()
@@ -1170,6 +1186,7 @@ public class RomLineSession : MonoBehaviour
         Debug.Log($"[선실측] 확인 — {MotionName[m]} · 능동 {(results[m * 2].valid ? results[m * 2].angle.ToString("F1") : "—")}° · " +
                   $"압박 {(results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") : "—")}° ({why})");
         Buzz(0.06f, 0.6f);
+        SaveBaselineIfPractice("확인");
         int next = NextTab(tab);
         if (next >= 0) { Resume(next, "확인"); return; }
 
@@ -1583,7 +1600,7 @@ public class RomLineSession : MonoBehaviour
         view.SetBattery(pct, charging);
     }
 
-    private const string MonitorTitle = "경추ROM진단";   // 관제 화면 타이틀 — 이 씬이 돌리는 실습
+    private const string MonitorTitle = "XR-ROM경추";   // 11-13 사용자 «경추ROM진단 → XR-ROM경추»   // 관제 화면 타이틀 — 이 씬이 돌리는 실습
     private string monitorUser = "";                     // 관제 화면 녹화 파일 이름의 사용자명(10-22) — 기기에 남은 로그인 정보(LoginStateStore), 없으면 빈 글자
 
     private void PumpMonitor()
@@ -1598,7 +1615,7 @@ public class RomLineSession : MonoBehaviour
         js.Append("{\"t\":").Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
           .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false")
           // 10-21 관제 화면 아래 줄: 실행 중인 실습 이름(타이틀) · 좌우 컨트롤러 연결 · 찍는 쪽
-          .Append(",\"title\":\"").Append(MonitorTitle).Append('"')
+          .Append(",\"title\":\"").Append(monitorTitle).Append('"')
           .Append(",\"user\":"); JsonStr(js, monitorUser);   // 10-22: 녹화 파일 이름(실습명_사용자명_날짜) — 없으면 브라우저가 뺀다
         js
           .Append(",\"ctrlL\":").Append(OVRInput.IsControllerConnected(OVRInput.Controller.LTouch) ? "true" : "false")
@@ -1715,6 +1732,7 @@ public class RomLineSession : MonoBehaviour
         confirmWait = false;
         noteText = "";
         Debug.Log($"[선실측] 이 탭 지우기 — {GuidedTabName[tab]} ({why})");
+        SaveBaselineIfPractice("탭 지우기");
         Play(sndUndo);
         dirty = true;
     }
@@ -1806,9 +1824,106 @@ public class RomLineSession : MonoBehaviour
                      .Append(pOn ? pr.angle.ToString("F1") : "").Append(',')
                      .Append(aOn && pOn ? (pr.angle - a.angle).ToString("+0.0;-0.0;0.0") : "").Append('\n');
         }
+        // 11-13 평가가 끝났으면 관제 «측정값 저장»에도 비교를 붙인다(끝나기 전엔 실습값을 안 보인다 — 사용자)
+        if (evalMode && evalScored)
+        {
+            resultCsv.Append("\n측정 명칭,실습 능동(°),실습 압박(°),오차 능동(°),오차 압박(°)\n");
+            for (int m = 0; m < 6; m++)
+                resultCsv.Append(MotionName[m]).Append(',')
+                         .Append(float.IsNaN(baseVals[m * 2]) ? "" : baseVals[m * 2].ToString("F1")).Append(',')
+                         .Append(float.IsNaN(baseVals[m * 2 + 1]) ? "" : baseVals[m * 2 + 1].ToString("F1")).Append(',')
+                         .Append(ErrText(m * 2) == "—" ? "" : ErrText(m * 2)).Append(',')
+                         .Append(ErrText(m * 2 + 1) == "—" ? "" : ErrText(m * 2 + 1)).Append('\n');
+            resultCsv.Append("평가 점수,").Append(evalScore.ToString("F1")).Append(",평균 오차,").Append(evalMeanErr.ToString("F2")).Append(",\n");
+        }
         return resultCsv.ToString();
     }
     private readonly StringBuilder resultCsv = new StringBuilder(256);
+
+    // ── 11-13 실습 / 평가(재현성) — RomLineRepeatScore 설명 참고 ──────────────────
+    private bool evalMode, hasBase, evalScored;
+    private string baseWhen = "", monitorTitle = MonitorTitle;
+    private readonly float[] baseVals = new float[RomLineRepeatScore.Slots];
+    private readonly float[] curVals = new float[RomLineRepeatScore.Slots];
+    private float evalScore, evalMeanErr;
+    private int evalN;
+
+    /// <summary>결과표와 같은 규칙(확인한 동작만)으로 지금 값 12칸을 채운다 — 없는 칸은 NaN.</summary>
+    private void FillCurrent()
+    {
+        for (int s = 0; s < RomLineRepeatScore.Slots; s++)
+            curVals[s] = results[s].valid && confirmed[s / 2] ? results[s].angle : float.NaN;
+    }
+
+    private void SaveBaselineIfPractice(string why)
+    {
+        if (evalMode) return;
+        FillCurrent();
+        RomLineRepeatScore.SaveBaseline(monitorUser, curVals);
+        Debug.Log($"[선실측] 실습값 저장({why}) — {RomLineRepeatScore.BaselinePath(monitorUser)}");
+    }
+
+    /// <summary>판 맨 아래 줄 · 평가가 끝났으면 값 칸에 실습값 · 차이 칸에 오차를 덧쓴다(Refresh 안 · 결과표를 채운 뒤).</summary>
+    private void RefreshRepeat()
+    {
+        if (!evalMode) { view.SetFooter("실습 — 이 측정값이 평가의 비교 기준이 됩니다"); return; }
+        if (!hasBase) { view.SetFooter("평가 — ★이 사용자의 실습 기록이 없어 점수를 낼 수 없습니다(실습 먼저)"); evalScored = false; return; }
+        if (!Done) { view.SetFooter("평가 — 여섯 동작을 다 재면 실습값과 비교해 점수를 냅니다"); evalScored = false; return; }
+
+        // ★평가가 끝난 뒤에만 실습값을 보인다(사용자 11-13)
+        FillCurrent();
+        evalScore = RomLineRepeatScore.Total(baseVals, curVals, out evalMeanErr, out evalN);
+        var ci = CultureInfo.InvariantCulture;
+        for (int m = 0; m < 6; m++)
+        {
+            int a = m * 2, p = m * 2 + 1;
+            if (!float.IsNaN(baseVals[a]) && !float.IsNaN(curVals[a]))
+                view.SetValue(a, curVals[a].ToString("F1", ci) + "° <size=60%>(실습 " + baseVals[a].ToString("F1", ci) + ")</size>", false, false);
+            if (!float.IsNaN(baseVals[p]) && !float.IsNaN(curVals[p]))
+                view.SetValue(p, curVals[p].ToString("F1", ci) + "° <size=60%>(실습 " + baseVals[p].ToString("F1", ci) + ")</size>", false, false);
+            view.SetDiff(m, "오차 " + ErrText(a) + " / " + ErrText(p), false);
+        }
+        view.SetFooter(evalN > 0
+            ? $"평가 점수 {evalScore:F1}점 · 평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 실습 {baseWhen} 기준 (오차 = 평가 − 실습, 능동 / 압박)"
+            : "평가 — 실습과 겹치는 측정값이 없어 점수를 낼 수 없습니다");
+        if (!evalScored)
+        {
+            evalScored = true;
+            Debug.Log($"[선실측] ★평가 점수 {evalScore:F1} · 평균 오차 {evalMeanErr:F2}° · {evalN}칸 · 실습 {baseWhen}");
+            SaveEvalFile();
+        }
+    }
+
+    private string ErrText(int s)
+    {
+        if (float.IsNaN(baseVals[s]) || float.IsNaN(curVals[s])) return "—";
+        return (curVals[s] - baseVals[s]).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
+    }
+
+    private void SaveEvalFile()
+    {
+        var ci = CultureInfo.InvariantCulture;
+        var sb = new StringBuilder(512);
+        sb.Append("측정 명칭,구분,실습(°),평가(°),오차(°),점수\n");
+        for (int s = 0; s < RomLineRepeatScore.Slots; s++)
+        {
+            bool both = !float.IsNaN(baseVals[s]) && !float.IsNaN(curVals[s]);
+            sb.Append(MotionName[s / 2]).Append(',').Append(s % 2 == 0 ? "능동" : "압박").Append(',')
+              .Append(float.IsNaN(baseVals[s]) ? "" : baseVals[s].ToString("F1", ci)).Append(',')
+              .Append(float.IsNaN(curVals[s]) ? "" : curVals[s].ToString("F1", ci)).Append(',')
+              .Append(both ? (curVals[s] - baseVals[s]).ToString("F1", ci) : "").Append(',')
+              .Append(both ? RomLineRepeatScore.ScoreOf(curVals[s] - baseVals[s]).ToString("F1", ci) : "").Append('\n');
+        }
+        sb.Append("종합,,,,").Append(evalMeanErr.ToString("F2", ci)).Append(',').Append(evalScore.ToString("F1", ci)).Append('\n');
+        sb.Append("실습 기준,").Append(baseWhen).Append(",,,,\n");
+        try
+        {
+            string path = System.IO.Path.Combine(Application.persistentDataPath, "romline_eval_" + System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".csv");
+            System.IO.File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
+            Debug.Log("[선실측] 평가 결과 파일 — " + path);
+        }
+        catch (System.Exception e) { Debug.LogWarning($"[선실측] ★평가 결과 파일 실패({e.Message})"); }
+    }
 
     private string DiffText(int m)
     {
@@ -1910,6 +2025,7 @@ public class RomLineSession : MonoBehaviour
             view.SetDiff(m, aOn && pOn ? DiffText(m) : "—", current >= 0 && current / 2 == m);   // ★10-15: 차이 칸(압박 − 능동)
             view.SetGauge(m, aOn, a.angle, aOpp, pOn, pr.angle, pOpp);
         }
+        RefreshRepeat();
         monitor.SetCsv(ResultCsv());   // 결과표가 바뀔 때마다(Refresh는 dirty일 때만 돈다)
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.

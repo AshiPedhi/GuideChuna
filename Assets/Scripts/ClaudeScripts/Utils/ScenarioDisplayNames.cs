@@ -28,8 +28,8 @@ public static class ScenarioDisplayNames
         { "복와위_하부흉추_굴곡변위", ("흉추교정2", "복와위 양손두상골 하부흉추 골곡변위 교정기법") },   // ★«골곡»은 받은 목록 그대로 — 오타 여부 확인 대기
         { "제1늑골 교정기법", ("늑골교정1", "흉곽부 제1늑골(1st rib) 교정") },
         { "제2늑골_상방변위", ("늑골교정2", "흉곽부 제2늑골(2nd rib) 교정") },
-        // ROM진단 — 09-07 지시 «경추ROM진단»
-        { "경추ROM측정", ("경추ROM진단", "") },
+        // ROM진단 — 09-07 지시 «경추ROM진단» → 11-13 사용자 «경추ROM진단을 XR-ROM경추로»
+        { "경추ROM측정", ("XR-ROM경추", "") },
     };
 
     public static bool Has(string internalName) => !string.IsNullOrEmpty(internalName) && Map.ContainsKey(internalName);

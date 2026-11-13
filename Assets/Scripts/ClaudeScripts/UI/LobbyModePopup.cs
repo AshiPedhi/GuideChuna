@@ -55,8 +55,9 @@ public class LobbyModePopup : MonoBehaviour
 
     private void OnDestroy() { if (Instance == this) Instance = null; }
 
-    public void Show(int scenarioIndex, string title, LobbyAuthUI_Complete brain, Sprite photo = null, string subtitle = null)
+    public void Show(int scenarioIndex, string title, LobbyAuthUI_Complete brain, Sprite photo = null, string subtitle = null, string sceneOverride = null)
     {
+        pendingScene = sceneOverride;   // 11-13 XR-ROM 카드(RomLineScene)도 팝업을 거친다 — 고른 뒤 그 씬으로
         if (subtitleText != null) subtitleText.text = subtitle ?? "";
         if (thumbnail != null) { thumbnail.sprite = photo; thumbnail.enabled = photo != null; }
         pendingIndex = scenarioIndex;
@@ -82,7 +83,9 @@ public class LobbyModePopup : MonoBehaviour
         ChunaLogger.Log($"[LobbyModePopup] 진입 — {mode} · 난이도 칸 {difficulty} → 넘김 {d}");
         LobbyModeChoice.Set(mode, d);
         int index = pendingIndex;
+        string scene = pendingScene;
         Hide();
-        auth.OnScenarioCardClicked(index);
+        auth.OnScenarioCardClicked(index, scene);
     }
+    private string pendingScene;
 }

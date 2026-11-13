@@ -66,7 +66,9 @@ public class ScenarioLaunchButton : MonoBehaviour
         // 2026-10-27: 로그인돼 있고 TrainingScene으로 가는 카드면 모드 팝업(VR/XR × 실습/평가)을 먼저 띄운다.
         //   씬을 따로 지정한 카드(실측 기록 씬 등)는 모드가 의미 없어 종전대로 바로 간다.
         //   팝업이 씬에 없으면 종전대로 — 실습 씬에서 모드를 고른다.
-        if (lobbyAuthUI != null && lobbyAuthUI.IsLoggedIn && string.IsNullOrWhiteSpace(sceneOverride))
+        // ★11-13 사용자 «다른 시나리오 진입처럼 양식 맞출 것» — XR-ROM(선 실측 · sceneOverride RomLineScene)도 실습 / 평가를 고른다.
+        //   그래서 씬을 지정한 카드도 팝업을 띄운다(지금 씬 지정 카드는 그 하나뿐 · 옛 RomMarkerScene 카드는 11-13에 RomLineScene으로 바꿨다).
+        if (lobbyAuthUI != null && lobbyAuthUI.IsLoggedIn)
         {
             var popup = LobbyModePopup.Instance;
             if (popup != null)
@@ -74,7 +76,7 @@ public class ScenarioLaunchButton : MonoBehaviour
                 var card = GetComponent<LobbyItemCard>();
                 var photo = transform.Find("Content/Background/사진")?.GetComponent<UnityEngine.UI.Image>();   // 카드 사진 칸(10-27 분리)
                 var sub = transform.Find("Content/Background/Elements/Label (1)")?.GetComponent<TMPro.TMP_Text>();   // 카드 부제 = 기법명
-                popup.Show(scenarioIndex, card != null ? card.DisplayName : name, lobbyAuthUI, photo != null ? photo.sprite : null, sub != null ? sub.text : null);
+                popup.Show(scenarioIndex, card != null ? card.DisplayName : name, lobbyAuthUI, photo != null ? photo.sprite : null, sub != null ? sub.text : null, sceneOverride);
                 return;
             }
         }
