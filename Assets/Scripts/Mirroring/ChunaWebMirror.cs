@@ -188,7 +188,8 @@ public class ChunaWebMirror : MonoBehaviour
     {
         html = Resources.Load<TextAsset>("Mirror/chuna_mirror")?.text ?? "";
         // 11-13 시험 스위치: adb shell setprop debug.coco.webmirror.sync 1 → 영상도 동기 읽기 + 앱 시작 · 씬 대기 없음(앱을 다시 켜야 먹는다)
-        syncMode = Prop("debug.coco.webmirror.sync", "0") == "1";
+        // ★11-13 기기 실측: 비동기는 대기 20초를 다 지나도 첫 읽기 0.4초 뒤 죽었다(18:04:25) · 동기는 대기 없이 멀쩡(5.3ms/장) → 기본 = 동기. 0을 주면 예전 비동기.
+        syncMode = Prop("debug.coco.webmirror.sync", "1") != "0";
         video.SyncRead = syncMode;
         Debug.Log($"[웹미러] 영상 읽기 방식 — {(syncMode ? "★동기(ReadPixels) · 시작/씬 대기 없음" : "비동기(AsyncGPUReadback) · 시작 20초 · 씬 5초 대기")}");
         if (!suspended) StartServing();
@@ -409,7 +410,9 @@ public class ChunaWebMirror : MonoBehaviour
 
         var ci = CultureInfo.InvariantCulture;
         state.Length = 0;
-        state.Append("{\"page\":\"chuna\",\"title\":");   // 11-13 page — 관제 페이지가 다른 종류(rom)를 받고 있으면 스스로 새로고침한다 Json(state, sc != null ? ScenarioDisplayNames.Full(sc.scenarioName) : "");   // 10-27: 화면 이름 표
+        // 11-13 page — 관제 페이지가 다른 종류(rom)를 받고 있으면 스스로 새로고침한다
+        //   ★11-13 기기에서 잡음: 이 주석을 아래 줄 끝에 붙였다가 Json(제목) 호출이 주석에 묻혀 "title":, (깨진 JSON → 페이지 «연결 끊김»)
+        state.Append("{\"page\":\"chuna\",\"title\":"); Json(state, sc != null ? ScenarioDisplayNames.Full(sc.scenarioName) : "");   // 10-27: 화면 이름 표
         state.Append(",\"user\":"); Json(state, monitorUser);
         state.Append(",\"scene\":"); Json(state, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         state.Append(",\"mode\":"); Json(state, sm != null ? sm.SelectedMode : "");

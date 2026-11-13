@@ -86,6 +86,27 @@ public class RomLineMirror : MonoBehaviour
     // 11-13 추나 앱에 합침(A안) — 추나 미러링과 같은 대기(ChunaWebMirror.AsyncReadbackReady: 앱 시작 20초 · 씬 불러온 뒤 5초)를 지난 뒤에 GPU 비동기 읽기를 시작한다.
     //   종전(별도 ROM 앱)엔 대기 없이 읽었다 — GLES 컴퓨트 버퍼 첫 생성 크래시(11-04 · 11-11 심볼)와 같은 길이다.
     private bool readWaitLogged, readWaitDone;
+    // ★11-13 기기 실측(3S · 추나 앱): 대기 20초를 다 기다려도 <b>첫 비동기 읽기 0.4초 뒤</b> 같은 크래시(memset 널)가 났다 — 대기는 회피가 아니었다.
+    //   동기 읽기(ReadPixels)로는 대기 없이 60초+ 멀쩡 · 영상 15장/s · 앱 72fps · 한 장 평균 5.3ms. 11-12 ROM 별도 앱의 9연속 크래시도 같은 서명.
+    //   → 기본을 동기 읽기로. adb shell setprop debug.coco.webmirror.sync 0 이면 예전 비동기(추나 미러링과 같은 스위치).
+    private bool syncRead = true;
+    private Texture2D syncVideoTex, syncOverlayTex, syncWallTex;
+    private bool syncVideoLogged;
+
+    /// <summary>rt를 주 스레드에서 바로 읽는다(ReadPixels). 돌려준 배열은 다음 ReadPixels 전까지만 유효 — 바로 복사한다.</summary>
+    private static NativeArray<byte> ReadSync(RenderTexture rt, ref Texture2D tex, TextureFormat fmt)
+    {
+        if (tex == null || tex.width != rt.width || tex.height != rt.height || tex.format != fmt)
+        {
+            if (tex != null) Destroy(tex);
+            tex = new Texture2D(rt.width, rt.height, fmt, false, true) { name = "미러링 동기 읽기 " + rt.name };
+        }
+        var prev = RenderTexture.active;
+        RenderTexture.active = rt;
+        tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0, false);
+        RenderTexture.active = prev;
+        return tex.GetRawTextureData<byte>();
+    }
     // 11-13 영상 포트(8092) 다시 시도 — 추나 미러링이 막 비켜 준 직후라 아직 닫히는 중일 수 있다
     private float videoRetryAt = -1f;
     private int videoTries;
@@ -107,6 +128,10 @@ public class RomLineMirror : MonoBehaviour
     {
         monitor = m;
         view = v;
+#if UNITY_ANDROID && !UNITY_EDITOR
+        syncRead = AndroidProp("debug.coco.webmirror.sync") != "0";
+#endif
+        Debug.Log($"[선실측] 미러링 읽기 방식 — {(syncRead ? "동기(ReadPixels) · 대기 없음" : "★비동기(AsyncGPUReadback) · 시작 20초 · 씬 5초 대기")}");
         StartCamera();
         StartVideo();
         Debug.Log($"[선실측] 미러링 — 붙었다 · 벽면UI {wallWidth}px 간격 {wallInterval:F2}s · 현실 영상 {camResolution.x}×{camResolution.y} 간격 {camInterval:F2}s · JPEG {jpegQuality}");
@@ -270,14 +295,15 @@ public class RomLineMirror : MonoBehaviour
         px.Reinterpret<byte>(4).CopyTo(camBuf);
         camW = r.x; camH = r.y;
         camBusy = true;
-        if (!camOverlay || !SystemInfo.supportsAsyncGPUReadback)
+        if (!camOverlay || (!syncRead && !SystemInfo.supportsAsyncGPUReadback))
         {
             ThreadPool.QueueUserWorkItem(_ => Encode(camBuf, camW, camH, "cam"));
             return;
         }
 
         RenderOverlay(r);
-        AsyncGPUReadback.Request(overlayRt, 0, TextureFormat.RGBA32, OnOverlayRead);
+        if (syncRead) ProcessOverlay(ReadSync(overlayRt, ref syncOverlayTex, TextureFormat.RGBA32));
+        else AsyncGPUReadback.Request(overlayRt, 0, TextureFormat.RGBA32, OnOverlayRead);
     }
 
     /// <summary>앱 화면을 패스스루 카메라 자리 · 화각에서 투명 바탕에 다시 그린다(overlayRt). JPEG · 영상 경로가 같이 쓴다.</summary>
@@ -329,7 +355,7 @@ public class RomLineMirror : MonoBehaviour
     private void StartVideo()
     {
 #if UNITY_ANDROID && !UNITY_EDITOR
-        if (!SystemInfo.supportsAsyncGPUReadback) { videoState = "지원 안 함(GPU 비동기 읽기 없음)"; Debug.Log("[선실측] 미러링 영상 — " + videoState); return; }
+        if (!syncRead && !SystemInfo.supportsAsyncGPUReadback) { videoState = "지원 안 함(GPU 비동기 읽기 없음)"; Debug.Log("[선실측] 미러링 영상 — " + videoState); return; }
         Shader sh = Resources.Load<Shader>("RomLine/RomMirrorNV12");
         if (sh == null || !sh.isSupported) { videoState = "셰이더 없음"; Debug.LogWarning("[선실측] ★미러링 영상 — 셰이더 RomLine/RomMirrorNV12가 없거나 지원 안 함"); return; }
         if (nv12Mat == null) nv12Mat = new Material(sh);   // 11-13 포트 재시도 때 다시 만들지 않는다
@@ -425,6 +451,22 @@ public class RomLineMirror : MonoBehaviour
         Graphics.Blit(cam, nv12Rt, nv12Mat, 0);
         vBusy[slot] = true;
         int s = slot;
+        if (syncRead)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var data = ReadSync(nv12Rt, ref syncVideoTex, TextureFormat.R8);
+            bool ok = data.Length == vBufs[s].Length;
+            if (ok) data.CopyTo(vBufs[s]);
+            if (!syncVideoLogged)
+            {
+                syncVideoLogged = true;
+                if (ok) Debug.Log($"[선실측] 미러링 영상 — 동기 읽기 첫 장 {nv12Rt.width}×{nv12Rt.height} R8 · {sw.Elapsed.TotalMilliseconds:F1}ms · 첫 바이트 {data[0]} · 가운데 {data[data.Length / 3]}(0만 나오면 읽기 실패)");
+                else Debug.LogError($"[선실측] ★미러링 영상 — 동기 읽기 크기가 안 맞는다(읽음 {data.Length} · 칸 {vBufs[s].Length})");
+            }
+            if (ok) FeedVideo(s);
+            vBusy[s] = false;
+            return;
+        }
         AsyncGPUReadback.RequestIntoNativeArray(ref vBufs[s], nv12Rt, 0, req => OnVideoRead(req, s));
     }
 
@@ -432,14 +474,22 @@ public class RomLineMirror : MonoBehaviour
     {
         try
         {
-            if (req.hasError || !vBufs[slot].IsCreated || video == null) return;
+            if (req.hasError) return;
+            FeedVideo(slot);
+        }
+        finally { vBusy[slot] = false; }
+    }
+
+    private void FeedVideo(int slot)
+    {
+        {
+            if (!vBufs[slot].IsCreated || video == null) return;
 #if UNITY_ANDROID && !UNITY_EDITOR
             videoArgs[0].l = vJBufs[slot];
             videoArgs[1].j = videoClock.ElapsedTicks * 1000000L / System.Diagnostics.Stopwatch.Frequency;
             if (AndroidJNI.CallBooleanMethod(video.GetRawObject(), videoFeed, videoArgs)) vidFed++;
 #endif
         }
-        finally { vBusy[slot] = false; }
     }
 
     private void EnsureOverlay(Vector2Int r)
@@ -464,9 +514,13 @@ public class RomLineMirror : MonoBehaviour
 
     private void OnOverlayRead(AsyncGPUReadbackRequest req)
     {
-        if (req.hasError || camBuf == null) { camBusy = false; return; }
-        NativeArray<byte> data = req.GetData<byte>();
-        if (data.Length != camBuf.Length) { camBusy = false; return; }
+        if (req.hasError) { camBusy = false; return; }
+        ProcessOverlay(req.GetData<byte>());
+    }
+
+    private void ProcessOverlay(NativeArray<byte> data)
+    {
+        if (camBuf == null || data.Length != camBuf.Length) { camBusy = false; return; }
         if (overlayBuf == null || overlayBuf.Length != data.Length) overlayBuf = new byte[data.Length];
         data.CopyTo(overlayBuf);
         ThreadPool.QueueUserWorkItem(_ =>
@@ -490,7 +544,7 @@ public class RomLineMirror : MonoBehaviour
     private void LateUpdate()   // 판이 이번 프레임의 글자 · 선으로 바뀐 뒤에 찍는다
     {
         if (monitor == null || monitor.Port == 0 || view == null || view.Panel == null || !view.PanelPlaced) return;
-        if (!readWaitDone)
+        if (!readWaitDone && !syncRead)   // 동기 읽기면 기다릴 이유가 없다(11-13 기기 실측)
         {
             if (!ChunaWebMirror.AsyncReadbackReady(out float left))
             {
@@ -509,7 +563,7 @@ public class RomLineMirror : MonoBehaviour
             CaptureCam();   // 겹칠 가상 화면이 이번 프레임의 끝점 · 선을 그리게 LateUpdate에서
         }
         if (wallBusy || now < wallNext || !monitor.ImageWatched("wall")) return;
-        if (!SystemInfo.supportsAsyncGPUReadback)
+        if (!syncRead && !SystemInfo.supportsAsyncGPUReadback)
         {
             Debug.LogWarning("[선실측] ★미러링 — 이 기기는 GPU 비동기 읽기를 지원하지 않는다(벽면UI 이미지 없음)");
             wallNext = float.MaxValue;   // 한 번만 남긴다
@@ -528,7 +582,8 @@ public class RomLineMirror : MonoBehaviour
         wallCam.Render();
 
         wallBusy = true;
-        AsyncGPUReadback.Request(wallRt, 0, TextureFormat.RGBA32, OnWallRead);
+        if (syncRead) ProcessWall(ReadSync(wallRt, ref syncWallTex, TextureFormat.RGBA32));
+        else AsyncGPUReadback.Request(wallRt, 0, TextureFormat.RGBA32, OnWallRead);
     }
 
     private void EnsureWallCamera()
@@ -556,8 +611,13 @@ public class RomLineMirror : MonoBehaviour
 
     private void OnWallRead(AsyncGPUReadbackRequest req)
     {
-        if (req.hasError || wallRt == null) { wallBusy = false; return; }
-        NativeArray<byte> data = req.GetData<byte>();
+        if (req.hasError) { wallBusy = false; return; }
+        ProcessWall(req.GetData<byte>());
+    }
+
+    private void ProcessWall(NativeArray<byte> data)
+    {
+        if (wallRt == null) { wallBusy = false; return; }
         if (wallBuf == null || wallBuf.Length != data.Length) wallBuf = new byte[data.Length];
         data.CopyTo(wallBuf);
         ThreadPool.QueueUserWorkItem(_ => Encode(wallBuf, wallW, wallH, "wall"));
@@ -623,5 +683,8 @@ public class RomLineMirror : MonoBehaviour
         if (video != null) { try { video.Call("stop"); } catch (Exception) { } video.Dispose(); video = null; }
         AsyncGPUReadback.WaitAllRequests();
         FreeVideoBuffers();
+        if (syncVideoTex != null) Destroy(syncVideoTex);
+        if (syncOverlayTex != null) Destroy(syncOverlayTex);
+        if (syncWallTex != null) Destroy(syncWallTex);
     }
 }
