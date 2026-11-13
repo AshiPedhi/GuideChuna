@@ -48,6 +48,8 @@ public class RomLineMonitor
         try
         {
             listener = new TcpListener(IPAddress.Any, port);
+            // 11-13 A안: 추나 미러링과 선 실측이 한 앱에서 8090을 번갈아 연다 — 닫은 쪽의 끊긴 연결(TIME_WAIT)이 다음 쪽 bind를 막지 않게
+            listener.Server.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             listener.Start();
         }
         catch (Exception e)

@@ -301,13 +301,18 @@ setTimeout(() => { if (mode === 'wait' && !videoTry) goJpeg('4초 안에 영상 
 
 // ── 영상(H.264) — 10-21 사용자 지시: 배터리 · 발열을 줄이려 JPEG 대신 헤드셋 하드웨어 압축 ──
 //   헤드셋(RomVideoEncoder)이 :videoPort/video로 Annex-B 스트림을 흘린다 → 접근 단위(한 장)로 잘라 jmuxer가 MSE(<video>)에 넣는다.
-//   첫 장이 5초 안에 안 오거나 끊기면 사진(JPEG)으로 돌아간다. 장이 한 번도 안 온 실패가 3번 이어지면 다시 시도하지 않는다.
+//   첫 장이 5초 안에 안 오거나 끊기면 사진(JPEG)으로 돌아간다.
+//   ★11-10 사용자 «왜 영상이 아니라 사진으로» — 종전엔 실패 3번이면 <b>다시는</b> 영상을 시도하지 않아, 헤드셋 앱이 죽었다 다시 켜진 뒤에도
+//     페이지가 사진(낮은 프레임)에 머물렀다(Quest 3 · 헤드셋은 영상을 보내는 중이었다). → 실패 3번 뒤에도 10초마다 한 번씩 다시 시도한다.
 const vid = $('vCam');
-let videoPort = 0, videoTry = null, videoFails = 0;
+let videoPort = 0, videoTry = null, videoFails = 0, videoRetry = null;
+const VIDEO_RETRY_MS = 10000;
 function startVideo() {
   if (videoTry || !videoPort) return;
-  if (videoFails >= 3 || !window.MediaSource || typeof JMuxer === 'undefined') {
-    goJpeg(videoFails >= 3 ? '영상 실패 3번' : '이 브라우저는 영상(MSE) 재생 불가');
+  if (!window.MediaSource || typeof JMuxer === 'undefined') { goJpeg('이 브라우저는 영상(MSE) 재생 불가'); return; }
+  if (videoFails >= 3) {
+    goJpeg('영상 실패 3번 — ' + VIDEO_RETRY_MS / 1000 + '초 뒤 다시 시도');
+    if (!videoRetry) videoRetry = setTimeout(() => { videoRetry = null; videoFails = 2; startVideo(); }, VIDEO_RETRY_MS);
     return;
   }
   const jm = new JMuxer({ node: vid, mode: 'video', flushingTime: 0, fps: 15, clearBuffer: true, debug: false, onError: () => {} });

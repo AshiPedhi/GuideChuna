@@ -40,6 +40,9 @@ public class ChunaWebMirror : MonoBehaviour
     {
         if (Prop("debug.coco.webmirror", "1") == "0") return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "RomLineScene") return;   // ROM 판 — 포트 8090을 RomLineSession이 쓴다
+        // 11-11 씬을 불러온 시각 — 그 뒤 SceneSettleSeconds가 지나야 화면 읽기를 시작한다(아래 Warmup 설명)
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, __) => lastSceneLoadAt = Time.realtimeSinceStartup;
+        lastSceneLoadAt = Time.realtimeSinceStartup;
         var go = new GameObject("[ChunaWebMirror]");
         DontDestroyOnLoad(go);
         go.AddComponent<ChunaWebMirror>();
@@ -79,11 +82,78 @@ public class ChunaWebMirror : MonoBehaviour
     private bool ready;
     private readonly StringBuilder info = new StringBuilder(384);
 
+    // ── 11-13 사용자 «XR-ROM을 추나에 같이 합쳐야» (A안 — 로비 카드로 RomLineScene에 들어간다 · 별도 앱 없앰) ──
+    //   선 실측 씬은 자기 관제 서버(RomLineSession :8090 · RomLineMirror :8092)를 연다 — 이 미러링과 포트가 같다.
+    //   → 그 씬이 서버를 열기 직전에 Suspend로 비켜 주고, 그 씬이 닫히면 Resume으로 다시 연다(켠 쪽 RomLineSession이 끈다 — 대칭).
+    //   ★Resume은 바로 열지 않고 ResumeDelay 뒤에 연다 — 씬이 내려갈 때 RomLineMirror(:8092)의 OnDestroy가 RomLineSession보다 늦을 수 있다.
+    //   관제 화면 주소(:8090)는 같으므로 PC 브라우저는 그대로 두면 된다(다시 붙는 건 브라우저 쪽 재시도에 달렸다 — 기기 미확인).
+    private static ChunaWebMirror instance;
+    private static bool suspended;
+    private const float ResumeDelay = 1f, RetryEvery = 1f;
+    private const int RetryMax = 10;
+    private bool serving;
+    private float resumeAt = -1f;
+    private int resumeTries;
+    private string html = "";
+
+    /// <summary>선 실측 씬이 자기 서버를 열기 직전에 부른다 — 8090 · 8092를 비운다.</summary>
+    public static void Suspend(string by)
+    {
+        if (suspended) return;
+        suspended = true;
+        if (instance == null) { Debug.Log($"[웹미러] 비켜 줌 요청({by}) — 미러링이 안 떠 있다(에디터 · 속성 0 · 별도 판)"); return; }
+        instance.resumeAt = -1f;
+        instance.StopServing();
+        Debug.Log($"[웹미러] ★비켜 줌({by}) — 8090 · {VideoPort} 닫음 · 그 씬이 닫히면 다시 연다");
+    }
+
+    /// <summary>선 실측 씬이 닫힐 때 부른다 — ResumeDelay 뒤 다시 연다.</summary>
+    public static void Resume(string by)
+    {
+        if (!suspended) return;
+        suspended = false;
+        if (instance == null) return;
+        instance.resumeAt = Time.unscaledTime + ResumeDelay;
+        instance.resumeTries = 0;
+        Debug.Log($"[웹미러] 다시 열기 예약({by}) — {ResumeDelay:F0}초 뒤");
+    }
+
+    private void Awake() { instance = this; }
+
+    private void StopServing()
+    {
+        if (cam != null && cb != null) cam.RemoveCommandBuffer(CamEvent, cb);
+        cam = null;
+        server.Stop();
+        video.Dispose();
+        AsyncGPUReadback.WaitAllRequests();
+        busy = false;
+        serving = false;
+    }
+
+    private void StartServing()
+    {
+        resumeAt = -1f;
+        if (!server.Start(Port, html))
+        {
+            if (++resumeTries <= RetryMax) { resumeAt = Time.unscaledTime + RetryEvery; Debug.LogWarning($"[웹미러] ★8090을 아직 못 열었다 — {RetryEvery:F0}초 뒤 다시({resumeTries}/{RetryMax})"); }
+            else Debug.LogError($"[웹미러] ★8090을 {RetryMax}번 못 열었다 — 미러링 없이 계속한다");
+            return;
+        }
+        video.Start();
+        serving = true;
+        Debug.Log($"[웹미러] 열었다 — {server.Url} · 영상 {video.State}");
+    }
+
     private System.Collections.IEnumerator Start()
     {
-        string html = Resources.Load<TextAsset>("Mirror/chuna_mirror")?.text ?? "";
-        server.Start(Port, html);
-        video.Start();
+        html = Resources.Load<TextAsset>("Mirror/chuna_mirror")?.text ?? "";
+        // 11-13 시험 스위치: adb shell setprop debug.coco.webmirror.sync 1 → 영상도 동기 읽기 + 앱 시작 · 씬 대기 없음(앱을 다시 켜야 먹는다)
+        syncMode = Prop("debug.coco.webmirror.sync", "0") == "1";
+        video.SyncRead = syncMode;
+        Debug.Log($"[웹미러] 영상 읽기 방식 — {(syncMode ? "★동기(ReadPixels) · 시작/씬 대기 없음" : "비동기(AsyncGPUReadback) · 시작 20초 · 씬 5초 대기")}");
+        if (!suspended) StartServing();
+        else Debug.Log("[웹미러] 시작 — 선 실측 씬이 포트를 쓰는 중이라 서버는 그 씬이 닫힌 뒤 연다");
         // 시작 직후엔 XR이 아직 눈 화면을 안 만든다(256×256) — 실제 크기가 나올 때까지 기다린다(HwMirrorTest와 같다)
         float until = Time.realtimeSinceStartup + 15f;
         while (Time.realtimeSinceStartup < until && (!XRSettings.isDeviceActive || XRSettings.eyeTextureDesc.width <= 256)) yield return null;
@@ -127,6 +197,11 @@ public class ChunaWebMirror : MonoBehaviour
 
     private void Update()
     {
+        if (!serving)
+        {
+            if (!suspended && resumeAt >= 0f && Time.unscaledTime >= resumeAt) StartServing();
+            return;
+        }
         while (server.TryDequeue(out string c))
         {
             if (c.Length == 4 && c.StartsWith("res") && c[3] >= '0' && c[3] <= '2') pendingChoice = c[3] - '0';
@@ -167,6 +242,20 @@ public class ChunaWebMirror : MonoBehaviour
         // ★11-04 진단: 기기(3S · GLES3)에서 잡기 시작 25~30ms 뒤 렌더 스레드 충돌 4/4
         //   (심볼: GfxDeviceGLES::UpdateComputeConstantBuffers → ClearBufferSubData → memset 널). 복사와 출력 · 읽기를 시간으로 떼어 어느 쪽인지 가른다.
         if (now < stage2At) return;
+        // ★11-10 앱 시작 직후 출력 · 읽기를 시작하면 렌더 스레드가 죽는다(SIGSEGV · memset 널) — 4번 모두 시작 1.4~2초 뒤 첫 그림에서.
+        //   같은 판이 몇 초 뒤 켜졌을 땐 끝까지 멀쩡했다(15:41~15:43). 11-04 기록도 «켜고 40초 뒤는 멀쩡 · 켜자마자는 죽음».
+        //   → 앱이 켜지고 WarmupSeconds가 지나기 전에는 출력 · 읽기를 시작하지 않는다(원인 제거가 아니라 회피 — 원인은 아직 모름).
+        // ★11-11 3S 10:33 크래시를 이 빌드 심볼(libunity 706c6be3d3d01005)로 풀었다:
+        //   GfxDeviceWorker → GfxDeviceGLES::UpdateComputeConstantBuffers → BufferManagerGLES::AcquireBuffer → ApiGLES::ClearBufferSubData → memset(널)
+        //   = GLES에서 비동기 읽기(컴퓨트)용 상수 버퍼를 처음 만들 때 드라이버가 준 주소가 비어 있었다. 첫 장에서만 죽고 넘기면 멀쩡하다.
+        //   12초로는 부족했다(10:33 = 시작 14초 뒤 첫 장에서 죽음) → 앱 시작 20초 + 씬 불러온 뒤 5초(사용자 «20초로»). 여전히 회피다 — 동기 읽기 시험은 따로.
+        float since = Time.realtimeSinceStartup;
+        if (!syncMode && (since < WarmupSeconds || since - lastSceneLoadAt < SceneSettleSeconds))
+        {
+            if (!warmLogged) { warmLogged = true; Debug.Log($"[웹미러] 앱 시작 {WarmupSeconds:F0}초 · 씬 불러온 뒤 {SceneSettleSeconds:F0}초가 지나야 화면 읽기를 시작한다(GLES 컴퓨트 버퍼 첫 생성 충돌 회피) · 지금 시작 {since:F1}초 · 씬 {since - lastSceneLoadAt:F1}초"); }
+            return;
+        }
+        if (warmLogged && !warmDoneLogged) { warmDoneLogged = true; Debug.Log($"[웹미러] 대기 끝 — 화면 읽기 시작 · 시작 {since:F1}초 · 씬 {since - lastSceneLoadAt:F1}초"); }
         if (!stage2Logged) { stage2Logged = true; Debug.Log("[웹미러] ★2단계 — 복사는 살아남았다 · 이제 출력 셰이더 · 읽기 시작(이 뒤에 죽으면 출력 · 읽기가 원인)"); }
 
         // 영상 — 보는 화면이 붙어 있을 때만(간격을 쌓아 간다 — now + 간격이면 72fps에서 한 장씩 걸러진다)
@@ -206,10 +295,15 @@ public class ChunaWebMirror : MonoBehaviour
         EncodeAsync(outW, outH);
     }
 
+    private bool syncMode;
     private const float PhotoInterval = 1f / 8f;
     private Texture2D shotTex;
 
     private const float StageGap = 1.5f;
+    private const float WarmupSeconds = 20f;   // 11-10 12초 → 11-11 20초(사용자 지시 · 12초 넘긴 14초에도 죽었다)
+    private const float SceneSettleSeconds = 5f;   // 11-11 씬을 불러온 뒤 이만큼
+    private static float lastSceneLoadAt = 0f;   // 값은 Boot(안드로이드 전용)에서 넣는다
+    private bool warmLogged, warmDoneLogged;
     private float stage2At;
     private bool stage2Logged, firstVideoLogged, firstShotLogged;
 
@@ -348,7 +442,11 @@ public class ChunaWebMirror : MonoBehaviour
         info.Append('}');
         server.SetMirrorInfo(info.ToString());
         if (viaVideo)
-            Debug.Log($"[웹미러] 영상 진단 — 넣음 {vf / span:F1}장/s · {outW}×{outH} · {video.State} · Java {vStats} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps");
+        {
+            var (syncAvg, syncN) = video.TakeSyncStats();
+            Debug.Log($"[웹미러] 영상 진단 — 넣음 {vf / span:F1}장/s · {outW}×{outH} · {video.State} · Java {vStats} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps · " +
+                      (syncMode ? $"동기 읽기 평균 {syncAvg:F2}ms × {syncN}장" : "비동기 읽기"));
+        }
         else if (server.ImageWatched("cam"))
             Debug.Log($"[웹미러] 진단 — {n / span:F1}장/s · 인코딩 {ms:F0}ms · {outW}×{outH} · 앱 {1f / Mathf.Max(0.0001f, Time.smoothDeltaTime):F0}fps");
         diagFrom = now;

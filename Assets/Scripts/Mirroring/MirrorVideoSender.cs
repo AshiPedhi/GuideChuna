@@ -83,6 +83,7 @@ public class MirrorVideoSender : IDisposable
     {
         if (enc == null) return false;
         if (!Ensure(new Vector2Int(w, h), mat, fps)) return false;
+        if (SyncRead) return SendSync(src, mat, pass, w, h);
         int slot = -1;
         for (int i = 0; i < Slots; i++) if (!busy[i]) { slot = i; break; }
         if (slot < 0) return false;
@@ -133,6 +134,49 @@ public class MirrorVideoSender : IDisposable
         finally { busy[slot] = false; }
     }
 
+    // ── 11-13 시험: 동기 읽기(ReadPixels = glReadPixels) ──
+    //   사용자 «동기 방식으로 바꿨을 때 성능이랑 발열 기기 부담 체크». 비동기 읽기(AsyncGPUReadback)가 GLES에서 컴퓨트 상수 버퍼를 처음 만들 때
+    //   렌더 스레드가 죽는다(11-04 · 11-11 심볼) → 그 경로를 아예 안 타는 동기 읽기를 켜서 잰다. 사진 경로는 11-04부터 이미 동기 읽기다.
+    //   값: 한 장 읽는 데 주 스레드가 멈춘 시간(SyncMs) — 진단 로그에 평균으로 찍는다.
+    public bool SyncRead;
+    private Texture2D syncTex;
+    private double syncMs; private int syncN;
+    private bool syncLogged;
+
+    /// <summary>동기 읽기 평균(ms)과 장수를 꺼내고 0으로 돌린다.</summary>
+    public (double avgMs, int n) TakeSyncStats() { var r = (syncN > 0 ? syncMs / syncN : 0.0, syncN); syncMs = 0; syncN = 0; return r; }
+
+    private bool SendSync(Texture src, Material mat, int pass, int w, int h)
+    {
+        int rows = h * 3 / 2;
+        Graphics.Blit(src, nv12Rt, mat, pass);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        if (syncTex == null || syncTex.width != w || syncTex.height != rows)
+        {
+            if (syncTex != null) UnityEngine.Object.Destroy(syncTex);
+            syncTex = new Texture2D(w, rows, TextureFormat.R8, false, true) { name = "미러링 영상 NV12 동기" };
+        }
+        var prev = RenderTexture.active;
+        RenderTexture.active = nv12Rt;
+        syncTex.ReadPixels(new Rect(0, 0, w, rows), 0, 0, false);
+        RenderTexture.active = prev;
+        var data = syncTex.GetRawTextureData<byte>();
+        if (data.Length != bufs[0].Length)
+        {
+            if (!syncLogged) { syncLogged = true; Debug.LogError($"{tag} ★동기 읽기 — 크기가 안 맞는다(읽음 {data.Length} · 칸 {bufs[0].Length}) — 보내지 않는다"); }
+            return false;
+        }
+        data.CopyTo(bufs[0]);
+        syncMs += sw.Elapsed.TotalMilliseconds; syncN++;
+        if (!syncLogged) { syncLogged = true; Debug.Log($"{tag} 동기 읽기 첫 장 — {w}×{rows} R8 · {sw.Elapsed.TotalMilliseconds:F1}ms · 첫 바이트 {data[0]} · 가운데 {data[data.Length / 3]}(0만 나오면 읽기 실패)"); }
+#if UNITY_ANDROID && !UNITY_EDITOR
+        args[0].l = jbufs[0];
+        args[1].j = clock.ElapsedTicks * 1000000L / System.Diagnostics.Stopwatch.Frequency;
+        if (AndroidJNI.CallBooleanMethod(enc.GetRawObject(), feedMethod, args)) fed++;
+#endif
+        return true;
+    }
+
     /// <summary>지난번 뒤로 압축기에 넘긴 장수를 꺼낸다.</summary>
     public int TakeFed() { int n = fed; fed = 0; return n; }
 
@@ -157,5 +201,7 @@ public class MirrorVideoSender : IDisposable
         if (enc != null) { try { enc.Call("stop"); } catch (Exception) { } enc.Dispose(); enc = null; }
         AsyncGPUReadback.WaitAllRequests();
         FreeBuffers();
+        if (syncTex != null) { UnityEngine.Object.Destroy(syncTex); syncTex = null; }
+        syncLogged = false;
     }
 }
