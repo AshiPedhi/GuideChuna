@@ -40,9 +40,6 @@ public class ChunaWebMirror : MonoBehaviour
     {
         if (Prop("debug.coco.webmirror", "1") == "0") return;
         if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "RomLineScene") return;   // ROM 판 — 포트 8090을 RomLineSession이 쓴다
-        // 11-11 씬을 불러온 시각 — 그 뒤 SceneSettleSeconds가 지나야 화면 읽기를 시작한다(아래 Warmup 설명)
-        UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, __) => lastSceneLoadAt = Time.realtimeSinceStartup;
-        lastSceneLoadAt = Time.realtimeSinceStartup;
         var go = new GameObject("[ChunaWebMirror]");
         DontDestroyOnLoad(go);
         go.AddComponent<ChunaWebMirror>();
@@ -118,6 +115,31 @@ public class ChunaWebMirror : MonoBehaviour
         Debug.Log($"[웹미러] 다시 열기 예약({by}) — {ResumeDelay:F0}초 뒤");
     }
 
+    // 11-11 씬을 불러온 시각 — 그 뒤 SceneSettleSeconds가 지나야 화면 읽기를 시작한다(아래 Warmup 설명).
+    // ★11-13 미러링을 안 띄우는 경우(속성 0 · ROM 판)에도 재야 한다 — 선 실측 미러링(RomLineMirror)이 같은 대기(AsyncReadbackReady)를 쓴다.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void TrackSceneLoads()
+    {
+        UnityEngine.SceneManagement.SceneManager.sceneLoaded += (_, __) => lastSceneLoadAt = Time.realtimeSinceStartup;
+        lastSceneLoadAt = Time.realtimeSinceStartup;
+    }
+
+    /// <summary>
+    /// 11-13 GLES 비동기 읽기(AsyncGPUReadback)를 지금 시작해도 되나 — 앱 시작 WarmupSeconds · 씬 불러온 뒤 SceneSettleSeconds가 지났나.
+    /// 추나 미러링과 선 실측 미러링(RomLineMirror)이 같은 기준을 쓴다. 에디터는 늘 true(크래시는 기기 GLES에서만).
+    /// </summary>
+    public static bool AsyncReadbackReady(out float waitLeft)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        float since = Time.realtimeSinceStartup;
+        waitLeft = Mathf.Max(WarmupSeconds - since, SceneSettleSeconds - (since - lastSceneLoadAt));
+        return waitLeft <= 0f;
+#else
+        waitLeft = 0f;
+        return true;
+#endif
+    }
+
     private void Awake() { instance = this; }
 
     private void StopServing()
@@ -129,6 +151,21 @@ public class ChunaWebMirror : MonoBehaviour
         AsyncGPUReadback.WaitAllRequests();
         busy = false;
         serving = false;
+        videoRetryAt = -1f;
+    }
+
+    // 11-13 영상 포트(8092)를 못 열었을 때 다시 시도 — 선 실측 씬에서 돌아올 때 RomLineMirror가 아직 8092를 쥐고 있을 수 있다.
+    //   종전엔 한 번 실패하면 그 판 내내 사진(JPEG)으로만 보냈다.
+    private float videoRetryAt = -1f;
+    private int videoTries;
+
+    private void RetryVideo(float now)
+    {
+        if (videoRetryAt < 0f || now < videoRetryAt) return;
+        video.Start();
+        if (video.Ready) { videoRetryAt = -1f; Debug.Log($"[웹미러] 영상 포트 다시 열었다({videoTries}번째)"); return; }
+        if (++videoTries <= RetryMax) videoRetryAt = now + RetryEvery;
+        else { videoRetryAt = -1f; Debug.LogWarning($"[웹미러] ★영상 포트 {VideoPort}를 {RetryMax}번 못 열었다 — 사진으로만 보낸다"); }
     }
 
     private void StartServing()
@@ -141,6 +178,8 @@ public class ChunaWebMirror : MonoBehaviour
             return;
         }
         video.Start();
+        videoTries = 0;
+        videoRetryAt = video.Ready ? -1f : Time.unscaledTime + RetryEvery;
         serving = true;
         Debug.Log($"[웹미러] 열었다 — {server.Url} · 영상 {video.State}");
     }
@@ -208,6 +247,7 @@ public class ChunaWebMirror : MonoBehaviour
             else Debug.LogWarning($"[웹미러] ★모르는 명령 «{c}»");
         }
         float now = Time.unscaledTime;
+        RetryVideo(now);
         video.Poll(now);
         if (server.Watched) PumpState(now);
         if (!ready) return;
@@ -302,7 +342,7 @@ public class ChunaWebMirror : MonoBehaviour
     private const float StageGap = 1.5f;
     private const float WarmupSeconds = 20f;   // 11-10 12초 → 11-11 20초(사용자 지시 · 12초 넘긴 14초에도 죽었다)
     private const float SceneSettleSeconds = 5f;   // 11-11 씬을 불러온 뒤 이만큼
-    private static float lastSceneLoadAt = 0f;   // 값은 Boot(안드로이드 전용)에서 넣는다
+    private static float lastSceneLoadAt = 0f;   // 값은 TrackSceneLoads에서 넣는다
     private bool warmLogged, warmDoneLogged;
     private float stage2At;
     private bool stage2Logged, firstVideoLogged, firstShotLogged;
@@ -369,7 +409,7 @@ public class ChunaWebMirror : MonoBehaviour
 
         var ci = CultureInfo.InvariantCulture;
         state.Length = 0;
-        state.Append("{\"title\":"); Json(state, sc != null ? ScenarioDisplayNames.Full(sc.scenarioName) : "");   // 10-27: 화면 이름 표
+        state.Append("{\"page\":\"chuna\",\"title\":");   // 11-13 page — 관제 페이지가 다른 종류(rom)를 받고 있으면 스스로 새로고침한다 Json(state, sc != null ? ScenarioDisplayNames.Full(sc.scenarioName) : "");   // 10-27: 화면 이름 표
         state.Append(",\"user\":"); Json(state, monitorUser);
         state.Append(",\"scene\":"); Json(state, UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
         state.Append(",\"mode\":"); Json(state, sm != null ? sm.SelectedMode : "");

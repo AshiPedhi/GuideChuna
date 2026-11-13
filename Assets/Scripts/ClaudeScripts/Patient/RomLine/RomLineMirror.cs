@@ -83,6 +83,12 @@ public class RomLineMirror : MonoBehaviour
     private byte[] overlayBuf;
     private Transform trackingSpace;
     private bool overlayLogged;
+    // 11-13 추나 앱에 합침(A안) — 추나 미러링과 같은 대기(ChunaWebMirror.AsyncReadbackReady: 앱 시작 20초 · 씬 불러온 뒤 5초)를 지난 뒤에 GPU 비동기 읽기를 시작한다.
+    //   종전(별도 ROM 앱)엔 대기 없이 읽었다 — GLES 컴퓨트 버퍼 첫 생성 크래시(11-04 · 11-11 심볼)와 같은 길이다.
+    private bool readWaitLogged, readWaitDone;
+    // 11-13 영상 포트(8092) 다시 시도 — 추나 미러링이 막 비켜 준 직후라 아직 닫히는 중일 수 있다
+    private float videoRetryAt = -1f;
+    private int videoTries;
 
     private float diagNext, diagFrom;
 
@@ -242,6 +248,14 @@ public class RomLineMirror : MonoBehaviour
             }
         }
 
+        if (video == null && videoRetryAt >= 0f && now >= videoRetryAt)
+        {
+            StartVideo();
+            if (video != null) { videoRetryAt = -1f; Debug.Log($"[선실측] 미러링 영상 — 포트 {VideoPort} 다시 열었다({videoTries}번째)"); }
+            else if (++videoTries <= 10) videoRetryAt = now + 1f;
+            else { videoRetryAt = -1f; Debug.LogWarning($"[선실측] ★미러링 영상 — 포트 {VideoPort}를 10번 못 열었다 — JPEG로만 보낸다"); }
+        }
+
         UpdateCameraPower(now);
         if (diagInterval > 0f && now >= diagNext) Diagnose(now);
     }
@@ -318,7 +332,7 @@ public class RomLineMirror : MonoBehaviour
         if (!SystemInfo.supportsAsyncGPUReadback) { videoState = "지원 안 함(GPU 비동기 읽기 없음)"; Debug.Log("[선실측] 미러링 영상 — " + videoState); return; }
         Shader sh = Resources.Load<Shader>("RomLine/RomMirrorNV12");
         if (sh == null || !sh.isSupported) { videoState = "셰이더 없음"; Debug.LogWarning("[선실측] ★미러링 영상 — 셰이더 RomLine/RomMirrorNV12가 없거나 지원 안 함"); return; }
-        nv12Mat = new Material(sh);
+        if (nv12Mat == null) nv12Mat = new Material(sh);   // 11-13 포트 재시도 때 다시 만들지 않는다
         nv12Mat.SetFloat("_FlipY", AndroidProp("debug.coco.romvideo.flip") == "1" ? 1f : 0f);   // 기기에서 거꾸로 나오면 adb shell setprop debug.coco.romvideo.flip 1
         try
         {
@@ -327,7 +341,8 @@ public class RomLineMirror : MonoBehaviour
             {
                 video.Dispose(); video = null;
                 videoState = $"포트 {VideoPort}를 못 열었다";
-                Debug.LogWarning("[선실측] ★미러링 영상 — " + videoState + " — JPEG로만 보낸다");
+                Debug.LogWarning("[선실측] ★미러링 영상 — " + videoState + " — 1초 뒤 다시(그동안 JPEG)");
+                if (videoTries == 0) videoRetryAt = Time.unscaledTime + 1f;   // 첫 실패에서만 예약 — 뒤는 Update가 센다
                 return;
             }
             videoFeed = AndroidJNI.GetMethodID(video.GetRawClass(), "feed", "(Ljava/nio/ByteBuffer;J)Z");
@@ -475,6 +490,16 @@ public class RomLineMirror : MonoBehaviour
     private void LateUpdate()   // 판이 이번 프레임의 글자 · 선으로 바뀐 뒤에 찍는다
     {
         if (monitor == null || monitor.Port == 0 || view == null || view.Panel == null || !view.PanelPlaced) return;
+        if (!readWaitDone)
+        {
+            if (!ChunaWebMirror.AsyncReadbackReady(out float left))
+            {
+                if (!readWaitLogged) { readWaitLogged = true; Debug.Log($"[선실측] 미러링 — GPU 읽기 대기 {left:F1}초(GLES 첫 읽기 크래시 회피 · 추나 미러링과 같은 기준)"); }
+                return;
+            }
+            readWaitDone = true;
+            if (readWaitLogged) Debug.Log("[선실측] 미러링 — 대기 끝 · GPU 읽기 시작");
+        }
         float now = Time.unscaledTime;
         if (videoClients > 0 && video != null && pca != null && pca.IsPlaying && pca.IsUpdatedThisFrame && now >= vidNext)
             CaptureVideo(now);   // 영상 경로 — 보는 화면이 붙어 있을 때만

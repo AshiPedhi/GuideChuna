@@ -200,6 +200,8 @@ public class MirrorVideoSender : IDisposable
     {
         if (enc != null) { try { enc.Call("stop"); } catch (Exception) { } enc.Dispose(); enc = null; }
         AsyncGPUReadback.WaitAllRequests();
+        // 11-13 읽는 중 표시를 비운다 — 콜백이 안 돌아온 채 닫히면 다시 열었을 때 칸이 «읽는 중»으로 남아 Ensure · Send가 영영 미룬다(선 실측 다녀온 뒤 영상 끊김 후보)
+        Array.Clear(busy, 0, busy.Length);
         FreeBuffers();
         if (syncTex != null) { UnityEngine.Object.Destroy(syncTex); syncTex = null; }
         syncLogged = false;

@@ -1612,7 +1612,7 @@ public class RomLineSession : MonoBehaviour
 
         StringBuilder js = monitorLive;
         js.Length = 0;
-        js.Append("{\"t\":").Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))
+        js.Append("{\"page\":\"rom\",\"t\":").Append(Time.unscaledTime.ToString("F1", CultureInfo.InvariantCulture))   // 11-13 page — 추나 관제 페이지가 열려 있으면 새로고침시킨다
           .Append(",\"tracked\":").Append(tipValid ? "true" : "false").Append(",\"calib\":").Append(calibrating ? "true" : "false")
           // 10-21 관제 화면 아래 줄: 실행 중인 실습 이름(타이틀) · 좌우 컨트롤러 연결 · 찍는 쪽
           .Append(",\"title\":\"").Append(monitorTitle).Append('"')

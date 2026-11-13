@@ -231,6 +231,8 @@ function val(cell, r, on) {
 let lastGuide = null, lastNote = null;
 function poll() {
   fetch('/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    // 11-13 같은 주소(:8090)를 추나 미러링과 XR-ROM이 번갈아 연다 — 다른 종류의 상태가 오면 그 쪽 페이지로 새로고침
+    if (s.page && s.page !== 'rom') { location.reload(); return; }
     $('connBox').style.display = 'none';
     $('track').textContent = s.calib ? '보정 중' : (s.tracked ? '추적 중' : '★놓침');
     if (s.title && $('title').textContent !== s.title) { $('title').textContent = s.title; document.title = s.title; }

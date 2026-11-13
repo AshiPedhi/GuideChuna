@@ -228,6 +228,8 @@ function sim(v) { return v === undefined ? ['—', 'off'] : [Math.round(v * 100)
 let lastGuide = null;
 function poll() {
   fetch('/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
+    // 11-13 같은 주소(:8090)를 추나 미러링과 XR-ROM이 번갈아 연다 — 다른 종류의 상태가 오면 그 쪽 페이지로 새로고침
+    if (s.page && s.page !== 'chuna') { location.reload(); return; }
     $('connBox').style.display = 'none';
     if (s.title && $('title').textContent !== s.title) { $('title').textContent = s.title; document.title = s.title; }
     if (typeof s.user === 'string' && $('user').textContent !== s.user) $('user').textContent = s.user;   // 없으면 빈 칸
