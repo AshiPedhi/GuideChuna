@@ -343,6 +343,12 @@ public class AuthenticationService : MonoBehaviour, IAuthenticationService
     }
     #endregion
 
+    /// <summary>
+    /// 같은 서버(baseApiUrl)의 다른 주소로 JSON을 보내고 응답 본문을 그대로 돌려준다(11-16 · XR-ROM 결과 전송 <see cref="RomLineUpload"/>).
+    /// 실패(HTTP 오류 · 시간 초과)는 예외로 던진다 — 부르는 쪽이 큐에 남겨 다시 보낸다.
+    /// </summary>
+    public UniTask<string> PostJsonRawAsync(string endpoint, string json) => PostAsyncRaw(BuildUrl(endpoint), json);
+
     #region IAuthenticationService Implementation - Utility
     public void CancelAllRequests()
     {

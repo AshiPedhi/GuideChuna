@@ -342,6 +342,11 @@ public class RomLineSession : MonoBehaviour
         }
         else Debug.Log($"[선실측] 실습 모드 — 확인할 때마다 실습값을 저장한다({RomLineRepeatScore.BaselinePath(monitorUser)})");
 
+        // 서버 전송(11-16) — 이 판의 번호를 정하고, 지난 판에서 못 보낸 것부터 보낸다
+        uploadId = System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + System.Guid.NewGuid().ToString("N").Substring(0, 8);
+        uploadStartedAt = RomLineUpload.Now();
+        RomLineUpload.Flush(uploadId, "시작 — 지난 판").Forget();
+
         var rig = FindAnyObjectByType<OVRCameraRig>();
         if (rig != null) trackingSpace = rig.trackingSpace;
 
@@ -439,6 +444,8 @@ public class RomLineSession : MonoBehaviour
         if (hapticOff > 0f) OVRInput.SetControllerVibration(0f, 0f, active);
         if (simultaneousOn) OVRInput.DisableSimultaneousHandsAndControllers();   // 우리가 켠 것만 되돌린다
         monitor.Stop();
+        SaveUpload("나감", final: true);
+        RomLineUpload.Flush(null, "나감").Forget();   // 정적 비동기 — 씬이 내려가도 AuthenticationService(DontDestroyOnLoad)로 끝까지 간다
         if (suspendedChunaMirror) { suspendedChunaMirror = false; ChunaWebMirror.Resume("선 실측"); }   // 우리가 비키게 한 것만 되돌린다
     }
     private bool suspendedChunaMirror;
@@ -1202,6 +1209,7 @@ public class RomLineSession : MonoBehaviour
                   $"압박 {(results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") : "—")}° ({why})");
         Buzz(0.06f, 0.6f);
         SaveBaselineIfPractice("확인");
+        SaveUpload("확인 " + MotionName[m]);
         int next = NextTab(tab);
         if (next >= 0) { Resume(next, "확인"); return; }
 
@@ -1749,6 +1757,7 @@ public class RomLineSession : MonoBehaviour
         if (lastConfirmedTab == tab) lastConfirmedTab = -1;   // 공간 각도기(11-16)
         Debug.Log($"[선실측] 이 탭 지우기 — {GuidedTabName[tab]} ({why})");
         SaveBaselineIfPractice("탭 지우기");
+        SaveUpload("탭 지우기");
         Play(sndUndo);
         dirty = true;
     }
@@ -1908,6 +1917,7 @@ public class RomLineSession : MonoBehaviour
             evalScored = true;
             Debug.Log($"[선실측] ★평가 점수 {evalScore:F1} · 평균 오차 {evalMeanErr:F2}° · {evalN}칸 · 실습 {baseWhen}");
             SaveEvalFile();
+            SaveUpload("평가 점수");
         }
     }
 
@@ -1915,6 +1925,102 @@ public class RomLineSession : MonoBehaviour
     {
         if (float.IsNaN(baseVals[s]) || float.IsNaN(curVals[s])) return "—";
         return (curVals[s] - baseVals[s]).ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture);
+    }
+
+    // ── 서버 전송(11-16 사용자 지시) ── 판 하나 = 큐 파일 하나. 이벤트 때마다 덮어쓰고, 나갈 때 · 다음 실행 때 보낸다(RomLineUpload).
+    private string uploadId, uploadStartedAt;
+    private bool uploadSaved;
+    private static readonly string[] MotionCode = { "flexion", "extension", "lateral_right", "lateral_left", "rotation_right", "rotation_left" };
+    private static readonly string[] PhaseCode = { "neutral", "active", "pressure" };
+
+    private void SaveUpload(string why, bool final = false)
+    {
+        bool any = uploadSaved;
+        for (int i = 0; i < PointCount && !any; i++) any = has[i];
+        if (!any) return;   // 아무것도 안 찍은 판은 안 남긴다
+
+        var login = new LoginStateStore();
+        var info = login.LoadLoginInfo();
+        var p = new RomLineUpload.Payload
+        {
+            sessionId = uploadId,
+            status = Done ? "completed" : final ? "exited" : "in_progress",
+            orgID = login.LoadOrgID(),
+            userId = info.hasData ? info.userID : 0,
+            username = info.hasData ? info.username : "",
+            deviceSN = login.LoadDeviceSN(),
+            appVersion = Application.version,
+            mode = evalMode ? "evaluation" : "practice",
+            startedAt = uploadStartedAt,
+            updatedAt = RomLineUpload.Now(),
+            tipOffsetMm = new RomLineUpload.Vec3(tipOffset * 1000f),
+            frame = new RomLineUpload.Frame
+            {
+                valid = frame.valid,
+                right = new RomLineUpload.Vec3(frame.right),
+                forward = new RomLineUpload.Vec3(frame.forward),
+                up = new RomLineUpload.Vec3(frame.up),
+                sidesSwapped = frame.sidesSwapped,
+            },
+            rawCsv = new List<string>(csvRows.Count + 1) { CsvHeader },
+        };
+        p.rawCsv.AddRange(csvRows);
+        for (int i = 0; i < 2; i++)
+            if (has[i]) p.frame.baseline.Add(new RomLineUpload.Point { phase = "baseline", label = ((RomLinePoint)i).ToString(), pos = new RomLineUpload.Vec3(points[i]) });
+
+        for (int m = 0; m < 6; m++)
+        {
+            LineOf((RomLineMotion)m, out RomLinePoint a, out RomLinePoint b);
+            var mo = new RomLineUpload.Motion
+            {
+                code = MotionCode[m], name = MotionName[m], confirmed = confirmed[m],
+                active = UploadAngle(m, m * 2), pressure = UploadAngle(m, m * 2 + 1),
+            };
+            for (int ph = 0; ph < 3; ph++)
+            {
+                int st = GroupStart(GroupOf(m, ph));
+                if (has[st]) mo.points.Add(new RomLineUpload.Point { phase = PhaseCode[ph], label = a.ToString(), pos = new RomLineUpload.Vec3(points[st]) });
+                if (has[st + 1]) mo.points.Add(new RomLineUpload.Point { phase = PhaseCode[ph], label = b.ToString(), pos = new RomLineUpload.Vec3(points[st + 1]) });
+            }
+            p.motions.Add(mo);
+        }
+
+        if (evalMode && evalScored)
+        {
+            var ev = new RomLineUpload.Evaluation { baselineAt = baseWhen, score = evalScore, meanError = evalMeanErr };
+            for (int s = 0; s < RomLineRepeatScore.Slots; s++)
+            {
+                bool hb = !float.IsNaN(baseVals[s]), hc = !float.IsNaN(curVals[s]);
+                ev.slots.Add(new RomLineUpload.Slot
+                {
+                    code = MotionCode[s / 2], kind = s % 2 == 0 ? "active" : "pressure",
+                    practice = hb ? baseVals[s] : (float?)null, evaluation = hc ? curVals[s] : (float?)null,
+                    error = hb && hc ? curVals[s] - baseVals[s] : (float?)null,
+                    score = hb && hc ? RomLineRepeatScore.ScoreOf(curVals[s] - baseVals[s]) : (float?)null,
+                });
+            }
+            p.evaluation = ev;
+        }
+
+        RomLineUpload.Save(p);
+        uploadSaved = true;
+        Debug.Log($"[XR-ROM 전송] 큐 저장({why}) — {p.status} · 확인 {CountConfirmed()}/6 · 상세 {csvRows.Count}줄");
+    }
+
+    private RomLineUpload.Angle UploadAngle(int m, int slot) => new RomLineUpload.Angle
+    {
+        valid = results[slot].valid,
+        angle = results[slot].valid ? results[slot].angle : 0f,
+        signedAngle = results[slot].valid ? results[slot].signedAngle : 0f,
+        directionMatches = results[slot].valid && RomLineMath.DirectionMatches((RomLineMotion)m, results[slot].signedAngle),
+        directAngle = direct[slot].valid ? direct[slot].angle : -1f,
+    };
+
+    private int CountConfirmed()
+    {
+        int n = 0;
+        for (int m = 0; m < 6; m++) if (confirmed[m]) n++;
+        return n;
     }
 
     private void SaveEvalFile()
