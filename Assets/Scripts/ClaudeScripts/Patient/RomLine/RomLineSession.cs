@@ -2136,16 +2136,10 @@ public class RomLineSession : MonoBehaviour
         RomLineResult first = on0 ? results[m0 * 2] : results[m1 * 2];
         Vector3 n = RomLineMath.PlaneNormal((RomLineMotion)(on0 ? m0 : m1), frame).normalized;   // 값을 낸 것과 같은 법선
         Vector3 zeroDir = first.neutralDir;
-        spaceGauge.Show(spaceGaugeCenter, n, zeroDir, spaceGaugeRadius,
-                        on0, MotionName[m0], results[m0 * 2].signedAngle, results[m0 * 2 + 1].valid, results[m0 * 2 + 1].signedAngle, on0 ? GaugeText(m0) : "",
-                        on1, MotionName[m1], results[m1 * 2].signedAngle, results[m1 * 2 + 1].valid, results[m1 * 2 + 1].signedAngle, on1 ? GaugeText(m1) : "");
-    }
-
-    private string GaugeText(int m)
-    {
-        string t = MotionName[m] + " <color=#FF6B05>" + results[m * 2].angle.ToString("F1") + "°</color>";
-        if (results[m * 2 + 1].valid) t += " / <color=#F2994D>" + results[m * 2 + 1].angle.ToString("F1") + "°</color>";
-        return t;
+        // ★디자인은 VR ROM 각도기와 통일(11-16) — 눈금 색 = 면(탭) · 도달점 = 숫자만(동작 이름 없음 · 능동 하늘색 / 압박 붉은 주황)
+        spaceGauge.Show(spaceGaugeCenter, n, zeroDir, spaceGaugeRadius, want,
+                        on0, results[m0 * 2].signedAngle, results[m0 * 2 + 1].valid, results[m0 * 2 + 1].signedAngle,
+                        on1, results[m1 * 2].signedAngle, results[m1 * 2 + 1].valid, results[m1 * 2 + 1].signedAngle);
     }
 
     private bool AnyPointInTab(int tab)

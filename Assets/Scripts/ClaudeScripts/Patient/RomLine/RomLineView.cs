@@ -37,6 +37,8 @@ public class RomLineView
 
     private Transform root;
     private Material mat;
+    /// <summary>Sprites/Default 공용 머티리얼 — 공간 각도기(<see cref="RomLineSpaceGauge"/>)의 눈금 메시가 같이 쓴다.</summary>
+    internal Material Mat => mat;
     private TMP_FontAsset font;
 
     // 판
