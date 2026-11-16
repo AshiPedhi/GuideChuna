@@ -141,6 +141,14 @@ public class RomLineSession : MonoBehaviour
     [Tooltip("안내 글을 컨트롤러 끝에서 위로 띄우는 만큼(m) — 안내는 찍는 컨트롤러 바로 위에 붙어 다닌다(10-13). 컨트롤러가 안 잡힐 때만 위의 두 값(시선 앞)으로 돌아간다.")]
     [SerializeField] private float guideRise = 0.10f;
 
+    [Header("=== 공간 각도기(11-16) ===")]
+    [Tooltip("확인한 동작의 각도기를 환자 중심에서 사용자 반대편으로 띄우는 거리(m). 굴곡·신전 · 측굴은 면의 법선 방향, 회전은 수평으로 민다.")]
+    [SerializeField] private float spaceGaugeDistance = 0.25f;
+    [Tooltip("공간 각도기의 반지름(m).")]
+    [SerializeField] private float spaceGaugeRadius = 0.15f;
+    [Tooltip("회전(수평면) 각도기만 환자 머리 높이에서 위로 띄우는 만큼(m).")]
+    [SerializeField] private float spaceGaugeRotationRise = 0.10f;
+
     [Header("=== 기타 ===")]
     [SerializeField] private float soundVolume = 1f;
     [SerializeField] private string lobbySceneName = "lobby";
@@ -164,6 +172,10 @@ public class RomLineSession : MonoBehaviour
     private readonly List<Vector3> freeAngleAt = new List<Vector3>(32);    // 공간에 띄울 각 글자의 자리와 글 — 상태가 바뀔 때만 다시 만든다
     private readonly List<string> freeAngleText = new List<string>(32);
     private readonly RomLineFreeView freeView = new RomLineFreeView();
+    private readonly RomLineSpaceGauge spaceGauge = new RomLineSpaceGauge();
+    private int lastConfirmedTab = -1;   // 공간 각도기 — 마지막으로 확인한 탭(다음 탭의 첫 점을 찍기 전까지 그 탭 것을 남긴다)
+    private int spaceGaugeTab = -1;      // 지금 공간 각도기가 그리는 탭(-1 = 숨김) — 바뀔 때만 자리를 다시 정한다
+    private Vector3 spaceGaugeCenter;
     private bool axesOn = true;
     private RomLineFrame axes;          // 공간에 고정된 세 축 — 양쪽 Tr이 하던 일을 대신한다
     private Vector3 axesOrigin;         // 바닥의 십자를 그리는 자리(방향만 쓰고 자리는 계산에 안 들어간다)
@@ -343,6 +355,7 @@ public class RomLineSession : MonoBehaviour
         }
         view.Build(transform, font, new Material(sh));
         freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
+        spaceGauge.Build(view, transform);
         BuildSounds();
 
         // ★10-08 사용자 지시: 탭 다섯 — 굴곡(3직선) · 신전(3) · 측굴(좌우 6) · 회전(좌우 6)을 <b>순서대로</b> 재고, 자유 측정은 «기타»다.
@@ -418,6 +431,7 @@ public class RomLineSession : MonoBehaviour
         if (Time.unscaledTime >= batteryNext) PollBattery();
         view.Tick(eye, tipShown, tipValid, tipPos, !home && (freeMode || (!confirmWait && !TabComplete(CurTab))));
         freeView.Tick(eye);
+        spaceGauge.Tick(eye);
     }
 
     private void OnDestroy()
@@ -1183,6 +1197,7 @@ public class RomLineSession : MonoBehaviour
         int m = MotionOf(group), tab = m / 2;
         confirmed[m] = true;
         confirmWait = false;
+        lastConfirmedTab = tab;   // 공간 각도기(11-16)
         Debug.Log($"[선실측] 확인 — {MotionName[m]} · 능동 {(results[m * 2].valid ? results[m * 2].angle.ToString("F1") : "—")}° · " +
                   $"압박 {(results[m * 2 + 1].valid ? results[m * 2 + 1].angle.ToString("F1") : "—")}° ({why})");
         Buzz(0.06f, 0.6f);
@@ -1731,6 +1746,7 @@ public class RomLineSession : MonoBehaviour
         index = 0;
         confirmWait = false;
         noteText = "";
+        if (lastConfirmedTab == tab) lastConfirmedTab = -1;   // 공간 각도기(11-16)
         Debug.Log($"[선실측] 이 탭 지우기 — {GuidedTabName[tab]} ({why})");
         SaveBaselineIfPractice("탭 지우기");
         Play(sndUndo);
@@ -1743,6 +1759,7 @@ public class RomLineSession : MonoBehaviour
         for (int i = 0; i < PointCount; i++) has[i] = false;
         for (int i = 0; i < GroupCount; i++) hasExtra[i] = false;
         for (int i = 0; i < 6; i++) confirmed[i] = false;
+        lastConfirmedTab = -1;   // 공간 각도기(11-16)
         frame = axes;   // 고정 3축은 그대로다
         for (int i = 0; i < 12; i++) ClearResult(i);
         int keep = freeTab, freePoints = 0;
@@ -1940,8 +1957,9 @@ public class RomLineSession : MonoBehaviour
 
     private void Refresh()
     {
-        if (freeMode) { RefreshFree(); return; }
+        if (freeMode) { SetSpaceGaugeTab(-1, "자유 측정"); RefreshFree(); return; }
         dirty = false;
+        RefreshSpaceGauge();
 
         int tab = CurTab, cm = MotionOf(group);
         string instruction, tipText = "", guide, note = noteText, forMonitor, guideNote = noteText;
@@ -2087,6 +2105,96 @@ public class RomLineSession : MonoBehaviour
             }
             view.SetSegment(ph, show, a, b, show ? (Vector3.Distance(points[s], points[s + 1]) * 1000f).ToString("F0") : "");
         }
+    }
+
+    // ── 공간 각도기(11-16 사용자 지시) ──────────────────────────────
+    //   ★계측 도구라 «찍는 동안 각이 보여 손이 숫자를 따라가는 것»을 막는다 — 트리거로 <b>확인한 뒤에만</b> 뜬다.
+    //     평가(재현성)는 6동작이 다 끝날 때까지(evalScored) 숨긴다 — 실습값을 끝나기 전에 안 보이는 것과 같은 이유다.
+    //   어느 탭: 지금 탭에 확인한 동작이 있으면 지금 탭 · 없으면 방금 끝낸 탭(다음 탭의 첫 점을 찍기 전까지 남긴다 — 탭은 확인하면 저절로 넘어가서
+    //     그러지 않으면 탭의 두 번째 동작 각도기는 뜨자마자 사라진다). 홈 · 자유 측정에서는 숨긴다(홈에선 공간에 아무것도 안 그린다 — 10-14).
+    //   자리: 탭이 바뀔 때 한 번 — 환자 중심(그 탭 첫 확인 동작의 네 점 평균)에서 사용자 반대편.
+    //     굴곡·신전 · 측굴 = 면의 법선 방향으로 사용자와 반대쪽 · 회전 = 수평으로 사용자 반대쪽 + 위로 spaceGaugeRotationRise.
+    private void RefreshSpaceGauge()
+    {
+        int want = -1;
+        string why = "";
+        if (home) why = "홈";
+        else if (evalMode && !evalScored) why = "평가 — 6동작이 끝날 때까지 숨김";
+        else
+        {
+            int tab = CurTab;
+            if (confirmed[tab * 2] || confirmed[tab * 2 + 1]) { want = tab; why = "지금 탭에 확인한 동작"; }
+            else if (lastConfirmedTab >= 0 && lastConfirmedTab != tab && !AnyPointInTab(tab)) { want = lastConfirmedTab; why = "방금 끝낸 탭(새 탭의 첫 점 전까지)"; }
+            else why = "확인한 동작 없음";
+        }
+        SetSpaceGaugeTab(want, why);
+        if (want < 0) return;
+
+        int m0 = want * 2, m1 = want * 2 + 1;
+        bool on0 = confirmed[m0] && results[m0 * 2].valid, on1 = confirmed[m1] && results[m1 * 2].valid;
+        if (!on0 && !on1) { SetSpaceGaugeTab(-1, "확인했지만 능동 값 없음"); return; }
+        RomLineResult first = on0 ? results[m0 * 2] : results[m1 * 2];
+        Vector3 n = RomLineMath.PlaneNormal((RomLineMotion)(on0 ? m0 : m1), frame).normalized;   // 값을 낸 것과 같은 법선
+        Vector3 zeroDir = first.neutralDir;
+        spaceGauge.Show(spaceGaugeCenter, n, zeroDir, spaceGaugeRadius,
+                        on0, MotionName[m0], results[m0 * 2].signedAngle, results[m0 * 2 + 1].valid, results[m0 * 2 + 1].signedAngle, on0 ? GaugeText(m0) : "",
+                        on1, MotionName[m1], results[m1 * 2].signedAngle, results[m1 * 2 + 1].valid, results[m1 * 2 + 1].signedAngle, on1 ? GaugeText(m1) : "");
+    }
+
+    private string GaugeText(int m)
+    {
+        string t = MotionName[m] + " <color=#FF6B05>" + results[m * 2].angle.ToString("F1") + "°</color>";
+        if (results[m * 2 + 1].valid) t += " / <color=#F2994D>" + results[m * 2 + 1].angle.ToString("F1") + "°</color>";
+        return t;
+    }
+
+    private bool AnyPointInTab(int tab)
+    {
+        for (int m = tab * 2; m < tab * 2 + 2; m++)
+            for (int ph = 0; ph < 3; ph++)
+            {
+                int st = GroupStart(GroupOf(m, ph));
+                if (has[st] || has[st + 1]) return true;
+            }
+        return false;
+    }
+
+    /// <summary>그릴 탭이 바뀔 때만 자리를 다시 정한다(고정 — 사용자를 따라 돌지 않는다). 로그 [선실측·각도기]로 자리 · 방향을 남긴다(반대편이 맞는지 Play에서 대조).</summary>
+    private void SetSpaceGaugeTab(int tab, string why)
+    {
+        if (tab == spaceGaugeTab) return;
+        int was = spaceGaugeTab;
+        spaceGaugeTab = tab;
+        if (tab < 0)
+        {
+            spaceGauge.Hide();
+            if (was >= 0) Debug.Log($"[선실측·각도기] 숨김 — {why}");
+            return;
+        }
+        int m = confirmed[tab * 2] && results[tab * 4].valid ? tab * 2 : tab * 2 + 1;
+        RomLineResult r = results[m * 2];
+        Vector3 c = (r.neutralA + r.neutralB + r.markA + r.markB) * 0.25f;
+        Vector3 n = RomLineMath.PlaneNormal((RomLineMotion)m, frame).normalized;
+        Vector3 toEye = eye != null ? eye.position - c : -n;
+        Vector3 pos;
+        string how;
+        if (tab == 2)
+        {
+            Vector3 away = Vector3.ProjectOnPlane(-toEye, Vector3.up);
+            if (away.sqrMagnitude < 1e-4f) away = frame.valid ? frame.forward : Vector3.forward;
+            pos = c + away.normalized * spaceGaugeDistance + Vector3.up * spaceGaugeRotationRise;
+            how = "수평 반대편 + 위";
+        }
+        else
+        {
+            float side = Vector3.Dot(toEye, n);
+            pos = c - n * (side >= 0f ? 1f : -1f) * spaceGaugeDistance;
+            how = $"법선 반대편(눈은 법선 {(side >= 0f ? "+" : "−")}쪽 · {side:F2}m)";
+        }
+        spaceGaugeCenter = pos;
+        float eyeSide = eye != null ? Vector3.Dot(eye.position - c, pos - c) : 0f;
+        Debug.Log($"[선실측·각도기] 띄움 — {GuidedTabName[tab]} ({why}) · {how} · 환자 중심 {c:F2} · 각도기 {pos:F2} · 눈 {(eye != null ? eye.position : Vector3.zero):F2} · " +
+                  $"법선 {n:F2} · 눈·각도기가 환자 반대쪽인가 {(eyeSide < 0f ? "예" : "★아니오")}({eyeSide:F3})");
     }
 
     /// <summary>순서대로 재는 흐름의 나머지 표시 — 진행 줄 · 바닥의 3축 · 안내 음성 · 모니터로 보낼 상태.</summary>
