@@ -11,7 +11,7 @@ using UnityEngine;
 ///
 /// ★디자인 = VR ROM 각도기(<see cref="CervicalRomPlaneGauge"/>)와 통일(11-16 사용자 결정 · 교수님 지시).
 ///   모양만 옮겨 그린다(컴포넌트 재사용 아님 — 그쪽은 실시간 지침 · 자리 잡기 로직이 따로 있고 추나 13개 술기와 공유).
-///   TrainingScene에 저장된 실제 값을 그대로 옮겼다(판 · 채움 끔 · ±90° 눈금 1/5/10° · 면별 눈금색 · 십자선 · 도달점 = 어두운 원 + 숫자).
+///   TrainingScene에 저장된 실제 값을 그대로 옮겼다(판 · 채움 끔(★11-17부터 범위 칠하기 켬 — Range) · ±90° 눈금 1/5/10° · 면별 눈금색 · 십자선 · 도달점 = 어두운 원 + 숫자).
 ///   - 능동·압박 색도 VR ROM 쪽(능동 하늘색 · 압박 붉은 주황 — 11-16 사용자 선택). ★그래서 이 각도기만 결과표 · 공간 선(능동 주황)과 색 뜻이 다르다.
 ///   - 지침(현재각)은 없다 — 확인한 값만 그린다. 최대각(초록) 선은 없다 — 선 실측 코드에 정상 범위 값이 없다.
 ///   - 길이 · 글자 크기는 VR ROM 반지름(0.36m) 기준 값을 반지름 비율로 줄이고 늘린다. 굵기는 그대로.
@@ -35,6 +35,10 @@ public class RomLineSpaceGauge
     private static readonly Color ActiveReached = new Color(0.35f, 0.85f, 1f, 1f);
     private static readonly Color PassiveReached = new Color(1f, 0.45f, 0.35f, 1f);
     private static readonly Color DiscColor = new Color(0.09f, 0.10f, 0.13f, 0.78f);
+    // ★11-17 범위 칠하기 — 능동 · 압박 색에 알파만 낮춘다(눈금이 묻히지 않게 0.25~0.35 안 · 사용자 지시). 채움 반지름 비율 = VR ROM fillRadius 0.28 / scaleRadius 0.34
+    private const float FillAlpha = 0.32f, FillRatio = 0.28f / 0.34f;
+    private static readonly Color ActiveFill = new Color(0.35f, 0.85f, 1f, FillAlpha);
+    private static readonly Color PassiveFill = new Color(1f, 0.45f, 0.35f, FillAlpha);
     private const int DiscSegments = 32;
     private const int TickLabelCount = (int)(ScaleSpan * 2 / MajorStep) + 1;   // −90 … 90 → 19개
 
@@ -146,7 +150,12 @@ public class RomLineSpaceGauge
         Color cross = plane; cross.a = CrossAlpha;
 
         verts.Clear(); cols.Clear(); tris.Clear();
-        // 십자선 — 제일 밑에. 회전 중심이 보여야 각도가 읽힌다(VR ROM)
+        // ★11-17 사용자 지시: 범위 칠하기 — 0°~능동 = 능동색 · 능동~압박 = 압박색 부채꼴(반투명). 제일 밑에 깐다(십자선 · 눈금이 위).
+        //   모양 = VR ROM CervicalRomPlaneGauge.AddSector(채움 반지름 = 눈금 반지름 × 0.28/0.34). 알파는 VR ROM(0.55 · 0.60)보다 낮춘다 —
+        //   VR ROM은 TrainingScene에서 채움을 꺼 둬서(showFill) 실물 기준이 없고, 눈금이 묻히지 않게 FillAlpha로 둔다.
+        if (on0) Range(a0, p0On, p0, radius * FillRatio);
+        if (on1) Range(a1, p1On, p1, radius * FillRatio);
+        // 십자선 — 채움 위. 회전 중심이 보여야 각도가 읽힌다(VR ROM)
         for (int q = 0; q < 4; q++) Arm(q * 90f, radius, CrossWidth, cross);
         // 미세 → 보조 → 주 순으로 겹쳐 그린다(굵은 눈금이 위)
         for (float a = -ScaleSpan; a <= ScaleSpan + 0.001f; a += MicroStep)
@@ -211,6 +220,33 @@ public class RomLineSpaceGauge
     {
         float r = deg * Mathf.Deg2Rad;
         return new Vector3(-Mathf.Sin(r), Mathf.Cos(r), 0f);
+    }
+
+    /// <summary>
+    /// 한 동작의 범위 칠하기. 능동 = 0°~a · 압박 = a~p(같은 쪽으로 더 갔을 때). 압박이 능동보다 덜 갔으면(같은 쪽 · |p| ≤ |a|) 압박 부채꼴은 없다(눈금 표시만) ·
+    /// 압박이 0°의 반대쪽이면 0°~p를 압박색으로 칠한다(반대로 움직인 값 — 덮이지 않게 따로).
+    /// </summary>
+    private void Range(float a, bool pOn, float p, float r)
+    {
+        Sector(Mathf.Min(0f, a), Mathf.Max(0f, a), r, ActiveFill);
+        if (!pOn) return;
+        bool sameSide = a * p >= 0f;
+        if (!sameSide) Sector(Mathf.Min(0f, p), Mathf.Max(0f, p), r, PassiveFill);
+        else if (Mathf.Abs(p) > Mathf.Abs(a)) Sector(Mathf.Min(a, p), Mathf.Max(a, p), r, PassiveFill);
+    }
+
+    /// <summary>부채꼴(from &lt; to · 도) — VR ROM AddSector와 같은 꼴(1°마다 한 조각).</summary>
+    private void Sector(float fromDeg, float toDeg, float r, Color c)
+    {
+        fromDeg = Mathf.Clamp(fromDeg, -ScaleSpan, ScaleSpan);
+        toDeg = Mathf.Clamp(toDeg, -ScaleSpan, ScaleSpan);
+        if (toDeg - fromDeg < 0.05f) return;
+        int steps = Mathf.Max(1, Mathf.CeilToInt(toDeg - fromDeg));
+        float span = (toDeg - fromDeg) / steps;
+        int center = verts.Count;
+        verts.Add(Vector3.zero); cols.Add(c);
+        for (int i = 0; i <= steps; i++) { verts.Add(Dir(fromDeg + span * i) * r); cols.Add(c); }
+        for (int i = 0; i < steps; i++) { tris.Add(center); tris.Add(center + 1 + i); tris.Add(center + 2 + i); }
     }
 
     private static bool OnStep(float degrees, float step) => step > 0f && Mathf.Abs(degrees % step) < 0.001f;
