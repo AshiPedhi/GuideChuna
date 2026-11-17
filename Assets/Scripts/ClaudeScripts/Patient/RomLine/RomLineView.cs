@@ -337,6 +337,8 @@ public class RomLineView
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
     private const float NearTabAlpha = 0.55f;   // ★10-14 사용자 지시: 안내 위 탭은 메인 화면 탭 줄과 <b>같은 디자인</b>(칸 바탕 · 지금 탭 = 파란 칸 + 노란 글자)에 알파만 낮춰 안내의 반투명 분위기에 맞춘다
     private static readonly Color GuideBorder = new Color(1f, 1f, 1f, 0.35f);
+    private static readonly Color NearTabCurrentText = new Color(0.949f, 0.953f, 0.961f, 1f);   // #F2F3F5(규격 CTx)
+    private static readonly Color NearTabOtherText = new Color(0.663f, 0.690f, 0.729f, 1f);     // #A9B0BA(규격 CTx2)
     private const float GaugeMaxDraw = 100f;     // 지움: 이보다 큰 각은 그림에서 여기까지만 그린다(반원 밖으로 넘어간다) — 숫자는 그대로 나온다
     private const int GaugeArcSegments = 12;
     private static readonly float[] GaugeZeroY = { 1f, 1f, 1f, 1f, 1f, 1f };         // 0° 선이 향하는 쪽(위 +1 · 아래 −1) — 회전도 위로 세웠다(10-13 저녁 사용자 지시 · 종전에는 아래가 환자 앞이라 뒤집혀 보였다)
@@ -735,7 +737,8 @@ public class RomLineView
 
         // 안내 위 탭 — 메인 화면 탭 줄과 같은 색 규칙에 알파만 낮춘다(NearTabAlpha). 칸이 좁아 « · » 둘레의 띄어쓰기를 붙인다(글이 바뀔 때만 불린다).
         nearTabTexts[i].text = label.Replace(" · ", "·");
-        nearTabTexts[i].color = popupTabTexts[i].color;
+        // ★11-17 시안 V0.3: 컨트롤러UI 탭 글자 = 지금 탭 흰색 · 나머지 #A9B0BA(실습 씬 UI 규격 CTx · CTx2). 못 가는 탭은 종전처럼 더 흐리게. 벽면 탭 줄은 종전(노란 글자) 그대로.
+        nearTabTexts[i].color = dim ? GaugeDim : current ? NearTabCurrentText : NearTabOtherText;
         Color plate = current ? TabOn : TabOff;
         plate.a = NearTabAlpha;
         nearTabPlates[i].material.color = plate;
