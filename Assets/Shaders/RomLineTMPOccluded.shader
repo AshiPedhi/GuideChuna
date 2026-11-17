@@ -55,6 +55,8 @@ Properties {
 
 	_CullMode			("Cull Mode", Float) = 0
 	_ColorMask			("Color Mask", Float) = 15
+	_OccluderMaxDistance ("Occluder Max Distance (m)", Float) = 1.8   // 11-17 — 이보다 먼 현실(방 벽 · 가구)은 가리지 않는다
+	_OccludedAlpha		("Occluded Alpha", Range(0,1)) = 0.25          // 11-17 — 가려진 곳도 살짝 보이게
 }
 
 SubShader {
@@ -98,6 +100,7 @@ SubShader {
 		#include "UnityUI.cginc"
 		#include "Assets/TextMesh Pro/Shaders/TMPro_Properties.cginc"
 		#include "Packages/com.meta.xr.sdk.core/Shaders/EnvironmentDepth/BiRP/EnvironmentOcclusionBiRP.cginc"
+		#include "Assets/Shaders/RomLineOccMax.cginc"
 
 		struct vertex_t {
 			UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -126,6 +129,7 @@ SubShader {
 
 		float _RomLineOccOff;   // 전역 — 미러링 카메라가 찍는 동안 1
 		float _EnvironmentDepthBias;
+		float _OccludedAlpha;
 		float _UIMaskSoftnessX;
         float _UIMaskSoftnessY;
         int _UIVertexColorAlwaysGammaSpace;
@@ -247,8 +251,12 @@ SubShader {
 			#endif
 
 			// 현실이 더 가까우면 그 자리 글자를 지운다(출력이 premultiplied라 통째로 곱한다)
-			float occ = META_DEPTH_GET_OCCLUSION_VALUE(input, _EnvironmentDepthBias);
-			c *= lerp(saturate(occ), 1.0, saturate(_RomLineOccOff));
+			float occ = 1.0;
+			#if defined(HARD_OCCLUSION) || defined(SOFT_OCCLUSION)
+			occ = RomLineOcclusion(input.posWorld, _EnvironmentDepthBias);   // 11-17 가림 거리 상한 포함(RomLineOccMax.cginc)
+			#endif
+			occ = lerp(saturate(occ), 1.0, saturate(_RomLineOccOff));
+			c *= lerp(_OccludedAlpha, 1.0, occ);   // ★11-17 사용자: 가려진 곳도 살짝 보이게(_OccludedAlpha 기본 0.25) — 출력이 premultiplied라 통째로 곱한다
 
 			#if UNITY_UI_ALPHACLIP
 			clip(c.a - 0.001);

@@ -3,7 +3,7 @@
 // ★왜(사용자 11-17): 벽면UI가 환자 뒤에 있는데 언제나 덧그려져 환자를 가린다. «폐색으로 해야겠다.»
 //   벽면은 환자보다 멀리 있으니 Meta Depth API가 «현실이 더 가깝다»를 알려 주면 그 자리만 비우면 된다.
 // ★실측랩의 RomRecordOccluded(09-21 · 기기에서 폐색 확인)와 같은 방식이다. 다른 점은 둘:
-//   ① 가려진 곳은 기본으로 완전히 비운다(_OccludedAlpha 0 — 벽면은 «몸을 관통하는 선»이 아니다).
+//   ① 가려진 곳은 옅게 남긴다(_OccludedAlpha 0.25 — 11-17 사용자 «살짝 보이게». 처음엔 0 = 완전히 비웠다).
 //   ② 관제 미러링 카메라(벽면 · 겹치기)는 눈 카메라가 아니라 깊이 재투영이 맞지 않는다 →
 //      RomLineMirror가 Render() 앞뒤로 전역 _RomLineOccOff를 1/0으로 바꿔 그때는 폐색을 끈다.
 // ★깊이 매니저가 없거나 미지원 기기면 키워드가 안 켜져 가려짐 값이 1.0 — 종전(Sprites/Default)과 똑같이 보인다.
@@ -14,8 +14,9 @@ Shader "GuideChuna/RomLine/WallOccluded"
     {
         _MainTex ("Texture", 2D) = "white" {}
         _Color ("Color", Color) = (1,1,1,1)
-        _OccludedAlpha ("Occluded Alpha", Range(0,1)) = 0
+        _OccludedAlpha ("Occluded Alpha", Range(0,1)) = 0.25   // ★11-17 사용자: 가려진 곳도 살짝 보이게(종전 0 = 완전히 비움)
         _EnvironmentDepthBias ("Environment Depth Bias", Float) = 0.0
+        _OccluderMaxDistance ("Occluder Max Distance (m)", Float) = 1.8   // 11-17 — 이보다 먼 현실(방 벽 · 가구)은 가리지 않는다
     }
 
     SubShader
@@ -35,6 +36,7 @@ Shader "GuideChuna/RomLine/WallOccluded"
             #pragma multi_compile _ HARD_OCCLUSION SOFT_OCCLUSION
             #include "UnityCG.cginc"
             #include "Packages/com.meta.xr.sdk.core/Shaders/EnvironmentDepth/BiRP/EnvironmentOcclusionBiRP.cginc"
+            #include "Assets/Shaders/RomLineOccMax.cginc"
 
             struct appdata
             {
@@ -77,7 +79,10 @@ Shader "GuideChuna/RomLine/WallOccluded"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 fixed4 c = tex2D(_MainTex, i.uv) * _Color * i.color;
-                float occ = META_DEPTH_GET_OCCLUSION_VALUE(i, _EnvironmentDepthBias);
+                float occ = 1.0;
+                #if defined(HARD_OCCLUSION) || defined(SOFT_OCCLUSION)
+                occ = RomLineOcclusion(i.posWorld, _EnvironmentDepthBias);   // 11-17 가림 거리 상한 포함(RomLineOccMax.cginc)
+                #endif
                 occ = lerp(saturate(occ), 1.0, saturate(_RomLineOccOff));
                 c.a *= lerp(_OccludedAlpha, 1.0, occ);
                 return c;

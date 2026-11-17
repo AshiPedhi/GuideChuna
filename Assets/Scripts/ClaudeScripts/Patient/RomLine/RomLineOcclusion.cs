@@ -14,6 +14,15 @@ using UnityEngine;
 public static class RomLineOcclusion
 {
     private static readonly int OccOffId = Shader.PropertyToID("_RomLineOccOff");
+    private static readonly int OccMaxId = Shader.PropertyToID("_OccluderMaxDistance");
+    /// <summary>
+    /// ★11-17 사용자 기기 확인: 벽면UI(3.2m 앞)가 통째로 안 보였다 = 방 벽 · 가구가 판보다 가까워 전부 가려졌다(«너 말대로 거리 때문이네»).
+    ///   → 현실 깊이가 이 거리(m)보다 먼 자리는 가리지 않는다(Assets/Shaders/RomLineOccMax.cginc). 환자 0.4~1.2m · 손은 더 가깝다(계산).
+    /// </summary>
+    public const float OccluderMaxDistance = 1.8f;
+    private static readonly int OccAlphaId = Shader.PropertyToID("_OccludedAlpha");
+    /// <summary>★11-17 사용자: 가려진 곳을 완전히 비우지 말고 살짝 보이게 — 가려진 자리의 알파 배율(0 = 완전히 비움 · 1 = 안 가림).</summary>
+    public const float OccludedAlpha = 0.25f;
     private static Meta.XR.EnvironmentDepth.EnvironmentDepthManager added;   // 우리가 붙인 것만 되돌린다
 
     /// <summary>벽면UI 렌더러의 셰이더를 폐색 셰이더로 바꾼다(색 · 글꼴 · 키워드는 그대로). 바꾼 개수를 돌려준다. 만든 뒤 한 번만 부른다.</summary>
@@ -33,6 +42,8 @@ public static class RomLineOcclusion
             Material m = t.fontMaterial;   // 글자마다 인스턴스(한 번) — 원본 글꼴 asset은 건드리지 않는다
             if (m == null || m.shader == tmpSh) continue;
             m.shader = tmpSh;
+            m.SetFloat(OccMaxId, OccluderMaxDistance);
+            m.SetFloat(OccAlphaId, OccludedAlpha);
             texts++;
         }
         foreach (var r in root.GetComponentsInChildren<Renderer>(true))
@@ -41,6 +52,8 @@ public static class RomLineOcclusion
             Material m = r.sharedMaterial;
             if (m == null || m.shader == wallSh || m.shader.name != "Sprites/Default") continue;
             r.material.shader = wallSh;   // 인스턴스 — r.material.color로 바꾸던 색은 _Color 그대로 남는다
+            r.material.SetFloat(OccMaxId, OccluderMaxDistance);
+            r.material.SetFloat(OccAlphaId, OccludedAlpha);
             quads++;
         }
         Debug.Log($"[선실측] 폐색 — 벽면UI 셰이더 바꿈(판 · 선 {quads}개 · 글자 {texts}개) · 컨트롤러UI · 공간 각도기는 뺌");
@@ -59,7 +72,7 @@ public static class RomLineOcclusion
         if (mgr == null) { mgr = host.AddComponent<Meta.XR.EnvironmentDepth.EnvironmentDepthManager>(); added = mgr; }
         mgr.enabled = true;
         mgr.OcclusionShadersMode = Meta.XR.EnvironmentDepth.OcclusionShadersMode.SoftOcclusion;   // 경계가 딱딱하면 오려 붙인 것처럼 보인다
-        Debug.Log($"[선실측] 폐색 — 켬({why}) · 부드러운 폐색 · 손도 깊이에 남긴다");
+        Debug.Log($"[선실측] 폐색 — 켬({why}) · 부드러운 폐색 · 손도 깊이에 남긴다 · 가림 거리 상한 {OccluderMaxDistance:F1}m(더 먼 방 벽 · 가구는 무시) · 가려진 곳 알파 {OccludedAlpha:F2}");
         return true;
     }
 
