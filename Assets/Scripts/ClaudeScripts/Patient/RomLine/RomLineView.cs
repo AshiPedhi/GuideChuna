@@ -233,6 +233,8 @@ public class RomLineView
             nearTabTexts[i].outlineWidth = 0.2f;
             nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(cellW, nearTabH), TabOff, 1).GetComponent<Renderer>();
         }
+        // ★11-17 시안 V0.4: 홈 칸 = 메뉴 아이콘(가로 막대 셋 · 도형 — KoPub 글자표를 타지 않는다) · 칸은 좁게(SetTabCount)
+        nearHomeIcon = MakeMenuIcon(guide, "홈 아이콘", nearTabH * 0.46f, nearIconBars);
 
         // ★11-17 사용자 지시: 홈 메뉴(측정값 초기화 · 끝점 보정 · 나가기)는 <b>안내 테두리 안</b>에 작게 — 왼쪽 항목 셋, 고른 항목 오른쪽에 설명.
         //   스틱 위아래로 고른다(세션). 초기화 · 나가기는 트리거 길게 — 설명 아래 막대가 찬다. 커서가 없으면 이 묶음은 꺼지고 안내 두 줄이 그대로 보인다.
@@ -578,7 +580,12 @@ public class RomLineView
     public void SetTabCount(int n)
     {
         int shown = Mathf.Clamp(n, 1, PopupTabs);
-        float cellW = (GuideW - NearTabGap * (shown - 1)) / shown;
+        // ★11-17 시안 V0.4: 홈 칸(0)은 메뉴 아이콘만 있어 좁다 — 컨트롤러UI는 나머지 칸의 약 절반(HomeTabFrac), 벽면UI는 PopupHomeW.
+        float avail = GuideW - NearTabGap * (shown - 1);
+        float nearHomeW = shown > 1 ? avail * HomeTabFrac : avail;
+        float nearOtherW = shown > 1 ? (avail - nearHomeW) / (shown - 1) : avail;
+        float wallTotal = PopupHomeW + (shown - 1) * (PopupTabW + PopupTabGap);
+        float nx = -GuideW * 0.5f, wx = -wallTotal * 0.5f;
         for (int i = 0; i < PopupTabs; i++)
         {
             bool on = i < n;
@@ -586,14 +593,62 @@ public class RomLineView
             popupTabTexts[i].gameObject.SetActive(on);
             nearTabPlates[i].gameObject.SetActive(on);
             nearTabTexts[i].gameObject.SetActive(on);
-            float k = i - (n - 1) * 0.5f;
-            SetX(popupTabPlates[i].transform, k * (PopupTabW + PopupTabGap));
-            SetX(popupTabTexts[i].transform, k * (PopupTabW + PopupTabGap));
-            nearTabPlates[i].transform.localScale = new Vector3(cellW, nearTabH, 1f);
-            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, nearTabH);
-            SetX(nearTabPlates[i].transform, k * (cellW + NearTabGap));
-            SetX(nearTabTexts[i].transform, k * (cellW + NearTabGap));
+            if (!on) continue;
+            float nw = i == 0 ? nearHomeW : nearOtherW, ww = i == 0 ? PopupHomeW : PopupTabW;
+            float nc = nx + nw * 0.5f, wc = wx + ww * 0.5f;
+            nx += nw + NearTabGap;
+            wx += ww + PopupTabGap;
+            popupTabPlates[i].transform.localScale = new Vector3(ww, PopupTabH, 1f);
+            popupTabTexts[i].rectTransform.sizeDelta = new Vector2(ww, PopupTabH);
+            SetX(popupTabPlates[i].transform, wc);
+            SetX(popupTabTexts[i].transform, wc);
+            nearTabPlates[i].transform.localScale = new Vector3(nw, nearTabH, 1f);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(nw, nearTabH);
+            SetX(nearTabPlates[i].transform, nc);
+            SetX(nearTabTexts[i].transform, nc);
+            if (i == 0) { SetX(nearHomeIcon, nc); SetX(popupHomeIcon, wc); }
         }
+        Debug.Log($"[선실측] 탭 줄 — 컨트롤러UI 홈 {nearHomeW * 100f:F1}cm · 나머지 {nearOtherW * 100f:F1}cm · 벽면 홈 {PopupHomeW:F3} · 나머지 {PopupTabW:F3}");
+    }
+
+    // ── 홈 칸 메뉴 아이콘(11-17 시안 V0.4) ── 가로 막대 셋. h = 아이콘 전체 높이. 색은 SetTab이 탭 글자 색 규칙대로 칠한다.
+    private const float HomeTabFrac = 34f / 234.1f;   // 시안: 컨트롤러UI 홈 34mm · 나머지 셋 66.7mm(틈 제외 234.1mm)
+    private const float PopupHomeW = 0.070f, PopupTabH = 0.064f;
+    private Transform nearHomeIcon, popupHomeIcon;
+    private readonly Renderer[] nearIconBars = new Renderer[3], popupIconBars = new Renderer[3];
+
+    private Transform MakeMenuIcon(Transform parent, string name, float h, Renderer[] bars)
+    {
+        var t = new GameObject(name).transform;
+        t.SetParent(parent, false);
+        float barW = h * 1.25f, barH = h * 0.16f;
+        for (int b = 0; b < 3; b++)
+            bars[b] = MakeQuad(t, "막대 " + b, new Vector2(0f, (1 - b) * h * 0.38f), new Vector2(barW, barH), Color.white, 3).GetComponent<Renderer>();
+        t.localPosition = new Vector3(0f, 0f, -0.004f);
+        return t;
+    }
+
+    private static void PaintIcon(Renderer[] bars, Color c)
+    {
+        for (int b = 0; b < bars.Length; b++) bars[b].material.color = c;
+    }
+
+    // ── 상자(테두리 막대 넷) ──
+    private void MakeBox(Transform parent, string name, Transform[] sides)
+    {
+        var t = new GameObject(name).transform;
+        t.SetParent(parent, false);
+        for (int s = 0; s < 4; s++) sides[s] = MakeQuad(t, name + " 변 " + s, Vector2.zero, new Vector2(GuideBorderT, GuideBorderT), GuideBorder, 0);
+    }
+
+    private static void SetBox(Transform[] sides, float cx, float cy, float w, float h)
+    {
+        sides[0].localPosition = new Vector3(cx, cy + h * 0.5f, sides[0].localPosition.z);
+        sides[1].localPosition = new Vector3(cx, cy - h * 0.5f, sides[1].localPosition.z);
+        sides[0].localScale = sides[1].localScale = new Vector3(w, GuideBorderT, 1f);
+        sides[2].localPosition = new Vector3(cx - w * 0.5f, cy, sides[2].localPosition.z);
+        sides[3].localPosition = new Vector3(cx + w * 0.5f, cy, sides[3].localPosition.z);
+        sides[2].localScale = sides[3].localScale = new Vector3(GuideBorderT, h, 1f);
     }
 
     // ── 홈 메뉴(11-17) ── 안내 테두리 안. 글은 상태가 바뀔 때만 넣는다(SetHomeMenu) · 막대만 매 프레임(SetHomeMenuHold, 할당 없음).
@@ -698,6 +753,7 @@ public class RomLineView
             popupTabTexts[i] = Place(MakeText(popup, "", 0.23f, TextAlignmentOptions.Center, 3), c, w);
             popupTabTexts[i].rectTransform.sizeDelta = new Vector2(w, h);   // 두 줄(이름 · 진행)
         }
+        popupHomeIcon = MakeMenuIcon(popup, "홈 아이콘", h * 0.42f, popupIconBars);   // ★11-17 시안 V0.4: 벽면 탭 줄 홈 칸도 메뉴 아이콘 · 좁은 칸(SetTabCount)
         // 확인 창 — 탭 창 위에 덮어 뜬다. ★10-22: 측정값 초기화(홈 A)와 촉 끝 맞추기(홈 B)가 같이 쓴다 — 글은 ShowAsk가 넣는다
         resetCard = new GameObject("확인 창").transform;
         resetCard.SetParent(popup, false);
@@ -723,14 +779,18 @@ public class RomLineView
     /// </summary>
     public void SetTab(int i, string label, bool current, bool dim)
     {
-        popupTabTexts[i].text = label;
-        popupTabTexts[i].color = dim ? GaugeDim : current ? TipColor : Color.white;
+        Color wallText = dim ? GaugeDim : current ? TipColor : Color.white;
+        // ★11-17 시안 V0.4: 홈 칸(0)은 글자 대신 메뉴 아이콘 — 아이콘을 탭 글자 색 규칙대로 칠한다(이름은 모니터 · 로그용으로 세션에 남는다)
+        popupTabTexts[i].text = i == 0 ? "" : label;
+        popupTabTexts[i].color = wallText;
         popupTabPlates[i].material.color = current ? TabOn : TabOff;
 
         // 안내 위 탭 — 메인 화면 탭 줄과 같은 색 규칙에 알파만 낮춘다(NearTabAlpha). 칸이 좁아 « · » 둘레의 띄어쓰기를 붙인다(글이 바뀔 때만 불린다).
-        nearTabTexts[i].text = label.Replace(" · ", "·");
+        nearTabTexts[i].text = i == 0 ? "" : label.Replace(" · ", "·");
         // ★11-17 시안 V0.3: 컨트롤러UI 탭 글자 = 지금 탭 흰색 · 나머지 #A9B0BA(실습 씬 UI 규격 CTx · CTx2). 못 가는 탭은 종전처럼 더 흐리게. 벽면 탭 줄은 종전(노란 글자) 그대로.
-        nearTabTexts[i].color = dim ? GaugeDim : current ? NearTabCurrentText : NearTabOtherText;
+        Color nearText = dim ? GaugeDim : current ? NearTabCurrentText : NearTabOtherText;
+        nearTabTexts[i].color = nearText;
+        if (i == 0) { PaintIcon(popupIconBars, wallText); PaintIcon(nearIconBars, nearText); }
         Color plate = current ? TabOn : TabOff;
         plate.a = NearTabAlpha;
         nearTabPlates[i].material.color = plate;
@@ -766,6 +826,7 @@ public class RomLineView
             nearTabTexts[i].transform.localPosition = new Vector3(p.x, tabY, p.z);
             nearTabPlates[i].transform.localPosition = new Vector3(p.x, tabY, nearTabPlates[i].transform.localPosition.z);
         }
+        if (nearHomeIcon != null) nearHomeIcon.localPosition = new Vector3(nearHomeIcon.localPosition.x, tabY, -0.004f);
         if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + nearTabH * 0.5f + nearBattery.fontSize * 0.06f, -0.004f);
     }
 
