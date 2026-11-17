@@ -2412,12 +2412,42 @@ public class RomLineSession : MonoBehaviour
         if (!on0 && !on1) { SetSpaceGaugeTab(-1, "확인했지만 능동 값 없음"); return; }
         RomLineResult first = on0 ? results[m0 * 2] : results[m1 * 2];
         Vector3 n = RomLineMath.PlaneNormal((RomLineMotion)(on0 ? m0 : m1), frame).normalized;   // 값을 낸 것과 같은 법선
-        Vector3 zeroDir = first.neutralDir;
+        // ★11-17 사용자 지적 «각도기가 판 안에서 180° 돌아가 있고 조금 기울어 있다» → 0°를 고정 기준으로.
+        //   종전 zeroDir = first.neutralDir 는 중립선(미간 → 턱끝 순서)이라 <b>아래</b>를 향했다(평가 판 실측 y 1.501 → 1.403)
+        //   → LookRotation(normal, zeroDir)에서 0°(+Y)가 아래 = 법선 둘레 180°, 얼굴선이 수직에서 벗어난 만큼(~5° · 계산) 기울었다.
+        //   옆면 · 앞면(법선이 수평) = 월드 위를 면에 투영한 방향 · 바닥면(회전 · 법선 = 위) = 환자 정면(frame.forward)을 면에 투영.
+        //   도달점은 그대로 signedAngle(중립 대비)을 Dir(a)로 — 회전 방향(법선 둘레)은 같아 값 · 부호는 결과표와 같다.
+        //   ★방향은 추론으로 확정하지 않는다(규칙 9) — 아래 로그의 두 각으로 Play에서 대조한다.
+        Vector3 zeroRef = want == 2 ? (frame.valid ? frame.forward : Vector3.forward) : Vector3.up;
+        Vector3 zeroDir = Vector3.ProjectOnPlane(zeroRef, n);
+        if (zeroDir.sqrMagnitude < 1e-6f) zeroDir = -first.neutralDir;   // 면이 기준과 수직에 가까우면(드묾) 중립선을 뒤집어 쓴다
+        zeroDir.Normalize();
+        LogSpaceGaugeDir(want, n, zeroRef, zeroDir, first);
         // ★디자인은 VR ROM 각도기와 통일(11-16) — 눈금 색 = 면(탭) · 도달점 = 숫자만(동작 이름 없음 · 능동 하늘색 / 압박 붉은 주황)
         spaceGauge.Show(spaceGaugeCenter, n, zeroDir, spaceGaugeRadius, want,
                         on0, results[m0 * 2].signedAngle, results[m0 * 2 + 1].valid, results[m0 * 2 + 1].signedAngle,
                         on1, results[m1 * 2].signedAngle, results[m1 * 2 + 1].valid, results[m1 * 2 + 1].signedAngle);
     }
+
+    /// <summary>
+    /// 각도기 방향 대조 로그(11-17) — 값이 바뀔 때만 한 줄. ①0°와 기준(옆·앞면 = 월드 위 / 바닥면 = 환자 정면)의 각 — 0이면 0°가 정확히 그쪽이다.
+    /// ②능동 도달점 방향(0°에서 signedAngle만큼 법선 둘레로 돌린 것) vs 실제 능동선을 뒤집은 방향(−markDir — 0°가 «위/앞»이라 선도 그쪽 끝을 본다)의 각 — 작으면 도달점이 실제 선과 같은 쪽.
+    /// ③0°와 −중립선의 각 = ②가 0이 아닌 이유(얼굴선이 기준에서 벗어난 만큼).
+    /// </summary>
+    private void LogSpaceGaugeDir(int tab, Vector3 n, Vector3 zeroRef, Vector3 zeroDir, RomLineResult first)
+    {
+        if (tab == lastGaugeDirTab && Mathf.Approximately(first.signedAngle, lastGaugeDirAngle)) return;
+        lastGaugeDirTab = tab;
+        lastGaugeDirAngle = first.signedAngle;
+        Vector3 shown = Quaternion.AngleAxis(first.signedAngle, n) * zeroDir;
+        float refAng = Vector3.Angle(zeroDir, zeroRef);
+        float vsLine = Vector3.Angle(shown, -first.markDir);
+        float vsNeutral = Vector3.Angle(zeroDir, -first.neutralDir);
+        Debug.Log($"[선실측·각도기] 방향 — {GuidedTabName[tab]} · 0°↔{(tab == 2 ? "환자 정면" : "월드 위")} {refAng:F1}° · " +
+                  $"능동 도달점({first.signedAngle:F1}°) ↔ 실제 능동선(뒤집음) {vsLine:F1}° · 0° ↔ 중립선(뒤집음) {vsNeutral:F1}° · 법선 {n:F2}");
+    }
+    private int lastGaugeDirTab = -1;
+    private float lastGaugeDirAngle = float.NaN;
 
     private bool AnyPointInTab(int tab)
     {
