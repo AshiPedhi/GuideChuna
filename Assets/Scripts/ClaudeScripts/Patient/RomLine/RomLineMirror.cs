@@ -322,7 +322,9 @@ public class RomLineMirror : MonoBehaviour
         overlayCam.projectionMatrix = Matrix4x4.Frustum(lo.x / lo.z * n, hi.x / hi.z * n, lo.y / lo.z * n, hi.y / hi.z * n, n, f);
         Camera eyeCam = Camera.main;
         overlayCam.cullingMask = eyeCam != null ? eyeCam.cullingMask : ~0;
+        RomLineOcclusion.MirrorBegin();   // ★11-17 폐색 시험: 이 카메라는 깊이 재투영이 안 맞는다 — 찍는 동안 폐색을 끈다
         overlayCam.Render();
+        RomLineOcclusion.MirrorEnd();
         if (!overlayLogged)
         {
             overlayLogged = true;
@@ -579,7 +581,9 @@ public class RomLineMirror : MonoBehaviour
         wallCam.orthographicSize = (WallTop - WallBottom) * 0.5f * k;
         wallCam.nearClipPlane = (CamBack - SlabHalf) * k;
         wallCam.farClipPlane = (CamBack + SlabHalf) * k;
+        RomLineOcclusion.MirrorBegin();   // ★11-17 폐색 시험: 관제 화면의 벽면UI는 가리지 않는다
         wallCam.Render();
+        RomLineOcclusion.MirrorEnd();
 
         wallBusy = true;
         if (syncRead) ProcessWall(ReadSync(wallRt, ref syncWallTex, TextureFormat.RGBA32));

@@ -370,6 +370,9 @@ public class RomLineSession : MonoBehaviour
         view.Build(transform, font, new Material(sh));
         freeView.Build(view, transform, view.FreeArea, view.FreeTableTop);
         spaceGauge.Build(view, transform);
+        // ★11-17 폐색 시험: 벽면UI만 현실 깊이에 가려지게(환자가 UI 앞에 보이게). 깊이는 추적이 붙은 뒤 Update에서 한 번 더 켠다.
+        RomLineOcclusion.ApplyToWall(view.Panel);
+        occOn = RomLineOcclusion.Enable(gameObject, "시작");
         BuildSounds();
 
         // ★10-08 사용자 지시: 탭 다섯 — 굴곡(3직선) · 신전(3) · 측굴(좌우 6) · 회전(좌우 6)을 <b>순서대로</b> 재고, 자유 측정은 «기타»다.
@@ -435,6 +438,7 @@ public class RomLineSession : MonoBehaviour
         if (eye == null) { Silent("눈(Camera.main)이 없다"); return; }
 
         if (!view.PanelPlaced) PlaceFixed();
+        TickOcclusion();
 
         ReadController();
         ReadHands();
@@ -458,8 +462,26 @@ public class RomLineSession : MonoBehaviour
         if (suspendedChunaMirror) { suspendedChunaMirror = false; ChunaWebMirror.Resume("선 실측"); }   // 우리가 비키게 한 것만 되돌린다
         RomLineDevLog.Save("나감", tipOffset * 1000f);
         RomLineDevLog.End();   // Start에서 켠 것을 끈다
+        RomLineOcclusion.Disable();   // 우리가 붙인 깊이 매니저만 끈다
     }
     private bool suspendedChunaMirror;
+
+    // ── 폐색(11-17 시험) — Start에서는 XR이 아직 안 붙어 깊이가 없을 수 있다(09-21 실측랩 실측). 눈이 제자리에 온 뒤 한 번 더 켜고,
+    //   깊이 텍스처가 처음 들어온 순간을 한 번 남긴다. 상태가 바뀔 때만 로그(매 프레임 할당 없음).
+    private bool occOn, occRetried, occReadyLogged;
+    private void TickOcclusion()
+    {
+        if (!occRetried && eye.position.y > 0.3f && Time.timeSinceLevelLoad > 2f)
+        {
+            occRetried = true;
+            if (!occOn) occOn = RomLineOcclusion.Enable(gameObject, "추적이 붙은 뒤");
+        }
+        if (occOn && !occReadyLogged && RomLineOcclusion.DepthReady)
+        {
+            occReadyLogged = true;
+            Debug.Log($"[선실측] 폐색 — 깊이 텍스처 준비됨(첫 프레임 · 시작 {Time.timeSinceLevelLoad:F1}초)");
+        }
+    }
 
     /// <summary>앱이 내려가면(헤드셋을 벗음 · 홈 버튼) 개발용 로그를 남겨 둔다 — 그대로 꺼질 수 있다(11-17).</summary>
     private void OnApplicationPause(bool paused)
