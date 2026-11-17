@@ -752,7 +752,11 @@ public class RomLineSession : MonoBehaviour
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");   // 확인 안내 중의 좌우는 HandleHomeMenu가 먼저 받는다
+            // ★11-17 사용자 지시: 끝에서 순환 — 마지막 탭에서 → 첫 탭(≡ 홈) · 첫 탭에서 ← 마지막 탭(재는 중 잠금은 GoTab이 그대로 막는다)
+            int nextTop = CurTop + (stick.x > 0f ? 1 : -1);
+            bool wrapTop = nextTop < 0 || nextTop > LastTop;
+            if (nextTop < 0) nextTop = LastTop; else if (nextTop > LastTop) nextTop = 0;
+            GoTab(nextTop, wrapTop ? "스틱 · 순환" : "스틱");   // 확인 안내 중의 좌우는 HandleHomeMenu가 먼저 받는다
             return;
         }
 
@@ -770,7 +774,7 @@ public class RomLineSession : MonoBehaviour
 
     // ── 홈 메뉴(11-17 · 시안 V0.4) ────────────────────────────────────
     /// <summary>
-    /// 홈에서만 부른다. 목록: 스틱 ▲▼ = 항목(끝에서 멈춤 · 순환 없음) · 트리거 = ROM이면 측정 탭으로, 나머지는 확인 안내.
+    /// 홈에서만 부른다. 목록: 스틱 ▲▼ = 항목(끝에서 순환 — 11-17) · 트리거 = ROM이면 측정 탭으로, 나머지는 확인 안내.
     /// 확인 안내 중: 트리거 = 실행 · B = 취소(목록으로) · 스틱 ▲▼는 받지 않음 · 스틱 ◀▶는 설정 탭이 둘 이상일 때만 설정 탭 이동(아니면 받지 않음).
     /// 목록에서 스틱 ◀▶ · B · A는 받지 않고 넘긴다(false — 위 탭 줄 이동 · 자유 측정 B는 그대로). 입력을 썼으면 true.
     /// </summary>
@@ -813,11 +817,14 @@ public class RomLineSession : MonoBehaviour
         if (vertical)
         {
             stickReady = false;
-            int next = Mathf.Clamp(menuCursor + (stick.y < 0f ? 1 : -1), 0, MenuLabel.Length - 1);
+            // ★11-17 사용자 지시: 끝에서 순환 — 맨 아래(나가기)에서 ▼ → 맨 위(ROM) · 맨 위에서 ▲ → 맨 아래
+            int next = menuCursor + (stick.y < 0f ? 1 : -1);
+            bool wrap = next < 0 || next > MenuLabel.Length - 1;
+            if (next < 0) next = MenuLabel.Length - 1; else if (next > MenuLabel.Length - 1) next = 0;
             if (next != menuCursor)
             {
                 menuCursor = next;
-                Debug.Log($"[선실측] 홈 메뉴 — 커서 → {MenuLabel[menuCursor]}");
+                Debug.Log($"[선실측] 홈 메뉴 — 커서 → {MenuLabel[menuCursor]}{(wrap ? " (순환)" : "")}");
                 Play(sndPress);
                 dirty = true;
             }
