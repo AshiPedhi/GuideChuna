@@ -37,8 +37,7 @@ public static class RomLineDevLog
     /// <summary>남긴다(★로 시작하는 줄은 Drop에 없으면 모두 남는다).</summary>
     private static readonly string[] Keep =
     {
-        "취소", "이 탭 지우기", "리셋", "받지 않음", "멈춰 있다", "나가기",
-        "홈 메뉴 — 끝점 보정 실행",
+        "취소", "이 탭 지우기", "리셋", "받지 않음", "나가기",
         "확인 —",
         "쓰는 컨트롤러", "반대쪽 컨트롤러",
         "끝점 보정", "끝점 저장",
@@ -57,7 +56,7 @@ public static class RomLineDevLog
     private static readonly Queue<string> tail = new Queue<string>(256);
     private static int tailChars, lines, omitted;
     private static float nextDiag, nextVideoDiag;
-    private static string firstBattery, lastBattery;
+    private static string firstBattery, lastStall;
 
     /// <summary>판을 시작한다(RomLineSession.Start). 지난 판의 로그 파일이 너무 많으면 오래된 것부터 지운다.</summary>
     public static void Begin(string session, bool evaluation, string started)
@@ -70,7 +69,7 @@ public static class RomLineDevLog
         tail.Clear();
         tailChars = lines = omitted = 0;
         nextDiag = nextVideoDiag = 0f;
-        firstBattery = lastBattery = null;
+        firstBattery = lastStall = null;
         warned = false;
         Trim();
         Application.logMessageReceived += OnLog;
@@ -117,18 +116,31 @@ public static class RomLineDevLog
         if (At(msg, o, "미러링 영상 진단")) return Throttle(ref nextVideoDiag);
 
         // 컨트롤러 추적 — 끊김(★) · 복귀(잡힘)만. 맨손 상태 줄(«컨트롤러 O · 왼손 …»)은 뺀다
-        if (At(msg, o, "추적 — ")) return msg.IndexOf('★') >= 0 || msg.IndexOf("잡힘", StringComparison.Ordinal) >= 0;
+        if (At(msg, o, "추적 — "))
+        {
+            bool back = msg.IndexOf("잡힘", StringComparison.Ordinal) >= 0;
+            if (back) lastStall = null;   // 상태가 바뀌었다 — 다음 «멈춰 있다»는 다시 남긴다
+            return back || msg.IndexOf('★') >= 0;
+        }
+        // ★11-17 기기 시험 분석 개선 1: «멈춰 있다»는 2초마다 반복된다(26초 끊김에 14줄) — 같은 문장이 이어지면 처음 한 줄만
+        if (At(msg, o, "멈춰 있다"))
+        {
+            if (msg == lastStall) return false;
+            lastStall = msg;
+            return true;
+        }
 
         // 배터리 — 처음 한 줄만 바로 남기고, 끝 값은 저장할 때 붙인다
         if (At(msg, o, "배터리"))
         {
             if (firstBattery == null) { firstBattery = msg; return true; }
-            lastBattery = msg;
-            return false;
+            return false;   // 끝 값은 저장할 때 지금 값을 읽어 붙인다(Save)
         }
 
         if (msg.Length > o && msg[o] == '★') return true;
-        if (At(msg, o, "홈 메뉴 — ")) return msg.IndexOf("길게 완료", StringComparison.Ordinal) >= 0;
+        // 홈 메뉴(11-17 V0.4) — 실행 · 취소(B)만. 커서 이동 · 확인 안내 · 설정 탭 이동 · 열 폭은 뺀다
+        if (At(msg, o, "홈 메뉴 — "))
+            return msg.IndexOf(" 실행(", StringComparison.Ordinal) >= 0 || msg.IndexOf(" 취소(B)", StringComparison.Ordinal) >= 0;
         for (int i = 0; i < Keep.Length; i++)
             if (string.CompareOrdinal(msg, o, Keep[i], 0, Keep[i].Length) == 0) return true;
         return false;
@@ -198,7 +210,10 @@ public static class RomLineDevLog
             sb.Append(head);
             if (omitted > 0) sb.Append("…생략 ").Append(omitted).Append("줄\n");
             foreach (string l in tail) sb.Append(l).Append('\n');
-            if (lastBattery != null) sb.Append(DateTime.Now.ToString("HH:mm:ss.fff")).Append(" I ").Append(lastBattery).Append(" (끝)\n");
+            // ★11-17 기기 시험 분석 개선 2: 배터리 줄은 잔량 구간이 바뀔 때만 찍혀 판 끝 값이 비었다 — 저장할 때 지금 값을 한 줄 붙인다
+            int pct = RomLineView.BatteryPercent();
+            sb.Append(DateTime.Now.ToString("HH:mm:ss.fff")).Append(" I ").Append(Main).Append("배터리 — ")
+              .Append(pct < 0 ? "읽을 수 없음" : pct + "%").Append(RomLineView.BatteryCharging() ? " · 충전 중" : " · 충전 안 함").Append(" (끝)\n");
 
             Directory.CreateDirectory(RomLineUpload.QueueDir);
             string path = Path.Combine(RomLineUpload.QueueDir, "xrrom_log_" + sessionId + ".txt");
