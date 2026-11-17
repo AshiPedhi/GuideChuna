@@ -89,12 +89,12 @@ public class RomLineView
             // 0·1 = 기준(양쪽 Tr) · 그 뒤로 동작마다 중립 2 · 능동 2 · 압박 2
             int phase = i < 2 ? 0 : ((i - 2) / 2) % 3;
             Color c = phase == 0 ? NeutralColor : phase == 1 ? ActiveColor : PressureColor;
-            spheres[i] = MakeSphere("점", PointRadius, c);
+            spheres[i] = MakeSphere("점", PointRadius, SpaceA(c));
             spheres[i].gameObject.SetActive(false);
         }
         for (int i = 0; i < extraSpheres.Length; i++)
         {
-            extraSpheres[i] = MakeSphere("점(비교 턱끝점)", PointRadius, i == 0 ? NeutralColor : i == 1 ? ActiveColor : PressureColor);
+            extraSpheres[i] = MakeSphere("점(비교 턱끝점)", PointRadius, SpaceA(i == 0 ? NeutralColor : i == 1 ? ActiveColor : PressureColor));
             extraSpheres[i].gameObject.SetActive(false);
         }
         for (int i = 0; i < neutralLabels.Length; i++)
@@ -103,9 +103,9 @@ public class RomLineView
             neutralLabels[i].gameObject.SetActive(false);
         }
 
-        neutralLine = MakeLine("중립 기준선", NeutralColor, 2);
-        activeLine = MakeLine("능동 측정선", ActiveColor, 2);
-        pressureLine = MakeLine("압박 측정선", PressureColor, 2);
+        neutralLine = MakeLine("중립 기준선", SpaceA(NeutralColor), 2);
+        activeLine = MakeLine("능동 측정선", SpaceA(ActiveColor), 2);
+        pressureLine = MakeLine("압박 측정선", SpaceA(PressureColor), 2);
         // 길이 글자 — 흰 글자 + 검은 외곽선(선의 색과 겹치지 않게 · 자유 측정의 길이 글자와 같은 크기)
         neutralText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
         activeText = Outlined(MakeText(root, "", 0.07f, TextAlignmentOptions.Center, 5));
@@ -113,9 +113,9 @@ public class RomLineView
         HideMeasure();
 
         // 비교 시험의 Gl ~ Gn 선 — Tr ~ Gl 선과 헷갈리지 않게 하늘색 계열로 그린다
-        cmpNeutralLine = MakeLine("비교 중립선", CompareNeutral, 2);
-        cmpActiveLine = MakeLine("비교 능동선", CompareColor, 2);
-        cmpPressureLine = MakeLine("비교 압박선", ComparePressure, 2);
+        cmpNeutralLine = MakeLine("비교 중립선", SpaceA(CompareNeutral), 2);
+        cmpActiveLine = MakeLine("비교 능동선", SpaceA(CompareColor), 2);
+        cmpPressureLine = MakeLine("비교 압박선", SpaceA(ComparePressure), 2);
         cmpText = MakeText(root, "", 0.10f, TextAlignmentOptions.Center, 5);
         cmpText.color = CompareColor;
         HideCompare();
@@ -1163,6 +1163,11 @@ public class RomLineView
         Vector3 away = t.position - eye.position;
         if (away.sqrMagnitude > 1e-6f) t.rotation = Quaternion.LookRotation(away, eye.up);
     }
+
+    // ★11-17 사용자 결정: 공간에 찍은 점 · 선(측정 점 · 중립/능동/압박 선 · 자유 측정 점·선)은 늘 반투명 — 환자 얼굴을 덜 가린다(폐색 아님).
+    //   촉 끝 커서 · 벽면UI · 컨트롤러UI · 각도기 · 바닥 3축은 해당 없음. 값을 바꾸려면 이 상수 하나.
+    public const float PointLineAlpha = 0.5f;
+    public static Color SpaceA(Color c) { c.a *= PointLineAlpha; return c; }
 
     // ── 만들기 ──────────────────────────────────────────────────────
     internal Transform MakeSphere(string name, float radius, Color c)

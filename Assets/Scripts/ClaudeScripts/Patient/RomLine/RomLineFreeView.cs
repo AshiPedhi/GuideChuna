@@ -115,7 +115,7 @@ public class RomLineFreeView
         int n = pts.Count;
         while (spheres.Count < n)
         {
-            Transform s = v.MakeSphere("점(자유)", RomLineView.PointRadius, LineColor);
+            Transform s = v.MakeSphere("점(자유)", RomLineView.PointRadius, RomLineView.SpaceA(LineColor));
             s.SetParent(world, false);
             spheres.Add(s);
             sphereRenderers.Add(s.GetComponent<Renderer>());
@@ -126,7 +126,7 @@ public class RomLineFreeView
             if (spheres[i].gameObject.activeSelf != show) spheres[i].gameObject.SetActive(show);
             if (!show) continue;
             spheres[i].position = pts[i];
-            sphereRenderers[i].material.color = mode == 0 && i < 3 ? FirstColor : LineColor;
+            sphereRenderers[i].material.color = RomLineView.SpaceA(mode == 0 && i < 3 ? FirstColor : LineColor);   // 11-17 반투명
         }
 
         int seg = 0;
@@ -135,13 +135,13 @@ public class RomLineFreeView
             if (!Linked(mode, i)) continue;
             if (lines.Count <= seg)
             {
-                LineRenderer lr = v.MakeLine("선(자유)", LineColor, 2);
+                LineRenderer lr = v.MakeLine("선(자유)", RomLineView.SpaceA(LineColor), 2);
                 lr.transform.SetParent(world, false);
                 lines.Add(lr);
                 labels.Add(RomLineView.Outlined(v.MakeText(world, "", 0.07f, TextAlignmentOptions.Center, 5)));   // 글자는 선의 색을 따르지 않는다(10-13 오후)
             }
             Color c = mode == 0 && i < 3 ? FirstColor : LineColor;
-            lines[seg].startColor = lines[seg].endColor = c;
+            lines[seg].startColor = lines[seg].endColor = RomLineView.SpaceA(c);   // 11-17 반투명
             Vector3 a = pts[i], b = pts[i + 1];
             RomLineView.DrawLine(lines[seg], a, b);   // 찍은 두 점 사이만(10-13)
             labels[seg].text = (Vector3.Distance(a, b) * 1000f).ToString("F0");   // 길이는 mm, 단위 글자 없이(10-13)
