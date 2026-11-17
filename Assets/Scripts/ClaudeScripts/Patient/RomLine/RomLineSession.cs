@@ -1820,6 +1820,7 @@ public class RomLineSession : MonoBehaviour
         confirmWait = false;
         noteText = "";
         if (lastConfirmedTab == tab) lastConfirmedTab = -1;   // 공간 각도기(11-16)
+        if (resultOn) resultOffWhy = "이 탭 지우기 · " + GuidedTabName[tab];   // 결과 창(11-17)
         Debug.Log($"[선실측] 이 탭 지우기 — {GuidedTabName[tab]} ({why})");
         SaveBaselineIfPractice("탭 지우기");
         SaveUpload("탭 지우기");
@@ -1834,6 +1835,7 @@ public class RomLineSession : MonoBehaviour
         for (int i = 0; i < GroupCount; i++) hasExtra[i] = false;
         for (int i = 0; i < 6; i++) confirmed[i] = false;
         lastConfirmedTab = -1;   // 공간 각도기(11-16)
+        if (resultOn) resultOffWhy = "측정값 초기화 · " + why;   // 결과 창(11-17)
         frame = axes;   // 고정 3축은 그대로다
         for (int i = 0; i < 12; i++) ClearResult(i);
         int keep = freeTab, freePoints = 0;
@@ -1965,15 +1967,13 @@ public class RomLineSession : MonoBehaviour
         // ★평가가 끝난 뒤에만 실습값을 보인다(사용자 11-13)
         FillCurrent();
         evalScore = RomLineRepeatScore.Total(baseVals, curVals, out evalMeanErr, out evalN);
+        // ★11-17 결과 창(시안 V0.2): 값 칸 = 평가 값 + 그 아래 «(실습 값)» · 차이 칸 자리 = 오차 칩 둘. 종전 «값 (실습 x)» 한 줄 · «오차 a / p» 글은 칸이 겹쳐 바꿨다.
         var ci = CultureInfo.InvariantCulture;
-        for (int m = 0; m < 6; m++)
+        for (int s = 0; s < RomLineRepeatScore.Slots; s++)
         {
-            int a = m * 2, p = m * 2 + 1;
-            if (!float.IsNaN(baseVals[a]) && !float.IsNaN(curVals[a]))
-                view.SetValue(a, curVals[a].ToString("F1", ci) + "° <size=60%>(실습 " + baseVals[a].ToString("F1", ci) + ")</size>", false, false);
-            if (!float.IsNaN(baseVals[p]) && !float.IsNaN(curVals[p]))
-                view.SetValue(p, curVals[p].ToString("F1", ci) + "° <size=60%>(실습 " + baseVals[p].ToString("F1", ci) + ")</size>", false, false);
-            view.SetDiff(m, "오차 " + ErrText(a) + " / " + ErrText(p), false);
+            bool hasCur = !float.IsNaN(curVals[s]), both = hasCur && !float.IsNaN(baseVals[s]);
+            view.SetEvalCell(s, both, hasCur ? curVals[s].ToString("F1", ci) + "°" : "—",
+                             both ? "(실습 " + baseVals[s].ToString("F1", ci) + ")" : "", both ? curVals[s] - baseVals[s] : 0f);
         }
         view.SetFooter(evalN > 0
             ? $"평가 점수 {evalScore:F1}점 · 평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 실습 {baseWhen} 기준 (오차 = 평가 - 실습, 능동 / 압박)"
@@ -1985,6 +1985,32 @@ public class RomLineSession : MonoBehaviour
             SaveEvalFile();
             SaveUpload("평가 점수");
         }
+    }
+
+    // ── 결과 창(11-17 사용자 결정 · 시안 V0.2) ── 6동작을 다 확인하면(Done) 벽면 판이 결과 창으로 바뀐다 — 탭은 Confirm이 이미 홈으로 보낸다(10-14).
+    //   닫기는 없다. Done이 풀리면(홈 메뉴 «측정값 초기화» · 측정 탭의 B 길게 «이 탭 지우기») 결과가 더 이상 완전하지 않으니 사라진다.
+    //   다 못 잰 판은 결과 창이 없다(값만 기록 · 점수 없음 — 종전 그대로).
+    private bool resultOn, resultEvalOn;
+    private string resultWhen = "", resultOffWhy = "결과가 비었다";
+
+    private void RefreshResultWindow()
+    {
+        bool on = Done;
+        bool eval = on && evalMode && evalScored && evalN > 0;
+        if (on == resultOn && eval == resultEvalOn) return;   // 상태가 바뀔 때만
+        if (on && !resultOn) resultWhen = System.DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string user = monitorUser.Length > 0 ? " · 사용자 " + monitorUser : "";
+        string title = "경추 ROM 결과 · " + (evalMode ? "평가" : "실습");
+        string sub = !evalMode ? resultWhen + user + " · 6 / 6 동작 확인"
+                   : hasBase ? resultWhen + user + " · 실습 " + baseWhen + " 기준"
+                   : resultWhen + user + " · 비교할 실습 기록 없음";
+        view.SetResultWindow(on, eval, title, sub);
+        if (eval) view.SetEvalScore(evalScore, $"평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 오차 = 평가 - 실습");
+        if (on) Debug.Log($"[선실측] 결과 창 — 띄움({(evalMode ? "평가" : "실습")}{(eval ? $" · 점수 {evalScore:F1} · 평균 오차 {evalMeanErr:F2}° · {evalN}칸" : evalMode ? " · 점수 없음" : "")})");
+        else Debug.Log($"[선실측] 결과 창 — 사라짐({resultOffWhy})");
+        resultOn = on;
+        resultEvalOn = eval;
+        resultOffWhy = "결과가 비었다";
     }
 
     private string ErrText(int s)
@@ -2191,6 +2217,14 @@ public class RomLineSession : MonoBehaviour
                 // ★11-17 글꼴 KoPub(정적 SDF)에 ↕ · ∞ · −(U+2212)가 없다 → 화면 글은 ▲▼ · «Meta 버튼» · -로 쓴다(fallback Noto 동적 글꼴이 글자를 굽지 않게 · LFS 사고 예방). 관제 페이지(forMonitor)는 브라우저라 그대로.
                 forMonitor = instruction = "홈 — 스틱 위아래 : 메뉴(측정값 초기화 · 끝점 보정 · 나가기)" + (FreeTabOn ? " · B : 자유측정 모드변경" : "") + " · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
                 guide = "스틱 ▲▼ : 메뉴\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + SubInfo + "Meta 버튼 길게 : 뷰 재설정</size>";
+                if (Done)
+                {
+                    // ★11-17 결과 창(시안 V0.2): 다 잰 뒤의 홈 — 윗줄에 끝났다는 말, 알림 줄에 다시 재는 법(닫기는 없다)
+                    string doneLine = evalMode ? "평가가 끝났습니다" : "6동작을 모두 쟀습니다";
+                    forMonitor = instruction = doneLine + " · " + instruction;
+                    guide = "<color=#73E68C>" + doneLine + "</color>\n" + guide;
+                    if (guideNote.Length == 0) guideNote = "다시 재려면 홈 메뉴 «측정값 초기화» (트리거 길게)";
+                }
             }
         }
         // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).
@@ -2246,6 +2280,7 @@ public class RomLineSession : MonoBehaviour
             view.SetGauge(m, aOn, a.angle, aOpp, pOn, pr.angle, pOpp);
         }
         RefreshRepeat();
+        RefreshResultWindow();
         monitor.SetCsv(ResultCsv());   // 결과표가 바뀔 때마다(Refresh는 dirty일 때만 돈다)
 
         // 점 — 기준 둘은 늘, 그 밖은 지금 동작 것만.

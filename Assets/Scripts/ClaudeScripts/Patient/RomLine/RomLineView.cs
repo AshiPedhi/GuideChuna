@@ -379,7 +379,8 @@ public class RomLineView
         Place(MakeText(resultArea, "측정", 0.12f, TextAlignmentOptions.Left, 3), new Vector2(XName, headY), 0.14f).color = DimColor;
         Place(MakeText(resultArea, "능동", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XActive, headY), 0.10f).color = ActiveColor;
         Place(MakeText(resultArea, "압박", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XPressure, headY), 0.10f).color = PressureColor;
-        Place(MakeText(resultArea, "차이", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XDiff, headY), 0.10f).color = DiffColor;
+        TextMeshPro diffHeadText = Place(MakeText(resultArea, "차이", 0.15f, TextAlignmentOptions.Center, 3), new Vector2(XDiff, headY), 0.10f);
+        diffHeadText.color = DiffColor;
         // ★10-14 사용자 지시: «각도기» 머리글과 각도기 옆의 «옆에서 / 앞에서 / 위에서 본 그림» 글자를 뺐다(양옆의 앞 · 뒤 / 좌 · 우 표시는 둔다).
 
         rowNow = MakeQuad(resultArea, "지금 줄", Vector2.zero, new Vector2(LeftW, RowH - 0.004f), RowNowColor, 1);
@@ -419,6 +420,9 @@ public class RomLineView
                 Seg(verts, cols, tris, GaugePoint(m, deg, GaugeR - (deg % 45 == 0 ? 0.011f : 0.006f)), GaugePoint(m, deg, GaugeR), 0.0016f, GaugeDim);
             Seg(verts, cols, tris, gaugePivot[m], GaugePoint(m, 0f, GaugeR), 0.0012f, NeutralColor);   // 0° = 중립 (10-15 절반으로)
         }
+
+        diffHead = diffHeadText;
+        BuildResultWindow(top);
 
         var go = new GameObject("각도기 바탕");
         go.transform.SetParent(resultArea, false);
@@ -462,6 +466,110 @@ public class RomLineView
         lr.startWidth = lr.endWidth = width;
         return lr;
     }
+
+    // ── 결과 창(11-17 사용자 결정 · 시안 D:/CoCoChuna_XR-ROM_결과창_시안_V0.2_20261117) ──────────────────
+    //   새 판이 아니라 <b>벽면 판이 «끝난 모습»으로 바뀐다</b>: 맨 위 비워 둔 띠(10-12 타이틀 자리)에 제목 · 날짜 · 사용자,
+    //   평가면 그 오른쪽에 점수(큰 주황 숫자) · 80~100 띠(90 기준선) · 평균 오차 줄. 값 칸 = 평가 값(0.22) + 그 아래 «(실습 값)»(0.12),
+    //   차이 칸 자리 = 오차 칩 둘(능동 / 압박 — 2° 안 초록 · 5° 안 주황 · 넘으면 빨강). 칸 · 각도기 셋 · 색은 결과표 그대로다.
+    //   ★점수 띠는 시안(x 0.09~0.37)에서 왼쪽으로 당겼다(0.07~0.23) — 오른쪽 위 모서리의 배터리 글자와 겹치지 않게.
+    private Transform resultTitleRoot, evalRoot, evalScoreFill;
+    private TextMeshPro resultTitle, resultSub, evalScoreText, evalMeanText, diffHead;
+    private readonly TextMeshPro[] evalVals = new TextMeshPro[12], evalBases = new TextMeshPro[12], errTexts = new TextMeshPro[12];
+    private readonly Renderer[] errChips = new Renderer[12];
+    private const float ScoreBarX0 = 0.07f, ScoreBarX1 = 0.23f, ScoreBarH = 0.010f;
+    private static readonly Color ErrOk = new Color(0.45f, 0.90f, 0.55f, 1f);   // #73E68C(다 잰 탭 · 배터리 높음과 같다)
+    private bool resultShown, resultEval;
+
+    private void BuildResultWindow(float top)
+    {
+        resultTitleRoot = new GameObject("결과 창 제목").transform;
+        resultTitleRoot.SetParent(resultArea, false);
+        float left = XName - 0.07f;   // 동작 이름 글자가 시작하는 자리(이름 칸 0.14 · 왼쪽 정렬)
+        resultTitle = Place(MakeText(resultTitleRoot, "", 0.22f, TextAlignmentOptions.Left, 3, fontB), new Vector2(left + 0.15f, top - 0.040f), 0.30f);
+        resultSub = Place(MakeText(resultTitleRoot, "", 0.12f, TextAlignmentOptions.Left, 3, fontL), new Vector2(left + 0.20f, top - 0.072f), 0.40f);
+        resultSub.color = DimColor;
+        resultTitleRoot.gameObject.SetActive(false);
+
+        evalRoot = new GameObject("결과 창 평가").transform;
+        evalRoot.SetParent(resultArea, false);
+        evalScoreText = Place(MakeText(evalRoot, "", 0.40f, TextAlignmentOptions.Right, 3, fontB), new Vector2(0.02f - 0.07f, top - 0.050f), 0.14f);
+        evalScoreText.color = ActiveColor;
+        Place(MakeText(evalRoot, "점", 0.17f, TextAlignmentOptions.Left, 3, fontM), new Vector2(0.026f + 0.02f, top - 0.058f), 0.04f);
+        float yy = top - 0.040f, bw = ScoreBarX1 - ScoreBarX0;
+        MakeQuad(evalRoot, "점수 띠 바탕", new Vector2((ScoreBarX0 + ScoreBarX1) * 0.5f, yy), new Vector2(bw, ScoreBarH), TabOff, 1);
+        evalScoreFill = MakeQuad(evalRoot, "점수 띠", new Vector2(ScoreBarX0, yy), new Vector2(bw, ScoreBarH), ActiveColor, 2);
+        MakeQuad(evalRoot, "90 기준선", new Vector2(ScoreBarX0 + bw * 0.5f, yy), new Vector2(0.002f, 0.024f), Color.white, 3);
+        Place(MakeText(evalRoot, "80", 0.10f, TextAlignmentOptions.Center, 3, fontL), new Vector2(ScoreBarX0, yy - 0.020f), 0.04f).color = GaugeDim;
+        Place(MakeText(evalRoot, "90 기준", 0.10f, TextAlignmentOptions.Center, 3, fontM), new Vector2(ScoreBarX0 + bw * 0.5f, yy - 0.020f), 0.06f);
+        Place(MakeText(evalRoot, "100", 0.10f, TextAlignmentOptions.Center, 3, fontL), new Vector2(ScoreBarX1, yy - 0.020f), 0.04f).color = GaugeDim;
+        evalMeanText = Place(MakeText(evalRoot, "", 0.10f, TextAlignmentOptions.Left, 3, fontL), new Vector2(ScoreBarX0 + 0.15f, top - 0.074f), 0.30f);
+        evalMeanText.color = DimColor;
+
+        float rowTop = top - 0.112f;
+        for (int s = 0; s < 12; s++)
+        {
+            int m = s / 2;
+            float y = rowTop - RowH * (DisplayRow[m] + 0.5f);
+            float x = s % 2 == 0 ? XActive : XPressure;
+            evalVals[s] = Place(MakeText(evalRoot, "", 0.22f, TextAlignmentOptions.Center, 3), new Vector2(x, y + 0.006f), 0.10f);
+            evalVals[s].color = s % 2 == 0 ? ActiveColor : PressureColor;
+            evalBases[s] = Place(MakeText(evalRoot, "", 0.12f, TextAlignmentOptions.Center, 3, fontL), new Vector2(x, y - 0.0135f), 0.10f);
+            evalBases[s].color = DimColor;
+            float cu = XDiff - 0.024f + (s % 2) * 0.048f;
+            errChips[s] = MakeQuad(evalRoot, "오차 칩", new Vector2(cu, y), new Vector2(0.044f, 0.028f), ErrOk, 2).GetComponent<Renderer>();
+            errTexts[s] = Place(MakeText(evalRoot, "", 0.15f, TextAlignmentOptions.Center, 3, fontB), new Vector2(cu, y), 0.046f);
+        }
+        evalRoot.gameObject.SetActive(false);
+    }
+
+    /// <summary>
+    /// 결과 창을 켜고 끈다(상태가 바뀔 때만 부른다). eval = 평가 점수가 난 결과(값 칸 · 차이 칸을 평가 칸으로 바꾼다).
+    /// 끄면 맨 위 띠는 다시 비고 값 · 차이 칸이 돌아온다.
+    /// </summary>
+    public void SetResultWindow(bool on, bool eval, string title, string sub)
+    {
+        eval &= on;
+        resultTitle.text = on ? title : "";
+        resultSub.text = on ? sub : "";
+        if (resultTitleRoot.gameObject.activeSelf != on) resultTitleRoot.gameObject.SetActive(on);
+        if (evalRoot.gameObject.activeSelf != eval) evalRoot.gameObject.SetActive(eval);
+        for (int s = 0; s < 12; s++)
+            if (values[s].gameObject.activeSelf == eval) values[s].gameObject.SetActive(!eval);
+        for (int m = 0; m < 6; m++)
+            if (diffs[m].gameObject.activeSelf == eval) diffs[m].gameObject.SetActive(!eval);
+        diffHead.text = eval ? "오차 능동 / 압박" : "차이";
+        diffHead.fontSize = eval ? 0.12f : 0.15f;
+        resultShown = on;
+        resultEval = eval;
+    }
+
+    /// <summary>평가 결과의 점수 · 평균 오차 줄(점수가 바뀔 때만).</summary>
+    public void SetEvalScore(float score, string meanLine)
+    {
+        evalScoreText.text = score.ToString("F1");
+        float k = Mathf.Clamp01((score - 80f) / 20f), bw = ScoreBarX1 - ScoreBarX0;
+        evalScoreFill.localScale = new Vector3(Mathf.Max(bw * k, 0.0001f), ScoreBarH, 1f);
+        evalScoreFill.localPosition = new Vector3(ScoreBarX0 + bw * k * 0.5f, evalScoreFill.localPosition.y, evalScoreFill.localPosition.z);
+        evalMeanText.text = meanLine;
+    }
+
+    /// <summary>평가 결과의 한 칸(slot = 동작 × 능동 · 압박). has = 실습 · 평가 둘 다 값이 있다. err = 평가 − 실습(도).</summary>
+    public void SetEvalCell(int slot, bool has, string value, string baseText, float err)
+    {
+        evalVals[slot].text = value;
+        evalBases[slot].text = has ? baseText : "";
+        bool chip = has;
+        if (errChips[slot].gameObject.activeSelf != chip) errChips[slot].gameObject.SetActive(chip);
+        errTexts[slot].text = has ? err.ToString("+0.0;-0.0;0.0") : "—";
+        if (!has) { errTexts[slot].color = GaugeDim; return; }
+        float e = Mathf.Abs(err);
+        Color c = e <= 2f ? ErrOk : e <= 5f ? PressureColor : OppositeColor;
+        errTexts[slot].color = c;
+        errChips[slot].material.color = new Color(c.r, c.g, c.b, 0.22f);
+    }
+
+    public bool ResultShown => resultShown;
+    public bool ResultEval => resultEval;
 
     // ── 탭 창 ── A/X로 부른다. 메인 화면 아래에 따로 뜬다. 탭 다섯 + 지금 탭의 진행 + 알림 + 버튼 안내.
     //   «리셋»만 고른 뒤 A를 눌러야 하고(확인 창이 한 번 더 뜬다), 나머지 탭은 스틱이 옮겨 가는 대로 바뀐다.
