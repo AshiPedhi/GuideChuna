@@ -24,6 +24,13 @@ public class RenderManager : MonoBehaviour
 {
     public static RenderManager instance = null;
 
+    // ★11-17 사용자 지시(«webrtc는 꺼도 될 것 같아»): 예전 WebRTC 미러링(PC 미러링 클라 · 시그널링)을 시작하지 않는다.
+    //   지금 쓰는 미러링은 앱 안 웹 미러(ChunaWebMirror · MirrorVideoSender · RomLineMirror — MediaCodec + HTTP)라 이것과 무관하다.
+    //   이 경로는 10-01 Vulkan에서 검은 화면이었고(VulkanTexture2D::Init failed) 11-17 기기 로그에도 «최대 연결 시도 횟수 초과»만 남겼다.
+    //   로그인 · 기기 인증 · 서버 IP 업로드는 이 클래스와 따로 돈다(LobbyAuthUI_Complete가 로그인 뒤 데이터를 넘겨줄 뿐).
+    //   다시 켜려면 true로. (const로 두면 «접근할 수 없는 코드» 경고가 난다)
+    public static readonly bool LegacyWebRtcEnabled = false;
+
     /// <summary>
     /// 미러링 연결 상태
     /// </summary>
@@ -121,6 +128,7 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     public void SetMirroringData(MirroringData mirroringData)
     {
+        if (!LegacyWebRtcEnabled) { LogDebug("예전 WebRTC 미러링 꺼짐(11-17) — 시작하지 않는다"); return; }
         try
         {
             if (mirroringData == null)

@@ -821,6 +821,12 @@ public class LobbyAuthUI_Complete : MonoBehaviour
     /// </summary>
     private void ActivateMirroring(MirroringData mirroringData)
     {
+        // ★11-17: 예전 WebRTC 미러링은 끈다(RenderManager.LegacyWebRtcEnabled) — 미러링 카메라도 켜지 않는다(GPU · 배터리).
+        if (!RenderManager.LegacyWebRtcEnabled)
+        {
+            ChunaLogger.Log("[LobbyUI] 예전 WebRTC 미러링 꺼짐(11-17) — 미러링 카메라 · RenderManager 시작 안 함 · 앱 안 웹 미러는 그대로");
+            return;
+        }
         // 미러링 데이터가 없거나 off면 미러링 안함
         if (mirroringData == null || mirroringData.mirroring == "off")
         {
