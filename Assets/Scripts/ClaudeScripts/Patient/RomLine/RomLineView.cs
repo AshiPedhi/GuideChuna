@@ -268,15 +268,70 @@ public class RomLineView
         footer.color = new Color(0.60f, 0.66f, 0.72f, 1f);
 
         // 배터리(10-21 사용자 지시) — 벽면UI는 오른쪽 위 모서리(타이틀 자리의 끝), 컨트롤러UI는 탭 줄 바로 위 오른쪽(LayoutGuide가 높이를 맞춘다)
-        wallBattery = Place(MakeText(panel, "", 0.13f, TextAlignmentOptions.Right, 3), new Vector2(PanelW * 0.5f - 0.01f - 0.08f, PanelH * 0.5f - 0.03f), 0.16f);
-        nearBattery = Outlined(Place(MakeText(guide, "", Fs(PxSmall), TextAlignmentOptions.Right, 3, fontM), Vector2.zero, GuideW));
+        // ★11-17 사용자 결정(A): 글자 «배터리 96%» → <b>배터리 아이콘(도형) + 작은 숫자</b>. 채움색 = 잔량 구간 색.
+        wallBat = MakeBattery(panel, "배터리(벽면)", 0.012f, 0.13f, null, false);
+        wallBat.root.localPosition = new Vector3(PanelW * 0.5f - 0.012f, PanelH * 0.5f - 0.03f, 0f);
+        nearBat = MakeBattery(guide, "배터리(컨트롤러)", Fs(PxSmall) * 0.085f, Fs(PxSmall), fontM, true);
         SetBattery(-1, false);
         LayoutGuide(0f, 0f);
     }
 
     // ── 배터리 ── 색은 잔량 구간마다 하나: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강. 관제 화면(mirror.html · chuna_mirror.html)도 같은 구간이다.
     //   ★주황은 측정값 색이라 쓰지 않는다(10-12 색 규칙).
-    private TextMeshPro wallBattery, nearBattery;
+    /// <summary>배터리 아이콘 한 벌 — root = 오른쪽 끝(숫자의 오른쪽 끝) 기준점.</summary>
+    private sealed class BatteryIcon
+    {
+        public Transform root, fill;
+        public Renderer fillR;
+        public TextMeshPro num;
+        public float fillLeft, fillMaxW, fillH;
+    }
+    private BatteryIcon wallBat, nearBat;
+    private const string BatteryWidest = "100% 충전";   // 숫자 칸 폭을 이 글로 잰다(충전 중 표시 포함)
+
+    /// <summary>
+    /// 배터리 아이콘을 만든다 — 몸통 테두리(막대 넷) + 꼭지 + 잔량 막대 + 오른쪽 숫자. h = 몸통 높이(그 부모 단위) ·
+    /// numSize = 숫자 글자 크기. 숫자는 root에서 왼쪽으로 오른쪽 정렬, 아이콘은 그 왼쪽이다.
+    /// </summary>
+    private BatteryIcon MakeBattery(Transform parent, string name, float h, float numSize, TMP_FontAsset face, bool outlined)
+    {
+        var b = new BatteryIcon { root = new GameObject(name).transform };
+        b.root.SetParent(parent, false);
+        b.num = MakeText(b.root, "", numSize, TextAlignmentOptions.Right, 3, face);
+        if (outlined) Outlined(b.num);
+        float numW = b.num.GetPreferredValues(BatteryWidest).x + h * 0.2f;
+        b.num.rectTransform.sizeDelta = new Vector2(numW, h * 2f);
+        b.num.transform.localPosition = new Vector3(-numW * 0.5f, 0f, -0.004f);
+
+        float w = h * 2.0f, t = Mathf.Max(h * 0.12f, 0.0004f), tipW = h * 0.18f, gap = h * 0.35f;
+        float tipX = -numW - gap - tipW * 0.5f;
+        float cx = tipX - tipW * 0.5f - w * 0.5f;
+        Color edge = DimColor;
+        MakeQuad(b.root, "위", new Vector2(cx, (h - t) * 0.5f), new Vector2(w, t), edge, 3);
+        MakeQuad(b.root, "아래", new Vector2(cx, -(h - t) * 0.5f), new Vector2(w, t), edge, 3);
+        MakeQuad(b.root, "왼쪽", new Vector2(cx - (w - t) * 0.5f, 0f), new Vector2(t, h), edge, 3);
+        MakeQuad(b.root, "오른쪽", new Vector2(cx + (w - t) * 0.5f, 0f), new Vector2(t, h), edge, 3);
+        MakeQuad(b.root, "꼭지", new Vector2(tipX, 0f), new Vector2(tipW, h * 0.45f), edge, 3);
+        b.fillLeft = cx - w * 0.5f + t * 2f;
+        b.fillMaxW = w - t * 4f;
+        b.fillH = h - t * 4f;
+        b.fill = MakeQuad(b.root, "잔량", new Vector2(b.fillLeft + b.fillMaxW * 0.5f, 0f), new Vector2(b.fillMaxW, b.fillH), BatteryHigh, 3);
+        b.fillR = b.fill.GetComponent<Renderer>();
+        return b;
+    }
+
+    private static void FillBattery(BatteryIcon b, int pct, bool charging, Color c)
+    {
+        float k = pct < 0 ? 0f : Mathf.Clamp01(pct / 100f);
+        float fw = Mathf.Max(b.fillMaxW * k, 0.0001f);
+        b.fill.gameObject.SetActive(pct >= 0);
+        b.fill.localScale = new Vector3(fw, b.fillH, 1f);
+        b.fill.localPosition = new Vector3(b.fillLeft + fw * 0.5f, 0f, b.fill.localPosition.z);
+        b.fillR.material.color = c;
+        b.num.text = pct < 0 ? "—" : pct + "%" + (charging ? " 충전" : "");
+        b.num.color = c;
+    }
+
     private static readonly Color BatteryHigh = new Color(0.45f, 0.90f, 0.55f, 1f);   // #73E68C(다 잰 탭과 같다)
     private static readonly Color BatteryMid = new Color(1f, 0.95f, 0.20f, 1f);       // #FFF233
     private static readonly Color BatteryLow = new Color(1f, 0.42f, 0.42f, 1f);       // #FF6B6B
@@ -288,20 +343,13 @@ public class RomLineView
     /// <summary>색 구간: -1 모름 · 0 낮음(≤20) · 1 중간(≤50) · 2 높음.</summary>
     public static int BatteryBand(int pct) => pct < 0 ? -1 : pct <= 20 ? 0 : pct <= 50 ? 1 : 2;
 
-    /// <summary>두 화면의 배터리 글자(바뀔 때만 부른다). «배터리» 글자는 흐린 색, 숫자만 구간 색이다.</summary>
+    /// <summary>두 화면의 배터리 아이콘 · 숫자(바뀔 때만 부른다). 잔량 막대와 숫자가 구간 색이다(읽을 수 없으면 흐린 색 · 빈 몸통).</summary>
     public void SetBattery(int pct, bool charging)
     {
-        string text;
-        if (pct < 0) text = "배터리 —";
-        else
-        {
-            int band = BatteryBand(pct);
-            Color c = band == 2 ? BatteryHigh : band == 1 ? BatteryMid : BatteryLow;
-            text = "배터리 <color=#" + ColorUtility.ToHtmlStringRGB(c) + ">" + pct + "%</color>" + (charging ? " · 충전 중" : "");
-        }
-        wallBattery.text = nearBattery.text = text;
-        wallBattery.color = DimColor;
-        nearBattery.color = NoteColor;
+        int band = BatteryBand(pct);
+        Color c = band < 0 ? GaugeDim : band == 2 ? BatteryHigh : band == 1 ? BatteryMid : BatteryLow;
+        FillBattery(wallBat, pct, charging, c);
+        FillBattery(nearBat, pct, charging, c);
     }
 
     // ── 결과표 ── ★10-13 사용자 지시: 3 × 2 칸을 풀어 <b>왼쪽에 여섯 줄</b>(측정 명칭 | 능동 | 압박), <b>오른쪽에 각도기 셋</b>으로 나눈다.
@@ -829,7 +877,7 @@ public class RomLineView
             nearTabPlates[i].transform.localPosition = new Vector3(p.x, tabY, nearTabPlates[i].transform.localPosition.z);
         }
         if (nearHomeIcon != null) nearHomeIcon.localPosition = new Vector3(nearHomeIcon.localPosition.x, tabY, -0.004f);
-        if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + nearTabH * 0.5f + nearBattery.fontSize * 0.06f, -0.004f);
+        if (nearBat != null) nearBat.root.localPosition = new Vector3(GuideW * 0.5f, tabY + nearTabH * 0.5f + nearBat.num.fontSize * 0.07f, 0f);
     }
 
     /// <summary>확인 창을 탭 창 위에 덮어 띄운다 / 내린다 — 측정값 초기화 · 촉 끝 맞추기(10-22). 글은 바뀔 때만 넣는다.</summary>
