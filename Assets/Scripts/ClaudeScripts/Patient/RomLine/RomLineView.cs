@@ -220,6 +220,22 @@ public class RomLineView
             nearTabTexts[i].outlineWidth = 0.2f;
             nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(cellW, NearTabH), TabOff, 1).GetComponent<Renderer>();
         }
+
+        // ★11-17 사용자 지시: 홈 메뉴(측정값 초기화 · 끝점 보정 · 나가기)는 <b>안내 테두리 안</b>에 작게 — 왼쪽 항목 셋, 고른 항목 오른쪽에 설명.
+        //   스틱 위아래로 고른다(세션). 초기화 · 나가기는 트리거 길게 — 설명 아래 막대가 찬다. 커서가 없으면 이 묶음은 꺼지고 안내 두 줄이 그대로 보인다.
+        menuRoot = new GameObject("홈 메뉴").transform;
+        menuRoot.SetParent(guide, false);
+        menuHi = MakeQuad(menuRoot, "커서", Vector2.zero, new Vector2(MenuLeftW, MenuRowH - 0.002f), new Color(TabOn.r, TabOn.g, TabOn.b, NearTabAlpha), 1);
+        for (int i = 0; i < MenuRows; i++)
+        {
+            menuItems[i] = Outlined(Place(MakeText(menuRoot, "", MenuItemSize, TextAlignmentOptions.Midline, 3), Vector2.zero, MenuLeftW));
+            menuItems[i].rectTransform.sizeDelta = new Vector2(MenuLeftW, MenuRowH);
+        }
+        menuDesc = Outlined(Place(MakeText(menuRoot, "", MenuDescSize, TextAlignmentOptions.TopLeft, 3), Vector2.zero, MenuRightW));
+        menuDesc.textWrappingMode = TextWrappingModes.Normal;
+        holdBack = MakeQuad(menuRoot, "길게 바탕", Vector2.zero, new Vector2(MenuRightW, MenuBarH), GaugeDim, 1);
+        holdFill = MakeQuad(menuRoot, "길게 막대", Vector2.zero, new Vector2(MenuRightW, MenuBarH), TipColor, 2);
+        menuRoot.gameObject.SetActive(false);
         LayoutGuide(0f, 0f);
         guide.gameObject.SetActive(false);
 
@@ -416,11 +432,13 @@ public class RomLineView
 
     /// <summary>
     /// 보이는 탭 수(10-16 사용자 지시: 자유 측정 탭을 끄면 4). 남는 탭은 끄고, 나머지를 두 탭 줄(메인 화면 아래 · 안내 위) 가운데로 모은다.
-    /// 탭 칸의 폭은 그대로다. 한 번만 부른다(Build 뒤).
+    /// 메인 화면 탭 칸의 폭은 그대로다. ★11-17 사용자 지시: 안내 위 탭 줄은 <b>보이는 탭 수로 나눠 안내 테두리 폭을 꽉 채운다</b>
+    /// (종전에는 다섯 칸 폭 그대로라 넷이면 양옆이 비었다). 한 번만 부른다(Build 뒤).
     /// </summary>
     public void SetTabCount(int n)
     {
-        float cellW = (GuideW - NearTabGap * (PopupTabs - 1)) / PopupTabs;
+        int shown = Mathf.Clamp(n, 1, PopupTabs);
+        float cellW = (GuideW - NearTabGap * (shown - 1)) / shown;
         for (int i = 0; i < PopupTabs; i++)
         {
             bool on = i < n;
@@ -431,9 +449,76 @@ public class RomLineView
             float k = i - (n - 1) * 0.5f;
             SetX(popupTabPlates[i].transform, k * (PopupTabW + PopupTabGap));
             SetX(popupTabTexts[i].transform, k * (PopupTabW + PopupTabGap));
+            nearTabPlates[i].transform.localScale = new Vector3(cellW, NearTabH, 1f);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
             SetX(nearTabPlates[i].transform, k * (cellW + NearTabGap));
             SetX(nearTabTexts[i].transform, k * (cellW + NearTabGap));
         }
+    }
+
+    // ── 홈 메뉴(11-17) ── 안내 테두리 안. 글은 상태가 바뀔 때만 넣는다(SetHomeMenu) · 막대만 매 프레임(SetHomeMenuHold, 할당 없음).
+    private const int MenuRows = 3;
+    private const float MenuItemSize = 0.075f, MenuDescSize = 0.068f;   // 안내 알림 줄(0.085)보다 작게 — 사용자 «과하게 크지 않게»
+    private const float MenuRowH = 0.017f, MenuLeftW = 0.074f, MenuGap = 0.008f;
+    private const float MenuRightW = GuideW - GuidePad * 2f - MenuLeftW - MenuGap;
+    private const float MenuBarH = 0.004f, MenuBarGap = 0.004f;
+    private Transform menuRoot, menuHi, holdBack, holdFill;
+    private readonly TextMeshPro[] menuItems = new TextMeshPro[MenuRows];
+    private TextMeshPro menuDesc;
+    private float menuBarLeft, menuBarY;
+
+    /// <summary>
+    /// 홈 메뉴를 띄운다 / 내린다. cursor = 고른 항목(−1이면 내리고 안내 두 줄을 되살린다) · labels = 항목 이름(MenuRows개) ·
+    /// desc = 고른 항목의 설명(리치 텍스트) · holdItem = 트리거 길게 항목이면 막대를 보인다. SetGuide 뒤에 부른다(테두리를 다시 잰다).
+    /// </summary>
+    public void SetHomeMenu(int cursor, string[] labels, string desc, bool holdItem)
+    {
+        bool on = cursor >= 0 && labels != null;
+        if (menuRoot.gameObject.activeSelf != on) menuRoot.gameObject.SetActive(on);
+        if (guideLine.gameObject.activeSelf == on) guideLine.gameObject.SetActive(!on);
+        if (guideNote.gameObject.activeSelf == on) guideNote.gameObject.SetActive(!on);
+        if (!on) return;   // 테두리는 방금 SetGuide가 안내 두 줄에 맞춰 두었다
+
+        for (int i = 0; i < MenuRows; i++)
+        {
+            string s = i < labels.Length ? labels[i] : "";
+            if (menuItems[i].text != s) menuItems[i].text = s;
+            menuItems[i].color = i == cursor ? TipColor : DimColor;
+        }
+        if (menuDesc.text != desc) menuDesc.text = desc;
+        if (holdBack.gameObject.activeSelf != holdItem) holdBack.gameObject.SetActive(holdItem);
+
+        float descH = menuDesc.GetPreferredValues(desc, MenuRightW, 0f).y;
+        float rightH = descH + (holdItem ? MenuBarGap + MenuBarH : 0f);
+        float inner = Mathf.Max(MenuRows * MenuRowH, rightH);
+        guideH = Mathf.Max(GuideMinH, inner + GuidePad * 2f);
+        float y0 = guideH * 0.5f - GuidePad;                               // 글 묶음의 윗변
+        float xL = -GuideW * 0.5f + GuidePad + MenuLeftW * 0.5f;           // 항목 열 가운데
+        for (int i = 0; i < MenuRows; i++)
+            menuItems[i].transform.localPosition = new Vector3(xL, y0 - MenuRowH * (i + 0.5f), -0.004f);
+        int c = Mathf.Min(cursor, MenuRows - 1);
+        menuHi.localPosition = new Vector3(xL, y0 - MenuRowH * (c + 0.5f), menuHi.localPosition.z);
+
+        menuBarLeft = -GuideW * 0.5f + GuidePad + MenuLeftW + MenuGap;    // 설명 열 왼쪽 끝
+        float xR = menuBarLeft + MenuRightW * 0.5f;
+        menuDesc.rectTransform.sizeDelta = new Vector2(MenuRightW, Mathf.Max(descH, 0.001f));
+        menuDesc.transform.localPosition = new Vector3(xR, y0 - descH * 0.5f, -0.004f);
+        menuBarY = y0 - descH - MenuBarGap - MenuBarH * 0.5f;
+        holdBack.localPosition = new Vector3(xR, menuBarY, holdBack.localPosition.z);
+        SetHomeMenuHold(0f);
+        PlaceGuideFrame();
+    }
+
+    /// <summary>트리거 길게 막대 — t = 0~1(0이면 숨긴다). 길게 누르는 동안 매 프레임 불린다(할당 없음).</summary>
+    public void SetHomeMenuHold(float t)
+    {
+        t = Mathf.Clamp01(t);
+        bool show = t > 0f && holdBack.gameObject.activeSelf;
+        if (holdFill.gameObject.activeSelf != show) holdFill.gameObject.SetActive(show);
+        if (!show) return;
+        float w = MenuRightW * t;
+        holdFill.localScale = new Vector3(w, MenuBarH, 1f);
+        holdFill.localPosition = new Vector3(menuBarLeft + w * 0.5f, menuBarY, holdFill.localPosition.z);
     }
 
     private static void SetX(Transform t, float x) { Vector3 p = t.localPosition; t.localPosition = new Vector3(x, p.y, p.z); }
@@ -499,7 +584,13 @@ public class RomLineView
         guideLine.transform.localPosition = new Vector3(0f, y - lineH * 0.5f, -0.004f);
         guideNote.rectTransform.sizeDelta = new Vector2(GuideW - 0.02f, Mathf.Max(noteH, 0.001f));
         guideNote.transform.localPosition = new Vector3(0f, y - lineH - GuideNoteGap - noteH * 0.5f, -0.004f);
+        PlaceGuideFrame();
+    }
 
+    /// <summary>테두리 · 탭 줄 · 배터리를 지금 guideH에 맞춘다(안내 두 줄 · 홈 메뉴가 같이 쓴다).</summary>
+    private void PlaceGuideFrame()
+    {
+        float top = guideH * 0.5f;
         borderTop.localPosition = new Vector3(0f, top, borderTop.localPosition.z);
         borderBottom.localPosition = new Vector3(0f, -top, borderBottom.localPosition.z);
         borderLeft.localScale = borderRight.localScale = new Vector3(GuideBorderT, guideH, 1f);
