@@ -31,6 +31,24 @@ public class RenderManager : MonoBehaviour
     //   다시 켜려면 true로. (const로 두면 «접근할 수 없는 코드» 경고가 난다)
     public static readonly bool LegacyWebRtcEnabled = false;
 
+#if !UNITY_EDITOR
+    /// <summary>
+    /// ★11-17: WebRTC를 끈 뒤(f1a56d1a)에도 로비에서 «Signaling: Connecting WS ws://127.0.0.1:80 → WS connection closed, code: 1006»이
+    ///   5초마다 찍혔다(기기 로그 16:27~16:53 · 600줄). 출처 = Render Streaming 패키지 설정
+    ///   (Packages/com.unity.renderstreaming/Runtime/RenderStreamingSettings.asset «automaticStreaming: 1»)이
+    ///   씬 로드 전에 «AutomaticStreaming» 오브젝트를 만들어 기본 주소로 시그널링을 돌린 것 — RenderManager · 씬의 SignalingManager(runOnAwake 0)와는 따로다.
+    ///   → 예전 미러링을 끈 동안엔 자동 스트리밍도 끈다(RenderStreaming.AutomaticStreaming = false → 패키지가 그 오브젝트를 지운다).
+    ///   ★에디터에선 하지 않는다 — 에디터에서 이 값을 바꾸면 패키지 설정 asset이 더럽혀져 저장된다(EditorUtility.SetDirty).
+    /// </summary>
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void DisableAutomaticStreaming()
+    {
+        if (LegacyWebRtcEnabled || !RenderStreaming.AutomaticStreaming) return;
+        RenderStreaming.AutomaticStreaming = false;
+        Debug.Log("[RenderManager] 예전 WebRTC 꺼짐(11-17) — Render Streaming 자동 스트리밍(시그널링 ws://127.0.0.1:80)도 끈다");
+    }
+#endif
+
     /// <summary>
     /// 미러링 연결 상태
     /// </summary>
@@ -362,6 +380,8 @@ public class RenderManager : MonoBehaviour
     /// </summary>
     private void StartMirroring()
     {
+        // ★11-17: 재연결 함수(TryReconnect · ReconnectAfterSceneTransition)도 이 함수를 부르므로 시작 지점에서 한 번 더 막는다(방어).
+        if (!LegacyWebRtcEnabled) { LogDebug("예전 WebRTC 미러링 꺼짐(11-17) — 재연결도 시작하지 않는다"); return; }
         try
         {
             // 이미 연결 중이면 무시
