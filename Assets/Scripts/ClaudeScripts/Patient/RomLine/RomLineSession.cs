@@ -353,6 +353,7 @@ public class RomLineSession : MonoBehaviour
         // 서버 전송(11-16) — 이 판의 번호를 정하고, 지난 판에서 못 보낸 것부터 보낸다
         uploadId = System.DateTime.Now.ToString("yyyyMMdd_HHmmss") + "_" + System.Guid.NewGuid().ToString("N").Substring(0, 8);
         uploadStartedAt = RomLineUpload.Now();
+        RomLineDevLog.Begin(uploadId, evalMode, uploadStartedAt);   // 개발용 로그(11-17) — OnDestroy에서 끈다
         RomLineUpload.Flush(uploadId, "시작 — 지난 판").Forget();
 
         var rig = FindAnyObjectByType<OVRCameraRig>();
@@ -455,8 +456,16 @@ public class RomLineSession : MonoBehaviour
         SaveUpload("나감", final: true);
         RomLineUpload.Flush(null, "나감").Forget();   // 정적 비동기 — 씬이 내려가도 AuthenticationService(DontDestroyOnLoad)로 끝까지 간다
         if (suspendedChunaMirror) { suspendedChunaMirror = false; ChunaWebMirror.Resume("선 실측"); }   // 우리가 비키게 한 것만 되돌린다
+        RomLineDevLog.Save("나감", tipOffset * 1000f);
+        RomLineDevLog.End();   // Start에서 켠 것을 끈다
     }
     private bool suspendedChunaMirror;
+
+    /// <summary>앱이 내려가면(헤드셋을 벗음 · 홈 버튼) 개발용 로그를 남겨 둔다 — 그대로 꺼질 수 있다(11-17).</summary>
+    private void OnApplicationPause(bool paused)
+    {
+        if (paused) RomLineDevLog.Save("앱 내려감", tipOffset * 1000f);
+    }
 
     // ── 손 ──────────────────────────────────────────────────────────
     private void ReadHands()
@@ -1865,6 +1874,7 @@ public class RomLineSession : MonoBehaviour
         index = 0;
         noteText = "";
         Debug.Log($"[선실측] 리셋 — 전체 측정 결과를 지웠다(자유 측정의 점 {freePoints}개 포함) ({why})");
+        RomLineDevLog.Save("측정값 초기화", tipOffset * 1000f);
         Play(sndUndo);
         dirty = true;
     }
@@ -2015,6 +2025,7 @@ public class RomLineSession : MonoBehaviour
         if (eval) view.SetEvalScore(evalScore, $"평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 오차 = 평가 - 실습");
         if (on) Debug.Log($"[선실측] 결과 창 — 띄움({(evalMode ? "평가" : "실습")}{(eval ? $" · 점수 {evalScore:F1} · 평균 오차 {evalMeanErr:F2}° · {evalN}칸" : evalMode ? " · 점수 없음" : "")})");
         else Debug.Log($"[선실측] 결과 창 — 사라짐({resultOffWhy})");
+        if (on) RomLineDevLog.Save(eval ? "결과 창 · 평가" : "결과 창", tipOffset * 1000f);   // 한 판이 끝났다 — 개발용 로그(11-17)
         resultOn = on;
         resultEvalOn = eval;
         resultOffWhy = "결과가 비었다";
