@@ -471,10 +471,10 @@ public class RomLineView
 
     // ── 결과 창(11-17 사용자 결정 · 시안 D:/CoCoChuna_XR-ROM_결과창_시안_V0.2_20261117) ──────────────────
     //   새 판이 아니라 <b>벽면 판이 «끝난 모습»으로 바뀐다</b>: 맨 위 비워 둔 띠(10-12 타이틀 자리)에 제목 · 날짜 · 사용자,
-    //   평가면 그 오른쪽에 점수(큰 주황 숫자) · 80~100 띠(90 기준선) · 평균 오차 줄. 값 칸 = 평가 값(0.22) + 그 아래 «(실습 값)»(0.12),
+    //   평가면 그 오른쪽에 점수(큰 주황 숫자) · 평균 오차 줄(80~100 띠 · 90 기준선은 11-17 사용자 지시로 뺐다). 값 칸 = 평가 값(0.22) + 그 아래 «(실습 값)»(0.12),
     //   차이 칸 자리 = 오차 칩 둘(능동 / 압박 — 2° 안 초록 · 5° 안 주황 · 넘으면 빨강). 칸 · 각도기 셋 · 색은 결과표 그대로다.
     //   ★점수 띠는 시안(x 0.09~0.37)에서 왼쪽으로 당겼다(0.07~0.23) — 오른쪽 위 모서리의 배터리 글자와 겹치지 않게.
-    private Transform resultTitleRoot, evalRoot, evalScoreFill;
+    private Transform resultTitleRoot, evalRoot;
     private TextMeshPro resultTitle, resultSub, evalScoreText, evalMeanText, diffHead;
     private readonly TextMeshPro[] evalVals = new TextMeshPro[12], evalBases = new TextMeshPro[12], errTexts = new TextMeshPro[12];
     private readonly Renderer[] errChips = new Renderer[12];
@@ -497,13 +497,8 @@ public class RomLineView
         evalScoreText = Place(MakeText(evalRoot, "", 0.40f, TextAlignmentOptions.Right, 3, fontB), new Vector2(0.02f - 0.07f, top - 0.050f), 0.14f);
         evalScoreText.color = ActiveColor;
         Place(MakeText(evalRoot, "점", 0.17f, TextAlignmentOptions.Left, 3, fontM), new Vector2(0.026f + 0.02f, top - 0.058f), 0.04f);
-        float yy = top - 0.040f, bw = ScoreBarX1 - ScoreBarX0;
-        MakeQuad(evalRoot, "점수 띠 바탕", new Vector2((ScoreBarX0 + ScoreBarX1) * 0.5f, yy), new Vector2(bw, ScoreBarH), TabOff, 1);
-        evalScoreFill = MakeQuad(evalRoot, "점수 띠", new Vector2(ScoreBarX0, yy), new Vector2(bw, ScoreBarH), ActiveColor, 2);
-        MakeQuad(evalRoot, "90 기준선", new Vector2(ScoreBarX0 + bw * 0.5f, yy), new Vector2(0.002f, 0.024f), Color.white, 3);
-        Place(MakeText(evalRoot, "80", 0.10f, TextAlignmentOptions.Center, 3, fontL), new Vector2(ScoreBarX0, yy - 0.020f), 0.04f).color = GaugeDim;
-        Place(MakeText(evalRoot, "90 기준", 0.10f, TextAlignmentOptions.Center, 3, fontM), new Vector2(ScoreBarX0 + bw * 0.5f, yy - 0.020f), 0.06f);
-        Place(MakeText(evalRoot, "100", 0.10f, TextAlignmentOptions.Center, 3, fontL), new Vector2(ScoreBarX1, yy - 0.020f), 0.04f).color = GaugeDim;
+        // ★11-17 사용자 지시: 80~100 띠 · 90 기준선 · «80 / 90 기준 / 100» 글자를 뺐다 — 최저 80 · 기준 90을 알면
+        //   «잘했다»가 아니라 «다 이렇게 나오는구나»로 읽는다. 점수 숫자와 평균 오차 줄만 남긴다.
         evalMeanText = Place(MakeText(evalRoot, "", 0.10f, TextAlignmentOptions.Left, 3, fontL), new Vector2(ScoreBarX0 + 0.15f, top - 0.074f), 0.30f);
         evalMeanText.color = DimColor;
 
@@ -549,9 +544,6 @@ public class RomLineView
     public void SetEvalScore(float score, string meanLine)
     {
         evalScoreText.text = score.ToString("F1");
-        float k = Mathf.Clamp01((score - 80f) / 20f), bw = ScoreBarX1 - ScoreBarX0;
-        evalScoreFill.localScale = new Vector3(Mathf.Max(bw * k, 0.0001f), ScoreBarH, 1f);
-        evalScoreFill.localPosition = new Vector3(ScoreBarX0 + bw * k * 0.5f, evalScoreFill.localPosition.y, evalScoreFill.localPosition.z);
         evalMeanText.text = meanLine;
     }
 
