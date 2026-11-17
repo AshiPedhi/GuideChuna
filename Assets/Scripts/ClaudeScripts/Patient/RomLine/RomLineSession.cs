@@ -186,6 +186,7 @@ public class RomLineSession : MonoBehaviour
     private Transform trackingSpace;
     private Transform eye;
     private OVRInput.Controller active = OVRInput.Controller.RTouch;
+    private static readonly bool AllowControllerSwitch = false;   // ★11-17 사용자 결정: 오른쪽만(const로 두면 «접근할 수 없는 코드» 경고)
     private bool tipValid;              // 헤드셋 카메라가 컨트롤러를 보고 있다(자리가 «추적» 상태) — 이때만 점을 찍는다
     private bool tipShown;              // 자리가 있긴 하다(못 보는 동안은 기기가 센서로 추정한 값) — 끝 구슬을 빨갛게라도 보여 준다
     private int trackState = -1;        // 연결·자리 추적·자리 유효·방향 추적을 묶은 값 — 바뀔 때 로그를 남긴다
@@ -515,8 +516,14 @@ public class RomLineSession : MonoBehaviour
 
         // 쥐고 있지 않은 쪽에서 무언가 눌리면 그쪽으로 바꾼다. ★바꾼 그 누름은 «전환»으로만 쓴다 —
         //   컨트롤러를 바꿔 쥐다 눌린 트리거가 점으로 찍히지 않게.
+        //   ★11-17 사용자 결정: 오른쪽 컨트롤러만 쓴다 — 반대쪽 버튼으로 넘어가는 전환을 막는다(AllowControllerSwitch).
+        //     왼손 좌표 뒤집기(tipOffset x)는 남겨 둔다 — 전환을 다시 열면 그대로 쓴다. 관제 명령 · 설정으로 바꾸는 길은 없다(11-17 확인).
         OVRInput.Controller other = active == OVRInput.Controller.RTouch ? OVRInput.Controller.LTouch : OVRInput.Controller.RTouch;
-        if (AnyDown(other))
+        if (!AllowControllerSwitch)
+        {
+            if (AnyDown(other)) Debug.Log("[선실측] 반대쪽 컨트롤러 누름 — 무시(오른쪽만 쓴다)");
+        }
+        else if (AnyDown(other))
         {
             active = other;
             prevTrigger = 1f;       // 이번 당김은 끝날 때까지 무시
