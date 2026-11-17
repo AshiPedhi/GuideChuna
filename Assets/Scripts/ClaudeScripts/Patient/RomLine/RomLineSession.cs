@@ -2603,7 +2603,26 @@ public class RomLineSession : MonoBehaviour
         }
         js.Append("],\"pending\":");
         if (!Done && index == 1) JsonVec(js, InAxes(points[GroupStart(group)])); else js.Append("null");
+        AppendMenuResultJson(js);
         monitorBody = js.ToString();
+    }
+
+    /// <summary>
+    /// ★11-17 사용자 지시: 관제 화면도 컨트롤러UI처럼(홈 메뉴 목록 · 설명).
+    ///   menu = {on, cur, ask, labels, desc, hint} — desc는 헤드셋과 같은 글(TMP 태그 그대로 · 화면이 HTML로 바꾼다).
+    ///   result = {on, eval, title, sub, score, mean, n, cells[12] = {v 평가 · b 실습 · e 오차}} — 결과 창과 같은 함수(FillCurrent · RomLineRepeatScore.Total)로 낸다.
+    ///   Refresh(바뀔 때만)에서 부른다 — RefreshRepeat보다 먼저 불려도 같은 값이 나오게 여기서 직접 계산한다.
+    /// </summary>
+    private void AppendMenuResultJson(StringBuilder js)
+    {
+        bool menuOn = home && !calibrating && !freeMode;
+        js.Append(",\"menu\":{\"on\":").Append(menuOn ? "true" : "false").Append(",\"cur\":").Append(menuCursor)
+          .Append(",\"ask\":").Append(menuAsk ? "true" : "false").Append(",\"labels\":[");
+        for (int i = 0; i < MenuLabel.Length; i++) { if (i > 0) js.Append(','); JsonStr(js, MenuLabel[i]); }
+        js.Append("],\"desc\":");
+        JsonStr(js, menuOn ? MenuDesc(menuCursor, menuAsk) : "").Append(",\"hint\":");
+        JsonStr(js, menuOn ? (menuAsk ? MenuAskHint : MenuListHint) : "").Append('}');
+
     }
 
     /// <summary>모니터로 보내는 값 한 칸 — 없으면 null, 있으면 {"v":각,"o":반대쪽으로 움직였나}.</summary>

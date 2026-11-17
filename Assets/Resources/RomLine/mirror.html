@@ -33,16 +33,31 @@
 
   /* 컨트롤러UI — 탭 줄(칸 바탕 · 지금 탭 = 파란 칸 + 노란 글자 · 다 잰 탭 = 초록 글자) + 반투명 테두리 안내 */
   #ctrl { flex:1 1 0; display:flex; flex-direction:column; }
-  #tabs { display:grid; grid-template-columns:repeat(4, 1fr); gap:3px; margin-bottom:6px; }
-  #tabs button { background:var(--tabOff); color:#fff; border:0; border-radius:4px; padding:9px 4px; font-size:17px; font-family:inherit; cursor:pointer; }
+  /* ★11-17 사용자 지시: 헤드셋 컨트롤러UI와 같게 — 탭 줄 홈 = ≡ 아이콘 · 좁은 칸 · 지금 탭 흰색 / 나머지 회색 · 배터리 아이콘 + 숫자 ·
+       홈 메뉴 = 목록 상자 + 설명 상자 · 글자 비율 = 실습 UI 규격 20(안내) / 18(탭) / 16(메뉴) / 14(설명 · 알림) / 12(조작 · 배터리) — 기준 20 = 23px */
+  #cBattRow { display:flex; justify-content:flex-end; align-items:center; gap:6px; font-size:13.8px; color:var(--dim); margin-bottom:3px; min-height:18px; }
+  #cBattRow svg { width:30px; height:16px; display:block; }
+  #tabs { display:grid; grid-template-columns:0.5fr 1fr 1fr 1fr; gap:3px; margin-bottom:6px; }
+  #tabs button { background:var(--tabOff); color:#A9B0BA; border:0; border-radius:4px; padding:9px 4px; font-size:20.7px; font-family:inherit; cursor:pointer; white-space:nowrap; overflow:hidden; }
+  #tabs button svg { width:22px; height:16px; display:block; margin:auto; }
   #tabs button.done { color:var(--done); }
-  #tabs button.cur { background:var(--tabOn); color:var(--tabCur); font-weight:700; }
+  #tabs button.cur { background:var(--tabOn); color:#F2F3F5; font-weight:700; }
   #guide { flex:1; min-height:0; border:1.5px solid rgba(255,255,255,0.35); border-radius:4px; padding:10px 14px; overflow:hidden; text-align:center;
-           display:flex; flex-direction:column; justify-content:center; }
+           display:flex; flex-direction:column; justify-content:center; gap:8px; }
   #gLine { font-size:23px; line-height:1.5; }
   #gLine .sub { font-size:72%; }
-  #gNote { font-size:17px; color:var(--note); margin-top:6px; }
+  #gNote { font-size:16.1px; color:var(--note); }
   #gNote:empty { display:none; }
+  #menu { display:none; gap:8px; text-align:left; }
+  #menu.on { display:flex; }
+  #mList, #mDesc { border:1px solid rgba(255,255,255,0.28); border-radius:4px; padding:6px 8px; }
+  #mList { flex:none; display:flex; flex-direction:column; gap:2px; }
+  #mList div { font-size:18.4px; padding:3px 8px; border-radius:3px; color:#F2F3F5; white-space:nowrap; }
+  #mList div.cur { background:var(--tabOn); color:#FFF233; font-weight:700; }
+  #mDesc { flex:1; font-size:16.1px; line-height:1.45; color:var(--note); }
+  #mHint { font-size:13.8px; color:var(--dim); text-align:center; }
+  #mHint:empty { display:none; }
+
 
   /* 기록UI — 확인(트리거)한 동작만 채운다(헤드셋 결과표와 같다). 줄 높이는 카드 높이를 나눠 쓴다 */
   #result { flex:1.35 1 0; display:flex; padding:6px 12px; }
@@ -119,8 +134,10 @@
   <main id="grp">
     <div id="left">
       <div class="card" id="ctrl">
+        <div id="cBattRow"><svg viewBox="0 0 34 18"><rect x="1" y="1" width="28" height="16" rx="3" fill="none" stroke="#b8c2d1" stroke-width="2"/><rect x="30" y="6" width="3" height="6" rx="1" fill="#b8c2d1"/><rect id="cbFill" x="4" y="4" width="0" height="10" rx="1" fill="#55606e"/></svg><b id="cBatt">—</b></div>
         <div id="tabs"></div>
-        <div id="guide"><div id="gLine">연결하는 중…</div><div id="gNote"></div></div>
+        <div id="guide"><div id="gLine">연결하는 중…</div><div id="gNote"></div>
+          <div id="menu"><div id="mList"></div><div id="mDesc"></div></div><div id="mHint"></div></div>
       </div>
       <div class="card" id="result">
         <table>
@@ -172,7 +189,9 @@ const MOTIONS = ['굴곡', '신전', '우측굴', '좌측굴', '우회전', '좌
 const PAD = 14, GAP = 14;   // 영상 둘레 여백 · 묶음과 영상 사이(px, 고정)
 const $ = id => document.getElementById(id);
 const tabsEl = $('tabs');
-TABS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });
+// ★11-17: 홈 탭 = ≡ 아이콘(헤드셋 컨트롤러UI · 벽면UI와 같은 막대 3개) · 칸은 좁게(CSS 0.5fr)
+const MENU_ICON = '<svg viewBox="0 0 22 16"><rect x="1" y="1" width="20" height="2.6" rx="1" fill="currentColor"/><rect x="1" y="6.7" width="20" height="2.6" rx="1" fill="currentColor"/><rect x="1" y="12.4" width="20" height="2.6" rx="1" fill="currentColor"/></svg>';
+TABS.forEach((n, i) => { const b = document.createElement('button'); if (i === 0) { b.innerHTML = MENU_ICON; b.title = '메뉴(홈)'; } else b.textContent = n; b.onclick = () => cmd('top' + i); tabsEl.appendChild(b); });
 // 미러링 해상도 — 앱 RomLineMirror.CamChoices와 같은 순서(cam0 · cam1 · 10-23 저녁: 둘만)
 const resEl = $('res');
 ['800x600', '1280x960'].forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = r.replace('x', ' × '); o.dataset.r = r; resEl.appendChild(o); });
@@ -219,7 +238,8 @@ function cmd(c) {
 function tmp(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/&lt;color=(#[0-9A-Fa-f]{6,8})&gt;/g, '<span style="color:$1">').replace(/&lt;\/color&gt;/g, '</span>')
-    .replace(/&lt;size=[0-9.]+%&gt;/g, '<span class="sub">').replace(/&lt;\/size&gt;/g, '</span>')
+    .replace(/&lt;size=72%&gt;/g, '<span class="sub">').replace(/&lt;size=([0-9.]+)%&gt;/g, '<span style="font-size:$1%">').replace(/&lt;\/size&gt;/g, '</span>')
+    .replace(/&lt;b&gt;/g, '<b>').replace(/&lt;\/b&gt;/g, '</b>')
     .replace(/\n/g, '<br>');
 }
 
@@ -228,7 +248,7 @@ function val(cell, r, on) {
   cell.classList.toggle('opp', !!(on && r && r.o));
 }
 
-let lastGuide = null, lastNote = null;
+let lastGuide = null, lastNote = null, lastMenu = null;
 function poll() {
   fetch('/state', { cache: 'no-store' }).then(r => r.json()).then(s => {
     // 11-13 같은 주소(:8090)를 추나 미러링과 XR-ROM이 번갈아 연다 — 다른 종류의 상태가 오면 그 쪽 페이지로 새로고침
@@ -247,6 +267,20 @@ function poll() {
     if (n !== lastNote) { $('gNote').innerHTML = tmp(n); lastNote = n; }
     const top = typeof s.top === 'number' ? s.top : -1, done = s.tabDone || '000';
     [...tabsEl.children].forEach((b, i) => { b.classList.toggle('cur', i === top); b.classList.toggle('done', i >= 1 && done[i - 1] === '1'); });
+
+    // 홈 메뉴(11-17) — 헤드셋 컨트롤러UI와 같은 목록 · 설명(글은 헤드셋과 같은 TMP 글)
+    const mn = s.menu;
+    const menuOn = !!(mn && mn.on);
+    $('menu').classList.toggle('on', menuOn);
+    if (menuOn) {
+      const key = JSON.stringify(mn);
+      if (key !== lastMenu) {
+        lastMenu = key;
+        $('mList').innerHTML = (mn.labels || []).map((l, i) => '<div class="' + (i === mn.cur ? 'cur' : '') + '">' + (i === mn.cur ? '▶ ' : '') + l + '</div>').join('');
+        $('mDesc').innerHTML = tmp(mn.desc || '');
+        $('mHint').textContent = mn.hint || '';
+      }
+    } else if (lastMenu !== null) { lastMenu = null; $('mHint').textContent = ''; }
 
     // 기록 — 확인한 동작만 채운다
     const conf = s.confirmed || '000000', res = s.results || [];
@@ -463,12 +497,16 @@ $('saveCsv').onclick = async () => {
 
 // 헤드셋 배터리(10-21) — 구간 색은 헤드셋 RomLineView.BatteryBand와 같다: 50% 초과 초록 · 20% 초과 노랑 · 20% 이하 빨강
 function batt(m) {
-  const e = $('batt'), f = $('bFill');
-  if (m.battery === undefined || m.battery < 0) { e.textContent = '—'; e.style.color = ''; f.setAttribute('width', 0); return; }
-  const c = m.battery > 50 ? '#73E68C' : m.battery > 20 ? '#FFF233' : '#FF6B6B';
-  e.textContent = m.battery + '%' + (m.charging ? ' · 충전 중' : '');
-  e.style.color = c;
-  f.setAttribute('width', (22 * m.battery / 100).toFixed(1)); f.setAttribute('fill', c);
+  // ★11-17: 아래 줄(헤드셋 배터리)과 컨트롤러UI 위 배터리(아이콘 + 숫자 — 헤드셋 컨트롤러UI와 같다)를 같이 칠한다
+  [['batt', 'bFill', true], ['cBatt', 'cbFill', false]].forEach(([ei, fi, long]) => {
+    const e = $(ei), f = $(fi);
+    if (!e || !f) return;
+    if (m.battery === undefined || m.battery < 0) { e.textContent = '—'; e.style.color = ''; f.setAttribute('width', 0); return; }
+    const c = m.battery > 50 ? '#73E68C' : m.battery > 20 ? '#FFF233' : '#FF6B6B';
+    e.textContent = m.battery + '%' + (m.charging ? (long ? ' · 충전 중' : ' 충전') : '');
+    e.style.color = c;
+    f.setAttribute('width', (22 * m.battery / 100).toFixed(1)); f.setAttribute('fill', c);
+  });
 }
 function info() {
   fetch('/mirrorinfo', { cache: 'no-store' }).then(r => r.json()).then(m => {
