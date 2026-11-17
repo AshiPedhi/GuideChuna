@@ -71,7 +71,14 @@ public class RomLineView
 
     public void Build(Transform parent, TMP_FontAsset f, Material m)
     {
-        font = f;
+        // ★11-17 글꼴 = KoPubWorld 돋움(환자 옆 안내판과 같은 묶음 Resources/UI/SideGuideFonts) — 없으면 넘어온 글꼴 하나로
+        var kp = SideGuideFonts.Get();
+        fontM = kp != null && kp.medium != null ? kp.medium : f;
+        fontB = kp != null && kp.bold != null ? kp.bold : fontM;
+        fontL = kp != null && kp.light != null ? kp.light : fontM;
+        font = fontM;
+        if (kp != null && kp.medium != null) Debug.Log($"[선실측] 글꼴 — KoPub(B {fontB?.name} · M {fontM?.name} · L {fontL?.name}) · OS 글자 ×{OsDisplayScale.Font:F2}");
+        else Debug.LogWarning($"[선실측] 글꼴 — ★KoPub 묶음(Resources/UI/SideGuideFonts)이 없다 · 기본 '{(f != null ? f.name : "없음")}'으로 그린다");
         mat = m;
         root = new GameObject("선 실측 표시").transform;
         root.SetParent(parent, false);
@@ -199,9 +206,9 @@ public class RomLineView
         borderBottom = MakeQuad(guide, "테두리 아래", Vector2.zero, new Vector2(GuideW, GuideBorderT), GuideBorder, 0);
         borderLeft = MakeQuad(guide, "테두리 왼쪽", new Vector2(-GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
         borderRight = MakeQuad(guide, "테두리 오른쪽", new Vector2(GuideW * 0.5f, 0f), new Vector2(GuideBorderT, 1f), GuideBorder, 0);
-        guideLine = Place(MakeText(guide, "", 0.16f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
+        guideLine = Place(MakeText(guide, "", Fs(PxGuideLine), TextAlignmentOptions.Center, 3, fontB), Vector2.zero, GuideW - 0.02f);
         guideLine.textWrappingMode = TextWrappingModes.Normal;   // 긴 줄(«트리거 : 컨트롤러 끝점 보정» 등)은 테두리 안에서 줄을 바꾼다 — 높이는 LayoutGuide가 맞춘다
-        guideNote = Place(MakeText(guide, "", 0.085f, TextAlignmentOptions.Center, 3), Vector2.zero, GuideW - 0.02f);
+        guideNote = Place(MakeText(guide, "", Fs(PxNote), TextAlignmentOptions.Center, 3, fontL), Vector2.zero, GuideW - 0.02f);
         guideNote.textWrappingMode = TextWrappingModes.Normal;
         guideNote.color = NoteColor;
         // 바탕이 없어 밝은 배경(패스스루)에서 글자가 묻힌다 — 검은 외곽선을 두른다
@@ -211,30 +218,41 @@ public class RomLineView
         // 탭 줄의 복제(10-14 사용자 지시) — 안내 테두리 바로 위, <b>테두리 폭에 맞춘다</b>.
         //   ★같은 날 사용자 지시: 메인 화면 탭을 그대로 옮긴 첫 판은 너무 튀었고, 글자만 둔 둘째 판은 눈에 안 들어왔다 → 같은 디자인에 알파만 낮춘다(NearTabAlpha).
         float cellW = (GuideW - NearTabGap * (PopupTabs - 1)) / PopupTabs;
+        float tabSize = Fs(PxTab);
+        nearTabH = tabSize * 0.2f;   // 글자 높이(≈ 크기 × 0.1m)의 두 배 — 종전 0.092 글자 · 0.027 칸과 비슷한 여유
         for (int i = 0; i < PopupTabs; i++)
         {
             var c = new Vector2((i - 2f) * (cellW + NearTabGap), 0f);
-            nearTabTexts[i] = Place(MakeText(guide, "", 0.092f, TextAlignmentOptions.Center, 3), c, cellW);
-            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
+            nearTabTexts[i] = Place(MakeText(guide, "", tabSize, TextAlignmentOptions.Center, 3, fontB), c, cellW);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, nearTabH);
+            // 칸이 좁아 «굴곡·신전»이 넘칠 수 있다 — 규격 크기를 최대로 두고 칸에 맞춰 줄인다(최소 60%)
+            nearTabTexts[i].enableAutoSizing = true;
+            nearTabTexts[i].fontSizeMax = tabSize;
+            nearTabTexts[i].fontSizeMin = tabSize * 0.6f;
             nearTabTexts[i].outlineColor = new Color32(0, 0, 0, 255);
             nearTabTexts[i].outlineWidth = 0.2f;
-            nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(cellW, NearTabH), TabOff, 1).GetComponent<Renderer>();
+            nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(cellW, nearTabH), TabOff, 1).GetComponent<Renderer>();
         }
 
         // ★11-17 사용자 지시: 홈 메뉴(측정값 초기화 · 끝점 보정 · 나가기)는 <b>안내 테두리 안</b>에 작게 — 왼쪽 항목 셋, 고른 항목 오른쪽에 설명.
         //   스틱 위아래로 고른다(세션). 초기화 · 나가기는 트리거 길게 — 설명 아래 막대가 찬다. 커서가 없으면 이 묶음은 꺼지고 안내 두 줄이 그대로 보인다.
         menuRoot = new GameObject("홈 메뉴").transform;
         menuRoot.SetParent(guide, false);
-        menuHi = MakeQuad(menuRoot, "커서", Vector2.zero, new Vector2(MenuLeftW, MenuRowH - 0.002f), new Color(TabOn.r, TabOn.g, TabOn.b, NearTabAlpha), 1);
+        float itemSize = Fs(PxMenuItem);
+        menuRowH = itemSize * 0.22f;   // 종전 0.075 글자 · 0.017 줄과 같은 비율
+        menuLeftW = -1f;               // 항목 이름을 받으면 가장 긴 이름에 맞춘다(SetHomeMenu)
+        menuRightW = GuideW - GuidePad * 2f - 0.08f - MenuGap;
+        menuHi = MakeQuad(menuRoot, "커서", Vector2.zero, new Vector2(0.08f, menuRowH - 0.002f), new Color(TabOn.r, TabOn.g, TabOn.b, NearTabAlpha), 1);
         for (int i = 0; i < MenuRows; i++)
         {
-            menuItems[i] = Outlined(Place(MakeText(menuRoot, "", MenuItemSize, TextAlignmentOptions.Midline, 3), Vector2.zero, MenuLeftW));
-            menuItems[i].rectTransform.sizeDelta = new Vector2(MenuLeftW, MenuRowH);
+            menuItems[i] = Outlined(Place(MakeText(menuRoot, "", itemSize, TextAlignmentOptions.Midline, 3, fontM), Vector2.zero, 0.08f));
+            menuItems[i].rectTransform.sizeDelta = new Vector2(0.08f, menuRowH);
         }
-        menuDesc = Outlined(Place(MakeText(menuRoot, "", MenuDescSize, TextAlignmentOptions.TopLeft, 3), Vector2.zero, MenuRightW));
+        menuDesc = Outlined(Place(MakeText(menuRoot, "", Fs(PxNote), TextAlignmentOptions.TopLeft, 3, fontL), Vector2.zero, menuRightW));
         menuDesc.textWrappingMode = TextWrappingModes.Normal;
-        holdBack = MakeQuad(menuRoot, "길게 바탕", Vector2.zero, new Vector2(MenuRightW, MenuBarH), GaugeDim, 1);
-        holdFill = MakeQuad(menuRoot, "길게 막대", Vector2.zero, new Vector2(MenuRightW, MenuBarH), TipColor, 2);
+        menuDesc.color = NoteColor;   // Outlined가 흰색으로 둔다 — 설명은 #CCDBED
+        holdBack = MakeQuad(menuRoot, "길게 바탕", Vector2.zero, new Vector2(menuRightW, MenuBarH), GaugeDim, 1);
+        holdFill = MakeQuad(menuRoot, "길게 막대", Vector2.zero, new Vector2(menuRightW, MenuBarH), TipColor, 2);
         menuRoot.gameObject.SetActive(false);
         LayoutGuide(0f, 0f);
         guide.gameObject.SetActive(false);
@@ -245,7 +263,7 @@ public class RomLineView
 
         // 배터리(10-21 사용자 지시) — 벽면UI는 오른쪽 위 모서리(타이틀 자리의 끝), 컨트롤러UI는 탭 줄 바로 위 오른쪽(LayoutGuide가 높이를 맞춘다)
         wallBattery = Place(MakeText(panel, "", 0.13f, TextAlignmentOptions.Right, 3), new Vector2(PanelW * 0.5f - 0.01f - 0.08f, PanelH * 0.5f - 0.03f), 0.16f);
-        nearBattery = Outlined(Place(MakeText(guide, "", 0.075f, TextAlignmentOptions.Right, 3), Vector2.zero, GuideW));
+        nearBattery = Outlined(Place(MakeText(guide, "", Fs(PxSmall), TextAlignmentOptions.Right, 3, fontM), Vector2.zero, GuideW));
         SetBattery(-1, false);
         LayoutGuide(0f, 0f);
     }
@@ -293,7 +311,27 @@ public class RomLineView
     private const float LeftX = -0.16f, LeftW = 0.46f;   // 왼쪽 표(지금 줄을 밝히는 띠)의 가운데와 폭
     private const float PopupH = 0.088f, PopupGap = 0.015f;   // 탭 한 줄뿐이다(아래의 설명 세 줄은 뺐다, 10-12)
     private const float BandH = 0.075f;                       // 탭 줄 아래 안내 띠의 높이(배율 전, 10-14)
-    private const float NearTabH = 0.027f, NearTabGap = 0.002f; // 안내 위 탭 줄(실제 크기 m, 10-14) — 다섯 칸을 안내 테두리 폭(GuideW)에 맞춘다
+    private const float NearTabGap = 0.002f;   // 안내 위 탭 줄 칸 사이(m, 10-14) — 칸은 보이는 탭 수로 안내 테두리 폭(GuideW)을 채운다(11-17)
+    private float nearTabH = 0.027f;           // 탭 칸 높이 — 탭 글자 크기에 맞춰 Build에서 정한다(종전 고정 0.027)
+
+    // ── 컨트롤러UI 글자 규격 ── ★11-17 사용자 결정: 실습 씬 UI 규격 V0.1 8절 «환자 옆 안내판»(D:/CoCoChuna_실습씬_UI규격_V0.1_20261111)을 따른다.
+    //   ★규격은 <b>글자 사이 비율</b>만 맞춘다(사용자 정정) — 설계 px × 기준 배율 하나 × OS 글자 배율. 절대 크기는 OS 설정을 따라 변해도 된다.
+    //   기준 배율 = 안내 큰 글 20px이 종전 크기 0.16이 되게(지금 크기 감각 유지). 글꼴 = KoPubWorld 돋움 B · M · L(SideGuideFonts).
+    //   벽면UI는 글꼴만 KoPub M(굵게 쓰던 곳은 B)이고 크기는 종전 그대로다.
+    private const float PxGuideLine = 20f;   // 안내 큰 글(지금 할 일) — B · 흰
+    private const float PxTab = 18f;         // 탭 — B · 탭 색 규칙(파란 칸 + 노란 글자) 유지
+    private const float PxMenuItem = 16f;    // 홈 메뉴 항목 — M(고른 항목 B)
+    private const float PxNote = 14f;        // 알림 · 메뉴 설명 — L · #CCDBED
+    private const float PxSmall = 12f;       // 조작 문구 · 배터리 — M
+    private const float PxToSize = 0.16f / PxGuideLine;
+    /// <summary>설계 px → RomLine TMP 글자 크기(OS 글자 배율 포함).</summary>
+    private static float Fs(float px) => px * PxToSize * OsDisplayScale.Font;
+    /// <summary>메뉴 설명 안 조작 문구(12px)를 설명 글(14px)에 대한 비율로 줄이는 리치 텍스트 태그 — 세션이 설명 끝줄에 쓴다.</summary>
+    public const string SmallTagOpen = "<size=86%>", SmallTagClose = "</size>";   // 12 / 14 ≈ 0.86
+
+    private TMP_FontAsset fontB, fontM, fontL;   // KoPub 세 굵기(없으면 셋 다 Build에 넘어온 글꼴)
+    /// <summary>굵은 글꼴 — 공간 각도기의 굵은 숫자가 쓴다.</summary>
+    internal TMP_FontAsset BoldFont => fontB;
     private const float GuidePad = 0.008f, GuideNoteGap = 0.004f, GuideMinH = 0.040f, GuideBorderT = 0.0015f;   // 안내 테두리 안쪽 여백 · 두 줄 사이 · 최소 높이 · 테두리 굵기
     private const float GuideW = 0.24f;                       // 안내 테두리의 폭(m) — ★10-13 오후 사용자 지시: 길쭉한 띠(0.40 × 0.085) 말고 조금 넓은 직사각형. 높이는 10-14부터 글에 맞춘다(LayoutGuide)
     private const float GuideFollow = 10f;                   // 안내가 컨트롤러를 따라오는 빠르기(1/초) — 손 떨림은 걸러 내되 손을 옮기면 바로 따라붙는다
@@ -449,8 +487,8 @@ public class RomLineView
             float k = i - (n - 1) * 0.5f;
             SetX(popupTabPlates[i].transform, k * (PopupTabW + PopupTabGap));
             SetX(popupTabTexts[i].transform, k * (PopupTabW + PopupTabGap));
-            nearTabPlates[i].transform.localScale = new Vector3(cellW, NearTabH, 1f);
-            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, NearTabH);
+            nearTabPlates[i].transform.localScale = new Vector3(cellW, nearTabH, 1f);
+            nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, nearTabH);
             SetX(nearTabPlates[i].transform, k * (cellW + NearTabGap));
             SetX(nearTabTexts[i].transform, k * (cellW + NearTabGap));
         }
@@ -458,10 +496,10 @@ public class RomLineView
 
     // ── 홈 메뉴(11-17) ── 안내 테두리 안. 글은 상태가 바뀔 때만 넣는다(SetHomeMenu) · 막대만 매 프레임(SetHomeMenuHold, 할당 없음).
     private const int MenuRows = 3;
-    private const float MenuItemSize = 0.075f, MenuDescSize = 0.068f;   // 안내 알림 줄(0.085)보다 작게 — 사용자 «과하게 크지 않게»
-    private const float MenuRowH = 0.017f, MenuLeftW = 0.074f, MenuGap = 0.008f;
-    private const float MenuRightW = GuideW - GuidePad * 2f - MenuLeftW - MenuGap;
+    private const float MenuGap = 0.008f;
     private const float MenuBarH = 0.004f, MenuBarGap = 0.004f;
+    // 항목 줄 높이 · 항목 열 폭 · 설명 열 폭 — 글자 크기(Fs)에 따라 Build · 첫 SetHomeMenu에서 정한다
+    private float menuRowH, menuLeftW = -1f, menuRightW;
     private Transform menuRoot, menuHi, holdBack, holdFill;
     private readonly TextMeshPro[] menuItems = new TextMeshPro[MenuRows];
     private TextMeshPro menuDesc;
@@ -484,29 +522,53 @@ public class RomLineView
             string s = i < labels.Length ? labels[i] : "";
             if (menuItems[i].text != s) menuItems[i].text = s;
             menuItems[i].color = i == cursor ? TipColor : DimColor;
+            TMP_FontAsset face = i == cursor ? fontB : fontM;   // 규격: 항목 16 M · 고른 항목 16 B
+            if (face != null && menuItems[i].font != face) menuItems[i].font = face;
         }
+        if (menuLeftW < 0f) FitMenuColumns(labels);
         if (menuDesc.text != desc) menuDesc.text = desc;
         if (holdBack.gameObject.activeSelf != holdItem) holdBack.gameObject.SetActive(holdItem);
 
-        float descH = menuDesc.GetPreferredValues(desc, MenuRightW, 0f).y;
+        float descH = menuDesc.GetPreferredValues(desc, menuRightW, 0f).y;
         float rightH = descH + (holdItem ? MenuBarGap + MenuBarH : 0f);
-        float inner = Mathf.Max(MenuRows * MenuRowH, rightH);
+        float inner = Mathf.Max(MenuRows * menuRowH, rightH);
         guideH = Mathf.Max(GuideMinH, inner + GuidePad * 2f);
         float y0 = guideH * 0.5f - GuidePad;                               // 글 묶음의 윗변
-        float xL = -GuideW * 0.5f + GuidePad + MenuLeftW * 0.5f;           // 항목 열 가운데
+        float xL = -GuideW * 0.5f + GuidePad + menuLeftW * 0.5f;           // 항목 열 가운데
         for (int i = 0; i < MenuRows; i++)
-            menuItems[i].transform.localPosition = new Vector3(xL, y0 - MenuRowH * (i + 0.5f), -0.004f);
+            menuItems[i].transform.localPosition = new Vector3(xL, y0 - menuRowH * (i + 0.5f), -0.004f);
         int c = Mathf.Min(cursor, MenuRows - 1);
-        menuHi.localPosition = new Vector3(xL, y0 - MenuRowH * (c + 0.5f), menuHi.localPosition.z);
+        menuHi.localPosition = new Vector3(xL, y0 - menuRowH * (c + 0.5f), menuHi.localPosition.z);
 
-        menuBarLeft = -GuideW * 0.5f + GuidePad + MenuLeftW + MenuGap;    // 설명 열 왼쪽 끝
-        float xR = menuBarLeft + MenuRightW * 0.5f;
-        menuDesc.rectTransform.sizeDelta = new Vector2(MenuRightW, Mathf.Max(descH, 0.001f));
+        menuBarLeft = -GuideW * 0.5f + GuidePad + menuLeftW + MenuGap;    // 설명 열 왼쪽 끝
+        float xR = menuBarLeft + menuRightW * 0.5f;
+        menuDesc.rectTransform.sizeDelta = new Vector2(menuRightW, Mathf.Max(descH, 0.001f));
         menuDesc.transform.localPosition = new Vector3(xR, y0 - descH * 0.5f, -0.004f);
         menuBarY = y0 - descH - MenuBarGap - MenuBarH * 0.5f;
         holdBack.localPosition = new Vector3(xR, menuBarY, holdBack.localPosition.z);
         SetHomeMenuHold(0f);
         PlaceGuideFrame();
+    }
+
+    /// <summary>
+    /// 항목 열 폭을 가장 긴 이름(굵게)에 맞추고 설명 열이 나머지를 쓴다 — 처음 한 번(항목 이름은 바뀌지 않는다).
+    /// 글자 크기가 OS 배율을 따라 변하니 고정 폭 대신 잰다. 설명 열은 테두리 폭의 40% 밑으로 줄이지 않는다.
+    /// </summary>
+    private void FitMenuColumns(string[] labels)
+    {
+        float w = 0f;
+        TMP_FontAsset keep = menuItems[0].font;
+        if (fontB != null) menuItems[0].font = fontB;   // 고른 항목이 굵어져도 넘치지 않게 굵은 글꼴로 잰다
+        for (int i = 0; i < labels.Length && i < MenuRows; i++)
+            w = Mathf.Max(w, menuItems[0].GetPreferredValues(labels[i]).x);
+        menuItems[0].font = keep;
+        float inner = GuideW - GuidePad * 2f - MenuGap;
+        menuLeftW = Mathf.Min(w + 0.006f, inner * 0.6f);
+        menuRightW = inner - menuLeftW;
+        for (int i = 0; i < MenuRows; i++) menuItems[i].rectTransform.sizeDelta = new Vector2(menuLeftW, menuRowH);
+        menuHi.localScale = new Vector3(menuLeftW, menuRowH - 0.002f, 1f);
+        holdBack.localScale = new Vector3(menuRightW, MenuBarH, 1f);
+        Debug.Log($"[선실측] 홈 메뉴 — 열 폭 항목 {menuLeftW * 100f:F1}cm · 설명 {menuRightW * 100f:F1}cm · 줄 {menuRowH * 100f:F1}cm · 글자 항목 {menuItems[0].fontSize:F3} · 설명 {menuDesc.fontSize:F3}");
     }
 
     /// <summary>트리거 길게 막대 — t = 0~1(0이면 숨긴다). 길게 누르는 동안 매 프레임 불린다(할당 없음).</summary>
@@ -516,7 +578,7 @@ public class RomLineView
         bool show = t > 0f && holdBack.gameObject.activeSelf;
         if (holdFill.gameObject.activeSelf != show) holdFill.gameObject.SetActive(show);
         if (!show) return;
-        float w = MenuRightW * t;
+        float w = menuRightW * t;
         holdFill.localScale = new Vector3(w, MenuBarH, 1f);
         holdFill.localPosition = new Vector3(menuBarLeft + w * 0.5f, menuBarY, holdFill.localPosition.z);
     }
@@ -594,14 +656,14 @@ public class RomLineView
         borderTop.localPosition = new Vector3(0f, top, borderTop.localPosition.z);
         borderBottom.localPosition = new Vector3(0f, -top, borderBottom.localPosition.z);
         borderLeft.localScale = borderRight.localScale = new Vector3(GuideBorderT, guideH, 1f);
-        float tabY = top + 0.003f + NearTabH * 0.5f;
+        float tabY = top + 0.003f + nearTabH * 0.5f;
         for (int i = 0; i < PopupTabs; i++)
         {
             Vector3 p = nearTabTexts[i].transform.localPosition;
             nearTabTexts[i].transform.localPosition = new Vector3(p.x, tabY, p.z);
             nearTabPlates[i].transform.localPosition = new Vector3(p.x, tabY, nearTabPlates[i].transform.localPosition.z);
         }
-        if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + NearTabH * 0.5f + 0.008f, -0.004f);
+        if (nearBattery != null) nearBattery.transform.localPosition = new Vector3(0f, tabY + nearTabH * 0.5f + nearBattery.fontSize * 0.06f, -0.004f);
     }
 
     /// <summary>확인 창을 탭 창 위에 덮어 띄운다 / 내린다 — 측정값 초기화 · 촉 끝 맞추기(10-22). 글은 바뀔 때만 넣는다.</summary>
@@ -718,7 +780,7 @@ public class RomLineView
     public void SetValue(int slot, string text, bool current, bool opposite)
     {
         values[slot].text = text;
-        values[slot].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+        SetWeight(values[slot], current);
         values[slot].color = opposite ? OppositeColor : slot % 2 == 0 ? ActiveColor : PressureColor;
     }
 
@@ -726,7 +788,19 @@ public class RomLineView
     public void SetDiff(int m, string text, bool current)
     {
         if (diffs[m].text != text) diffs[m].text = text;
-        diffs[m].fontStyle = current ? FontStyles.Bold : FontStyles.Normal;
+        SetWeight(diffs[m], current);
+    }
+
+    /// <summary>굵게/보통 — KoPub이면 B · M 글꼴을 바꾸고(합성 굵게 대신, 11-17), 없으면 종전처럼 FontStyles로.</summary>
+    private void SetWeight(TextMeshPro t, bool bold)
+    {
+        if (fontB != null && fontB != fontM)
+        {
+            TMP_FontAsset face = bold ? fontB : fontM;
+            if (t.font != face) t.font = face;
+            if (t.fontStyle != FontStyles.Normal) t.fontStyle = FontStyles.Normal;
+        }
+        else t.fontStyle = bold ? FontStyles.Bold : FontStyles.Normal;
     }
 
     /// <summary>비교 시험 줄. row 0 = 굴곡 · 1 = 신전.</summary>
@@ -922,12 +996,16 @@ public class RomLineView
         return go.transform;
     }
 
-    internal TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order)
+    internal TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order) => MakeText(parent, text, size, align, order, null);
+
+    /// <summary>글꼴을 골라 만든다(null = 기본 KoPub M). 컨트롤러UI 규격 글자가 B · L을 고를 때 쓴다(11-17).</summary>
+    internal TextMeshPro MakeText(Transform parent, string text, float size, TextAlignmentOptions align, int order, TMP_FontAsset face)
     {
         var go = new GameObject("글자");
         go.transform.SetParent(parent, false);
         var t = go.AddComponent<TextMeshPro>();
-        if (font != null) t.font = font;
+        TMP_FontAsset use = face != null ? face : font;
+        if (use != null) t.font = use;
         t.fontSize = size;
         t.alignment = align;
         t.color = Color.white;

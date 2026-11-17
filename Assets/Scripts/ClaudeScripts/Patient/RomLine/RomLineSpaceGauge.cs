@@ -72,15 +72,15 @@ public class RomLineSpaceGauge
 
         for (int i = 0; i < TickLabelCount; i++)
         {
-            tickLabels[i] = v.MakeText(root, "", TickLabelSize, TextAlignmentOptions.Center, 5);
-            tickLabels[i].fontStyle = FontStyles.Bold;
+            tickLabels[i] = v.MakeText(root, "", TickLabelSize, TextAlignmentOptions.Center, 5, v.BoldFont);   // 11-17 글꼴 KoPub B(크기 그대로)
+            if (v.BoldFont == null) tickLabels[i].fontStyle = FontStyles.Bold;   // KoPub B가 없을 때만 합성 굵게
             tickLabels[i].rectTransform.sizeDelta = new Vector2(0.12f, 0.05f);
         }
         for (int i = 0; i < 4; i++)
         {
             puckDisc[i] = MakeDisc("도달점 배경", root);
-            puckLabel[i] = v.MakeText(root, "", ReachedLabelSize, TextAlignmentOptions.Center, 6);
-            puckLabel[i].fontStyle = FontStyles.Bold;
+            puckLabel[i] = v.MakeText(root, "", ReachedLabelSize, TextAlignmentOptions.Center, 6, v.BoldFont);
+            if (v.BoldFont == null) puckLabel[i].fontStyle = FontStyles.Bold;
             puckLabel[i].color = (i % 2 == 0) ? ActiveReached : PassiveReached;
             puckLabel[i].rectTransform.sizeDelta = new Vector2(0.12f, 0.05f);
         }

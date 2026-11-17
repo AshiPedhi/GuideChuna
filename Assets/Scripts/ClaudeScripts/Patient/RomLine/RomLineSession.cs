@@ -2085,19 +2085,19 @@ public class RomLineSession : MonoBehaviour
     /// <summary>홈 메뉴에서 고른 항목의 설명(안내 테두리 안 오른쪽 열). 상태가 바뀔 때만 불린다(Refresh).</summary>
     private string MenuDesc(int item)
     {
-        const string Key = "<color=#FFF233>";
+        const string Key = RomLineView.SmallTagOpen + "<color=#FFF233>";   // 조작 문구 = 규격 12px(설명 14px의 86%) · 색은 컨트롤러UI 조작 안내의 노랑 그대로
         switch (item)
         {
             case MenuReset:
-                return "이번 판에 잰 6동작 값을\n모두 지우고 처음부터 잰다\n" + Key + "트리거 길게 : 초기화</color>";
+                return "이번 판에 잰 6동작 값을\n모두 지우고 처음부터 잰다\n" + Key + "트리거 길게 : 초기화</color>" + RomLineView.SmallTagClose;
             case MenuCalib:
-                return "촉 끝이 어디인지 다시 잡는다\n바꾼 값은 기기에 저장된다\n" + Key + "트리거 : 시작</color>";
+                return "촉 끝이 어디인지 다시 잡는다\n바꾼 값은 기기에 저장된다\n" + Key + "트리거 : 시작</color>" + RomLineView.SmallTagClose;
             default:
                 int done = CountConfirmed();
                 return "로비로 돌아간다\n"
                      + (done < 6 ? "<color=#FF8C8C>아직 " + (6 - done) + "개 동작 남음</color>\n" : "")
                      + (done > 0 ? "잰 값은 기기에 기록으로 남는다\n" : "")
-                     + Key + "트리거 길게 : 나가기</color>";
+                     + Key + "트리거 길게 : 나가기</color>" + RomLineView.SmallTagClose;
         }
     }
 
