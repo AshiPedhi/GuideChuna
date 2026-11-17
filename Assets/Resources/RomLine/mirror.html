@@ -58,6 +58,15 @@
   #mHint { font-size:13.8px; color:var(--dim); text-align:center; }
   #mHint:empty { display:none; }
 
+  /* 결과(11-17) — 결과 창이 떴을 때 표 위에 제목 · 부제(· 평가 점수) */
+  #resHead { display:none; margin-bottom:6px; }
+  #resHead.on { display:flex; align-items:center; gap:14px; }
+  #resHead .t { font-size:18px; font-weight:700; }
+  #resHead .s { font-size:13px; color:var(--dim); }
+  #resHead .score { font-size:34px; font-weight:700; color:var(--act); line-height:1; }
+  #resHead .score small { font-size:15px; color:var(--text); margin-left:2px; }
+  td .base { display:block; font-size:12px; color:var(--dim); line-height:1.1; }
+  .chip { display:inline-block; min-width:44px; padding:1px 5px; border-radius:4px; font-size:15px; font-weight:700; background:#1d242e; margin:0 1px; }
 
   /* 기록UI — 확인(트리거)한 동작만 채운다(헤드셋 결과표와 같다). 줄 높이는 카드 높이를 나눠 쓴다 */
   #result { flex:1.35 1 0; display:flex; padding:6px 12px; }
@@ -139,9 +148,10 @@
         <div id="guide"><div id="gLine">연결하는 중…</div><div id="gNote"></div>
           <div id="menu"><div id="mList"></div><div id="mDesc"></div></div><div id="mHint"></div></div>
       </div>
-      <div class="card" id="result">
+      <div class="card" id="result" style="flex-direction:column">
+        <div id="resHead"><div><div class="t" id="rTitle"></div><div class="s" id="rSub"></div></div><div id="rScore" style="margin-left:auto;text-align:right"></div></div>
         <table>
-          <thead><tr><th class="n">측정</th><th class="a">능동</th><th class="p">압박</th><th class="d">차이</th></tr></thead>
+          <thead><tr><th class="n">측정</th><th class="a">능동</th><th class="p">압박</th><th class="d" id="thD">차이</th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -282,14 +292,32 @@ function poll() {
       }
     } else if (lastMenu !== null) { lastMenu = null; $('mHint').textContent = ''; }
 
-    // 기록 — 확인한 동작만 채운다
+    // 기록 — 확인한 동작만 채운다. ★11-17 결과 창이 떴으면 제목 · 부제 · (평가) 점수 · 칸별 «평가 (실습)» · 오차 칩
     const conf = s.confirmed || '000000', res = s.results || [];
     const now = top > 0 && typeof s.cur === 'number' ? s.cur : -1;
+    const R = s.result || {};
+    const ev = !!(R.on && R.eval && R.cells);
+    $('resHead').classList.toggle('on', !!R.on);
+    if (R.on) {
+      $('rTitle').textContent = R.title || '';
+      $('rSub').textContent = R.sub || '';
+      $('rScore').innerHTML = ev ? '<div class="score">' + Number(R.score).toFixed(1) + '<small>점</small></div><div class="s">평균 오차 ' + Number(R.mean).toFixed(1) + '° · 비교 ' + R.n + '칸</div>' : '';
+    }
+    $('thD').textContent = ev ? '오차 능동 / 압박' : '차이';
+    const chip = e => e === null || e === undefined ? '<span class="chip" style="color:var(--off)">—</span>'
+      : '<span class="chip" style="color:' + (Math.abs(e) <= 2 ? '#73E68C' : Math.abs(e) <= 5 ? '#F2994D' : '#FF7373') + '">' + (e > 0 ? '+' : '') + Number(e).toFixed(1) + '</span>';
     cells.forEach((c, m) => {
       const on = conf[m] === '1', r = res[m] || {};
-      val(c.a, r.a, on); val(c.p, r.p, on);
-      c.d.textContent = on && r.a && r.p ? ((x => (x > 0 ? '+' : '') + x.toFixed(1))(r.p.v - r.a.v)) + '°' : '—';
-      c.tr.classList.toggle('now', m === now);
+      if (ev) {
+        const ca = R.cells[m * 2] || {}, cp = R.cells[m * 2 + 1] || {};
+        const cell = (el, x) => { el.innerHTML = (x.v === null || x.v === undefined ? '—' : Number(x.v).toFixed(1) + '°') + (x.b === null || x.b === undefined ? '' : '<span class="base">(실습 ' + Number(x.b).toFixed(1) + ')</span>'); el.classList.remove('opp'); };
+        cell(c.a, ca); cell(c.p, cp);
+        c.d.innerHTML = chip(ca.e) + chip(cp.e);
+      } else {
+        val(c.a, r.a, on); val(c.p, r.p, on);
+        c.d.textContent = on && r.a && r.p ? ((x => (x > 0 ? '+' : '') + x.toFixed(1))(r.p.v - r.a.v)) + '°' : '—';
+      }
+      c.tr.classList.toggle('now', m === now && !R.on);
     });
   }).catch(() => { $('conn').textContent = '★연결 끊김'; $('connBox').style.display = ''; })
     .finally(() => setTimeout(poll, 300));

@@ -2608,7 +2608,7 @@ public class RomLineSession : MonoBehaviour
     }
 
     /// <summary>
-    /// ★11-17 사용자 지시: 관제 화면도 컨트롤러UI처럼(홈 메뉴 목록 · 설명).
+    /// ★11-17 사용자 지시: 관제 화면도 컨트롤러UI처럼(홈 메뉴 목록 · 설명) + 측정값 표에 결과 창 내용(실습 «6 / 6» · 평가 점수 · 칸별 «평가 (실습)» · 오차).
     ///   menu = {on, cur, ask, labels, desc, hint} — desc는 헤드셋과 같은 글(TMP 태그 그대로 · 화면이 HTML로 바꾼다).
     ///   result = {on, eval, title, sub, score, mean, n, cells[12] = {v 평가 · b 실습 · e 오차}} — 결과 창과 같은 함수(FillCurrent · RomLineRepeatScore.Total)로 낸다.
     ///   Refresh(바뀔 때만)에서 부른다 — RefreshRepeat보다 먼저 불려도 같은 값이 나오게 여기서 직접 계산한다.
@@ -2623,6 +2623,33 @@ public class RomLineSession : MonoBehaviour
         JsonStr(js, menuOn ? MenuDesc(menuCursor, menuAsk) : "").Append(",\"hint\":");
         JsonStr(js, menuOn ? (menuAsk ? MenuAskHint : MenuListHint) : "").Append('}');
 
+        bool on = Done;
+        js.Append(",\"result\":{\"on\":").Append(on ? "true" : "false");
+        if (!on) { js.Append('}'); return; }
+        var ci = CultureInfo.InvariantCulture;
+        FillCurrent();
+        bool eval = evalMode && hasBase;
+        float score = 0f, mean = 0f;
+        int n = 0;
+        if (eval) { score = RomLineRepeatScore.Total(baseVals, curVals, out mean, out n); eval = n > 0; }
+        string when = resultWhen.Length > 0 ? resultWhen : System.DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        string user = monitorUser.Length > 0 ? " · 사용자 " + monitorUser : "";
+        js.Append(",\"eval\":").Append(eval ? "true" : "false").Append(",\"title\":");
+        JsonStr(js, "경추 ROM 결과 · " + (evalMode ? "평가" : "실습")).Append(",\"sub\":");
+        JsonStr(js, !evalMode ? when + user + " · 6 / 6 동작 확인"
+                    : hasBase ? when + user + " · 실습 " + baseWhen + " 기준"
+                    : when + user + " · 비교할 실습 기록 없음");
+        js.Append(",\"score\":").Append(score.ToString("F1", ci)).Append(",\"mean\":").Append(mean.ToString("F2", ci)).Append(",\"n\":").Append(n)
+          .Append(",\"cells\":[");
+        for (int s = 0; s < RomLineRepeatScore.Slots; s++)
+        {
+            if (s > 0) js.Append(',');
+            bool hasCur = !float.IsNaN(curVals[s]), both = eval && hasCur && !float.IsNaN(baseVals[s]);
+            js.Append("{\"v\":").Append(hasCur ? curVals[s].ToString("F1", ci) : "null")
+              .Append(",\"b\":").Append(both ? baseVals[s].ToString("F1", ci) : "null")
+              .Append(",\"e\":").Append(both ? (curVals[s] - baseVals[s]).ToString("F1", ci) : "null").Append('}');
+        }
+        js.Append("]}");
     }
 
     /// <summary>모니터로 보내는 값 한 칸 — 없으면 null, 있으면 {"v":각,"o":반대쪽으로 움직였나}.</summary>
