@@ -211,15 +211,17 @@ public class RomLineSession : MonoBehaviour
 
     // 탭 · 단계 멈춤(10-12 저녁 · 10-14 홈)
     private bool home = true;             // 홈 탭 — 처음은 여기서 시작하고, 네 탭(굴곡 · 신전 · 측굴 · 회전)을 다 재면 여기로 돌아온다(10-14)
-    private bool resetAsk;                // «측정값을 초기화할까요?» 확인 창(홈에서 A · 10-22 «리셋» → «측정값 초기화»)
-    private bool calibAsk;                // «촉 끝 맞추기를 시작할까요?» 확인 창(홈에서 B · 10-22) — 트리거를 눌러야 시작한다
-    // ★11-17 사용자 지시: 홈 메뉴 — 스틱 위아래로 고르고(처음엔 커서 없음 · 순환 없음 · 맨 위에서 위로 = 닫기) 트리거로 정한다.
-    //   끝점 보정 = 트리거 한 번 · 측정값 초기화 · 나가기 = 트리거 길게(MenuHoldSeconds). 홈의 A · B는 아무 일도 안 한다(확인 창 resetAsk · calibAsk는 홈에서 안 띄운다).
-    private const int MenuReset = 0, MenuCalib = 1, MenuExit = 2;
-    private static readonly string[] MenuLabel = { "측정값 초기화", "끝점 보정", "나가기" };
-    private const float MenuHoldSeconds = 1.0f;
-    private int menuCursor = -1;          // −1 = 커서 없음(홈 안내만)
-    private float menuHoldStart = -1f;    // 트리거 길게를 시작한 시각(−1 = 안 누름)
+    // ★11-17 사용자 지시: 홈 메뉴 — 스틱 위아래로 고르고 트리거로 정한다. 홈의 A · B(목록)는 아무 일도 안 한다.
+    //   (11-17 오전판 = 항목 셋 · 커서 없음에서 시작 · 초기화 · 나가기 트리거 길게 → 오후 시안 V0.4로 바꿨다. 벽면 확인 창 resetAsk · calibAsk는 없앴다.)
+    // ★11-17 시안 V0.4(사용자 결정 «추천대로»): 항목 넷 · 홈에 올 때마다 ROM 기본 선택(커서 없는 상태 없음) · 트리거 길게를 없애고
+    //   초기화 · 설정(끝점 보정) · 나가기는 설명 상자 안 확인 안내(트리거 : 실행 · B : 취소)를 한 번 거친다. ROM은 바로 측정 탭으로.
+    private const int MenuRom = 0, MenuReset = 1, MenuSettings = 2, MenuExit = 3;
+    private static readonly string[] MenuLabel = { "ROM", "측정값 초기화", "설정", "나가기" };
+    // 설정 안의 항목(탭) — 지금은 끝점 보정 하나. 둘 이상이 되면 확인 안내 중 스틱 좌우가 이 탭을 옮긴다(위 탭 줄은 안 옮긴다 · 시안 ⑦).
+    private static readonly string[] SettingsName = { "끝점 보정" };
+    private int menuCursor = MenuRom;
+    private bool menuAsk;                 // 설명 상자에 확인 안내가 떠 있다(초기화 · 설정 · 나가기)
+    private int settingsTab;
     private bool confirmWait;             // 동작 하나(세 직선)를 다 찍었다 — A/X(확인)를 기다린다
     private readonly bool[] confirmed = new bool[6];   // 동작마다 확인까지 마쳤는가
     private bool axesAsk;                 // «축 다시 잡기»를 불렀다(스틱 누름) — 스틱을 밀면 잡는다
@@ -701,18 +703,6 @@ public class RomLineSession : MonoBehaviour
             else SampleCalibration();
             return;
         }
-        if (calibAsk)
-        {
-            if (triggerDown) { calibAsk = false; BeginCalibration(); return; }
-            if (undoTap || undoLong || aDown)
-            {
-                calibAsk = false;
-                Debug.Log("[선실측] 촉 끝 맞추기 확인 — 취소(" + (aDown ? "A/X" : "B/Y") + ")");
-                Play(sndUndo);
-                dirty = true;
-                return;
-            }
-        }
 
         // ── 축 다시 잡기를 불러 둔 동안 — 스틱을 밀면(어느 쪽이든) 잡는다. 다른 버튼 · 트리거는 그만두기(점은 찍지 않는다) ──
         if (axesAsk)
@@ -729,33 +719,21 @@ public class RomLineSession : MonoBehaviour
             return;
         }
 
-        // ── 홈 메뉴(11-17) — 스틱 위아래 · 트리거(보정) · 트리거 길게(초기화 · 나가기) ──
-        if (home && HandleHomeMenu(stick, stickPush, trigger, triggerDown)) return;
+        // ── 홈 메뉴(11-17 시안 V0.4) — 스틱 위아래 · 트리거(ROM = 측정 탭으로 · 나머지 = 확인 안내) · 확인 안내 중 트리거 / B ──
+        if (home && HandleHomeMenu(stick, stickPush, triggerDown, undoTap || undoLong)) return;
 
-        // ── A/X — ★10-14 사용자 지시: 탭 창(A로 여닫기)을 없앴다. A는 홈에서만 «리셋»이다(확인 창 → A : 지우기 · B : 취소). 측정 확인은 트리거(10-13, Mark) ──
+        // ── A/X — ★10-14 사용자 지시: 탭 창(A로 여닫기)을 없앴다. 측정 확인은 트리거(10-13, Mark) ──
         if (aDown)
         {
-            if (resetAsk)
-            {
-                Buzz(0.12f, 0.8f);
-                ResetAll("홈의 A");
-            }
-            else if (home) { }   // ★11-17: 홈의 A는 아무 일도 안 한다 — 측정값 초기화는 홈 메뉴(스틱 위아래 → 트리거 길게)
-            else Deny("측정값 초기화는 홈 메뉴에서 — 스틱 좌우로 홈 → 스틱 위아래");
+            // ★11-17: 홈의 A는 아무 일도 안 한다 — 측정값 초기화는 홈 메뉴(스틱 ▲▼ → 트리거 → 확인 안내)
+            if (!home) Deny("측정값 초기화는 홈 메뉴에서 — 스틱 좌우로 홈(메뉴) → 측정값 초기화");
             return;
         }
 
         // ── B/Y ── 홈에서는 자유 측정의 방식 바꾸기(3점 → 2선 → 연속 — 탭 이름이 따라 바뀐다, 10-14). 측정 탭에서는 취소 · 지우기
         if (undoTap || undoLong)
         {
-            if (resetAsk)
-            {
-                resetAsk = false;
-                Debug.Log("[선실측] 측정값 초기화 확인 — 취소(B/Y)");
-                Play(sndUndo);
-                dirty = true;
-            }
-            else if (home)
+            if (home)
             {
                 if (FreeTabOn) SetFreeTab((freeTab + 1) % 3);   // 길게 눌러도 같다(길게는 뗄 때 짧은 누름으로 읽히지 않는다)
                 // ★11-17: 자유 측정을 끈 홈의 B는 아무 일도 안 한다 — 끝점 보정은 홈 메뉴로 옮겼다(10-22~11-16에는 촉 끝 맞추기 확인 창이었다)
@@ -774,7 +752,7 @@ public class RomLineSession : MonoBehaviour
         if (stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f)
         {
             stickReady = false;
-            if (!resetAsk && !calibAsk) GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");
+            GoTab(Mathf.Clamp(CurTop + (stick.x > 0f ? 1 : -1), 0, LastTop), "스틱");   // 확인 안내 중의 좌우는 HandleHomeMenu가 먼저 받는다
             return;
         }
 
@@ -790,76 +768,99 @@ public class RomLineSession : MonoBehaviour
         }
     }
 
-    // ── 홈 메뉴(11-17) ─────────────────────────────────────────────
+    // ── 홈 메뉴(11-17 · 시안 V0.4) ────────────────────────────────────
     /// <summary>
-    /// 홈에서만 부른다. 스틱 위아래 = 커서(아래로 다음 항목 · 맨 위에서 위로 = 닫기 · 순환 없음) ·
-    /// 끝점 보정 = 트리거 한 번 · 측정값 초기화 · 나가기 = 트리거를 MenuHoldSeconds 동안(놓으면 취소). 입력을 썼으면 true.
+    /// 홈에서만 부른다. 목록: 스틱 ▲▼ = 항목(끝에서 멈춤 · 순환 없음) · 트리거 = ROM이면 측정 탭으로, 나머지는 확인 안내.
+    /// 확인 안내 중: 트리거 = 실행 · B = 취소(목록으로) · 스틱 ▲▼는 받지 않음 · 스틱 ◀▶는 설정 탭이 둘 이상일 때만 설정 탭 이동(아니면 받지 않음).
+    /// 목록에서 스틱 ◀▶ · B · A는 받지 않고 넘긴다(false — 위 탭 줄 이동 · 자유 측정 B는 그대로). 입력을 썼으면 true.
     /// </summary>
-    private bool HandleHomeMenu(Vector2 stick, bool stickPush, float trigger, bool triggerDown)
+    private bool HandleHomeMenu(Vector2 stick, bool stickPush, bool triggerDown, bool bPressed)
     {
-        if (stickPush && Mathf.Abs(stick.y) > 0.7f && Mathf.Abs(stick.x) < 0.5f)
+        bool vertical = stickPush && Mathf.Abs(stick.y) > 0.7f && Mathf.Abs(stick.x) < 0.5f;
+        bool horizontal = stickPush && Mathf.Abs(stick.x) > 0.7f && Mathf.Abs(stick.y) < 0.5f;
+        if (menuAsk)
+        {
+            if (vertical || horizontal)
+            {
+                stickReady = false;
+                if (horizontal && menuCursor == MenuSettings && SettingsName.Length > 1)
+                {
+                    int next = Mathf.Clamp(settingsTab + (stick.x > 0f ? 1 : -1), 0, SettingsName.Length - 1);
+                    if (next != settingsTab) { settingsTab = next; Debug.Log($"[선실측] 홈 메뉴 — 설정 탭 → {SettingsName[settingsTab]}"); Play(sndPress); dirty = true; }
+                }
+                return true;
+            }
+            if (bPressed)
+            {
+                menuAsk = false;
+                Debug.Log($"[선실측] 홈 메뉴 — {MenuLabel[menuCursor]} 취소(B)");
+                Play(sndUndo);
+                dirty = true;
+                return true;
+            }
+            if (!triggerDown) return false;
+            int item = menuCursor;
+            menuAsk = false;
+            Debug.Log($"[선실측] 홈 메뉴 — {MenuLabel[item]} 실행(트리거){(item == MenuSettings ? " · " + SettingsName[settingsTab] : "")}");
+            Buzz(0.12f, 0.8f);
+            dirty = true;
+            if (item == MenuReset) ResetAll("홈 메뉴");
+            else if (item == MenuSettings) BeginCalibration();   // 설정 탭 0 = 끝점 보정(지금 하나뿐)
+            else Exit();
+            return true;
+        }
+
+        if (vertical)
         {
             stickReady = false;
-            int next = Mathf.Clamp(menuCursor + (stick.y < 0f ? 1 : -1), -1, MenuLabel.Length - 1);
-            if (next != menuCursor) SetMenuCursor(next, "스틱");
+            int next = Mathf.Clamp(menuCursor + (stick.y < 0f ? 1 : -1), 0, MenuLabel.Length - 1);
+            if (next != menuCursor)
+            {
+                menuCursor = next;
+                Debug.Log($"[선실측] 홈 메뉴 — 커서 → {MenuLabel[menuCursor]}");
+                Play(sndPress);
+                dirty = true;
+            }
             return true;
         }
-        if (menuCursor < 0) return false;
-
-        if (menuCursor == MenuCalib)
+        if (!triggerDown) return false;
+        if (menuCursor == MenuRom)
         {
-            if (!triggerDown) return false;
-            Debug.Log("[선실측] 홈 메뉴 — 끝점 보정 실행(트리거)");
-            SetMenuCursor(-1, "끝점 보정 시작");
-            BeginCalibration();
+            int tab = RomEntryTab();
+            Debug.Log($"[선실측] 홈 메뉴 — ROM 실행(트리거) → {GuidedTabName[tab]}");
+            GoTab(tab + 1, "홈 메뉴 ROM");
             return true;
         }
-
-        // 측정값 초기화 · 나가기 — 트리거 길게
-        if (menuHoldStart < 0f)
-        {
-            if (!triggerDown) return false;
-            menuHoldStart = Time.unscaledTime;
-            Debug.Log($"[선실측] 홈 메뉴 — {MenuLabel[menuCursor]} 길게 시작");
-            return true;
-        }
-        if (trigger < 0.35f)
-        {
-            Debug.Log($"[선실측] 홈 메뉴 — {MenuLabel[menuCursor]} 길게 취소({Time.unscaledTime - menuHoldStart:F2}초에 놓음)");
-            menuHoldStart = -1f;
-            view.SetHomeMenuHold(0f);
-            return true;
-        }
-        float t = (Time.unscaledTime - menuHoldStart) / MenuHoldSeconds;
-        view.SetHomeMenuHold(t);
-        if (t < 1f) return true;
-
-        int item = menuCursor;
-        Debug.Log($"[선실측] 홈 메뉴 — {MenuLabel[item]} 길게 완료 → 실행");
-        Buzz(0.12f, 0.8f);
-        SetMenuCursor(-1, MenuLabel[item] + " 실행");
-        if (item == MenuReset) ResetAll("홈 메뉴");
-        else Exit();
+        menuAsk = true;
+        settingsTab = 0;
+        Debug.Log($"[선실측] 홈 메뉴 — 확인 안내 → {MenuLabel[menuCursor]}");
+        Play(sndPress);
+        dirty = true;
         return true;
     }
 
-    /// <summary>홈 메뉴의 커서를 옮긴다(−1 = 닫기). 길게 누르던 것은 버린다.</summary>
-    private void SetMenuCursor(int cursor, string why)
+    /// <summary>ROM으로 들어갈 탭 — 아직 다 재지 않은 첫 탭 · 다 쟀으면 굴곡·신전(0).</summary>
+    private int RomEntryTab()
     {
-        bool holding = menuHoldStart >= 0f;
-        menuHoldStart = -1f;
-        if (holding && view != null) view.SetHomeMenuHold(0f);
-        if (cursor == menuCursor) return;
-        menuCursor = cursor;
-        Debug.Log("[선실측] 홈 메뉴 — " + (cursor < 0 ? "닫음" : "커서 → " + MenuLabel[cursor]) + $" ({why})");
-        if (cursor >= 0) Play(sndPress);
+        for (int t = 0; t < 3; t++) if (!TabComplete(t)) return t;
+        return 0;
+    }
+
+    /// <summary>홈에 올 때 — 늘 ROM을 고른 목록(확인 안내는 닫는다).</summary>
+    private void ResetMenu(string why)
+    {
+        bool changed = menuCursor != MenuRom || menuAsk;
+        menuCursor = MenuRom;
+        menuAsk = false;
+        settingsTab = 0;
+        if (changed) Debug.Log($"[선실측] 홈 메뉴 — 커서 → ROM({why})");
         dirty = true;
     }
 
     // ── 끝점 보정 ───────────────────────────────────────────────────
     private void BeginCalibration()
     {
-        SetMenuCursor(-1, "끝점 보정");   // 11-17: 보정이 끝나면 홈 메뉴는 닫힌 채(모니터에서 시작해도 같다)
+        menuAsk = false;   // 11-17 V0.4: 보정 중엔 메뉴를 내리고(Refresh) 끝나면 목록으로 돌아온다(커서는 그대로)
         calibrating = true;
         calibStart = Time.unscaledTime;
         calibNextText = 0f;
@@ -967,7 +968,7 @@ public class RomLineSession : MonoBehaviour
         if (confirmWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) Confirm("트리거"); return; }
         if (TabComplete(CurTab))
         {
-            Deny(Done ? "측정이 끝났다 — 다시 재려면 홈 메뉴 «측정값 초기화»(트리거 길게) · 그 탭만이면 B 길게 : 이 탭 지우기"
+            Deny(Done ? "측정이 끝났다 — 다시 재려면 홈 메뉴 «측정값 초기화» · 그 탭만이면 B 길게 : 이 탭 지우기"
                       : $"{GuidedTabName[CurTab]} 탭은 다 쟀다 — 스틱으로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
             return;
         }
@@ -1232,9 +1233,7 @@ public class RomLineSession : MonoBehaviour
         if (top == CurTop) return true;
         if (top < 0 || top > LastTop) return false;   // 10-16: 자유 측정을 끄면 4는 없다
         if (TabLocked) { Deny(LockText()); return false; }
-        resetAsk = false;
-        calibAsk = false;
-        SetMenuCursor(-1, "탭 이동");   // 11-17: 스틱 좌우로 탭을 옮기면 홈 메뉴는 닫힌다
+        menuAsk = false;   // 11-17: 탭을 옮기면 확인 안내는 닫힌다(홈에 다시 오면 ROM부터 — GoHome)
         if (top == 0) { GoHome(why); return true; }
         home = false;
         if (top == 4) { SetFreeMode(true); return true; }
@@ -1249,6 +1248,7 @@ public class RomLineSession : MonoBehaviour
         SetFreeMode(false);
         home = true;
         noteText = "";
+        ResetMenu("홈");   // ★11-17 V0.4: 홈에 올 때마다 ROM을 고른 목록(결과 창이 뜬 뒤 포함)
         Debug.Log($"[선실측] 탭 → 홈 ({why})");
         Play(sndPress);
         dirty = true;
@@ -1886,9 +1886,7 @@ public class RomLineSession : MonoBehaviour
             freeConfirmed[t] = 0;
         }
         freeTab = keep;
-        resetAsk = false;
-        calibAsk = false;
-        SetMenuCursor(-1, "리셋");
+        ResetMenu("리셋");
         confirmWait = false;
         SetFreeMode(false);
         home = true;    // 리셋은 홈에서 한다 — 홈에 머문다(10-14)
@@ -2148,23 +2146,79 @@ public class RomLineSession : MonoBehaviour
         directAngle = direct[slot].valid ? direct[slot].angle : -1f,
     };
 
-    /// <summary>홈 메뉴에서 고른 항목의 설명(안내 테두리 안 오른쪽 열). 상태가 바뀔 때만 불린다(Refresh).</summary>
-    private string MenuDesc(int item)
+    // ── 홈 메뉴 글(11-17 시안 V0.4 부록 문구) — 상태가 바뀔 때만 만든다(Refresh) ──
+    private const string MenuKey = RomLineView.SmallTagOpen + "<color=#FFF233>";   // 조작 문구 = 규격 12px(설명 14px의 86%) · 컨트롤러UI 조작 안내의 노랑
+    private const string MenuKeyEnd = "</color>" + RomLineView.SmallTagClose;
+    private const string AskOpen = "<size=114%><b><color=#F2F3F5>";               // 확인 질문 = 규격 16 B(설명 14의 114%) · 흰
+    private const string AskClose = "</color></b></size>";
+    // 상자 아래 힌트 한 줄(시안 부록) — 목록 / 확인 안내
+    private const string MenuListHint = "스틱 ▲▼ : 고르기 · ◀▶ : 탭 이동";
+    private const string MenuAskHint = "B : 목록으로";
+
+    /// <summary>설명 상자의 글 — 목록이면 그 항목의 설명 + 조작, 확인 안내 중이면 질문 + 조작.</summary>
+    private string MenuDesc(int item, bool ask)
     {
-        const string Key = RomLineView.SmallTagOpen + "<color=#FFF233>";   // 조작 문구 = 규격 12px(설명 14px의 86%) · 색은 컨트롤러UI 조작 안내의 노랑 그대로
+        int done = CountConfirmed();
+        if (ask)
+        {
+            switch (item)
+            {
+                case MenuReset:
+                    return AskOpen + "측정값을 모두 지울까요?" + AskClose + "\n" + MenuKey + "트리거 : 초기화 · B : 취소" + MenuKeyEnd;
+                case MenuSettings:
+                    return AskOpen + SettingsName[settingsTab] + "을 시작할까요?" + AskClose + "\n" + MenuKey + "트리거 : 시작 · B : 취소" + MenuKeyEnd;
+                default:
+                    return AskOpen + "정말 나갈까요?" + AskClose + "\n"
+                         + (done < 6 ? "<color=#FF8C8C>아직 " + (6 - done) + "개 동작 남음</color>\n" : "")
+                         + MenuKey + "트리거 : 나가기 · B : 취소" + MenuKeyEnd;
+            }
+        }
         switch (item)
         {
+            case MenuRom:
+                return "경추 ROM 측정을\n시작한다\n"
+                     + (Done ? "<color=#73E68C>" + (evalMode ? "평가가 끝났다" : "6동작을 모두 쟀다") + "</color>\n" : "")
+                     + "→ " + GuidedTabName[RomEntryTab()] + (Done ? "" : "부터") + "\n"
+                     + MenuKey + "트리거 : 측정 시작" + MenuKeyEnd;
             case MenuReset:
-                return "이번 판에 잰 6동작 값을\n모두 지우고 처음부터 잰다\n" + Key + "트리거 길게 : 초기화</color>" + RomLineView.SmallTagClose;
-            case MenuCalib:
-                return "촉 끝이 어디인지 다시 잡는다\n바꾼 값은 기기에 저장된다\n" + Key + "트리거 : 시작</color>" + RomLineView.SmallTagClose;
+                return "이번 판에 잰 값을\n모두 지운다\n" + MenuKey + "트리거 : 선택" + MenuKeyEnd;
+            case MenuSettings:
+                return "끝점 보정 등\n측정 준비\n" + MenuKey + "트리거 : 열기" + MenuKeyEnd;
             default:
-                int done = CountConfirmed();
                 return "로비로 돌아간다\n"
-                     + (done < 6 ? "<color=#FF8C8C>아직 " + (6 - done) + "개 동작 남음</color>\n" : "")
-                     + (done > 0 ? "잰 값은 기기에 기록으로 남는다\n" : "")
-                     + Key + "트리거 길게 : 나가기</color>" + RomLineView.SmallTagClose;
+                     + (AnyPointTaken() ? "잰 값은 기기에 남는다\n" : "")
+                     + MenuKey + "트리거 : 선택" + MenuKeyEnd;
         }
+    }
+
+    /// <summary>벽면 안내 띠 · 관제 페이지의 한 줄(시안 V0.4 벽면 동기화 A) — 리치 텍스트 없이.</summary>
+    private string MenuBandLine(int item, bool ask)
+    {
+        if (ask)
+        {
+            switch (item)
+            {
+                case MenuReset: return "메뉴 · 측정값 초기화 — 측정값을 모두 지울까요? 트리거 : 초기화 · B : 취소";
+                case MenuSettings: return "메뉴 · 설정 — " + SettingsName[settingsTab] + "을 시작할까요? 트리거 : 시작 · B : 취소";
+                default:
+                    int done = CountConfirmed();
+                    return "메뉴 · 나가기 — 정말 나갈까요?" + (done < 6 ? " (아직 " + (6 - done) + "개 동작 남음)" : "") + " 트리거 : 나가기 · B : 취소";
+            }
+        }
+        switch (item)
+        {
+            case MenuRom: return "메뉴 · ROM — 경추 ROM 측정을 시작한다(" + GuidedTabName[RomEntryTab()] + ") · 트리거 : 측정 시작";
+            case MenuReset: return "메뉴 · 측정값 초기화 — 이번 판에 잰 값을 모두 지운다 · 트리거 : 선택";
+            case MenuSettings: return "메뉴 · 설정 — 끝점 보정 등 측정 준비 · 트리거 : 열기";
+            default: return "메뉴 · 나가기 — 로비로 돌아간다 · 트리거 : 선택";
+        }
+    }
+
+    /// <summary>점을 하나라도 찍었나(나가기 설명의 «잰 값은 기기에 남는다» — 찍은 판만 큐 파일이 남는다).</summary>
+    private bool AnyPointTaken()
+    {
+        for (int i = 0; i < has.Length; i++) if (has[i]) return true;
+        return CountConfirmed() > 0;
     }
 
     private int CountConfirmed()
@@ -2214,7 +2268,7 @@ public class RomLineSession : MonoBehaviour
 
     private void Refresh()
     {
-        if (freeMode) { view.SetHomeMenu(-1, null, "", false); SetSpaceGaugeTab(-1, "자유 측정"); RefreshFree(); return; }
+        if (freeMode) { view.SetHomeMenu(-1, null, "", "", false); SetSpaceGaugeTab(-1, "자유 측정"); RefreshFree(); return; }
         dirty = false;
         RefreshSpaceGauge();
 
@@ -2224,47 +2278,21 @@ public class RomLineSession : MonoBehaviour
         //   동작 하나를 다 재면 안내에 능동 · 압박의 각을 띄우고 확인(트리거)을 기다린다 — ★확인해야 결과표에 기록된다(10-13 오후). 아랫줄은 알림, 없으면 버튼 안내.
         if (home)
         {
-            // ★10-14 사용자 지시: 홈의 안내 = 버튼 둘. B로 바꾼 자유 측정의 방식은 탭 이름(맨 끝 탭)이 보여 준다.
-            if (resetAsk)
-            {
-                forMonitor = instruction = "측정값을 초기화할까요? — A : 초기화 · B : 취소";
-                guide = "<color=#FF8C8C>측정값을 초기화할까요?</color>\n" + SubInfo + "A : 초기화   B : 취소</size>";
-            }
-            else if (calibAsk)
-            {
-                forMonitor = instruction = "끝점 보정을 시작할까요? — 트리거 : 시작 · B : 취소";
-                guide = "<color=#FFF233>끝점 보정을 시작할까요?</color>\n" + SubInfo + "트리거 : 시작   B : 취소</size>";
-            }
-            else if (calibrating)
+            if (calibrating)
             {
                 forMonitor = instruction = "끝점 보정 중 — 트리거 : 끝";
                 guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
             }
-            else if (menuCursor >= 0)
-            {
-                // ★11-17: 홈 메뉴 — 안내 테두리 안에 항목 셋 + 고른 항목의 설명(view.SetHomeMenu, 아래). 메인 화면 안내 띠 · 모니터에는 한 줄로.
-                forMonitor = instruction = "홈 메뉴 — " + MenuLabel[menuCursor] + (menuCursor == MenuCalib ? " · 트리거 : 시작" : " · 트리거 길게 : 실행") + " · 스틱 위아래 : 고르기";
-                guide = forMonitor;
-                guideNote = "";
-            }
             else
             {
-                // ★10-14 사용자 정정: 홈에는 조작 설명만 둔다(다 잰 뒤에도 — 기록은 각 탭에서 본다). 전부 같은 종류(조작)라 줄이지 않는다.
-                //   Meta 버튼 길게 = 메타 퀘스트 시스템의 «뷰 재설정»(추적 원점을 지금 자리로) — 벽면UI · 바닥 축이 그 원점에 맞춰 선다(PlaceFixed).
-                //   ★Meta 버튼은 로고 모양을 닮은 «∞»로 적는다(NotoSansKR-Bold에 있다 — 10-14 fontTools로 확인). 이 줄만 작게(사용자 지시).
-                // ★10-22 사용자 지시: «리셋» → «측정값 초기화» · «트리거 : 컨트롤러 끝점 보정» → «B : 촉 끝 맞추기»(확인 창을 거친다)
-                // ★11-17: A · B 안내를 «스틱 위아래 : 메뉴»로 바꿨다(측정값 초기화 · 끝점 보정 · 나가기는 홈 메뉴).
-                // ★11-17 글꼴 KoPub(정적 SDF)에 ↕ · ∞ · −(U+2212)가 없다 → 화면 글은 ▲▼ · «Meta 버튼» · -로 쓴다(fallback Noto 동적 글꼴이 글자를 굽지 않게 · LFS 사고 예방). 관제 페이지(forMonitor)는 브라우저라 그대로.
-                forMonitor = instruction = "홈 — 스틱 위아래 : 메뉴(측정값 초기화 · 끝점 보정 · 나가기)" + (FreeTabOn ? " · B : 자유측정 모드변경" : "") + " · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
-                guide = "스틱 ▲▼ : 메뉴\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + SubInfo + "Meta 버튼 길게 : 뷰 재설정</size>";
-                if (Done)
-                {
-                    // ★11-17 결과 창(시안 V0.2): 다 잰 뒤의 홈 — 윗줄에 끝났다는 말, 알림 줄에 다시 재는 법(닫기는 없다)
-                    string doneLine = evalMode ? "평가가 끝났습니다" : "6동작을 모두 쟀습니다";
-                    forMonitor = instruction = doneLine + " · " + instruction;
-                    guide = "<color=#73E68C>" + doneLine + "</color>\n" + guide;
-                    if (guideNote.Length == 0) guideNote = "다시 재려면 홈 메뉴 «측정값 초기화» (트리거 길게)";
-                }
+                // ★11-17 시안 V0.4: 홈 = 메뉴(목록 + 설명 상자 — 컨트롤러UI는 view.SetHomeMenu, 아래). 벽면 안내 띠 · 관제 페이지는 한 줄(동기화 A).
+                //   안내 띠 아랫줄(알림) = 다 잰 뒤면 끝났다는 말 · 아니면 조작 힌트(Meta 버튼 길게 = 메타 퀘스트 «뷰 재설정» — PlaceFixed).
+                // ★11-17 글꼴 KoPub(정적 SDF)에 ↕ · ∞ · −(U+2212)가 없다 → 화면 글은 ▲▼ · «Meta 버튼» · -로 쓴다(fallback Noto 동적 글꼴이 글자를 굽지 않게 · LFS 사고 예방).
+                forMonitor = instruction = MenuBandLine(menuCursor, menuAsk);
+                guide = forMonitor;
+                if (guideNote.Length == 0)
+                    guideNote = Done ? (evalMode ? "평가가 끝났습니다" : "6동작을 모두 쟀습니다") + " · 다시 재려면 메뉴 «측정값 초기화»"
+                                     : "스틱 ▲▼ : 고르기 · ◀▶ : 탭 이동 · Meta 버튼 길게 : 뷰 재설정";
             }
         }
         // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).
@@ -2298,8 +2326,9 @@ public class RomLineSession : MonoBehaviour
         }
         view.SetTip(tipText);
         view.SetGuide(guide, guideNote);
-        bool menuOn = home && !calibrating && menuCursor >= 0;
-        view.SetHomeMenu(menuOn ? menuCursor : -1, MenuLabel, menuOn ? MenuDesc(menuCursor) : "", menuOn && menuCursor != MenuCalib);
+        bool menuOn = home && !calibrating;
+        view.SetHomeMenu(menuOn ? menuCursor : -1, MenuLabel, menuOn ? MenuDesc(menuCursor, menuAsk) : "",
+                         menuOn ? (menuAsk ? MenuAskHint : MenuListHint) : "", menuAsk);
         RefreshGuidedExtras(tab, forMonitor, note, guide, guideNote);
         RefreshTabs();
 
@@ -2583,7 +2612,7 @@ public class RomLineSession : MonoBehaviour
     {
         js.Append(",\"popup\":false,\"cursor\":").Append(CurTop)   // 탭 창은 없앴다(10-14) — 모니터가 읽는 이름만 남긴다
           .Append(",\"locked\":").Append(TabLocked ? "true" : "false").Append(",\"confirm\":").Append(!freeMode && confirmWait ? "true" : "false")
-          .Append(",\"resetAsk\":").Append(resetAsk ? "true" : "false").Append(",\"confirmed\":\"");
+          .Append(",\"resetAsk\":").Append(menuAsk && menuCursor == MenuReset ? "true" : "false").Append(",\"confirmed\":\"");
         for (int m = 0; m < 6; m++) js.Append(confirmed[m] ? '1' : '0');
         return js.Append('"');
     }
@@ -2601,8 +2630,7 @@ public class RomLineSession : MonoBehaviour
             string name = TopName(t);
             view.SetTab(t, t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name, t == cur, false);
         }
-        view.ShowAsk(resetAsk || calibAsk, resetAsk ? "측정값을 초기화할까요?" : "끝점 보정을 시작할까요?",
-                     resetAsk ? "A : 초기화          B : 취소" : "트리거 : 시작          B : 취소");
+        // ★11-17 V0.4: 벽면 확인 창(ShowAsk)은 쓰지 않는다 — 확인 안내는 컨트롤러UI 설명 상자 + 벽면 안내 띠 한 줄(Refresh)
     }
 
     private static readonly List<Vector3> NoPoints = new List<Vector3>(0);

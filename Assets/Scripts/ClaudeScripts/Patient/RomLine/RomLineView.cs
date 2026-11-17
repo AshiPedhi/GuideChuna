@@ -236,14 +236,17 @@ public class RomLineView
         // ★11-17 시안 V0.4: 홈 칸 = 메뉴 아이콘(가로 막대 셋 · 도형 — KoPub 글자표를 타지 않는다) · 칸은 좁게(SetTabCount)
         nearHomeIcon = MakeMenuIcon(guide, "홈 아이콘", nearTabH * 0.46f, nearIconBars);
 
-        // ★11-17 사용자 지시: 홈 메뉴(측정값 초기화 · 끝점 보정 · 나가기)는 <b>안내 테두리 안</b>에 작게 — 왼쪽 항목 셋, 고른 항목 오른쪽에 설명.
-        //   스틱 위아래로 고른다(세션). 초기화 · 나가기는 트리거 길게 — 설명 아래 막대가 찬다. 커서가 없으면 이 묶음은 꺼지고 안내 두 줄이 그대로 보인다.
+        // ★11-17 시안 V0.4(사용자 결정): 홈 메뉴 = <b>목록 상자 + 설명 상자</b>(따로 그린 두 상자 · 틈 BoxGap) + 아래 힌트 한 줄.
+        //   항목 넷(ROM · 측정값 초기화 · 설정 · 나가기) · 홈에서는 늘 떠 있다(커서 없는 상태 없음). 확인 안내도 설명 상자 안에 뜬다(팝업 아님).
+        //   메뉴가 뜬 동안 바깥 테두리와 안내 두 줄은 숨긴다.
         menuRoot = new GameObject("홈 메뉴").transform;
         menuRoot.SetParent(guide, false);
         float itemSize = Fs(PxMenuItem);
         menuRowH = itemSize * 0.22f;   // 종전 0.075 글자 · 0.017 줄과 같은 비율
         menuLeftW = -1f;               // 항목 이름을 받으면 가장 긴 이름에 맞춘다(SetHomeMenu)
-        menuRightW = GuideW - GuidePad * 2f - 0.08f - MenuGap;
+        menuRightW = GuideW * 0.5f;
+        MakeBox(menuRoot, "목록 상자", listBox);
+        MakeBox(menuRoot, "설명 상자", descBox);
         menuHi = MakeQuad(menuRoot, "커서", Vector2.zero, new Vector2(0.08f, menuRowH - 0.002f), new Color(TabOn.r, TabOn.g, TabOn.b, NearTabAlpha), 1);
         for (int i = 0; i < MenuRows; i++)
         {
@@ -253,8 +256,9 @@ public class RomLineView
         menuDesc = Outlined(Place(MakeText(menuRoot, "", Fs(PxNote), TextAlignmentOptions.TopLeft, 3, fontL), Vector2.zero, menuRightW));
         menuDesc.textWrappingMode = TextWrappingModes.Normal;
         menuDesc.color = NoteColor;   // Outlined가 흰색으로 둔다 — 설명은 #CCDBED
-        holdBack = MakeQuad(menuRoot, "길게 바탕", Vector2.zero, new Vector2(menuRightW, MenuBarH), GaugeDim, 1);
-        holdFill = MakeQuad(menuRoot, "길게 막대", Vector2.zero, new Vector2(menuRightW, MenuBarH), TipColor, 2);
+        menuHint = Outlined(Place(MakeText(menuRoot, "", Fs(PxSmall), TextAlignmentOptions.Center, 3, fontM), Vector2.zero, GuideW));
+        menuHint.textWrappingMode = TextWrappingModes.Normal;
+        menuHint.color = NoteColor;
         menuRoot.gameObject.SetActive(false);
         LayoutGuide(0f, 0f);
         guide.gameObject.SetActive(false);
@@ -651,65 +655,77 @@ public class RomLineView
         sides[2].localScale = sides[3].localScale = new Vector3(GuideBorderT, h, 1f);
     }
 
-    // ── 홈 메뉴(11-17) ── 안내 테두리 안. 글은 상태가 바뀔 때만 넣는다(SetHomeMenu) · 막대만 매 프레임(SetHomeMenuHold, 할당 없음).
-    private const int MenuRows = 3;
-    private const float MenuGap = 0.008f;
-    private const float MenuBarH = 0.004f, MenuBarGap = 0.004f;
+    // ── 홈 메뉴(11-17 · 시안 V0.4) ── 목록 상자 + 설명 상자(따로 그린 두 상자) + 힌트 한 줄. 글은 상태가 바뀔 때만 넣는다(SetHomeMenu · 할당은 그때만).
+    private const int MenuRows = 4;                       // ROM · 측정값 초기화 · 설정 · 나가기
+    private const float BoxGap = 0.004f, HintGap = 0.003f; // 두 상자 사이 틈(시안 4mm) · 상자와 힌트 사이
     // 항목 줄 높이 · 항목 열 폭 · 설명 열 폭 — 글자 크기(Fs)에 따라 Build · 첫 SetHomeMenu에서 정한다
     private float menuRowH, menuLeftW = -1f, menuRightW;
-    private Transform menuRoot, menuHi, holdBack, holdFill;
+    private Transform menuRoot, menuHi;
     private readonly TextMeshPro[] menuItems = new TextMeshPro[MenuRows];
-    private TextMeshPro menuDesc;
-    private float menuBarLeft, menuBarY;
+    private TextMeshPro menuDesc, menuHint;
+    private readonly Transform[] listBox = new Transform[4], descBox = new Transform[4];
 
     /// <summary>
-    /// 홈 메뉴를 띄운다 / 내린다. cursor = 고른 항목(−1이면 내리고 안내 두 줄을 되살린다) · labels = 항목 이름(MenuRows개) ·
-    /// desc = 고른 항목의 설명(리치 텍스트) · holdItem = 트리거 길게 항목이면 막대를 보인다. SetGuide 뒤에 부른다(테두리를 다시 잰다).
+    /// 홈 메뉴를 띄운다 / 내린다. cursor = 고른 항목(−1이면 내리고 안내 두 줄 · 바깥 테두리를 되살린다) · labels = 항목 이름(MenuRows개) ·
+    /// desc = 설명 상자 글(리치 텍스트 — 확인 안내도 여기) · hint = 상자 아래 한 줄 · ask = 확인 안내 중(고른 항목을 흰 글자로).
+    /// SetGuide 뒤에 부른다(테두리 · 탭 줄 높이를 다시 잰다).
     /// </summary>
-    public void SetHomeMenu(int cursor, string[] labels, string desc, bool holdItem)
+    public void SetHomeMenu(int cursor, string[] labels, string desc, string hint, bool ask)
     {
         bool on = cursor >= 0 && labels != null;
         if (menuRoot.gameObject.activeSelf != on) menuRoot.gameObject.SetActive(on);
         if (guideLine.gameObject.activeSelf == on) guideLine.gameObject.SetActive(!on);
         if (guideNote.gameObject.activeSelf == on) guideNote.gameObject.SetActive(!on);
+        bool outer = !on;   // 메뉴가 뜬 동안은 두 상자가 바깥 테두리를 대신한다
+        if (borderTop.gameObject.activeSelf != outer)
+        {
+            borderTop.gameObject.SetActive(outer);
+            borderBottom.gameObject.SetActive(outer);
+            borderLeft.gameObject.SetActive(outer);
+            borderRight.gameObject.SetActive(outer);
+        }
         if (!on) return;   // 테두리는 방금 SetGuide가 안내 두 줄에 맞춰 두었다
 
         for (int i = 0; i < MenuRows; i++)
         {
             string s = i < labels.Length ? labels[i] : "";
             if (menuItems[i].text != s) menuItems[i].text = s;
-            menuItems[i].color = i == cursor ? TipColor : DimColor;
+            menuItems[i].color = i != cursor ? DimColor : ask ? NearTabCurrentText : TipColor;   // 고른 항목 노랑 · 확인 안내 중엔 흰색
             TMP_FontAsset face = i == cursor ? fontB : fontM;   // 규격: 항목 16 M · 고른 항목 16 B
             if (face != null && menuItems[i].font != face) menuItems[i].font = face;
         }
         if (menuLeftW < 0f) FitMenuColumns(labels);
         if (menuDesc.text != desc) menuDesc.text = desc;
-        if (holdBack.gameObject.activeSelf != holdItem) holdBack.gameObject.SetActive(holdItem);
+        if (menuHint.text != hint) menuHint.text = hint;
 
+        float listH = MenuRows * menuRowH;
         float descH = menuDesc.GetPreferredValues(desc, menuRightW, 0f).y;
-        float rightH = descH + (holdItem ? MenuBarGap + MenuBarH : 0f);
-        float inner = Mathf.Max(MenuRows * menuRowH, rightH);
-        guideH = Mathf.Max(GuideMinH, inner + GuidePad * 2f);
-        float y0 = guideH * 0.5f - GuidePad;                               // 글 묶음의 윗변
-        float xL = -GuideW * 0.5f + GuidePad + menuLeftW * 0.5f;           // 항목 열 가운데
-        for (int i = 0; i < MenuRows; i++)
-            menuItems[i].transform.localPosition = new Vector3(xL, y0 - menuRowH * (i + 0.5f), -0.004f);
-        int c = Mathf.Min(cursor, MenuRows - 1);
-        menuHi.localPosition = new Vector3(xL, y0 - menuRowH * (c + 0.5f), menuHi.localPosition.z);
+        float boxH = Mathf.Max(listH, descH) + GuidePad * 2f;
+        float hintH = hint.Length > 0 ? menuHint.GetPreferredValues(hint, GuideW, 0f).y : 0f;
+        guideH = Mathf.Max(GuideMinH, boxH + (hintH > 0f ? HintGap + hintH : 0f));
+        float top = guideH * 0.5f;
+        float leftBoxW = menuLeftW + GuidePad * 2f, rightBoxW = GuideW - leftBoxW - BoxGap;
+        float lcx = -GuideW * 0.5f + leftBoxW * 0.5f, rcx = GuideW * 0.5f - rightBoxW * 0.5f, bcy = top - boxH * 0.5f;
+        SetBox(listBox, lcx, bcy, leftBoxW, boxH);
+        SetBox(descBox, rcx, bcy, rightBoxW, boxH);
 
-        menuBarLeft = -GuideW * 0.5f + GuidePad + menuLeftW + MenuGap;    // 설명 열 왼쪽 끝
-        float xR = menuBarLeft + menuRightW * 0.5f;
+        float y0 = top - GuidePad;   // 상자 안 글 묶음의 윗변
+        for (int i = 0; i < MenuRows; i++)
+            menuItems[i].transform.localPosition = new Vector3(lcx, y0 - menuRowH * (i + 0.5f), -0.004f);
+        int c = Mathf.Clamp(cursor, 0, MenuRows - 1);
+        menuHi.localScale = new Vector3(leftBoxW - GuidePad, menuRowH - 0.002f, 1f);
+        menuHi.localPosition = new Vector3(lcx, y0 - menuRowH * (c + 0.5f), menuHi.localPosition.z);
+
         menuDesc.rectTransform.sizeDelta = new Vector2(menuRightW, Mathf.Max(descH, 0.001f));
-        menuDesc.transform.localPosition = new Vector3(xR, y0 - descH * 0.5f, -0.004f);
-        menuBarY = y0 - descH - MenuBarGap - MenuBarH * 0.5f;
-        holdBack.localPosition = new Vector3(xR, menuBarY, holdBack.localPosition.z);
-        SetHomeMenuHold(0f);
+        menuDesc.transform.localPosition = new Vector3(rcx, y0 - descH * 0.5f, -0.004f);
+        menuHint.rectTransform.sizeDelta = new Vector2(GuideW, Mathf.Max(hintH, 0.001f));
+        menuHint.transform.localPosition = new Vector3(0f, top - boxH - HintGap - hintH * 0.5f, -0.004f);
         PlaceGuideFrame();
     }
 
     /// <summary>
-    /// 항목 열 폭을 가장 긴 이름(굵게)에 맞추고 설명 열이 나머지를 쓴다 — 처음 한 번(항목 이름은 바뀌지 않는다).
-    /// 글자 크기가 OS 배율을 따라 변하니 고정 폭 대신 잰다. 설명 열은 테두리 폭의 40% 밑으로 줄이지 않는다.
+    /// 항목 열 폭을 가장 긴 이름(굵게)에 맞추고 설명 상자가 나머지를 쓴다 — 처음 한 번(항목 이름은 바뀌지 않는다).
+    /// 글자 크기가 OS 배율을 따라 변하니 고정 폭 대신 잰다. 목록 열은 안쪽 폭의 절반을 넘지 않는다.
     /// </summary>
     private void FitMenuColumns(string[] labels)
     {
@@ -719,25 +735,11 @@ public class RomLineView
         for (int i = 0; i < labels.Length && i < MenuRows; i++)
             w = Mathf.Max(w, menuItems[0].GetPreferredValues(labels[i]).x);
         menuItems[0].font = keep;
-        float inner = GuideW - GuidePad * 2f - MenuGap;
-        menuLeftW = Mathf.Min(w + 0.006f, inner * 0.6f);
+        float inner = GuideW - GuidePad * 4f - BoxGap;   // 두 상자의 안쪽 폭 합
+        menuLeftW = Mathf.Min(w + 0.004f, inner * 0.5f);
         menuRightW = inner - menuLeftW;
         for (int i = 0; i < MenuRows; i++) menuItems[i].rectTransform.sizeDelta = new Vector2(menuLeftW, menuRowH);
-        menuHi.localScale = new Vector3(menuLeftW, menuRowH - 0.002f, 1f);
-        holdBack.localScale = new Vector3(menuRightW, MenuBarH, 1f);
-        Debug.Log($"[선실측] 홈 메뉴 — 열 폭 항목 {menuLeftW * 100f:F1}cm · 설명 {menuRightW * 100f:F1}cm · 줄 {menuRowH * 100f:F1}cm · 글자 항목 {menuItems[0].fontSize:F3} · 설명 {menuDesc.fontSize:F3}");
-    }
-
-    /// <summary>트리거 길게 막대 — t = 0~1(0이면 숨긴다). 길게 누르는 동안 매 프레임 불린다(할당 없음).</summary>
-    public void SetHomeMenuHold(float t)
-    {
-        t = Mathf.Clamp01(t);
-        bool show = t > 0f && holdBack.gameObject.activeSelf;
-        if (holdFill.gameObject.activeSelf != show) holdFill.gameObject.SetActive(show);
-        if (!show) return;
-        float w = menuRightW * t;
-        holdFill.localScale = new Vector3(w, MenuBarH, 1f);
-        holdFill.localPosition = new Vector3(menuBarLeft + w * 0.5f, menuBarY, holdFill.localPosition.z);
+        Debug.Log($"[선실측] 홈 메뉴 — 열 폭 목록 {menuLeftW * 100f:F1}cm · 설명 {menuRightW * 100f:F1}cm · 줄 {menuRowH * 100f:F1}cm · 글자 항목 {menuItems[0].fontSize:F3} · 설명 {menuDesc.fontSize:F3}");
     }
 
     private static void SetX(Transform t, float x) { Vector3 p = t.localPosition; t.localPosition = new Vector3(x, p.y, p.z); }
