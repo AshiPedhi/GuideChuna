@@ -866,7 +866,7 @@ public class RomLineSession : MonoBehaviour
         calibRange = 0f;
         calibPos.Clear();
         calibRot.Clear();
-        noteText = "촉 끝 맞추기 — 촉 끝을 한 점에 대고 여러 방향으로 돌리세요";
+        noteText = "끝점 보정 — 촉 끝을 한 점에 대고 여러 방향으로 돌리세요";
         Debug.Log($"[선실측] 끝점 보정 시작 — 지금 값 {tipOffset * 1000f:F1}mm · 끝을 움직이지 않는 한 점에 댄 채 컨트롤러를 여러 방향으로 돌린다(트리거 · 스틱 누르기 = 끝)");
         Play(sndPress);
         dirty = true;
@@ -883,7 +883,7 @@ public class RomLineSession : MonoBehaviour
         }
         if (Time.unscaledTime < calibNextText) return;
         calibNextText = Time.unscaledTime + 0.5f;   // 글자는 0.5초에 한 번만 바꾼다
-        noteText = $"촉 끝 맞추기 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 : 끝";
+        noteText = $"끝점 보정 중 — 표본 {calibPos.Count} · 돌린 범위 {calibRange:F0}° · 트리거 : 끝";
         dirty = true;
     }
 
@@ -893,12 +893,12 @@ public class RomLineSession : MonoBehaviour
         int n = calibPos.Count;
         if (n < CalibMinSamples || calibRange < CalibMinRange)
         {
-            Deny($"촉 끝 맞추기 — 모자라다(표본 {n} · 돌린 범위 {calibRange:F0}°). 더 크게, 여러 방향으로 돌려야 한다");
+            Deny($"끝점 보정 — 모자라다(표본 {n} · 돌린 범위 {calibRange:F0}°). 더 크게, 여러 방향으로 돌려야 한다");
             return;
         }
         if (!RomLineMath.PivotFit(calibPos, calibRot, out Vector3 fit, out Vector3 pivot, out float rms, out float max))
         {
-            Deny("촉 끝 맞추기 — 계산을 못 했다(한 방향으로만 돌렸다)");
+            Deny("끝점 보정 — 계산을 못 했다(한 방향으로만 돌렸다)");
             return;
         }
 
@@ -924,7 +924,7 @@ public class RomLineSession : MonoBehaviour
         }
         else
         {
-            noteText = $"촉 끝 맞추기 — 흔들림 {rms * 1000f:F1}mm로 커서 적용 안 함";
+            noteText = $"끝점 보정 — 흔들림 {rms * 1000f:F1}mm로 커서 적용 안 함";
             Play(sndDeny);
         }
         dirty = true;
@@ -967,7 +967,7 @@ public class RomLineSession : MonoBehaviour
         if (confirmWait) { if (Time.unscaledTime - waitSince >= ConfirmGuard) Confirm("트리거"); return; }
         if (TabComplete(CurTab))
         {
-            Deny(Done ? "측정이 끝났다 — 다시 재려면 B 길게(이 탭 지우기)나 홈의 A(측정값 초기화)"
+            Deny(Done ? "측정이 끝났다 — 다시 재려면 홈 메뉴 «측정값 초기화»(트리거 길게) · 그 탭만이면 B 길게 : 이 탭 지우기"
                       : $"{GuidedTabName[CurTab]} 탭은 다 쟀다 — 스틱으로 다른 탭을 고르거나 B 길게로 이 탭을 지운다");
             return;
         }
@@ -2232,13 +2232,13 @@ public class RomLineSession : MonoBehaviour
             }
             else if (calibAsk)
             {
-                forMonitor = instruction = "촉 끝 맞추기를 시작할까요? — 트리거 : 시작 · B : 취소";
-                guide = "<color=#FFF233>촉 끝 맞추기를 시작할까요?</color>\n" + SubInfo + "트리거 : 시작   B : 취소</size>";
+                forMonitor = instruction = "끝점 보정을 시작할까요? — 트리거 : 시작 · B : 취소";
+                guide = "<color=#FFF233>끝점 보정을 시작할까요?</color>\n" + SubInfo + "트리거 : 시작   B : 취소</size>";
             }
             else if (calibrating)
             {
-                forMonitor = instruction = "촉 끝 맞추기 중 — 트리거 : 끝";
-                guide = "<color=#FFF233>촉 끝 맞추기 중</color>\n" + SubInfo + "트리거 : 끝</size>";
+                forMonitor = instruction = "끝점 보정 중 — 트리거 : 끝";
+                guide = "<color=#FFF233>끝점 보정 중</color>\n" + SubInfo + "트리거 : 끝</size>";
             }
             else if (menuCursor >= 0)
             {
@@ -2285,7 +2285,7 @@ public class RomLineSession : MonoBehaviour
             int first = tab * 2, second = tab * 2 + 1;
             forMonitor = instruction = $"{GuidedTabName[tab]} 측정 완료";
             guide = "<color=#73E68C>" + GuidedTabName[tab] + " 완료</color>\n" + RecordLine(first) + "\n" + RecordLine(second);
-            if (guideNote.Length == 0) guideNote = "B 길게 : 초기화";
+            if (guideNote.Length == 0) guideNote = "B 길게 : 이 탭 지우기";
         }
         else
         {
@@ -2601,7 +2601,7 @@ public class RomLineSession : MonoBehaviour
             string name = TopName(t);
             view.SetTab(t, t >= 1 && t <= 3 && TabComplete(t - 1) ? "<color=#73E68C>" + name + "</color>" : name, t == cur, false);
         }
-        view.ShowAsk(resetAsk || calibAsk, resetAsk ? "측정값을 초기화할까요?" : "촉 끝 맞추기를 시작할까요?",
+        view.ShowAsk(resetAsk || calibAsk, resetAsk ? "측정값을 초기화할까요?" : "끝점 보정을 시작할까요?",
                      resetAsk ? "A : 초기화          B : 취소" : "트리거 : 시작          B : 취소");
     }
 
