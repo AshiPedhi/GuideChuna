@@ -1976,7 +1976,7 @@ public class RomLineSession : MonoBehaviour
             view.SetDiff(m, "오차 " + ErrText(a) + " / " + ErrText(p), false);
         }
         view.SetFooter(evalN > 0
-            ? $"평가 점수 {evalScore:F1}점 · 평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 실습 {baseWhen} 기준 (오차 = 평가 − 실습, 능동 / 압박)"
+            ? $"평가 점수 {evalScore:F1}점 · 평균 오차 {evalMeanErr:F1}° · 비교 {evalN}칸 · 실습 {baseWhen} 기준 (오차 = 평가 - 실습, 능동 / 압박)"
             : "평가 — 실습과 겹치는 측정값이 없어 점수를 낼 수 없습니다");
         if (!evalScored)
         {
@@ -2188,8 +2188,9 @@ public class RomLineSession : MonoBehaviour
                 //   ★Meta 버튼은 로고 모양을 닮은 «∞»로 적는다(NotoSansKR-Bold에 있다 — 10-14 fontTools로 확인). 이 줄만 작게(사용자 지시).
                 // ★10-22 사용자 지시: «리셋» → «측정값 초기화» · «트리거 : 컨트롤러 끝점 보정» → «B : 촉 끝 맞추기»(확인 창을 거친다)
                 // ★11-17: A · B 안내를 «스틱 위아래 : 메뉴»로 바꿨다(측정값 초기화 · 끝점 보정 · 나가기는 홈 메뉴).
+                // ★11-17 글꼴 KoPub(정적 SDF)에 ↕ · ∞ · −(U+2212)가 없다 → 화면 글은 ▲▼ · «Meta 버튼» · -로 쓴다(fallback Noto 동적 글꼴이 글자를 굽지 않게 · LFS 사고 예방). 관제 페이지(forMonitor)는 브라우저라 그대로.
                 forMonitor = instruction = "홈 — 스틱 위아래 : 메뉴(측정값 초기화 · 끝점 보정 · 나가기)" + (FreeTabOn ? " · B : 자유측정 모드변경" : "") + " · ∞(Meta) 버튼 길게 : 뷰 재설정 · 스틱 좌우 : 탭 고르기";
-                guide = "스틱 ↕ : 메뉴\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + SubInfo + "∞ 버튼 길게 : 뷰 재설정</size>";
+                guide = "스틱 ▲▼ : 메뉴\n" + (FreeTabOn ? "B : 자유측정 모드변경\n" : "") + SubInfo + "Meta 버튼 길게 : 뷰 재설정</size>";
             }
         }
         // ★10-14 사용자 정정: 여섯 동작을 다 잰 뒤에도 각 탭에서는 그 탭의 기록을 보인다 — 종전에는 «측정 완료» 한 줄로 덮였다(Done 분기가 아래 «다 잰 탭» 분기보다 앞이었다).

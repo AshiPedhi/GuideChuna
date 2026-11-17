@@ -225,10 +225,10 @@ public class RomLineView
             var c = new Vector2((i - 2f) * (cellW + NearTabGap), 0f);
             nearTabTexts[i] = Place(MakeText(guide, "", tabSize, TextAlignmentOptions.Center, 3, fontB), c, cellW);
             nearTabTexts[i].rectTransform.sizeDelta = new Vector2(cellW, nearTabH);
-            // 칸이 좁아 «굴곡·신전»이 넘칠 수 있다 — 규격 크기를 최대로 두고 칸에 맞춰 줄인다(최소 60%)
+            // 칸이 좁아 «굴곡·신전»이 넘칠 수 있다 — 규격 크기를 최대로 두고 칸에 맞춰 줄인다(최소 70%)
             nearTabTexts[i].enableAutoSizing = true;
             nearTabTexts[i].fontSizeMax = tabSize;
-            nearTabTexts[i].fontSizeMin = tabSize * 0.6f;
+            nearTabTexts[i].fontSizeMin = tabSize * 0.7f;
             nearTabTexts[i].outlineColor = new Color32(0, 0, 0, 255);
             nearTabTexts[i].outlineWidth = 0.2f;
             nearTabPlates[i] = MakeQuad(guide, "탭 " + i, c, new Vector2(cellW, nearTabH), TabOff, 1).GetComponent<Renderer>();
